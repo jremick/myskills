@@ -204,6 +204,9 @@ test("default registry client is stable between renders", async () => {
     if (url.includes("/v1/me")) {
       return jsonResponse(200, { user: authUser() });
     }
+    if (url.endsWith("/v1/skills/release-notes-helper/releases")) {
+      return jsonResponse(200, { releases: [] });
+    }
     if (url.includes("/releases/")) {
       return jsonResponse(200, { release: publicRelease() });
     }
@@ -217,12 +220,13 @@ test("default registry client is stable between renders", async () => {
     const view = render(<RegistryApp />);
 
     await view.findByText("Turns merged changes into concise release notes.");
-    await waitFor(() => assert.equal(calls.length, 5));
+    await waitFor(() => assert.equal(calls.length, 6));
     await delay(25);
     assert.deepEqual([...calls].sort(), [
       "http://localhost:3001/v1/me",
       "http://localhost:3001/v1/skills",
       "http://localhost:3001/v1/skills/release-notes-helper",
+      "http://localhost:3001/v1/skills/release-notes-helper/releases",
       "http://localhost:3001/v1/skills/release-notes-helper/releases/0.1.0",
       "http://localhost:3001/v1/architecture-targets",
     ].sort());
@@ -284,9 +288,119 @@ test("skill detail displays public metadata and release artifact metadata only",
   assert.equal(client.bundleCalls, 0);
 });
 
+test("public release history selects exact metadata and a supported platform without exporting", async () => {
+  setupDom("http://localhost/skills/release-notes-helper?q=writing");
+  const fixture = releaseHistoryFixture();
+  const client = historyClient(fixture);
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText(fixture.latest.releaseNotes!);
+  const selector = view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement;
+  assert.equal(selector.value, fixture.latest.version);
+  assert.deepEqual(Array.from(selector.options).map((option) => option.value), [fixture.latest.version, fixture.older.version]);
+  assert.equal(view.queryByText("Manager-only notes."), null);
+  assert.equal(client.releaseHistoryCalls.length, 1);
+  assert.equal(client.releaseManagementCalls, 0);
+  assert.equal(view.getByText("feature").textContent, "feature");
+  const latestDate = view.getByText("Released").parentElement?.textContent;
+
+  fireEvent.change(selector, { target: { value: fixture.older.version } });
+  await view.findByText(fixture.older.releaseNotes!);
+  await waitFor(() => assert.equal(window.location.search, "?q=writing&platform=generic&version=0.1.0"));
+  assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, fixture.older.version);
+  assert.notEqual(view.getByText("Released").parentElement?.textContent, latestDate);
+  assert.equal(view.getByText("fix").textContent, "fix");
+  assert.match(view.getByText("Minimum MySkills").parentElement?.textContent ?? "", /1\.0\.0/);
+  assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /bbbbbbbbbb…bbbbbbbb/);
+  assert.match(view.getByText("Byte size").parentElement?.textContent ?? "", /513/);
+  assert.equal(view.getByText("Platforms").parentElement?.textContent?.includes("codex"), false);
+  assert.equal(view.queryByRole("button", { name: "codex" }), null);
+  await view.findByText(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/);
+  assert.equal(client.releaseCalls.at(-1), "release-notes-helper@0.1.0");
+  assert.equal(client.bundleCalls, 0);
+  assert.equal(client.releaseManagementCalls, 0);
+});
+
+test("manager-only history cannot be pinned and offers an explicit return to latest", async () => {
+  setupDom("http://localhost/skills/release-notes-helper?version=0.3.0");
+  const fixture = releaseHistoryFixture();
+  const client = historyClient(fixture);
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("This exact release is unavailable.");
+  assert.equal(window.location.search, "?version=0.3.0");
+  assert.deepEqual(client.releaseCalls, []);
+  assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, "0.3.0");
+  assert.equal(view.getByRole("option", { name: "Unavailable exact version" }).hasAttribute("disabled"), true);
+  assert.equal(view.queryByText("Manager-only notes."), null);
+  assert.equal(view.queryByText(fixture.latest.releaseNotes!), null);
+
+  fireEvent.click(view.getByRole("button", { name: "Return to latest" }));
+  await view.findByText(fixture.latest.releaseNotes!);
+  assert.equal(window.location.search, "");
+});
+
+for (const version of ["not-a-version", "9.9.9"]) {
+  test(`malformed or removed exact version ${version} is not replaced by latest`, async () => {
+    setupDom(`http://localhost/skills/release-notes-helper?version=${version}`);
+    const fixture = releaseHistoryFixture();
+    const client = historyClient(fixture);
+    const view = render(<RegistryApp client={client} />);
+
+    await view.findByText("This exact release is unavailable.");
+    assert.equal(new URLSearchParams(window.location.search).get("version"), version);
+    assert.deepEqual(client.releaseCalls, []);
+    assert.equal(view.queryByText(fixture.latest.releaseNotes!), null);
+  });
+}
+
+test("a listed exact version returning 404 stays pinned instead of falling back", async () => {
+  setupDom("http://localhost/skills/release-notes-helper?version=0.1.0");
+  const fixture = releaseHistoryFixture();
+  const client = historyClient(fixture, {
+    releaseLoader: (_slug, version, fallback) => {
+      if (version === fixture.older.version) throw safeApiError(404, "RELEASE_NOT_FOUND", "Private release details");
+      return fallback;
+    },
+  });
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("This exact release is unavailable.");
+  assert.equal(new URLSearchParams(window.location.search).get("version"), fixture.older.version);
+  assert.deepEqual(client.releaseCalls, ["release-notes-helper@0.1.0"]);
+  assert.equal(document.body.textContent?.includes("Private release details"), false);
+  assert.equal(view.queryByText(fixture.latest.releaseNotes!), null);
+  fireEvent.click(view.getByRole("button", { name: "Return to latest" }));
+  await view.findByText(fixture.latest.releaseNotes!);
+});
+
+test("release history shows loading and unavailable states without exposing errors", async () => {
+  setupDom("http://localhost/skills/release-notes-helper");
+  const pending = deferred<SkillReleaseSummary[]>();
+  const client = mockClient({ releaseListLoader: () => pending.promise });
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("Loading release history…");
+  await act(async () => {
+    pending.reject(new Error("Private release data"));
+    await delay(0);
+  });
+  await view.findByText("Release history is unavailable.");
+  await view.findByText("Turns merged changes into concise release notes.");
+  assert.equal(document.body.textContent?.includes("Private release data"), false);
+});
+
+test("an empty release list has a visible history state", async () => {
+  setupDom("http://localhost/skills/release-notes-helper");
+  const view = render(<RegistryApp client={mockClient()} />);
+  await view.findByText("No published release history is available.");
+  await view.findByText("Turns merged changes into concise release notes.");
+});
+
 test("signed-in users review an exact release before queueing a connected-target install", async () => {
   setupAuthenticatedDom("http://localhost/skills/release-notes-helper");
-  const client = mockClient();
+  const fixture = releaseHistoryFixture();
+  const client = historyClient(fixture);
   const operations: Array<Record<string, unknown>> = [];
   const target: ArchitectureTargetRecord = {
     schemaVersion: 1,
@@ -314,8 +428,14 @@ test("signed-in users review an exact release before queueing a connected-target
 
   const view = render(<RegistryApp client={client} />);
   await view.findByRole("heading", { name: "Install this exact release" });
+  fireEvent.change(await view.findByRole("combobox", { name: "Release version" }), { target: { value: fixture.older.version } });
+  await view.findByText(fixture.older.releaseNotes!);
+  assert.equal(operations.length, 0);
+  assert.equal(client.bundleCalls, 0);
   fireEvent.click(await view.findByRole("button", { name: "Review install" }));
   await view.findByText("release-notes-helper 0.1.0");
+  assert.equal(view.getAllByText(fixture.older.releaseNotes!).length, 2);
+  assert.match(document.querySelector(".release-install-review")?.textContent ?? "", /generic · SHA-256 b{12}… · 513 bytes/);
   assert.equal(operations.length, 0);
   fireEvent.click(view.getByRole("button", { name: "Confirm exact install" }));
   await waitFor(() => assert.equal(operations.length, 1));
@@ -330,7 +450,7 @@ test("signed-in users review an exact release before queueing a connected-target
     action: "install",
     slug: "release-notes-helper",
     version: "0.1.0",
-    platform: "codex",
+    platform: "generic",
   });
   assert.match(String(operations[0]?.idempotencyKey), /^install:[a-z0-9]+$/);
 });
@@ -346,6 +466,7 @@ test("privileged skill controls stay locked without an MFA-verified session and 
   await view.findByRole("heading", { name: "Lifecycle and sharing controls are locked", level: 2 });
   assert.equal(view.queryByRole("region", { name: "Skill lifecycle controls" }), null);
   assert.equal(view.queryByRole("region", { name: "Sharing controls" }), null);
+  assert.deepEqual(client.releaseHistoryCalls, [managedSkill.slug]);
   assert.equal(client.releaseManagementCalls, 0);
   assert.equal(client.sharingDetailCalls, 0);
 });
@@ -360,6 +481,7 @@ test("MFA-verified managers can load lifecycle and sharing controls", async () =
 
   await view.findByRole("region", { name: "Skill lifecycle controls" });
   await view.findByRole("region", { name: "Sharing controls" });
+  assert.deepEqual(client.releaseHistoryCalls, [managedSkill.slug]);
   assert.equal(client.releaseManagementCalls, 1);
   assert.equal(client.sharingDetailCalls, 1);
 });
@@ -418,6 +540,100 @@ test("URL state and popstate restore search, selection, platform, and active nav
   await view.findByText(/--platform 'generic'/);
   assert.equal((view.getByLabelText("Search skills") as HTMLInputElement).value, "release");
   assert.equal(window.location.pathname, "/skills/release-notes-helper");
+});
+
+test("late skill and release-list responses cannot overwrite another skill", async () => {
+  setupDom("http://localhost/skills/slow-helper");
+  const slow = { ...publicSkill("slow-helper"), title: "Slow helper", summary: "Slow detail." };
+  const fast = { ...publicSkill("fast-helper"), title: "Fast helper", summary: "Fast detail." };
+  const pendingSkill = deferred<PublicSkill>();
+  const client = mockClient({
+    skills: [slow, fast],
+    skillLoader: (slug, fallback) => slug === slow.slug ? pendingSkill.promise : fallback,
+  });
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("link", { name: /Fast helper/ }));
+  await view.findByText("Fast detail.");
+  await act(async () => { pendingSkill.resolve(slow); await pendingSkill.promise; });
+  assert.equal(window.location.pathname, "/skills/fast-helper");
+  assert.equal(view.queryByText("Slow detail."), null);
+  assert.equal(client.releaseCalls.some((call) => call.startsWith("slow-helper@")), false);
+});
+
+test("a late release list cannot replace another skill's history", async () => {
+  setupDom("http://localhost/skills/slow-helper");
+  const slow = { ...publicSkill("slow-helper"), title: "Slow helper", summary: "Slow detail." };
+  const fast = { ...publicSkill("fast-helper"), title: "Fast helper", summary: "Fast detail." };
+  const pendingHistory = deferred<SkillReleaseSummary[]>();
+  const client = mockClient({
+    skills: [slow, fast],
+    releaseListLoader: (slug, fallback) => slug === slow.slug ? pendingHistory.promise : fallback,
+  });
+  const view = render(<RegistryApp client={client} />);
+  await view.findByText("Loading release history…");
+  fireEvent.click(view.getByRole("link", { name: /Fast helper/ }));
+  await view.findByText("Fast detail.");
+  await act(async () => {
+    pendingHistory.resolve([{ ...releaseSummary(publicRelease()), slug: slow.slug }]);
+    await pendingHistory.promise;
+  });
+  assert.equal(window.location.pathname, "/skills/fast-helper");
+  assert.equal(view.queryByRole("combobox", { name: "Release version" }), null);
+  assert.equal(client.releaseManagementCalls, 0);
+});
+
+test("out-of-order exact release responses cannot replace the current version", async () => {
+  setupDom("http://localhost/skills/release-notes-helper?version=0.1.0");
+  const fixture = releaseHistoryFixture();
+  const pendingRelease = deferred<ReleaseMetadata>();
+  const client = historyClient(fixture, {
+    releaseLoader: (_slug, version, fallback) => version === fixture.older.version ? pendingRelease.promise : fallback,
+  });
+  const view = render(<RegistryApp client={client} />);
+  await waitFor(() => assert.deepEqual(client.releaseCalls, ["release-notes-helper@0.1.0"]));
+  fireEvent.click(await view.findByRole("button", { name: "Return to latest" }));
+  await view.findByText(fixture.latest.releaseNotes!);
+  await act(async () => { pendingRelease.resolve(fixture.older); await pendingRelease.promise; });
+  assert.equal(window.location.search, "");
+  assert.equal(view.queryByText(fixture.older.releaseNotes!), null);
+  assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /aaaaaaaaaa…aaaaaaaa/);
+  assert.equal(client.releaseCalls.at(-1), "release-notes-helper@0.2.0");
+});
+
+test("popstate restores a pinned version and skill changes clear that pin", async () => {
+  setupDom("http://localhost/skills/release-notes-helper?q=writing&platform=generic");
+  const fixture = releaseHistoryFixture();
+  const another = { ...publicSkill("another-helper"), title: "Another helper", summary: "Another detail." };
+  const client = historyClient(fixture, { skills: [fixture.skill, another] });
+  const view = render(<RegistryApp client={client} />);
+  await view.findByText(fixture.latest.releaseNotes!);
+  const historyLength = window.history.length;
+  fireEvent.change(view.getByRole("combobox", { name: "Release version" }), { target: { value: fixture.older.version } });
+  await view.findByText(fixture.older.releaseNotes!);
+  const pinnedUrl = `${window.location.pathname}${window.location.search}`;
+  assert.equal(pinnedUrl, "/skills/release-notes-helper?q=writing&platform=generic&version=0.1.0");
+  assert.equal(window.history.length, historyLength + 1);
+  fireEvent.click(view.getByRole("link", { name: /Another helper/ }));
+  await view.findByText("Another detail.");
+  const otherUrl = `${window.location.pathname}${window.location.search}`;
+  assert.equal(otherUrl, "/skills/another-helper?q=writing&platform=generic");
+
+  act(() => {
+    window.history.replaceState(window.history.state, "", pinnedUrl);
+    window.dispatchEvent(new window.PopStateEvent("popstate", { state: window.history.state }));
+  });
+  await view.findByText(fixture.older.releaseNotes!);
+  assert.equal((view.getByLabelText("Search skills") as HTMLInputElement).value, "writing");
+  assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, fixture.older.version);
+  assert.equal(view.getByRole("link", { name: /Release Notes Helper/ }).getAttribute("aria-current"), "true");
+  await view.findByText(/--version '0\.1\.0' --platform 'generic'/);
+
+  act(() => {
+    window.history.replaceState(window.history.state, "", otherUrl);
+    window.dispatchEvent(new window.PopStateEvent("popstate", { state: window.history.state }));
+  });
+  await view.findByText("Another detail.");
+  assert.equal(new URLSearchParams(window.location.search).has("version"), false);
 });
 
 test("unknown routes render an explicit not-found view", async () => {
@@ -1800,6 +2016,7 @@ function mockClient(input: {
   adminUsers?: AdminUser[];
   reviewSubmissions?: ReviewSubmissionSummary[];
   skills?: PublicSkill[];
+  skillLoader?: (slug: string, fallback: PublicSkill) => PublicSkill | Promise<PublicSkill>;
   release?: ReleaseMetadata;
   getSkillError?: SafeApiError;
   loginError?: SafeApiError;
@@ -1818,6 +2035,7 @@ function mockClient(input: {
   architectureDraftPreview?: ArchitectureDraftPreview | Promise<ArchitectureDraftPreview>;
   architectureRevisions?: ArchitectureRevisionRecord[];
   registryReleases?: Record<string, SkillReleaseSummary[]>;
+  releaseListLoader?: (slug: string, fallback: SkillReleaseSummary[]) => SkillReleaseSummary[] | Promise<SkillReleaseSummary[]>;
   releaseMetadata?: Record<string, ReleaseMetadata>;
   releaseLoader?: (slug: string, version: string, fallback: ReleaseMetadata) => ReleaseMetadata | Promise<ReleaseMetadata>;
   organizations?: OrganizationListItem[];
@@ -1845,6 +2063,7 @@ function mockClient(input: {
   let sharingDetails = input.sharingDetails ?? defaultSharingDetails();
   let architectureSummaries = input.architectures ?? [defaultArchitectureSummary()];
   let architectureRevisionRecords = [...(input.architectureRevisions ?? [])];
+  const pendingPublicHistory = new Set<string>();
   const client: RegistryClient & {
     adminTokenRevokes: string[];
     apiTokenCreates: Array<{ name: string; scopes: ApiTokenScope[] }>;
@@ -1870,6 +2089,7 @@ function mockClient(input: {
     registrationInvitations: Array<{ email: string; name?: string }>;
     registrationUpdates: AdminRegistrationMode[];
     releaseCalls: string[];
+    releaseHistoryCalls: string[];
     releaseManagementCalls: number;
     reviewActions: string[];
     reviewBundleCalls: string[];
@@ -1908,6 +2128,7 @@ function mockClient(input: {
     registrationInvitations: [],
     registrationUpdates: [],
     releaseCalls: [],
+    releaseHistoryCalls: [],
     releaseManagementCalls: 0,
     reviewActions: [],
     reviewBundleCalls: [],
@@ -1929,12 +2150,14 @@ function mockClient(input: {
       if (input.getSkillError) {
         throw input.getSkillError;
       }
-      const skill = skills.find((item) => item.slug === slug) ?? publicSkill(slug);
+      const fallback = skills.find((item) => item.slug === slug) ?? publicSkill(slug);
+      const skill = input.skillLoader ? await input.skillLoader(slug, fallback) : fallback;
+      pendingPublicHistory.add(slug);
       return skill;
     },
     async getRelease(slug, version) {
       client.releaseCalls.push(`${slug}@${version}`);
-      const fallback = input.releaseMetadata?.[`${slug}@${version}`] ?? release;
+      const fallback = input.releaseMetadata?.[`${slug}@${version}`] ?? { ...release, slug, version };
       return input.releaseLoader ? await input.releaseLoader(slug, version, fallback) : fallback;
     },
     async getMe() {
@@ -2197,8 +2420,13 @@ function mockClient(input: {
       };
     },
     async listSkillReleases(slug) {
-      client.releaseManagementCalls += 1;
-      return input.registryReleases?.[slug] ?? [];
+      if (pendingPublicHistory.delete(slug)) {
+        client.releaseHistoryCalls.push(slug);
+      } else {
+        client.releaseManagementCalls += 1;
+      }
+      const fallback = input.registryReleases?.[slug] ?? [];
+      return input.releaseListLoader ? await input.releaseListLoader(slug, fallback) : fallback;
     },
     async updateSkillMetadata() {
       throw new Error("Skill metadata is not used by this web mock.");
@@ -2934,6 +3162,86 @@ function publicRelease(): ReleaseMetadata {
       contentType: "application/vnd.myskills-app.package+json",
     },
   };
+}
+
+function releaseSummary(release: ReleaseMetadata): SkillReleaseSummary {
+  return {
+    id: `release-${release.version}`,
+    slug: release.slug,
+    version: release.version,
+    lifecycleStatus: release.lifecycleStatus,
+    reviewStatus: release.reviewStatus,
+    securityStatus: release.securityStatus,
+    publishedAt: release.publishedAt,
+    platforms: release.platforms,
+    releaseNotes: release.releaseNotes,
+    changeKind: release.changeKind,
+    compatibility: release.compatibility,
+    artifact: release.artifact,
+    findingCount: 0,
+    allowedActions: [],
+  };
+}
+
+function releaseHistoryFixture() {
+  const latest: ReleaseMetadata = {
+    ...publicRelease(),
+    version: "0.2.0",
+    publishedAt: "2026-08-12T00:00:00.000Z",
+    releaseNotes: "Current release adds new guidance.",
+    changeKind: "feature",
+    compatibility: { minimumMyskillsVersion: "2.0.0" },
+    artifact: { ...publicRelease().artifact, sha256: "a".repeat(64), byteSize: 2048 },
+  };
+  const older: ReleaseMetadata = {
+    ...publicRelease(),
+    lifecycleStatus: "deprecated",
+    publishedAt: "2026-05-02T00:00:00.000Z",
+    platforms: [{ name: "generic", installTarget: "prompt-pack", status: "supported" }],
+    releaseNotes: "Earlier release supports generic only.",
+    changeKind: "fix",
+    compatibility: { minimumMyskillsVersion: "1.0.0" },
+    artifact: { ...publicRelease().artifact, sha256: "b".repeat(64), byteSize: 513 },
+  };
+  const hidden: SkillReleaseSummary = {
+    ...releaseSummary(latest),
+    id: "manager-only",
+    version: "0.3.0",
+    lifecycleStatus: "draft",
+    reviewStatus: "pending",
+    securityStatus: "pending",
+    publishedAt: null,
+    releaseNotes: "Manager-only notes.",
+  };
+  const unpublished: SkillReleaseSummary = { ...releaseSummary(latest), id: "unpublished", version: "0.2.1", publishedAt: null };
+  return {
+    skill: { ...publicSkill(), latestVersion: latest.version },
+    latest,
+    older,
+    history: [releaseSummary(older), hidden, unpublished, releaseSummary(latest)],
+  };
+}
+
+function historyClient(fixture: ReturnType<typeof releaseHistoryFixture>, options: Parameters<typeof mockClient>[0] = {}) {
+  return mockClient({
+    skills: [fixture.skill],
+    registryReleases: { [fixture.skill.slug]: fixture.history },
+    releaseMetadata: {
+      [`${fixture.skill.slug}@${fixture.latest.version}`]: fixture.latest,
+      [`${fixture.skill.slug}@${fixture.older.version}`]: fixture.older,
+    },
+    ...options,
+  });
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 function safeApiError(status: number, code: string, message: string): SafeApiError {
