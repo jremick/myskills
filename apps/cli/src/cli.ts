@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   hasBlockingFindings,
@@ -90,6 +90,14 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
         return await reviewCommand(parsed, runtime);
       case "export":
         return await exportCommand(parsed, runtime);
+      case "install":
+        return await installCommand(parsed, runtime);
+      case "list":
+        return await listInstalledCommand(parsed, runtime);
+      case "update":
+        return await updateCommand(parsed, runtime);
+      case "rollback":
+        return await rollbackCommand(parsed, runtime);
       case "token":
         return await tokenCommand(parsed, runtime);
       default:
@@ -440,27 +448,228 @@ async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   const platform = stringOption(parsed, "platform");
   const outputDir = stringOption(parsed, "output");
   const token = await tokenOption(parsed, runtime) ?? undefined;
+  const bundle = await downloadVerifiedBundle({ slug, version, platform }, parsed, runtime, token);
+  const outputRoot = path.resolve(outputDir);
+  const writes = await writeBundleFiles(bundle.files, outputRoot, { clean: false });
+  runtime.io.stdout(`${slug}@${version}\texported\tfiles=${writes.length}\t${outputRoot}`);
+  return 0;
+}
+
+async function installCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const slug = parsed.args[0];
+  if (!slug) {
+    throw new CliError("Usage: ai-skills install <skill-slug> [--version <version>] [--platform <platform>] [--dir <install-root>]", 2);
+  }
+  const token = await tokenOption(parsed, runtime) ?? undefined;
+  const root = installRoot(parsed, runtime);
+  const registry = await readInstallRegistry(root);
+  const version = optionalStringOption(parsed, "version") ?? await latestVersionForSkill(slug, parsed, runtime, token);
+  const installed = await installSkillVersion({
+    slug,
+    version,
+    platform: optionalStringOption(parsed, "platform"),
+    root,
+    registry,
+    parsed,
+    runtime,
+    token,
+  });
+  await writeInstallRegistry(root, registry);
+  runtime.io.stdout(`${installed.slug}@${installed.version}\tinstalled\tplatform=${installed.platform}\t${installed.path}`);
+  return 0;
+}
+
+async function listInstalledCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const root = installRoot(parsed, runtime);
+  const registry = await readInstallRegistry(root);
+  const installations = Object.values(registry.installations).sort((a, b) => a.slug.localeCompare(b.slug));
+  if (parsed.options.json) {
+    runtime.io.stdout(JSON.stringify({ installations }, null, 2));
+    return 0;
+  }
+  if (installations.length === 0) {
+    runtime.io.stdout("No installed skills.");
+    return 0;
+  }
+  for (const installed of installations) {
+    runtime.io.stdout(`${installed.slug}\t${installed.version}\t${installed.platform}\t${installed.path}`);
+  }
+  return 0;
+}
+
+async function updateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const root = installRoot(parsed, runtime);
+  const registry = await readInstallRegistry(root);
+  const targets = parsed.args[0]
+    ? [parseInstallSlug(parsed.args[0])]
+    : Object.keys(registry.installations).sort();
+  if (targets.length === 0) {
+    runtime.io.stdout("No installed skills.");
+    return 0;
+  }
+  const token = await tokenOption(parsed, runtime) ?? undefined;
+  const explicitVersion = optionalStringOption(parsed, "version");
+  const explicitPlatform = optionalStringOption(parsed, "platform");
+
+  for (const slug of targets) {
+    const existing = registry.installations[slug];
+    if (!existing) {
+      throw new CliError(`${slug} is not installed. Run ai-skills install ${slug}.`, 1);
+    }
+    const version = explicitVersion ?? await latestVersionForSkill(slug, parsed, runtime, token);
+    const platform = explicitPlatform ?? existing.platform;
+    if (version === existing.version && platform === existing.platform) {
+      runtime.io.stdout(`${slug}@${existing.version}\tcurrent\tplatform=${existing.platform}`);
+      continue;
+    }
+    const updated = await installSkillVersion({
+      slug,
+      version,
+      platform,
+      root,
+      registry,
+      parsed,
+      runtime,
+      token,
+    });
+    runtime.io.stdout(`${updated.slug}@${updated.version}\tupdated\tplatform=${updated.platform}\tprevious=${existing.version}`);
+  }
+  await writeInstallRegistry(root, registry);
+  return 0;
+}
+
+async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const requestedSlug = parsed.args[0];
+  if (!requestedSlug) {
+    throw new CliError("Usage: ai-skills rollback <skill-slug> [--dir <install-root>]", 2);
+  }
+  const slug = parseInstallSlug(requestedSlug);
+  const root = installRoot(parsed, runtime);
+  const registry = await readInstallRegistry(root);
+  const existing = registry.installations[slug];
+  const previous = existing?.history.at(-1);
+  if (!existing || !previous) {
+    throw new CliError(`${slug} has no rollback snapshot.`, 1);
+  }
+
+  const outputRoot = skillInstallPath(root, slug);
+  const snapshotPath = path.resolve(previous.snapshotPath);
+  assertChildPath(path.join(root, ".ai-skills-share", "history"), snapshotPath);
+  await rm(outputRoot, { recursive: true, force: true });
+  await mkdir(path.dirname(outputRoot), { recursive: true });
+  await cp(snapshotPath, outputRoot, { recursive: true });
+  registry.installations[slug] = {
+    slug,
+    version: previous.version,
+    platform: previous.platform,
+    path: outputRoot,
+    installedAt: new Date().toISOString(),
+    artifact: previous.artifact,
+    history: existing.history.slice(0, -1),
+  };
+  await writeInstallRegistry(root, registry);
+  runtime.io.stdout(`${slug}@${previous.version}\trolled-back\tplatform=${previous.platform}\t${outputRoot}`);
+  return 0;
+}
+
+async function latestVersionForSkill(slug: string, parsed: ParsedArgs, runtime: CliRuntime, token: string | undefined): Promise<string> {
+  const response = await apiGet(`/v1/skills/${encodeURIComponent(parseInstallSlug(slug))}`, parsed, runtime, token);
+  const skill = response.skill;
+  if (!skill || typeof skill !== "object" || Array.isArray(skill)) {
+    throw new CliError("API skill response is missing skill metadata.", 1);
+  }
+  const latestVersion = (skill as { latestVersion?: unknown }).latestVersion;
+  if (typeof latestVersion !== "string" || !latestVersion) {
+    throw new CliError(`${slug} has no approved release to install.`, 1);
+  }
+  return latestVersion;
+}
+
+async function installSkillVersion(input: {
+  slug: string;
+  version: string;
+  platform?: string;
+  root: string;
+  registry: InstallRegistry;
+  parsed: ParsedArgs;
+  runtime: CliRuntime;
+  token?: string;
+}): Promise<InstalledSkillRecord> {
+  const slug = parseInstallSlug(input.slug);
+  const outputRoot = skillInstallPath(input.root, slug);
+  const bundle = await downloadVerifiedBundle({
+    slug,
+    version: input.version,
+    platform: input.platform,
+  }, input.parsed, input.runtime, input.token);
+  const existing = input.registry.installations[slug];
+  const history = existing ? [...existing.history] : [];
+  if (existing && await pathExists(outputRoot)) {
+    const snapshotPath = historySnapshotPath(input.root, slug, existing.version);
+    await mkdir(path.dirname(snapshotPath), { recursive: true });
+    await rm(snapshotPath, { recursive: true, force: true });
+    await cp(outputRoot, snapshotPath, { recursive: true });
+    history.push({
+      version: existing.version,
+      platform: existing.platform,
+      installedAt: existing.installedAt,
+      artifact: existing.artifact,
+      snapshotPath,
+    });
+  }
+
+  await writeBundleFiles(bundle.files, outputRoot, { clean: true });
+  const installed: InstalledSkillRecord = {
+    slug,
+    version: bundle.version,
+    platform: bundle.platform.name,
+    path: outputRoot,
+    installedAt: new Date().toISOString(),
+    artifact: bundle.artifact,
+    history,
+  };
+  input.registry.installations[slug] = installed;
+  return installed;
+}
+
+async function downloadVerifiedBundle(input: {
+  slug: string;
+  version: string;
+  platform?: string;
+}, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<VerifiedBundle> {
+  const slug = parseInstallSlug(input.slug);
+  const version = input.version;
   const releaseResponse = await apiGet(
     `/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}`,
     parsed,
     runtime,
     token,
   );
-  const artifact = releaseArtifact(releaseResponse);
+  const release = releaseMetadata(releaseResponse, { slug, version });
+  const platform = selectReleasePlatform(release, input.platform);
   const bundleText = await apiGetText(
-    `/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}/bundle?platform=${encodeURIComponent(platform)}`,
+    `/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}/bundle?platform=${encodeURIComponent(platform.name)}`,
     parsed,
     runtime,
     token,
   );
   const byteSize = Buffer.byteLength(bundleText);
   const sha256 = createHash("sha256").update(bundleText).digest("hex");
-  if (byteSize !== artifact.byteSize || sha256 !== artifact.sha256) {
+  if (byteSize !== release.artifact.byteSize || sha256 !== release.artifact.sha256) {
     throw new CliError("Downloaded bundle did not match release metadata.", 1);
   }
 
   const files = parseBundlePayload(bundleText);
-  const outputRoot = path.resolve(outputDir);
+  return {
+    slug: release.slug,
+    version: release.version,
+    artifact: release.artifact,
+    platform,
+    files,
+  };
+}
+
+async function writeBundleFiles(files: Array<{ path: string; content: string }>, outputRoot: string, options: { clean: boolean }): Promise<Array<{ absolutePath: string; content: string }>> {
   const writes = files.map((file) => {
     const normalized = safeBundlePath(file.path);
     const absolutePath = path.resolve(outputRoot, normalized);
@@ -474,12 +683,256 @@ async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     };
   });
 
+  if (options.clean) {
+    await rm(outputRoot, { recursive: true, force: true });
+  }
   for (const file of writes) {
     await mkdir(path.dirname(file.absolutePath), { recursive: true });
     await writeFile(file.absolutePath, file.content, "utf8");
   }
-  runtime.io.stdout(`${slug}@${version}\texported\tfiles=${writes.length}\t${outputRoot}`);
-  return 0;
+  return writes;
+}
+
+interface VerifiedBundle {
+  slug: string;
+  version: string;
+  platform: ReleasePlatform;
+  artifact: ReleaseArtifact;
+  files: Array<{ path: string; content: string }>;
+}
+
+interface ReleasePlatform {
+  name: string;
+  installTarget: string;
+  status: string;
+}
+
+interface ReleaseArtifact {
+  sha256: string;
+  byteSize: number;
+}
+
+interface ReleaseInfo {
+  slug: string;
+  version: string;
+  platforms: ReleasePlatform[];
+  artifact: ReleaseArtifact;
+}
+
+interface InstallRegistry {
+  version: 1;
+  installations: Record<string, InstalledSkillRecord>;
+}
+
+interface InstalledSkillRecord {
+  slug: string;
+  version: string;
+  platform: string;
+  path: string;
+  installedAt: string;
+  artifact: ReleaseArtifact;
+  history: InstalledSkillSnapshot[];
+}
+
+interface InstalledSkillSnapshot {
+  version: string;
+  platform: string;
+  installedAt: string;
+  artifact: ReleaseArtifact;
+  snapshotPath: string;
+}
+
+function releaseMetadata(response: Record<string, unknown>, fallback: { slug: string; version: string }): ReleaseInfo {
+  const release = response.release;
+  if (!release || typeof release !== "object" || Array.isArray(release)) {
+    throw new CliError("API release response is missing release metadata.", 1);
+  }
+  const record = release as Record<string, unknown>;
+  return {
+    slug: typeof record.slug === "string" && record.slug ? record.slug : fallback.slug,
+    version: typeof record.version === "string" && record.version ? record.version : fallback.version,
+    platforms: parseReleasePlatforms(record.platforms),
+    artifact: releaseArtifact(response),
+  };
+}
+
+function parseReleasePlatforms(input: unknown): ReleasePlatform[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+  return input.flatMap((platform) => {
+    if (!platform || typeof platform !== "object" || Array.isArray(platform)) {
+      return [];
+    }
+    const record = platform as Record<string, unknown>;
+    if (typeof record.name !== "string" || typeof record.installTarget !== "string") {
+      return [];
+    }
+    return [{
+      name: record.name,
+      installTarget: record.installTarget,
+      status: typeof record.status === "string" ? record.status : "supported",
+    }];
+  });
+}
+
+function selectReleasePlatform(release: ReleaseInfo, requestedPlatform: string | undefined): ReleasePlatform {
+  const platform = requestedPlatform
+    ? release.platforms.find((candidate) => candidate.name === requestedPlatform)
+    : release.platforms.find((candidate) => candidate.name === "codex" && candidate.status === "supported")
+      ?? release.platforms.find((candidate) => candidate.status === "supported")
+      ?? release.platforms[0];
+  if (requestedPlatform && !platform) {
+    throw new CliError(`Platform is not available for this release: ${requestedPlatform}`, 1);
+  }
+  if (platform && platform.status !== "supported") {
+    throw new CliError(`Platform is not supported for this release: ${platform.name}`, 1);
+  }
+  return platform ?? {
+    name: requestedPlatform ?? "codex",
+    installTarget: "unknown",
+    status: "supported",
+  };
+}
+
+function installRoot(parsed: ParsedArgs, runtime: CliRuntime): string {
+  const configured = optionalStringOption(parsed, "dir")
+    ?? runtime.env.AI_SKILLS_INSTALL_DIR
+    ?? (runtime.env.XDG_DATA_HOME ? path.join(runtime.env.XDG_DATA_HOME, "ai-skills-share", "skills") : undefined)
+    ?? (runtime.env.HOME ? path.join(runtime.env.HOME, ".local", "share", "ai-skills-share", "skills") : undefined)
+    ?? path.join(process.cwd(), ".ai-skills-share", "skills");
+  return path.resolve(configured);
+}
+
+async function readInstallRegistry(root: string): Promise<InstallRegistry> {
+  try {
+    return parseInstallRegistry(await readFile(installRegistryPath(root), "utf8"), root);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return { version: 1, installations: {} };
+    }
+    throw error;
+  }
+}
+
+async function writeInstallRegistry(root: string, registry: InstallRegistry): Promise<void> {
+  const filePath = installRegistryPath(root);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
+}
+
+function parseInstallRegistry(raw: string, root: string): InstallRegistry {
+  const parsed = JSON.parse(raw) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new CliError("Install registry must contain a JSON object.", 1);
+  }
+  const record = parsed as Record<string, unknown>;
+  if (record.version !== 1 || !record.installations || typeof record.installations !== "object" || Array.isArray(record.installations)) {
+    throw new CliError("Install registry has an unsupported format.", 1);
+  }
+  const installations: Record<string, InstalledSkillRecord> = {};
+  for (const [slug, value] of Object.entries(record.installations as Record<string, unknown>)) {
+    const installed = parseInstalledSkillRecord(slug, value, root);
+    if (installed) {
+      installations[slug] = installed;
+    }
+  }
+  return { version: 1, installations };
+}
+
+function parseInstalledSkillRecord(slug: string, input: unknown, root: string): InstalledSkillRecord | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+  const record = input as Record<string, unknown>;
+  if (typeof record.version !== "string" || typeof record.platform !== "string") {
+    return null;
+  }
+  const normalizedSlug = parseInstallSlug(slug);
+  const installPath = skillInstallPath(root, normalizedSlug);
+  return {
+    slug: normalizedSlug,
+    version: record.version,
+    platform: record.platform,
+    path: installPath,
+    installedAt: typeof record.installedAt === "string" ? record.installedAt : "",
+    artifact: parseStoredArtifact(record.artifact),
+    history: parseInstallHistory(record.history, root),
+  };
+}
+
+function parseInstallHistory(input: unknown, root: string): InstalledSkillSnapshot[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+  return input.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return [];
+    }
+    const record = item as Record<string, unknown>;
+    if (typeof record.version !== "string" || typeof record.platform !== "string" || typeof record.snapshotPath !== "string") {
+      return [];
+    }
+    const snapshotPath = path.resolve(record.snapshotPath);
+    assertChildPath(path.join(root, ".ai-skills-share", "history"), snapshotPath);
+    return [{
+      version: record.version,
+      platform: record.platform,
+      installedAt: typeof record.installedAt === "string" ? record.installedAt : "",
+      artifact: parseStoredArtifact(record.artifact),
+      snapshotPath,
+    }];
+  });
+}
+
+function parseStoredArtifact(input: unknown): ReleaseArtifact {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return { sha256: "", byteSize: 0 };
+  }
+  const record = input as Record<string, unknown>;
+  return {
+    sha256: typeof record.sha256 === "string" ? record.sha256 : "",
+    byteSize: typeof record.byteSize === "number" ? record.byteSize : 0,
+  };
+}
+
+function installRegistryPath(root: string): string {
+  return path.join(root, ".ai-skills-share", "installed.json");
+}
+
+function skillInstallPath(root: string, slug: string): string {
+  return path.join(root, parseInstallSlug(slug));
+}
+
+function historySnapshotPath(root: string, slug: string, version: string): string {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return path.join(root, ".ai-skills-share", "history", parseInstallSlug(slug), `${timestamp}-${version}`);
+}
+
+function parseInstallSlug(slug: string): string {
+  if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(slug)) {
+    throw new CliError("Skill slug is invalid.", 2);
+  }
+  return slug;
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await stat(filePath);
+    return true;
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+function assertChildPath(root: string, target: string): void {
+  const relative = path.relative(path.resolve(root), path.resolve(target));
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new CliError("Install registry contains an unsafe path.", 1);
+  }
 }
 
 async function apiGet(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<Record<string, unknown>> {
@@ -714,6 +1167,10 @@ function releaseArtifact(response: Record<string, unknown>): { sha256: string; b
   };
 }
 
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
+}
+
 function parseBundlePayload(text: string): Array<{ path: string; content: string }> {
   let body: unknown;
   try {
@@ -801,6 +1258,10 @@ function helpText(): string {
     "  review submissions [--api-url <url>] [--token <token>]",
     "  review action <submission-id> --action <approve|publish> [--reason <text>]",
     "  export <skill-slug> --version <version> --platform <platform> --output <dir>",
+    "  install <skill-slug> [--version <version>] [--platform <platform>] [--dir <install-root>]",
+    "  list [--dir <install-root>]",
+    "  update [skill-slug] [--version <version>] [--platform <platform>] [--dir <install-root>]",
+    "  rollback <skill-slug> [--dir <install-root>]",
     "  token create --name <name> --scope <scope> [--scope <scope>]",
     "  token list",
     "  token revoke <token-id>",

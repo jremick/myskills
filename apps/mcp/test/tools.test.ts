@@ -82,6 +82,7 @@ test("install instructions never fetch or expose bundle package contents", async
     "http://localhost:3001/v1/skills/release-notes-helper/releases/0.1.0",
   ]);
   assert.equal(calls.some((url) => url.includes("/bundle")), false);
+  assert.match(text, /ai-skills install release-notes-helper --version 0\.1\.0 --platform codex/);
   assert.match(text, /ai-skills export release-notes-helper --version 0\.1\.0 --platform codex/);
   assert.match(text, /packageContentsReturned/);
   assert.equal(text.includes("storageKey"), false);

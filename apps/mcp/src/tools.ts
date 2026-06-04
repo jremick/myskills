@@ -89,6 +89,7 @@ export function createAiSkillsMcpHandlers(client: RegistryApiClient): AiSkillsMc
           install: {
             platform: selectedPlatform.name,
             installTarget: selectedPlatform.installTarget,
+            cliInstallCommand: `ai-skills install ${skill.slug} --version ${release.version} --platform ${selectedPlatform.name}`,
             cliExportCommand: `ai-skills export ${skill.slug} --version ${release.version} --platform ${selectedPlatform.name} --output ${outputDir}`,
             apiBundleEndpoint: `${client.baseUrl}/v1/skills/${encodeURIComponent(skill.slug)}/releases/${encodeURIComponent(release.version)}/bundle?platform=${encodeURIComponent(selectedPlatform.name)}`,
             authentication: client.hasToken

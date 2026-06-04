@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { runCli, type FetchLike } from "../src/cli.js";
@@ -392,14 +392,7 @@ test("export writes verified bundle files under output directory", async (t) => 
     if (String(input).endsWith("/bundle?platform=codex")) {
       return rawResponse(200, bundle);
     }
-    return response(200, {
-      release: {
-        artifact: {
-          sha256: createHash("sha256").update(bundle).digest("hex"),
-          byteSize: Buffer.byteLength(bundle),
-        },
-      },
-    });
+    return response(200, releaseBody("0.1.0", bundle));
   };
 
   const code = await runCli([
@@ -436,14 +429,7 @@ test("export refuses unsafe bundle file paths before writing", async (t) => {
     if (String(input).endsWith("/bundle?platform=codex")) {
       return rawResponse(200, bundle);
     }
-    return response(200, {
-      release: {
-        artifact: {
-          sha256: createHash("sha256").update(bundle).digest("hex"),
-          byteSize: Buffer.byteLength(bundle),
-        },
-      },
-    });
+    return response(200, releaseBody("0.1.0", bundle));
   };
 
   const code = await runCli([
@@ -459,6 +445,139 @@ test("export refuses unsafe bundle file paths before writing", async (t) => {
 
   assert.equal(code, 1);
   assert.match(output.stderr.join("\n"), /cannot traverse directories/);
+});
+
+test("install downloads the latest verified bundle and records local state", async (t) => {
+  const installRoot = await mkdtemp(path.join(os.tmpdir(), "ai-skills-install-"));
+  t.after(() => rm(installRoot, { recursive: true, force: true }));
+  const output = createOutput();
+  const bundle = bundleText("0.2.0");
+  const calls: string[] = [];
+  const fetch: FetchLike = async (input, init) => {
+    calls.push(`${init?.headers?.authorization ?? ""} ${String(input)}`);
+    if (String(input).endsWith("/v1/skills/release-notes-helper")) {
+      return response(200, {
+        skill: {
+          slug: "release-notes-helper",
+          title: "Release Notes Helper",
+          summary: "Turns merged changes into concise release notes.",
+          latestVersion: "0.2.0",
+          platforms: [{ name: "codex", installTarget: "codex-skill", status: "supported" }],
+          tags: [],
+        },
+      });
+    }
+    if (String(input).endsWith("/releases/0.2.0")) {
+      return response(200, releaseBody("0.2.0", bundle));
+    }
+    return rawResponse(200, bundle);
+  };
+
+  const code = await runCli([
+    "install",
+    "release-notes-helper",
+    "--dir",
+    installRoot,
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "install-token" }));
+
+  assert.equal(code, 0);
+  assert.deepEqual(calls, [
+    "Bearer install-token http://api.test/v1/skills/release-notes-helper",
+    "Bearer install-token http://api.test/v1/skills/release-notes-helper/releases/0.2.0",
+    "Bearer install-token http://api.test/v1/skills/release-notes-helper/releases/0.2.0/bundle?platform=codex",
+  ]);
+  assert.equal(await readFile(path.join(installRoot, "release-notes-helper", "README.md"), "utf8"), "Release notes helper 0.2.0");
+  assert.match(output.stdout[0], /release-notes-helper@0\.2\.0\tinstalled\tplatform=codex/);
+
+  const registry = JSON.parse(await readFile(path.join(installRoot, ".ai-skills-share", "installed.json"), "utf8"));
+  assert.equal(registry.installations["release-notes-helper"].version, "0.2.0");
+  assert.equal(registry.installations["release-notes-helper"].platform, "codex");
+  assert.equal(registry.installations["release-notes-helper"].history.length, 0);
+});
+
+test("list prints local installed skills without registry calls", async (t) => {
+  const installRoot = await mkdtemp(path.join(os.tmpdir(), "ai-skills-install-"));
+  t.after(() => rm(installRoot, { recursive: true, force: true }));
+  await mkdir(path.join(installRoot, ".ai-skills-share"), { recursive: true });
+  await writeFile(path.join(installRoot, ".ai-skills-share", "installed.json"), JSON.stringify({
+    version: 1,
+    installations: {
+      "release-notes-helper": {
+        version: "0.2.0",
+        platform: "codex",
+        installedAt: "2026-06-04T00:00:00.000Z",
+        artifact: { sha256: "abc", byteSize: 123 },
+        history: [],
+      },
+    },
+  }));
+  const output = createOutput();
+  let calls = 0;
+
+  const code = await runCli(["list", "--dir", installRoot], testRuntime(output, async () => {
+    calls += 1;
+    return response(500, {});
+  }));
+
+  assert.equal(code, 0);
+  assert.equal(calls, 0);
+  assert.deepEqual(output.stdout, [`release-notes-helper\t0.2.0\tcodex\t${path.join(installRoot, "release-notes-helper")}`]);
+});
+
+test("update stores a rollback snapshot and rollback restores it", async (t) => {
+  const installRoot = await mkdtemp(path.join(os.tmpdir(), "ai-skills-install-"));
+  t.after(() => rm(installRoot, { recursive: true, force: true }));
+  const output = createOutput();
+  const fetch: FetchLike = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/v1/skills/release-notes-helper")) {
+      return response(200, {
+        skill: {
+          slug: "release-notes-helper",
+          latestVersion: "0.2.0",
+          platforms: [{ name: "codex", installTarget: "codex-skill", status: "supported" }],
+          tags: [],
+        },
+      });
+    }
+    if (url.endsWith("/bundle?platform=codex")) {
+      const version = url.includes("/0.2.0/") ? "0.2.0" : "0.1.0";
+      return rawResponse(200, bundleText(version));
+    }
+    const version = url.endsWith("/releases/0.2.0") ? "0.2.0" : "0.1.0";
+    return response(200, releaseBody(version, bundleText(version)));
+  };
+
+  const install = await runCli([
+    "install",
+    "release-notes-helper",
+    "--version",
+    "0.1.0",
+    "--platform",
+    "codex",
+    "--dir",
+    installRoot,
+  ], testRuntime(output, fetch));
+  assert.equal(install, 0);
+  assert.equal(await readFile(path.join(installRoot, "release-notes-helper", "README.md"), "utf8"), "Release notes helper 0.1.0");
+
+  const update = await runCli(["update", "release-notes-helper", "--dir", installRoot], testRuntime(output, fetch));
+  assert.equal(update, 0);
+  assert.equal(await readFile(path.join(installRoot, "release-notes-helper", "README.md"), "utf8"), "Release notes helper 0.2.0");
+  let registry = JSON.parse(await readFile(path.join(installRoot, ".ai-skills-share", "installed.json"), "utf8"));
+  assert.equal(registry.installations["release-notes-helper"].version, "0.2.0");
+  assert.equal(registry.installations["release-notes-helper"].history[0].version, "0.1.0");
+
+  const rollback = await runCli(["rollback", "release-notes-helper", "--dir", installRoot], testRuntime(output, fetch));
+  assert.equal(rollback, 0);
+  assert.equal(await readFile(path.join(installRoot, "release-notes-helper", "README.md"), "utf8"), "Release notes helper 0.1.0");
+  registry = JSON.parse(await readFile(path.join(installRoot, ".ai-skills-share", "installed.json"), "utf8"));
+  assert.equal(registry.installations["release-notes-helper"].version, "0.1.0");
+  assert.deepEqual(registry.installations["release-notes-helper"].history, []);
+  assert.match(output.stdout.join("\n"), /release-notes-helper@0\.2\.0\tupdated\tplatform=codex\tprevious=0\.1\.0/);
+  assert.match(output.stdout.join("\n"), /release-notes-helper@0\.1\.0\trolled-back\tplatform=codex/);
 });
 
 test("token create requires an existing bearer token before fetch", async () => {
@@ -604,6 +723,32 @@ function manifestJson(): string {
     license: "Apache-2.0",
     platforms: [{ name: "codex", install_target: "codex-skill" }],
   });
+}
+
+function bundleText(version: string): string {
+  return JSON.stringify({
+    files: [
+      { path: "README.md", content: `Release notes helper ${version}` },
+      { path: "skill.json", content: manifestJson() },
+    ],
+  });
+}
+
+function releaseBody(version: string, bundle: string) {
+  return {
+    release: {
+      slug: "release-notes-helper",
+      title: "Release Notes Helper",
+      summary: "Turns merged changes into concise release notes.",
+      version,
+      platforms: [{ name: "codex", installTarget: "codex-skill", status: "supported" }],
+      artifact: {
+        sha256: createHash("sha256").update(bundle).digest("hex"),
+        byteSize: Buffer.byteLength(bundle),
+        contentType: "application/vnd.ai-skills-share.package+json",
+      },
+    },
+  };
 }
 
 function assertPackageManifestMatchesBody(body: { manifest?: { name?: string; version?: string; title?: string }; files?: Array<{ path: string; content: string }> }): void {
