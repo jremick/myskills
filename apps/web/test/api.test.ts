@@ -144,6 +144,9 @@ test("registry client manages admin settings with the session bearer", async () 
     if (url.endsWith("/v1/admin/users/user-1/actions")) {
       return jsonResponse(200, { user: { id: "user-1", status: "disabled" } });
     }
+    if (url.endsWith("/v1/admin/users/user-1/roles")) {
+      return jsonResponse(200, { user: { id: "user-1", roles: ["maintainer", "author"] } });
+    }
     if (url.endsWith("/v1/admin/providers") && !init?.method) {
       return jsonResponse(200, { providers: [{ key: "oidc-main", roleMappings: [] }] });
     }
@@ -157,6 +160,7 @@ test("registry client manages admin settings with the session bearer", async () 
   await client.updateAdminRegistration("request", "session-token");
   await client.listAdminUsers("session-token");
   await client.performAdminUserAction("user-1", "disable", "session-token");
+  await client.updateAdminUserRoles("user-1", ["maintainer", "author"], "session-token");
   await client.listAdminProviders("session-token");
   await client.upsertAdminProvider("oidc-main", {
     type: "oidc",
@@ -171,6 +175,7 @@ test("registry client manages admin settings with the session bearer", async () 
     "PUT http://api.test/v1/admin/registration",
     "GET http://api.test/v1/admin/users",
     "POST http://api.test/v1/admin/users/user-1/actions",
+    "PUT http://api.test/v1/admin/users/user-1/roles",
     "GET http://api.test/v1/admin/providers",
     "PUT http://api.test/v1/admin/providers/oidc-main",
     "GET http://api.test/v1/admin/audit?limit=10",
@@ -183,10 +188,12 @@ test("registry client manages admin settings with the session bearer", async () 
     "Bearer session-token",
     "Bearer session-token",
     "Bearer session-token",
+    "Bearer session-token",
   ]);
   assert.equal(calls[1].body, JSON.stringify({ mode: "request" }));
   assert.equal(calls[3].body, JSON.stringify({ action: "disable" }));
-  assert.equal(calls[5].body?.includes("groups"), true);
+  assert.equal(calls[4].body, JSON.stringify({ roles: ["maintainer", "author"] }));
+  assert.equal(calls[6].body?.includes("groups"), true);
 });
 
 test("registry client manages review queue with the session bearer", async () => {

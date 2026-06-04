@@ -351,6 +351,133 @@ test("admins can approve, disable, activate, and delete users without preserving
   assert.equal(deletedSessionDenied.statusCode, 401);
 });
 
+test("owners can update user roles with audit and immediate authorization changes", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAdminApp(authStore);
+  t.after(() => app.close());
+  const ownerSession = await addAndLoginWithMfa(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+  const targetSession = await addAndLogin(app, authStore, {
+    id: "target-1",
+    email: "target@example.com",
+    roles: ["user"],
+  });
+  const targetApiToken = await createApiToken(app, targetSession, ["profile:read"]);
+
+  const update = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/users/target-1/roles",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: { roles: ["maintainer", "author", "author"], reason: "approved contributor" },
+  });
+  assert.equal(update.statusCode, 200);
+  assert.deepEqual(update.json().user.roles, ["maintainer", "author"]);
+  assert.deepEqual((await authStore.findUserById("target-1"))?.roles, ["maintainer", "author"]);
+
+  const revokedSessionDenied = await app.inject({
+    method: "GET",
+    url: "/v1/me",
+    headers: { authorization: `Bearer ${targetSession}` },
+  });
+  assert.equal(revokedSessionDenied.statusCode, 401);
+  const revokedApiTokenDenied = await app.inject({
+    method: "GET",
+    url: "/v1/me",
+    headers: { authorization: `Bearer ${targetApiToken}` },
+  });
+  assert.equal(revokedApiTokenDenied.statusCode, 401);
+
+  const audit = await app.inject({
+    method: "GET",
+    url: "/v1/admin/audit?limit=1",
+    headers: { authorization: `Bearer ${ownerSession}` },
+  });
+  assert.equal(audit.statusCode, 200);
+  assert.equal(audit.json().events[0].action, "admin.user.roles.update");
+  assert.deepEqual(audit.json().events[0].details.rolesBefore, ["user"]);
+  assert.deepEqual(audit.json().events[0].details.rolesAfter, ["maintainer", "author"]);
+  assert.equal(audit.json().events[0].details.credentialsRevoked, true);
+});
+
+test("role updates enforce owner, self-lockout, deleted-user, and invalid-role safeguards", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAdminApp(authStore);
+  t.after(() => app.close());
+  const ownerSession = await addAndLoginWithMfa(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+  const adminSession = await addAndLoginWithMfa(app, authStore, {
+    id: "admin-1",
+    email: "admin@example.com",
+    roles: ["admin"],
+  });
+  await addUser(authStore, {
+    id: "target-1",
+    email: "target@example.com",
+    status: "active",
+    emailVerifiedAt: new Date(),
+    roles: ["user"],
+  });
+  await addUser(authStore, {
+    id: "deleted-1",
+    email: "deleted@example.com",
+    status: "deleted",
+    emailVerifiedAt: new Date(),
+    roles: ["user"],
+  });
+
+  const adminGrantOwner = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/users/target-1/roles",
+    headers: { authorization: `Bearer ${adminSession}` },
+    payload: { roles: ["owner"] },
+  });
+  assert.equal(adminGrantOwner.statusCode, 403);
+  assert.equal(adminGrantOwner.json().error.code, "OWNER_ROLE_UPDATE_REQUIRES_OWNER");
+  assert.deepEqual((await authStore.findUserById("target-1"))?.roles, ["user"]);
+
+  const selfChange = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/users/owner-1/roles",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: { roles: ["owner", "admin"] },
+  });
+  assert.equal(selfChange.statusCode, 409);
+  assert.equal(selfChange.json().error.code, "SELF_ROLE_CHANGE_PREVENTED");
+
+  const deleted = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/users/deleted-1/roles",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: { roles: ["author"] },
+  });
+  assert.equal(deleted.statusCode, 409);
+  assert.equal(deleted.json().error.code, "USER_DELETED");
+
+  const lastOwner = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/users/owner-1/roles",
+    headers: { authorization: `Bearer ${adminSession}` },
+    payload: { roles: ["user"] },
+  });
+  assert.equal(lastOwner.statusCode, 403);
+  assert.equal(lastOwner.json().error.code, "OWNER_ROLE_UPDATE_REQUIRES_OWNER");
+
+  const invalid = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/users/target-1/roles",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: { roles: [] },
+  });
+  assert.equal(invalid.statusCode, 400);
+  assert.equal(invalid.json().error.code, "INVALID_ADMIN_USER_ROLES");
+});
+
 test("admin user actions reject missing users and invalid actions without mutation", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const app = buildAdminApp(authStore);
@@ -510,6 +637,33 @@ test("admin routes require session auth, admin role, and MFA", async (t) => {
   });
   assert.equal(providerRoleRequired.statusCode, 403);
   assert.equal(providerRoleRequired.json().error.code, "ADMIN_ROLE_REQUIRED");
+
+  const roleUpdateApiTokenDenied = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/users/user-1/roles",
+    headers: { authorization: `Bearer ${ownerApiToken}` },
+    payload: { roles: ["author"] },
+  });
+  assert.equal(roleUpdateApiTokenDenied.statusCode, 403);
+  assert.equal(roleUpdateApiTokenDenied.json().error.code, "SESSION_AUTH_REQUIRED");
+
+  const roleUpdateMfaRequired = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/users/user-1/roles",
+    headers: { authorization: `Bearer ${ownerSessionWithoutMfa}` },
+    payload: { roles: ["author"] },
+  });
+  assert.equal(roleUpdateMfaRequired.statusCode, 403);
+  assert.equal(roleUpdateMfaRequired.json().error.code, "MFA_VERIFICATION_REQUIRED");
+
+  const roleUpdateRoleRequired = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/users/user-1/roles",
+    headers: { authorization: `Bearer ${userSessionWithMfa}` },
+    payload: { roles: ["author"] },
+  });
+  assert.equal(roleUpdateRoleRequired.statusCode, 403);
+  assert.equal(roleUpdateRoleRequired.json().error.code, "ADMIN_ROLE_REQUIRED");
 });
 
 test("admins cannot disable or delete their own account", async (t) => {

@@ -197,6 +197,7 @@ export interface AuthStore {
   listUsers(): Promise<AuthUserRecord[]>;
   findUserById(userId: string): Promise<AuthUserRecord | null>;
   updateUserStatus(input: { userId: string; status: UserStatus; emailVerifiedAt?: Date | null }): Promise<AuthUserRecord | null>;
+  updateUserRoles(input: { userId: string; roles: AuthenticatedUser["roles"] }): Promise<AuthUserRecord | null>;
   updatePasswordCredential(input: { userId: string; passwordHash: string; passwordUpdatedAt?: Date }): Promise<boolean>;
   createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord>;
   consumeAuthActionToken(input: {

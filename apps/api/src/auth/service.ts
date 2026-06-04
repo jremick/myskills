@@ -14,8 +14,10 @@ import {
   verifyTotpCode,
   verifyPassword,
   canAdmin,
+  roles as authRoles,
   type AuthenticatedUser,
   type RegistrationMode,
+  type Role,
   type UserStatus,
 } from "@ai-skills-share/auth";
 import type { AuthRateLimiter } from "./rate-limit.js";
@@ -201,6 +203,12 @@ export type AdminUserAction = "approve" | "activate" | "disable" | "delete";
 export interface AdminUserActionInput {
   userId: string;
   action: AdminUserAction;
+  reason?: string;
+}
+
+export interface AdminUserRoleUpdateInput {
+  userId: string;
+  roles: Role[];
   reason?: string;
 }
 
@@ -694,6 +702,50 @@ export class AuthService {
     return this.safeAdminUser(updated);
   }
 
+  async updateAdminUserRoles(actor: AuthResponseUser, input: AdminUserRoleUpdateInput): Promise<SafeAdminUser> {
+    assertAdmin(actor);
+    const userId = cleanId(input.userId, "userId");
+    const roles = normalizeAdminUserRoles(input.roles);
+    const target = await this.store.findUserById(userId);
+    if (!target) {
+      await this.recordAdminUserDeny(actor, "roles.update", userId, "user_not_found", input.reason);
+      throw new AppError("User not found.", "USER_NOT_FOUND", 404);
+    }
+    const blockedReason = adminUserRoleUpdateBlockedReason(actor, target, roles);
+    if (blockedReason) {
+      await this.recordAdminUserDeny(actor, "roles.update", target.id, blockedReason, input.reason, target);
+      throw adminUserRoleUpdateError(blockedReason);
+    }
+    if (target.status === "active" && target.roles.includes("owner") && !roles.includes("owner")) {
+      const otherOwnerCount = await this.store.countActiveOwnersExcluding(target.id);
+      if (otherOwnerCount === 0) {
+        await this.recordAdminUserDeny(actor, "roles.update", target.id, "last_owner_required", input.reason, target);
+        throw new AppError("At least one active owner is required.", "LAST_OWNER_REQUIRED", 409);
+      }
+    }
+
+    const updated = await this.store.updateUserRoles({ userId: target.id, roles });
+    if (!updated) {
+      throw new AppError("User not found.", "USER_NOT_FOUND", 404);
+    }
+    await this.store.revokeUserCredentials(target.id);
+    await this.store.recordAuditEvent({
+      actorUserId: actor.id,
+      action: "admin.user.roles.update",
+      decision: "allow",
+      resourceType: "user",
+      resourceId: target.id,
+      details: {
+        targetUserId: target.id,
+        rolesBefore: target.roles,
+        rolesAfter: updated.roles,
+        credentialsRevoked: true,
+        reason: input.reason,
+      },
+    });
+    return this.safeAdminUser(updated);
+  }
+
   async listAdminAuditEvents(actor: AuthResponseUser, input: ListAdminAuditEventsInput = {}): Promise<SafeAuditEvent[]> {
     assertAdmin(actor);
     const events = await this.store.listAuditEvents({ limit: normalizeAuditLimit(input.limit) });
@@ -837,7 +889,7 @@ export class AuthService {
 
   private async recordAdminUserDeny(
     actor: AuthResponseUser,
-    action: AdminUserAction,
+    action: AdminUserAction | "roles.update",
     targetUserId: string,
     reason: string,
     operatorReason?: string,
@@ -995,6 +1047,32 @@ function adminUserActionError(reason: string): AppError {
   return new AppError("Owner accounts can only be modified by owners.", "OWNER_ACTION_REQUIRES_OWNER", 403);
 }
 
+function adminUserRoleUpdateBlockedReason(actor: AuthResponseUser, target: AuthUserRecord, roles: Role[]): string | null {
+  if (target.status === "deleted") {
+    return "user_deleted";
+  }
+  if (actor.id === target.id) {
+    return "self_role_change_prevented";
+  }
+  const actorIsOwner = actor.roles.includes("owner");
+  const targetHasPrivilegedRole = target.roles.some(isOwnerOrAdminRole);
+  const requestedHasPrivilegedRole = roles.some(isOwnerOrAdminRole);
+  if ((targetHasPrivilegedRole || requestedHasPrivilegedRole) && !actorIsOwner) {
+    return "owner_role_update_requires_owner";
+  }
+  return null;
+}
+
+function adminUserRoleUpdateError(reason: string): AppError {
+  if (reason === "user_deleted") {
+    return new AppError("Deleted users cannot be modified.", "USER_DELETED", 409);
+  }
+  if (reason === "self_role_change_prevented") {
+    return new AppError("Admins cannot change their own roles.", "SELF_ROLE_CHANGE_PREVENTED", 409);
+  }
+  return new AppError("Owner and admin role changes require an owner.", "OWNER_ROLE_UPDATE_REQUIRES_OWNER", 403);
+}
+
 function adminActionUpdate(action: AdminUserAction, target: AuthUserRecord): { status: UserStatus; emailVerifiedAt?: Date | null } {
   if (action === "approve") {
     return { status: "active" };
@@ -1131,6 +1209,31 @@ function normalizeAdminUserAction(action: AdminUserAction): AdminUserAction {
     return action;
   }
   throw new AppError("User action is invalid.", "INVALID_ADMIN_USER_ACTION", 400);
+}
+
+function normalizeAdminUserRoles(input: unknown): Role[] {
+  if (!Array.isArray(input)) {
+    throw new AppError("User roles are invalid.", "INVALID_ADMIN_USER_ROLES", 400);
+  }
+  const seen = new Set<Role>();
+  for (const item of input) {
+    if (typeof item !== "string" || !isRole(item)) {
+      throw new AppError("User roles are invalid.", "INVALID_ADMIN_USER_ROLES", 400);
+    }
+    seen.add(item);
+  }
+  if (seen.size === 0) {
+    throw new AppError("At least one user role is required.", "INVALID_ADMIN_USER_ROLES", 400);
+  }
+  return authRoles.filter((role) => seen.has(role));
+}
+
+function isRole(input: string): input is Role {
+  return (authRoles as readonly string[]).includes(input);
+}
+
+function isOwnerOrAdminRole(role: Role): boolean {
+  return role === "owner" || role === "admin";
 }
 
 function normalizeAuditLimit(input: number | undefined): number {

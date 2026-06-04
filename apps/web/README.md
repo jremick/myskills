@@ -15,7 +15,7 @@ Implemented:
 - session-aware API client calls that forward the active bearer token when present
 - authenticated author package submission via `.zip` archive upload to `POST /v1/submissions`
 - maintainer review dashboard for metadata-only review queue, approval, and publication actions
-- owner/admin admin console for registration mode, safe user status actions, non-secret provider metadata and role mappings, and audit review
+- owner/admin admin console for registration mode, safe user status actions, role updates, non-secret provider metadata and role mappings, and audit review
 - responsive browse/detail layout for desktop and mobile widths
 
 Run locally:
@@ -35,6 +35,6 @@ The web app defaults to `http://localhost:3000` and reads `VITE_API_BASE_URL` fo
 - browse/search/filter skills
 - view skill details and install/export guidance
 - manage private drafts
-- administer roles and remaining instance settings
+- administer remaining instance settings
 
 The web app consumes API decisions. It must not duplicate authorization policy in client code.

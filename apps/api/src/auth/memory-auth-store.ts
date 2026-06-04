@@ -217,6 +217,15 @@ export class MemoryAuthStore implements AuthStore {
     return toRecord(user);
   }
 
+  async updateUserRoles(input: { userId: string; roles: Role[] }): Promise<AuthUserRecord | null> {
+    const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
+    if (!user) {
+      return null;
+    }
+    user.roles = input.roles;
+    return toRecord(user);
+  }
+
   async updatePasswordCredential(input: { userId: string; passwordHash: string; passwordUpdatedAt?: Date }): Promise<boolean> {
     const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
     if (!user || user.passwordHash === null) {

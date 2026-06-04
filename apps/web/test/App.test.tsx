@@ -210,6 +210,7 @@ test("admin sessions can manage registration, users, and provider metadata", asy
   await waitFor(() => assert.equal(view.getAllByText("Cloudflare Access").length >= 1, true));
   assert.equal(document.body.textContent?.includes("clientSecret"), false);
   assert.equal(document.body.textContent?.includes("private_key"), false);
+  assert.equal((view.getByLabelText("Set author@example.com author role") as HTMLInputElement).disabled, true);
 
   fireEvent.click(view.getByRole("button", { name: "Request" }));
   await waitFor(() => assert.deepEqual(client.registrationUpdates, ["request"]));
@@ -217,11 +218,46 @@ test("admin sessions can manage registration, users, and provider metadata", asy
   fireEvent.click(view.getByLabelText("Disable user"));
   await waitFor(() => assert.deepEqual(client.userActions, ["user-2:disable"]));
 
+  fireEvent.click(view.getByLabelText("Set author@example.com maintainer role"));
+  await waitFor(() => assert.deepEqual(client.roleUpdates, ["user-2:maintainer,author"]));
+  await waitFor(() => assert.equal((view.getByLabelText("Set author@example.com maintainer role") as HTMLInputElement).checked, true));
+
   fireEvent.input(view.getByLabelText("Display name"), { target: { value: "Cloudflare Main" } });
   fireEvent.click(view.getByRole("button", { name: /save provider/i }));
 
   await waitFor(() => assert.equal(client.providerUpserts[0]?.displayName, "Cloudflare Main"));
   assert.equal(client.providerUpserts[0]?.roleMappings?.[0]?.role, "maintainer");
+});
+
+test("non-owner admin sessions cannot edit privileged target role controls", async () => {
+  setupDom();
+  const client = mockClient({
+    user: authUser({ email: "admin@example.com", roles: ["admin"] }),
+    adminUsers: [
+      {
+        id: "owner-1",
+        email: "owner@example.com",
+        name: "Owner",
+        status: "active",
+        roles: ["owner"],
+        emailVerified: true,
+        mfaEnabled: true,
+      },
+      ...defaultAdminUsers(),
+    ],
+  });
+
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.input(view.getByLabelText("Email"), { target: { value: "admin@example.com" } });
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: /sign in/i }));
+
+  await view.findByText("admin@example.com");
+  fireEvent.click(view.getByRole("button", { name: /admin/i }));
+
+  await view.findByText("Admin console");
+  assert.equal((view.getByLabelText("Set owner@example.com maintainer role") as HTMLInputElement).disabled, true);
+  assert.equal((view.getByLabelText("Set author@example.com maintainer role") as HTMLInputElement).disabled, false);
 });
 
 test("maintainer sessions can approve and publish review submissions without bundle content", async () => {
@@ -386,6 +422,7 @@ function mockClient(input: {
     registrationUpdates: AdminRegistrationMode[];
     releaseCalls: string[];
     reviewActions: string[];
+    roleUpdates: string[];
     searchCalls: string[];
     submitCalls: Array<{ filename: string; contentBase64: string }>;
     userActions: string[];
@@ -397,6 +434,7 @@ function mockClient(input: {
     registrationUpdates: [],
     releaseCalls: [],
     reviewActions: [],
+    roleUpdates: [],
     searchCalls: [],
     submitCalls: [],
     userActions: [],
@@ -464,6 +502,11 @@ function mockClient(input: {
         ...user,
         status: action === "disable" ? "disabled" : action === "delete" ? "deleted" : "active",
       } : user);
+      return adminUsers.find((user) => user.id === userId) ?? defaultAdminUsers()[0];
+    },
+    async updateAdminUserRoles(userId, roles) {
+      client.roleUpdates.push(`${userId}:${roles.join(",")}`);
+      adminUsers = adminUsers.map((user) => user.id === userId ? { ...user, roles } : user);
       return adminUsers.find((user) => user.id === userId) ?? defaultAdminUsers()[0];
     },
     async listAdminProviders() {

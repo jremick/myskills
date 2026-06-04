@@ -13,6 +13,7 @@ import type {
   AuthContext,
   AuthService,
   AdminUserActionInput,
+  AdminUserRoleUpdateInput,
   ConfirmEmailVerificationInput,
   ConfirmPasswordResetInput,
   ConfirmTotpEnrollmentInput,
@@ -388,6 +389,22 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     };
   });
 
+  app.put("/v1/admin/users/:id/roles", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return {
+      user: await options.authService.updateAdminUserRoles(
+        user,
+        parseAdminUserRoleUpdateInput(request.params, request.body),
+      ),
+    };
+  });
+
   app.get("/v1/admin/audit", async (request, reply) => {
     if (!options.authService) {
       throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
@@ -702,6 +719,24 @@ function parseAdminUserActionInput(paramsInput: unknown, bodyInput: unknown): Ad
   return {
     userId: parseUserIdParam(paramsInput),
     action,
+    reason: optionalString(body.reason, "reason"),
+  };
+}
+
+function parseAdminUserRoleUpdateInput(paramsInput: unknown, bodyInput: unknown): AdminUserRoleUpdateInput {
+  const body = parseJsonObject(bodyInput);
+  const roles = body.roles;
+  if (!Array.isArray(roles)) {
+    throw new AppError("User roles are invalid.", "INVALID_ADMIN_USER_ROLES", 400);
+  }
+  return {
+    userId: parseUserIdParam(paramsInput),
+    roles: roles.map((role) => {
+      if (typeof role !== "string") {
+        throw new AppError("User roles are invalid.", "INVALID_ADMIN_USER_ROLES", 400);
+      }
+      return role as AdminUserRoleUpdateInput["roles"][number];
+    }),
     reason: optionalString(body.reason, "reason"),
   };
 }

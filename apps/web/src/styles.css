@@ -499,6 +499,35 @@ button {
   gap: 6px;
 }
 
+.role-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
+.role-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.role-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #0f766e;
+}
+
+.role-toggle input:disabled + span {
+  color: #94a3b8;
+}
+
 .icon-button {
   display: inline-flex;
   align-items: center;

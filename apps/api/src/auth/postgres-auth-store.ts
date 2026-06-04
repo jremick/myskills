@@ -1,5 +1,6 @@
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
-import type { RegistrationMode, Role, UserStatus } from "@ai-skills-share/auth";
+import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { AppError } from "@ai-skills-share/core";
+import { roles as authRoles, type RegistrationMode, type Role, type UserStatus } from "@ai-skills-share/auth";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type { Database } from "../db/client.js";
 import {
@@ -135,6 +136,48 @@ export class PostgresAuthStore implements AuthStore {
       .where(eq(users.id, input.userId))
       .returning();
     return user ? { ...toRecord(user), roles: await this.rolesForUser(user.id) } : null;
+  }
+
+  async updateUserRoles(input: { userId: string; roles: Role[] }): Promise<AuthUserRecord | null> {
+    return this.db.transaction(async (tx) => {
+      if (!input.roles.includes("owner")) {
+        await tx.execute(sql`
+          select ${users.id}
+          from ${users}
+          inner join ${roleAssignments} on ${roleAssignments.userId} = ${users.id}
+          where ${roleAssignments.role} = 'owner'
+            and ${users.status} = 'active'
+          order by ${users.id}
+          for update
+        `);
+      }
+      const [user] = await tx
+        .update(users)
+        .set({ updatedAt: new Date() })
+        .where(eq(users.id, input.userId))
+        .returning();
+      if (!user) {
+        return null;
+      }
+      await tx.delete(roleAssignments).where(eq(roleAssignments.userId, input.userId));
+      if (input.roles.length > 0) {
+        await tx.insert(roleAssignments).values(input.roles.map((role) => ({
+          userId: input.userId,
+          role,
+        }))).onConflictDoNothing();
+      }
+      if (!input.roles.includes("owner")) {
+        const activeOwners = await tx
+          .select({ id: users.id })
+          .from(users)
+          .innerJoin(roleAssignments, eq(roleAssignments.userId, users.id))
+          .where(and(eq(roleAssignments.role, "owner"), eq(users.status, "active")));
+        if (activeOwners.length === 0) {
+          throw new AppError("At least one active owner is required.", "LAST_OWNER_REQUIRED", 409);
+        }
+      }
+      return { ...toRecord(user), roles: input.roles };
+    });
   }
 
   async updatePasswordCredential(input: { userId: string; passwordHash: string; passwordUpdatedAt?: Date }): Promise<boolean> {
@@ -556,7 +599,8 @@ export class PostgresAuthStore implements AuthStore {
       .select({ role: roleAssignments.role })
       .from(roleAssignments)
       .where(eq(roleAssignments.userId, userId));
-    return rows.map((row) => row.role);
+    const assignedRoles = new Set(rows.map((row) => row.role));
+    return authRoles.filter((role) => assignedRoles.has(role));
   }
 
   private async providerRoleMappingsForConfig(providerConfigId: string): Promise<ProviderRoleMappingRecord[]> {

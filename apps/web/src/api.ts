@@ -151,6 +151,7 @@ export interface RegistryClient {
   updateAdminRegistration(mode: AdminRegistrationMode, token?: string): Promise<AdminRegistrationSettings>;
   listAdminUsers(token?: string): Promise<AdminUser[]>;
   performAdminUserAction(userId: string, action: "approve" | "activate" | "disable" | "delete", token?: string): Promise<AdminUser>;
+  updateAdminUserRoles(userId: string, roles: string[], token?: string): Promise<AdminUser>;
   listAdminProviders(token?: string): Promise<AdminProviderConfig[]>;
   upsertAdminProvider(key: string, input: UpsertAdminProviderInput, token?: string): Promise<AdminProviderConfig>;
   listAdminAudit(limit?: number, token?: string): Promise<AdminAuditEvent[]>;
@@ -243,6 +244,14 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         fetchImpl,
         `${root}/v1/admin/users/${encodeURIComponent(userId)}/actions`,
         { method: "POST", body: { action }, token: overrideToken ?? token },
+      );
+      return body.user;
+    },
+    async updateAdminUserRoles(userId, roles, overrideToken) {
+      const body = await requestJson<{ user: AdminUser }>(
+        fetchImpl,
+        `${root}/v1/admin/users/${encodeURIComponent(userId)}/roles`,
+        { method: "PUT", body: { roles }, token: overrideToken ?? token },
       );
       return body.user;
     },

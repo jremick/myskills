@@ -717,6 +717,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
   const [providers, setProviders] = useState<AdminProviderConfig[]>([]);
   const [auditEvents, setAuditEvents] = useState<AdminAuditEvent[]>([]);
   const [draft, setDraft] = useState<ProviderDraft>(() => emptyProviderDraft());
+  const sessionCanEditPrivilegedRoles = session.user.roles.includes("owner");
 
   async function refreshAdmin() {
     setState("loading");
@@ -759,6 +760,17 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
     setMessage(null);
     try {
       const updated = await client.performAdminUserAction(userId, action, session.token);
+      setUsers((current) => current.map((user) => user.id === updated.id ? updated : user));
+      setAuditEvents(await client.listAdminAudit(25, session.token));
+    } catch (error) {
+      setMessage(safeAdminErrorMessage(error));
+    }
+  }
+
+  async function updateUserRoles(userId: string, roles: string[]) {
+    setMessage(null);
+    try {
+      const updated = await client.updateAdminUserRoles(userId, roles, session.token);
       setUsers((current) => current.map((user) => user.id === updated.id ? updated : user));
       setAuditEvents(await client.listAdminAudit(25, session.token));
     } catch (error) {
@@ -840,7 +852,19 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
                   <small>{user.name || user.id}</small>
                 </span>
                 <span><StatusToken value={user.status} /></span>
-                <span>{user.roles.join(", ") || "user"}</span>
+                <span>
+                  <RoleEditor
+                    canEditPrivilegedRoles={sessionCanEditPrivilegedRoles}
+                    disabled={
+                      user.id === session.user.id
+                      || user.status === "deleted"
+                      || (!sessionCanEditPrivilegedRoles && user.roles.some(isPrivilegedRole))
+                    }
+                    roles={user.roles}
+                    userEmail={user.email}
+                    onChange={(roles) => void updateUserRoles(user.id, roles)}
+                  />
+                </span>
                 <span>{user.emailVerified ? "verified" : "unverified"} · {user.mfaEnabled ? "MFA" : "no MFA"}</span>
                 <span className="row-actions">
                   {user.status === "pending" && (
@@ -1030,6 +1054,42 @@ function IconButton({ children, label, onClick }: { children: ReactNode; label: 
     <button className="icon-button" type="button" aria-label={label} title={label} onClick={onClick}>
       {children}
     </button>
+  );
+}
+
+function RoleEditor({
+  canEditPrivilegedRoles,
+  disabled,
+  onChange,
+  roles,
+  userEmail,
+}: {
+  canEditPrivilegedRoles: boolean;
+  disabled: boolean;
+  onChange: (roles: string[]) => void;
+  roles: string[];
+  userEmail: string;
+}) {
+  return (
+    <div className="role-editor">
+      {ADMIN_ROLE_OPTIONS.map((role) => {
+        const privilegedRole = role === "owner" || role === "admin";
+        const removingLastRole = roles.length === 1 && roles.includes(role);
+        const roleDisabled = disabled || removingLastRole || (privilegedRole && !canEditPrivilegedRoles);
+        return (
+          <label className="role-toggle" key={role}>
+            <input
+              aria-label={`Set ${userEmail} ${role} role`}
+              checked={roles.includes(role)}
+              disabled={roleDisabled}
+              onChange={() => onChange(toggleRole(roles, role))}
+              type="checkbox"
+            />
+            <span>{role}</span>
+          </label>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1351,6 +1411,20 @@ function updateDraftMapping(
   });
 }
 
+function toggleRole(roles: string[], role: string): string[] {
+  const next = new Set(roles);
+  if (next.has(role)) {
+    next.delete(role);
+  } else {
+    next.add(role);
+  }
+  return ADMIN_ROLE_OPTIONS.filter((item) => next.has(item));
+}
+
+function isPrivilegedRole(role: string): boolean {
+  return role === "owner" || role === "admin";
+}
+
 function capitalize(value: string): string {
   return value.slice(0, 1).toUpperCase() + value.slice(1);
 }
@@ -1389,6 +1463,7 @@ function skillSlugFromPath(pathname: string): string | null {
 
 const SESSION_STORAGE_KEY = "ai-skills-share:web-session";
 const MAX_WEB_ARCHIVE_BYTES = 10 * 1024 * 1024;
+const ADMIN_ROLE_OPTIONS = ["owner", "admin", "maintainer", "author", "user"];
 
 function readStoredSession(): WebSession | null {
   try {
