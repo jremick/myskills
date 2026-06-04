@@ -1,6 +1,10 @@
+import { createHash } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import {
   hasBlockingFindings,
   loadSkillManifestFromPath,
+  normalizePackageFilePath,
   readPackageFilesFromPath,
   scanPackagePath,
   type PackageScanResult,
@@ -56,6 +60,10 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
         return await whoamiCommand(parsed, runtime);
       case "submit":
         return await submitCommand(parsed, runtime);
+      case "review":
+        return await reviewCommand(parsed, runtime);
+      case "export":
+        return await exportCommand(parsed, runtime);
       default:
         throw new CliError(`Unknown command: ${parsed.command}`, 2);
     }
@@ -158,6 +166,66 @@ async function whoamiCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   return 0;
 }
 
+async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const token = tokenOption(parsed, runtime);
+  if (!token) {
+    throw new CliError("No token provided. Set AI_SKILLS_TOKEN or pass --token.", 1);
+  }
+  const subcommand = parsed.args[0];
+  if (subcommand === "submissions") {
+    const response = await apiGet("/v1/review/submissions", parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      const submissions = response.submissions as Array<{
+        id: string;
+        slug: string;
+        version: string;
+        reviewStatus: string;
+        securityStatus: string;
+        findingCount: number;
+      }>;
+      if (submissions.length === 0) {
+        runtime.io.stdout("No submissions awaiting review.");
+      } else {
+        for (const submission of submissions) {
+          runtime.io.stdout(`${submission.id}\t${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tfindings=${submission.findingCount}`);
+        }
+      }
+    }
+    return 0;
+  }
+  if (subcommand === "action") {
+    const submissionId = parsed.args[1];
+    if (!submissionId) {
+      throw new CliError("Usage: ai-skills review action <submission-id> --action <approve|publish>", 2);
+    }
+    const action = stringOption(parsed, "action");
+    if (action !== "approve" && action !== "publish") {
+      throw new CliError("--action must be approve or publish.", 2);
+    }
+    const reason = optionalStringOption(parsed, "reason");
+    const response = await apiPost(`/v1/review/submissions/${encodeURIComponent(submissionId)}/actions`, {
+      action,
+      ...(reason ? { reason } : {}),
+    }, parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      const submission = response.submission as {
+        slug: string;
+        version: string;
+        reviewStatus: string;
+        securityStatus: string;
+        publishedAt: string | null;
+      };
+      runtime.io.stdout(`${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tpublished=${submission.publishedAt ?? "-"}`);
+    }
+    return 0;
+  }
+  throw new CliError("Usage: ai-skills review submissions | review action <submission-id> --action <approve|publish>", 2);
+}
+
 async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const token = tokenOption(parsed, runtime);
   if (!token) {
@@ -191,6 +259,57 @@ async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   return 0;
 }
 
+async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const slug = parsed.args[0];
+  if (!slug) {
+    throw new CliError("Usage: ai-skills export <skill-slug> --version <version> --platform <platform> --output <dir>", 2);
+  }
+  const version = stringOption(parsed, "version");
+  const platform = stringOption(parsed, "platform");
+  const outputDir = stringOption(parsed, "output");
+  const token = tokenOption(parsed, runtime) ?? undefined;
+  const releaseResponse = await apiGet(
+    `/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}`,
+    parsed,
+    runtime,
+    token,
+  );
+  const artifact = releaseArtifact(releaseResponse);
+  const bundleText = await apiGetText(
+    `/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}/bundle?platform=${encodeURIComponent(platform)}`,
+    parsed,
+    runtime,
+    token,
+  );
+  const byteSize = Buffer.byteLength(bundleText);
+  const sha256 = createHash("sha256").update(bundleText).digest("hex");
+  if (byteSize !== artifact.byteSize || sha256 !== artifact.sha256) {
+    throw new CliError("Downloaded bundle did not match release metadata.", 1);
+  }
+
+  const files = parseBundlePayload(bundleText);
+  const outputRoot = path.resolve(outputDir);
+  const writes = files.map((file) => {
+    const normalized = safeBundlePath(file.path);
+    const absolutePath = path.resolve(outputRoot, normalized);
+    const relative = path.relative(outputRoot, absolutePath);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+      throw new CliError(`Bundle file escapes output directory: ${file.path}`, 1);
+    }
+    return {
+      absolutePath,
+      content: file.content,
+    };
+  });
+
+  for (const file of writes) {
+    await mkdir(path.dirname(file.absolutePath), { recursive: true });
+    await writeFile(file.absolutePath, file.content, "utf8");
+  }
+  runtime.io.stdout(`${slug}@${version}\texported\tfiles=${writes.length}\t${outputRoot}`);
+  return 0;
+}
+
 async function apiGet(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<Record<string, unknown>> {
   const baseUrl = String(parsed.options["api-url"] ?? runtime.env.AI_SKILLS_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
   const headers: Record<string, string> = {};
@@ -205,6 +324,21 @@ async function apiGet(pathname: string, parsed: ParsedArgs, runtime: CliRuntime,
     throw new CliError(error?.message ?? `API request failed with ${response.status}.`, 1);
   }
   return body;
+}
+
+async function apiGetText(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<string> {
+  const baseUrl = String(parsed.options["api-url"] ?? runtime.env.AI_SKILLS_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers.authorization = `Bearer ${token}`;
+  }
+  const response = await runtime.fetch(`${baseUrl}${pathname}`, { headers });
+  const text = await response.text();
+  if (!response.ok) {
+    const error = parseApiError(text);
+    throw new CliError(error ?? `API request failed with ${response.status}.`, 1);
+  }
+  return text;
 }
 
 async function apiPost(pathname: string, payload: unknown, parsed: ParsedArgs, runtime: CliRuntime, token: string): Promise<Record<string, unknown>> {
@@ -224,6 +358,16 @@ async function apiPost(pathname: string, payload: unknown, parsed: ParsedArgs, r
     throw new CliError(error?.message ?? `API request failed with ${response.status}.`, 1);
   }
   return body;
+}
+
+function parseApiError(text: string): string | null {
+  try {
+    const body = text ? JSON.parse(text) as Record<string, unknown> : {};
+    const error = body.error as { message?: string } | undefined;
+    return error?.message ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function printScanResult(result: PackageScanResult, io: CliIo): void {
@@ -250,6 +394,75 @@ function tokenOption(parsed: ParsedArgs, runtime: CliRuntime): string | null {
     return token;
   }
   return runtime.env.AI_SKILLS_TOKEN ?? null;
+}
+
+function stringOption(parsed: ParsedArgs, key: string): string {
+  const value = parsed.options[key];
+  if (typeof value !== "string" || !value) {
+    throw new CliError(`--${key} is required.`, 2);
+  }
+  return value;
+}
+
+function optionalStringOption(parsed: ParsedArgs, key: string): string | undefined {
+  const value = parsed.options[key];
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function releaseArtifact(response: Record<string, unknown>): { sha256: string; byteSize: number } {
+  const release = response.release;
+  if (!release || typeof release !== "object" || Array.isArray(release)) {
+    throw new CliError("API release response is missing release metadata.", 1);
+  }
+  const artifact = (release as { artifact?: unknown }).artifact;
+  if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) {
+    throw new CliError("API release response is missing artifact metadata.", 1);
+  }
+  const record = artifact as Record<string, unknown>;
+  if (typeof record.sha256 !== "string" || typeof record.byteSize !== "number") {
+    throw new CliError("API release response has invalid artifact metadata.", 1);
+  }
+  return {
+    sha256: record.sha256,
+    byteSize: record.byteSize,
+  };
+}
+
+function parseBundlePayload(text: string): Array<{ path: string; content: string }> {
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    throw new CliError("Bundle response is not valid JSON.", 1);
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new CliError("Bundle response must be an object.", 1);
+  }
+  const files = (body as { files?: unknown }).files;
+  if (!Array.isArray(files)) {
+    throw new CliError("Bundle response is missing files.", 1);
+  }
+  return files.map((file) => {
+    if (!file || typeof file !== "object" || Array.isArray(file)) {
+      throw new CliError("Bundle file entries must be objects.", 1);
+    }
+    const record = file as Record<string, unknown>;
+    if (typeof record.path !== "string" || typeof record.content !== "string") {
+      throw new CliError("Bundle file entries require path and content.", 1);
+    }
+    return {
+      path: record.path,
+      content: record.content,
+    };
+  });
+}
+
+function safeBundlePath(inputPath: string): string {
+  try {
+    return normalizePackageFilePath(inputPath);
+  } catch (error) {
+    throw new CliError(error instanceof Error ? error.message : "Invalid bundle path.", 1);
+  }
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -290,6 +503,9 @@ function helpText(): string {
     "  info <skill-slug> [--api-url <url>]",
     "  whoami [--api-url <url>] [--token <token>]",
     "  submit --path <file-or-directory> [--api-url <url>] [--token <token>]",
+    "  review submissions [--api-url <url>] [--token <token>]",
+    "  review action <submission-id> --action <approve|publish> [--reason <text>]",
+    "  export <skill-slug> --version <version> --platform <platform> --output <dir>",
     "",
     "Options:",
     "  --json              Print machine-readable JSON.",

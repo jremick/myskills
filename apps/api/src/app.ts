@@ -2,7 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { AppError } from "@ai-skills-share/core";
 import { parseSkillManifest, type PackageInputFile } from "@ai-skills-share/skill-package";
 import type { AuthService, LoginInput, RegisterInput } from "./auth/service.js";
-import type { StoredSubmission } from "./submissions/types.js";
+import type { ReviewAction, StoredSubmission, SubmissionActor } from "./submissions/types.js";
 import type { SubmissionService } from "./submissions/service.js";
 import type { SkillRepository } from "@ai-skills-share/core";
 
@@ -60,6 +60,48 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       limit: query.limit,
     });
     return { skills };
+  });
+
+  app.get("/v1/skills/:slug/releases/:version", async (request, reply) => {
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const params = parseReleaseParams(request.params);
+    const release = await options.submissionService.getPublicRelease(params);
+    if (!release) {
+      return reply.code(404).send({
+        error: {
+          code: "RELEASE_NOT_FOUND",
+          message: "Release not found.",
+        },
+      });
+    }
+    return { release };
+  });
+
+  app.get("/v1/skills/:slug/releases/:version/bundle", async (request, reply) => {
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const params = parseReleaseParams(request.params);
+    const query = parseBundleQuery(request.query);
+    const user = await options.authService?.authenticateAuthorizationHeader(request.headers.authorization);
+    const bundle = await options.submissionService.getPublicBundle({
+      ...params,
+      platform: query.platform,
+      actorId: user?.id ?? null,
+    });
+    if (!bundle) {
+      return reply.code(404).send({
+        error: {
+          code: "RELEASE_NOT_FOUND",
+          message: "Release not found.",
+        },
+      });
+    }
+    return reply
+      .type(bundle.artifact.contentType)
+      .send(bundle.payload);
   });
 
   app.get("/v1/skills/:slug", async (request, reply) => {
@@ -145,7 +187,62 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     return reply.code(202).send(submissionResponse(submission));
   });
 
+  app.get("/v1/review/submissions", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const actor = await authenticateActor(options.authService, request.headers.authorization);
+    if (!actor) {
+      return reply.code(401).send({
+        error: {
+          code: "AUTHENTICATION_REQUIRED",
+          message: "Authentication is required.",
+        },
+      });
+    }
+    const submissions = await options.submissionService.listReviewSubmissions(actor);
+    return { submissions };
+  });
+
+  app.post("/v1/review/submissions/:id/actions", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const actor = await authenticateActor(options.authService, request.headers.authorization);
+    if (!actor) {
+      return reply.code(401).send({
+        error: {
+          code: "AUTHENTICATION_REQUIRED",
+          message: "Authentication is required.",
+        },
+      });
+    }
+    const result = await options.submissionService.performReviewAction({
+      actor,
+      submissionId: parseSubmissionIdParam(request.params),
+      ...parseReviewActionInput(request.body),
+    });
+    return reply.send({ submission: result });
+  });
+
   return app;
+}
+
+async function authenticateActor(authService: AuthService, authorization: string | undefined): Promise<SubmissionActor | null> {
+  const user = await authService.authenticateAuthorizationHeader(authorization);
+  if (!user) {
+    return null;
+  }
+  return {
+    id: user.id,
+    roles: user.roles,
+  };
 }
 
 function parseRegisterInput(input: unknown): RegisterInput {
@@ -235,6 +332,18 @@ function submissionResponse(submission: StoredSubmission) {
   };
 }
 
+function parseReviewActionInput(input: unknown): { action: ReviewAction; reason?: string } {
+  const body = parseJsonObject(input);
+  const action = requiredString(body.action, "action");
+  if (action !== "approve" && action !== "publish") {
+    throw new AppError("Unsupported review action.", "INVALID_REVIEW_ACTION", 400);
+  }
+  return {
+    action,
+    reason: optionalString(body.reason, "reason"),
+  };
+}
+
 function parseSlugParam(input: unknown): string {
   const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
   const slug = params.slug;
@@ -242,6 +351,25 @@ function parseSlugParam(input: unknown): string {
     throw new AppError("Valid skill slug is required.", "INVALID_SKILL_SLUG", 400);
   }
   return slug;
+}
+
+function parseReleaseParams(input: unknown): { slug: string; version: string } {
+  const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const slug = parseSlugParam(params);
+  const version = requiredString(params.version, "version");
+  if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)) {
+    throw new AppError("Valid release version is required.", "INVALID_RELEASE_VERSION", 400);
+  }
+  return { slug, version };
+}
+
+function parseSubmissionIdParam(input: unknown): string {
+  const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const id = requiredString(params.id, "id");
+  if (!/^[A-Za-z0-9-]{1,128}$/.test(id)) {
+    throw new AppError("Valid submission id is required.", "INVALID_SUBMISSION_ID", 400);
+  }
+  return id;
 }
 
 function httpStatusCode(error: unknown): number | null {
@@ -282,4 +410,13 @@ function parseQuery(input: unknown): { q?: string; limit?: number } {
   const rawLimit = typeof params.limit === "string" ? Number.parseInt(params.limit, 10) : undefined;
   const limit = rawLimit && Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : undefined;
   return { q, limit };
+}
+
+function parseBundleQuery(input: unknown): { platform?: string } {
+  const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const platform = typeof params.platform === "string" && params.platform.trim() ? params.platform.trim() : undefined;
+  if (platform && !/^[A-Za-z0-9._-]{1,64}$/.test(platform)) {
+    throw new AppError("Valid platform is required.", "INVALID_PLATFORM", 400);
+  }
+  return { platform };
 }

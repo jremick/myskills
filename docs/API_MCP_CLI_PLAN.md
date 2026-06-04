@@ -15,19 +15,17 @@ Milestone 1 REST endpoints:
 - `GET /v1/me`
 - `GET /v1/skills`
 - `GET /v1/skills/:slug`
+- `GET /v1/skills/:slug/releases/:version`
+- `GET /v1/skills/:slug/releases/:version/bundle?platform=...`
 - `POST /v1/submissions`
+- `GET /v1/review/submissions`
+- `POST /v1/review/submissions/:id/actions`
 
 Milestone 2-3 REST endpoints:
 
-- `GET /v1/skills/:slug`
-- `GET /v1/skills/:slug/releases/:version`
-- `GET /v1/skills/:slug/releases/:version/bundle?platform=...`
 - `POST /v1/drafts`
 - `GET /v1/drafts`
-- `POST /v1/submissions`
 - `GET /v1/submissions/mine`
-- `GET /v1/review/submissions`
-- `POST /v1/review/submissions/:id/actions`
 - `GET /v1/admin/users`
 - `POST /v1/admin/users/:id/actions`
 - `GET /v1/admin/audit`
@@ -75,15 +73,15 @@ ai-skills list
 ai-skills update [skill]
 ai-skills rollback <skill>
 ai-skills submit --path <dir-or-zip>
+ai-skills review submissions
+ai-skills review action <submission-id> --action <approve|publish> --reason <reason>
 ```
 
-Current CLI slice implements local `validate` and `scan`, backend-backed `search`, `info`, token-based `whoami`, and `submit` for text-entry package intake. Browser login, durable token storage, install/export, rollback, and archive packaging are still planned.
+Current CLI slice implements local `validate` and `scan`, backend-backed `search`, `info`, token-based `whoami`, `submit` for text-entry package intake, role-gated review list/actions, and verified `export` of approved bundle payloads. Browser login, durable token storage, install/update/rollback, and archive packaging are still planned.
 
 Later maintainer/admin commands:
 
 ```text
-ai-skills review submissions
-ai-skills review action <submission-id> --action <action> --reason <reason>
 ai-skills admin users
 ai-skills admin audit
 ai-skills admin analytics

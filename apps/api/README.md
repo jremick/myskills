@@ -25,10 +25,16 @@ Implemented:
 - `POST /v1/auth/logout` current-session revocation
 - `GET /v1/me` bearer-session current user response
 - `POST /v1/submissions` authenticated package intake with scan evidence
+- `GET /v1/review/submissions` maintainer review queue
+- `POST /v1/review/submissions/:id/actions` maintainer `approve` and `publish`
 - `GET /v1/skills` public approved skill search
 - `GET /v1/skills/:slug` public approved skill detail
+- `GET /v1/skills/:slug/releases/:version` public approved release metadata
+- `GET /v1/skills/:slug/releases/:version/bundle?platform=...` public approved package payload delivery
 - Drizzle Postgres schema and migrations
 - synthetic seed data for one owner and one approved public skill
+
+Public search, detail, release metadata, and bundle delivery all require the same safe release state: public skill, approved lifecycle, approved review, passed security status, non-null `publishedAt`, and artifact metadata. Review and publish actions require `owner`, `admin`, or `maintainer`.
 
 Run locally:
 

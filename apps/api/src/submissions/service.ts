@@ -1,8 +1,24 @@
 import { createHash } from "node:crypto";
 import { AppError } from "@ai-skills-share/core";
-import { hasBlockingFindings, scanPackageFiles, type PackageInputFile } from "@ai-skills-share/skill-package";
+import {
+  hasBlockingFindings,
+  normalizePackageFilePath,
+  scanPackageFiles,
+  type PackageInputFile,
+} from "@ai-skills-share/skill-package";
 import type { Role } from "@ai-skills-share/auth";
-import type { CreateSubmissionInput, StoredSubmission, SubmissionStore } from "./types.js";
+import type {
+  ArtifactPayload,
+  CreateSubmissionInput,
+  PublicBundle,
+  PublicReleaseMetadata,
+  ReviewAction,
+  ReviewActionResult,
+  ReviewSubmissionSummary,
+  StoredSubmission,
+  SubmissionActor,
+  SubmissionStore,
+} from "./types.js";
 
 const PACKAGE_CONTENT_TYPE = "application/vnd.ai-skills-share.package+json";
 
@@ -44,26 +60,93 @@ export class SubmissionService {
       securityStatus: scan.findings.length > 0 ? "warning" : "passed",
     });
   }
+
+  async listReviewSubmissions(actor: SubmissionActor): Promise<ReviewSubmissionSummary[]> {
+    if (!canReview(actor.roles)) {
+      await this.store.recordReviewDenied({
+        actorId: actor.id,
+        action: "review.submissions.list",
+        reason: "review_role_required",
+      });
+      throw new AppError("Review requires maintainer permissions.", "REVIEW_ROLE_REQUIRED", 403);
+    }
+    return this.store.listReviewSubmissions();
+  }
+
+  async performReviewAction(input: {
+    actor: SubmissionActor;
+    submissionId: string;
+    action: ReviewAction;
+    reason?: string;
+  }): Promise<ReviewActionResult> {
+    if (!canReview(input.actor.roles)) {
+      await this.store.recordReviewDenied({
+        actorId: input.actor.id,
+        action: `review.${input.action}`,
+        submissionId: input.submissionId,
+        reason: "review_role_required",
+      });
+      throw new AppError("Review requires maintainer permissions.", "REVIEW_ROLE_REQUIRED", 403);
+    }
+
+    if (input.action === "approve") {
+      return this.store.approveSubmission({
+        actorId: input.actor.id,
+        submissionId: input.submissionId,
+        reason: input.reason,
+      });
+    }
+
+    return this.store.publishSubmission({
+      actorId: input.actor.id,
+      submissionId: input.submissionId,
+      reason: input.reason,
+    });
+  }
+
+  async getPublicRelease(input: { slug: string; version: string }): Promise<PublicReleaseMetadata | null> {
+    return this.store.getPublicRelease(input);
+  }
+
+  async getPublicBundle(input: { slug: string; version: string; platform?: string; actorId?: string | null }): Promise<PublicBundle | null> {
+    const bundle = await this.store.getPublicBundle(input);
+    await this.store.recordArtifactAccess({
+      actorId: input.actorId ?? null,
+      slug: input.slug,
+      version: input.version,
+      platform: input.platform,
+      decision: bundle ? "allow" : "deny",
+      reason: bundle ? undefined : "not_public_or_missing",
+    });
+    return bundle;
+  }
 }
 
 function canSubmit(roles: Role[]): boolean {
   return roles.some((role) => role === "owner" || role === "admin" || role === "maintainer" || role === "author");
 }
 
+function canReview(roles: Role[]): boolean {
+  return roles.some((role) => role === "owner" || role === "admin" || role === "maintainer");
+}
+
 function artifactMetadata(slug: string, version: string, files: PackageInputFile[]): StoredSubmission["artifact"] {
-  const payload = canonicalPackagePayload(files);
+  const artifactPayload = canonicalArtifactPayload(files);
+  const payload = JSON.stringify(artifactPayload);
+  const sha256 = createHash("sha256").update(payload).digest("hex");
   return {
-    storageKey: `submissions/${slug}/${version}/${createHash("sha256").update(payload).digest("hex")}.json`,
-    sha256: createHash("sha256").update(payload).digest("hex"),
+    storageKey: `submissions/${slug}/${version}/${sha256}.json`,
+    sha256,
     byteSize: Buffer.byteLength(payload),
     contentType: PACKAGE_CONTENT_TYPE,
+    payload: artifactPayload,
   };
 }
 
-function canonicalPackagePayload(files: PackageInputFile[]): string {
-  return JSON.stringify({
+function canonicalArtifactPayload(files: PackageInputFile[]): ArtifactPayload {
+  return {
     files: [...files]
-      .map((file) => ({ path: file.path, content: file.content }))
+      .map((file) => ({ path: normalizePackageFilePath(file.path), content: file.content }))
       .sort((a, b) => a.path.localeCompare(b.path)),
-  });
+  };
 }

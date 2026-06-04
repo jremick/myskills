@@ -42,9 +42,11 @@ Last updated: 2026-06-04
 - Server code generates artifact hashes, sizes, content type, and storage keys instead of trusting client-supplied values.
 - Blocking scan findings reject the submission before skill, version, or artifact records are created.
 - Warning findings remain reviewable but unpublished.
+- Submitting a new unreviewed version must not mutate or hide an already approved public release.
+- Public bundle delivery uses the same approved/public/passed/published predicate as public search and detail.
 - Reject archive traversal, absolute paths, symlinks, encrypted archives, unsupported compression, excessive size, and excessive file count.
 - Scan for secrets, private keys, tokens, credentials, risky shell commands, dependency install hooks, generated binaries, and unsafe prompt instructions.
-- Require maintainer approval before publication.
+- Require maintainer approval and an explicit publish action before publication.
 - Store immutable artifact hashes.
 
 ### Audit
@@ -69,3 +71,4 @@ Last updated: 2026-06-04
 - Package parser rejects unsafe archives.
 - Scanner blocks known secret and unsafe-command fixtures.
 - Audit sanitizer redacts sensitive fields.
+- A newer unreviewed or unsafe version cannot displace a previously approved public release.

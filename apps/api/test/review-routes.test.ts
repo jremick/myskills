@@ -1,0 +1,310 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { hashPassword, type Role } from "@ai-skills-share/auth";
+import { buildApp } from "../src/app.js";
+import { AuthService } from "../src/auth/service.js";
+import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
+import { MemorySkillRepository } from "../src/repositories/memory-skill-repository.js";
+import { MemorySubmissionStore } from "../src/submissions/memory-submission-store.js";
+import { SubmissionService } from "../src/submissions/service.js";
+
+test("review routes require authentication", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const app = buildReviewApp({ submissionStore });
+  t.after(() => app.close());
+
+  const response = await app.inject({ method: "GET", url: "/v1/review/submissions" });
+
+  assert.equal(response.statusCode, 401);
+  assert.equal(response.json().error.code, "AUTHENTICATION_REQUIRED");
+});
+
+test("authors cannot list or act on reviews", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildReviewApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const authorToken = await addAndLogin(app, authStore, "author@example.com", ["author"]);
+
+  const listResponse = await app.inject({
+    method: "GET",
+    url: "/v1/review/submissions",
+    headers: { authorization: `Bearer ${authorToken}` },
+  });
+  const actionResponse = await app.inject({
+    method: "POST",
+    url: "/v1/review/submissions/submission-1/actions",
+    headers: { authorization: `Bearer ${authorToken}` },
+    payload: { action: "approve" },
+  });
+
+  assert.equal(listResponse.statusCode, 403);
+  assert.equal(listResponse.json().error.code, "REVIEW_ROLE_REQUIRED");
+  assert.equal(actionResponse.statusCode, 403);
+  assert.equal(actionResponse.json().error.code, "REVIEW_ROLE_REQUIRED");
+  assert.equal(JSON.stringify(listResponse.json()).includes("Release Notes Helper"), false);
+});
+
+test("maintainers can approve and publish a clean public submission", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildReviewApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const authorToken = await addAndLogin(app, authStore, "author@example.com", ["author"]);
+  const maintainerToken = await addAndLogin(app, authStore, "maintainer@example.com", ["maintainer"]);
+
+  const submitResponse = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${authorToken}` },
+    payload: cleanSubmissionPayload(),
+  });
+  assert.equal(submitResponse.statusCode, 202);
+  const submissionId = submitResponse.json().submission.id as string;
+
+  const listResponse = await app.inject({
+    method: "GET",
+    url: "/v1/review/submissions",
+    headers: { authorization: `Bearer ${maintainerToken}` },
+  });
+  assert.equal(listResponse.statusCode, 200);
+  assert.equal(listResponse.json().submissions[0].id, submissionId);
+  assert.equal(JSON.stringify(listResponse.json()).includes("storageKey"), false);
+  assert.equal(JSON.stringify(listResponse.json()).includes("Summarize release notes."), false);
+
+  const approveResponse = await app.inject({
+    method: "POST",
+    url: `/v1/review/submissions/${submissionId}/actions`,
+    headers: { authorization: `Bearer ${maintainerToken}` },
+    payload: { action: "approve", reason: "checked Bearer abcdefghijklmnopqrstuvwxyz" },
+  });
+  assert.equal(approveResponse.statusCode, 200);
+  assert.equal(approveResponse.json().submission.reviewStatus, "approved");
+  assert.equal(approveResponse.json().submission.publishedAt, null);
+
+  const publishResponse = await app.inject({
+    method: "POST",
+    url: `/v1/review/submissions/${submissionId}/actions`,
+    headers: { authorization: `Bearer ${maintainerToken}` },
+    payload: { action: "publish" },
+  });
+  assert.equal(publishResponse.statusCode, 200);
+  assert.equal(publishResponse.json().submission.publishedAt.length > 0, true);
+
+  const releaseResponse = await app.inject({
+    method: "GET",
+    url: "/v1/skills/release-notes-helper/releases/0.1.0",
+  });
+  assert.equal(releaseResponse.statusCode, 200);
+  assert.equal(releaseResponse.json().release.slug, "release-notes-helper");
+  assert.equal(JSON.stringify(releaseResponse.json()).includes("storageKey"), false);
+  assert.equal(JSON.stringify(releaseResponse.json()).includes("Summarize release notes."), false);
+
+  const bundleResponse = await app.inject({
+    method: "GET",
+    url: "/v1/skills/release-notes-helper/releases/0.1.0/bundle?platform=codex",
+  });
+  assert.equal(bundleResponse.statusCode, 200);
+  assert.match(bundleResponse.headers["content-type"] as string, /application\/vnd\.ai-skills-share\.package\+json/);
+  const metadata = releaseResponse.json().release.artifact;
+  assert.equal(Buffer.byteLength(bundleResponse.body), metadata.byteSize);
+  assert.equal(createHash("sha256").update(bundleResponse.body).digest("hex"), metadata.sha256);
+  assert.deepEqual(JSON.parse(bundleResponse.body).files.map((file: { path: string }) => file.path), ["README.md", "skill.json"]);
+
+  const missingPlatformResponse = await app.inject({
+    method: "GET",
+    url: "/v1/skills/release-notes-helper/releases/0.1.0/bundle?platform=missing",
+  });
+  assert.equal(missingPlatformResponse.statusCode, 404);
+  assert.equal(missingPlatformResponse.json().error.code, "RELEASE_NOT_FOUND");
+
+  const approveAudit = submissionStore.auditEvents().find((event) => event.action === "review.approve" && event.decision === "allow");
+  assert.equal(approveAudit?.details.reason, "checked Bearer [redacted]");
+  assert.equal(submissionStore.auditEvents().some((event) => event.action === "artifact.bundle" && event.decision === "allow"), true);
+  assert.equal(submissionStore.auditEvents().some((event) => event.action === "artifact.bundle" && event.decision === "deny"), true);
+});
+
+test("warning submissions cannot be approved or published", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildReviewApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const authorToken = await addAndLogin(app, authStore, "author@example.com", ["author"]);
+  const maintainerToken = await addAndLogin(app, authStore, "maintainer@example.com", ["maintainer"]);
+  const payload = cleanSubmissionPayload();
+  payload.files.push({
+    path: "package.json",
+    content: JSON.stringify({ scripts: { postinstall: "node setup.js" } }),
+  });
+
+  const submitResponse = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${authorToken}` },
+    payload,
+  });
+  assert.equal(submitResponse.statusCode, 202);
+  const submissionId = submitResponse.json().submission.id as string;
+
+  const approveResponse = await app.inject({
+    method: "POST",
+    url: `/v1/review/submissions/${submissionId}/actions`,
+    headers: { authorization: `Bearer ${maintainerToken}` },
+    payload: { action: "approve" },
+  });
+  const publishResponse = await app.inject({
+    method: "POST",
+    url: `/v1/review/submissions/${submissionId}/actions`,
+    headers: { authorization: `Bearer ${maintainerToken}` },
+    payload: { action: "publish" },
+  });
+
+  assert.equal(approveResponse.statusCode, 422);
+  assert.equal(approveResponse.json().error.code, "PACKAGE_SCAN_NOT_PASSED");
+  assert.equal(publishResponse.statusCode, 422);
+  assert.equal(publishResponse.json().error.code, "PACKAGE_SCAN_NOT_PASSED");
+});
+
+test("release routes hide unpublished and private releases consistently", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildReviewApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const authorToken = await addAndLogin(app, authStore, "author@example.com", ["author"]);
+  const maintainerToken = await addAndLogin(app, authStore, "maintainer@example.com", ["maintainer"]);
+
+  const unpublishedSubmit = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${authorToken}` },
+    payload: cleanSubmissionPayload({ version: "0.2.0" }),
+  });
+  assert.equal(unpublishedSubmit.statusCode, 202);
+
+  const privateSubmit = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${authorToken}` },
+    payload: cleanSubmissionPayload({ name: "private-helper", version: "0.1.0", visibility: "private" }),
+  });
+  assert.equal(privateSubmit.statusCode, 202);
+  const privateId = privateSubmit.json().submission.id as string;
+  await app.inject({
+    method: "POST",
+    url: `/v1/review/submissions/${privateId}/actions`,
+    headers: { authorization: `Bearer ${maintainerToken}` },
+    payload: { action: "approve" },
+  });
+  await app.inject({
+    method: "POST",
+    url: `/v1/review/submissions/${privateId}/actions`,
+    headers: { authorization: `Bearer ${maintainerToken}` },
+    payload: { action: "publish" },
+  });
+
+  for (const url of [
+    "/v1/skills/release-notes-helper/releases/0.2.0",
+    "/v1/skills/release-notes-helper/releases/0.2.0/bundle?platform=codex",
+    "/v1/skills/private-helper/releases/0.1.0",
+    "/v1/skills/private-helper/releases/0.1.0/bundle?platform=codex",
+  ]) {
+    const response = await app.inject({ method: "GET", url });
+    assert.equal(response.statusCode, 404);
+    assert.equal(response.json().error.code, "RELEASE_NOT_FOUND");
+    assert.deepEqual(Object.keys(response.json().error).sort(), ["code", "message"]);
+  }
+});
+
+test("invalid review actions are rejected before state changes", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildReviewApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const maintainerToken = await addAndLogin(app, authStore, "maintainer@example.com", ["maintainer"]);
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/review/submissions/submission-1/actions",
+    headers: { authorization: `Bearer ${maintainerToken}` },
+    payload: { action: "delete" },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error.code, "INVALID_REVIEW_ACTION");
+});
+
+function buildReviewApp(options: {
+  authStore?: MemoryAuthStore;
+  submissionStore: MemorySubmissionStore;
+}) {
+  const authStore = options.authStore ?? new MemoryAuthStore("closed");
+  return buildApp({
+    skillRepository: new MemorySkillRepository([]),
+    authService: new AuthService(authStore),
+    submissionService: new SubmissionService(options.submissionStore),
+  });
+}
+
+async function addAndLogin(
+  app: ReturnType<typeof buildApp>,
+  authStore: MemoryAuthStore,
+  email: string,
+  roles: Role[],
+): Promise<string> {
+  authStore.addUser({
+    email,
+    status: "active",
+    emailVerifiedAt: new Date(),
+    roles,
+    passwordHash: await hashPassword("correct horse battery staple"),
+  });
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email,
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(response.statusCode, 200);
+  return response.json().token;
+}
+
+function cleanSubmissionPayload(input: {
+  name?: string;
+  version?: string;
+  visibility?: "public" | "private";
+} = {}) {
+  return {
+    manifest: {
+      name: input.name ?? "release-notes-helper",
+      title: "Release Notes Helper",
+      summary: "Turns merged changes into concise release notes.",
+      version: input.version ?? "0.1.0",
+      license: "Apache-2.0",
+      visibility: input.visibility ?? "public",
+      platforms: [{ name: "codex", install_target: "codex-skill" }],
+      tags: ["writing", "release"],
+    },
+    files: [
+      {
+        path: "skill.json",
+        content: JSON.stringify({
+          name: input.name ?? "release-notes-helper",
+          title: "Release Notes Helper",
+          summary: "Turns merged changes into concise release notes.",
+          version: input.version ?? "0.1.0",
+          license: "Apache-2.0",
+          visibility: input.visibility ?? "public",
+          platforms: [{ name: "codex", install_target: "codex-skill" }],
+          tags: ["writing", "release"],
+        }),
+      },
+      {
+        path: "README.md",
+        content: "Summarize release notes.",
+      },
+    ],
+  };
+}

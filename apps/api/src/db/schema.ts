@@ -110,6 +110,7 @@ export const skillArtifacts = pgTable("skill_artifacts", {
   sha256: text("sha256").notNull(),
   byteSize: integer("byte_size").notNull(),
   contentType: text("content_type").notNull(),
+  payload: jsonb("payload").notNull().default({ files: [] }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

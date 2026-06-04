@@ -25,7 +25,7 @@ M1 tables are the thin backend proof. M2 tables harden auth and submissions. Lat
 - M1 `skills`: stable skill identity, slug, title, summary, owner, visibility, and lifecycle.
 - M1 `skill_versions`: semantic versions and release notes.
 - M1 `skill_platform_variants`: target runtime metadata such as Codex, Claude, ChatGPT, generic prompt pack, or MCP resource bundle.
-- M1 `skill_artifacts`: object storage references, checksums, sizes, content type, and retention metadata.
+- M1 `skill_artifacts`: generated storage references, checksums, sizes, content type, and normalized text package payloads for the current slice. Future object storage backends should keep the database as system of record and move package bytes out of Postgres.
 - Later `skill_dependencies`: optional relationships between skills.
 - Later `skill_examples`: examples and expected use cases.
 - M1 `skill_tags`: searchable taxonomy.

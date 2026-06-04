@@ -116,14 +116,37 @@ async function seed() {
     await db.insert(skillTags).values({ skillId: skill.id, tag }).onConflictDoNothing();
   }
 
-  const syntheticArtifact = "release-notes-helper 0.1.0 synthetic seed";
+  const syntheticArtifactPayload = {
+    files: [
+      {
+        path: "README.md",
+        content: "Turns merged changes into concise release notes with decisions, risks, and upgrade notes.",
+      },
+      {
+        path: "skill.json",
+        content: JSON.stringify({
+          name: "release-notes-helper",
+          title: "Release Notes Helper",
+          summary: "Turns merged changes into concise release notes with decisions, risks, and upgrade notes.",
+          version: "0.1.0",
+          license: "Apache-2.0",
+          visibility: "public",
+          platforms: [{ name: "codex", install_target: "codex-skill", status: "supported" }],
+          tags: ["writing", "release"],
+        }),
+      },
+    ],
+  };
+  const syntheticArtifact = JSON.stringify(syntheticArtifactPayload);
+  await db.delete(skillArtifacts).where(eq(skillArtifacts.skillVersionId, existingVersion.id));
   await db.insert(skillArtifacts).values({
     skillVersionId: existingVersion.id,
-    storageKey: "seed/release-notes-helper/0.1.0/package.zip",
+    storageKey: `seed/release-notes-helper/0.1.0/${createHash("sha256").update(syntheticArtifact).digest("hex")}.json`,
     sha256: createHash("sha256").update(syntheticArtifact).digest("hex"),
     byteSize: Buffer.byteLength(syntheticArtifact),
-    contentType: "application/zip",
-  }).onConflictDoNothing();
+    contentType: "application/vnd.ai-skills-share.package+json",
+    payload: syntheticArtifactPayload,
+  });
 
   await db.insert(auditEvents).values({
     actorUserId: owner.id,

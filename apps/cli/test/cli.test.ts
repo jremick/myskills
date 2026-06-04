@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { runCli, type FetchLike } from "../src/cli.js";
@@ -175,6 +176,194 @@ test("submit sends package entries to the API", async (t) => {
   assert.deepEqual(output.stdout, ["release-notes-helper@0.1.0\tunreviewed\tpassed\tfindings=0"]);
 });
 
+test("review submissions requires a token before fetch", async () => {
+  const output = createOutput();
+  let calls = 0;
+
+  const code = await runCli(["review", "submissions"], testRuntime(output, async () => {
+    calls += 1;
+    return response(500, {});
+  }));
+
+  assert.equal(code, 1);
+  assert.equal(calls, 0);
+  assert.match(output.stderr.join("\n"), /No token provided/);
+});
+
+test("review submissions prints stable rows", async () => {
+  const output = createOutput();
+  let url = "";
+  let authorization = "";
+  const fetch: FetchLike = async (input, init) => {
+    url = String(input);
+    authorization = init?.headers?.authorization ?? "";
+    return response(200, {
+      submissions: [{
+        id: "submission-1",
+        slug: "release-notes-helper",
+        version: "0.1.0",
+        reviewStatus: "unreviewed",
+        securityStatus: "passed",
+        findingCount: 0,
+      }],
+    });
+  };
+
+  const code = await runCli(["review", "submissions", "--api-url", "http://api.test"], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "review-token" }));
+
+  assert.equal(code, 0);
+  assert.equal(url, "http://api.test/v1/review/submissions");
+  assert.equal(authorization, "Bearer review-token");
+  assert.deepEqual(output.stdout, ["submission-1\trelease-notes-helper@0.1.0\tunreviewed\tpassed\tfindings=0"]);
+});
+
+test("review action posts exact action payload", async () => {
+  const output = createOutput();
+  let url = "";
+  let method = "";
+  let authorization = "";
+  let body: Record<string, unknown> = {};
+  const fetch: FetchLike = async (input, init) => {
+    url = String(input);
+    method = init?.method ?? "GET";
+    authorization = init?.headers?.authorization ?? "";
+    body = JSON.parse(init?.body ?? "{}");
+    return response(200, {
+      submission: {
+        slug: "release-notes-helper",
+        version: "0.1.0",
+        reviewStatus: "approved",
+        securityStatus: "passed",
+        publishedAt: null,
+      },
+    });
+  };
+
+  const code = await runCli([
+    "review",
+    "action",
+    "submission-1",
+    "--action",
+    "approve",
+    "--reason",
+    "checked",
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "review-token" }));
+
+  assert.equal(code, 0);
+  assert.equal(url, "http://api.test/v1/review/submissions/submission-1/actions");
+  assert.equal(method, "POST");
+  assert.equal(authorization, "Bearer review-token");
+  assert.deepEqual(body, { action: "approve", reason: "checked" });
+  assert.deepEqual(output.stdout, ["release-notes-helper@0.1.0\tapproved\tpassed\tpublished=-"]);
+});
+
+test("review action rejects unknown actions without fetch", async () => {
+  const output = createOutput();
+  let calls = 0;
+
+  const code = await runCli([
+    "review",
+    "action",
+    "submission-1",
+    "--action",
+    "delete",
+  ], testRuntime(output, async () => {
+    calls += 1;
+    return response(500, {});
+  }, { AI_SKILLS_TOKEN: "review-token" }));
+
+  assert.equal(code, 2);
+  assert.equal(calls, 0);
+  assert.match(output.stderr.join("\n"), /--action must be approve or publish/);
+});
+
+test("export writes verified bundle files under output directory", async (t) => {
+  const outputDir = await mkdtemp(path.join(os.tmpdir(), "ai-skills-export-"));
+  t.after(() => rm(outputDir, { recursive: true, force: true }));
+  const output = createOutput();
+  const bundle = JSON.stringify({
+    files: [
+      { path: "README.md", content: "Summarize release notes." },
+      { path: "nested/skill.json", content: "{}" },
+    ],
+  });
+  const calls: string[] = [];
+  const fetch: FetchLike = async (input) => {
+    calls.push(String(input));
+    if (String(input).endsWith("/bundle?platform=codex")) {
+      return rawResponse(200, bundle);
+    }
+    return response(200, {
+      release: {
+        artifact: {
+          sha256: createHash("sha256").update(bundle).digest("hex"),
+          byteSize: Buffer.byteLength(bundle),
+        },
+      },
+    });
+  };
+
+  const code = await runCli([
+    "export",
+    "release-notes-helper",
+    "--version",
+    "0.1.0",
+    "--platform",
+    "codex",
+    "--output",
+    outputDir,
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, fetch));
+
+  assert.equal(code, 0);
+  assert.deepEqual(calls, [
+    "http://api.test/v1/skills/release-notes-helper/releases/0.1.0",
+    "http://api.test/v1/skills/release-notes-helper/releases/0.1.0/bundle?platform=codex",
+  ]);
+  assert.equal(await readFile(path.join(outputDir, "README.md"), "utf8"), "Summarize release notes.");
+  assert.equal(await readFile(path.join(outputDir, "nested", "skill.json"), "utf8"), "{}");
+  assert.match(output.stdout[0], /release-notes-helper@0\.1\.0\texported\tfiles=2/);
+});
+
+test("export refuses unsafe bundle file paths before writing", async (t) => {
+  const outputDir = await mkdtemp(path.join(os.tmpdir(), "ai-skills-export-"));
+  t.after(() => rm(outputDir, { recursive: true, force: true }));
+  const output = createOutput();
+  const bundle = JSON.stringify({
+    files: [{ path: "../secret.txt", content: "nope" }],
+  });
+  const fetch: FetchLike = async (input) => {
+    if (String(input).endsWith("/bundle?platform=codex")) {
+      return rawResponse(200, bundle);
+    }
+    return response(200, {
+      release: {
+        artifact: {
+          sha256: createHash("sha256").update(bundle).digest("hex"),
+          byteSize: Buffer.byteLength(bundle),
+        },
+      },
+    });
+  };
+
+  const code = await runCli([
+    "export",
+    "release-notes-helper",
+    "--version",
+    "0.1.0",
+    "--platform",
+    "codex",
+    "--output",
+    outputDir,
+  ], testRuntime(output, fetch));
+
+  assert.equal(code, 1);
+  assert.match(output.stderr.join("\n"), /cannot traverse directories/);
+});
+
 async function writeManifest(dir: string): Promise<void> {
   await writeFile(path.join(dir, "skill.json"), JSON.stringify({
     name: "release-notes-helper",
@@ -218,6 +407,16 @@ function response(status: number, body: Record<string, unknown>, expectedInput?:
     status,
     async text() {
       return JSON.stringify(body);
+    },
+  };
+}
+
+function rawResponse(status: number, body: string) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    async text() {
+      return body;
     },
   };
 }
