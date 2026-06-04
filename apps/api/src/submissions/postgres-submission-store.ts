@@ -1,6 +1,9 @@
 import { and, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { AppError } from "@ai-skills-share/core";
-import { parseSkillManifest } from "@ai-skills-share/skill-package";
+import {
+  loadSkillManifestFromPackageFiles,
+  PackageManifestFileError,
+} from "@ai-skills-share/skill-package";
 import { sanitizeAuditDetails, sanitizeAuditValue } from "../audit/sanitize.js";
 import type { Database } from "../db/client.js";
 import {
@@ -342,7 +345,25 @@ export class PostgresSubmissionStore implements SubmissionStore {
         }, tx);
         throw new AppError("A succeeded package scan is required before publication.", "PACKAGE_SCAN_REQUIRED", 422);
       }
-      const manifest = manifestFromPayload(row.artifactPayload);
+      let manifest;
+      try {
+        manifest = manifestFromPayload(row.artifactPayload);
+      } catch (error) {
+        await this.insertReviewAudit("release.publish", "deny", input.actorId, input.submissionId, {
+          slug: row.slug,
+          version: row.version,
+          reason: error instanceof AppError ? error.code : "invalid_artifact_manifest",
+        }, tx);
+        throw error;
+      }
+      if (manifest.name !== row.slug || manifest.version !== row.version || manifest.visibility !== row.visibility) {
+        await this.insertReviewAudit("release.publish", "deny", input.actorId, input.submissionId, {
+          slug: row.slug,
+          version: row.version,
+          reason: "manifest_mismatch",
+        }, tx);
+        throw new AppError("Package manifest does not match the reviewed submission.", "PACKAGE_MANIFEST_MISMATCH", 422);
+      }
       const now = new Date();
       const [updatedVersion] = await tx.update(skillVersions).set({
         publishedAt: now,
@@ -629,18 +650,13 @@ function parseArtifactPayload(input: unknown): ArtifactPayload {
 
 function manifestFromPayload(input: unknown) {
   const payload = parseArtifactPayload(input);
-  const manifestFile = payload.files.find((file) => (
-    file.path === "skill.json" ||
-    file.path === "skill-manifest.json" ||
-    file.path === "ai-skill.json"
-  ));
-  if (!manifestFile) {
-    throw new AppError("Package manifest file is required before publication.", "PACKAGE_MANIFEST_REQUIRED", 422);
-  }
   try {
-    return parseSkillManifest(JSON.parse(manifestFile.content));
-  } catch {
-    throw new AppError("Package manifest is invalid.", "INVALID_PACKAGE_MANIFEST", 422);
+    return loadSkillManifestFromPackageFiles(payload.files);
+  } catch (error) {
+    if (error instanceof PackageManifestFileError) {
+      throw new AppError(error.message, error.code, 422);
+    }
+    throw new AppError(error instanceof Error ? error.message : "Invalid artifact payload.", "INVALID_PACKAGE_PAYLOAD", 422);
   }
 }
 

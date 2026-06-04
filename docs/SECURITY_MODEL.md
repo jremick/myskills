@@ -44,6 +44,7 @@ Last updated: 2026-06-04
 
 - Public search and detail expose only approved, scan-passed, published releases with artifact records.
 - Submission intake accepts package text entries only; the API does not accept server-local paths or URLs.
+- Submission intake requires a strict root package manifest file that matches the submitted manifest metadata; publish revalidates stored artifact manifests before release.
 - Submission is role-gated to owner, admin, maintainer, and author accounts in the current slice; MFA enforcement for admin/maintainer submission remains a remaining hardening item.
 - Server code generates artifact hashes, sizes, content type, and storage keys instead of trusting client-supplied values.
 - Blocking scan findings reject the submission before skill, version, or artifact records are created.

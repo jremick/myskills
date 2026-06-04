@@ -225,6 +225,7 @@ test("submit sends package entries to the API", async (t) => {
   assert.equal(authorization, "Bearer submit-token");
   assert.equal(body.manifest?.name, "release-notes-helper");
   assert.deepEqual(body.files?.map((file) => file.path), ["README.md", "skill.json"]);
+  assertPackageManifestMatchesBody(body);
   assert.deepEqual(output.stdout, ["release-notes-helper@0.1.0\tunreviewed\tpassed\tfindings=0"]);
 });
 
@@ -263,6 +264,7 @@ test("submit sends extracted zip entries to the API", async (t) => {
   assert.equal(authorization, "Bearer submit-token");
   assert.equal(body.manifest?.name, "release-notes-helper");
   assert.deepEqual(body.files?.map((file) => file.path), ["README.md", "skill.json"]);
+  assertPackageManifestMatchesBody(body);
   assert.deepEqual(output.stdout, ["release-notes-helper@0.1.0\tunreviewed\tpassed\tfindings=0"]);
 });
 
@@ -597,6 +599,13 @@ function manifestJson(): string {
     license: "Apache-2.0",
     platforms: [{ name: "codex", install_target: "codex-skill" }],
   });
+}
+
+function assertPackageManifestMatchesBody(body: { manifest?: { name?: string; version?: string; title?: string }; files?: Array<{ path: string; content: string }> }): void {
+  const packageManifest = JSON.parse(body.files?.find((file) => file.path === "skill.json")?.content ?? "{}");
+  assert.equal(packageManifest.name, body.manifest?.name);
+  assert.equal(packageManifest.version, body.manifest?.version);
+  assert.equal(packageManifest.title, body.manifest?.title);
 }
 
 async function makeTempPackage(): Promise<string> {

@@ -136,6 +136,62 @@ test("invalid manifests are rejected", async (t) => {
   assert.equal(submissionStore.count(), 0);
 });
 
+test("submitted manifest must match the package manifest file", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const token = await addAndLogin(app, authStore, ["author"]);
+  const payload = cleanSubmissionPayload();
+  payload.files[0].content = JSON.stringify({
+    ...payload.manifest,
+    name: "different-helper",
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload,
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error.code, "PACKAGE_MANIFEST_MISMATCH");
+  assert.equal(submissionStore.count(), 0);
+  assert.equal(submissionStore.deniedCount(), 0);
+});
+
+test("package manifest file is required and must be valid", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const token = await addAndLogin(app, authStore, ["author"]);
+  const missingManifest = cleanSubmissionPayload();
+  missingManifest.files = [{ path: "README.md", content: "Summarize release notes." }];
+  const invalidManifest = cleanSubmissionPayload();
+  invalidManifest.files[0].content = "{}";
+
+  const missingResponse = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload: missingManifest,
+  });
+  const invalidResponse = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload: invalidManifest,
+  });
+
+  assert.equal(missingResponse.statusCode, 400);
+  assert.equal(missingResponse.json().error.code, "PACKAGE_MANIFEST_REQUIRED");
+  assert.equal(invalidResponse.statusCode, 400);
+  assert.equal(invalidResponse.json().error.code, "INVALID_PACKAGE_MANIFEST");
+  assert.equal(submissionStore.count(), 0);
+});
+
 test("duplicate slug and version are rejected", async (t) => {
   const submissionStore = new MemorySubmissionStore();
   const authStore = new MemoryAuthStore("closed");
@@ -229,20 +285,21 @@ async function addAndLogin(
 }
 
 function cleanSubmissionPayload() {
+  const manifest = {
+    name: "release-notes-helper",
+    title: "Release Notes Helper",
+    summary: "Turns merged changes into concise release notes.",
+    version: "0.1.0",
+    license: "Apache-2.0",
+    platforms: [{ name: "codex", install_target: "codex-skill" }],
+    tags: ["writing", "release"],
+  };
   return {
-    manifest: {
-      name: "release-notes-helper",
-      title: "Release Notes Helper",
-      summary: "Turns merged changes into concise release notes.",
-      version: "0.1.0",
-      license: "Apache-2.0",
-      platforms: [{ name: "codex", install_target: "codex-skill" }],
-      tags: ["writing", "release"],
-    },
+    manifest,
     files: [
       {
         path: "skill.json",
-        content: "{}",
+        content: JSON.stringify(manifest),
       },
       {
         path: "README.md",

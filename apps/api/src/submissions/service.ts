@@ -2,9 +2,12 @@ import { createHash } from "node:crypto";
 import { AppError } from "@ai-skills-share/core";
 import {
   hasBlockingFindings,
+  loadSkillManifestFromPackageFiles,
   normalizePackageFilePath,
+  PackageManifestFileError,
   scanPackageFiles,
   type PackageInputFile,
+  type SkillManifest,
 } from "@ai-skills-share/skill-package";
 import type { Role } from "@ai-skills-share/auth";
 import type {
@@ -32,6 +35,7 @@ export class SubmissionService {
     if (input.files.length === 0) {
       throw new AppError("Package files are required.", "PACKAGE_FILES_REQUIRED", 400);
     }
+    const packageManifest = validatePackageManifest(input.manifest, input.files);
 
     let scan: ReturnType<typeof scanPackageFiles>;
     try {
@@ -52,9 +56,10 @@ export class SubmissionService {
       });
     }
 
-    const artifact = artifactMetadata(input.manifest.name, input.manifest.version, input.files);
+    const artifact = artifactMetadata(packageManifest.name, packageManifest.version, input.files);
     return this.store.createSubmission({
       ...input,
+      manifest: packageManifest,
       artifact,
       findings: scan.findings,
       securityStatus: scan.findings.length > 0 ? "warning" : "passed",
@@ -128,6 +133,39 @@ function canSubmit(roles: Role[]): boolean {
 
 function canReview(roles: Role[]): boolean {
   return roles.some((role) => role === "owner" || role === "admin" || role === "maintainer");
+}
+
+function validatePackageManifest(submittedManifest: SkillManifest, files: PackageInputFile[]): SkillManifest {
+  let packageManifest: SkillManifest;
+  try {
+    packageManifest = loadSkillManifestFromPackageFiles(files);
+  } catch (error) {
+    if (error instanceof PackageManifestFileError) {
+      throw new AppError(error.message, error.code, 400);
+    }
+    throw new AppError(error instanceof Error ? error.message : "Invalid package payload.", "INVALID_PACKAGE_PAYLOAD", 400);
+  }
+  if (canonicalManifest(submittedManifest) !== canonicalManifest(packageManifest)) {
+    throw new AppError("Submitted manifest must match the package manifest file.", "PACKAGE_MANIFEST_MISMATCH", 400);
+  }
+  return packageManifest;
+}
+
+function canonicalManifest(manifest: SkillManifest): string {
+  return JSON.stringify({
+    name: manifest.name,
+    title: manifest.title,
+    summary: manifest.summary,
+    version: manifest.version,
+    license: manifest.license,
+    visibility: manifest.visibility,
+    platforms: manifest.platforms.map((platform) => ({
+      name: platform.name,
+      install_target: platform.install_target,
+      status: platform.status,
+    })),
+    tags: manifest.tags,
+  });
 }
 
 function artifactMetadata(slug: string, version: string, files: PackageInputFile[]): StoredSubmission["artifact"] {

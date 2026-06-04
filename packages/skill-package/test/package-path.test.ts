@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   MAX_PACKAGE_FILES,
   MAX_PACKAGE_TEXT_BYTES,
+  loadSkillManifestFromPackageFiles,
   normalizePackageFilePath,
   loadSkillManifestFromPath,
   readPackageFilesFromPath,
@@ -232,6 +233,30 @@ test("scans in-memory package files", () => {
   assert.equal(result.findings[0]?.path, "README.md");
 });
 
+test("loads a skill manifest from normalized package file entries", () => {
+  const manifest = loadSkillManifestFromPackageFiles([
+    { path: "./ai-skill.json", content: manifestJson({ name: "alternate-helper" }) },
+    { path: "README.md", content: "readme" },
+  ]);
+
+  assert.equal(manifest.name, "alternate-helper");
+  assert.equal(manifest.version, "0.1.0");
+  assert.equal(manifest.visibility, "private");
+});
+
+test("rejects missing, invalid, and ambiguous package manifest file entries", () => {
+  assert.throws(() => loadSkillManifestFromPackageFiles([
+    { path: "README.md", content: "readme" },
+  ]), /required/);
+  assert.throws(() => loadSkillManifestFromPackageFiles([
+    { path: "skill.json", content: "{}" },
+  ]), /invalid/);
+  assert.throws(() => loadSkillManifestFromPackageFiles([
+    { path: "skill.json", content: manifestJson() },
+    { path: "skill-manifest.json", content: manifestJson() },
+  ]), /multiple/);
+});
+
 test("rejects unsafe package payload paths", () => {
   assert.throws(() => normalizePackageFilePath("../secret.txt"), /traverse/);
   assert.throws(() => normalizePackageFilePath("dir/../secret.txt"), /traverse/);
@@ -255,12 +280,15 @@ async function makeTempPackage(): Promise<string> {
   return mkdtemp(path.join(os.tmpdir(), "ai-skills-package-"));
 }
 
-function manifestJson(): string {
+function manifestJson(overrides: Partial<{
+  name: string;
+  version: string;
+}> = {}): string {
   return JSON.stringify({
-    name: "release-notes-helper",
+    name: overrides.name ?? "release-notes-helper",
     title: "Release Notes Helper",
     summary: "Turns merged changes into concise release notes.",
-    version: "0.1.0",
+    version: overrides.version ?? "0.1.0",
     license: "Apache-2.0",
     platforms: [{ name: "codex", install_target: "codex-skill" }],
   });

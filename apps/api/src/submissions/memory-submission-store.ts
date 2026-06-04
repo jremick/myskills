@@ -1,4 +1,9 @@
 import { AppError } from "@ai-skills-share/core";
+import {
+  loadSkillManifestFromPackageFiles,
+  PackageManifestFileError,
+  type SkillManifest,
+} from "@ai-skills-share/skill-package";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type {
   CreateSubmissionInput,
@@ -146,6 +151,17 @@ export class MemorySubmissionStore implements SubmissionStore {
       });
       throw new AppError("Submission is already published.", "SUBMISSION_ALREADY_PUBLISHED", 409);
     }
+    try {
+      assertArtifactManifestMatchesSubmission(submission);
+    } catch (error) {
+      this.recordAudit("release.publish", "deny", input.actorId, {
+        submissionId: submission.id,
+        slug: submission.skillSlug,
+        version: submission.version,
+        reason: error instanceof AppError ? error.code : "invalid_artifact_manifest",
+      });
+      throw error;
+    }
     submission.publishedAt = new Date().toISOString();
     this.recordAudit("release.publish", "allow", input.actorId, {
       submissionId: submission.id,
@@ -274,4 +290,22 @@ function publicRelease(submission: StoredSubmission): PublicReleaseMetadata {
       contentType: submission.artifact.contentType,
     },
   };
+}
+
+function assertArtifactManifestMatchesSubmission(submission: StoredSubmission): void {
+  const manifest = manifestFromArtifactPayload(submission.artifact.payload);
+  if (manifest.name !== submission.skillSlug || manifest.version !== submission.version) {
+    throw new AppError("Package manifest does not match the reviewed submission.", "PACKAGE_MANIFEST_MISMATCH", 422);
+  }
+}
+
+function manifestFromArtifactPayload(input: StoredSubmission["artifact"]["payload"]): SkillManifest {
+  try {
+    return loadSkillManifestFromPackageFiles(input.files);
+  } catch (error) {
+    if (error instanceof PackageManifestFileError) {
+      throw new AppError(error.message, error.code, 422);
+    }
+    throw new AppError(error instanceof Error ? error.message : "Invalid artifact payload.", "INVALID_PACKAGE_PAYLOAD", 422);
+  }
 }

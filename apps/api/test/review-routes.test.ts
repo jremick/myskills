@@ -166,6 +166,57 @@ test("warning submissions cannot be approved or published", async (t) => {
   assert.equal(publishResponse.json().error.code, "PACKAGE_SCAN_NOT_PASSED");
 });
 
+test("publish revalidates the stored package manifest", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildReviewApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const authorToken = await addAndLogin(app, authStore, "author@example.com", ["author"]);
+  const maintainerToken = await addAndLoginWithMfa(app, authStore, "maintainer@example.com", ["maintainer"]);
+
+  const submitResponse = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${authorToken}` },
+    payload: cleanSubmissionPayload(),
+  });
+  assert.equal(submitResponse.statusCode, 202);
+  const submissionId = submitResponse.json().submission.id as string;
+
+  const approveResponse = await app.inject({
+    method: "POST",
+    url: `/v1/review/submissions/${submissionId}/actions`,
+    headers: { authorization: `Bearer ${maintainerToken}` },
+    payload: { action: "approve" },
+  });
+  assert.equal(approveResponse.statusCode, 200);
+
+  const stored = firstStoredSubmission(submissionStore);
+  const manifestFile = stored.artifact.payload.files.find((file) => file.path === "skill.json");
+  if (!manifestFile) {
+    throw new Error("Expected stored package manifest.");
+  }
+  manifestFile.content = JSON.stringify({
+    ...JSON.parse(manifestFile.content),
+    name: "different-helper",
+  });
+
+  const publishResponse = await app.inject({
+    method: "POST",
+    url: `/v1/review/submissions/${submissionId}/actions`,
+    headers: { authorization: `Bearer ${maintainerToken}` },
+    payload: { action: "publish" },
+  });
+
+  assert.equal(publishResponse.statusCode, 422);
+  assert.equal(publishResponse.json().error.code, "PACKAGE_MANIFEST_MISMATCH");
+  assert.equal(submissionStore.auditEvents().some((event) => (
+    event.action === "release.publish" &&
+    event.decision === "deny" &&
+    event.details.reason === "PACKAGE_MANIFEST_MISMATCH"
+  )), true);
+});
+
 test("release routes hide unpublished and private releases consistently", async (t) => {
   const submissionStore = new MemorySubmissionStore();
   const authStore = new MemoryAuthStore("closed");
@@ -357,4 +408,21 @@ function cleanSubmissionPayload(input: {
       },
     ],
   };
+}
+
+function firstStoredSubmission(submissionStore: MemorySubmissionStore) {
+  const internalStore = submissionStore as unknown as {
+    submissions: Map<string, {
+      artifact: {
+        payload: {
+          files: Array<{ path: string; content: string }>;
+        };
+      };
+    }>;
+  };
+  const stored = [...internalStore.submissions.values()][0];
+  if (!stored) {
+    throw new Error("Expected stored submission.");
+  }
+  return stored;
 }

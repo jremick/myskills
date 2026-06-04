@@ -23,6 +23,22 @@ export interface PackageInputFile {
   content: string;
 }
 
+export type PackageManifestFileErrorCode =
+  | "PACKAGE_MANIFEST_REQUIRED"
+  | "PACKAGE_MANIFEST_AMBIGUOUS"
+  | "INVALID_PACKAGE_MANIFEST"
+  | "INVALID_PACKAGE_PAYLOAD";
+
+export class PackageManifestFileError extends Error {
+  constructor(
+    readonly code: PackageManifestFileErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "PackageManifestFileError";
+  }
+}
+
 interface PackageFile {
   absolutePath: string;
   relativePath: string;
@@ -128,6 +144,47 @@ export function scanPackageFiles(files: PackageInputFile[]): PackageScanResult {
     bytesScanned,
     findings,
   };
+}
+
+export function loadSkillManifestFromPackageFiles(files: PackageInputFile[]): SkillManifest {
+  const manifests: Array<{ path: string; manifest: SkillManifest }> = [];
+  const seen = new Set<string>();
+
+  for (const file of files) {
+    const relativePath = normalizePackageFilePath(file.path);
+    if (seen.has(relativePath)) {
+      throw new PackageManifestFileError("INVALID_PACKAGE_PAYLOAD", `Package contains duplicate file path: ${relativePath}`);
+    }
+    seen.add(relativePath);
+    if (!DEFAULT_MANIFEST_NAMES.includes(relativePath as (typeof DEFAULT_MANIFEST_NAMES)[number])) {
+      continue;
+    }
+    if (typeof file.content !== "string") {
+      throw new PackageManifestFileError("INVALID_PACKAGE_PAYLOAD", `Package file content must be text: ${relativePath}`);
+    }
+    try {
+      manifests.push({
+        path: relativePath,
+        manifest: parseSkillManifest(JSON.parse(file.content)),
+      });
+    } catch {
+      throw new PackageManifestFileError("INVALID_PACKAGE_MANIFEST", `Package manifest file is invalid: ${relativePath}`);
+    }
+  }
+
+  if (manifests.length === 0) {
+    throw new PackageManifestFileError(
+      "PACKAGE_MANIFEST_REQUIRED",
+      `Package manifest file is required. Expected one of: ${DEFAULT_MANIFEST_NAMES.join(", ")}`,
+    );
+  }
+  if (manifests.length > 1) {
+    throw new PackageManifestFileError(
+      "PACKAGE_MANIFEST_AMBIGUOUS",
+      `Package contains multiple root manifests: ${manifests.map((manifest) => manifest.path).join(", ")}`,
+    );
+  }
+  return manifests[0].manifest;
 }
 
 async function resolveManifestPath(inputPath: string): Promise<string> {

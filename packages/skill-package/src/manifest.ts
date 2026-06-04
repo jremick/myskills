@@ -11,7 +11,7 @@ export const platformVariantSchema = z.object({
   name: z.string().min(1).max(64),
   install_target: z.string().min(1).max(96),
   status: z.enum(["supported", "planned", "deprecated"]).default("supported"),
-});
+}).strict();
 
 export const skillManifestSchema = z.object({
   name: skillSlugSchema,
@@ -22,11 +22,10 @@ export const skillManifestSchema = z.object({
   visibility: z.enum(["public", "authenticated", "organization", "team", "private", "explicit-users"]).default("private"),
   platforms: z.array(platformVariantSchema).min(1),
   tags: z.array(z.string().min(1).max(40)).max(20).default([]),
-});
+}).strict();
 
 export type SkillManifest = z.infer<typeof skillManifestSchema>;
 
 export function parseSkillManifest(input: unknown): SkillManifest {
   return skillManifestSchema.parse(input);
 }
-
