@@ -69,6 +69,17 @@ button {
   background: #e9fbf8;
 }
 
+.brand-mark {
+  border-color: transparent;
+  background: transparent;
+}
+
+.brand-mark img {
+  display: block;
+  width: 42px;
+  height: 42px;
+}
+
 .skill-icon.large {
   width: 68px;
   height: 68px;

@@ -216,7 +216,9 @@ export function RegistryApp({ client }: RegistryAppProps) {
           setSelectedSlug(skills[0]?.slug ?? null);
           window.history.replaceState({}, "", "/");
         }}>
-          <span className="brand-mark" aria-hidden="true"><PackageOpen size={22} /></span>
+          <span className="brand-mark" aria-hidden="true">
+            <img src="/brand/myskills-mark.svg" alt="" />
+          </span>
           <span>MySkills</span>
         </a>
         <label className="global-search" htmlFor="skill-search">
