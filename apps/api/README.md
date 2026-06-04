@@ -22,6 +22,10 @@ Implemented:
 - `GET /health`
 - `POST /v1/auth/register` admin-policy-gated self registration
 - `POST /v1/auth/login` email/password login for active verified users, returning an MFA challenge when TOTP is enabled
+- `POST /v1/auth/email-verification/request` generic email verification token request
+- `POST /v1/auth/email-verification/confirm` single-use email verification token confirmation
+- `POST /v1/auth/password-reset/request` generic password reset token request
+- `POST /v1/auth/password-reset/confirm` single-use password reset confirmation with credential revocation
 - `POST /v1/auth/mfa/verify` MFA challenge verification with TOTP or recovery code
 - `GET /v1/auth/mfa` session-only MFA status
 - `POST /v1/auth/mfa/totp/enroll` session-only TOTP enrollment bootstrap with password reauth
@@ -56,6 +60,8 @@ Admin registration and user-status mutations write sanitized audit events. Audit
 API tokens are hashed at rest and returned in plaintext only on creation. Token management routes require an interactive session, not another API token. Current token scopes are `profile:read`, `skills:read`, `skills:submit`, `review:read`, and `review:write`; route checks require both the user role and the token scope. Owner, admin, and maintainer accounts must create review-scoped API tokens from an MFA-verified session.
 
 TOTP secrets are encrypted before storage with `AUTH_SECRET`. Production startup fails if `AUTH_SECRET` is missing or shorter than 32 bytes.
+
+Email verification and password reset action tokens are opaque, short-lived, single-use, and stored only as SHA-256 hashes. Request endpoints return the same `202 { "status": "pending" }` body for known and unknown accounts. Password reset revokes the user's active sessions and API tokens and requires a normal login/MFA flow afterward. The current API exposes the token generation boundary through an `AuthNotificationSink`; production deployments still need to wire that sink to an email provider or queue.
 
 Run locally:
 

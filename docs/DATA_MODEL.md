@@ -15,6 +15,7 @@ M1 tables are the thin backend proof. M2 tables harden auth and submissions. Lat
 - M1 `password_credentials`: first-party email/password credentials.
 - M2 `identities`: linked external provider identities such as OIDC, SAML, GitHub, Google, or Cloudflare Access.
 - M1 `auth_sessions`: hashed opaque bearer sessions.
+- M2 `auth_action_tokens`: hashed single-use email verification and password reset tokens with purpose, recipient, expiry, and consumed timestamp.
 - M2 `mfa_factors`: TOTP, passkey, recovery-code, and future factors.
 - M1 `api_tokens`: scoped hashed tokens for CLI, automation, and MCP clients, with non-secret display prefixes, expiry, revocation, and last-used tracking.
 - M1 `roles`: global and scoped roles.

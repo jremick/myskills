@@ -52,7 +52,7 @@ flowchart LR
 
 Postgres stores canonical product state:
 
-- users, identities, sessions, roles, MFA factors
+- users, identities, sessions, auth action tokens, roles, MFA factors
 - skills, versions, releases, platform variants
 - packages, artifact references, checksums, scan results
 - submissions, reviews, comments, lifecycle actions

@@ -4,12 +4,16 @@ import type {
   AuditEventRecord,
   ApiTokenRecord,
   ApiTokenScope,
+  AuthActionTokenRecord,
+  AuthActionTokenPurpose,
+  AuthActionTokenWithUser,
   AuthStore,
   AuthUserRecord,
   AuthUserWithSession,
   AuthUserWithPassword,
   AuthUserWithApiToken,
   CreateAuditEventInput,
+  CreateAuthActionTokenInput,
   CreateApiTokenInput,
   CreateMfaChallengeInput,
   CreateMfaTotpFactorInput,
@@ -85,6 +89,17 @@ interface MemoryMfaChallenge {
   createdAt: Date;
 }
 
+interface MemoryAuthActionToken {
+  id: string;
+  userId: string;
+  purpose: AuthActionTokenPurpose;
+  tokenHash: string;
+  sentToNormalizedEmail: string;
+  expiresAt: Date;
+  usedAt: Date | null;
+  createdAt: Date;
+}
+
 interface MemoryAuditEvent {
   id: string;
   actorUserId: string | null;
@@ -103,6 +118,7 @@ export class MemoryAuthStore implements AuthStore {
   private mfaFactors = new Map<string, MemoryMfaTotpFactor>();
   private mfaRecoveryCodes = new Map<string, MemoryMfaRecoveryCode>();
   private mfaChallenges = new Map<string, MemoryMfaChallenge>();
+  private authActionTokens = new Map<string, MemoryAuthActionToken>();
   private audit = new Map<string, MemoryAuditEvent>();
 
   constructor(private registrationMode: RegistrationMode = "closed") {}
@@ -182,6 +198,46 @@ export class MemoryAuthStore implements AuthStore {
       user.emailVerifiedAt = input.emailVerifiedAt;
     }
     return toRecord(user);
+  }
+
+  async updatePasswordCredential(input: { userId: string; passwordHash: string; passwordUpdatedAt?: Date }): Promise<boolean> {
+    const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
+    if (!user || user.passwordHash === null) {
+      return false;
+    }
+    user.passwordHash = input.passwordHash;
+    return true;
+  }
+
+  async createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord> {
+    const token: MemoryAuthActionToken = {
+      id: `auth-action-token-${this.authActionTokens.size + 1}`,
+      userId: input.userId,
+      purpose: input.purpose,
+      tokenHash: input.tokenHash,
+      sentToNormalizedEmail: input.sentToNormalizedEmail,
+      expiresAt: input.expiresAt,
+      usedAt: null,
+      createdAt: new Date(),
+    };
+    this.authActionTokens.set(token.tokenHash, token);
+    return toAuthActionTokenRecord(token);
+  }
+
+  async consumeAuthActionToken(input: {
+    tokenHash: string;
+    purpose: AuthActionTokenPurpose;
+    now?: Date;
+    usedAt?: Date;
+  }): Promise<AuthActionTokenWithUser | null> {
+    const now = input.now ?? new Date();
+    const token = this.authActionTokens.get(input.tokenHash);
+    if (!token || token.purpose !== input.purpose || token.usedAt || token.expiresAt <= now) {
+      return null;
+    }
+    token.usedAt = input.usedAt ?? now;
+    const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
+    return user ? { ...toAuthActionTokenRecord(token), user: toRecord(user) } : null;
   }
 
   async countActiveOwnersExcluding(userId: string): Promise<number> {
@@ -491,6 +547,19 @@ function toMfaChallengeRecord(challenge: MemoryMfaChallenge): MfaChallengeRecord
     expiresAt: challenge.expiresAt,
     usedAt: challenge.usedAt,
     createdAt: challenge.createdAt,
+  };
+}
+
+function toAuthActionTokenRecord(token: MemoryAuthActionToken): AuthActionTokenRecord {
+  return {
+    id: token.id,
+    userId: token.userId,
+    purpose: token.purpose,
+    tokenHash: token.tokenHash,
+    sentToNormalizedEmail: token.sentToNormalizedEmail,
+    expiresAt: token.expiresAt,
+    usedAt: token.usedAt,
+    createdAt: token.createdAt,
   };
 }
 

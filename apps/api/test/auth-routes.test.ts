@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { generateTotpCode, hashPassword } from "@ai-skills-share/auth";
 import { buildApp } from "../src/app.js";
 import { MemoryAuthRateLimiter } from "../src/auth/rate-limit.js";
-import { AuthService } from "../src/auth/service.js";
+import { AuthService, type AuthNotificationSink } from "../src/auth/service.js";
 import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
 import { MemorySkillRepository } from "../src/repositories/memory-skill-repository.js";
 
@@ -55,6 +55,160 @@ test("request registration creates a pending account without a session", async (
   const pending = await authStore.findUserByEmailWithPassword("new@example.com");
   assert.equal(pending?.status, "pending");
   assert.equal(pending?.passwordHash?.includes("correct horse"), false);
+});
+
+test("registration queues email verification without activating request-mode accounts", async (t) => {
+  const authStore = new MemoryAuthStore("request");
+  const outbox = createAuthOutbox();
+  const app = buildApp({
+    skillRepository: emptySkillRepository(),
+    authService: new AuthService(authStore, { notificationSink: outbox.sink }),
+  });
+  t.after(() => app.close());
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/auth/register",
+    payload: {
+      email: "New@Example.com",
+      password: "correct horse battery staple",
+      name: "New User",
+    },
+  });
+
+  assert.equal(response.statusCode, 202);
+  assert.deepEqual(response.json(), { status: "pending" });
+  assert.equal(outbox.emailVerifications.length, 1);
+  assert.equal(outbox.emailVerifications[0].email, "new@example.com");
+  assertNoSensitiveAuthMaterial(response.json());
+
+  const verified = await app.inject({
+    method: "POST",
+    url: "/v1/auth/email-verification/confirm",
+    payload: {
+      token: outbox.emailVerifications[0].token,
+    },
+  });
+  assert.equal(verified.statusCode, 200);
+  assert.deepEqual(verified.json(), { status: "verified" });
+  assertNoSensitiveAuthMaterial(verified.json());
+
+  const user = await authStore.findUserByEmailWithPassword("new@example.com");
+  assert.equal(user?.status, "pending");
+  assert.equal(user?.emailVerifiedAt instanceof Date, true);
+
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: "new@example.com",
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(login.statusCode, 403);
+  assert.equal(login.json().error.code, "ACCOUNT_NOT_ACTIVE");
+});
+
+test("email verification requests are generic and active unverified users can verify", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const outbox = createAuthOutbox();
+  authStore.addUser({
+    id: "active-unverified",
+    email: "active-unverified@example.com",
+    status: "active",
+    emailVerifiedAt: null,
+    passwordHash: await hashPassword("correct horse battery staple"),
+  });
+  const app = buildApp({
+    skillRepository: emptySkillRepository(),
+    authService: new AuthService(authStore, { notificationSink: outbox.sink }),
+  });
+  t.after(() => app.close());
+
+  const request = await app.inject({
+    method: "POST",
+    url: "/v1/auth/email-verification/request",
+    payload: { email: "ACTIVE-UNVERIFIED@example.com" },
+  });
+  const unknown = await app.inject({
+    method: "POST",
+    url: "/v1/auth/email-verification/request",
+    payload: { email: "unknown@example.com" },
+  });
+  assert.equal(request.statusCode, 202);
+  assert.deepEqual(request.json(), { status: "pending" });
+  assert.equal(unknown.statusCode, 202);
+  assert.deepEqual(unknown.json(), { status: "pending" });
+  assert.equal(outbox.emailVerifications.length, 1);
+
+  const verified = await app.inject({
+    method: "POST",
+    url: "/v1/auth/email-verification/confirm",
+    payload: { token: outbox.emailVerifications[0].token },
+  });
+  assert.equal(verified.statusCode, 200);
+  assert.deepEqual(verified.json(), { status: "verified" });
+
+  const replay = await app.inject({
+    method: "POST",
+    url: "/v1/auth/email-verification/confirm",
+    payload: { token: outbox.emailVerifications[0].token },
+  });
+  assert.equal(replay.statusCode, 401);
+  assert.equal(replay.json().error.code, "INVALID_VERIFICATION_TOKEN");
+
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: "active-unverified@example.com",
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(login.statusCode, 200);
+  assert.equal(login.json().user.emailVerified, true);
+});
+
+test("email verification requests are rate limited and invalid tokens are generic", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildApp({
+    skillRepository: emptySkillRepository(),
+    authService: new AuthService(authStore, {
+      emailVerificationLimiter: new MemoryAuthRateLimiter({ maxAttempts: 1, windowMs: 60_000 }),
+    }),
+  });
+  t.after(() => app.close());
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/v1/auth/email-verification/request",
+    remoteAddress: "203.0.113.20",
+    payload: { email: "unknown@example.com" },
+  });
+  const second = await app.inject({
+    method: "POST",
+    url: "/v1/auth/email-verification/request",
+    remoteAddress: "203.0.113.20",
+    payload: { email: "unknown@example.com" },
+  });
+  const malformed = await app.inject({
+    method: "POST",
+    url: "/v1/auth/email-verification/confirm",
+    payload: { token: "short" },
+  });
+  const unknownToken = await app.inject({
+    method: "POST",
+    url: "/v1/auth/email-verification/confirm",
+    payload: { token: "a".repeat(43) },
+  });
+
+  assert.equal(first.statusCode, 202);
+  assert.equal(second.statusCode, 429);
+  assert.equal(second.json().error.code, "RATE_LIMITED");
+  assert.equal(malformed.statusCode, 400);
+  assert.equal(malformed.json().error.code, "INVALID_REQUEST_BODY");
+  assert.equal(unknownToken.statusCode, 401);
+  assert.equal(unknownToken.json().error.code, "INVALID_VERIFICATION_TOKEN");
 });
 
 test("pending accounts cannot login", async (t) => {
@@ -140,6 +294,292 @@ test("active verified accounts can login, call me, and logout", async (t) => {
     headers: { authorization: `Bearer ${token}` },
   });
   assert.equal(revoked.statusCode, 401);
+});
+
+test("password reset requests are generic and successful reset revokes existing credentials", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const outbox = createAuthOutbox();
+  const app = buildApp({
+    skillRepository: emptySkillRepository(),
+    authService: new AuthService(authStore, { notificationSink: outbox.sink }),
+  });
+  t.after(() => app.close());
+  authStore.addUser({
+    id: "reset-user",
+    email: "reset@example.com",
+    status: "active",
+    emailVerifiedAt: new Date(),
+    passwordHash: await hashPassword("correct horse battery staple"),
+  });
+
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: "reset@example.com",
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(login.statusCode, 200);
+  const sessionToken = login.json().token;
+
+  const apiTokenResponse = await app.inject({
+    method: "POST",
+    url: "/v1/auth/api-tokens",
+    headers: { authorization: `Bearer ${sessionToken}` },
+    payload: {
+      name: "Reset regression",
+      scopes: ["profile:read"],
+    },
+  });
+  assert.equal(apiTokenResponse.statusCode, 201);
+  const apiToken = apiTokenResponse.json().token.token;
+
+  const request = await app.inject({
+    method: "POST",
+    url: "/v1/auth/password-reset/request",
+    payload: { email: "RESET@example.com" },
+  });
+  const unknown = await app.inject({
+    method: "POST",
+    url: "/v1/auth/password-reset/request",
+    payload: { email: "unknown@example.com" },
+  });
+  assert.equal(request.statusCode, 202);
+  assert.deepEqual(request.json(), { status: "pending" });
+  assert.equal(unknown.statusCode, 202);
+  assert.deepEqual(unknown.json(), { status: "pending" });
+  assert.equal(outbox.passwordResets.length, 1);
+  assertNoSensitiveAuthMaterial(request.json());
+
+  const weak = await app.inject({
+    method: "POST",
+    url: "/v1/auth/password-reset/confirm",
+    payload: {
+      token: outbox.passwordResets[0].token,
+      password: "short",
+    },
+  });
+  assert.equal(weak.statusCode, 400);
+  assert.equal(weak.json().error.code, "INVALID_PASSWORD");
+
+  const reset = await app.inject({
+    method: "POST",
+    url: "/v1/auth/password-reset/confirm",
+    payload: {
+      token: outbox.passwordResets[0].token,
+      password: "new correct horse battery staple",
+    },
+  });
+  assert.equal(reset.statusCode, 200);
+  assert.deepEqual(reset.json(), { status: "reset" });
+  assertNoSensitiveAuthMaterial(reset.json());
+
+  const replay = await app.inject({
+    method: "POST",
+    url: "/v1/auth/password-reset/confirm",
+    payload: {
+      token: outbox.passwordResets[0].token,
+      password: "another correct horse battery staple",
+    },
+  });
+  assert.equal(replay.statusCode, 401);
+  assert.equal(replay.json().error.code, "INVALID_RESET_TOKEN");
+
+  const oldPassword = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: "reset@example.com",
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(oldPassword.statusCode, 401);
+  assert.equal(oldPassword.json().error.code, "INVALID_CREDENTIALS");
+
+  const newPassword = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: "reset@example.com",
+      password: "new correct horse battery staple",
+    },
+  });
+  assert.equal(newPassword.statusCode, 200);
+  assert.equal(newPassword.json().mfaRequired, false);
+
+  for (const token of [sessionToken, apiToken]) {
+    const me = await app.inject({
+      method: "GET",
+      url: "/v1/me",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(me.statusCode, 401);
+  }
+});
+
+test("password reset does not issue tokens for unusable accounts and invalid tokens are generic", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const outbox = createAuthOutbox();
+  const app = buildApp({
+    skillRepository: emptySkillRepository(),
+    authService: new AuthService(authStore, {
+      notificationSink: outbox.sink,
+      passwordResetLimiter: new MemoryAuthRateLimiter({ maxAttempts: 1, windowMs: 60_000 }),
+    }),
+  });
+  t.after(() => app.close());
+  authStore.addUser({
+    email: "pending@example.com",
+    status: "pending",
+    emailVerifiedAt: null,
+    passwordHash: await hashPassword("correct horse battery staple"),
+  });
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/v1/auth/password-reset/request",
+    remoteAddress: "203.0.113.21",
+    payload: { email: "pending@example.com" },
+  });
+  const second = await app.inject({
+    method: "POST",
+    url: "/v1/auth/password-reset/request",
+    remoteAddress: "203.0.113.21",
+    payload: { email: "pending@example.com" },
+  });
+  const malformed = await app.inject({
+    method: "POST",
+    url: "/v1/auth/password-reset/confirm",
+    payload: {
+      token: "short",
+      password: "new correct horse battery staple",
+    },
+  });
+  const unknownToken = await app.inject({
+    method: "POST",
+    url: "/v1/auth/password-reset/confirm",
+    payload: {
+      token: "b".repeat(43),
+      password: "new correct horse battery staple",
+    },
+  });
+
+  assert.equal(first.statusCode, 202);
+  assert.deepEqual(first.json(), { status: "pending" });
+  assert.equal(outbox.passwordResets.length, 0);
+  assert.equal(second.statusCode, 429);
+  assert.equal(second.json().error.code, "RATE_LIMITED");
+  assert.equal(malformed.statusCode, 400);
+  assert.equal(malformed.json().error.code, "INVALID_REQUEST_BODY");
+  assert.equal(unknownToken.statusCode, 401);
+  assert.equal(unknownToken.json().error.code, "INVALID_RESET_TOKEN");
+});
+
+test("password reset preserves enabled MFA state", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const outbox = createAuthOutbox();
+  const app = buildApp({
+    skillRepository: emptySkillRepository(),
+    authService: new AuthService(authStore, { notificationSink: outbox.sink }),
+  });
+  t.after(() => app.close());
+  const session = await addAndLogin(app, authStore, {
+    id: "reset-mfa",
+    email: "reset-mfa@example.com",
+    roles: ["user"],
+  });
+  const enrollment = await enrollTotp(app, session);
+  await confirmTotp(app, session, enrollment);
+
+  const request = await app.inject({
+    method: "POST",
+    url: "/v1/auth/password-reset/request",
+    payload: { email: "reset-mfa@example.com" },
+  });
+  assert.equal(request.statusCode, 202);
+  assert.equal(outbox.passwordResets.length, 1);
+
+  const reset = await app.inject({
+    method: "POST",
+    url: "/v1/auth/password-reset/confirm",
+    payload: {
+      token: outbox.passwordResets[0].token,
+      password: "new correct horse battery staple",
+    },
+  });
+  assert.equal(reset.statusCode, 200);
+
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: "reset-mfa@example.com",
+      password: "new correct horse battery staple",
+    },
+  });
+  assert.equal(login.statusCode, 200);
+  assert.equal(login.json().mfaRequired, true);
+  assert.equal(typeof login.json().challengeToken, "string");
+  assert.equal(login.json().token, undefined);
+});
+
+test("expired email verification and password reset tokens are denied", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const outbox = createAuthOutbox();
+  authStore.addUser({
+    email: "expired@example.com",
+    status: "active",
+    emailVerifiedAt: null,
+    passwordHash: await hashPassword("correct horse battery staple"),
+  });
+  authStore.addUser({
+    email: "expired-reset@example.com",
+    status: "active",
+    emailVerifiedAt: new Date(),
+    passwordHash: await hashPassword("correct horse battery staple"),
+  });
+  const app = buildApp({
+    skillRepository: emptySkillRepository(),
+    authService: new AuthService(authStore, {
+      notificationSink: outbox.sink,
+      emailVerificationTtlMs: -1,
+      passwordResetTtlMs: -1,
+    }),
+  });
+  t.after(() => app.close());
+
+  const verificationRequest = await app.inject({
+    method: "POST",
+    url: "/v1/auth/email-verification/request",
+    payload: { email: "expired@example.com" },
+  });
+  const resetRequest = await app.inject({
+    method: "POST",
+    url: "/v1/auth/password-reset/request",
+    payload: { email: "expired-reset@example.com" },
+  });
+  assert.equal(verificationRequest.statusCode, 202);
+  assert.equal(resetRequest.statusCode, 202);
+
+  const verification = await app.inject({
+    method: "POST",
+    url: "/v1/auth/email-verification/confirm",
+    payload: { token: outbox.emailVerifications[0].token },
+  });
+  const reset = await app.inject({
+    method: "POST",
+    url: "/v1/auth/password-reset/confirm",
+    payload: {
+      token: outbox.passwordResets[0].token,
+      password: "new correct horse battery staple",
+    },
+  });
+
+  assert.equal(verification.statusCode, 401);
+  assert.equal(verification.json().error.code, "INVALID_VERIFICATION_TOKEN");
+  assert.equal(reset.statusCode, 401);
+  assert.equal(reset.json().error.code, "INVALID_RESET_TOKEN");
 });
 
 test("MFA enrollment requires a session and does not leak stored secret material", async (t) => {
@@ -531,6 +971,42 @@ function buildAuthApp(authStore: MemoryAuthStore) {
     skillRepository: emptySkillRepository(),
     authService: new AuthService(authStore),
   });
+}
+
+function createAuthOutbox(): {
+  sink: AuthNotificationSink;
+  emailVerifications: Array<{ email: string; token: string; expiresAt: Date }>;
+  passwordResets: Array<{ email: string; token: string; expiresAt: Date }>;
+} {
+  const emailVerifications: Array<{ email: string; token: string; expiresAt: Date }> = [];
+  const passwordResets: Array<{ email: string; token: string; expiresAt: Date }> = [];
+  return {
+    sink: {
+      sendEmailVerification(input) {
+        emailVerifications.push({
+          email: input.email,
+          token: input.token,
+          expiresAt: input.expiresAt,
+        });
+      },
+      sendPasswordReset(input) {
+        passwordResets.push({
+          email: input.email,
+          token: input.token,
+          expiresAt: input.expiresAt,
+        });
+      },
+    },
+    emailVerifications,
+    passwordResets,
+  };
+}
+
+function assertNoSensitiveAuthMaterial(input: unknown): void {
+  const serialized = JSON.stringify(input);
+  for (const value of ["passwordHash", "tokenHash", "verificationToken", "resetToken", "secretCiphertext"]) {
+    assert.equal(serialized.includes(value), false);
+  }
 }
 
 async function addAndLogin(

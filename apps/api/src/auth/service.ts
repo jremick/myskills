@@ -10,6 +10,7 @@ import {
   hashApiToken,
   hashPassword,
   hashSessionToken,
+  validatePasswordInput,
   verifyTotpCode,
   verifyPassword,
   canAdmin,
@@ -23,6 +24,7 @@ import {
   type AuditEventRecord,
   type ApiTokenRecord,
   type ApiTokenScope,
+  type AuthActionTokenPurpose,
   type AuthResponseUser,
   type AuthStore,
   type AuthUserRecord,
@@ -31,6 +33,8 @@ import {
 
 const DEFAULT_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const DEFAULT_MFA_CHALLENGE_TTL_MS = 1000 * 60 * 5;
+const DEFAULT_EMAIL_VERIFICATION_TTL_MS = 1000 * 60 * 60 * 24;
+const DEFAULT_PASSWORD_RESET_TTL_MS = 1000 * 60 * 60;
 const DEFAULT_API_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 90;
 const MAX_API_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 365;
 const API_TOKEN_PREFIX_LENGTH = 12;
@@ -59,6 +63,39 @@ export interface VerifyMfaChallengeInput {
   code?: string;
   recoveryCode?: string;
   ip?: string;
+}
+
+export interface RequestEmailVerificationInput {
+  email: string;
+  ip?: string;
+}
+
+export interface ConfirmEmailVerificationInput {
+  token: string;
+  ip?: string;
+}
+
+export interface RequestPasswordResetInput {
+  email: string;
+  ip?: string;
+}
+
+export interface ConfirmPasswordResetInput {
+  token: string;
+  password: string;
+  ip?: string;
+}
+
+export interface AuthActionNotification {
+  user: AuthUserRecord;
+  email: string;
+  token: string;
+  expiresAt: Date;
+}
+
+export interface AuthNotificationSink {
+  sendEmailVerification(input: AuthActionNotification): Promise<void> | void;
+  sendPasswordReset(input: AuthActionNotification): Promise<void> | void;
 }
 
 export interface CreateApiTokenRequest {
@@ -180,6 +217,12 @@ export class AuthService {
       loginLimiter?: AuthRateLimiter;
       registrationLimiter?: AuthRateLimiter;
       mfaLimiter?: AuthRateLimiter;
+      emailVerificationLimiter?: AuthRateLimiter;
+      passwordResetLimiter?: AuthRateLimiter;
+      authActionTokenLimiter?: AuthRateLimiter;
+      emailVerificationTtlMs?: number;
+      passwordResetTtlMs?: number;
+      notificationSink?: AuthNotificationSink;
     } = {},
   ) {}
 
@@ -191,13 +234,90 @@ export class AuthService {
 
     const email = normalizeEmail(input.email);
     assertAllowed(this.options.registrationLimiter, rateLimitKeys("register", email, input.ip));
-    const passwordHash = await hashPassword(input.password);
-    await this.store.createUserWithPassword({
+    const passwordHash = await this.hashNewPassword(input.password);
+    const created = await this.store.createUserWithPassword({
       email,
       name: cleanName(input.name),
       passwordHash,
     });
+    if (created.user) {
+      await this.sendAuthActionToken(created.user, "email_verification");
+    }
     return { status: "pending" };
+  }
+
+  async requestEmailVerification(input: RequestEmailVerificationInput): Promise<{ status: "pending" }> {
+    const email = normalizeEmail(input.email);
+    assertAllowed(this.options.emailVerificationLimiter, rateLimitKeys("email-verification", email, input.ip));
+    const user = await this.store.findUserByEmailWithPassword(email);
+    if (user && shouldIssueEmailVerification(user)) {
+      await this.sendAuthActionToken(user, "email_verification");
+    }
+    return { status: "pending" };
+  }
+
+  async confirmEmailVerification(input: ConfirmEmailVerificationInput): Promise<{ status: "verified" }> {
+    const token = cleanOpaqueToken(input.token, "token");
+    const tokenHash = hashSessionToken(token);
+    assertAllowed(
+      this.options.authActionTokenLimiter ?? this.options.emailVerificationLimiter,
+      tokenRateLimitKeys("email-verification-confirm", tokenHash, input.ip),
+    );
+    const consumed = await this.store.consumeAuthActionToken({
+      tokenHash,
+      purpose: "email_verification",
+      now: new Date(),
+    });
+    if (!consumed || consumed.user.status === "disabled" || consumed.user.status === "deleted") {
+      throw invalidVerificationToken();
+    }
+    if (!consumed.user.emailVerifiedAt) {
+      const verifiedAt = consumed.usedAt ?? new Date();
+      await this.store.updateUserStatus({
+        userId: consumed.user.id,
+        status: consumed.user.status,
+        emailVerifiedAt: verifiedAt,
+      });
+    }
+    return { status: "verified" };
+  }
+
+  async requestPasswordReset(input: RequestPasswordResetInput): Promise<{ status: "pending" }> {
+    const email = normalizeEmail(input.email);
+    assertAllowed(this.options.passwordResetLimiter, rateLimitKeys("password-reset", email, input.ip));
+    const user = await this.store.findUserByEmailWithPassword(email);
+    if (user?.passwordHash && isUsableAuthenticatedAccount(user)) {
+      await this.sendAuthActionToken(user, "password_reset");
+    }
+    return { status: "pending" };
+  }
+
+  async confirmPasswordReset(input: ConfirmPasswordResetInput): Promise<{ status: "reset" }> {
+    const token = cleanOpaqueToken(input.token, "token");
+    const tokenHash = hashSessionToken(token);
+    assertAllowed(
+      this.options.authActionTokenLimiter ?? this.options.passwordResetLimiter,
+      tokenRateLimitKeys("password-reset-confirm", tokenHash, input.ip),
+    );
+    const passwordHash = await this.hashNewPassword(input.password);
+    const consumed = await this.store.consumeAuthActionToken({
+      tokenHash,
+      purpose: "password_reset",
+      now: new Date(),
+    });
+    if (!consumed || !isUsableAuthenticatedAccount(consumed.user)) {
+      throw invalidResetToken();
+    }
+    const updated = await this.store.updatePasswordCredential({
+      userId: consumed.user.id,
+      passwordHash,
+      passwordUpdatedAt: consumed.usedAt ?? new Date(),
+    });
+    if (!updated) {
+      throw invalidResetToken();
+    }
+    await this.store.revokeUserCredentials(consumed.user.id);
+    return { status: "reset" };
   }
 
   async login(input: LoginInput): Promise<LoginResult> {
@@ -558,6 +678,55 @@ export class AuthService {
     return this.options.mfaSecretKey ?? DEV_AUTH_SECRET;
   }
 
+  private async sendAuthActionToken(user: AuthUserRecord, purpose: AuthActionTokenPurpose): Promise<void> {
+    const sink = this.options.notificationSink;
+    if (!sink) {
+      return;
+    }
+    const token = createSessionToken();
+    const expiresAt = new Date(Date.now() + this.authActionTokenTtlMs(purpose));
+    await this.store.createAuthActionToken({
+      userId: user.id,
+      purpose,
+      tokenHash: hashSessionToken(token),
+      sentToNormalizedEmail: user.email,
+      expiresAt,
+    });
+    if (purpose === "email_verification") {
+      await sink.sendEmailVerification({
+        user,
+        email: user.email,
+        token,
+        expiresAt,
+      });
+      return;
+    }
+    await sink.sendPasswordReset({
+      user,
+      email: user.email,
+      token,
+      expiresAt,
+    });
+  }
+
+  private authActionTokenTtlMs(purpose: AuthActionTokenPurpose): number {
+    return purpose === "email_verification"
+      ? this.options.emailVerificationTtlMs ?? DEFAULT_EMAIL_VERIFICATION_TTL_MS
+      : this.options.passwordResetTtlMs ?? DEFAULT_PASSWORD_RESET_TTL_MS;
+  }
+
+  private async hashNewPassword(password: string): Promise<string> {
+    try {
+      validatePasswordInput(password);
+      return await hashPassword(password);
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new AppError(error.message, "INVALID_PASSWORD", 400);
+      }
+      throw error;
+    }
+  }
+
   private async safeAdminUser(user: AuthUserRecord): Promise<SafeAdminUser> {
     return {
       id: user.id,
@@ -611,6 +780,10 @@ function isUsableAuthenticatedAccount(user: AuthUserRecord): boolean {
   return user.status === "active" && Boolean(user.emailVerifiedAt);
 }
 
+function shouldIssueEmailVerification(user: AuthUserRecord): boolean {
+  return !user.emailVerifiedAt && user.status !== "disabled" && user.status !== "deleted";
+}
+
 function assertAllowed(limiter: AuthRateLimiter | undefined, keys: string[]): void {
   if (!limiter) {
     return;
@@ -628,6 +801,14 @@ function rateLimitKeys(kind: string, email: string, ip: string | undefined): str
   return [
     `${kind}:ip:${source}`,
     `${kind}:ip-email:${source}:${email}`,
+  ];
+}
+
+function tokenRateLimitKeys(kind: string, tokenHash: string, ip: string | undefined): string[] {
+  const source = ip?.trim() || "unknown";
+  return [
+    `${kind}:ip:${source}`,
+    `${kind}:ip-token:${source}:${tokenHash}`,
   ];
 }
 
@@ -832,6 +1013,14 @@ function requiresVerifiedMfaForApiToken(actor: AuthResponseUser, scopes: ApiToke
 
 function invalidMfaCode(): AppError {
   return new AppError("Invalid MFA challenge or code.", "INVALID_MFA_CODE", 401);
+}
+
+function invalidVerificationToken(): AppError {
+  return new AppError("Invalid or expired verification token.", "INVALID_VERIFICATION_TOKEN", 401);
+}
+
+function invalidResetToken(): AppError {
+  return new AppError("Invalid or expired reset token.", "INVALID_RESET_TOKEN", 401);
 }
 
 function encryptSecret(plaintext: string, secretKey: string): string {

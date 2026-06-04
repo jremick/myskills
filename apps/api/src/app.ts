@@ -13,11 +13,15 @@ import type {
   AuthContext,
   AuthService,
   AdminUserActionInput,
+  ConfirmEmailVerificationInput,
+  ConfirmPasswordResetInput,
   ConfirmTotpEnrollmentInput,
   CreateApiTokenRequest,
   ListAdminAuditEventsInput,
   LoginInput,
   RegisterInput,
+  RequestEmailVerificationInput,
+  RequestPasswordResetInput,
   StartTotpEnrollmentInput,
   UpdateRegistrationSettingsInput,
   VerifyMfaChallengeInput,
@@ -170,6 +174,48 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     }
     return options.authService.login({
       ...parseLoginInput(request.body),
+      ip: request.ip,
+    });
+  });
+
+  app.post("/v1/auth/email-verification/request", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const result = await options.authService.requestEmailVerification({
+      ...parseEmailVerificationRequestInput(request.body),
+      ip: request.ip,
+    });
+    return reply.code(202).send(result);
+  });
+
+  app.post("/v1/auth/email-verification/confirm", async (request) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    return options.authService.confirmEmailVerification({
+      ...parseEmailVerificationConfirmInput(request.body),
+      ip: request.ip,
+    });
+  });
+
+  app.post("/v1/auth/password-reset/request", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const result = await options.authService.requestPasswordReset({
+      ...parsePasswordResetRequestInput(request.body),
+      ip: request.ip,
+    });
+    return reply.code(202).send(result);
+  });
+
+  app.post("/v1/auth/password-reset/confirm", async (request) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    return options.authService.confirmPasswordReset({
+      ...parsePasswordResetConfirmInput(request.body),
       ip: request.ip,
     });
   });
@@ -515,6 +561,35 @@ function parseLoginInput(input: unknown): LoginInput {
   const body = parseJsonObject(input);
   return {
     email: requiredString(body.email, "email"),
+    password: requiredString(body.password, "password"),
+  };
+}
+
+function parseEmailVerificationRequestInput(input: unknown): RequestEmailVerificationInput {
+  const body = parseJsonObject(input);
+  return {
+    email: requiredString(body.email, "email"),
+  };
+}
+
+function parseEmailVerificationConfirmInput(input: unknown): ConfirmEmailVerificationInput {
+  const body = parseJsonObject(input);
+  return {
+    token: requiredString(body.token, "token"),
+  };
+}
+
+function parsePasswordResetRequestInput(input: unknown): RequestPasswordResetInput {
+  const body = parseJsonObject(input);
+  return {
+    email: requiredString(body.email, "email"),
+  };
+}
+
+function parsePasswordResetConfirmInput(input: unknown): ConfirmPasswordResetInput {
+  const body = parseJsonObject(input);
+  return {
+    token: requiredString(body.token, "token"),
     password: requiredString(body.password, "password"),
   };
 }

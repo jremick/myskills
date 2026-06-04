@@ -1,8 +1,10 @@
 import type { AuthenticatedUser, RegistrationMode, UserStatus } from "@ai-skills-share/auth";
 
 export const apiTokenScopes = ["profile:read", "skills:read", "skills:submit", "review:read", "review:write"] as const;
+export const authActionTokenPurposes = ["email_verification", "password_reset"] as const;
 
 export type ApiTokenScope = (typeof apiTokenScopes)[number];
+export type AuthActionTokenPurpose = (typeof authActionTokenPurposes)[number];
 export type AuditDecision = "allow" | "deny";
 
 export interface AuthUserRecord {
@@ -37,6 +39,29 @@ export interface CreateUserWithPasswordInput {
 export interface CreateUserWithPasswordResult {
   created: boolean;
   user?: AuthUserRecord;
+}
+
+export interface CreateAuthActionTokenInput {
+  userId: string;
+  purpose: AuthActionTokenPurpose;
+  tokenHash: string;
+  sentToNormalizedEmail: string;
+  expiresAt: Date;
+}
+
+export interface AuthActionTokenRecord {
+  id: string;
+  userId: string;
+  purpose: AuthActionTokenPurpose;
+  tokenHash: string;
+  sentToNormalizedEmail: string;
+  expiresAt: Date;
+  usedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface AuthActionTokenWithUser extends AuthActionTokenRecord {
+  user: AuthUserRecord;
 }
 
 export interface CreateSessionInput {
@@ -140,6 +165,14 @@ export interface AuthStore {
   listUsers(): Promise<AuthUserRecord[]>;
   findUserById(userId: string): Promise<AuthUserRecord | null>;
   updateUserStatus(input: { userId: string; status: UserStatus; emailVerifiedAt?: Date | null }): Promise<AuthUserRecord | null>;
+  updatePasswordCredential(input: { userId: string; passwordHash: string; passwordUpdatedAt?: Date }): Promise<boolean>;
+  createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord>;
+  consumeAuthActionToken(input: {
+    tokenHash: string;
+    purpose: AuthActionTokenPurpose;
+    now?: Date;
+    usedAt?: Date;
+  }): Promise<AuthActionTokenWithUser | null>;
   countActiveOwnersExcluding(userId: string): Promise<number>;
   findUserByEmailWithPassword(email: string): Promise<AuthUserWithPassword | null>;
   createSession(input: CreateSessionInput): Promise<void>;

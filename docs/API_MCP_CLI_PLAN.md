@@ -15,6 +15,10 @@ Milestone 1 REST endpoints:
 
 - `GET /health`
 - `GET /v1/me`
+- `POST /v1/auth/email-verification/request`
+- `POST /v1/auth/email-verification/confirm`
+- `POST /v1/auth/password-reset/request`
+- `POST /v1/auth/password-reset/confirm`
 - `GET /v1/auth/api-tokens`
 - `POST /v1/auth/api-tokens`
 - `DELETE /v1/auth/api-tokens/:id`

@@ -21,6 +21,7 @@ export const securityStatus = pgEnum("security_status", ["not-run", "passed", "w
 export const jobStatus = pgEnum("job_status", ["queued", "running", "succeeded", "failed"]);
 export const mfaFactorType = pgEnum("mfa_factor_type", ["totp"]);
 export const mfaFactorStatus = pgEnum("mfa_factor_status", ["pending", "enabled", "disabled"]);
+export const authActionTokenPurpose = pgEnum("auth_action_token_purpose", ["email_verification", "password_reset"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -105,6 +106,20 @@ export const mfaChallenges = pgTable("mfa_challenges", {
 }, (table) => [
   index("mfa_challenges_user_idx").on(table.userId),
   index("mfa_challenges_active_idx").on(table.tokenHash, table.expiresAt).where(sql`${table.usedAt} IS NULL`),
+]);
+
+export const authActionTokens = pgTable("auth_action_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  purpose: authActionTokenPurpose("purpose").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  sentToNormalizedEmail: text("sent_to_normalized_email").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("auth_action_tokens_user_purpose_idx").on(table.userId, table.purpose),
+  index("auth_action_tokens_active_idx").on(table.tokenHash, table.purpose, table.expiresAt).where(sql`${table.usedAt} IS NULL`),
 ]);
 
 export const roles = pgTable("roles", {

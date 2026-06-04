@@ -3,6 +3,7 @@ import type { RegistrationMode, Role, UserStatus } from "@ai-skills-share/auth";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type { Database } from "../db/client.js";
 import {
+  authActionTokens,
   apiTokens,
   authSessions,
   auditEvents,
@@ -18,12 +19,16 @@ import type {
   AuditEventRecord,
   ApiTokenRecord,
   ApiTokenScope,
+  AuthActionTokenRecord,
+  AuthActionTokenPurpose,
+  AuthActionTokenWithUser,
   AuthStore,
   AuthUserRecord,
   AuthUserWithApiToken,
   AuthUserWithSession,
   AuthUserWithPassword,
   CreateAuditEventInput,
+  CreateAuthActionTokenInput,
   CreateApiTokenInput,
   CreateMfaChallengeInput,
   CreateMfaTotpFactorInput,
@@ -123,6 +128,53 @@ export class PostgresAuthStore implements AuthStore {
       .where(eq(users.id, input.userId))
       .returning();
     return user ? { ...toRecord(user), roles: await this.rolesForUser(user.id) } : null;
+  }
+
+  async updatePasswordCredential(input: { userId: string; passwordHash: string; passwordUpdatedAt?: Date }): Promise<boolean> {
+    const [credential] = await this.db
+      .update(passwordCredentials)
+      .set({
+        passwordHash: input.passwordHash,
+        passwordUpdatedAt: input.passwordUpdatedAt ?? new Date(),
+      })
+      .where(eq(passwordCredentials.userId, input.userId))
+      .returning({ userId: passwordCredentials.userId });
+    return Boolean(credential);
+  }
+
+  async createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord> {
+    const [token] = await this.db
+      .insert(authActionTokens)
+      .values(input)
+      .returning();
+    if (!token) {
+      throw new Error("Auth action token insert failed.");
+    }
+    return toAuthActionTokenRecord(token);
+  }
+
+  async consumeAuthActionToken(input: {
+    tokenHash: string;
+    purpose: AuthActionTokenPurpose;
+    now?: Date;
+    usedAt?: Date;
+  }): Promise<AuthActionTokenWithUser | null> {
+    const now = input.now ?? new Date();
+    const [token] = await this.db
+      .update(authActionTokens)
+      .set({ usedAt: input.usedAt ?? now })
+      .where(and(
+        eq(authActionTokens.tokenHash, input.tokenHash),
+        eq(authActionTokens.purpose, input.purpose),
+        isNull(authActionTokens.usedAt),
+        gt(authActionTokens.expiresAt, now),
+      ))
+      .returning();
+    if (!token) {
+      return null;
+    }
+    const user = await this.findUserById(token.userId);
+    return user ? { ...toAuthActionTokenRecord(token), user } : null;
   }
 
   async countActiveOwnersExcluding(userId: string): Promise<number> {
@@ -468,6 +520,19 @@ function toMfaChallengeRecord(challenge: typeof mfaChallenges.$inferSelect): Mfa
     expiresAt: challenge.expiresAt,
     usedAt: challenge.usedAt,
     createdAt: challenge.createdAt,
+  };
+}
+
+function toAuthActionTokenRecord(token: typeof authActionTokens.$inferSelect): AuthActionTokenRecord {
+  return {
+    id: token.id,
+    userId: token.userId,
+    purpose: token.purpose,
+    tokenHash: token.tokenHash,
+    sentToNormalizedEmail: token.sentToNormalizedEmail,
+    expiresAt: token.expiresAt,
+    usedAt: token.usedAt,
+    createdAt: token.createdAt,
   };
 }
 
