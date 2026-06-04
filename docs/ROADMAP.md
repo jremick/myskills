@@ -118,13 +118,14 @@ Deliverables:
 - Maintainer review dashboard.
 - Admin user/settings console.
 - Accessible responsive design.
+- Apply the supplied My Skills identity system across the web app: Paper/Slate/Coral/Amber/Teal palette, typography, surfaces, states, and refreshed screenshot evidence.
 
 Acceptance:
 
 - Common user, author, maintainer, and admin workflows work in browser tests.
 - Text and controls fit on mobile and desktop.
 
-Current status: public browse/search, skill detail, release metadata, export-guidance views, email/password login/logout, MFA challenge completion, current-user refresh, session-aware API calls, authenticated author `.zip` package submission, maintainer review dashboard workflows for approval/publication, and owner/admin console workflows for registration, user status actions, role updates, provider metadata/mappings, and audit review exist. Private draft management and remaining instance settings administration are still future work.
+Current status: public browse/search, skill detail, release metadata, export-guidance views, email/password login/logout, MFA challenge completion, current-user refresh, session-aware API calls, authenticated author `.zip` package submission, maintainer review dashboard workflows for approval/publication, and owner/admin console workflows for registration, user status actions, role updates, provider metadata/mappings, and audit review exist. The supplied My Skills logo and favicon kit is wired into the web app; the broader color, typography, surface, and component refresh from the identity guidelines remains planned. Private draft management and remaining instance settings administration are still future work.
 
 ## Milestone 6: Skill Evals
 

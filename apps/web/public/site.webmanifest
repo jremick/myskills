@@ -1,0 +1,29 @@
+{
+  "name": "My Skills",
+  "short_name": "My Skills",
+  "description": "Business-grade AI skills management \u2014 web, CLI, API & MCP.",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "theme_color": "#FF6B5B",
+  "background_color": "#F5F3EE",
+  "display": "standalone",
+  "start_url": "/"
+}

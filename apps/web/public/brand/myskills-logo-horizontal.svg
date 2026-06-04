@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 110" width="360" height="110" role="img" aria-label="My Skills logo">
+<defs><style>@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700&amp;family=JetBrains+Mono:wght@500&amp;display=swap');
+.wm{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:50px;letter-spacing:-1.5px;fill:#2B3A4E}
+.dom{font-family:'JetBrains Mono',monospace;font-weight:500;font-size:15px;letter-spacing:0.5px;fill:#8A93A0}</style></defs>
+<g transform="translate(8,18) scale(0.84)"><rect x="14" y="14" width="28" height="28" rx="8" fill="#14B8A6"/>
+  <rect x="50" y="14" width="28" height="28" rx="8" fill="#F5B53D"/>
+  <rect x="14" y="50" width="28" height="28" rx="8" fill="#2B3A4E"/>
+  <rect x="58" y="58" width="28" height="28" rx="8" fill="#FF6B5B"/></g>
+<text class="wm" x="112" y="62">My Skills</text>
+<text class="dom" x="114" y="84">myskills.sh</text>
+</svg>

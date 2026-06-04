@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="My Skills">
-  <rect width="100" height="100" rx="22" fill="#F5F3EE"/>
+  <rect width="100" height="100" rx="22" fill="#2B3A4E"/>
   <rect x="24" y="24" width="20" height="20" rx="5" fill="#14B8A6"/>
   <rect x="50" y="24" width="20" height="20" rx="5" fill="#F5B53D"/>
-  <rect x="24" y="50" width="20" height="20" rx="5" fill="#2B3A4E"/>
+  <rect x="24" y="50" width="20" height="20" rx="5" fill="#F5F3EE"/>
   <rect x="56" y="56" width="20" height="20" rx="5" fill="#FF6B5B"/>
 </svg>
