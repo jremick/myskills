@@ -91,7 +91,7 @@ ai-skills token list
 ai-skills token revoke <token-id>
 ```
 
-Current CLI slice implements local `validate` and `scan` for manifest files, directories, and `.zip` packages, prompt-based `login`, MFA login completion, `logout`, API-URL-scoped durable session-token storage, backend-backed `search`, `info`, `whoami`, `submit` for normalized text-entry package intake, role-gated review list/actions, verified `export` of approved bundle payloads, and server API-token create/list/revoke commands. Browser login, platform keychain storage, install/update/rollback, and archive creation are still planned.
+Current CLI slice implements local `validate` and `scan` for manifest files, directories, and `.zip` packages, prompt-based `login`, MFA login completion, `logout`, API-URL-scoped durable session-token storage, backend-backed `search`, `info`, `whoami`, `submit` for normalized directory text-entry package intake and server-extracted `.zip` archive intake, role-gated review list/actions, verified `export` of approved bundle payloads, and server API-token create/list/revoke commands. Browser login, platform keychain storage, install/update/rollback, and archive creation are still planned.
 
 Later maintainer/admin commands:
 

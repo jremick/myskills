@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -9,6 +9,7 @@ import {
   loadSkillManifestFromPackageFiles,
   normalizePackageFilePath,
   loadSkillManifestFromPath,
+  readPackageFilesFromZipBuffer,
   readPackageFilesFromPath,
   scanPackageFiles,
   scanPackagePath,
@@ -116,6 +117,21 @@ test("reads package files from a zip in stable relative-path order", async (t) =
   assert.equal(files[1]?.content, "Package readme.");
 });
 
+test("reads package files from an uploaded zip buffer", async (t) => {
+  const dir = await makeTempPackage();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const zipPath = path.join(dir, "package.zip");
+  await writeStoredZip(zipPath, [
+    { path: "skill.json", content: manifestJson() },
+    { path: "README.md", content: "Package readme." },
+  ]);
+
+  const files = await readPackageFilesFromZipBuffer(await readFile(zipPath));
+
+  assert.deepEqual(files.map((file) => file.path), ["README.md", "skill.json"]);
+  assert.equal(files[0]?.content, "Package readme.");
+});
+
 test("rejects symlinks in package directories", async (t) => {
   const dir = await makeTempPackage();
   t.after(() => rm(dir, { recursive: true, force: true }));
@@ -219,6 +235,7 @@ test("rejects zip file content that is not strict UTF-8 text", async (t) => {
   ]);
 
   await assert.rejects(() => readPackageFilesFromPath(zipPath), /valid UTF-8/);
+  await assert.rejects(readPackageFilesFromZipBuffer(await readFile(zipPath)), /valid UTF-8/);
 });
 
 test("scans in-memory package files", () => {

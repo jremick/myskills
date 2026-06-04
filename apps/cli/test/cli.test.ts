@@ -229,7 +229,7 @@ test("submit sends package entries to the API", async (t) => {
   assert.deepEqual(output.stdout, ["release-notes-helper@0.1.0\tunreviewed\tpassed\tfindings=0"]);
 });
 
-test("submit sends extracted zip entries to the API", async (t) => {
+test("submit sends zip archives to the API without extracted file entries", async (t) => {
   const dir = await makeTempPackage();
   t.after(() => rm(dir, { recursive: true, force: true }));
   const zipPath = path.join(dir, "package.zip");
@@ -240,7 +240,11 @@ test("submit sends extracted zip entries to the API", async (t) => {
   const output = createOutput();
   let method = "";
   let authorization = "";
-  let body: { manifest?: { name?: string }; files?: Array<{ path: string; content: string }> } = {};
+  let body: {
+    manifest?: { name?: string; version?: string; title?: string };
+    archive?: { filename?: string; contentBase64?: string };
+    files?: Array<{ path: string; content: string }>;
+  } = {};
   const fetch: FetchLike = async (_input, init) => {
     method = init?.method ?? "GET";
     authorization = init?.headers?.authorization ?? "";
@@ -263,8 +267,9 @@ test("submit sends extracted zip entries to the API", async (t) => {
   assert.equal(method, "POST");
   assert.equal(authorization, "Bearer submit-token");
   assert.equal(body.manifest?.name, "release-notes-helper");
-  assert.deepEqual(body.files?.map((file) => file.path), ["README.md", "skill.json"]);
-  assertPackageManifestMatchesBody(body);
+  assert.equal(body.archive?.filename, "package.zip");
+  assert.equal(body.archive?.contentBase64, (await readFile(zipPath)).toString("base64"));
+  assert.equal(body.files, undefined);
   assert.deepEqual(output.stdout, ["release-notes-helper@0.1.0\tunreviewed\tpassed\tfindings=0"]);
 });
 

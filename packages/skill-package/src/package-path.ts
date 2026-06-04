@@ -104,6 +104,13 @@ export async function readPackageFilesFromPath(inputPath: string): Promise<Packa
   return result;
 }
 
+export async function readPackageFilesFromZipBuffer(buffer: Buffer): Promise<PackageInputFile[]> {
+  if (buffer.byteLength > MAX_PACKAGE_ARCHIVE_BYTES) {
+    throw new Error(`Package archive exceeds ${MAX_PACKAGE_ARCHIVE_BYTES} bytes.`);
+  }
+  return readZipPackageFiles(buffer);
+}
+
 export function scanPackageFiles(files: PackageInputFile[]): PackageScanResult {
   if (files.length > MAX_PACKAGE_FILES) {
     throw new Error(`Package contains more than ${MAX_PACKAGE_FILES} files.`);
@@ -366,11 +373,11 @@ async function scanZipPackage(zipPath: string): Promise<PackageScanResult> {
   };
 }
 
-async function readZipPackageFiles(zipPath: string): Promise<PackageInputFile[]> {
+async function readZipPackageFiles(zipInput: string | Buffer): Promise<PackageInputFile[]> {
   const files: PackageInputFile[] = [];
   let bytesRead = 0;
 
-  await walkZipPackage(zipPath, async (entry, relativePath, zipfile) => {
+  await walkZipPackage(zipInput, async (entry, relativePath, zipfile) => {
     const remainingBytes = MAX_PACKAGE_TEXT_BYTES - bytesRead;
     if (entry.uncompressedSize > remainingBytes) {
       throw new Error(`Package text exceeds ${MAX_PACKAGE_TEXT_BYTES} bytes.`);
@@ -390,10 +397,10 @@ async function readZipPackageFiles(zipPath: string): Promise<PackageInputFile[]>
 }
 
 async function walkZipPackage(
-  zipPath: string,
+  zipInput: string | Buffer,
   onFile: (entry: Entry, relativePath: string, zipfile: ZipFile) => Promise<void>,
 ): Promise<void> {
-  const zipfile = await openZipFile(zipPath);
+  const zipfile = await openZipFile(zipInput);
   if (zipfile.entryCount > MAX_PACKAGE_ARCHIVE_ENTRIES) {
     zipfile.close();
     throw new Error(`Package archive contains more than ${MAX_PACKAGE_ARCHIVE_ENTRIES} entries.`);
@@ -466,20 +473,26 @@ async function walkZipPackage(
   });
 }
 
-function openZipFile(zipPath: string): Promise<ZipFile> {
+function openZipFile(zipInput: string | Buffer): Promise<ZipFile> {
   return new Promise((resolve, reject) => {
-    yauzl.open(zipPath, {
+    const options = {
       lazyEntries: true,
       decodeStrings: true,
       strictFileNames: true,
       validateEntrySizes: true,
-    }, (error, zipfile) => {
+    };
+    const callback = (error: Error | null, zipfile: ZipFile) => {
       if (error) {
         reject(error);
         return;
       }
       resolve(zipfile);
-    });
+    };
+    if (typeof zipInput === "string") {
+      yauzl.open(zipInput, options, callback);
+    } else {
+      yauzl.fromBuffer(zipInput, options, callback);
+    }
   });
 }
 

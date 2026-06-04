@@ -1,5 +1,8 @@
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { hashPassword } from "@ai-skills-share/auth";
 import { buildApp } from "../src/app.js";
 import { AuthService } from "../src/auth/service.js";
@@ -7,6 +10,7 @@ import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
 import { MemorySkillRepository } from "../src/repositories/memory-skill-repository.js";
 import { MemorySubmissionStore } from "../src/submissions/memory-submission-store.js";
 import { SubmissionService } from "../src/submissions/service.js";
+import { writeStoredZip, type ZipFixtureEntry } from "../../../test-support/zip-fixture.js";
 
 test("submission requires authentication", async (t) => {
   const submissionStore = new MemorySubmissionStore();
@@ -67,6 +71,30 @@ test("authors can submit clean packages", async (t) => {
   assert.equal(submissionStore.count(), 1);
 });
 
+test("authors can submit clean archive packages", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const token = await addAndLogin(app, authStore, ["author"]);
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload: await cleanArchiveSubmissionPayload(t),
+  });
+
+  assert.equal(response.statusCode, 202);
+  assert.equal(response.json().submission.slug, "release-notes-helper");
+  assert.equal(response.json().submission.version, "0.1.0");
+  assert.equal(response.json().submission.reviewStatus, "unreviewed");
+  assert.equal(response.json().submission.securityStatus, "passed");
+  assert.equal(response.json().scan.findingCount, 0);
+  assert.equal(JSON.stringify(response.json()).includes("storageKey"), false);
+  assert.equal(submissionStore.count(), 1);
+});
+
 test("warning findings are persisted as scan evidence", async (t) => {
   const submissionStore = new MemorySubmissionStore();
   const authStore = new MemoryAuthStore("closed");
@@ -84,6 +112,28 @@ test("warning findings are persisted as scan evidence", async (t) => {
     url: "/v1/submissions",
     headers: { authorization: `Bearer ${token}` },
     payload,
+  });
+
+  assert.equal(response.statusCode, 202);
+  assert.equal(response.json().submission.securityStatus, "warning");
+  assert.equal(response.json().scan.findings[0].category, "install-hook");
+  assert.equal(response.json().scan.findings[0].path, "package.json");
+});
+
+test("archive submissions persist warning findings", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const token = await addAndLogin(app, authStore, ["author"]);
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload: await cleanArchiveSubmissionPayload(t, [
+      { path: "package.json", content: JSON.stringify({ scripts: { postinstall: "node setup.js" } }) },
+    ]),
   });
 
   assert.equal(response.statusCode, 202);
@@ -115,6 +165,30 @@ test("blocking findings reject without accepted records", async (t) => {
   assert.equal(submissionStore.deniedCount(), 1);
 });
 
+test("archive submissions reject blocking findings without accepted records", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const token = await addAndLogin(app, authStore, ["author"]);
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload: await archiveSubmissionPayload(t, [
+      { path: "skill.json", content: manifestJson() },
+      { path: "README.md", content: `token: ATATT${"abcdefghijklmnopqrstuvwxyz1234567890"}` },
+    ]),
+  });
+
+  assert.equal(response.statusCode, 422);
+  assert.equal(response.json().error.code, "PACKAGE_SCAN_BLOCKED");
+  assert.equal(response.json().error.details.findings[0].path, "README.md");
+  assert.equal(submissionStore.count(), 0);
+  assert.equal(submissionStore.deniedCount(), 1);
+});
+
 test("invalid manifests are rejected", async (t) => {
   const submissionStore = new MemorySubmissionStore();
   const authStore = new MemoryAuthStore("closed");
@@ -136,6 +210,47 @@ test("invalid manifests are rejected", async (t) => {
   assert.equal(submissionStore.count(), 0);
 });
 
+test("archive manifest validation maps to package manifest errors", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const token = await addAndLogin(app, authStore, ["author"]);
+  const missingManifest = await archiveSubmissionPayload(t, [{ path: "README.md", content: "readme" }]);
+  const invalidManifest = await archiveSubmissionPayload(t, [{ path: "skill.json", content: "{}" }]);
+  const ambiguousManifest = await archiveSubmissionPayload(t, [
+    { path: "skill.json", content: manifestJson() },
+    { path: "skill-manifest.json", content: manifestJson() },
+  ]);
+
+  const missingResponse = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload: missingManifest,
+  });
+  const invalidResponse = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload: invalidManifest,
+  });
+  const ambiguousResponse = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload: ambiguousManifest,
+  });
+
+  assert.equal(missingResponse.statusCode, 400);
+  assert.equal(missingResponse.json().error.code, "PACKAGE_MANIFEST_REQUIRED");
+  assert.equal(invalidResponse.statusCode, 400);
+  assert.equal(invalidResponse.json().error.code, "INVALID_PACKAGE_MANIFEST");
+  assert.equal(ambiguousResponse.statusCode, 400);
+  assert.equal(ambiguousResponse.json().error.code, "PACKAGE_MANIFEST_AMBIGUOUS");
+  assert.equal(submissionStore.count(), 0);
+});
+
 test("submitted manifest must match the package manifest file", async (t) => {
   const submissionStore = new MemorySubmissionStore();
   const authStore = new MemoryAuthStore("closed");
@@ -153,6 +268,33 @@ test("submitted manifest must match the package manifest file", async (t) => {
     url: "/v1/submissions",
     headers: { authorization: `Bearer ${token}` },
     payload,
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error.code, "PACKAGE_MANIFEST_MISMATCH");
+  assert.equal(submissionStore.count(), 0);
+  assert.equal(submissionStore.deniedCount(), 0);
+});
+
+test("submitted manifest must match the archive package manifest file", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const token = await addAndLogin(app, authStore, ["author"]);
+  const payload = await cleanArchiveSubmissionPayload(t);
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      ...payload,
+      manifest: {
+        ...cleanManifest(),
+        name: "different-helper",
+      },
+    },
   });
 
   assert.equal(response.statusCode, 400);
@@ -189,6 +331,76 @@ test("package manifest file is required and must be valid", async (t) => {
   assert.equal(missingResponse.json().error.code, "PACKAGE_MANIFEST_REQUIRED");
   assert.equal(invalidResponse.statusCode, 400);
   assert.equal(invalidResponse.json().error.code, "INVALID_PACKAGE_MANIFEST");
+  assert.equal(submissionStore.count(), 0);
+});
+
+test("archive payload validation rejects unsafe archive content", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const token = await addAndLogin(app, authStore, ["author"]);
+  const unsafePath = await cleanArchiveSubmissionPayload(t, [{ path: "../secret.txt", content: "nope" }]);
+  const symlink = await cleanArchiveSubmissionPayload(t, [{ path: "link.txt", content: "target.txt", mode: 0o120777 }]);
+  const binary = await cleanArchiveSubmissionPayload(t, [{ path: "binary.bin", content: Buffer.from([0xff]) }]);
+
+  for (const payload of [unsafePath, symlink, binary]) {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/submissions",
+      headers: { authorization: `Bearer ${token}` },
+      payload,
+    });
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.json().error.code, "INVALID_PACKAGE_ARCHIVE");
+  }
+  assert.equal(submissionStore.count(), 0);
+});
+
+test("archive payload shape is validated before package processing", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const token = await addAndLogin(app, authStore, ["author"]);
+  const filesAndArchive = {
+    ...cleanSubmissionPayload(),
+    archive: (await cleanArchiveSubmissionPayload(t)).archive,
+  };
+  const invalidBase64 = {
+    manifest: cleanManifest(),
+    archive: { filename: "package.zip", contentBase64: "not base64" },
+  };
+  const unsafeFilename = {
+    manifest: cleanManifest(),
+    archive: { filename: "../package.zip", contentBase64: Buffer.from("not a zip").toString("base64") },
+  };
+
+  const ambiguousResponse = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload: filesAndArchive,
+  });
+  const invalidBase64Response = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload: invalidBase64,
+  });
+  const unsafeFilenameResponse = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload: unsafeFilename,
+  });
+
+  assert.equal(ambiguousResponse.statusCode, 400);
+  assert.equal(ambiguousResponse.json().error.code, "INVALID_SUBMISSION_PACKAGE_SOURCE");
+  assert.equal(invalidBase64Response.statusCode, 400);
+  assert.equal(invalidBase64Response.json().error.code, "INVALID_PACKAGE_ARCHIVE");
+  assert.equal(unsafeFilenameResponse.statusCode, 400);
+  assert.equal(unsafeFilenameResponse.json().error.code, "INVALID_PACKAGE_ARCHIVE");
   assert.equal(submissionStore.count(), 0);
 });
 
@@ -285,15 +497,7 @@ async function addAndLogin(
 }
 
 function cleanSubmissionPayload() {
-  const manifest = {
-    name: "release-notes-helper",
-    title: "Release Notes Helper",
-    summary: "Turns merged changes into concise release notes.",
-    version: "0.1.0",
-    license: "Apache-2.0",
-    platforms: [{ name: "codex", install_target: "codex-skill" }],
-    tags: ["writing", "release"],
-  };
+  const manifest = cleanManifest();
   return {
     manifest,
     files: [
@@ -307,4 +511,41 @@ function cleanSubmissionPayload() {
       },
     ],
   };
+}
+
+function cleanManifest() {
+  return {
+    name: "release-notes-helper",
+    title: "Release Notes Helper",
+    summary: "Turns merged changes into concise release notes.",
+    version: "0.1.0",
+    license: "Apache-2.0",
+    platforms: [{ name: "codex", install_target: "codex-skill" }],
+    tags: ["writing", "release"],
+  };
+}
+
+async function cleanArchiveSubmissionPayload(t: TestContext, extraEntries: ZipFixtureEntry[] = []) {
+  return archiveSubmissionPayload(t, [
+    { path: "skill.json", content: manifestJson() },
+    { path: "README.md", content: "Summarize release notes." },
+    ...extraEntries,
+  ]);
+}
+
+async function archiveSubmissionPayload(t: TestContext, entries: ZipFixtureEntry[]) {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "ai-skills-api-archive-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const zipPath = path.join(dir, "package.zip");
+  await writeStoredZip(zipPath, entries);
+  return {
+    archive: {
+      filename: "package.zip",
+      contentBase64: (await readFile(zipPath)).toString("base64"),
+    },
+  };
+}
+
+function manifestJson(): string {
+  return JSON.stringify(cleanManifest());
 }

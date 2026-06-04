@@ -80,7 +80,7 @@ To run the stdio MCP server, create an API token with `skills:read` scope and st
 AI_SKILLS_TOKEN=<api-token-with-skills-read> npm run dev:mcp
 ```
 
-The current CLI can validate and scan local package directories, search and inspect approved releases, submit package text entries, run maintainer review actions, manage scoped API tokens, and export verified approved bundles:
+The current CLI can validate and scan local package directories and `.zip` archives, search and inspect approved releases, submit package directories or server-extracted archive uploads, run maintainer review actions, manage scoped API tokens, and export verified approved bundles:
 
 ```bash
 npm run build
@@ -105,4 +105,4 @@ npm run check
 
 ## Current Status
 
-This is the first backend and product-surface foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, MFA challenge flow, CLI login/logout with API-URL-scoped stored sessions, hashed scoped API tokens, public skill search/detail/release/bundle endpoints, MCP token introspection with `skills:read`, authenticated package intake with scan evidence, maintainer approve/publish actions, a Vite/React web browser for public registry metadata, a read-only stdio MCP server, a starter CLI with verified export and token management, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, seed data, package manifest validation, local package risk scanning, and deterministic checks.
+This is the first backend and product-surface foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, MFA challenge flow, CLI login/logout with API-URL-scoped stored sessions, hashed scoped API tokens, public skill search/detail/release/bundle endpoints, MCP token introspection with `skills:read`, authenticated package intake with server-side archive extraction and scan evidence, maintainer approve/publish actions, a Vite/React web browser for public registry metadata, a read-only stdio MCP server, a starter CLI with verified export and token management, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, seed data, package manifest validation, local package risk scanning, and deterministic checks.

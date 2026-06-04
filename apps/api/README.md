@@ -37,7 +37,7 @@ Implemented:
 - `GET /v1/admin/audit?limit=...` MFA-verified admin audit event list
 - `GET /v1/me` bearer-session or scoped API-token current user response
 - `GET /v1/mcp/session` API-token-only MCP auth check requiring `skills:read`
-- `POST /v1/submissions` authenticated package intake with strict root-manifest/package-file integrity checks and scan evidence
+- `POST /v1/submissions` authenticated package intake with strict root-manifest/package-file integrity checks, JSON text-entry payloads, JSON base64 `.zip` archive payloads, server-side archive extraction, and scan evidence
 - `GET /v1/review/submissions` maintainer review queue
 - `POST /v1/review/submissions/:id/actions` maintainer `approve` and `publish`
 - `GET /v1/skills` public approved skill search

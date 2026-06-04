@@ -23,7 +23,7 @@ The prototype test suite passed locally during review:
 - Package manifests need owner, version, lifecycle, review, security, platform, compatibility, install policy, examples, and test evidence.
 - CLI workflows should include init, validate, scan, search, info, install, export, update, rollback, submit, and admin/review commands.
 - MCP should start read-only with search/info/install-guidance tools.
-- Package parsing needs defenses against unsafe zip paths, symlinks, excessive expansion, unsupported compression, and nested package confusion; the current local package tooling implements those core `.zip` defenses, while API archive upload remains a future boundary.
+- Package parsing needs defenses against unsafe zip paths, symlinks, excessive expansion, unsupported compression, and nested package confusion; the current package tooling implements those core `.zip` defenses for local CLI use and API archive upload.
 - Audit logs need strong sanitization.
 
 ## What Must Not Be Carried Forward

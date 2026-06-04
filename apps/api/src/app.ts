@@ -1,6 +1,13 @@
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import { AppError } from "@ai-skills-share/core";
-import { parseSkillManifest, type PackageInputFile } from "@ai-skills-share/skill-package";
+import {
+  MAX_PACKAGE_ARCHIVE_BYTES,
+  loadSkillManifestFromPackageFiles,
+  PackageManifestFileError,
+  parseSkillManifest,
+  readPackageFilesFromZipBuffer,
+  type PackageInputFile,
+} from "@ai-skills-share/skill-package";
 import type { ApiTokenScope } from "./auth/types.js";
 import type {
   AuthContext,
@@ -381,7 +388,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       });
     }
     requireScope(context, "skills:submit");
-    const input = parseSubmissionInput(request.body);
+    const input = await parseSubmissionInput(request.body);
     const submission = await options.submissionService.createSubmission({
       actor: {
         id: context.user.id,
@@ -590,18 +597,31 @@ function parseCreateApiTokenInput(input: unknown): CreateApiTokenRequest {
   };
 }
 
-function parseSubmissionInput(input: unknown): {
+async function parseSubmissionInput(input: unknown): Promise<{
   manifest: ReturnType<typeof parseSkillManifest>;
   files: PackageInputFile[];
-} {
+}> {
   const body = parseJsonObject(input);
   rejectServerManagedSubmissionFields(body);
 
-  let manifest: ReturnType<typeof parseSkillManifest>;
-  try {
-    manifest = parseSkillManifest(body.manifest);
-  } catch {
-    throw new AppError("Invalid package manifest.", "INVALID_PACKAGE_MANIFEST", 400);
+  const hasFiles = "files" in body;
+  const hasArchive = "archive" in body;
+  if (hasFiles === hasArchive) {
+    throw new AppError("Submit exactly one package source: files or archive.", "INVALID_SUBMISSION_PACKAGE_SOURCE", 400);
+  }
+
+  if (hasArchive) {
+    const archive = parseSubmissionArchive(body.archive);
+    let files: PackageInputFile[];
+    try {
+      files = await readPackageFilesFromZipBuffer(archive.content);
+    } catch (error) {
+      throw new AppError(error instanceof Error ? error.message : "Invalid package archive.", "INVALID_PACKAGE_ARCHIVE", 400);
+    }
+    return {
+      manifest: parseSubmissionManifest(body.manifest, files, { optional: true }),
+      files,
+    };
   }
 
   if (!Array.isArray(body.files)) {
@@ -622,7 +642,61 @@ function parseSubmissionInput(input: unknown): {
     };
   });
 
-  return { manifest, files };
+  return {
+    manifest: parseSubmissionManifest(body.manifest, files, { optional: false }),
+    files,
+  };
+}
+
+function parseSubmissionManifest(input: unknown, files: PackageInputFile[], options: { optional: boolean }): ReturnType<typeof parseSkillManifest> {
+  if (input === undefined && options.optional) {
+    return manifestFromPackageFiles(files);
+  }
+  try {
+    return parseSkillManifest(input);
+  } catch {
+    throw new AppError("Invalid package manifest.", "INVALID_PACKAGE_MANIFEST", 400);
+  }
+}
+
+function manifestFromPackageFiles(files: PackageInputFile[]): ReturnType<typeof parseSkillManifest> {
+  try {
+    return loadSkillManifestFromPackageFiles(files);
+  } catch (error) {
+    if (error instanceof PackageManifestFileError) {
+      throw new AppError(error.message, error.code, 400);
+    }
+    throw new AppError(error instanceof Error ? error.message : "Invalid package archive.", "INVALID_PACKAGE_ARCHIVE", 400);
+  }
+}
+
+function parseSubmissionArchive(input: unknown): { filename?: string; content: Buffer } {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new AppError("Package archive must be an object.", "INVALID_PACKAGE_ARCHIVE", 400);
+  }
+  const record = input as Record<string, unknown>;
+  const filename = optionalString(record.filename, "archive.filename");
+  if (filename !== undefined && !/^[A-Za-z0-9._-]+\.zip$/i.test(filename)) {
+    throw new AppError("Package archive filename must be a .zip basename.", "INVALID_PACKAGE_ARCHIVE", 400);
+  }
+  const contentBase64 = requiredString(record.contentBase64, "archive.contentBase64");
+  if (contentBase64.length > Math.ceil(MAX_PACKAGE_ARCHIVE_BYTES / 3) * 4) {
+    throw new AppError(`Package archive exceeds ${MAX_PACKAGE_ARCHIVE_BYTES} bytes.`, "INVALID_PACKAGE_ARCHIVE", 400);
+  }
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(contentBase64) || contentBase64.length % 4 !== 0) {
+    throw new AppError("Package archive content must be base64 encoded.", "INVALID_PACKAGE_ARCHIVE", 400);
+  }
+  const content = Buffer.from(contentBase64, "base64");
+  if (content.length === 0) {
+    throw new AppError("Package archive content is required.", "INVALID_PACKAGE_ARCHIVE", 400);
+  }
+  if (content.byteLength > MAX_PACKAGE_ARCHIVE_BYTES) {
+    throw new AppError(`Package archive exceeds ${MAX_PACKAGE_ARCHIVE_BYTES} bytes.`, "INVALID_PACKAGE_ARCHIVE", 400);
+  }
+  if (content.toString("base64") !== contentBase64) {
+    throw new AppError("Package archive content must be canonical base64.", "INVALID_PACKAGE_ARCHIVE", 400);
+  }
+  return { filename, content };
 }
 
 function rejectServerManagedSubmissionFields(body: Record<string, unknown>): void {

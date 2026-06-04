@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   hasBlockingFindings,
@@ -398,11 +398,7 @@ async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     printScanResult(scan, runtime.io);
     throw new CliError("Package has blocking scan findings; submission was not sent.", 1);
   }
-  const files = await readPackageFilesFromPath(packagePath);
-  const response = await apiPost("/v1/submissions", {
-    manifest,
-    files,
-  }, parsed, runtime, token);
+  const response = await apiPost("/v1/submissions", await submissionPayload(packagePath, manifest), parsed, runtime, token);
   if (parsed.options.json) {
     runtime.io.stdout(JSON.stringify(response, null, 2));
   } else {
@@ -417,6 +413,22 @@ async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     runtime.io.stdout(`${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tfindings=${responseScan.findingCount}`);
   }
   return 0;
+}
+
+async function submissionPayload(packagePath: string, manifest: unknown): Promise<Record<string, unknown>> {
+  if (path.extname(packagePath).toLowerCase() === ".zip") {
+    return {
+      manifest,
+      archive: {
+        filename: path.basename(packagePath),
+        contentBase64: (await readFile(packagePath)).toString("base64"),
+      },
+    };
+  }
+  return {
+    manifest,
+    files: await readPackageFilesFromPath(packagePath),
+  };
 }
 
 async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
