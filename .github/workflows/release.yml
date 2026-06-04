@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Verify Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install declared npm version
+        run: npm install -g "$(node -p 'require("./package.json").packageManager')"
+
+      - name: Verify tag matches package version
+        run: |
+          expected="v$(node -p 'require("./package.json").version')"
+          test "$expected" = "$GITHUB_REF_NAME"
+
+      - name: Install
+        run: npm ci
+
+      - name: Check
+        run: npm run check
+
+      - name: Create release artifacts
+        run: npm run release:artifacts -- --require-tag --expected-tag "$GITHUB_REF_NAME"
+
+      - name: Build API image
+        run: docker build --target api -t ai-skills-share-api:${{ github.ref_name }} .
+
+      - name: Build MCP HTTP image
+        run: docker build --target mcp-http -t ai-skills-share-mcp-http:${{ github.ref_name }} .
+
+      - name: Build web image
+        run: docker build --target web --build-arg VITE_API_BASE_URL=https://api.example.invalid -t ai-skills-share-web:${{ github.ref_name }} .
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-skills-share-${{ github.ref_name }}
+          path: dist/release/*
+          if-no-files-found: error

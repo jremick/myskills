@@ -24,6 +24,7 @@
     "dev:web": "npm run dev -w @ai-skills-share/web",
     "docker:down": "docker compose down",
     "docker:up": "docker compose up -d postgres minio minio-init",
+    "release:artifacts": "node scripts/create-release-artifacts.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "start:mcp:http": "npm run start:http -w @ai-skills-share/mcp",
     "test": "npm test --workspaces --if-present"

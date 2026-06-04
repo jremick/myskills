@@ -159,4 +159,4 @@ Acceptance:
 - Public docs contain no private-source carryover.
 - First public release tag is reproducible.
 
-Current status: deployment docs, production Docker targets, production Compose example, and production env preflight exist. Security/threat-model refresh, release workflow, and first reproducible public release tag remain planned.
+Current status: deployment docs, production Docker targets, production Compose example, production env preflight, and tag-triggered release artifact workflow exist. Security/threat-model refresh and first reproducible public release tag remain planned.
