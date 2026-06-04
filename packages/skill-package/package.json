@@ -11,7 +11,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "node --import tsx --test test/**/*.test.ts"
+    "test": "node ../../scripts/run-node-tests.mjs --import tsx --extensions .test.ts"
   },
   "dependencies": {
     "yauzl": "^3.3.2",

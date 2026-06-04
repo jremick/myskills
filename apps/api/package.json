@@ -10,7 +10,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
-    "test": "node --import tsx --test test/**/*.test.ts"
+    "test": "node ../../scripts/run-node-tests.mjs --import tsx --extensions .test.ts"
   },
   "dependencies": {
     "@ai-skills-share/auth": "0.1.0",
