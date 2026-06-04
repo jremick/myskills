@@ -19,10 +19,12 @@
     "db:seed": "npm run db:seed -w @ai-skills-share/api",
     "dev:api": "npm run dev -w @ai-skills-share/api",
     "dev:mcp": "npm run dev -w @ai-skills-share/mcp",
+    "dev:mcp:http": "npm run dev:http -w @ai-skills-share/mcp",
     "dev:web": "npm run dev -w @ai-skills-share/web",
     "docker:down": "docker compose down",
     "docker:up": "docker compose up -d postgres minio minio-init",
     "scan:secrets": "node scripts/scan-secrets.mjs",
+    "start:mcp:http": "npm run start:http -w @ai-skills-share/mcp",
     "test": "npm test --workspaces --if-present"
   },
   "engines": {

@@ -49,7 +49,7 @@ Use OpenAPI once the first implementation slice stabilizes.
 
 Use the official TypeScript MCP SDK for production implementation if runtime constraints allow it. Current SDK docs support MCP servers with tools and Streamable HTTP transports over common Node frameworks.
 
-Current implementation uses the stable TypeScript MCP SDK with stdio transport. MCP calls require an API token with `skills:read` scope through `GET /v1/mcp/session`; interactive session tokens are rejected for the MCP surface.
+Current implementation uses the stable TypeScript MCP SDK with stdio and stateless Streamable HTTP transports. MCP calls require an API token with `skills:read` scope through `GET /v1/mcp/session`; interactive session tokens are rejected for the MCP surface. The stdio adapter reads `AI_SKILLS_TOKEN`; the HTTP adapter validates each request bearer through `/v1/mcp/session` before MCP protocol handling, requires each client request to send its own `Authorization: Bearer ...` header, applies host/origin guardrails, and does not fall back to a shared server token.
 
 Initial tools:
 

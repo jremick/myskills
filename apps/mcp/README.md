@@ -7,6 +7,7 @@ MCP transport surface for AI Skills Share.
 Implemented:
 
 - SDK-backed stdio MCP server
+- stateless Streamable HTTP MCP server
 - authenticated read-only skill discovery through `search_skills`
 - safe metadata for authorized skills through `get_skill_info`
 - install/export guidance through `get_install_instructions`
@@ -23,7 +24,16 @@ npm run dev:api
 AI_SKILLS_TOKEN=<api-token-with-skills-read> npm run dev:mcp
 ```
 
-The MCP server defaults to `http://localhost:3001` and reads `AI_SKILLS_API_URL` for another API base URL.
+The stdio MCP server defaults to `http://localhost:3001` and reads `AI_SKILLS_API_URL` for another API base URL.
+
+For Streamable HTTP, start the HTTP adapter and configure clients to call `POST /mcp` with a bearer API token:
+
+```bash
+npm run dev:mcp:http
+curl http://127.0.0.1:3002/health
+```
+
+The HTTP adapter defaults to `127.0.0.1:3002/mcp` and reads `AI_SKILLS_MCP_HOST`, `AI_SKILLS_MCP_PORT`, `AI_SKILLS_MCP_PATH`, `AI_SKILLS_MCP_ALLOWED_HOSTS`, `AI_SKILLS_MCP_ALLOWED_ORIGINS`, and `AI_SKILLS_API_URL`. Unlike stdio, HTTP clients authenticate per request with `Authorization: Bearer <api-token-with-skills-read>`; the server validates that token through `/v1/mcp/session` before protocol handling and does not use a shared `AI_SKILLS_TOKEN` fallback for HTTP clients. Non-loopback binds must set `AI_SKILLS_MCP_ALLOWED_HOSTS`.
 
 ## Security Rules
 
@@ -31,11 +41,10 @@ MCP clients should authenticate with scoped API tokens, not interactive sessions
 
 Package contents should not be returned by MCP tools in the first production surface. Delivery should remain an API/CLI path with explicit authorization and audit.
 
-Tool inputs must not carry tokens or API base URLs. Configure `AI_SKILLS_TOKEN` and `AI_SKILLS_API_URL` in the MCP server process environment.
+Tool inputs must not carry tokens or API base URLs. For stdio, configure `AI_SKILLS_TOKEN` and `AI_SKILLS_API_URL` in the MCP server process environment. For HTTP, configure only the API base URL and host/origin allowlists on the server, then send client credentials through the HTTP `Authorization` header.
 
 ## Planned Workflows
 
 - role-gated read-only maintainer/admin tools
-- Streamable HTTP transport
 - MCP audit events for allow/deny decisions
 - client compatibility notes

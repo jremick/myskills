@@ -72,6 +72,8 @@ Last updated: 2026-06-04
 ### MCP
 
 - Authenticate every MCP request.
+- HTTP MCP clients must send scoped API tokens in the `Authorization` header; the HTTP adapter must validate the token before MCP protocol handling and must not use a shared server-side bearer token fallback.
+- HTTP MCP deployments must restrict Host and browser Origin headers; non-loopback binds require an explicit allowed-host configuration.
 - Default to read-only tools.
 - Keep package contents out of MCP results unless a future explicit, audited delivery tool is designed.
 - Role-gate maintainer and admin tools.

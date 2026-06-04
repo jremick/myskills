@@ -4,12 +4,15 @@
   "private": true,
   "type": "module",
   "bin": {
-    "ai-skills-mcp": "./dist/index.js"
+    "ai-skills-mcp": "./dist/index.js",
+    "ai-skills-mcp-http": "./dist/http-index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
+    "dev:http": "tsx src/http-index.ts",
     "start": "node dist/index.js",
+    "start:http": "node dist/http-index.js",
     "test": "node --import tsx --test test/**/*.test.ts"
   },
   "dependencies": {
