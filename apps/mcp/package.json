@@ -1,6 +1,6 @@
 {
   "name": "@ai-skills-share/mcp",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.0",
   "private": true,
   "type": "module",
   "bin": {
@@ -16,7 +16,7 @@
     "test": "node ../../scripts/run-node-tests.mjs --import tsx --extensions .test.ts"
   },
   "dependencies": {
-    "@ai-skills-share/core": "0.1.0",
+    "@ai-skills-share/core": "0.1.0-alpha.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.1.13"
   },

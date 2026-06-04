@@ -1,8 +1,14 @@
 # AI Skills Share
 
-AI Skills Share is a planned open-source platform for publishing, reviewing, discovering, installing, and using AI agent skills across web, API, CLI, and MCP interfaces.
+AI Skills Share is an open-source alpha platform for publishing, reviewing, discovering, installing, and using AI agent skills across web, API, CLI, and MCP interfaces.
 
 The project starts from the useful product lessons of a prior internal prototype, but this repository is a clean public-ready product. It does not use that prototype's identity model, company-specific terminology, or Git-repo-as-database backend.
+
+## Release Status
+
+Current target: **v0.1.0-alpha.0**.
+
+This alpha is intended for evaluation, local demos, and early self-hosting feedback. It is not yet the business-safe production release: API contracts, package formats, deployment defaults, and operational guidance may still change before `v1.0`.
 
 ## Working Name
 
@@ -42,6 +48,8 @@ packages/
   skill-package/  Package manifest, validation, scanning, bundling, and install logic.
 docs/
   adr/            Architecture decision records.
+examples/
+  skills/         Public-safe example skill packages.
 scripts/
   check-*.mjs     Repo hygiene checks.
 ```
@@ -106,6 +114,16 @@ node apps/cli/dist/index.js logout
 
 CLI bearer resolution is `--token`, then `AI_SKILLS_TOKEN`, then the stored login token scoped to the normalized API URL.
 
+## Example Skill
+
+A public-safe example package lives at [examples/skills/release-notes-helper](examples/skills/release-notes-helper). It mirrors the seeded demo skill and can be used for CLI validation, local submission tests, and package-format examples:
+
+```bash
+npm run build
+node apps/cli/dist/index.js validate --path examples/skills/release-notes-helper
+node apps/cli/dist/index.js scan --path examples/skills/release-notes-helper
+```
+
 ## Verification
 
 ```bash
@@ -134,6 +152,8 @@ npm run release:artifacts
 
 See [docs/RELEASE.md](docs/RELEASE.md) for tag gates, artifact contents, and the GitHub release workflow.
 
+The immediate alpha goal is tracked in [docs/ALPHA_RELEASE_GOAL.md](docs/ALPHA_RELEASE_GOAL.md). The later business-safe production release goal is tracked in [docs/BUSINESS_SAFE_RELEASE_GOAL.md](docs/BUSINESS_SAFE_RELEASE_GOAL.md).
+
 ## Current Status
 
-This is the first backend and product-surface foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, hash-only email verification and password-reset action tokens, SMTP/dev auth notification delivery, MFA challenge flow, browser login/logout with session-aware API calls, CLI login/logout with API-URL-scoped stored sessions, hashed scoped API tokens, MFA-verified admin provider config and claim-to-role mapping management, public skill search/detail/release/bundle endpoints, MCP token introspection with `skills:read` and session decision audit events, authenticated package intake with server-side archive extraction and scan evidence, maintainer approve/publish actions, a Vite/React web browser for public registry metadata, author `.zip` package submission, maintainer review, and admin workflows including safe local role editing, read-only stdio and stateless Streamable HTTP MCP servers, a starter CLI with verified export, local install/list/update/rollback, and token management, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, production container targets and preflight env validation, seed data, package manifest validation, local package risk scanning, and deterministic checks.
+This is the responsible public alpha foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, hash-only email verification and password-reset action tokens, SMTP/dev auth notification delivery, MFA challenge flow, browser login/logout with session-aware API calls, CLI login/logout with API-URL-scoped stored sessions, hashed scoped API tokens, MFA-verified admin provider config and claim-to-role mapping management, public skill search/detail/release/bundle endpoints, MCP token introspection with `skills:read` and session decision audit events, authenticated package intake with server-side archive extraction and scan evidence, maintainer approve/publish actions, a Vite/React web browser for public registry metadata, author `.zip` package submission, maintainer review, and admin workflows including safe local role editing, read-only stdio and stateless Streamable HTTP MCP servers, a starter CLI with verified export, local install/list/update/rollback, and token management, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, production container targets and preflight env validation, seed data, a public-safe example skill package, package manifest validation, local package risk scanning, deterministic alpha-release checks, and reproducible release artifacts.

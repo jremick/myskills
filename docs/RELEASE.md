@@ -1,9 +1,9 @@
 # Release Process
 
-Version: 0.1.0
+Version: 0.1.0-alpha.0
 Last updated: 2026-06-04
 
-This repo is not ready for a public release until the remaining Milestone 7 security, threat-model, license, contribution, and example-package checks are complete. The release workflow exists now so the first public tag can be reproduced from source once those gates are done.
+This repo is prepared for a responsible public alpha once the checklist in [ALPHA_RELEASE_GOAL.md](ALPHA_RELEASE_GOAL.md) passes. Alpha releases are for evaluation and early self-hosting feedback, not business-critical production use.
 
 ## Release Gates
 
@@ -15,6 +15,7 @@ Before creating a release tag:
 - Run `npm run release:artifacts`.
 - Review the generated `dist/release/release-metadata.json` and `dist/release/SHA256SUMS`.
 - Confirm public docs and examples contain no private-source carryover.
+- Confirm GitHub private vulnerability reporting is enabled before announcing the public alpha or pushing the public alpha tag.
 
 ## Local Artifact Build
 
@@ -43,4 +44,4 @@ git push origin "v${VERSION}"
 
 The GitHub release workflow runs on `v*.*.*` tags. It installs the repo-declared npm version, checks that the pushed tag matches `package.json`, runs `npm run check`, creates artifacts with `--require-tag`, builds the API, web, and HTTP MCP Docker targets, and uploads the release artifact bundle.
 
-The workflow does not publish npm packages, create a GitHub Release, or push container images yet. Those should be enabled after the first public release policy is decided.
+The workflow does not publish npm packages, create a GitHub Release, or push container images yet. Those should be enabled after the business-safe release publishing policy is decided.

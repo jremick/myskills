@@ -1,7 +1,9 @@
 # Security Model
 
-Version: 0.1.0
+Version: 0.1.0-alpha.0
 Last updated: 2026-06-04
+
+This security model describes the current alpha controls. The companion threat model in [THREAT_MODEL.md](THREAT_MODEL.md) records attacker goals, trust boundaries, residual alpha risks, and business-safe release gates.
 
 ## Main Risks
 
@@ -25,7 +27,7 @@ Last updated: 2026-06-04
 - CLI login tokens are stored locally by normalized API URL with user-only file permissions; platform keychain storage remains the target hardening path.
 - Login uses normalized email lookup and generic invalid-credential denial.
 - Existing sessions are denied when the user is no longer active or email verified.
-- Login, registration, email verification, password reset, MFA, and action-token confirmation paths are throttled before repeated expensive auth work where applicable.
+- Login, registration, email verification, password reset, MFA, and action-token confirmation paths are throttled before repeated expensive auth work where applicable. Alpha rate limits are process-local; distributed rate limits are required before the business-safe production release.
 - Email verification before normal account use.
 - Password reset uses generic request responses, including notification delivery failures, and revokes active sessions and API tokens after a successful credential change.
 - Rate limits on auth endpoints.
@@ -61,7 +63,7 @@ Last updated: 2026-06-04
 - Submitting a new unreviewed version must not mutate or hide an already approved public release.
 - Public bundle delivery uses the same approved/public/passed/published predicate as public search and detail.
 - Reject archive traversal, absolute paths, symlinks, encrypted archives, unsupported compression, excessive size, and excessive file count.
-- Scan for secrets, private keys, tokens, credentials, risky shell commands, dependency install hooks, generated binaries, and unsafe prompt instructions.
+- The alpha scanner blocks known credential/private-key patterns, destructive shell snippets, and unsafe archive structures, and warns on dependency install hooks. Broader fixture-backed scanning for uncommon secrets, generated binaries, and unsafe prompt-instruction patterns is required before the business-safe production release.
 - Require maintainer approval and an explicit publish action before publication.
 - Store immutable artifact hashes.
 

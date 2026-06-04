@@ -1,6 +1,6 @@
 {
   "name": "@ai-skills-share/auth",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -14,7 +14,7 @@
     "test": "node ../../scripts/run-node-tests.mjs --import tsx --extensions .test.ts"
   },
   "dependencies": {
-    "@ai-skills-share/core": "0.1.0",
+    "@ai-skills-share/core": "0.1.0-alpha.0",
     "bcryptjs": "^3.0.3"
   },
   "devDependencies": {

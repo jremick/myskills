@@ -1,6 +1,6 @@
 {
   "name": "ai-skills-share",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.0",
   "private": true,
   "description": "Open-source skill registry, sharing, installation, API, MCP, and CLI platform for AI agent skills.",
   "type": "module",
@@ -11,7 +11,8 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "audit:prod": "npm audit --omit=dev",
-    "check": "npm run check:structure && npm run check:privacy && npm run scan:secrets && npm run audit:prod && npm run build && npm run test",
+    "check": "npm run check:structure && npm run check:privacy && npm run scan:secrets && npm run audit:prod && npm run build && npm run check:alpha-release && npm run test",
+    "check:alpha-release": "npm run build -w @ai-skills-share/skill-package && node scripts/check-alpha-release.mjs",
     "check:prod-env": "node scripts/check-production-env.mjs",
     "check:privacy": "node scripts/check-privacy.mjs",
     "check:structure": "node scripts/check-structure.mjs",

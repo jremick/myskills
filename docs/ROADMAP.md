@@ -1,7 +1,12 @@
 # Roadmap
 
-Version: 0.1.0
+Version: 0.1.0-alpha.0
 Last updated: 2026-06-04
+
+## Release Tracks
+
+- **Responsible public alpha (`v0.1.0-alpha.0`)**: make the repository public with clear alpha limits, sanitized examples, security reporting, reproducible artifacts, and fresh-clone proof.
+- **Business-safe production release**: harden the alpha into an operator-ready release with stronger audit, background scanning, provider lifecycle, artifact delivery, CLI credential storage, deploy/ops guidance, and upgrade policy. See [BUSINESS_SAFE_RELEASE_GOAL.md](BUSINESS_SAFE_RELEASE_GOAL.md).
 
 ## Milestone 0: Private Project Setup
 
@@ -159,4 +164,26 @@ Acceptance:
 - Public docs contain no private-source carryover.
 - First public release tag is reproducible.
 
-Current status: deployment docs, production Docker targets, production Compose example, production env preflight, and tag-triggered release artifact workflow exist. Security/threat-model refresh and first reproducible public release tag remain planned.
+Current status: responsible public alpha docs, public security policy, threat model, production Docker targets, production Compose example, production env preflight, public-safe example skill package, deterministic alpha-release check, and tag-triggered release artifact workflow exist. Fresh-clone rehearsal, public visibility switch, and first reproducible alpha tag remain planned.
+
+## Milestone 8: Business-Safe Production Release
+
+Goal: turn the public alpha into a release that a business can operate with clear trust boundaries, support expectations, upgrade paths, and incident response.
+
+Deliverables:
+
+- Provider login/linking and external identity lifecycle.
+- Background package scan jobs with durable scan evidence and retry policy.
+- Authoritative per-tool MCP audit events and role-gated maintainer/admin tools.
+- Platform keychain storage for CLI credentials.
+- Signed or direct object delivery that preserves authorization, integrity checks, and audit.
+- Platform-specific install adapters.
+- Production deploy guidance with backup, restore, monitoring, logging, upgrade, and rollback runbooks.
+- Release publishing policy for GitHub Releases, container images, and package artifacts.
+
+Acceptance:
+
+- Fresh production-like deploy rehearsal passes from a clean clone.
+- Security/threat-model findings above accepted alpha risk are closed or tracked with explicit mitigations.
+- Admin, maintainer, author, user, CLI, API, MCP, and deployment workflows have deterministic verification.
+- Upgrade from the alpha data model is tested or migration limits are clearly documented.

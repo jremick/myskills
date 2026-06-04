@@ -1,6 +1,6 @@
 # Contributing
 
-AI Skills Share is private while the core architecture and security boundaries are being established. The contribution model below is the intended public-ready shape.
+AI Skills Share is in public alpha. Contributions are welcome when they keep the project self-hostable, public-safe, and aligned across API, web, CLI, and MCP surfaces.
 
 ## Development Principles
 
@@ -15,7 +15,16 @@ AI Skills Share is private while the core architecture and security boundaries a
 npm run check
 ```
 
+For package examples, also run:
+
+```bash
+npm run build
+node apps/cli/dist/index.js validate --path examples/skills/release-notes-helper
+node apps/cli/dist/index.js scan --path examples/skills/release-notes-helper
+```
+
 ## Security
 
 Do not include secrets, customer data, private company context, production tokens, or local machine state in issues, commits, test fixtures, examples, docs, or generated artifacts.
 
+Do not file public issues for suspected vulnerabilities. Use the reporting path in [SECURITY.md](SECURITY.md).

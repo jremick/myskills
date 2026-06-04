@@ -1,0 +1,19 @@
+{
+  "name": "release-notes-helper",
+  "title": "Release Notes Helper",
+  "summary": "Turns a reviewed list of merged changes into concise release notes with decisions, risks, and upgrade notes.",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "visibility": "public",
+  "platforms": [
+    {
+      "name": "codex",
+      "install_target": "codex-skill",
+      "status": "supported"
+    }
+  ],
+  "tags": [
+    "writing",
+    "release"
+  ]
+}
