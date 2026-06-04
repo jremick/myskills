@@ -139,6 +139,11 @@ test("API token scopes gate protected routes separately from roles", async (t) =
   const profileOnly = await createApiToken(app, authorSession, ["profile:read"]);
   const authorSubmit = await createApiToken(app, authorSession, ["skills:submit"]);
   const userSubmit = await createApiToken(app, userSession, ["skills:submit"]);
+  const unverifiedMaintainerSession = await addAndLogin(app, authStore, {
+    email: "unverified-maintainer@example.com",
+    roles: ["maintainer"],
+  });
+  const unverifiedMaintainerSubmit = await createApiToken(app, unverifiedMaintainerSession, ["skills:submit"]);
   const reviewRead = await createApiToken(app, maintainerSession, ["review:read"]);
   const reviewWrite = await createApiToken(app, maintainerSession, ["review:write"]);
 
@@ -169,6 +174,16 @@ test("API token scopes gate protected routes separately from roles", async (t) =
     payload: cleanSubmissionPayload(),
   });
   assert.equal(submitted.statusCode, 202);
+  assert.equal(submissionStore.count(), 1);
+
+  const missingMfa = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${unverifiedMaintainerSubmit.token}` },
+    payload: cleanSubmissionPayload(),
+  });
+  assert.equal(missingMfa.statusCode, 403);
+  assert.equal(missingMfa.json().error.code, "MFA_VERIFICATION_REQUIRED");
   assert.equal(submissionStore.count(), 1);
 
   const reviewList = await app.inject({

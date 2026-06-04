@@ -49,7 +49,7 @@ Last updated: 2026-06-04
 - Public search and detail expose only approved, scan-passed, published releases with artifact records.
 - Submission intake accepts normalized package text entries or base64 `.zip` archive uploads; the API does not accept server-local paths or URLs.
 - Submission intake requires a strict root package manifest file that matches the submitted manifest metadata; publish revalidates stored artifact manifests before release.
-- Submission is role-gated to owner, admin, maintainer, and author accounts in the current slice; MFA enforcement for admin/maintainer submission remains a remaining hardening item.
+- Submission is role-gated to owner, admin, maintainer, and author accounts; owner, admin, and maintainer submitters require MFA verification.
 - Server code generates artifact hashes, sizes, content type, and storage keys instead of trusting client-supplied values.
 - Object storage keys are internal, opaque, and never returned in public, CLI, web, or MCP responses.
 - Object-backed publish and bundle delivery verify stored object bytes against database size and SHA-256 metadata and fail closed on mismatch.

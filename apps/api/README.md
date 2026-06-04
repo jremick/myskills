@@ -51,7 +51,7 @@ Implemented:
 - Drizzle Postgres schema and migrations
 - synthetic seed data for one owner and one approved public skill
 
-Public search, detail, release metadata, and bundle delivery all require the same safe release state: public skill, approved lifecycle, approved review, passed security status, non-null `publishedAt`, and artifact metadata. Review and publish actions require `owner`, `admin`, or `maintainer` and an MFA-verified session or MFA-bound API token.
+Public search, detail, release metadata, and bundle delivery all require the same safe release state: public skill, approved lifecycle, approved review, passed security status, non-null `publishedAt`, and artifact metadata. Submission is open to `author` and above; `owner`, `admin`, and `maintainer` submitters require an MFA-verified session or MFA-bound API token. Review and publish actions require `owner`, `admin`, or `maintainer` and an MFA-verified session or MFA-bound API token.
 
 Package artifacts are stored through an S3-compatible object storage abstraction when `ARTIFACT_STORAGE_MODE=s3`. The API generates opaque object keys, hashes, byte sizes, and content types; submission requests cannot provide artifact metadata. Production startup defaults to S3 mode and rejects DB payload mode. Development can use `ARTIFACT_STORAGE_MODE=db`, but object-backed rows fail closed when object bytes are missing, invalid, or do not match stored metadata.
 

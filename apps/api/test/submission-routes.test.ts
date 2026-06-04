@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { hashPassword } from "@ai-skills-share/auth";
+import { generateTotpCode, hashPassword } from "@ai-skills-share/auth";
 import { buildApp } from "../src/app.js";
 import { AuthService } from "../src/auth/service.js";
 import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
@@ -92,6 +92,34 @@ test("authors can submit clean archive packages", async (t) => {
   assert.equal(response.json().submission.securityStatus, "passed");
   assert.equal(response.json().scan.findingCount, 0);
   assert.equal(JSON.stringify(response.json()).includes("storageKey"), false);
+  assert.equal(submissionStore.count(), 1);
+});
+
+test("privileged submitters require MFA verification", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const unverifiedMaintainer = await addAndLoginAs(app, authStore, "maintainer@example.com", ["maintainer"]);
+  const verifiedMaintainer = await addAndLoginWithMfa(app, authStore, "verified-maintainer@example.com", ["maintainer"]);
+
+  const denied = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${unverifiedMaintainer}` },
+    payload: cleanSubmissionPayload(),
+  });
+  assert.equal(denied.statusCode, 403);
+  assert.equal(denied.json().error.code, "MFA_VERIFICATION_REQUIRED");
+  assert.equal(submissionStore.count(), 0);
+
+  const allowed = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${verifiedMaintainer}` },
+    payload: cleanSubmissionPayload(),
+  });
+  assert.equal(allowed.statusCode, 202);
   assert.equal(submissionStore.count(), 1);
 });
 
@@ -486,8 +514,17 @@ async function addAndLogin(
   authStore: MemoryAuthStore,
   roles: Array<"author" | "maintainer" | "user">,
 ): Promise<string> {
+  return addAndLoginAs(app, authStore, "author@example.com", roles);
+}
+
+async function addAndLoginAs(
+  app: ReturnType<typeof buildApp>,
+  authStore: MemoryAuthStore,
+  email: string,
+  roles: Array<"author" | "maintainer" | "user">,
+): Promise<string> {
   authStore.addUser({
-    email: "author@example.com",
+    email,
     status: "active",
     emailVerifiedAt: new Date(),
     roles,
@@ -497,12 +534,61 @@ async function addAndLogin(
     method: "POST",
     url: "/v1/auth/login",
     payload: {
-      email: "author@example.com",
+      email,
       password: "correct horse battery staple",
     },
   });
   assert.equal(response.statusCode, 200);
   return response.json().token;
+}
+
+async function addAndLoginWithMfa(
+  app: ReturnType<typeof buildApp>,
+  authStore: MemoryAuthStore,
+  email: string,
+  roles: Array<"author" | "maintainer" | "user">,
+): Promise<string> {
+  const setupSession = await addAndLoginAs(app, authStore, email, roles);
+  const enrollment = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/totp/enroll",
+    headers: { authorization: `Bearer ${setupSession}` },
+    payload: {
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(enrollment.statusCode, 201);
+  const confirm = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/totp/confirm",
+    headers: { authorization: `Bearer ${setupSession}` },
+    payload: {
+      factorId: enrollment.json().enrollment.factorId,
+      code: generateTotpCode(enrollment.json().enrollment.secret),
+    },
+  });
+  assert.equal(confirm.statusCode, 200);
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email,
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(login.statusCode, 200);
+  assert.equal(login.json().mfaRequired, true);
+  const verify = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/verify",
+    payload: {
+      challengeToken: login.json().challengeToken,
+      recoveryCode: confirm.json().mfa.recoveryCodes[0],
+    },
+  });
+  assert.equal(verify.statusCode, 200);
+  assert.equal(verify.json().user.mfaVerified, true);
+  return verify.json().token;
 }
 
 function cleanSubmissionPayload() {

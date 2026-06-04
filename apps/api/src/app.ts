@@ -424,8 +424,8 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     if (!options.submissionService) {
       throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
     }
-    const context = await options.authService.authenticateRequest(request.headers.authorization);
-    if (!context) {
+    const actor = await authenticateActor(options.authService, request.headers.authorization, "skills:submit", { mfaRequired: true });
+    if (!actor) {
       return reply.code(401).send({
         error: {
           code: "AUTHENTICATION_REQUIRED",
@@ -433,13 +433,9 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         },
       });
     }
-    requireScope(context, "skills:submit");
     const input = await parseSubmissionInput(request.body);
     const submission = await options.submissionService.createSubmission({
-      actor: {
-        id: context.user.id,
-        roles: context.user.roles,
-      },
+      actor,
       manifest: input.manifest,
       files: input.files,
     });
