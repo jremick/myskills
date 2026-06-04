@@ -1,0 +1,164 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai_skills_share
+      POSTGRES_USER: ai_skills_share
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_skills_share -d ai_skills_share"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  minio-init:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "local/$$S3_BUCKET"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
+
+  migrate:
+    build:
+      context: .
+      target: api
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://ai_skills_share:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/ai_skills_share
+    command: ["node", "apps/api/dist/db/migrate.js"]
+
+  seed:
+    build:
+      context: .
+      target: api
+    profiles: ["bootstrap"]
+    restart: "no"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://ai_skills_share:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/ai_skills_share
+      SEED_OWNER_EMAIL: ${SEED_OWNER_EMAIL:?set SEED_OWNER_EMAIL}
+      SEED_OWNER_PASSWORD: ${SEED_OWNER_PASSWORD:?set SEED_OWNER_PASSWORD}
+    command: ["node", "apps/api/dist/db/seed.js"]
+
+  api:
+    build:
+      context: .
+      target: api
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+      DATABASE_URL: postgres://ai_skills_share:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/ai_skills_share
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET}
+      TOTP_ISSUER: ${TOTP_ISSUER:-AI Skills Share}
+      APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
+      ALLOWED_WEB_ORIGINS: ${ALLOWED_WEB_ORIGINS:?set ALLOWED_WEB_ORIGINS}
+      AUTH_NOTIFICATION_MODE: smtp
+      SMTP_HOST: ${SMTP_HOST:?set SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-true}
+      SMTP_TLS_REJECT_UNAUTHORIZED: ${SMTP_TLS_REJECT_UNAUTHORIZED:-true}
+      SMTP_FROM: ${SMTP_FROM:?set SMTP_FROM}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      ARTIFACT_STORAGE_MODE: s3
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: ${S3_REGION:-local}
+      S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
+      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+      S3_FORCE_PATH_STYLE: "true"
+    ports:
+      - "${API_PORT:-3001}:3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?set VITE_API_BASE_URL}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  mcp-http:
+    build:
+      context: .
+      target: mcp-http
+    profiles: ["mcp"]
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      AI_SKILLS_API_URL: http://api:3001
+      AI_SKILLS_MCP_HOST: 0.0.0.0
+      AI_SKILLS_MCP_PORT: 3002
+      AI_SKILLS_MCP_PATH: ${AI_SKILLS_MCP_PATH:-/mcp}
+      AI_SKILLS_MCP_ALLOWED_HOSTS: ${AI_SKILLS_MCP_ALLOWED_HOSTS:?set AI_SKILLS_MCP_ALLOWED_HOSTS}
+      AI_SKILLS_MCP_ALLOWED_ORIGINS: ${AI_SKILLS_MCP_ALLOWED_ORIGINS:-}
+    ports:
+      - "${MCP_HTTP_PORT:-3002}:3002"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
+  minio-data:
