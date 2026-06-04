@@ -1,4 +1,5 @@
 import { AppError } from "@ai-skills-share/core";
+import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type {
   CreateSubmissionInput,
   PublicBundle,
@@ -273,32 +274,4 @@ function publicRelease(submission: StoredSubmission): PublicReleaseMetadata {
       contentType: submission.artifact.contentType,
     },
   };
-}
-
-function sanitizeAuditDetails(input: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(input)
-      .filter(([, value]) => value !== undefined)
-      .map(([key, value]) => [key, sanitizeAuditValue(value)]),
-  );
-}
-
-function sanitizeAuditValue(input: unknown): unknown {
-  if (typeof input === "string") {
-    if (/token|secret|password|cookie|private[-_ ]?key|package content/i.test(input)) {
-      return "[redacted]";
-    }
-    const redacted = input
-      .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
-      .replace(/ATATT[A-Za-z0-9_-]+/g, "[redacted-token]")
-      .replace(/-----BEGIN [^-]+PRIVATE KEY-----[\s\S]*?-----END [^-]+PRIVATE KEY-----/g, "[redacted-private-key]");
-    return redacted.length > 200 ? `${redacted.slice(0, 200)}...` : redacted;
-  }
-  if (Array.isArray(input)) {
-    return input.map(sanitizeAuditValue);
-  }
-  if (input && typeof input === "object") {
-    return sanitizeAuditDetails(input as Record<string, unknown>);
-  }
-  return input;
 }

@@ -58,6 +58,7 @@ Last updated: 2026-06-04
 ### Audit
 
 - Record auth events, access decisions, package delivery, submissions, reviews, lifecycle actions, admin changes, and MCP calls.
+- Admin registration and user-status mutations write sanitized audit events; admin audit listing is MFA-verified session-only and bounded.
 - Redact tokens, cookies, passwords, provider secrets, package contents, and overly long free-text fields.
 - Export audit reports with spreadsheet formula injection defenses.
 

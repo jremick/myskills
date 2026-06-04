@@ -3,6 +3,7 @@ import type { AuthenticatedUser, RegistrationMode, UserStatus } from "@ai-skills
 export const apiTokenScopes = ["profile:read", "skills:read", "skills:submit", "review:read", "review:write"] as const;
 
 export type ApiTokenScope = (typeof apiTokenScopes)[number];
+export type AuditDecision = "allow" | "deny";
 
 export interface AuthUserRecord {
   id: string;
@@ -108,6 +109,30 @@ export interface MfaChallengeWithUser extends MfaChallengeRecord {
   user: AuthUserRecord;
 }
 
+export interface AuditEventRecord {
+  id: string;
+  actorUserId: string | null;
+  action: string;
+  decision: AuditDecision;
+  resourceType: string;
+  resourceId: string | null;
+  details: Record<string, unknown>;
+  createdAt: Date;
+}
+
+export interface CreateAuditEventInput {
+  actorUserId?: string | null;
+  action: string;
+  decision: AuditDecision;
+  resourceType?: string;
+  resourceId?: string | null;
+  details?: Record<string, unknown>;
+}
+
+export interface ListAuditEventsInput {
+  limit: number;
+}
+
 export interface AuthStore {
   getRegistrationMode(): Promise<RegistrationMode>;
   setRegistrationMode(mode: RegistrationMode): Promise<RegistrationMode>;
@@ -138,6 +163,8 @@ export interface AuthStore {
   createMfaChallenge(input: CreateMfaChallengeInput): Promise<MfaChallengeRecord>;
   findMfaChallengeByTokenHash(tokenHash: string, now?: Date): Promise<MfaChallengeWithUser | null>;
   markMfaChallengeUsed(input: { challengeId: string; usedAt: Date }): Promise<void>;
+  recordAuditEvent(input: CreateAuditEventInput): Promise<void>;
+  listAuditEvents(input: ListAuditEventsInput): Promise<AuditEventRecord[]>;
 }
 
 export interface AuthResponseUser {

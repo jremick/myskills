@@ -8,6 +8,7 @@ import type {
   AdminUserActionInput,
   ConfirmTotpEnrollmentInput,
   CreateApiTokenRequest,
+  ListAdminAuditEventsInput,
   LoginInput,
   RegisterInput,
   StartTotpEnrollmentInput,
@@ -306,6 +307,17 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     };
   });
 
+  app.get("/v1/admin/audit", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return { events: await options.authService.listAdminAuditEvents(user, parseAdminAuditQuery(request.query)) };
+  });
+
   app.get("/v1/me", async (request, reply) => {
     const context = await options.authService?.authenticateRequest(request.headers.authorization);
     if (context) {
@@ -548,6 +560,15 @@ function parseAdminUserActionInput(paramsInput: unknown, bodyInput: unknown): Ad
   return {
     userId: parseUserIdParam(paramsInput),
     action,
+    reason: optionalString(body.reason, "reason"),
+  };
+}
+
+function parseAdminAuditQuery(input: unknown): ListAdminAuditEventsInput {
+  const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const rawLimit = typeof params.limit === "string" ? Number.parseInt(params.limit, 10) : undefined;
+  return {
+    limit: rawLimit !== undefined && Number.isFinite(rawLimit) ? rawLimit : undefined,
   };
 }
 

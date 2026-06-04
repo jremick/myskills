@@ -1,9 +1,11 @@
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import type { RegistrationMode, Role, UserStatus } from "@ai-skills-share/auth";
+import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type { Database } from "../db/client.js";
 import {
   apiTokens,
   authSessions,
+  auditEvents,
   instanceSettings,
   mfaChallenges,
   mfaFactors,
@@ -13,6 +15,7 @@ import {
   users,
 } from "../db/schema.js";
 import type {
+  AuditEventRecord,
   ApiTokenRecord,
   ApiTokenScope,
   AuthStore,
@@ -20,6 +23,7 @@ import type {
   AuthUserWithApiToken,
   AuthUserWithSession,
   AuthUserWithPassword,
+  CreateAuditEventInput,
   CreateApiTokenInput,
   CreateMfaChallengeInput,
   CreateMfaTotpFactorInput,
@@ -29,6 +33,7 @@ import type {
   MfaChallengeRecord,
   MfaChallengeWithUser,
   MfaTotpFactorRecord,
+  ListAuditEventsInput,
 } from "./types.js";
 
 export class PostgresAuthStore implements AuthStore {
@@ -410,6 +415,26 @@ export class PostgresAuthStore implements AuthStore {
       .where(and(eq(mfaChallenges.id, input.challengeId), isNull(mfaChallenges.usedAt)));
   }
 
+  async recordAuditEvent(input: CreateAuditEventInput): Promise<void> {
+    await this.db.insert(auditEvents).values({
+      actorUserId: input.actorUserId ?? null,
+      action: input.action,
+      decision: input.decision,
+      resourceType: input.resourceType ?? "",
+      resourceId: input.resourceId && isUuid(input.resourceId) ? input.resourceId : null,
+      details: sanitizeAuditDetails(input.details ?? {}),
+    });
+  }
+
+  async listAuditEvents(input: ListAuditEventsInput): Promise<AuditEventRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(auditEvents)
+      .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id))
+      .limit(input.limit);
+    return rows.map(toAuditEventRecord);
+  }
+
   private async rolesForUser(userId: string): Promise<Role[]> {
     const rows = await this.db
       .select({ role: roleAssignments.role })
@@ -443,6 +468,19 @@ function toMfaChallengeRecord(challenge: typeof mfaChallenges.$inferSelect): Mfa
     expiresAt: challenge.expiresAt,
     usedAt: challenge.usedAt,
     createdAt: challenge.createdAt,
+  };
+}
+
+function toAuditEventRecord(event: typeof auditEvents.$inferSelect): AuditEventRecord {
+  return {
+    id: event.id,
+    actorUserId: event.actorUserId,
+    action: event.action,
+    decision: event.decision === "allow" ? "allow" : "deny",
+    resourceType: event.resourceType,
+    resourceId: event.resourceId,
+    details: parseAuditDetails(event.details),
+    createdAt: event.createdAt,
   };
 }
 
@@ -481,4 +519,14 @@ function parseApiTokenScopes(input: unknown): ApiTokenScope[] {
     scope === "review:read" ||
     scope === "review:write"
   ));
+}
+
+function parseAuditDetails(input: unknown): Record<string, unknown> {
+  return input && typeof input === "object" && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : {};
+}
+
+function isUuid(input: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input);
 }

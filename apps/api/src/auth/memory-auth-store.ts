@@ -1,5 +1,7 @@
 import type { RegistrationMode, Role, UserStatus } from "@ai-skills-share/auth";
+import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type {
+  AuditEventRecord,
   ApiTokenRecord,
   ApiTokenScope,
   AuthStore,
@@ -7,6 +9,7 @@ import type {
   AuthUserWithSession,
   AuthUserWithPassword,
   AuthUserWithApiToken,
+  CreateAuditEventInput,
   CreateApiTokenInput,
   CreateMfaChallengeInput,
   CreateMfaTotpFactorInput,
@@ -16,6 +19,7 @@ import type {
   MfaChallengeRecord,
   MfaChallengeWithUser,
   MfaTotpFactorRecord,
+  ListAuditEventsInput,
 } from "./types.js";
 
 interface MemoryUser {
@@ -81,6 +85,17 @@ interface MemoryMfaChallenge {
   createdAt: Date;
 }
 
+interface MemoryAuditEvent {
+  id: string;
+  actorUserId: string | null;
+  action: string;
+  decision: "allow" | "deny";
+  resourceType: string;
+  resourceId: string | null;
+  details: Record<string, unknown>;
+  createdAt: Date;
+}
+
 export class MemoryAuthStore implements AuthStore {
   private users = new Map<string, MemoryUser>();
   private sessions = new Map<string, MemorySession>();
@@ -88,6 +103,7 @@ export class MemoryAuthStore implements AuthStore {
   private mfaFactors = new Map<string, MemoryMfaTotpFactor>();
   private mfaRecoveryCodes = new Map<string, MemoryMfaRecoveryCode>();
   private mfaChallenges = new Map<string, MemoryMfaChallenge>();
+  private audit = new Map<string, MemoryAuditEvent>();
 
   constructor(private registrationMode: RegistrationMode = "closed") {}
 
@@ -400,6 +416,30 @@ export class MemoryAuthStore implements AuthStore {
       challenge.usedAt = input.usedAt;
     }
   }
+
+  async recordAuditEvent(input: CreateAuditEventInput): Promise<void> {
+    const event: MemoryAuditEvent = {
+      id: `audit-${this.audit.size + 1}`,
+      actorUserId: input.actorUserId ?? null,
+      action: input.action,
+      decision: input.decision,
+      resourceType: input.resourceType ?? "",
+      resourceId: input.resourceId ?? null,
+      details: sanitizeAuditDetails(input.details ?? {}),
+      createdAt: new Date(),
+    };
+    this.audit.set(event.id, event);
+  }
+
+  async listAuditEvents(input: ListAuditEventsInput): Promise<AuditEventRecord[]> {
+    return [...this.audit.values()]
+      .sort((a, b) => {
+        const time = b.createdAt.getTime() - a.createdAt.getTime();
+        return time === 0 ? b.id.localeCompare(a.id) : time;
+      })
+      .slice(0, input.limit)
+      .map(toAuditEventRecord);
+  }
 }
 
 function toRecord(user: MemoryUser): AuthUserRecord {
@@ -451,5 +491,18 @@ function toMfaChallengeRecord(challenge: MemoryMfaChallenge): MfaChallengeRecord
     expiresAt: challenge.expiresAt,
     usedAt: challenge.usedAt,
     createdAt: challenge.createdAt,
+  };
+}
+
+function toAuditEventRecord(event: MemoryAuditEvent): AuditEventRecord {
+  return {
+    id: event.id,
+    actorUserId: event.actorUserId,
+    action: event.action,
+    decision: event.decision,
+    resourceType: event.resourceType,
+    resourceId: event.resourceId,
+    details: event.details,
+    createdAt: event.createdAt,
   };
 }

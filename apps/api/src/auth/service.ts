@@ -20,6 +20,7 @@ import {
 import type { AuthRateLimiter } from "./rate-limit.js";
 import {
   apiTokenScopes,
+  type AuditEventRecord,
   type ApiTokenRecord,
   type ApiTokenScope,
   type AuthResponseUser,
@@ -131,6 +132,7 @@ export type AdminUserAction = "approve" | "activate" | "disable" | "delete";
 export interface AdminUserActionInput {
   userId: string;
   action: AdminUserAction;
+  reason?: string;
 }
 
 export interface SafeAdminUser {
@@ -141,6 +143,21 @@ export interface SafeAdminUser {
   roles: AuthenticatedUser["roles"];
   emailVerified: boolean;
   mfaEnabled: boolean;
+}
+
+export interface SafeAuditEvent {
+  id: string;
+  actorUserId: string | null;
+  action: string;
+  decision: "allow" | "deny";
+  resourceType: string;
+  resourceId: string | null;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface ListAdminAuditEventsInput {
+  limit?: number;
 }
 
 export interface AuthContext {
@@ -409,8 +426,21 @@ export class AuthService {
 
   async updateRegistrationSettings(actor: AuthResponseUser, input: UpdateRegistrationSettingsInput): Promise<AdminRegistrationSettings> {
     assertAdmin(actor);
+    const oldMode = await this.store.getRegistrationMode();
     const mode = normalizeRegistrationMode(input.mode);
-    return { mode: await this.store.setRegistrationMode(mode) };
+    const nextMode = await this.store.setRegistrationMode(mode);
+    await this.store.recordAuditEvent({
+      actorUserId: actor.id,
+      action: "admin.registration.update",
+      decision: "allow",
+      resourceType: "instance_setting",
+      details: {
+        setting: "registration",
+        oldMode,
+        newMode: nextMode,
+      },
+    });
+    return { mode: nextMode };
   }
 
   async listAdminUsers(actor: AuthResponseUser): Promise<SafeAdminUser[]> {
@@ -425,12 +455,18 @@ export class AuthService {
     const userId = cleanId(input.userId, "userId");
     const target = await this.store.findUserById(userId);
     if (!target) {
+      await this.recordAdminUserDeny(actor, action, userId, "user_not_found", input.reason);
       throw new AppError("User not found.", "USER_NOT_FOUND", 404);
     }
-    assertCanModifyUser(actor, target, action);
+    const blockedReason = adminUserActionBlockedReason(actor, target, action);
+    if (blockedReason) {
+      await this.recordAdminUserDeny(actor, action, target.id, blockedReason, input.reason, target);
+      throw adminUserActionError(blockedReason);
+    }
     if ((action === "disable" || action === "delete") && target.roles.includes("owner") && target.status === "active") {
       const otherOwnerCount = await this.store.countActiveOwnersExcluding(target.id);
       if (otherOwnerCount === 0) {
+        await this.recordAdminUserDeny(actor, action, target.id, "last_owner_required", input.reason, target);
         throw new AppError("At least one active owner is required.", "LAST_OWNER_REQUIRED", 409);
       }
     }
@@ -447,7 +483,29 @@ export class AuthService {
     if (action === "disable" || action === "delete") {
       await this.store.revokeUserCredentials(target.id);
     }
+    await this.store.recordAuditEvent({
+      actorUserId: actor.id,
+      action: `admin.user.${action}`,
+      decision: "allow",
+      resourceType: "user",
+      resourceId: target.id,
+      details: {
+        targetUserId: target.id,
+        statusBefore: target.status,
+        statusAfter: updated.status,
+        emailVerifiedBefore: Boolean(target.emailVerifiedAt),
+        emailVerifiedAfter: Boolean(updated.emailVerifiedAt),
+        credentialsRevoked: action === "disable" || action === "delete",
+        reason: input.reason,
+      },
+    });
     return this.safeAdminUser(updated);
+  }
+
+  async listAdminAuditEvents(actor: AuthResponseUser, input: ListAdminAuditEventsInput = {}): Promise<SafeAuditEvent[]> {
+    assertAdmin(actor);
+    const events = await this.store.listAuditEvents({ limit: normalizeAuditLimit(input.limit) });
+    return events.map(safeAuditEvent);
   }
 
   private async assertCanManageMfa(actor: AuthResponseUser, password: string): Promise<void> {
@@ -510,6 +568,30 @@ export class AuthService {
       emailVerified: Boolean(user.emailVerifiedAt),
       mfaEnabled: await this.store.countEnabledMfaFactors(user.id) > 0,
     };
+  }
+
+  private async recordAdminUserDeny(
+    actor: AuthResponseUser,
+    action: AdminUserAction,
+    targetUserId: string,
+    reason: string,
+    operatorReason?: string,
+    target?: AuthUserRecord,
+  ): Promise<void> {
+    await this.store.recordAuditEvent({
+      actorUserId: actor.id,
+      action: `admin.user.${action}`,
+      decision: "deny",
+      resourceType: "user",
+      resourceId: targetUserId,
+      details: {
+        targetUserId,
+        reason,
+        statusBefore: target?.status,
+        emailVerifiedBefore: target ? Boolean(target.emailVerifiedAt) : undefined,
+        operatorReason,
+      },
+    });
   }
 }
 
@@ -613,16 +695,27 @@ function assertAdmin(actor: AuthResponseUser): void {
   }
 }
 
-function assertCanModifyUser(actor: AuthResponseUser, target: AuthUserRecord, action: AdminUserAction): void {
+function adminUserActionBlockedReason(actor: AuthResponseUser, target: AuthUserRecord, action: AdminUserAction): string | null {
   if (target.status === "deleted" && action !== "delete") {
-    throw new AppError("Deleted users cannot be modified.", "USER_DELETED", 409);
+    return "user_deleted";
   }
   if ((action === "disable" || action === "delete") && actor.id === target.id) {
-    throw new AppError("Admins cannot disable or delete their own account.", "SELF_LOCKOUT_PREVENTED", 409);
+    return "self_lockout_prevented";
   }
   if (target.roles.includes("owner") && !actor.roles.includes("owner")) {
-    throw new AppError("Owner accounts can only be modified by owners.", "OWNER_ACTION_REQUIRES_OWNER", 403);
+    return "owner_action_requires_owner";
   }
+  return null;
+}
+
+function adminUserActionError(reason: string): AppError {
+  if (reason === "user_deleted") {
+    return new AppError("Deleted users cannot be modified.", "USER_DELETED", 409);
+  }
+  if (reason === "self_lockout_prevented") {
+    return new AppError("Admins cannot disable or delete their own account.", "SELF_LOCKOUT_PREVENTED", 409);
+  }
+  return new AppError("Owner accounts can only be modified by owners.", "OWNER_ACTION_REQUIRES_OWNER", 403);
 }
 
 function adminActionUpdate(action: AdminUserAction, target: AuthUserRecord): { status: UserStatus; emailVerifiedAt?: Date | null } {
@@ -650,6 +743,26 @@ function normalizeAdminUserAction(action: AdminUserAction): AdminUserAction {
     return action;
   }
   throw new AppError("User action is invalid.", "INVALID_ADMIN_USER_ACTION", 400);
+}
+
+function normalizeAuditLimit(input: number | undefined): number {
+  if (input === undefined || !Number.isFinite(input)) {
+    return 50;
+  }
+  return Math.min(Math.max(Math.trunc(input), 1), 100);
+}
+
+function safeAuditEvent(event: AuditEventRecord): SafeAuditEvent {
+  return {
+    id: event.id,
+    actorUserId: event.actorUserId,
+    action: event.action,
+    decision: event.decision,
+    resourceType: event.resourceType,
+    resourceId: event.resourceId,
+    details: event.details,
+    createdAt: event.createdAt.toISOString(),
+  };
 }
 
 function normalizeScopes(scopes: ApiTokenScope[]): ApiTokenScope[] {

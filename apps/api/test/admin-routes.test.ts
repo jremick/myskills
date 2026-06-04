@@ -321,6 +321,30 @@ test("admin routes require session auth, admin role, and MFA", async (t) => {
   });
   assert.equal(roleRequired.statusCode, 403);
   assert.equal(roleRequired.json().error.code, "ADMIN_ROLE_REQUIRED");
+
+  const auditApiTokenDenied = await app.inject({
+    method: "GET",
+    url: "/v1/admin/audit",
+    headers: { authorization: `Bearer ${userApiToken}` },
+  });
+  assert.equal(auditApiTokenDenied.statusCode, 403);
+  assert.equal(auditApiTokenDenied.json().error.code, "SESSION_AUTH_REQUIRED");
+
+  const auditMfaRequired = await app.inject({
+    method: "GET",
+    url: "/v1/admin/audit",
+    headers: { authorization: `Bearer ${ownerSessionWithoutMfa}` },
+  });
+  assert.equal(auditMfaRequired.statusCode, 403);
+  assert.equal(auditMfaRequired.json().error.code, "MFA_VERIFICATION_REQUIRED");
+
+  const auditRoleRequired = await app.inject({
+    method: "GET",
+    url: "/v1/admin/audit",
+    headers: { authorization: `Bearer ${userSessionWithMfa}` },
+  });
+  assert.equal(auditRoleRequired.statusCode, 403);
+  assert.equal(auditRoleRequired.json().error.code, "ADMIN_ROLE_REQUIRED");
 });
 
 test("admins cannot disable or delete their own account", async (t) => {
@@ -351,6 +375,109 @@ test("admins cannot disable or delete their own account", async (t) => {
     headers: { authorization: `Bearer ${ownerSession}` },
   });
   assert.equal(stillAdmin.statusCode, 200);
+});
+
+test("MFA-verified admins can list sanitized audit events newest first", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAdminApp(authStore);
+  t.after(() => app.close());
+  const ownerSession = await addAndLoginWithMfa(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+  await addUser(authStore, {
+    id: "target-1",
+    email: "target@example.com",
+    status: "active",
+    emailVerifiedAt: new Date(),
+    roles: ["user"],
+  });
+  const fakeVendorToken = ["AT", "ATTfake_token_should_not_persist"].join("");
+
+  const registration = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/registration",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: { mode: "request" },
+  });
+  assert.equal(registration.statusCode, 200);
+
+  const disable = await app.inject({
+    method: "POST",
+    url: "/v1/admin/users/target-1/actions",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: {
+      action: "disable",
+      reason: "reviewed Bearer abcdefghijklmnopqrstuvwxyz and secret before approval",
+    },
+  });
+  assert.equal(disable.statusCode, 200);
+
+  const missing = await app.inject({
+    method: "POST",
+    url: "/v1/admin/users/missing/actions",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: {
+      action: "delete",
+      reason: fakeVendorToken,
+    },
+  });
+  assert.equal(missing.statusCode, 404);
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/admin/audit?limit=2",
+    headers: { authorization: `Bearer ${ownerSession}` },
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().events.length, 2);
+  assert.deepEqual(response.json().events.map((event: { action: string; decision: string }) => `${event.action}:${event.decision}`), [
+    "admin.user.delete:deny",
+    "admin.user.disable:allow",
+  ]);
+
+  const all = await app.inject({
+    method: "GET",
+    url: "/v1/admin/audit?limit=9999",
+    headers: { authorization: `Bearer ${ownerSession}` },
+  });
+  assert.equal(all.statusCode, 200);
+  assert.equal(all.json().events.length >= 3, true);
+  assert.equal(all.json().events.some((event: { action: string }) => event.action === "admin.registration.update"), true);
+
+  const minLimit = await app.inject({
+    method: "GET",
+    url: "/v1/admin/audit?limit=0",
+    headers: { authorization: `Bearer ${ownerSession}` },
+  });
+  assert.equal(minLimit.statusCode, 200);
+  assert.equal(minLimit.json().events.length, 1);
+
+  const event = response.json().events[0] as Record<string, unknown>;
+  assert.deepEqual(Object.keys(event).sort(), [
+    "action",
+    "actorUserId",
+    "createdAt",
+    "decision",
+    "details",
+    "id",
+    "resourceId",
+    "resourceType",
+  ]);
+  const serialized = JSON.stringify(response.json());
+  for (const forbidden of [
+    "abcdefghijklmnopqrstuvwxyz",
+    fakeVendorToken.slice(0, 8),
+    "passwordHash",
+    "tokenHash",
+    "secretCiphertext",
+    "codeHash",
+    "normalizedEmail",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+  assert.equal(serialized.includes("[redacted]") || serialized.includes("[redacted-token]"), true);
 });
 
 function buildAdminApp(authStore: MemoryAuthStore) {
