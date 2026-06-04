@@ -105,6 +105,76 @@ test("whoami sends bearer token to the API", async () => {
   assert.deepEqual(output.stdout, ["owner@example.com\troles=owner\tmfa=not-verified"]);
 });
 
+test("submit requires a token before reading or posting", async (t) => {
+  const dir = await makeTempPackage();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await writeManifest(dir);
+  const output = createOutput();
+  let calls = 0;
+
+  const code = await runCli(["submit", "--path", dir], testRuntime(output, async () => {
+    calls += 1;
+    return response(500, {});
+  }));
+
+  assert.equal(code, 1);
+  assert.equal(calls, 0);
+  assert.match(output.stderr.join("\n"), /No token provided/);
+});
+
+test("submit blocks locally when scan has blocking findings", async (t) => {
+  const dir = await makeTempPackage();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await writeManifest(dir);
+  await writeFile(path.join(dir, "README.md"), `token: ATATT${"abcdefghijklmnopqrstuvwxyz1234567890"}`);
+  const output = createOutput();
+  let calls = 0;
+
+  const code = await runCli(["submit", "--path", dir], testRuntime(output, async () => {
+    calls += 1;
+    return response(500, {});
+  }, { AI_SKILLS_TOKEN: "submit-token" }));
+
+  assert.equal(code, 1);
+  assert.equal(calls, 0);
+  assert.match(output.stdout.join("\n"), /blocking\tsecret\tREADME\.md/);
+});
+
+test("submit sends package entries to the API", async (t) => {
+  const dir = await makeTempPackage();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await writeManifest(dir);
+  await writeFile(path.join(dir, "README.md"), "Summarize release notes.");
+  const output = createOutput();
+  let method = "";
+  let authorization = "";
+  let body: { manifest?: { name?: string }; files?: Array<{ path: string; content: string }> } = {};
+  const fetch: FetchLike = async (_input, init) => {
+    method = init?.method ?? "GET";
+    authorization = init?.headers?.authorization ?? "";
+    body = JSON.parse(init?.body ?? "{}");
+    return response(202, {
+      submission: {
+        id: "submission-1",
+        slug: "release-notes-helper",
+        version: "0.1.0",
+        reviewStatus: "unreviewed",
+        securityStatus: "passed",
+      },
+      scan: { findingCount: 0, findings: [] },
+    });
+  };
+
+  const code = await runCli(["submit", "--path", dir], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "submit-token" }));
+
+  assert.equal(code, 0);
+  assert.equal(method, "POST");
+  assert.equal(authorization, "Bearer submit-token");
+  assert.equal(body.manifest?.name, "release-notes-helper");
+  assert.deepEqual(body.files?.map((file) => file.path), ["README.md", "skill.json"]);
+  assert.deepEqual(output.stdout, ["release-notes-helper@0.1.0\tunreviewed\tpassed\tfindings=0"]);
+});
+
 async function writeManifest(dir: string): Promise<void> {
   await writeFile(path.join(dir, "skill.json"), JSON.stringify({
     name: "release-notes-helper",

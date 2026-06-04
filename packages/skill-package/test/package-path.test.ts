@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { loadSkillManifestFromPath, scanPackagePath } from "../src/package-path.js";
+import {
+  normalizePackageFilePath,
+  loadSkillManifestFromPath,
+  readPackageFilesFromPath,
+  scanPackageFiles,
+  scanPackagePath,
+} from "../src/package-path.js";
 import { hasBlockingFindings } from "../src/scan.js";
 
 test("loads a skill manifest from a package directory", async (t) => {
@@ -46,6 +52,17 @@ test("scans package files and attaches relative paths to findings", async (t) =>
   assert.deepEqual(result.findings.map((finding) => finding.path), ["README.md"]);
 });
 
+test("reads package files from disk in stable relative-path order", async (t) => {
+  const dir = await makeTempPackage();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await writeFile(path.join(dir, "skill.json"), "{}");
+  await writeFile(path.join(dir, "README.md"), "readme");
+
+  const files = await readPackageFilesFromPath(dir);
+
+  assert.deepEqual(files.map((file) => file.path), ["README.md", "skill.json"]);
+});
+
 test("rejects symlinks in package directories", async (t) => {
   const dir = await makeTempPackage();
   t.after(() => rm(dir, { recursive: true, force: true }));
@@ -53,6 +70,34 @@ test("rejects symlinks in package directories", async (t) => {
   await symlink(path.join(dir, "target.txt"), path.join(dir, "link.txt"));
 
   await assert.rejects(() => scanPackagePath(dir), /symlinks/);
+});
+
+test("scans in-memory package files", () => {
+  const token = `ATATT${"abcdefghijklmnopqrstuvwxyz1234567890"}`;
+  const result = scanPackageFiles([
+    { path: "skill.json", content: "{}" },
+    { path: "README.md", content: `token: ${token}` },
+  ]);
+
+  assert.equal(result.filesScanned, 2);
+  assert.equal(hasBlockingFindings(result.findings), true);
+  assert.equal(result.findings[0]?.path, "README.md");
+});
+
+test("rejects unsafe package payload paths", () => {
+  assert.throws(() => normalizePackageFilePath("../secret.txt"), /traverse/);
+  assert.throws(() => normalizePackageFilePath("/secret.txt"), /absolute/);
+  assert.throws(() => normalizePackageFilePath("C:/secret.txt"), /absolute/);
+  assert.throws(() => normalizePackageFilePath("dir\\secret.txt"), /forward slashes/);
+  assert.throws(() => normalizePackageFilePath("https://example.test/skill.json"), /URL/);
+  assert.throws(() => normalizePackageFilePath("bad\0path.txt"), /NUL/);
+});
+
+test("rejects duplicate package payload paths", () => {
+  assert.throws(() => scanPackageFiles([
+    { path: "README.md", content: "one" },
+    { path: "./README.md", content: "two" },
+  ]), /duplicate/);
 });
 
 async function makeTempPackage(): Promise<string> {

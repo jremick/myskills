@@ -4,6 +4,8 @@ import { AuthService } from "./auth/service.js";
 import { PostgresAuthStore } from "./auth/postgres-auth-store.js";
 import { PostgresSkillRepository } from "./repositories/postgres-skill-repository.js";
 import { buildApp } from "./app.js";
+import { SubmissionService } from "./submissions/service.js";
+import { PostgresSubmissionStore } from "./submissions/postgres-submission-store.js";
 
 const port = Number.parseInt(process.env.PORT ?? "3001", 10);
 const host = process.env.HOST ?? "0.0.0.0";
@@ -15,6 +17,7 @@ const app = buildApp({
     loginLimiter: new MemoryAuthRateLimiter({ maxAttempts: 10, windowMs: 15 * 60 * 1000 }),
     registrationLimiter: new MemoryAuthRateLimiter({ maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
   }),
+  submissionService: new SubmissionService(new PostgresSubmissionStore(db)),
   logger: process.env.NODE_ENV !== "test",
 });
 

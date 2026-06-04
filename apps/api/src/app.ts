@@ -1,11 +1,15 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { AppError } from "@ai-skills-share/core";
+import { parseSkillManifest, type PackageInputFile } from "@ai-skills-share/skill-package";
 import type { AuthService, LoginInput, RegisterInput } from "./auth/service.js";
+import type { StoredSubmission } from "./submissions/types.js";
+import type { SubmissionService } from "./submissions/service.js";
 import type { SkillRepository } from "@ai-skills-share/core";
 
 export interface BuildAppOptions {
   skillRepository: SkillRepository;
   authService?: AuthService;
+  submissionService?: SubmissionService;
   logger?: boolean;
 }
 
@@ -14,11 +18,17 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof AppError) {
-      return reply.code(error.statusCode).send({
+      const body: { error: { code: string; message: string; details?: unknown } } = {
         error: {
           code: error.code,
           message: error.message,
         },
+      };
+      if (error.details !== undefined) {
+        body.error.details = error.details;
+      }
+      return reply.code(error.statusCode).send({
+        ...body,
       });
     }
     const statusCode = httpStatusCode(error);
@@ -107,6 +117,34 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     });
   });
 
+  app.post("/v1/submissions", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await options.authService.authenticateAuthorizationHeader(request.headers.authorization);
+    if (!user) {
+      return reply.code(401).send({
+        error: {
+          code: "AUTHENTICATION_REQUIRED",
+          message: "Authentication is required.",
+        },
+      });
+    }
+    const input = parseSubmissionInput(request.body);
+    const submission = await options.submissionService.createSubmission({
+      actor: {
+        id: user.id,
+        roles: user.roles,
+      },
+      manifest: input.manifest,
+      files: input.files,
+    });
+    return reply.code(202).send(submissionResponse(submission));
+  });
+
   return app;
 }
 
@@ -124,6 +162,76 @@ function parseLoginInput(input: unknown): LoginInput {
   return {
     email: requiredString(body.email, "email"),
     password: requiredString(body.password, "password"),
+  };
+}
+
+function parseSubmissionInput(input: unknown): {
+  manifest: ReturnType<typeof parseSkillManifest>;
+  files: PackageInputFile[];
+} {
+  const body = parseJsonObject(input);
+  rejectServerManagedSubmissionFields(body);
+
+  let manifest: ReturnType<typeof parseSkillManifest>;
+  try {
+    manifest = parseSkillManifest(body.manifest);
+  } catch {
+    throw new AppError("Invalid package manifest.", "INVALID_PACKAGE_MANIFEST", 400);
+  }
+
+  if (!Array.isArray(body.files)) {
+    throw new AppError("Package files are required.", "PACKAGE_FILES_REQUIRED", 400);
+  }
+
+  const files = body.files.map((file, index) => {
+    if (!file || typeof file !== "object" || Array.isArray(file)) {
+      throw new AppError(`Package file ${index + 1} must be an object.`, "INVALID_PACKAGE_FILE", 400);
+    }
+    const record = file as Record<string, unknown>;
+    if (typeof record.content !== "string") {
+      throw new AppError(`files[${index}].content must be a string.`, "INVALID_PACKAGE_FILE", 400);
+    }
+    return {
+      path: requiredString(record.path, `files[${index}].path`),
+      content: record.content,
+    };
+  });
+
+  return { manifest, files };
+}
+
+function rejectServerManagedSubmissionFields(body: Record<string, unknown>): void {
+  const forbidden = [
+    "path",
+    "packagePath",
+    "url",
+    "ownerUserId",
+    "reviewStatus",
+    "securityStatus",
+    "publishedAt",
+    "storageKey",
+    "sha256",
+  ];
+  const present = forbidden.find((field) => field in body);
+  if (present) {
+    throw new AppError(`Submission field is not accepted: ${present}`, "UNSUPPORTED_SUBMISSION_FIELD", 400);
+  }
+}
+
+function submissionResponse(submission: StoredSubmission) {
+  return {
+    submission: {
+      id: submission.id,
+      slug: submission.skillSlug,
+      version: submission.version,
+      reviewStatus: submission.reviewStatus,
+      securityStatus: submission.securityStatus,
+    },
+    scan: {
+      status: submission.scan.status,
+      findingCount: submission.scan.findings.length,
+      findings: submission.scan.findings,
+    },
   };
 }
 

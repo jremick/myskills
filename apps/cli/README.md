@@ -30,6 +30,7 @@ ai-skills scan --path <file-or-directory>
 ai-skills search [query] [--api-url <url>]
 ai-skills info <skill-slug> [--api-url <url>]
 ai-skills whoami [--api-url <url>] [--token <token>]
+ai-skills submit --path <file-or-directory> [--api-url <url>] [--token <token>]
 ```
 
-`search`, `info`, and `whoami` read `AI_SKILLS_TOKEN` when `--token` is not passed. Token storage, browser login, install/export, and submission commands are still planned.
+`search`, `info`, `whoami`, and `submit` read `AI_SKILLS_TOKEN` when `--token` is not passed. `submit` validates and scans locally before sending package text entries to the API. Token storage, browser login, install/export, and archive packaging are still planned.

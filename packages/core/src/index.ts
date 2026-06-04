@@ -42,6 +42,7 @@ export class AppError extends Error {
     message: string,
     public readonly code = "APP_ERROR",
     public readonly statusCode = 500,
+    public readonly details?: unknown,
   ) {
     super(message);
   }

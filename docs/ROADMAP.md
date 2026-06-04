@@ -34,7 +34,7 @@ Acceptance:
 - No Git repository is required for registry operation.
 - Local setup can run Postgres plus object storage through Docker Compose.
 
-Current status: in progress. The first API and schema slice exists with email/password session auth, public search/detail endpoints, and a starter CLI for validation, scanning, search, info, and token-based whoami. Artifact delivery, package intake, and scan jobs are still future work.
+Current status: in progress. The first API and schema slice exists with email/password session auth, public search/detail endpoints, authenticated package intake with scan evidence, and a starter CLI for validation, scanning, search, info, whoami, and submit. Artifact delivery, archive upload/extraction, review actions, and background scan jobs are still future work.
 
 ## Milestone 2: Auth And User Management Foundation
 

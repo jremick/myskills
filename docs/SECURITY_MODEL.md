@@ -37,6 +37,11 @@ Last updated: 2026-06-04
 ### Package Safety
 
 - Public search and detail expose only approved, scan-passed, published releases with artifact records.
+- Submission intake accepts package text entries only; the API does not accept server-local paths or URLs.
+- Submission is role-gated to owner, admin, maintainer, and author accounts in the current slice; MFA enforcement for admin/maintainer submission remains required once MFA is implemented.
+- Server code generates artifact hashes, sizes, content type, and storage keys instead of trusting client-supplied values.
+- Blocking scan findings reject the submission before skill, version, or artifact records are created.
+- Warning findings remain reviewable but unpublished.
 - Reject archive traversal, absolute paths, symlinks, encrypted archives, unsupported compression, excessive size, and excessive file count.
 - Scan for secrets, private keys, tokens, credentials, risky shell commands, dependency install hooks, generated binaries, and unsafe prompt instructions.
 - Require maintainer approval before publication.

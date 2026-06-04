@@ -133,6 +133,7 @@ export const scanFindings = pgTable("scan_findings", {
   category: text("category").notNull(),
   severity: text("severity").notNull(),
   message: text("message").notNull(),
+  path: text("path"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

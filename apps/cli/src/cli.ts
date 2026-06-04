@@ -1,6 +1,7 @@
 import {
   hasBlockingFindings,
   loadSkillManifestFromPath,
+  readPackageFilesFromPath,
   scanPackagePath,
   type PackageScanResult,
 } from "@ai-skills-share/skill-package";
@@ -14,7 +15,7 @@ export interface CliIo {
 
 export type FetchLike = (
   input: string,
-  init?: { headers?: Record<string, string> },
+  init?: { method?: string; headers?: Record<string, string>; body?: string },
 ) => Promise<{
   ok: boolean;
   status: number;
@@ -44,15 +45,17 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
         runtime.io.stdout(helpText());
         return 0;
       case "validate":
-        return validateCommand(parsed, runtime);
+        return await validateCommand(parsed, runtime);
       case "scan":
-        return scanCommand(parsed, runtime);
+        return await scanCommand(parsed, runtime);
       case "search":
-        return searchCommand(parsed, runtime);
+        return await searchCommand(parsed, runtime);
       case "info":
-        return infoCommand(parsed, runtime);
+        return await infoCommand(parsed, runtime);
       case "whoami":
-        return whoamiCommand(parsed, runtime);
+        return await whoamiCommand(parsed, runtime);
+      case "submit":
+        return await submitCommand(parsed, runtime);
       default:
         throw new CliError(`Unknown command: ${parsed.command}`, 2);
     }
@@ -155,6 +158,39 @@ async function whoamiCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   return 0;
 }
 
+async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const token = tokenOption(parsed, runtime);
+  if (!token) {
+    throw new CliError("No token provided. Set AI_SKILLS_TOKEN or pass --token.", 1);
+  }
+  const packagePath = requiredPath(parsed);
+  const manifest = await loadSkillManifestFromPath(packagePath);
+  const scan = await scanPackagePath(packagePath);
+  if (hasBlockingFindings(scan.findings)) {
+    printScanResult(scan, runtime.io);
+    throw new CliError("Package has blocking scan findings; submission was not sent.", 1);
+  }
+  const files = await readPackageFilesFromPath(packagePath);
+  const response = await apiPost("/v1/submissions", {
+    manifest,
+    files,
+  }, parsed, runtime, token);
+  if (parsed.options.json) {
+    runtime.io.stdout(JSON.stringify(response, null, 2));
+  } else {
+    const submission = response.submission as {
+      id: string;
+      slug: string;
+      version: string;
+      reviewStatus: string;
+      securityStatus: string;
+    };
+    const responseScan = response.scan as { findingCount: number };
+    runtime.io.stdout(`${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tfindings=${responseScan.findingCount}`);
+  }
+  return 0;
+}
+
 async function apiGet(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<Record<string, unknown>> {
   const baseUrl = String(parsed.options["api-url"] ?? runtime.env.AI_SKILLS_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
   const headers: Record<string, string> = {};
@@ -162,6 +198,25 @@ async function apiGet(pathname: string, parsed: ParsedArgs, runtime: CliRuntime,
     headers.authorization = `Bearer ${token}`;
   }
   const response = await runtime.fetch(`${baseUrl}${pathname}`, { headers });
+  const text = await response.text();
+  const body = text ? JSON.parse(text) as Record<string, unknown> : {};
+  if (!response.ok) {
+    const error = body.error as { code?: string; message?: string } | undefined;
+    throw new CliError(error?.message ?? `API request failed with ${response.status}.`, 1);
+  }
+  return body;
+}
+
+async function apiPost(pathname: string, payload: unknown, parsed: ParsedArgs, runtime: CliRuntime, token: string): Promise<Record<string, unknown>> {
+  const baseUrl = String(parsed.options["api-url"] ?? runtime.env.AI_SKILLS_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
+  const response = await runtime.fetch(`${baseUrl}${pathname}`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
   const text = await response.text();
   const body = text ? JSON.parse(text) as Record<string, unknown> : {};
   if (!response.ok) {
@@ -234,6 +289,7 @@ function helpText(): string {
     "  search [query] [--api-url <url>]",
     "  info <skill-slug> [--api-url <url>]",
     "  whoami [--api-url <url>] [--token <token>]",
+    "  submit --path <file-or-directory> [--api-url <url>] [--token <token>]",
     "",
     "Options:",
     "  --json              Print machine-readable JSON.",

@@ -14,6 +14,11 @@ export interface PackageScanResult {
   findings: ScanFinding[];
 }
 
+export interface PackageInputFile {
+  path: string;
+  content: string;
+}
+
 interface PackageFile {
   absolutePath: string;
   relativePath: string;
@@ -50,6 +55,61 @@ export async function scanPackagePath(inputPath: string): Promise<PackageScanRes
 
   return {
     rootPath,
+    filesScanned: files.length,
+    bytesScanned,
+    findings,
+  };
+}
+
+export async function readPackageFilesFromPath(inputPath: string): Promise<PackageInputFile[]> {
+  const rootPath = path.resolve(inputPath);
+  const files = await collectPackageFiles(rootPath);
+  const result: PackageInputFile[] = [];
+  for (const file of files) {
+    result.push({
+      path: file.relativePath,
+      content: await readFile(file.absolutePath, "utf8"),
+    });
+  }
+  return result;
+}
+
+export function scanPackageFiles(files: PackageInputFile[]): PackageScanResult {
+  if (files.length > MAX_PACKAGE_FILES) {
+    throw new Error(`Package contains more than ${MAX_PACKAGE_FILES} files.`);
+  }
+
+  const findings: ScanFinding[] = [];
+  const seen = new Set<string>();
+  let bytesScanned = 0;
+
+  for (const file of files) {
+    const relativePath = normalizePackageFilePath(file.path);
+    if (seen.has(relativePath)) {
+      throw new Error(`Package contains duplicate file path: ${relativePath}`);
+    }
+    seen.add(relativePath);
+    if (typeof file.content !== "string") {
+      throw new Error(`Package file content must be text: ${relativePath}`);
+    }
+    const byteLength = Buffer.byteLength(file.content);
+    bytesScanned += byteLength;
+    if (bytesScanned > MAX_PACKAGE_TEXT_BYTES) {
+      findings.push({
+        category: "package-structure",
+        severity: "blocking",
+        message: `Package text exceeds ${MAX_PACKAGE_TEXT_BYTES} bytes.`,
+        path: relativePath,
+      });
+      break;
+    }
+    for (const finding of scanTextForPackageRisks(file.content)) {
+      findings.push({ ...finding, path: relativePath });
+    }
+  }
+
+  return {
+    rootPath: "package-payload",
     filesScanned: files.length,
     bytesScanned,
     findings,
@@ -132,4 +192,27 @@ async function collectDirectoryFiles(rootPath: string, currentPath: string, file
 
 function normalizeRelativePath(relativePath: string): string {
   return relativePath.split(path.sep).join(path.posix.sep);
+}
+
+export function normalizePackageFilePath(inputPath: string): string {
+  if (typeof inputPath !== "string" || !inputPath.trim()) {
+    throw new Error("Package file path is required.");
+  }
+  if (inputPath.includes("\0")) {
+    throw new Error("Package file path cannot contain NUL bytes.");
+  }
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(inputPath)) {
+    throw new Error(`Package file path cannot be a URL: ${inputPath}`);
+  }
+  if (inputPath.includes("\\")) {
+    throw new Error(`Package file path must use forward slashes: ${inputPath}`);
+  }
+  if (path.posix.isAbsolute(inputPath) || /^[A-Za-z]:\//.test(inputPath)) {
+    throw new Error(`Package file path cannot be absolute: ${inputPath}`);
+  }
+  const normalized = path.posix.normalize(inputPath);
+  if (normalized === "." || normalized.startsWith("../") || normalized === ".." || normalized.includes("/../")) {
+    throw new Error(`Package file path cannot traverse directories: ${inputPath}`);
+  }
+  return normalized;
 }
