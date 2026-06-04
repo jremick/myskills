@@ -26,6 +26,58 @@ export interface WebAuthUser {
   mfaVerified: boolean;
 }
 
+export type AdminRegistrationMode = "closed" | "request" | "open";
+
+export interface AdminRegistrationSettings {
+  mode: AdminRegistrationMode;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  status: "pending" | "active" | "disabled" | "deleted";
+  roles: string[];
+  emailVerified: boolean;
+  mfaEnabled: boolean;
+}
+
+export interface ProviderRoleMappingInput {
+  claim: string;
+  value: string;
+  role: string;
+}
+
+export interface AdminProviderConfig {
+  key: string;
+  type: "oidc" | "saml" | "cloudflare_access" | "github" | "google";
+  displayName: string;
+  issuer: string | null;
+  clientId: string | null;
+  enabled: boolean;
+  roleMappings: ProviderRoleMappingInput[];
+}
+
+export interface UpsertAdminProviderInput {
+  type: AdminProviderConfig["type"];
+  displayName: string;
+  issuer?: string;
+  clientId?: string;
+  enabled?: boolean;
+  roleMappings?: ProviderRoleMappingInput[];
+}
+
+export interface AdminAuditEvent {
+  id: string;
+  actorUserId: string | null;
+  action: string;
+  decision: "allow" | "deny";
+  resourceType: string;
+  resourceId: string | null;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
 export type LoginResult =
   | { mfaRequired: false; token: string; expiresAt: string; user: WebAuthUser }
   | { mfaRequired: true; challengeToken: string; expiresAt: string; user: WebAuthUser };
@@ -44,6 +96,13 @@ export interface RegistryClient {
   verifyMfa(input: { challengeToken: string; codeOrRecoveryCode: string }): Promise<SessionResult>;
   getMe(token?: string): Promise<WebAuthUser>;
   logout(token?: string): Promise<void>;
+  getAdminRegistration(token?: string): Promise<AdminRegistrationSettings>;
+  updateAdminRegistration(mode: AdminRegistrationMode, token?: string): Promise<AdminRegistrationSettings>;
+  listAdminUsers(token?: string): Promise<AdminUser[]>;
+  performAdminUserAction(userId: string, action: "approve" | "activate" | "disable" | "delete", token?: string): Promise<AdminUser>;
+  listAdminProviders(token?: string): Promise<AdminProviderConfig[]>;
+  upsertAdminProvider(key: string, input: UpsertAdminProviderInput, token?: string): Promise<AdminProviderConfig>;
+  listAdminAudit(limit?: number, token?: string): Promise<AdminAuditEvent[]>;
 }
 
 export interface SafeApiError extends Error {
@@ -103,6 +162,60 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         token: overrideToken ?? token,
       });
     },
+    async getAdminRegistration(overrideToken) {
+      const body = await requestJson<{ registration: AdminRegistrationSettings }>(
+        fetchImpl,
+        `${root}/v1/admin/registration`,
+        { token: overrideToken ?? token },
+      );
+      return body.registration;
+    },
+    async updateAdminRegistration(mode, overrideToken) {
+      const body = await requestJson<{ registration: AdminRegistrationSettings }>(
+        fetchImpl,
+        `${root}/v1/admin/registration`,
+        { method: "PUT", body: { mode }, token: overrideToken ?? token },
+      );
+      return body.registration;
+    },
+    async listAdminUsers(overrideToken) {
+      const body = await requestJson<{ users: AdminUser[] }>(fetchImpl, `${root}/v1/admin/users`, {
+        token: overrideToken ?? token,
+      });
+      return body.users;
+    },
+    async performAdminUserAction(userId, action, overrideToken) {
+      const body = await requestJson<{ user: AdminUser }>(
+        fetchImpl,
+        `${root}/v1/admin/users/${encodeURIComponent(userId)}/actions`,
+        { method: "POST", body: { action }, token: overrideToken ?? token },
+      );
+      return body.user;
+    },
+    async listAdminProviders(overrideToken) {
+      const body = await requestJson<{ providers: AdminProviderConfig[] }>(
+        fetchImpl,
+        `${root}/v1/admin/providers`,
+        { token: overrideToken ?? token },
+      );
+      return body.providers;
+    },
+    async upsertAdminProvider(key, input, overrideToken) {
+      const body = await requestJson<{ provider: AdminProviderConfig }>(
+        fetchImpl,
+        `${root}/v1/admin/providers/${encodeURIComponent(key)}`,
+        { method: "PUT", body: input, token: overrideToken ?? token },
+      );
+      return body.provider;
+    },
+    async listAdminAudit(limit = 25, overrideToken) {
+      const body = await requestJson<{ events: AdminAuditEvent[] }>(
+        fetchImpl,
+        `${root}/v1/admin/audit?limit=${encodeURIComponent(String(limit))}`,
+        { token: overrideToken ?? token },
+      );
+      return body.events;
+    },
   };
 }
 
@@ -133,9 +246,19 @@ export function safeAuthErrorMessage(error: unknown): string {
   return "Authentication is not available.";
 }
 
+export function safeAdminErrorMessage(error: unknown): string {
+  if (isSafeApiError(error) && (error.status === 401 || error.status === 403)) {
+    return "Admin access requires an MFA-verified owner or admin session.";
+  }
+  if (isSafeApiError(error) && error.status >= 400 && error.status < 500) {
+    return "Admin change could not be saved.";
+  }
+  return "Admin data is not available.";
+}
+
 async function requestJson<T>(fetchImpl: typeof fetch, url: string, options: {
   body?: unknown;
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PUT" | "DELETE";
   token?: string;
 } = {}): Promise<T> {
   const headers: Record<string, string> = { accept: "application/json" };

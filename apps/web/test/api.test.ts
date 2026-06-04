@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createRegistryClient, exportCommand, safeErrorMessage, type SafeApiError } from "../src/api.js";
+import { createRegistryClient, exportCommand, safeAdminErrorMessage, safeErrorMessage, type SafeApiError } from "../src/api.js";
 
 test("registry client searches skills through the API", async () => {
   const calls: string[] = [];
@@ -114,12 +114,80 @@ test("registry client supports login, MFA verification, current user, and logout
   assert.equal(calls[3].authorization, "Bearer verified-session-token");
 });
 
+test("registry client manages admin settings with the session bearer", async () => {
+  const calls: Array<{ body?: string; method?: string; url: string; authorization?: string }> = [];
+  const client = createRegistryClient("http://api.test", async (input, init) => {
+    const url = String(input);
+    calls.push({
+      body: typeof init?.body === "string" ? init.body : undefined,
+      method: init?.method,
+      url,
+      authorization: init?.headers instanceof Headers ? init.headers.get("authorization") ?? undefined : (init?.headers as Record<string, string> | undefined)?.authorization,
+    });
+    if (url.endsWith("/v1/admin/registration") && init?.method === "PUT") {
+      return jsonResponse(200, { registration: { mode: "request" } });
+    }
+    if (url.endsWith("/v1/admin/registration")) {
+      return jsonResponse(200, { registration: { mode: "closed" } });
+    }
+    if (url.endsWith("/v1/admin/users")) {
+      return jsonResponse(200, { users: [{ id: "user-1", email: "reader@example.com" }] });
+    }
+    if (url.endsWith("/v1/admin/users/user-1/actions")) {
+      return jsonResponse(200, { user: { id: "user-1", status: "disabled" } });
+    }
+    if (url.endsWith("/v1/admin/providers") && !init?.method) {
+      return jsonResponse(200, { providers: [{ key: "oidc-main", roleMappings: [] }] });
+    }
+    if (url.endsWith("/v1/admin/providers/oidc-main")) {
+      return jsonResponse(200, { provider: { key: "oidc-main", type: "oidc", roleMappings: [] } });
+    }
+    return jsonResponse(200, { events: [{ id: "audit-1", action: "admin.registration.update" }] });
+  });
+
+  await client.getAdminRegistration("session-token");
+  await client.updateAdminRegistration("request", "session-token");
+  await client.listAdminUsers("session-token");
+  await client.performAdminUserAction("user-1", "disable", "session-token");
+  await client.listAdminProviders("session-token");
+  await client.upsertAdminProvider("oidc-main", {
+    type: "oidc",
+    displayName: "OIDC",
+    enabled: true,
+    roleMappings: [{ claim: "groups", value: "authors", role: "author" }],
+  }, "session-token");
+  await client.listAdminAudit(10, "session-token");
+
+  assert.deepEqual(calls.map((call) => `${call.method ?? "GET"} ${call.url}`), [
+    "GET http://api.test/v1/admin/registration",
+    "PUT http://api.test/v1/admin/registration",
+    "GET http://api.test/v1/admin/users",
+    "POST http://api.test/v1/admin/users/user-1/actions",
+    "GET http://api.test/v1/admin/providers",
+    "PUT http://api.test/v1/admin/providers/oidc-main",
+    "GET http://api.test/v1/admin/audit?limit=10",
+  ]);
+  assert.deepEqual(calls.map((call) => call.authorization), [
+    "Bearer session-token",
+    "Bearer session-token",
+    "Bearer session-token",
+    "Bearer session-token",
+    "Bearer session-token",
+    "Bearer session-token",
+    "Bearer session-token",
+  ]);
+  assert.equal(calls[1].body, JSON.stringify({ mode: "request" }));
+  assert.equal(calls[3].body, JSON.stringify({ action: "disable" }));
+  assert.equal(calls[5].body?.includes("groups"), true);
+});
+
 test("safe error messages do not render raw server internals", () => {
   const error = new Error("stack trace /Users/example token storageKey") as SafeApiError;
   error.status = 500;
   error.code = "INTERNAL_SERVER_ERROR";
 
   assert.equal(safeErrorMessage(error), "The registry is not available.");
+  assert.equal(safeAdminErrorMessage(error), "Admin data is not available.");
 });
 
 test("export command matches CLI contract", () => {

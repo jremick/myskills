@@ -3,7 +3,16 @@ import assert from "node:assert/strict";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { PublicSkill } from "@ai-skills-share/core";
 import { RegistryApp } from "../src/App.js";
-import type { RegistryClient, ReleaseMetadata, SafeApiError } from "../src/api.js";
+import type {
+  AdminAuditEvent,
+  AdminProviderConfig,
+  AdminRegistrationMode,
+  AdminUser,
+  ProviderRoleMappingInput,
+  RegistryClient,
+  ReleaseMetadata,
+  SafeApiError,
+} from "../src/api.js";
 
 test("browse page requests skills with query and renders API-returned skills", async () => {
   setupDom();
@@ -169,6 +178,49 @@ test("MFA login verifies the challenge before storing a session", async () => {
   assert.equal(JSON.parse(window.localStorage.getItem("ai-skills-share:web-session") ?? "{}").token, "mfa-session-token");
 });
 
+test("non-admin sessions do not render the admin entry point", async () => {
+  setupDom();
+  const client = mockClient({ user: authUser({ roles: ["author"] }) });
+
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.input(view.getByLabelText("Email"), { target: { value: "reader@example.com" } });
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: /sign in/i }));
+
+  await view.findByText("reader@example.com");
+  assert.equal(view.queryByRole("button", { name: /admin/i }), null);
+});
+
+test("admin sessions can manage registration, users, and provider metadata", async () => {
+  setupDom();
+  const client = mockClient({ user: authUser({ email: "owner@example.com", roles: ["owner"] }) });
+
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.input(view.getByLabelText("Email"), { target: { value: "owner@example.com" } });
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: /sign in/i }));
+
+  await view.findByText("owner@example.com");
+  fireEvent.click(view.getByRole("button", { name: /admin/i }));
+
+  await view.findByText("Admin console");
+  await waitFor(() => assert.equal(view.getAllByText("Cloudflare Access").length >= 1, true));
+  assert.equal(document.body.textContent?.includes("clientSecret"), false);
+  assert.equal(document.body.textContent?.includes("private_key"), false);
+
+  fireEvent.click(view.getByRole("button", { name: "Request" }));
+  await waitFor(() => assert.deepEqual(client.registrationUpdates, ["request"]));
+
+  fireEvent.click(view.getByLabelText("Disable user"));
+  await waitFor(() => assert.deepEqual(client.userActions, ["user-2:disable"]));
+
+  fireEvent.input(view.getByLabelText("Display name"), { target: { value: "Cloudflare Main" } });
+  fireEvent.click(view.getByRole("button", { name: /save provider/i }));
+
+  await waitFor(() => assert.equal(client.providerUpserts[0]?.displayName, "Cloudflare Main"));
+  assert.equal(client.providerUpserts[0]?.roleMappings?.[0]?.role, "maintainer");
+});
+
 test("malformed stored sessions are ignored before signed-in render", async () => {
   setupDom();
   window.localStorage.setItem("ai-skills-share:web-session", JSON.stringify({
@@ -213,27 +265,40 @@ function setupDom(url = "http://localhost/") {
 }
 
 function mockClient(input: {
+  adminProviders?: AdminProviderConfig[];
+  adminUsers?: AdminUser[];
   skills?: PublicSkill[];
   release?: ReleaseMetadata;
-	  getSkillError?: SafeApiError;
-	  loginError?: SafeApiError;
-	  mfaRequired?: boolean;
+  getSkillError?: SafeApiError;
+  loginError?: SafeApiError;
+  mfaRequired?: boolean;
   searchResults?: (query: string) => PublicSkill[];
+  user?: ReturnType<typeof authUser>;
 } = {}) {
   const skills = input.skills ?? [publicSkill()];
   const release = input.release ?? publicRelease();
+  const currentUser = input.user ?? authUser();
+  let registrationMode: AdminRegistrationMode = "closed";
+  let adminUsers = input.adminUsers ?? defaultAdminUsers();
+  let adminProviders = input.adminProviders ?? defaultAdminProviders();
   const client: RegistryClient & {
     bundleCalls: number;
     logoutCalls: number;
     mfaCalls: string[];
+    providerUpserts: Array<{ key: string; displayName: string; roleMappings?: ProviderRoleMappingInput[] }>;
+    registrationUpdates: AdminRegistrationMode[];
     releaseCalls: string[];
     searchCalls: string[];
+    userActions: string[];
   } = {
     bundleCalls: 0,
     logoutCalls: 0,
     mfaCalls: [],
+    providerUpserts: [],
+    registrationUpdates: [],
     releaseCalls: [],
     searchCalls: [],
+    userActions: [],
     async searchSkills(query) {
       client.searchCalls.push(query);
       return input.searchResults?.(query) ?? skills;
@@ -250,13 +315,13 @@ function mockClient(input: {
       return release;
     },
     async getMe() {
-      return authUser();
+      return currentUser;
     },
-	    async login() {
-	      if (input.loginError) {
-	        throw input.loginError;
-	      }
-	      return input.mfaRequired
+    async login() {
+      if (input.loginError) {
+        throw input.loginError;
+      }
+      return input.mfaRequired
         ? {
           mfaRequired: true,
           challengeToken: "mfa-challenge-token",
@@ -267,7 +332,7 @@ function mockClient(input: {
           mfaRequired: false,
           token: "web-session-token",
           expiresAt: "2026-06-04T01:00:00.000Z",
-          user: authUser(),
+          user: currentUser,
         };
     },
     async logout() {
@@ -281,20 +346,102 @@ function mockClient(input: {
         user: authUser({ mfaVerified: true }),
       };
     },
+    async getAdminRegistration() {
+      return { mode: registrationMode };
+    },
+    async updateAdminRegistration(mode) {
+      registrationMode = mode;
+      client.registrationUpdates.push(mode);
+      return { mode };
+    },
+    async listAdminUsers() {
+      return adminUsers;
+    },
+    async performAdminUserAction(userId, action) {
+      client.userActions.push(`${userId}:${action}`);
+      adminUsers = adminUsers.map((user) => user.id === userId ? {
+        ...user,
+        status: action === "disable" ? "disabled" : action === "delete" ? "deleted" : "active",
+      } : user);
+      return adminUsers.find((user) => user.id === userId) ?? defaultAdminUsers()[0];
+    },
+    async listAdminProviders() {
+      return adminProviders;
+    },
+    async upsertAdminProvider(key, provider) {
+      client.providerUpserts.push({ key, displayName: provider.displayName, roleMappings: provider.roleMappings });
+      const saved: AdminProviderConfig = {
+        key,
+        type: provider.type,
+        displayName: provider.displayName,
+        issuer: provider.issuer ?? null,
+        clientId: provider.clientId ?? null,
+        enabled: Boolean(provider.enabled),
+        roleMappings: provider.roleMappings ?? [],
+      };
+      adminProviders = [saved, ...adminProviders.filter((item) => item.key !== key)];
+      return saved;
+    },
+    async listAdminAudit() {
+      return defaultAuditEvents();
+    },
   };
   return client;
 }
 
-function authUser(input: { email?: string; mfaVerified?: boolean } = {}) {
+function authUser(input: { email?: string; mfaVerified?: boolean; roles?: string[] } = {}) {
   return {
     id: "user-1",
     email: input.email ?? "reader@example.com",
     name: "Reader",
     status: "active",
-    roles: ["author"],
+    roles: input.roles ?? ["author"],
     emailVerified: true,
     mfaVerified: input.mfaVerified ?? true,
   };
+}
+
+function defaultAdminUsers(): AdminUser[] {
+  return [
+    {
+      id: "user-2",
+      email: "author@example.com",
+      name: "Author",
+      status: "active",
+      roles: ["author"],
+      emailVerified: true,
+      mfaEnabled: false,
+    },
+  ];
+}
+
+function defaultAdminProviders(): AdminProviderConfig[] {
+  return [
+    {
+      key: "cloudflare-main",
+      type: "cloudflare_access",
+      displayName: "Cloudflare Access",
+      issuer: "https://team.cloudflareaccess.com",
+      clientId: "public-client-id",
+      enabled: true,
+      roleMappings: [{ claim: "groups", value: "skills-maintainers", role: "maintainer" }],
+    },
+  ];
+}
+
+function defaultAuditEvents(): AdminAuditEvent[] {
+  return [
+    {
+      id: "audit-1",
+      actorUserId: "user-1",
+      action: "admin.provider.upsert",
+      decision: "allow",
+      resourceType: "provider_config",
+      resourceId: "provider-1",
+      details: {},
+      createdAt: "2026-06-04T00:00:00.000Z",
+    },
+  ];
 }
 
 function publicSkill(slug = "release-notes-helper"): PublicSkill {
