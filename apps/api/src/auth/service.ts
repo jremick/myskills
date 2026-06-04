@@ -30,6 +30,11 @@ import {
   type AuthStore,
   type AuthUserRecord,
   type MfaTotpFactorRecord,
+  providerTypes,
+  type ProviderConfigRecord,
+  type ProviderMappedRole,
+  type ProviderRoleMappingRecord,
+  type ProviderType,
 } from "./types.js";
 
 const DEFAULT_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
@@ -163,6 +168,32 @@ export interface AdminRegistrationSettings {
 
 export interface UpdateRegistrationSettingsInput {
   mode: RegistrationMode;
+}
+
+export interface ProviderRoleMappingInput {
+  claim: string;
+  value: string;
+  role: string;
+}
+
+export interface UpsertProviderConfigRequest {
+  key: string;
+  type: string;
+  displayName: string;
+  issuer?: string;
+  clientId?: string;
+  enabled?: boolean;
+  roleMappings?: ProviderRoleMappingInput[];
+}
+
+export interface SafeProviderConfig {
+  key: string;
+  type: ProviderType;
+  displayName: string;
+  issuer: string | null;
+  clientId: string | null;
+  enabled: boolean;
+  roleMappings: ProviderRoleMappingRecord[];
 }
 
 export type AdminUserAction = "approve" | "activate" | "disable" | "delete";
@@ -579,6 +610,31 @@ export class AuthService {
     return { mode: nextMode };
   }
 
+  async listAdminProviderConfigs(actor: AuthResponseUser): Promise<SafeProviderConfig[]> {
+    assertAdmin(actor);
+    return (await this.store.listProviderConfigs()).map(safeProviderConfig);
+  }
+
+  async upsertAdminProviderConfig(actor: AuthResponseUser, input: UpsertProviderConfigRequest): Promise<SafeProviderConfig> {
+    assertAdmin(actor);
+    const provider = normalizeProviderConfigInput(input);
+    const saved = await this.store.upsertProviderConfig(provider);
+    await this.store.recordAuditEvent({
+      actorUserId: actor.id,
+      action: "admin.provider.upsert",
+      decision: "allow",
+      resourceType: "provider_config",
+      resourceId: saved.id,
+      details: {
+        providerKey: saved.key,
+        type: saved.type,
+        enabled: saved.enabled,
+        mappingCount: saved.roleMappings.length,
+      },
+    });
+    return safeProviderConfig(saved);
+  }
+
   async listAdminUsers(actor: AuthResponseUser): Promise<SafeAdminUser[]> {
     assertAdmin(actor);
     const users = await this.store.listUsers();
@@ -959,6 +1015,117 @@ function normalizeRegistrationMode(mode: RegistrationMode): RegistrationMode {
   throw new AppError("Registration mode is invalid.", "INVALID_REGISTRATION_MODE", 400);
 }
 
+function normalizeProviderConfigInput(input: UpsertProviderConfigRequest): {
+  key: string;
+  type: ProviderType;
+  displayName: string;
+  issuer: string | null;
+  clientId: string | null;
+  enabled: boolean;
+  roleMappings: ProviderRoleMappingRecord[];
+} {
+  return {
+    key: normalizeProviderKey(input.key),
+    type: normalizeProviderType(input.type),
+    displayName: cleanProviderDisplayName(input.displayName),
+    issuer: cleanOptionalProviderUrl(input.issuer, "issuer"),
+    clientId: cleanOptionalProviderText(input.clientId, "clientId", 160),
+    enabled: input.enabled ?? false,
+    roleMappings: normalizeProviderRoleMappings(input.roleMappings ?? []),
+  };
+}
+
+function normalizeProviderKey(key: string): string {
+  if (typeof key !== "string" || !/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(key.trim())) {
+    throw new AppError("Provider key is invalid.", "INVALID_PROVIDER_CONFIG", 400);
+  }
+  return key.trim();
+}
+
+function normalizeProviderType(type: string): ProviderType {
+  const cleaned = typeof type === "string" ? type.trim() : "";
+  if ((providerTypes as readonly string[]).includes(cleaned)) {
+    return cleaned as ProviderType;
+  }
+  throw new AppError("Provider type is invalid.", "INVALID_PROVIDER_CONFIG", 400);
+}
+
+function cleanProviderDisplayName(value: string): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new AppError("Provider display name is required.", "INVALID_PROVIDER_CONFIG", 400);
+  }
+  return value.trim().slice(0, 80);
+}
+
+function cleanOptionalProviderUrl(value: string | undefined, field: string): string | null {
+  if (value === undefined || !value.trim()) {
+    return null;
+  }
+  try {
+    const parsed = new URL(value.trim());
+    if (parsed.protocol !== "https:") {
+      throw new Error("Provider URL must use HTTPS.");
+    }
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    throw new AppError(`${field} must be an HTTPS URL.`, "INVALID_PROVIDER_CONFIG", 400);
+  }
+}
+
+function cleanOptionalProviderText(value: string | undefined, field: string, maxLength: number): string | null {
+  if (value === undefined || !value.trim()) {
+    return null;
+  }
+  if (typeof value !== "string") {
+    throw new AppError(`${field} must be a string.`, "INVALID_PROVIDER_CONFIG", 400);
+  }
+  return value.trim().slice(0, maxLength);
+}
+
+function normalizeProviderRoleMappings(input: ProviderRoleMappingInput[]): ProviderRoleMappingRecord[] {
+  if (!Array.isArray(input)) {
+    throw new AppError("Provider role mappings must be an array.", "INVALID_PROVIDER_ROLE_MAPPING", 400);
+  }
+  const seen = new Set<string>();
+  const mappings: ProviderRoleMappingRecord[] = [];
+  for (const [index, mapping] of input.entries()) {
+    const claim = cleanProviderClaim(mapping?.claim, index);
+    const value = cleanProviderClaimValue(mapping?.value, index);
+    const role = normalizeProviderMappedRole(mapping?.role);
+    const key = `${claim}:${value}:${role}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      mappings.push({ claim, value, role });
+    }
+  }
+  return mappings.sort(compareProviderRoleMappings);
+}
+
+function cleanProviderClaim(value: unknown, index: number): string {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_.:-]{1,80}$/.test(value.trim())) {
+    throw new AppError(`Provider role mapping ${index + 1} claim is invalid.`, "INVALID_PROVIDER_ROLE_MAPPING", 400);
+  }
+  return value.trim();
+}
+
+function cleanProviderClaimValue(value: unknown, index: number): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new AppError(`Provider role mapping ${index + 1} value is invalid.`, "INVALID_PROVIDER_ROLE_MAPPING", 400);
+  }
+  return value.trim().slice(0, 200);
+}
+
+function normalizeProviderMappedRole(role: unknown): ProviderMappedRole {
+  if (role === "maintainer" || role === "author" || role === "user") {
+    return role;
+  }
+  throw new AppError("Provider role mappings cannot grant admin or owner roles.", "INVALID_PROVIDER_ROLE_MAPPING", 400);
+}
+
+function compareProviderRoleMappings(a: ProviderRoleMappingRecord, b: ProviderRoleMappingRecord): number {
+  return `${a.claim}:${a.value}:${a.role}`.localeCompare(`${b.claim}:${b.value}:${b.role}`);
+}
+
 function normalizeAdminUserAction(action: AdminUserAction): AdminUserAction {
   if (action === "approve" || action === "activate" || action === "disable" || action === "delete") {
     return action;
@@ -983,6 +1150,18 @@ function safeAuditEvent(event: AuditEventRecord): SafeAuditEvent {
     resourceId: event.resourceId,
     details: event.details,
     createdAt: event.createdAt.toISOString(),
+  };
+}
+
+function safeProviderConfig(provider: ProviderConfigRecord): SafeProviderConfig {
+  return {
+    key: provider.key,
+    type: provider.type,
+    displayName: provider.displayName,
+    issuer: provider.issuer,
+    clientId: provider.clientId,
+    enabled: provider.enabled,
+    roleMappings: [...provider.roleMappings].sort(compareProviderRoleMappings),
   };
 }
 

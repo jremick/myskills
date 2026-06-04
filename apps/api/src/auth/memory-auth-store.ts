@@ -20,6 +20,9 @@ import type {
   CreateSessionInput,
   CreateUserWithPasswordInput,
   CreateUserWithPasswordResult,
+  ProviderConfigRecord,
+  ProviderRoleMappingRecord,
+  UpsertProviderConfigInput,
   MfaChallengeRecord,
   MfaChallengeWithUser,
   MfaTotpFactorRecord,
@@ -56,6 +59,19 @@ interface MemoryApiToken {
   revokedAt: Date | null;
   lastUsedAt: Date | null;
   createdAt: Date;
+}
+
+interface MemoryProviderConfig {
+  id: string;
+  key: string;
+  type: ProviderConfigRecord["type"];
+  displayName: string;
+  issuer: string | null;
+  clientId: string | null;
+  enabled: boolean;
+  roleMappings: ProviderRoleMappingRecord[];
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 interface MemoryMfaTotpFactor {
@@ -115,6 +131,7 @@ export class MemoryAuthStore implements AuthStore {
   private users = new Map<string, MemoryUser>();
   private sessions = new Map<string, MemorySession>();
   private apiTokens = new Map<string, MemoryApiToken>();
+  private providerConfigs = new Map<string, MemoryProviderConfig>();
   private mfaFactors = new Map<string, MemoryMfaTotpFactor>();
   private mfaRecoveryCodes = new Map<string, MemoryMfaRecoveryCode>();
   private mfaChallenges = new Map<string, MemoryMfaChallenge>();
@@ -344,6 +361,31 @@ export class MemoryAuthStore implements AuthStore {
     return toApiTokenRecord(token);
   }
 
+  async listProviderConfigs(): Promise<ProviderConfigRecord[]> {
+    return [...this.providerConfigs.values()]
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .map(toProviderConfigRecord);
+  }
+
+  async upsertProviderConfig(input: UpsertProviderConfigInput): Promise<ProviderConfigRecord> {
+    const existing = this.providerConfigs.get(input.key);
+    const now = new Date();
+    const config: MemoryProviderConfig = {
+      id: existing?.id ?? `provider-${this.providerConfigs.size + 1}`,
+      key: input.key,
+      type: input.type,
+      displayName: input.displayName,
+      issuer: input.issuer ?? null,
+      clientId: input.clientId ?? null,
+      enabled: input.enabled ?? false,
+      roleMappings: [...input.roleMappings].sort(compareProviderRoleMappings),
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    this.providerConfigs.set(config.key, config);
+    return toProviderConfigRecord(config);
+  }
+
   async countEnabledMfaFactors(userId: string): Promise<number> {
     return [...this.mfaFactors.values()].filter((factor) => factor.userId === userId && factor.status === "enabled").length;
   }
@@ -521,6 +563,25 @@ function toApiTokenRecord(token: MemoryApiToken): ApiTokenRecord {
     lastUsedAt: token.lastUsedAt,
     createdAt: token.createdAt,
   };
+}
+
+function toProviderConfigRecord(config: MemoryProviderConfig): ProviderConfigRecord {
+  return {
+    id: config.id,
+    key: config.key,
+    type: config.type,
+    displayName: config.displayName,
+    issuer: config.issuer,
+    clientId: config.clientId,
+    enabled: config.enabled,
+    roleMappings: [...config.roleMappings].sort(compareProviderRoleMappings),
+    createdAt: config.createdAt,
+    updatedAt: config.updatedAt,
+  };
+}
+
+function compareProviderRoleMappings(a: ProviderRoleMappingRecord, b: ProviderRoleMappingRecord): number {
+  return `${a.claim}:${a.value}:${a.role}`.localeCompare(`${b.claim}:${b.value}:${b.role}`);
 }
 
 function toMfaTotpFactorRecord(factor: MemoryMfaTotpFactor): MfaTotpFactorRecord {

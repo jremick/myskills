@@ -1,11 +1,14 @@
-import type { AuthenticatedUser, RegistrationMode, UserStatus } from "@ai-skills-share/auth";
+import type { AuthenticatedUser, RegistrationMode, Role, UserStatus } from "@ai-skills-share/auth";
 
 export const apiTokenScopes = ["profile:read", "skills:read", "skills:submit", "review:read", "review:write"] as const;
 export const authActionTokenPurposes = ["email_verification", "password_reset"] as const;
+export const providerTypes = ["oidc", "saml", "cloudflare_access", "github", "google"] as const;
 
 export type ApiTokenScope = (typeof apiTokenScopes)[number];
 export type AuthActionTokenPurpose = (typeof authActionTokenPurposes)[number];
 export type AuditDecision = "allow" | "deny";
+export type ProviderType = (typeof providerTypes)[number];
+export type ProviderMappedRole = Extract<Role, "maintainer" | "author" | "user">;
 
 export interface AuthUserRecord {
   id: string;
@@ -91,6 +94,35 @@ export interface CreateApiTokenInput {
   scopes: ApiTokenScope[];
   expiresAt: Date;
   mfaVerifiedAt?: Date | null;
+}
+
+export interface ProviderRoleMappingRecord {
+  claim: string;
+  value: string;
+  role: ProviderMappedRole;
+}
+
+export interface ProviderConfigRecord {
+  id: string;
+  key: string;
+  type: ProviderType;
+  displayName: string;
+  issuer: string | null;
+  clientId: string | null;
+  enabled: boolean;
+  roleMappings: ProviderRoleMappingRecord[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface UpsertProviderConfigInput {
+  key: string;
+  type: ProviderType;
+  displayName: string;
+  issuer?: string | null;
+  clientId?: string | null;
+  enabled?: boolean;
+  roleMappings: ProviderRoleMappingRecord[];
 }
 
 export type MfaFactorStatus = "pending" | "enabled" | "disabled";
@@ -183,6 +215,8 @@ export interface AuthStore {
   listApiTokensForUser(userId: string): Promise<ApiTokenRecord[]>;
   findUserByApiTokenHash(tokenHash: string, now?: Date): Promise<AuthUserWithApiToken | null>;
   revokeApiToken(input: { userId: string; tokenId: string }): Promise<ApiTokenRecord | null>;
+  listProviderConfigs(): Promise<ProviderConfigRecord[]>;
+  upsertProviderConfig(input: UpsertProviderConfigInput): Promise<ProviderConfigRecord>;
   countEnabledMfaFactors(userId: string): Promise<number>;
   createMfaTotpFactor(input: CreateMfaTotpFactorInput): Promise<MfaTotpFactorRecord>;
   listMfaTotpFactorsForUser(userId: string): Promise<MfaTotpFactorRecord[]>;

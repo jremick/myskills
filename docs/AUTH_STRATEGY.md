@@ -43,8 +43,9 @@ The current API implementation owns the first-party auth boundary directly:
 - Review-scoped API tokens for owner, admin, and maintainer users must be created from an MFA-verified session; review actions require an MFA-verified session or MFA-bound token.
 - Registration is controlled by the instance registration setting and currently creates pending users. Email verification sets only the email-verification gate; request-mode accounts still require admin approval before login.
 - Password reset is generic for account-existence privacy, including delivery failures, rejects unusable accounts, updates the password credential, and revokes existing sessions and API tokens after success.
-- MFA-verified owner/admin sessions can read and update registration mode, list safe user records, and approve, activate, disable, or delete users. User disable/delete revokes existing sessions and API tokens.
-- Authorization still uses application roles, not provider claims.
+- MFA-verified owner/admin sessions can read and update registration mode, manage non-secret provider configs and explicit claim-to-role mappings, list safe user records, and approve, activate, disable, or delete users. User disable/delete revokes existing sessions and API tokens.
+- Provider config records store only non-secret metadata. Provider secrets remain deployment secrets, and external provider mappings currently allow only `user`, `author`, and `maintainer`; `owner` and `admin` remain local/manual roles.
+- Authorization still uses application roles, not provider claims. Provider mapping changes do not mutate existing local role assignments.
 
 This keeps setup portable for the open-source project while leaving room to adopt Better Auth or another provider adapter for queued email delivery, passkeys, provider MFA, and account linking once the web runtime is in place.
 
@@ -87,7 +88,7 @@ Use application roles and scopes:
 - `admin`: manage users, settings, provider mappings, and global lifecycle actions
 - `owner`: initial instance owner with break-glass controls
 
-Provider groups, Cloudflare Access claims, OIDC claims, or SAML attributes can map into local roles only through explicit admin configuration.
+Provider groups, Cloudflare Access claims, OIDC claims, or SAML attributes can map into local non-admin roles only through explicit admin configuration. `owner` and `admin` are not granted from external provider claims in the current foundation.
 
 ### API And CLI Tokens
 

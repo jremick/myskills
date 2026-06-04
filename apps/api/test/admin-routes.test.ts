@@ -75,6 +75,136 @@ test("MFA-verified admins can manage registration mode", async (t) => {
   assert.equal(registerDenied.json().error.code, "REGISTRATION_CLOSED");
 });
 
+test("MFA-verified admins can manage non-secret provider configs and role mappings", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAdminApp(authStore);
+  t.after(() => app.close());
+  const ownerSession = await addAndLoginWithMfa(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+  await addUser(authStore, {
+    id: "existing-1",
+    email: "existing@example.com",
+    status: "active",
+    emailVerifiedAt: new Date(),
+    roles: ["user"],
+  });
+
+  const secretFields = {
+    clientSecret: "must-not-be-stored",
+    client_secret: "must-not-be-stored-underscore",
+    "client-secret": "must-not-be-stored-hyphen",
+    private_key: "must-not-be-stored-private",
+    apiKey: "must-not-be-stored-api-key",
+  };
+  for (const [field, value] of Object.entries(secretFields)) {
+    const secretRejected = await app.inject({
+      method: "PUT",
+      url: "/v1/admin/providers/cloudflare-main",
+      headers: { authorization: `Bearer ${ownerSession}` },
+      payload: {
+        type: "cloudflare_access",
+        displayName: "Cloudflare Access",
+        issuer: "https://team.cloudflareaccess.com",
+        clientId: "public-client-id",
+        [field]: value,
+        roleMappings: [],
+      },
+    });
+    assert.equal(secretRejected.statusCode, 400);
+    assert.equal(secretRejected.json().error.code, "UNSUPPORTED_PROVIDER_SECRET_FIELD");
+    assert.equal(JSON.stringify(secretRejected.json()).includes(value), false);
+  }
+
+  for (const role of ["admin", "owner"]) {
+    const elevatedRoleRejected = await app.inject({
+      method: "PUT",
+      url: "/v1/admin/providers/cloudflare-main",
+      headers: { authorization: `Bearer ${ownerSession}` },
+      payload: {
+        type: "cloudflare_access",
+        displayName: "Cloudflare Access",
+        issuer: "https://team.cloudflareaccess.com",
+        clientId: "public-client-id",
+        roleMappings: [{ claim: "groups", value: "platform-admins", role }],
+      },
+    });
+    assert.equal(elevatedRoleRejected.statusCode, 400);
+    assert.equal(elevatedRoleRejected.json().error.code, "INVALID_PROVIDER_ROLE_MAPPING");
+  }
+
+  const upsert = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/providers/cloudflare-main",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: {
+      type: "cloudflare_access",
+      displayName: "Cloudflare Access",
+      issuer: "https://team.cloudflareaccess.com",
+      clientId: "public-client-id",
+      enabled: true,
+      roleMappings: [
+        { claim: "groups", value: "skills-maintainers", role: "maintainer" },
+        { claim: "email_domain", value: "example.com", role: "user" },
+      ],
+    },
+  });
+  assert.equal(upsert.statusCode, 200);
+  assert.deepEqual(upsert.json().provider, {
+    key: "cloudflare-main",
+    type: "cloudflare_access",
+    displayName: "Cloudflare Access",
+    issuer: "https://team.cloudflareaccess.com",
+    clientId: "public-client-id",
+    enabled: true,
+    roleMappings: [
+      { claim: "email_domain", value: "example.com", role: "user" },
+      { claim: "groups", value: "skills-maintainers", role: "maintainer" },
+    ],
+  });
+
+  const list = await app.inject({
+    method: "GET",
+    url: "/v1/admin/providers",
+    headers: { authorization: `Bearer ${ownerSession}` },
+  });
+  assert.equal(list.statusCode, 200);
+  assert.deepEqual(list.json(), { providers: [upsert.json().provider] });
+
+  const users = await app.inject({
+    method: "GET",
+    url: "/v1/admin/users",
+    headers: { authorization: `Bearer ${ownerSession}` },
+  });
+  assert.equal(users.statusCode, 200);
+  const existing = users.json().users.find((user: { id: string }) => user.id === "existing-1");
+  assert.deepEqual(existing.roles, ["user"]);
+
+  const audit = await app.inject({
+    method: "GET",
+    url: "/v1/admin/audit?limit=5",
+    headers: { authorization: `Bearer ${ownerSession}` },
+  });
+  assert.equal(audit.statusCode, 200);
+  assert.equal(audit.json().events.some((event: { action: string }) => event.action === "admin.provider.upsert"), true);
+
+  const serialized = JSON.stringify({ list: list.json(), audit: audit.json() });
+  for (const forbidden of [
+    "clientSecret",
+    "client_secret",
+    "client-secret",
+    "apiKey",
+    "must-not-be-stored",
+    "secret",
+    "tokenHash",
+    "privateKey",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+});
+
 test("admin user list returns deterministic safe fields only", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const app = buildAdminApp(authStore);
@@ -289,6 +419,7 @@ test("admin routes require session auth, admin role, and MFA", async (t) => {
     email: "user@example.com",
     roles: ["user"],
   });
+  const ownerApiToken = await createApiToken(app, ownerSessionWithoutMfa, ["profile:read"]);
   const userApiToken = await createApiToken(app, userSessionWithMfa, ["profile:read"]);
 
   const unauthenticated = await app.inject({
@@ -345,6 +476,40 @@ test("admin routes require session auth, admin role, and MFA", async (t) => {
   });
   assert.equal(auditRoleRequired.statusCode, 403);
   assert.equal(auditRoleRequired.json().error.code, "ADMIN_ROLE_REQUIRED");
+
+  const providerApiTokenDenied = await app.inject({
+    method: "GET",
+    url: "/v1/admin/providers",
+    headers: { authorization: `Bearer ${userApiToken}` },
+  });
+  assert.equal(providerApiTokenDenied.statusCode, 403);
+  assert.equal(providerApiTokenDenied.json().error.code, "SESSION_AUTH_REQUIRED");
+
+  const providerOwnerApiTokenDenied = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/providers/oidc-main",
+    headers: { authorization: `Bearer ${ownerApiToken}` },
+    payload: { type: "oidc", displayName: "OIDC", roleMappings: [] },
+  });
+  assert.equal(providerOwnerApiTokenDenied.statusCode, 403);
+  assert.equal(providerOwnerApiTokenDenied.json().error.code, "SESSION_AUTH_REQUIRED");
+
+  const providerMfaRequired = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/providers/oidc-main",
+    headers: { authorization: `Bearer ${ownerSessionWithoutMfa}` },
+    payload: { type: "oidc", displayName: "OIDC", roleMappings: [] },
+  });
+  assert.equal(providerMfaRequired.statusCode, 403);
+  assert.equal(providerMfaRequired.json().error.code, "MFA_VERIFICATION_REQUIRED");
+
+  const providerRoleRequired = await app.inject({
+    method: "GET",
+    url: "/v1/admin/providers",
+    headers: { authorization: `Bearer ${userSessionWithMfa}` },
+  });
+  assert.equal(providerRoleRequired.statusCode, 403);
+  assert.equal(providerRoleRequired.json().error.code, "ADMIN_ROLE_REQUIRED");
 });
 
 test("admins cannot disable or delete their own account", async (t) => {

@@ -12,6 +12,8 @@ import {
   mfaFactors,
   mfaRecoveryCodes,
   passwordCredentials,
+  providerConfigs,
+  providerRoleMappings,
   roleAssignments,
   users,
 } from "../db/schema.js";
@@ -35,6 +37,11 @@ import type {
   CreateSessionInput,
   CreateUserWithPasswordInput,
   CreateUserWithPasswordResult,
+  ProviderConfigRecord,
+  ProviderMappedRole,
+  ProviderRoleMappingRecord,
+  ProviderType,
+  UpsertProviderConfigInput,
   MfaChallengeRecord,
   MfaChallengeWithUser,
   MfaTotpFactorRecord,
@@ -318,6 +325,63 @@ export class PostgresAuthStore implements AuthStore {
     return token ? toApiTokenRecord(token) : null;
   }
 
+  async listProviderConfigs(): Promise<ProviderConfigRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(providerConfigs)
+      .orderBy(providerConfigs.key);
+    return Promise.all(rows.map(async (config) => ({
+      ...toProviderConfigRecord(config),
+      roleMappings: await this.providerRoleMappingsForConfig(config.id),
+    })));
+  }
+
+  async upsertProviderConfig(input: UpsertProviderConfigInput): Promise<ProviderConfigRecord> {
+    return this.db.transaction(async (tx) => {
+      const now = new Date();
+      const [config] = await tx
+        .insert(providerConfigs)
+        .values({
+          key: input.key,
+          type: input.type,
+          displayName: input.displayName,
+          issuer: input.issuer ?? null,
+          clientId: input.clientId ?? null,
+          enabled: input.enabled ?? false,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: providerConfigs.key,
+          set: {
+            type: input.type,
+            displayName: input.displayName,
+            issuer: input.issuer ?? null,
+            clientId: input.clientId ?? null,
+            enabled: input.enabled ?? false,
+            updatedAt: now,
+          },
+        })
+        .returning();
+      if (!config) {
+        throw new Error("Provider config upsert failed.");
+      }
+
+      await tx.delete(providerRoleMappings).where(eq(providerRoleMappings.providerConfigId, config.id));
+      if (input.roleMappings.length > 0) {
+        await tx.insert(providerRoleMappings).values(input.roleMappings.map((mapping) => ({
+          providerConfigId: config.id,
+          claim: mapping.claim,
+          value: mapping.value,
+          role: mapping.role,
+        })));
+      }
+      return {
+        ...toProviderConfigRecord(config),
+        roleMappings: [...input.roleMappings].sort(compareProviderRoleMappings),
+      };
+    });
+  }
+
   async countEnabledMfaFactors(userId: string): Promise<number> {
     const rows = await this.db
       .select({ id: mfaFactors.id })
@@ -494,6 +558,24 @@ export class PostgresAuthStore implements AuthStore {
       .where(eq(roleAssignments.userId, userId));
     return rows.map((row) => row.role);
   }
+
+  private async providerRoleMappingsForConfig(providerConfigId: string): Promise<ProviderRoleMappingRecord[]> {
+    const rows = await this.db
+      .select({
+        claim: providerRoleMappings.claim,
+        value: providerRoleMappings.value,
+        role: providerRoleMappings.role,
+      })
+      .from(providerRoleMappings)
+      .where(eq(providerRoleMappings.providerConfigId, providerConfigId));
+    return rows
+      .map((row) => ({
+        claim: row.claim,
+        value: row.value,
+        role: parseProviderMappedRole(row.role),
+      }))
+      .sort(compareProviderRoleMappings);
+  }
 }
 
 function toMfaTotpFactorRecord(factor: typeof mfaFactors.$inferSelect): MfaTotpFactorRecord {
@@ -571,6 +653,44 @@ function toApiTokenRecord(token: typeof apiTokens.$inferSelect): ApiTokenRecord 
     lastUsedAt: token.lastUsedAt,
     createdAt: token.createdAt,
   };
+}
+
+function toProviderConfigRecord(config: typeof providerConfigs.$inferSelect): Omit<ProviderConfigRecord, "roleMappings"> {
+  return {
+    id: config.id,
+    key: config.key,
+    type: parseProviderType(config.type),
+    displayName: config.displayName,
+    issuer: config.issuer,
+    clientId: config.clientId,
+    enabled: config.enabled,
+    createdAt: config.createdAt,
+    updatedAt: config.updatedAt,
+  };
+}
+
+function parseProviderType(input: string): ProviderType {
+  if (
+    input === "oidc" ||
+    input === "saml" ||
+    input === "cloudflare_access" ||
+    input === "github" ||
+    input === "google"
+  ) {
+    return input;
+  }
+  return "oidc";
+}
+
+function parseProviderMappedRole(input: Role): ProviderMappedRole {
+  if (input === "maintainer" || input === "author" || input === "user") {
+    return input;
+  }
+  return "user";
+}
+
+function compareProviderRoleMappings(a: ProviderRoleMappingRecord, b: ProviderRoleMappingRecord): number {
+  return `${a.claim}:${a.value}:${a.role}`.localeCompare(`${b.claim}:${b.value}:${b.role}`);
 }
 
 function parseApiTokenScopes(input: unknown): ApiTokenScope[] {

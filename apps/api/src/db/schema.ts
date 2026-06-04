@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   integer,
+  boolean,
   index,
   jsonb,
   pgEnum,
@@ -14,6 +15,7 @@ import {
 export const userStatus = pgEnum("user_status", ["pending", "active", "disabled", "deleted"]);
 export const roleName = pgEnum("role_name", ["owner", "admin", "maintainer", "author", "user"]);
 export const registrationMode = pgEnum("registration_mode", ["closed", "request", "open"]);
+export const providerType = pgEnum("provider_type", ["oidc", "saml", "cloudflare_access", "github", "google"]);
 export const skillLifecycleStatus = pgEnum("skill_lifecycle_status", ["draft", "private", "submitted", "review", "approved", "deprecated", "revoked", "archived"]);
 export const visibilityScope = pgEnum("visibility_scope", ["public", "authenticated", "organization", "team", "private", "explicit-users"]);
 export const reviewStatus = pgEnum("review_status", ["unreviewed", "changes-requested", "approved", "rejected"]);
@@ -142,6 +144,31 @@ export const instanceSettings = pgTable("instance_settings", {
   value: jsonb("value").notNull(),
   ...timestamps,
 });
+
+export const providerConfigs = pgTable("provider_configs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  key: text("key").notNull().unique(),
+  type: providerType("type").notNull(),
+  displayName: text("display_name").notNull(),
+  issuer: text("issuer"),
+  clientId: text("client_id"),
+  enabled: boolean("enabled").notNull().default(false),
+  ...timestamps,
+}, (table) => [
+  index("provider_configs_key_idx").on(table.key),
+]);
+
+export const providerRoleMappings = pgTable("provider_role_mappings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  providerConfigId: uuid("provider_config_id").notNull().references(() => providerConfigs.id, { onDelete: "cascade" }),
+  claim: text("claim").notNull(),
+  value: text("value").notNull(),
+  role: roleName("role").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("provider_role_mappings_provider_idx").on(table.providerConfigId),
+  unique().on(table.providerConfigId, table.claim, table.value, table.role),
+]);
 
 export const skills = pgTable("skills", {
   id: uuid("id").primaryKey().defaultRandom(),

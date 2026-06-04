@@ -32,6 +32,9 @@ Last updated: 2026-06-04
 - TOTP MFA uses encrypted authenticator secrets, short-lived challenge tokens, session-bound verification timestamps, and hashed single-use recovery codes.
 - Review and publish actions require MFA for owner, admin, and maintainer identities; review-scoped API tokens must be issued from an MFA-verified session.
 - User and registration administration requires an MFA-verified owner/admin session; API tokens cannot call admin routes.
+- Provider config and claim-to-role mapping administration requires an MFA-verified owner/admin session; API tokens cannot call provider admin routes.
+- Provider secrets are not accepted through admin APIs and must stay in deployment secret stores.
+- Provider claim mappings cannot grant `owner` or `admin`; those roles remain local/manual.
 - User disable/delete revokes the target user's sessions and API tokens and blocks self-lockout.
 - Session revocation and all-session logout.
 - Admin bootstrap flow that cannot be repeated after setup.

@@ -24,6 +24,7 @@ import type {
   RequestPasswordResetInput,
   StartTotpEnrollmentInput,
   UpdateRegistrationSettingsInput,
+  UpsertProviderConfigRequest,
   VerifyMfaChallengeInput,
 } from "./auth/service.js";
 import type { ReviewAction, StoredSubmission, SubmissionActor } from "./submissions/types.js";
@@ -329,6 +330,33 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       registration: await options.authService.updateRegistrationSettings(
         user,
         parseUpdateRegistrationSettingsInput(request.body),
+      ),
+    };
+  });
+
+  app.get("/v1/admin/providers", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return { providers: await options.authService.listAdminProviderConfigs(user) };
+  });
+
+  app.put("/v1/admin/providers/:key", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return {
+      provider: await options.authService.upsertAdminProviderConfig(
+        user,
+        parseProviderConfigInput(request.params, request.body),
       ),
     };
   });
@@ -678,6 +706,21 @@ function parseAdminUserActionInput(paramsInput: unknown, bodyInput: unknown): Ad
   };
 }
 
+function parseProviderConfigInput(paramsInput: unknown, bodyInput: unknown): UpsertProviderConfigRequest {
+  const body = parseJsonObject(bodyInput);
+  rejectProviderSecretFields(body);
+  rejectUnsupportedProviderFields(body);
+  return {
+    key: parseProviderKeyParam(paramsInput),
+    type: requiredString(body.type, "type"),
+    displayName: requiredString(body.displayName, "displayName"),
+    issuer: optionalString(body.issuer, "issuer"),
+    clientId: optionalString(body.clientId, "clientId"),
+    enabled: optionalBoolean(body.enabled, "enabled"),
+    roleMappings: parseProviderRoleMappings(body.roleMappings),
+  };
+}
+
 function parseAdminAuditQuery(input: unknown): ListAdminAuditEventsInput {
   const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
   const rawLimit = typeof params.limit === "string" ? Number.parseInt(params.limit, 10) : undefined;
@@ -901,6 +944,11 @@ function parseUserIdParam(input: unknown): string {
   return id;
 }
 
+function parseProviderKeyParam(input: unknown): string {
+  const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  return requiredString(params.key, "key");
+}
+
 function httpStatusCode(error: unknown): number | null {
   if (!error || typeof error !== "object" || !("statusCode" in error)) {
     return null;
@@ -931,6 +979,61 @@ function optionalString(value: unknown, field: string): string | undefined {
     throw new AppError(`${field} must be a string.`, "INVALID_REQUEST_BODY", 400);
   }
   return value;
+}
+
+function optionalBoolean(value: unknown, field: string): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "boolean") {
+    throw new AppError(`${field} must be a boolean.`, "INVALID_REQUEST_BODY", 400);
+  }
+  return value;
+}
+
+function rejectProviderSecretFields(input: unknown): void {
+  if (!input || typeof input !== "object") {
+    return;
+  }
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (/secret|password|token|private[-_ ]?key|api[-_ ]?key/i.test(key)) {
+      throw new AppError("Provider secrets must be configured through the deployment secret store.", "UNSUPPORTED_PROVIDER_SECRET_FIELD", 400);
+    }
+    rejectProviderSecretFields(value);
+  }
+}
+
+function rejectUnsupportedProviderFields(body: Record<string, unknown>): void {
+  const allowed = new Set(["type", "displayName", "issuer", "clientId", "enabled", "roleMappings"]);
+  const unsupported = Object.keys(body).find((key) => !allowed.has(key));
+  if (unsupported) {
+    throw new AppError(`Provider field is not accepted: ${unsupported}`, "UNSUPPORTED_PROVIDER_FIELD", 400);
+  }
+}
+
+function parseProviderRoleMappings(input: unknown): UpsertProviderConfigRequest["roleMappings"] {
+  if (input === undefined) {
+    return [];
+  }
+  if (!Array.isArray(input)) {
+    throw new AppError("Provider role mappings must be an array.", "INVALID_PROVIDER_ROLE_MAPPING", 400);
+  }
+  return input.map((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new AppError(`Provider role mapping ${index + 1} must be an object.`, "INVALID_PROVIDER_ROLE_MAPPING", 400);
+    }
+    const record = item as Record<string, unknown>;
+    const allowed = new Set(["claim", "value", "role"]);
+    const unsupported = Object.keys(record).find((key) => !allowed.has(key));
+    if (unsupported) {
+      throw new AppError(`Provider role mapping field is not accepted: ${unsupported}`, "UNSUPPORTED_PROVIDER_FIELD", 400);
+    }
+    return {
+      claim: requiredString(record.claim, `roleMappings[${index}].claim`),
+      value: requiredString(record.value, `roleMappings[${index}].value`),
+      role: requiredString(record.role, `roleMappings[${index}].role`),
+    };
+  });
 }
 
 function parseQuery(input: unknown): { q?: string; limit?: number } {

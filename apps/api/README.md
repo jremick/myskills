@@ -36,6 +36,8 @@ Implemented:
 - `DELETE /v1/auth/api-tokens/:id` session-only scoped API token revocation
 - `GET /v1/admin/registration` MFA-verified admin registration-mode read
 - `PUT /v1/admin/registration` MFA-verified admin registration-mode update
+- `GET /v1/admin/providers` MFA-verified admin provider config and role mapping list
+- `PUT /v1/admin/providers/:key` MFA-verified admin non-secret provider config and role mapping upsert
 - `GET /v1/admin/users` MFA-verified admin safe user list
 - `POST /v1/admin/users/:id/actions` MFA-verified admin user status actions: `approve`, `activate`, `disable`, `delete`
 - `GET /v1/admin/audit?limit=...` MFA-verified admin audit event list
@@ -55,9 +57,11 @@ Public search, detail, release metadata, and bundle delivery all require the sam
 
 Package artifacts are stored through an S3-compatible object storage abstraction when `ARTIFACT_STORAGE_MODE=s3`. The API generates opaque object keys, hashes, byte sizes, and content types; submission requests cannot provide artifact metadata. Production startup defaults to S3 mode and rejects DB payload mode. Development can use `ARTIFACT_STORAGE_MODE=db`, but object-backed rows fail closed when object bytes are missing, invalid, or do not match stored metadata.
 
-Admin routes require an interactive MFA-verified `owner` or `admin` session. API tokens cannot manage users or registration settings. Disable and delete actions revoke the target user's active sessions and API tokens, and self-disable/self-delete is blocked.
+Admin routes require an interactive MFA-verified `owner` or `admin` session. API tokens cannot manage users, registration settings, provider configs, or provider mappings. Disable and delete actions revoke the target user's active sessions and API tokens, and self-disable/self-delete is blocked.
 
-Admin registration, user-status mutations, and MCP session authorization decisions write sanitized audit events. Audit listing is newest-first, bounded to a maximum of 100 events per request, and returns only the event id, actor id, action, decision, resource reference, sanitized details, and timestamp.
+Provider configs store only non-secret metadata and explicit claim-to-role mappings. Provider secrets must stay in deployment secret stores. External provider mappings currently allow only `user`, `author`, and `maintainer`; `admin` and `owner` remain local/manual roles. Provider mapping changes do not mutate existing local user role assignments.
+
+Admin registration, provider config changes, user-status mutations, and MCP session authorization decisions write sanitized audit events. Audit listing is newest-first, bounded to a maximum of 100 events per request, and returns only the event id, actor id, action, decision, resource reference, sanitized details, and timestamp.
 
 API tokens are hashed at rest and returned in plaintext only on creation. Token management routes require an interactive session, not another API token. Current token scopes are `profile:read`, `skills:read`, `skills:submit`, `review:read`, and `review:write`; route checks require both the user role and the token scope. Owner, admin, and maintainer accounts must create review-scoped API tokens from an MFA-verified session.
 

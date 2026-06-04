@@ -13,7 +13,7 @@ M1 tables are the thin backend proof. M2 tables harden auth and submissions. Lat
 
 - M1 `users`: primary application users with normalized email uniqueness.
 - M1 `password_credentials`: first-party email/password credentials.
-- M2 `identities`: linked external provider identities such as OIDC, SAML, GitHub, Google, or Cloudflare Access.
+- Later `external_identities`: linked external provider identities such as OIDC, SAML, GitHub, Google, or Cloudflare Access. Login/linking is intentionally deferred until provider verification semantics are implemented.
 - M1 `auth_sessions`: hashed opaque bearer sessions.
 - M2 `auth_action_tokens`: hashed single-use email verification and password reset tokens with purpose, recipient, expiry, and consumed timestamp.
 - M2 `mfa_factors`: TOTP, passkey, recovery-code, and future factors.
@@ -54,7 +54,7 @@ M1 tables are the thin backend proof. M2 tables harden auth and submissions. Lat
 
 - M1 `settings`: registration mode, public browsing policy, default retention, upload limits.
 - M2 `provider_configs`: non-secret provider metadata. Secrets live in secret stores.
-- M2 `provider_role_mappings`: explicit claim-to-role mappings.
+- M2 `provider_role_mappings`: explicit claim-to-role mappings, currently limited to non-admin local roles.
 - Later `storage_configs`: object storage metadata.
 
 Organization and team scoped visibility are intentionally deferred until the ownership model is designed. The first implementation uses single-instance roles plus public, authenticated, and private visibility.
