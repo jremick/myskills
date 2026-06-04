@@ -693,20 +693,28 @@ export class AuthService {
       expiresAt,
     });
     if (purpose === "email_verification") {
-      await sink.sendEmailVerification({
+      try {
+        await sink.sendEmailVerification({
+          user,
+          email: user.email,
+          token,
+          expiresAt,
+        });
+      } catch {
+        // Public auth action request endpoints must not reveal account existence during delivery outages.
+      }
+      return;
+    }
+    try {
+      await sink.sendPasswordReset({
         user,
         email: user.email,
         token,
         expiresAt,
       });
-      return;
+    } catch {
+      // Public auth action request endpoints must not reveal account existence during delivery outages.
     }
-    await sink.sendPasswordReset({
-      user,
-      email: user.email,
-      token,
-      expiresAt,
-    });
   }
 
   private authActionTokenTtlMs(purpose: AuthActionTokenPurpose): number {

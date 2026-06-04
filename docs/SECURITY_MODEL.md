@@ -20,13 +20,14 @@ Last updated: 2026-06-04
 - Session tokens are opaque and stored only as hashes.
 - API tokens are opaque, scoped, stored only as hashes, and returned in plaintext only once.
 - Email verification and password reset tokens are opaque, short-lived, single-use, stored only as hashes, and never returned from HTTP responses.
+- Production auth action delivery requires SMTP configuration, HTTPS `APP_BASE_URL`, and TLS certificate validation. Local console delivery is rejected in production.
 - API token management requires a session; API tokens cannot create, list, or revoke other tokens.
 - CLI login tokens are stored locally by normalized API URL with user-only file permissions; platform keychain storage remains the target hardening path.
 - Login uses normalized email lookup and generic invalid-credential denial.
 - Existing sessions are denied when the user is no longer active or email verified.
 - Login, registration, email verification, password reset, MFA, and action-token confirmation paths are throttled before repeated expensive auth work where applicable.
 - Email verification before normal account use.
-- Password reset uses generic request responses and revokes active sessions and API tokens after a successful credential change.
+- Password reset uses generic request responses, including notification delivery failures, and revokes active sessions and API tokens after a successful credential change.
 - Rate limits on auth endpoints.
 - TOTP MFA uses encrypted authenticator secrets, short-lived challenge tokens, session-bound verification timestamps, and hashed single-use recovery codes.
 - Review and publish actions require MFA for owner, admin, and maintainer identities; review-scoped API tokens must be issued from an MFA-verified session.

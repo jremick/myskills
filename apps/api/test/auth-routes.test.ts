@@ -476,6 +476,49 @@ test("password reset does not issue tokens for unusable accounts and invalid tok
   assert.equal(unknownToken.json().error.code, "INVALID_RESET_TOKEN");
 });
 
+test("auth notification delivery failures remain generic for known and unknown accounts", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  authStore.addUser({
+    email: "delivery-fail@example.com",
+    status: "active",
+    emailVerifiedAt: new Date(),
+    passwordHash: await hashPassword("correct horse battery staple"),
+  });
+  const app = buildApp({
+    skillRepository: emptySkillRepository(),
+    authService: new AuthService(authStore, {
+      notificationSink: {
+        sendEmailVerification() {
+          throw new Error("smtp token delivery failed with reset-token");
+        },
+        sendPasswordReset() {
+          throw new Error("smtp token delivery failed with reset-token");
+        },
+      },
+    }),
+  });
+  t.after(() => app.close());
+
+  const known = await app.inject({
+    method: "POST",
+    url: "/v1/auth/password-reset/request",
+    payload: { email: "delivery-fail@example.com" },
+  });
+  const unknown = await app.inject({
+    method: "POST",
+    url: "/v1/auth/password-reset/request",
+    payload: { email: "unknown-delivery-fail@example.com" },
+  });
+
+  assert.equal(known.statusCode, 202);
+  assert.equal(unknown.statusCode, 202);
+  assert.deepEqual(known.json(), { status: "pending" });
+  assert.deepEqual(unknown.json(), { status: "pending" });
+  assertNoSensitiveAuthMaterial(known.json());
+  assertNoSensitiveAuthMaterial(unknown.json());
+  assert.equal(JSON.stringify(known.json()).includes("reset-token"), false);
+});
+
 test("password reset preserves enabled MFA state", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const outbox = createAuthOutbox();

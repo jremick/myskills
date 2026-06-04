@@ -61,7 +61,15 @@ API tokens are hashed at rest and returned in plaintext only on creation. Token 
 
 TOTP secrets are encrypted before storage with `AUTH_SECRET`. Production startup fails if `AUTH_SECRET` is missing or shorter than 32 bytes.
 
-Email verification and password reset action tokens are opaque, short-lived, single-use, and stored only as SHA-256 hashes. Request endpoints return the same `202 { "status": "pending" }` body for known and unknown accounts. Password reset revokes the user's active sessions and API tokens and requires a normal login/MFA flow afterward. The current API exposes the token generation boundary through an `AuthNotificationSink`; production deployments still need to wire that sink to an email provider or queue.
+Email verification and password reset action tokens are opaque, short-lived, single-use, and stored only as SHA-256 hashes. Request endpoints return the same `202 { "status": "pending" }` body for known and unknown accounts, including delivery failures. Password reset revokes the user's active sessions and API tokens and requires a normal login/MFA flow afterward.
+
+Auth notification delivery is configured with `AUTH_NOTIFICATION_MODE`:
+
+- `console`: local development only; writes fragment-token action links to the process logger.
+- `smtp`: production mode; sends via SMTP using `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`, optional `SMTP_USER`/`SMTP_PASSWORD`, and TLS settings.
+- `disabled`: local development only; no verification or reset delivery.
+
+Production defaults to `smtp`, rejects `console` and `disabled`, requires `APP_BASE_URL` to use HTTPS, rejects `SMTP_TLS_REJECT_UNAUTHORIZED=false`, and builds links only from the configured `APP_BASE_URL`.
 
 Run locally:
 
