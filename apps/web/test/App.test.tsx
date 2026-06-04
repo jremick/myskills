@@ -1,7 +1,7 @@
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import type { PublicSkill } from "@ai-skills-share/core";
+import type { PublicSkill } from "@myskills-app/core";
 import { RegistryApp } from "../src/App.js";
 import type {
   AdminAuditEvent,
@@ -132,11 +132,11 @@ test("platform selection changes CLI export guidance only", async () => {
   const client = mockClient();
 
   const view = render(<RegistryApp client={client} />);
-  await view.findByText(/ai-skills export release-notes-helper --version 0\.1\.0 --platform codex/);
+  await view.findByText(/myskills export release-notes-helper --version 0\.1\.0 --platform codex/);
 
   fireEvent.click(view.getByRole("button", { name: "generic" }));
 
-  await view.findByText(/ai-skills export release-notes-helper --version 0\.1\.0 --platform generic/);
+  await view.findByText(/myskills export release-notes-helper --version 0\.1\.0 --platform generic/);
   assert.equal(client.releaseCalls.length, 1);
   assert.equal(client.bundleCalls, 0);
 });
@@ -152,13 +152,13 @@ test("login stores a verified session and logout clears it", async () => {
 
   await view.findByText("reader@example.com");
   assert.equal(document.body.textContent?.includes("web-session-token"), false);
-  assert.equal(JSON.parse(window.localStorage.getItem("ai-skills-share:web-session") ?? "{}").token, "web-session-token");
+  assert.equal(JSON.parse(window.localStorage.getItem("myskills-app:web-session") ?? "{}").token, "web-session-token");
 
   fireEvent.click(view.getByLabelText("Sign out"));
 
 	  await view.findByRole("button", { name: /sign in/i });
 	  assert.equal((view.getByLabelText("Password") as HTMLInputElement).value, "");
-	  assert.equal(window.localStorage.getItem("ai-skills-share:web-session"), null);
+	  assert.equal(window.localStorage.getItem("myskills-app:web-session"), null);
 	  assert.equal(client.logoutCalls, 1);
 	});
 
@@ -177,7 +177,7 @@ test("MFA login verifies the challenge before storing a session", async () => {
 
   await view.findByText("reader@example.com");
   assert.deepEqual(client.mfaCalls, ["123456"]);
-  assert.equal(JSON.parse(window.localStorage.getItem("ai-skills-share:web-session") ?? "{}").token, "mfa-session-token");
+  assert.equal(JSON.parse(window.localStorage.getItem("myskills-app:web-session") ?? "{}").token, "mfa-session-token");
 });
 
 test("non-admin sessions do not render the admin entry point", async () => {
@@ -352,7 +352,7 @@ test("submission result renders controlled scan warnings", async () => {
 
 test("malformed stored sessions are ignored before signed-in render", async () => {
   setupDom();
-  window.localStorage.setItem("ai-skills-share:web-session", JSON.stringify({
+  window.localStorage.setItem("myskills-app:web-session", JSON.stringify({
     token: "stored-session-token",
     expiresAt: "2026-06-04T01:00:00.000Z",
     user: {},
@@ -362,7 +362,7 @@ test("malformed stored sessions are ignored before signed-in render", async () =
   const view = render(<RegistryApp client={client} />);
 
   await view.findByRole("button", { name: /sign in/i });
-  assert.equal(window.localStorage.getItem("ai-skills-share:web-session"), null);
+  assert.equal(window.localStorage.getItem("myskills-app:web-session"), null);
 });
 
 test("failed login shows auth-specific safe copy", async () => {
@@ -379,7 +379,7 @@ test("failed login shows auth-specific safe copy", async () => {
   await view.findByText("Sign in could not be completed.");
   assert.equal(document.body.textContent?.includes("registry item"), false);
   assert.equal(document.body.textContent?.includes("Wrong password"), false);
-  assert.equal(window.localStorage.getItem("ai-skills-share:web-session"), null);
+  assert.equal(window.localStorage.getItem("myskills-app:web-session"), null);
 });
 
 afterEach(() => {
@@ -698,7 +698,7 @@ function publicRelease(): ReleaseMetadata {
     artifact: {
       sha256: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
       byteSize: 1234,
-      contentType: "application/vnd.ai-skills-share.package+json",
+      contentType: "application/vnd.myskills-app.package+json",
     },
   };
 }

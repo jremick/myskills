@@ -1,6 +1,6 @@
 # Web App
 
-Browser interface for AI Skills Share.
+Browser interface for MySkills.
 
 ## Current Slice
 

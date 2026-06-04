@@ -302,7 +302,7 @@ test("safe error messages do not render raw server internals", () => {
 test("export command matches CLI contract", () => {
   assert.equal(
     exportCommand("release-notes-helper", "0.1.0", "codex"),
-    "ai-skills export release-notes-helper --version 0.1.0 --platform codex --output ./skills/release-notes-helper",
+    "myskills export release-notes-helper --version 0.1.0 --platform codex --output ./skills/release-notes-helper",
   );
 });
 

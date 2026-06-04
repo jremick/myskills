@@ -1,6 +1,6 @@
 # API App
 
-Backend API service and trust boundary for AI Skills Share.
+Backend API service and trust boundary for MySkills.
 
 Planned responsibilities:
 

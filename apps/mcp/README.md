@@ -1,6 +1,6 @@
 # MCP App
 
-MCP transport surface for AI Skills Share.
+MCP transport surface for MySkills.
 
 ## Current Slice
 
@@ -21,10 +21,10 @@ npm run docker:up
 npm run db:migrate
 npm run db:seed
 npm run dev:api
-AI_SKILLS_TOKEN=<api-token-with-skills-read> npm run dev:mcp
+MYSKILLS_TOKEN=<api-token-with-skills-read> npm run dev:mcp
 ```
 
-The stdio MCP server defaults to `http://localhost:3001` and reads `AI_SKILLS_API_URL` for another API base URL.
+The stdio MCP server defaults to `http://localhost:3001` and reads `MYSKILLS_API_URL` for another API base URL.
 
 For Streamable HTTP, start the HTTP adapter and configure clients to call `POST /mcp` with a bearer API token:
 
@@ -33,7 +33,7 @@ npm run dev:mcp:http
 curl http://127.0.0.1:3002/health
 ```
 
-The HTTP adapter defaults to `127.0.0.1:3002/mcp` and reads `AI_SKILLS_MCP_HOST`, `AI_SKILLS_MCP_PORT`, `AI_SKILLS_MCP_PATH`, `AI_SKILLS_MCP_ALLOWED_HOSTS`, `AI_SKILLS_MCP_ALLOWED_ORIGINS`, and `AI_SKILLS_API_URL`. Unlike stdio, HTTP clients authenticate per request with `Authorization: Bearer <api-token-with-skills-read>`; the server validates that token through `/v1/mcp/session` before protocol handling and does not use a shared `AI_SKILLS_TOKEN` fallback for HTTP clients. Non-loopback binds must set `AI_SKILLS_MCP_ALLOWED_HOSTS`.
+The HTTP adapter defaults to `127.0.0.1:3002/mcp` and reads `MYSKILLS_MCP_HOST`, `MYSKILLS_MCP_PORT`, `MYSKILLS_MCP_PATH`, `MYSKILLS_MCP_ALLOWED_HOSTS`, `MYSKILLS_MCP_ALLOWED_ORIGINS`, and `MYSKILLS_API_URL`. Unlike stdio, HTTP clients authenticate per request with `Authorization: Bearer <api-token-with-skills-read>`; the server validates that token through `/v1/mcp/session` before protocol handling and does not use a shared `MYSKILLS_TOKEN` fallback for HTTP clients. Non-loopback binds must set `MYSKILLS_MCP_ALLOWED_HOSTS`.
 
 ## Security Rules
 
@@ -43,7 +43,7 @@ Every `/v1/mcp/session` authorization decision is recorded by the API as a sanit
 
 Package contents should not be returned by MCP tools in the first production surface. Delivery should remain an API/CLI path with explicit authorization and audit.
 
-Tool inputs must not carry tokens or API base URLs. For stdio, configure `AI_SKILLS_TOKEN` and `AI_SKILLS_API_URL` in the MCP server process environment. For HTTP, configure only the API base URL and host/origin allowlists on the server, then send client credentials through the HTTP `Authorization` header.
+Tool inputs must not carry tokens or API base URLs. For stdio, configure `MYSKILLS_TOKEN` and `MYSKILLS_API_URL` in the MCP server process environment. For HTTP, configure only the API base URL and host/origin allowlists on the server, then send client credentials through the HTTP `Authorization` header.
 
 ## Planned Workflows
 

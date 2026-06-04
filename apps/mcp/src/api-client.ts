@@ -1,4 +1,4 @@
-import type { PublicSkill } from "@ai-skills-share/core";
+import type { PublicSkill } from "@myskills-app/core";
 
 export interface ReleaseMetadata {
   slug: string;

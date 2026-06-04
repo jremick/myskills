@@ -14,23 +14,23 @@ COPY scripts ./scripts
 RUN npm ci
 
 FROM deps AS api-build
-RUN npm run build -w @ai-skills-share/core \
-  && npm run build -w @ai-skills-share/auth \
-  && npm run build -w @ai-skills-share/skill-package \
-  && npm run build -w @ai-skills-share/api
+RUN npm run build -w @myskills-app/core \
+  && npm run build -w @myskills-app/auth \
+  && npm run build -w @myskills-app/skill-package \
+  && npm run build -w @myskills-app/api
 RUN npm prune --omit=dev
 
 FROM deps AS mcp-build
-RUN npm run build -w @ai-skills-share/core \
-  && npm run build -w @ai-skills-share/mcp
+RUN npm run build -w @myskills-app/core \
+  && npm run build -w @myskills-app/mcp
 RUN npm prune --omit=dev
 
 FROM deps AS web-build
 ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN node -e "const value = process.env.VITE_API_BASE_URL; if (!value) throw new Error('VITE_API_BASE_URL build arg is required for the web image.'); const url = new URL(value); const local = ['localhost','127.0.0.1','::1'].includes(url.hostname); if (url.protocol !== 'https:' && !local) throw new Error('VITE_API_BASE_URL must use https outside local builds.');"
-RUN npm run build -w @ai-skills-share/core \
-  && npm run build -w @ai-skills-share/web
+RUN npm run build -w @myskills-app/core \
+  && npm run build -w @myskills-app/web
 
 FROM node:${NODE_VERSION} AS api
 ENV NODE_ENV=production \
@@ -49,8 +49,8 @@ CMD ["node", "apps/api/dist/server.js"]
 
 FROM node:${NODE_VERSION} AS mcp-http
 ENV NODE_ENV=production \
-    AI_SKILLS_MCP_HOST=0.0.0.0 \
-    AI_SKILLS_MCP_PORT=3002
+    MYSKILLS_MCP_HOST=0.0.0.0 \
+    MYSKILLS_MCP_PORT=3002
 WORKDIR /app
 COPY --from=mcp-build /app/package.json /app/package-lock.json ./
 COPY --from=mcp-build /app/node_modules ./node_modules

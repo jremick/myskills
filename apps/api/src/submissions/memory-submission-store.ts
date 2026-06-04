@@ -1,9 +1,9 @@
-import { AppError } from "@ai-skills-share/core";
+import { AppError } from "@myskills-app/core";
 import {
   loadSkillManifestFromPackageFiles,
   PackageManifestFileError,
   type SkillManifest,
-} from "@ai-skills-share/skill-package";
+} from "@myskills-app/skill-package";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type {
   CreateSubmissionInput,

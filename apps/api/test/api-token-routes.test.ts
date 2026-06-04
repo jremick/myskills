@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateTotpCode, hashApiToken, hashPassword, hashSessionToken } from "@ai-skills-share/auth";
+import { generateTotpCode, hashApiToken, hashPassword, hashSessionToken } from "@myskills-app/auth";
 import { buildApp } from "../src/app.js";
 import { AuthService } from "../src/auth/service.js";
 import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";

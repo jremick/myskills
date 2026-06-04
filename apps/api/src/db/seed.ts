@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { hashPassword } from "@ai-skills-share/auth";
+import { hashPassword } from "@myskills-app/auth";
 import { createDb, createPgPool } from "./client.js";
 import {
   auditEvents,
@@ -144,7 +144,7 @@ async function seed() {
     storageKey: `seed/${randomUUID()}.json`,
     sha256: createHash("sha256").update(syntheticArtifact).digest("hex"),
     byteSize: Buffer.byteLength(syntheticArtifact),
-    contentType: "application/vnd.ai-skills-share.package+json",
+    contentType: "application/vnd.myskills-app.package+json",
     payload: syntheticArtifactPayload,
   });
 

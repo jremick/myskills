@@ -1,9 +1,9 @@
 import { and, eq, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
-import { AppError } from "@ai-skills-share/core";
+import { AppError } from "@myskills-app/core";
 import {
   loadSkillManifestFromPackageFiles,
   PackageManifestFileError,
-} from "@ai-skills-share/skill-package";
+} from "@myskills-app/skill-package";
 import { assertArtifactBodyMatchesMetadata, parseArtifactPayload, readArtifactPayload } from "../artifacts/package-payload.js";
 import { sanitizeAuditDetails, sanitizeAuditValue } from "../audit/sanitize.js";
 import type { Database } from "../db/client.js";

@@ -23,7 +23,7 @@ test("SMTP auth notification sink formats verification and reset messages", asyn
   const sent: Array<Record<string, unknown>> = [];
   const sink = new SmtpAuthNotificationSink({
     appBaseUrl: "https://skills.example",
-    from: "AI Skills Share <noreply@example.test>",
+    from: "MySkills <noreply@example.test>",
     transporter: {
       async sendMail(message: Record<string, unknown>) {
         sent.push(message);
@@ -36,12 +36,12 @@ test("SMTP auth notification sink formats verification and reset messages", asyn
   await sink.sendPasswordReset(notification("reset-token"));
 
   assert.equal(sent.length, 2);
-  assert.equal(sent[0].from, "AI Skills Share <noreply@example.test>");
+  assert.equal(sent[0].from, "MySkills <noreply@example.test>");
   assert.equal(sent[0].to, "user@example.com");
-  assert.equal(sent[0].subject, "Verify your AI Skills Share email");
+  assert.equal(sent[0].subject, "Verify your MySkills email");
   assert.match(String(sent[0].text), /https:\/\/skills\.example\/auth\/verify-email#token=verify-token/);
   assert.match(String(sent[0].html), /href="https:\/\/skills\.example\/auth\/verify-email#token=verify-token"/);
-  assert.equal(sent[1].subject, "Reset your AI Skills Share password");
+  assert.equal(sent[1].subject, "Reset your MySkills password");
   assert.match(String(sent[1].text), /https:\/\/skills\.example\/auth\/reset-password#token=reset-token/);
 
   const serialized = JSON.stringify(sent);
@@ -137,7 +137,7 @@ test("auth notification env config rejects unsafe production modes", () => {
       AUTH_NOTIFICATION_MODE: "smtp",
       APP_BASE_URL: "http://localhost:3000",
       SMTP_HOST: "smtp.example.com",
-      SMTP_FROM: "AI Skills Share",
+      SMTP_FROM: "MySkills",
     }),
     /SMTP_FROM must contain an email address/,
   );

@@ -26,7 +26,7 @@ npm run release:artifacts
 
 The artifact script writes:
 
-- `ai-skills-share-<version>-source.tar`: source archive created from `HEAD`.
+- `myskills-app-<version>-source.tar`: source archive created from `HEAD`.
 - `release-metadata.json`: package name, version, expected tag, commit SHA, commit time, Node/npm metadata, and artifact sizes/checksums.
 - `SHA256SUMS`: checksums for the source archive and metadata file.
 

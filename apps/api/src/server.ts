@@ -17,7 +17,7 @@ const app = buildApp({
   skillRepository: new PostgresSkillRepository(db),
   authService: new AuthService(new PostgresAuthStore(db), {
     mfaSecretKey: requiredAuthSecret(),
-    totpIssuer: process.env.TOTP_ISSUER ?? "AI Skills Share",
+    totpIssuer: process.env.TOTP_ISSUER ?? "MySkills",
     loginLimiter: new MemoryAuthRateLimiter({ maxAttempts: 10, windowMs: 15 * 60 * 1000 }),
     registrationLimiter: new MemoryAuthRateLimiter({ maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
     mfaLimiter: new MemoryAuthRateLimiter({ maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
@@ -69,5 +69,5 @@ function requiredAuthSecret(): string {
   if (process.env.NODE_ENV === "production") {
     throw new Error("AUTH_SECRET must be set to at least 32 bytes in production.");
   }
-  return "dev-only-ai-skills-share-auth-secret-change-before-production";
+  return "dev-only-myskills-app-auth-secret-change-before-production";
 }

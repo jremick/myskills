@@ -10,7 +10,7 @@ export interface AiSkillsMcpServerOptions extends RegistryApiClientOptions {
 
 export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}): McpServer {
   const server = new McpServer({
-    name: options.name ?? "ai-skills-share",
+    name: options.name ?? "myskills-app",
     version: options.version ?? "0.1.0",
   });
   const handlers = createAiSkillsMcpHandlers(createRegistryApiClient(options));
@@ -19,7 +19,7 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
     "search_skills",
     {
       title: "Search Skills",
-      description: "Search approved AI Skills Share registry entries visible to the configured API token.",
+      description: "Search approved MySkills registry entries visible to the configured API token.",
       inputSchema: z.object({
         query: z.string().trim().max(120).optional(),
         limit: z.number().int().min(1).max(100).optional(),

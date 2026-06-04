@@ -3,10 +3,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const DEV_AUTH_SECRET = "dev-only-ai-skills-share-auth-secret-change-before-production";
+const DEV_AUTH_SECRET = "dev-only-myskills-app-auth-secret-change-before-production";
 const DEV_DATABASE_URL = "postgres://ai_skills_share:ai_skills_share_dev@localhost:5432/ai_skills_share";
 const DEV_SEED_PASSWORD = "change-me-now-please";
-const DEV_MINIO_SECRET = "ai-skills-share-dev";
+const DEV_MINIO_SECRET = "myskills-app-dev";
 
 const args = parseArgs(process.argv.slice(2));
 const env = args.envFile ? { ...parseEnvFile(args.envFile) } : { ...process.env };
@@ -237,23 +237,23 @@ function validateBootstrapSecrets() {
 }
 
 function validateMcp() {
-  const apiUrl = stringValue("AI_SKILLS_API_URL");
+  const apiUrl = stringValue("MYSKILLS_API_URL");
   if (apiUrl) {
-    rejectLocalUrl("AI_SKILLS_API_URL", apiUrl);
+    rejectLocalUrl("MYSKILLS_API_URL", apiUrl);
   }
-  const host = stringValue("AI_SKILLS_MCP_HOST");
+  const host = stringValue("MYSKILLS_MCP_HOST");
   if (host && !isLoopbackHost(host)) {
-    const allowedHosts = csv("AI_SKILLS_MCP_ALLOWED_HOSTS");
+    const allowedHosts = csv("MYSKILLS_MCP_ALLOWED_HOSTS");
     if (allowedHosts.length === 0) {
-      errors.push("AI_SKILLS_MCP_ALLOWED_HOSTS is required when AI_SKILLS_MCP_HOST is not loopback.");
+      errors.push("MYSKILLS_MCP_ALLOWED_HOSTS is required when MYSKILLS_MCP_HOST is not loopback.");
     }
     if (allowedHosts.includes("*")) {
-      errors.push("AI_SKILLS_MCP_ALLOWED_HOSTS must not contain '*'.");
+      errors.push("MYSKILLS_MCP_ALLOWED_HOSTS must not contain '*'.");
     }
   }
-  for (const origin of csv("AI_SKILLS_MCP_ALLOWED_ORIGINS")) {
-    validateUrlValue("AI_SKILLS_MCP_ALLOWED_ORIGINS", origin, { https: true });
-    rejectLocalUrl("AI_SKILLS_MCP_ALLOWED_ORIGINS", origin);
+  for (const origin of csv("MYSKILLS_MCP_ALLOWED_ORIGINS")) {
+    validateUrlValue("MYSKILLS_MCP_ALLOWED_ORIGINS", origin, { https: true });
+    rejectLocalUrl("MYSKILLS_MCP_ALLOWED_ORIGINS", origin);
   }
 }
 

@@ -1,4 +1,4 @@
-import type { PublicSkill } from "@ai-skills-share/core";
+import type { PublicSkill } from "@myskills-app/core";
 import { RegistryApiError, type RegistryApiClient, type ReleaseMetadata } from "./api-client.js";
 
 export interface McpToolResult {
@@ -89,12 +89,12 @@ export function createAiSkillsMcpHandlers(client: RegistryApiClient): AiSkillsMc
           install: {
             platform: selectedPlatform.name,
             installTarget: selectedPlatform.installTarget,
-            cliInstallCommand: `ai-skills install ${skill.slug} --version ${release.version} --platform ${selectedPlatform.name}`,
-            cliExportCommand: `ai-skills export ${skill.slug} --version ${release.version} --platform ${selectedPlatform.name} --output ${outputDir}`,
+            cliInstallCommand: `myskills install ${skill.slug} --version ${release.version} --platform ${selectedPlatform.name}`,
+            cliExportCommand: `myskills export ${skill.slug} --version ${release.version} --platform ${selectedPlatform.name} --output ${outputDir}`,
             apiBundleEndpoint: `${client.baseUrl}/v1/skills/${encodeURIComponent(skill.slug)}/releases/${encodeURIComponent(release.version)}/bundle?platform=${encodeURIComponent(selectedPlatform.name)}`,
             authentication: client.hasToken
               ? "This MCP server will forward its configured bearer token to the API."
-              : "Configure AI_SKILLS_TOKEN for authenticated or restricted registry access.",
+              : "Configure MYSKILLS_TOKEN for authenticated or restricted registry access.",
             packageContentsReturned: false,
           },
         };

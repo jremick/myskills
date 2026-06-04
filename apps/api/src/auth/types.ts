@@ -1,4 +1,4 @@
-import type { AuthenticatedUser, RegistrationMode, Role, UserStatus } from "@ai-skills-share/auth";
+import type { AuthenticatedUser, RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 
 export const apiTokenScopes = ["profile:read", "skills:read", "skills:submit", "review:read", "review:write"] as const;
 export const authActionTokenPurposes = ["email_verification", "password_reset"] as const;

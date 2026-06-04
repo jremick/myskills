@@ -87,7 +87,7 @@ test("search sends bearer token when available", async () => {
     return response(200, { skills: [] });
   };
 
-  const code = await runCli(["search"], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "read-token" }));
+  const code = await runCli(["search"], testRuntime(output, fetch, { MYSKILLS_TOKEN: "read-token" }));
 
   assert.equal(code, 0);
   assert.equal(authorization, "Bearer read-token");
@@ -110,7 +110,7 @@ test("info sends bearer token when available", async () => {
     });
   };
 
-  const code = await runCli(["info", "release-notes-helper"], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "read-token" }));
+  const code = await runCli(["info", "release-notes-helper"], testRuntime(output, fetch, { MYSKILLS_TOKEN: "read-token" }));
 
   assert.equal(code, 0);
   assert.equal(authorization, "Bearer read-token");
@@ -130,7 +130,7 @@ test("whoami sends bearer token to the API", async () => {
     });
   };
 
-  const code = await runCli(["whoami"], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "test-token" }));
+  const code = await runCli(["whoami"], testRuntime(output, fetch, { MYSKILLS_TOKEN: "test-token" }));
 
   assert.equal(code, 0);
   assert.equal(authorization, "Bearer test-token");
@@ -165,7 +165,7 @@ test("submit blocks locally when scan has blocking findings", async (t) => {
   const code = await runCli(["submit", "--path", dir], testRuntime(output, async () => {
     calls += 1;
     return response(500, {});
-  }, { AI_SKILLS_TOKEN: "submit-token" }));
+  }, { MYSKILLS_TOKEN: "submit-token" }));
 
   assert.equal(code, 1);
   assert.equal(calls, 0);
@@ -186,7 +186,7 @@ test("submit blocks locally when a zip package has blocking findings", async (t)
   const code = await runCli(["submit", "--path", zipPath], testRuntime(output, async () => {
     calls += 1;
     return response(500, {});
-  }, { AI_SKILLS_TOKEN: "submit-token" }));
+  }, { MYSKILLS_TOKEN: "submit-token" }));
 
   assert.equal(code, 1);
   assert.equal(calls, 0);
@@ -218,7 +218,7 @@ test("submit sends package entries to the API", async (t) => {
     });
   };
 
-  const code = await runCli(["submit", "--path", dir], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "submit-token" }));
+  const code = await runCli(["submit", "--path", dir], testRuntime(output, fetch, { MYSKILLS_TOKEN: "submit-token" }));
 
   assert.equal(code, 0);
   assert.equal(method, "POST");
@@ -261,7 +261,7 @@ test("submit sends zip archives to the API without extracted file entries", asyn
     });
   };
 
-  const code = await runCli(["submit", "--path", zipPath], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "submit-token" }));
+  const code = await runCli(["submit", "--path", zipPath], testRuntime(output, fetch, { MYSKILLS_TOKEN: "submit-token" }));
 
   assert.equal(code, 0);
   assert.equal(method, "POST");
@@ -306,7 +306,7 @@ test("review submissions prints stable rows", async () => {
     });
   };
 
-  const code = await runCli(["review", "submissions", "--api-url", "http://api.test"], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "review-token" }));
+  const code = await runCli(["review", "submissions", "--api-url", "http://api.test"], testRuntime(output, fetch, { MYSKILLS_TOKEN: "review-token" }));
 
   assert.equal(code, 0);
   assert.equal(url, "http://api.test/v1/review/submissions");
@@ -346,7 +346,7 @@ test("review action posts exact action payload", async () => {
     "checked",
     "--api-url",
     "http://api.test",
-  ], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "review-token" }));
+  ], testRuntime(output, fetch, { MYSKILLS_TOKEN: "review-token" }));
 
   assert.equal(code, 0);
   assert.equal(url, "http://api.test/v1/review/submissions/submission-1/actions");
@@ -369,7 +369,7 @@ test("review action rejects unknown actions without fetch", async () => {
   ], testRuntime(output, async () => {
     calls += 1;
     return response(500, {});
-  }, { AI_SKILLS_TOKEN: "review-token" }));
+  }, { MYSKILLS_TOKEN: "review-token" }));
 
   assert.equal(code, 2);
   assert.equal(calls, 0);
@@ -377,7 +377,7 @@ test("review action rejects unknown actions without fetch", async () => {
 });
 
 test("export writes verified bundle files under output directory", async (t) => {
-  const outputDir = await mkdtemp(path.join(os.tmpdir(), "ai-skills-export-"));
+  const outputDir = await mkdtemp(path.join(os.tmpdir(), "myskills-export-"));
   t.after(() => rm(outputDir, { recursive: true, force: true }));
   const output = createOutput();
   const bundle = JSON.stringify({
@@ -419,7 +419,7 @@ test("export writes verified bundle files under output directory", async (t) => 
 });
 
 test("export refuses unsafe bundle file paths before writing", async (t) => {
-  const outputDir = await mkdtemp(path.join(os.tmpdir(), "ai-skills-export-"));
+  const outputDir = await mkdtemp(path.join(os.tmpdir(), "myskills-export-"));
   t.after(() => rm(outputDir, { recursive: true, force: true }));
   const output = createOutput();
   const bundle = JSON.stringify({
@@ -448,7 +448,7 @@ test("export refuses unsafe bundle file paths before writing", async (t) => {
 });
 
 test("install downloads the latest verified bundle and records local state", async (t) => {
-  const installRoot = await mkdtemp(path.join(os.tmpdir(), "ai-skills-install-"));
+  const installRoot = await mkdtemp(path.join(os.tmpdir(), "myskills-install-"));
   t.after(() => rm(installRoot, { recursive: true, force: true }));
   const output = createOutput();
   const bundle = bundleText("0.2.0");
@@ -480,7 +480,7 @@ test("install downloads the latest verified bundle and records local state", asy
     installRoot,
     "--api-url",
     "http://api.test",
-  ], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "install-token" }));
+  ], testRuntime(output, fetch, { MYSKILLS_TOKEN: "install-token" }));
 
   assert.equal(code, 0);
   assert.deepEqual(calls, [
@@ -491,17 +491,17 @@ test("install downloads the latest verified bundle and records local state", asy
   assert.equal(await readFile(path.join(installRoot, "release-notes-helper", "README.md"), "utf8"), "Release notes helper 0.2.0");
   assert.match(output.stdout[0], /release-notes-helper@0\.2\.0\tinstalled\tplatform=codex/);
 
-  const registry = JSON.parse(await readFile(path.join(installRoot, ".ai-skills-share", "installed.json"), "utf8"));
+  const registry = JSON.parse(await readFile(path.join(installRoot, ".myskills-app", "installed.json"), "utf8"));
   assert.equal(registry.installations["release-notes-helper"].version, "0.2.0");
   assert.equal(registry.installations["release-notes-helper"].platform, "codex");
   assert.equal(registry.installations["release-notes-helper"].history.length, 0);
 });
 
 test("list prints local installed skills without registry calls", async (t) => {
-  const installRoot = await mkdtemp(path.join(os.tmpdir(), "ai-skills-install-"));
+  const installRoot = await mkdtemp(path.join(os.tmpdir(), "myskills-install-"));
   t.after(() => rm(installRoot, { recursive: true, force: true }));
-  await mkdir(path.join(installRoot, ".ai-skills-share"), { recursive: true });
-  await writeFile(path.join(installRoot, ".ai-skills-share", "installed.json"), JSON.stringify({
+  await mkdir(path.join(installRoot, ".myskills-app"), { recursive: true });
+  await writeFile(path.join(installRoot, ".myskills-app", "installed.json"), JSON.stringify({
     version: 1,
     installations: {
       "release-notes-helper": {
@@ -527,7 +527,7 @@ test("list prints local installed skills without registry calls", async (t) => {
 });
 
 test("update stores a rollback snapshot and rollback restores it", async (t) => {
-  const installRoot = await mkdtemp(path.join(os.tmpdir(), "ai-skills-install-"));
+  const installRoot = await mkdtemp(path.join(os.tmpdir(), "myskills-install-"));
   t.after(() => rm(installRoot, { recursive: true, force: true }));
   const output = createOutput();
   const fetch: FetchLike = async (input) => {
@@ -566,14 +566,14 @@ test("update stores a rollback snapshot and rollback restores it", async (t) => 
   const update = await runCli(["update", "release-notes-helper", "--dir", installRoot], testRuntime(output, fetch));
   assert.equal(update, 0);
   assert.equal(await readFile(path.join(installRoot, "release-notes-helper", "README.md"), "utf8"), "Release notes helper 0.2.0");
-  let registry = JSON.parse(await readFile(path.join(installRoot, ".ai-skills-share", "installed.json"), "utf8"));
+  let registry = JSON.parse(await readFile(path.join(installRoot, ".myskills-app", "installed.json"), "utf8"));
   assert.equal(registry.installations["release-notes-helper"].version, "0.2.0");
   assert.equal(registry.installations["release-notes-helper"].history[0].version, "0.1.0");
 
   const rollback = await runCli(["rollback", "release-notes-helper", "--dir", installRoot], testRuntime(output, fetch));
   assert.equal(rollback, 0);
   assert.equal(await readFile(path.join(installRoot, "release-notes-helper", "README.md"), "utf8"), "Release notes helper 0.1.0");
-  registry = JSON.parse(await readFile(path.join(installRoot, ".ai-skills-share", "installed.json"), "utf8"));
+  registry = JSON.parse(await readFile(path.join(installRoot, ".myskills-app", "installed.json"), "utf8"));
   assert.equal(registry.installations["release-notes-helper"].version, "0.1.0");
   assert.deepEqual(registry.installations["release-notes-helper"].history, []);
   assert.match(output.stdout.join("\n"), /release-notes-helper@0\.2\.0\tupdated\tplatform=codex\tprevious=0\.1\.0/);
@@ -628,7 +628,7 @@ test("token create posts requested scopes and prints plaintext once", async () =
     "skills:submit",
     "--api-url",
     "http://api.test",
-  ], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "session-token" }));
+  ], testRuntime(output, fetch, { MYSKILLS_TOKEN: "session-token" }));
 
   assert.equal(code, 0);
   assert.equal(url, "http://api.test/v1/auth/api-tokens");
@@ -660,7 +660,7 @@ test("token list prints metadata without plaintext or hashes", async () => {
     });
   };
 
-  const code = await runCli(["token", "list"], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "session-token" }));
+  const code = await runCli(["token", "list"], testRuntime(output, fetch, { MYSKILLS_TOKEN: "session-token" }));
 
   assert.equal(code, 0);
   assert.equal(authorization, "Bearer session-token");
@@ -687,7 +687,7 @@ test("token revoke sends DELETE to the API", async () => {
     });
   };
 
-  const code = await runCli(["token", "revoke", "api-token-1", "--api-url", "http://api.test", "--token", "explicit-token"], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "env-token" }));
+  const code = await runCli(["token", "revoke", "api-token-1", "--api-url", "http://api.test", "--token", "explicit-token"], testRuntime(output, fetch, { MYSKILLS_TOKEN: "env-token" }));
 
   assert.equal(code, 0);
   assert.equal(url, "http://api.test/v1/auth/api-tokens/api-token-1");
@@ -703,7 +703,7 @@ test("token create usage errors exit without fetch", async () => {
   const code = await runCli(["token", "create", "--name", "Local CLI"], testRuntime(output, async () => {
     calls += 1;
     return response(500, {});
-  }, { AI_SKILLS_TOKEN: "session-token" }));
+  }, { MYSKILLS_TOKEN: "session-token" }));
 
   assert.equal(code, 2);
   assert.equal(calls, 0);
@@ -745,7 +745,7 @@ function releaseBody(version: string, bundle: string) {
       artifact: {
         sha256: createHash("sha256").update(bundle).digest("hex"),
         byteSize: Buffer.byteLength(bundle),
-        contentType: "application/vnd.ai-skills-share.package+json",
+        contentType: "application/vnd.myskills-app.package+json",
       },
     },
   };
@@ -759,7 +759,7 @@ function assertPackageManifestMatchesBody(body: { manifest?: { name?: string; ve
 }
 
 async function makeTempPackage(): Promise<string> {
-  return mkdtemp(path.join(os.tmpdir(), "ai-skills-cli-"));
+  return mkdtemp(path.join(os.tmpdir(), "myskills-cli-"));
 }
 
 function createOutput(): { stdout: string[]; stderr: string[] } {

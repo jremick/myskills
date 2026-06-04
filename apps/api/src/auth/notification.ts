@@ -119,8 +119,8 @@ function authActionMessage(
   const expiresAt = input.expiresAt.toISOString();
   const action = purpose === "email_verification" ? "verify your email address" : "reset your password";
   const subject = purpose === "email_verification"
-    ? "Verify your AI Skills Share email"
-    : "Reset your AI Skills Share password";
+    ? "Verify your MySkills email"
+    : "Reset your MySkills password";
   const escapedUrl = escapeHtml(url);
   const escapedAction = escapeHtml(action);
   return {

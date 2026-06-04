@@ -1,4 +1,4 @@
-import type { PublicSkill } from "@ai-skills-share/core";
+import type { PublicSkill } from "@myskills-app/core";
 
 export interface ReleaseMetadata {
   slug: string;
@@ -318,7 +318,7 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
 }
 
 export function exportCommand(slug: string, version: string, platform: string): string {
-  return `ai-skills export ${slug} --version ${version} --platform ${platform} --output ./skills/${slug}`;
+  return `myskills export ${slug} --version ${version} --platform ${platform} --output ./skills/${slug}`;
 }
 
 export function safeErrorMessage(error: unknown): string {

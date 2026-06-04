@@ -30,7 +30,7 @@ Out of scope for alpha: hosted service operations, multi-instance federation, pa
 - Browser to API over HTTP(S), using session bearer tokens.
 - CLI to API over HTTP(S), using stored sessions or scoped API tokens.
 - MCP clients to HTTP MCP adapter, using scoped API tokens before protocol handling.
-- MCP stdio process to API, using explicit `AI_SKILLS_TOKEN`.
+- MCP stdio process to API, using explicit `MYSKILLS_TOKEN`.
 - API to Postgres for canonical product state.
 - API to object storage for package artifacts.
 - Package upload boundary from untrusted author input into validation, scanning, object storage, review, and publication.

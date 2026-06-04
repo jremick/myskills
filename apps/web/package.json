@@ -1,5 +1,5 @@
 {
-  "name": "@ai-skills-share/web",
+  "name": "@myskills-app/web",
   "version": "0.1.0-alpha.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "test": "node ../../scripts/run-node-tests.mjs --import tsx --import ./test/setup-dom.ts --test-concurrency=1 --extensions .test.ts,.test.tsx"
   },
   "dependencies": {
-    "@ai-skills-share/core": "0.1.0-alpha.0",
+    "@myskills-app/core": "0.1.0-alpha.0",
     "lucide-react": "^0.561.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"

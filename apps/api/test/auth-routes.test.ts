@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateTotpCode, hashPassword } from "@ai-skills-share/auth";
+import { generateTotpCode, hashPassword } from "@myskills-app/auth";
 import { buildApp } from "../src/app.js";
 import { MemoryAuthRateLimiter } from "../src/auth/rate-limit.js";
 import { AuthService, type AuthNotificationSink } from "../src/auth/service.js";

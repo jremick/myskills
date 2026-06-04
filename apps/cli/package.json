@@ -1,17 +1,17 @@
 {
-  "name": "@ai-skills-share/cli",
+  "name": "@myskills-app/cli",
   "version": "0.1.0-alpha.0",
   "private": true,
   "type": "module",
   "bin": {
-    "ai-skills": "./dist/index.js"
+    "myskills": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "node ../../scripts/run-node-tests.mjs --import tsx --extensions .test.ts"
   },
   "dependencies": {
-    "@ai-skills-share/skill-package": "0.1.0-alpha.0"
+    "@myskills-app/skill-package": "0.1.0-alpha.0"
   },
   "devDependencies": {
     "tsx": "^4.20.6"

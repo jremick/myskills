@@ -1,6 +1,6 @@
 # Contributing
 
-AI Skills Share is in public alpha. Contributions are welcome when they keep the project self-hostable, public-safe, and aligned across API, web, CLI, and MCP surfaces.
+MySkills is in public alpha. Contributions are welcome when they keep the project self-hostable, public-safe, and aligned across API, web, CLI, and MCP surfaces.
 
 ## Development Principles
 

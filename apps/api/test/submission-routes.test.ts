@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { generateTotpCode, hashPassword } from "@ai-skills-share/auth";
+import { generateTotpCode, hashPassword } from "@myskills-app/auth";
 import { buildApp } from "../src/app.js";
 import { AuthService } from "../src/auth/service.js";
 import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
@@ -629,7 +629,7 @@ async function cleanArchiveSubmissionPayload(t: TestContext, extraEntries: ZipFi
 }
 
 async function archiveSubmissionPayload(t: TestContext, entries: ZipFixtureEntry[]) {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "ai-skills-api-archive-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "myskills-api-archive-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const zipPath = path.join(dir, "package.zip");
   await writeStoredZip(zipPath, entries);

@@ -1,11 +1,11 @@
 {
-  "name": "@ai-skills-share/mcp",
+  "name": "@myskills-app/mcp",
   "version": "0.1.0-alpha.0",
   "private": true,
   "type": "module",
   "bin": {
-    "ai-skills-mcp": "./dist/index.js",
-    "ai-skills-mcp-http": "./dist/http-index.js"
+    "myskills-mcp": "./dist/index.js",
+    "myskills-mcp-http": "./dist/http-index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -16,7 +16,7 @@
     "test": "node ../../scripts/run-node-tests.mjs --import tsx --extensions .test.ts"
   },
   "dependencies": {
-    "@ai-skills-share/core": "0.1.0-alpha.0",
+    "@myskills-app/core": "0.1.0-alpha.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.1.13"
   },

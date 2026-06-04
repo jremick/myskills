@@ -1,17 +1,16 @@
-# AI Skills Share Project Instructions
+# MySkills Project Instructions
 
 Version: 0.1.0
 Last updated: 2026-06-04
 
 ## Scope
 
-These instructions apply to this repository. They extend the global Codex instructions and focus on keeping this project portable, public-ready, and independent from any prior internal implementation.
+These instructions apply to this repository. They extend the global Codex instructions and focus on keeping this project portable and public-ready.
 
 ## Product Boundary
 
-- Treat this repo as a clean open-source product, not a continuation of any internal company repo.
-- Do not copy private source code, private skill content, internal documentation, production URLs, user identities, access policies, or organization-specific terminology from prior prototypes.
-- Use prior prototypes only as reference material for product lessons, feature inventory, and risk discovery.
+- Treat this repo as a clean open-source product.
+- Do not copy private source code, private skill content, internal documentation, production URLs, user identities, access policies, or organization-specific terminology into this repo.
 - Keep public docs generic. If exact private-source evidence is needed during migration, keep it in `.private/`, which is ignored by git.
 
 ## Backend Direction
@@ -45,4 +44,3 @@ Before claiming setup or implementation work is ready:
 - Confirm `npm run check:privacy` does not find internal/private carryover terms.
 - For code changes, add or update tests that prove the intended behavior.
 - For frontend work, run the app and verify the relevant user flow in a browser.
-

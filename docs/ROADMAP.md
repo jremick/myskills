@@ -6,6 +6,7 @@ Last updated: 2026-06-04
 ## Release Tracks
 
 - **Responsible public alpha (`v0.1.0-alpha.0`)**: make the repository public with clear alpha limits, sanitized examples, security reporting, reproducible artifacts, and fresh-clone proof.
+- **Short-term domain**: point `myskills.sh` to the public `myskills-app` repository until the website exists.
 - **Business-safe production release**: harden the alpha into an operator-ready release with stronger audit, background scanning, provider lifecycle, artifact delivery, CLI credential storage, deploy/ops guidance, and upgrade policy. See [BUSINESS_SAFE_RELEASE_GOAL.md](BUSINESS_SAFE_RELEASE_GOAL.md).
 
 ## Milestone 0: Private Project Setup
@@ -17,7 +18,7 @@ Acceptance:
 - Private personal repo exists.
 - Public-safe README, architecture, auth, data, API/MCP/CLI, security, and roadmap docs exist.
 - Privacy and structure checks pass.
-- Prior prototype reviewed without copying private source into this repo.
+- Public docs and examples contain no private-source carryover.
 
 ## Milestone 1: Backend Foundation Vertical Slice
 
@@ -92,7 +93,7 @@ Goal: support author and user workflows from the terminal.
 
 Deliverables:
 
-- `ai-skills` CLI package.
+- `myskills` CLI package.
 - Login, whoami, logout, token storage.
 - Init, validate, scan, package, submit.
 - Search, info, install, export, list, update, rollback.
@@ -187,3 +188,27 @@ Acceptance:
 - Security/threat-model findings above accepted alpha risk are closed or tracked with explicit mitigations.
 - Admin, maintainer, author, user, CLI, API, MCP, and deployment workflows have deterministic verification.
 - Upgrade from the alpha data model is tested or migration limits are clearly documented.
+
+## Milestone 9: Public Website
+
+Goal: build a full website for MySkills at `myskills.sh`.
+
+Short-term:
+
+- Make the repository public as `myskills-app`.
+- Point `myskills.sh` to the public GitHub repository or a minimal redirect page.
+
+Deliverables:
+
+- Product homepage with clear alpha status and install path.
+- Documentation hub for setup, deployment, CLI, API, MCP, package authoring, security, and release notes.
+- Example skill gallery using public-safe packages.
+- Screenshots or short demos for web, CLI, MCP, submission, review, and install workflows.
+- Release/download page for source artifacts and future containers/packages.
+- Contribution and security-reporting links.
+
+Acceptance:
+
+- `myskills.sh` gives a new user a clear path from product overview to running the local demo.
+- Website content does not duplicate stale docs; it links to canonical repo docs where appropriate.
+- The site can be deployed independently from the app services.

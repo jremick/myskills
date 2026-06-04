@@ -23,7 +23,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import type { PublicSkill } from "@ai-skills-share/core";
+import type { PublicSkill } from "@myskills-app/core";
 import {
   createRegistryClient,
   exportCommand,
@@ -217,7 +217,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
           window.history.replaceState({}, "", "/");
         }}>
           <span className="brand-mark" aria-hidden="true"><PackageOpen size={22} /></span>
-          <span>AI Skills Share</span>
+          <span>MySkills</span>
         </a>
         <label className="global-search" htmlFor="skill-search">
           <Search size={18} aria-hidden="true" />
@@ -1461,7 +1461,7 @@ function skillSlugFromPath(pathname: string): string | null {
   return match?.[1] ?? null;
 }
 
-const SESSION_STORAGE_KEY = "ai-skills-share:web-session";
+const SESSION_STORAGE_KEY = "myskills-app:web-session";
 const MAX_WEB_ARCHIVE_BYTES = 10 * 1024 * 1024;
 const ADMIN_ROLE_OPTIONS = ["owner", "admin", "maintainer", "author", "user"];
 

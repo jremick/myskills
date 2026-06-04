@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { AppError } from "@ai-skills-share/core";
+import { AppError } from "@myskills-app/core";
 import {
   hasBlockingFindings,
   loadSkillManifestFromPackageFiles,
@@ -8,8 +8,8 @@ import {
   scanPackageFiles,
   type PackageInputFile,
   type SkillManifest,
-} from "@ai-skills-share/skill-package";
-import type { Role } from "@ai-skills-share/auth";
+} from "@myskills-app/skill-package";
+import type { Role } from "@myskills-app/auth";
 import type {
   ArtifactPayload,
   CreateSubmissionInput,
@@ -23,7 +23,7 @@ import type {
   SubmissionStore,
 } from "./types.js";
 
-const PACKAGE_CONTENT_TYPE = "application/vnd.ai-skills-share.package+json";
+const PACKAGE_CONTENT_TYPE = "application/vnd.myskills-app.package+json";
 
 export class SubmissionService {
   constructor(private readonly store: SubmissionStore) {}

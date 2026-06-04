@@ -5,7 +5,7 @@ Last updated: 2026-06-04
 
 ## Core Decision
 
-AI Skills Share is a database-backed application. The API service is the trust boundary. Web, CLI, and MCP clients receive only authorized metadata, package artifacts, and workflow results.
+MySkills is a database-backed application. The API service is the trust boundary. Web, CLI, and MCP clients receive only authorized metadata, package artifacts, and workflow results.
 
 Git hosting integrations can help with import, export, PR review, changelogs, and releases, but they are not the canonical registry.
 

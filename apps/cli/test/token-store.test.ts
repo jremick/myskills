@@ -6,10 +6,10 @@ import path from "node:path";
 import { createFileTokenStore } from "../src/token-store.js";
 
 test("file token store scopes tokens by normalized API URL", async (t) => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "ai-skills-token-store-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "myskills-token-store-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const tokenFile = path.join(dir, "tokens.json");
-  const store = createFileTokenStore({ AI_SKILLS_TOKEN_FILE: tokenFile });
+  const store = createFileTokenStore({ MYSKILLS_TOKEN_FILE: tokenFile });
 
   await store.set("http://api.test/", {
     kind: "session",

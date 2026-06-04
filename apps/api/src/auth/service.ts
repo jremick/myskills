@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
-import { AppError } from "@ai-skills-share/core";
+import { AppError } from "@myskills-app/core";
 import {
   createApiToken,
   createRecoveryCodes,
@@ -19,7 +19,7 @@ import {
   type RegistrationMode,
   type Role,
   type UserStatus,
-} from "@ai-skills-share/auth";
+} from "@myskills-app/auth";
 import type { AuthRateLimiter } from "./rate-limit.js";
 import {
   apiTokenScopes,
@@ -46,8 +46,8 @@ const DEFAULT_PASSWORD_RESET_TTL_MS = 1000 * 60 * 60;
 const DEFAULT_API_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 90;
 const MAX_API_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 365;
 const API_TOKEN_PREFIX_LENGTH = 12;
-const DEFAULT_TOTP_ISSUER = "AI Skills Share";
-const DEV_AUTH_SECRET = "dev-only-ai-skills-share-auth-secret-change-before-production";
+const DEFAULT_TOTP_ISSUER = "MySkills";
+const DEV_AUTH_SECRET = "dev-only-myskills-app-auth-secret-change-before-production";
 
 export interface RegisterInput {
   email: string;

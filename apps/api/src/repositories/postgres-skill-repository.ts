@@ -1,5 +1,5 @@
 import { and, eq, ilike, isNotNull, or, sql, type SQL } from "drizzle-orm";
-import type { PublicSkill, SkillRepository, SkillSearchFilters, SkillPlatformVariant } from "@ai-skills-share/core";
+import type { PublicSkill, SkillRepository, SkillSearchFilters, SkillPlatformVariant } from "@myskills-app/core";
 import type { Database } from "../db/client.js";
 import { skillArtifacts, skillPlatformVariants, skills, skillTags, skillVersions } from "../db/schema.js";
 

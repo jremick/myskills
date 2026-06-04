@@ -51,7 +51,7 @@ test("GET /health returns service status", async (t) => {
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.json(), {
     ok: true,
-    service: "ai-skills-share-api",
+    service: "myskills-app-api",
   });
 });
 

@@ -9,11 +9,11 @@ Accepted.
 
 ## Context
 
-The prior prototype used Git-hosted content as the registry storage layer. That was useful for a private proof of concept, but it is not the right backend for an open-source production app.
+MySkills needs a backend that can safely model users, roles, submissions, reviews, package artifacts, audit events, API tokens, and lifecycle policy. Git repositories are useful integration points, but they are not the right canonical database or authorization boundary for this product.
 
 ## Decision
 
-AI Skills Share will use Postgres as the canonical system of record and object storage for package artifacts.
+MySkills will use Postgres as the canonical system of record and object storage for package artifacts.
 
 Git integrations may be added for import, export, review packets, changelog sync, or release automation, but Git is not the primary database, queue, artifact store, auth store, or policy store.
 
@@ -23,4 +23,3 @@ Git integrations may be added for import, export, review packets, changelog sync
 - Self-hosters are not forced to grant the app broad repository access.
 - Package review can still integrate with Git workflows later.
 - The first implementation milestone must include migrations, seed data, object storage abstraction, and backend tests.
-

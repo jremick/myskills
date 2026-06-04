@@ -82,8 +82,8 @@ test("install instructions never fetch or expose bundle package contents", async
     "http://localhost:3001/v1/skills/release-notes-helper/releases/0.1.0",
   ]);
   assert.equal(calls.some((url) => url.includes("/bundle")), false);
-  assert.match(text, /ai-skills install release-notes-helper --version 0\.1\.0 --platform codex/);
-  assert.match(text, /ai-skills export release-notes-helper --version 0\.1\.0 --platform codex/);
+  assert.match(text, /myskills install release-notes-helper --version 0\.1\.0 --platform codex/);
+  assert.match(text, /myskills export release-notes-helper --version 0\.1\.0 --platform codex/);
   assert.match(text, /packageContentsReturned/);
   assert.equal(text.includes("storageKey"), false);
   assert.equal(text.includes("payload"), false);
@@ -194,7 +194,7 @@ function publicRelease() {
     artifact: {
       sha256: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
       byteSize: 1234,
-      contentType: "application/vnd.ai-skills-share.package+json",
+      contentType: "application/vnd.myskills-app.package+json",
     },
   };
 }

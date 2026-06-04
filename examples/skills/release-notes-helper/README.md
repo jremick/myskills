@@ -1,6 +1,6 @@
 # Release Notes Helper
 
-Public-safe example skill package for AI Skills Share.
+Public-safe example skill package for MySkills.
 
 This example mirrors the seeded demo skill. It is intentionally small so package validation, scanning, submission, review, export, and install workflows have a clean fixture that does not depend on private context.
 

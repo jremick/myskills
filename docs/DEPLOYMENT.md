@@ -1,6 +1,6 @@
 # Deployment
 
-AI Skills Share is a Node/Postgres application with object storage for package artifacts. The production path is container-first:
+MySkills is a Node/Postgres application with object storage for package artifacts. The production path is container-first:
 
 - `api`: Fastify API and auth boundary.
 - `web`: static Vite build served by nginx.
@@ -46,7 +46,7 @@ To run the optional HTTP MCP adapter:
 docker compose --env-file .env.production -f docker-compose.production.example.yml --profile mcp up -d mcp-http
 ```
 
-The MCP HTTP service requires explicit `AI_SKILLS_MCP_ALLOWED_HOSTS` when bound to `0.0.0.0`.
+The MCP HTTP service requires explicit `MYSKILLS_MCP_ALLOWED_HOSTS` when bound to `0.0.0.0`.
 
 ## Reverse Proxy And TLS
 

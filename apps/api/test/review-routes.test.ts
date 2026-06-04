@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { generateTotpCode, hashPassword, type Role } from "@ai-skills-share/auth";
+import { generateTotpCode, hashPassword, type Role } from "@myskills-app/auth";
 import { buildApp } from "../src/app.js";
 import { AuthService } from "../src/auth/service.js";
 import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
@@ -123,7 +123,7 @@ test("maintainers can approve and publish a clean public submission", async (t) 
     url: "/v1/skills/release-notes-helper/releases/0.1.0/bundle?platform=codex",
   });
   assert.equal(bundleResponse.statusCode, 200);
-  assert.match(bundleResponse.headers["content-type"] as string, /application\/vnd\.ai-skills-share\.package\+json/);
+  assert.match(bundleResponse.headers["content-type"] as string, /application\/vnd\.myskills-app\.package\+json/);
   const metadata = releaseResponse.json().release.artifact;
   assert.equal(Buffer.byteLength(bundleResponse.body), metadata.byteSize);
   assert.equal(createHash("sha256").update(bundleResponse.body).digest("hex"), metadata.sha256);

@@ -1,6 +1,6 @@
 # Security Policy
 
-AI Skills Share is currently in public alpha. The project is suitable for evaluation and early self-hosting, but it is not yet a business-critical production platform.
+MySkills is currently in public alpha. The project is suitable for evaluation and early self-hosting, but it is not yet a business-critical production platform.
 
 ## Supported Versions
 

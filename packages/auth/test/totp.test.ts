@@ -30,12 +30,12 @@ test("rejects malformed TOTP codes", () => {
 test("creates authenticator app bootstrap material", () => {
   const secret = createTotpSecret();
   const uri = createTotpUri({
-    issuer: "AI Skills Share",
+    issuer: "MySkills",
     accountName: "owner@example.com",
     secret,
   });
 
   assert.match(secret, /^[A-Z2-7]{26,}$/);
-  assert.equal(uri.startsWith("otpauth://totp/AI%20Skills%20Share:owner%40example.com?"), true);
+  assert.equal(uri.startsWith("otpauth://totp/MySkills:owner%40example.com?"), true);
   assert.equal(uri.includes(`secret=${secret}`), true);
 });

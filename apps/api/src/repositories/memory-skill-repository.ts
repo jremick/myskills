@@ -1,4 +1,4 @@
-import type { PublicSkill, SkillRepository, SkillSearchFilters } from "@ai-skills-share/core";
+import type { PublicSkill, SkillRepository, SkillSearchFilters } from "@myskills-app/core";
 
 export class MemorySkillRepository implements SkillRepository {
   constructor(private readonly skills: PublicSkill[]) {}

@@ -1,5 +1,5 @@
 {
-  "name": "@ai-skills-share/api",
+  "name": "@myskills-app/api",
   "version": "0.1.0-alpha.0",
   "private": true,
   "type": "module",
@@ -13,9 +13,9 @@
     "test": "node ../../scripts/run-node-tests.mjs --import tsx --extensions .test.ts"
   },
   "dependencies": {
-    "@ai-skills-share/auth": "0.1.0-alpha.0",
-    "@ai-skills-share/core": "0.1.0-alpha.0",
-    "@ai-skills-share/skill-package": "0.1.0-alpha.0",
+    "@myskills-app/auth": "0.1.0-alpha.0",
+    "@myskills-app/core": "0.1.0-alpha.0",
+    "@myskills-app/skill-package": "0.1.0-alpha.0",
     "@aws-sdk/client-s3": "^3.1061.0",
     "drizzle-orm": "^0.45.0",
     "fastify": "^5.6.2",

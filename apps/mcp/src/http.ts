@@ -32,7 +32,7 @@ async function handleHttpRequest(
 ): Promise<void> {
   const path = requestPath(request);
   if (request.method === "GET" && path === "/health") {
-    sendJson(response, 200, { ok: true, service: "ai-skills-share-mcp-http" });
+    sendJson(response, 200, { ok: true, service: "myskills-app-mcp-http" });
     return;
   }
   if (path !== options.endpointPath) {

@@ -1,6 +1,6 @@
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
-import { AppError } from "@ai-skills-share/core";
-import { roles as authRoles, type RegistrationMode, type Role, type UserStatus } from "@ai-skills-share/auth";
+import { AppError } from "@myskills-app/core";
+import { roles as authRoles, type RegistrationMode, type Role, type UserStatus } from "@myskills-app/auth";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type { Database } from "../db/client.js";
 import {

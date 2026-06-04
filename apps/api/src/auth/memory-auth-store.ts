@@ -1,4 +1,4 @@
-import type { RegistrationMode, Role, UserStatus } from "@ai-skills-share/auth";
+import type { RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type {
   AuditEventRecord,

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { AppError } from "@ai-skills-share/core";
+import { AppError } from "@myskills-app/core";
 import { readArtifactPayload } from "../src/artifacts/package-payload.js";
 import {
   createArtifactObjectStorageFromEnv,
@@ -9,7 +9,7 @@ import {
   S3ArtifactObjectStorage,
 } from "../src/artifacts/storage.js";
 
-const PACKAGE_CONTENT_TYPE = "application/vnd.ai-skills-share.package+json";
+const PACKAGE_CONTENT_TYPE = "application/vnd.myskills-app.package+json";
 
 test("memory artifact storage writes and reads exact object text", async () => {
   const storage = new MemoryArtifactObjectStorage();
@@ -33,7 +33,7 @@ test("S3 artifact storage maps put and get commands without network", async () =
   const calls: Array<{ name: string; input: Record<string, unknown> }> = [];
   const body = JSON.stringify({ files: [{ path: "README.md", content: "Hello" }] });
   const storage = new S3ArtifactObjectStorage({
-    bucket: "ai-skills-share-dev",
+    bucket: "myskills-app-dev",
     client: {
       async send(command: { constructor: { name: string }; input: Record<string, unknown> }) {
         calls.push({ name: command.constructor.name, input: command.input });
@@ -66,7 +66,7 @@ test("S3 artifact storage maps put and get commands without network", async () =
 
   assert.equal(calls[0].name, "PutObjectCommand");
   assert.deepEqual(calls[0].input, {
-    Bucket: "ai-skills-share-dev",
+    Bucket: "myskills-app-dev",
     Key: "submissions/example/0.1.0/artifact.json",
     Body: body,
     ContentType: PACKAGE_CONTENT_TYPE,
@@ -75,7 +75,7 @@ test("S3 artifact storage maps put and get commands without network", async () =
   });
   assert.equal(calls[1].name, "GetObjectCommand");
   assert.deepEqual(calls[1].input, {
-    Bucket: "ai-skills-share-dev",
+    Bucket: "myskills-app-dev",
     Key: "submissions/example/0.1.0/artifact.json",
   });
 });
@@ -184,7 +184,7 @@ test("artifact storage env config rejects unsafe production DB mode and invalid 
   assert.throws(
     () => createArtifactObjectStorageFromEnv({
       ARTIFACT_STORAGE_MODE: "s3",
-      S3_BUCKET: "ai-skills-share-dev",
+      S3_BUCKET: "myskills-app-dev",
       S3_FORCE_PATH_STYLE: "yes",
     }),
     /Boolean environment values must be true or false/,
@@ -199,7 +199,7 @@ test("artifact storage env config validates S3 settings", () => {
   assert.throws(
     () => createArtifactObjectStorageFromEnv({
       ARTIFACT_STORAGE_MODE: "s3",
-      S3_BUCKET: "ai-skills-share-dev",
+      S3_BUCKET: "myskills-app-dev",
       S3_ACCESS_KEY_ID: "access-key",
     }),
     /S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be provided together/,
@@ -209,7 +209,7 @@ test("artifact storage env config validates S3 settings", () => {
     ARTIFACT_STORAGE_MODE: "s3",
     S3_ENDPOINT: "http://localhost:9000",
     S3_REGION: "local",
-    S3_BUCKET: "ai-skills-share-dev",
+    S3_BUCKET: "myskills-app-dev",
     S3_ACCESS_KEY_ID: "access-key",
     S3_SECRET_ACCESS_KEY: "secret-key",
   });

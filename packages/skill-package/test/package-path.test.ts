@@ -294,7 +294,7 @@ test("rejects duplicate package payload paths", () => {
 });
 
 async function makeTempPackage(): Promise<string> {
-  return mkdtemp(path.join(os.tmpdir(), "ai-skills-package-"));
+  return mkdtemp(path.join(os.tmpdir(), "myskills-package-"));
 }
 
 function manifestJson(overrides: Partial<{

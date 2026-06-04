@@ -1,12 +1,12 @@
-import type { Role } from "@ai-skills-share/auth";
-import type { SkillManifest, PackageInputFile, ScanFinding } from "@ai-skills-share/skill-package";
+import type { Role } from "@myskills-app/auth";
+import type { SkillManifest, PackageInputFile, ScanFinding } from "@myskills-app/skill-package";
 import type {
   ReviewStatus,
   SecurityStatus,
   SkillLifecycleStatus,
   SkillPlatformVariant,
   VisibilityScope,
-} from "@ai-skills-share/core";
+} from "@myskills-app/core";
 
 export interface ArtifactPayload {
   files: PackageInputFile[];

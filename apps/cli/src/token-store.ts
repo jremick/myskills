@@ -32,15 +32,15 @@ export function createFileTokenStore(env: Record<string, string | undefined> = p
 }
 
 function tokenFilePath(env: Record<string, string | undefined>): string {
-  if (env.AI_SKILLS_TOKEN_FILE) {
-    return path.resolve(env.AI_SKILLS_TOKEN_FILE);
+  if (env.MYSKILLS_TOKEN_FILE) {
+    return path.resolve(env.MYSKILLS_TOKEN_FILE);
   }
-  if (env.AI_SKILLS_CONFIG_DIR) {
-    return path.join(path.resolve(env.AI_SKILLS_CONFIG_DIR), "tokens.json");
+  if (env.MYSKILLS_CONFIG_DIR) {
+    return path.join(path.resolve(env.MYSKILLS_CONFIG_DIR), "tokens.json");
   }
   const baseDir = env.XDG_CONFIG_HOME
-    ? path.join(env.XDG_CONFIG_HOME, "ai-skills-share")
-    : path.join(os.homedir(), ".config", "ai-skills-share");
+    ? path.join(env.XDG_CONFIG_HOME, "myskills-app")
+    : path.join(os.homedir(), ".config", "myskills-app");
   return path.join(baseDir, "tokens.json");
 }
 

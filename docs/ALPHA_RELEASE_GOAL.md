@@ -5,7 +5,7 @@ Last updated: 2026-06-04
 
 ## Goal
 
-Ship AI Skills Share as a responsible public alpha that people can inspect, run locally, evaluate, and self-host experimentally without mistaking it for the final business-safe production release.
+Ship MySkills as a responsible public alpha that people can inspect, run locally, evaluate, and self-host experimentally without mistaking it for the final business-safe production release.
 
 ## Release Boundary
 
@@ -37,14 +37,15 @@ The alpha explicitly excludes business-critical production guarantees. API contr
 2. Confirm latest GitHub CI on `main` is green.
 3. Make the repository public.
 4. Enable GitHub private vulnerability reporting.
-5. Create and push the tag:
+5. Point `myskills.sh` to the public repository as a short-term landing target.
+6. Create and push the tag:
 
    ```bash
    git tag v0.1.0-alpha.0
    git push origin v0.1.0-alpha.0
    ```
 
-6. Confirm the tag-triggered release workflow succeeds and uploads artifacts.
+7. Confirm the tag-triggered release workflow succeeds and uploads artifacts.
 
 ## Stop Conditions
 

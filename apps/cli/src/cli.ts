@@ -8,7 +8,7 @@ import {
   readPackageFilesFromPath,
   scanPackagePath,
   type PackageScanResult,
-} from "@ai-skills-share/skill-package";
+} from "@myskills-app/skill-package";
 
 const DEFAULT_API_URL = "http://localhost:3001";
 
@@ -159,7 +159,7 @@ async function searchCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
 async function infoCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const slug = parsed.args[0];
   if (!slug) {
-    throw new CliError("Usage: ai-skills info <skill-slug>", 2);
+    throw new CliError("Usage: myskills info <skill-slug>", 2);
   }
   const response = await apiGet(
     `/v1/skills/${encodeURIComponent(slug)}`,
@@ -189,7 +189,7 @@ async function infoCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
 
 async function loginCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   if (!runtime.tokenStore) {
-    throw new CliError("No token store is configured. Set AI_SKILLS_TOKEN for one-off commands.", 1);
+    throw new CliError("No token store is configured. Set MYSKILLS_TOKEN for one-off commands.", 1);
   }
   const email = optionalStringOption(parsed, "email") ?? await promptText(runtime, "Email: ");
   const password = await promptSecret(runtime, "Password: ");
@@ -229,7 +229,7 @@ async function completeMfaLogin(loginResponse: Record<string, unknown>, parsed: 
 async function logoutCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const resolved = await resolveToken(parsed, runtime);
   if (!resolved) {
-    throw new CliError("Not logged in. Run ai-skills login, set AI_SKILLS_TOKEN, or pass --token.", 1);
+    throw new CliError("Not logged in. Run myskills login, set MYSKILLS_TOKEN, or pass --token.", 1);
   }
   if (resolved.source === "store" && resolved.stored.kind === "api") {
     await runtime.tokenStore?.delete(apiBaseUrl(parsed, runtime));
@@ -249,7 +249,7 @@ async function logoutCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
 async function whoamiCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const token = await tokenOption(parsed, runtime);
   if (!token) {
-    throw new CliError("No token provided. Run ai-skills login, set AI_SKILLS_TOKEN, or pass --token.", 1);
+    throw new CliError("No token provided. Run myskills login, set MYSKILLS_TOKEN, or pass --token.", 1);
   }
   const response = await apiGet("/v1/me", parsed, runtime, token);
   if (parsed.options.json) {
@@ -264,7 +264,7 @@ async function whoamiCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
 async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const token = await tokenOption(parsed, runtime);
   if (!token) {
-    throw new CliError("No token provided. Run ai-skills login, set AI_SKILLS_TOKEN, or pass --token.", 1);
+    throw new CliError("No token provided. Run myskills login, set MYSKILLS_TOKEN, or pass --token.", 1);
   }
   const subcommand = parsed.args[0];
   if (subcommand === "create") {
@@ -320,7 +320,7 @@ async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
   if (subcommand === "revoke") {
     const tokenId = parsed.args[1];
     if (!tokenId) {
-      throw new CliError("Usage: ai-skills token revoke <token-id>", 2);
+      throw new CliError("Usage: myskills token revoke <token-id>", 2);
     }
     const response = await apiDelete(`/v1/auth/api-tokens/${encodeURIComponent(tokenId)}`, parsed, runtime, token);
     if (parsed.options.json) {
@@ -331,13 +331,13 @@ async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
     }
     return 0;
   }
-  throw new CliError("Usage: ai-skills token create|list|revoke", 2);
+  throw new CliError("Usage: myskills token create|list|revoke", 2);
 }
 
 async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const token = await tokenOption(parsed, runtime);
   if (!token) {
-    throw new CliError("No token provided. Run ai-skills login, set AI_SKILLS_TOKEN, or pass --token.", 1);
+    throw new CliError("No token provided. Run myskills login, set MYSKILLS_TOKEN, or pass --token.", 1);
   }
   const subcommand = parsed.args[0];
   if (subcommand === "submissions") {
@@ -366,7 +366,7 @@ async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   if (subcommand === "action") {
     const submissionId = parsed.args[1];
     if (!submissionId) {
-      throw new CliError("Usage: ai-skills review action <submission-id> --action <approve|publish>", 2);
+      throw new CliError("Usage: myskills review action <submission-id> --action <approve|publish>", 2);
     }
     const action = stringOption(parsed, "action");
     if (action !== "approve" && action !== "publish") {
@@ -391,13 +391,13 @@ async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     }
     return 0;
   }
-  throw new CliError("Usage: ai-skills review submissions | review action <submission-id> --action <approve|publish>", 2);
+  throw new CliError("Usage: myskills review submissions | review action <submission-id> --action <approve|publish>", 2);
 }
 
 async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const token = await tokenOption(parsed, runtime);
   if (!token) {
-    throw new CliError("No token provided. Run ai-skills login, set AI_SKILLS_TOKEN, or pass --token.", 1);
+    throw new CliError("No token provided. Run myskills login, set MYSKILLS_TOKEN, or pass --token.", 1);
   }
   const packagePath = requiredPath(parsed);
   const manifest = await loadSkillManifestFromPath(packagePath);
@@ -442,7 +442,7 @@ async function submissionPayload(packagePath: string, manifest: unknown): Promis
 async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const slug = parsed.args[0];
   if (!slug) {
-    throw new CliError("Usage: ai-skills export <skill-slug> --version <version> --platform <platform> --output <dir>", 2);
+    throw new CliError("Usage: myskills export <skill-slug> --version <version> --platform <platform> --output <dir>", 2);
   }
   const version = stringOption(parsed, "version");
   const platform = stringOption(parsed, "platform");
@@ -458,7 +458,7 @@ async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
 async function installCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const slug = parsed.args[0];
   if (!slug) {
-    throw new CliError("Usage: ai-skills install <skill-slug> [--version <version>] [--platform <platform>] [--dir <install-root>]", 2);
+    throw new CliError("Usage: myskills install <skill-slug> [--version <version>] [--platform <platform>] [--dir <install-root>]", 2);
   }
   const token = await tokenOption(parsed, runtime) ?? undefined;
   const root = installRoot(parsed, runtime);
@@ -514,7 +514,7 @@ async function updateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   for (const slug of targets) {
     const existing = registry.installations[slug];
     if (!existing) {
-      throw new CliError(`${slug} is not installed. Run ai-skills install ${slug}.`, 1);
+      throw new CliError(`${slug} is not installed. Run myskills install ${slug}.`, 1);
     }
     const version = explicitVersion ?? await latestVersionForSkill(slug, parsed, runtime, token);
     const platform = explicitPlatform ?? existing.platform;
@@ -541,7 +541,7 @@ async function updateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
 async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const requestedSlug = parsed.args[0];
   if (!requestedSlug) {
-    throw new CliError("Usage: ai-skills rollback <skill-slug> [--dir <install-root>]", 2);
+    throw new CliError("Usage: myskills rollback <skill-slug> [--dir <install-root>]", 2);
   }
   const slug = parseInstallSlug(requestedSlug);
   const root = installRoot(parsed, runtime);
@@ -554,7 +554,7 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
 
   const outputRoot = skillInstallPath(root, slug);
   const snapshotPath = path.resolve(previous.snapshotPath);
-  assertChildPath(path.join(root, ".ai-skills-share", "history"), snapshotPath);
+  assertChildPath(path.join(root, ".myskills-app", "history"), snapshotPath);
   await rm(outputRoot, { recursive: true, force: true });
   await mkdir(path.dirname(outputRoot), { recursive: true });
   await cp(snapshotPath, outputRoot, { recursive: true });
@@ -797,10 +797,10 @@ function selectReleasePlatform(release: ReleaseInfo, requestedPlatform: string |
 
 function installRoot(parsed: ParsedArgs, runtime: CliRuntime): string {
   const configured = optionalStringOption(parsed, "dir")
-    ?? runtime.env.AI_SKILLS_INSTALL_DIR
-    ?? (runtime.env.XDG_DATA_HOME ? path.join(runtime.env.XDG_DATA_HOME, "ai-skills-share", "skills") : undefined)
-    ?? (runtime.env.HOME ? path.join(runtime.env.HOME, ".local", "share", "ai-skills-share", "skills") : undefined)
-    ?? path.join(process.cwd(), ".ai-skills-share", "skills");
+    ?? runtime.env.MYSKILLS_INSTALL_DIR
+    ?? (runtime.env.XDG_DATA_HOME ? path.join(runtime.env.XDG_DATA_HOME, "myskills-app", "skills") : undefined)
+    ?? (runtime.env.HOME ? path.join(runtime.env.HOME, ".local", "share", "myskills-app", "skills") : undefined)
+    ?? path.join(process.cwd(), ".myskills-app", "skills");
   return path.resolve(configured);
 }
 
@@ -874,7 +874,7 @@ function parseInstallHistory(input: unknown, root: string): InstalledSkillSnapsh
       return [];
     }
     const snapshotPath = path.resolve(record.snapshotPath);
-    assertChildPath(path.join(root, ".ai-skills-share", "history"), snapshotPath);
+    assertChildPath(path.join(root, ".myskills-app", "history"), snapshotPath);
     return [{
       version: record.version,
       platform: record.platform,
@@ -897,7 +897,7 @@ function parseStoredArtifact(input: unknown): ReleaseArtifact {
 }
 
 function installRegistryPath(root: string): string {
-  return path.join(root, ".ai-skills-share", "installed.json");
+  return path.join(root, ".myskills-app", "installed.json");
 }
 
 function skillInstallPath(root: string, slug: string): string {
@@ -906,7 +906,7 @@ function skillInstallPath(root: string, slug: string): string {
 
 function historySnapshotPath(root: string, slug: string, version: string): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return path.join(root, ".ai-skills-share", "history", parseInstallSlug(slug), `${timestamp}-${version}`);
+  return path.join(root, ".myskills-app", "history", parseInstallSlug(slug), `${timestamp}-${version}`);
 }
 
 function parseInstallSlug(slug: string): string {
@@ -1034,7 +1034,7 @@ function requiredPath(parsed: ParsedArgs): string {
 }
 
 function apiBaseUrl(parsed: ParsedArgs, runtime: CliRuntime): string {
-  return String(parsed.options["api-url"] ?? runtime.env.AI_SKILLS_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
+  return String(parsed.options["api-url"] ?? runtime.env.MYSKILLS_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
 }
 
 interface ResolvedToken {
@@ -1056,11 +1056,11 @@ async function resolveToken(parsed: ParsedArgs, runtime: CliRuntime): Promise<Re
       stored: { kind: "session", token },
     };
   }
-  if (runtime.env.AI_SKILLS_TOKEN) {
+  if (runtime.env.MYSKILLS_TOKEN) {
     return {
-      value: runtime.env.AI_SKILLS_TOKEN,
+      value: runtime.env.MYSKILLS_TOKEN,
       source: "env",
-      stored: { kind: "session", token: runtime.env.AI_SKILLS_TOKEN },
+      stored: { kind: "session", token: runtime.env.MYSKILLS_TOKEN },
     };
   }
   const stored = await runtime.tokenStore?.get(apiBaseUrl(parsed, runtime));
@@ -1076,7 +1076,7 @@ async function resolveToken(parsed: ParsedArgs, runtime: CliRuntime): Promise<Re
 
 async function promptText(runtime: CliRuntime, label: string): Promise<string> {
   if (!runtime.prompt) {
-    throw new CliError("Interactive input is unavailable. Set AI_SKILLS_TOKEN for one-off commands.", 1);
+    throw new CliError("Interactive input is unavailable. Set MYSKILLS_TOKEN for one-off commands.", 1);
   }
   const value = (await runtime.prompt.text(label)).trim();
   if (!value) {
@@ -1087,7 +1087,7 @@ async function promptText(runtime: CliRuntime, label: string): Promise<string> {
 
 async function promptSecret(runtime: CliRuntime, label: string): Promise<string> {
   if (!runtime.prompt) {
-    throw new CliError("Interactive input is unavailable. Set AI_SKILLS_TOKEN for one-off commands.", 1);
+    throw new CliError("Interactive input is unavailable. Set MYSKILLS_TOKEN for one-off commands.", 1);
   }
   const value = await runtime.prompt.secret(label);
   if (!value) {
@@ -1244,7 +1244,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 
 function helpText(): string {
   return [
-    "ai-skills <command>",
+    "myskills <command>",
     "",
     "Commands:",
     "  validate --path <file-directory-or-zip>",
@@ -1268,8 +1268,8 @@ function helpText(): string {
     "",
     "Options:",
     "  --json              Print machine-readable JSON.",
-    "  --api-url <url>     API base URL. Defaults to AI_SKILLS_API_URL or http://localhost:3001.",
-    "  --token <token>     Bearer token. Defaults to AI_SKILLS_TOKEN, then stored login token.",
+    "  --api-url <url>     API base URL. Defaults to MYSKILLS_API_URL or http://localhost:3001.",
+    "  --token <token>     Bearer token. Defaults to MYSKILLS_TOKEN, then stored login token.",
   ].join("\n");
 }
 

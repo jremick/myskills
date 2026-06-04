@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hashPassword } from "@ai-skills-share/auth";
+import { hashPassword } from "@myskills-app/auth";
 import { buildApp } from "../../api/src/app.js";
 import { AuthService } from "../../api/src/auth/service.js";
 import { MemoryAuthStore } from "../../api/src/auth/memory-auth-store.js";
@@ -215,12 +215,12 @@ test("token resolution precedence is token option, env, then durable store", asy
     "http://api.test",
     "--token",
     "option-session",
-  ], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "env-session" }, tokenStore)), 0);
+  ], testRuntime(output, fetch, { MYSKILLS_TOKEN: "env-session" }, tokenStore)), 0);
   assert.equal(await runCli([
     "whoami",
     "--api-url",
     "http://api.test",
-  ], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "env-session" }, tokenStore)), 0);
+  ], testRuntime(output, fetch, { MYSKILLS_TOKEN: "env-session" }, tokenStore)), 0);
   assert.equal(await runCli([
     "whoami",
     "--api-url",
@@ -336,7 +336,7 @@ test("logout using env token does not erase stored credentials", async () => {
     "logout",
     "--api-url",
     "http://api.test",
-  ], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "env-session" }, tokenStore));
+  ], testRuntime(output, fetch, { MYSKILLS_TOKEN: "env-session" }, tokenStore));
 
   assert.equal(code, 0);
   assert.equal(authorization, "Bearer env-session");

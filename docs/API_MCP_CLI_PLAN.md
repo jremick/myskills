@@ -52,7 +52,7 @@ Use OpenAPI once the first implementation slice stabilizes.
 
 Use the official TypeScript MCP SDK for production implementation if runtime constraints allow it. Current SDK docs support MCP servers with tools and Streamable HTTP transports over common Node frameworks.
 
-Current implementation uses the stable TypeScript MCP SDK with stdio and stateless Streamable HTTP transports. MCP calls require an API token with `skills:read` scope through `GET /v1/mcp/session`; interactive session tokens are rejected for the MCP surface. Every MCP session authorization branch writes a sanitized API-owned `mcp.session` audit event with the allow/deny decision, credential kind, required scope, and reason code. The stdio adapter reads `AI_SKILLS_TOKEN`; the HTTP adapter validates each request bearer through `/v1/mcp/session` before MCP protocol handling, requires each client request to send its own `Authorization: Bearer ...` header, applies host/origin guardrails, and does not fall back to a shared server token.
+Current implementation uses the stable TypeScript MCP SDK with stdio and stateless Streamable HTTP transports. MCP calls require an API token with `skills:read` scope through `GET /v1/mcp/session`; interactive session tokens are rejected for the MCP surface. Every MCP session authorization branch writes a sanitized API-owned `mcp.session` audit event with the allow/deny decision, credential kind, required scope, and reason code. The stdio adapter reads `MYSKILLS_TOKEN`; the HTTP adapter validates each request bearer through `/v1/mcp/session` before MCP protocol handling, requires each client request to send its own `Authorization: Bearer ...` header, applies host/origin guardrails, and does not fall back to a shared server token.
 
 Initial tools:
 
@@ -76,26 +76,26 @@ MCP responses must not return package contents by default. Package delivery shou
 Initial commands:
 
 ```text
-ai-skills login
-ai-skills logout
-ai-skills whoami
-ai-skills init <skill-slug>
-ai-skills validate --path <dir-or-zip>
-ai-skills scan --path <dir-or-zip>
-ai-skills package --path <dir> --output <file.zip>
-ai-skills search [query]
-ai-skills info <skill>
-ai-skills install <skill> --platform <platform>
-ai-skills export <skill> --platform <platform> --output <dir>
-ai-skills list
-ai-skills update [skill]
-ai-skills rollback <skill>
-ai-skills submit --path <dir-or-zip>
-ai-skills review submissions
-ai-skills review action <submission-id> --action <approve|publish> --reason <reason>
-ai-skills token create --name <name> --scope <scope>
-ai-skills token list
-ai-skills token revoke <token-id>
+myskills login
+myskills logout
+myskills whoami
+myskills init <skill-slug>
+myskills validate --path <dir-or-zip>
+myskills scan --path <dir-or-zip>
+myskills package --path <dir> --output <file.zip>
+myskills search [query]
+myskills info <skill>
+myskills install <skill> --platform <platform>
+myskills export <skill> --platform <platform> --output <dir>
+myskills list
+myskills update [skill]
+myskills rollback <skill>
+myskills submit --path <dir-or-zip>
+myskills review submissions
+myskills review action <submission-id> --action <approve|publish> --reason <reason>
+myskills token create --name <name> --scope <scope>
+myskills token list
+myskills token revoke <token-id>
 ```
 
 Current CLI slice implements local `validate` and `scan` for manifest files, directories, and `.zip` packages, prompt-based `login`, MFA login completion, `logout`, API-URL-scoped durable session-token storage, backend-backed `search`, `info`, `whoami`, `submit` for normalized directory text-entry package intake and server-extracted `.zip` archive intake, role-gated review list/actions, verified `export` of approved bundle payloads, local `install`/`list`/`update`/`rollback` with a filesystem install registry and rollback snapshots, and server API-token create/list/revoke commands. Browser login, platform keychain storage, platform-specific install adapters, and archive creation are still planned.
@@ -103,9 +103,9 @@ Current CLI slice implements local `validate` and `scan` for manifest files, dir
 Later maintainer/admin commands:
 
 ```text
-ai-skills admin users
-ai-skills admin audit
-ai-skills admin analytics
+myskills admin users
+myskills admin audit
+myskills admin analytics
 ```
 
 ## Compatibility Targets

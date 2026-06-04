@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { AppError } from "@ai-skills-share/core";
+import { AppError } from "@myskills-app/core";
 import type { ArtifactObjectStorage } from "./storage.js";
 import type { ArtifactPayload } from "../submissions/types.js";
 

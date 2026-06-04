@@ -115,7 +115,7 @@ test("HTTP MCP transport returns health and rejects non-POST MCP methods", async
 
   const health = await fetch(new URL("/health", url));
   assert.equal(health.status, 200);
-  assert.deepEqual(await health.json(), { ok: true, service: "ai-skills-share-mcp-http" });
+  assert.deepEqual(await health.json(), { ok: true, service: "myskills-app-mcp-http" });
 
   const getMcp = await fetch(url);
   assert.equal(getMcp.status, 405);

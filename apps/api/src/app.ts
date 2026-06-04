@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
-import { AppError } from "@ai-skills-share/core";
+import { AppError } from "@myskills-app/core";
 import {
   MAX_PACKAGE_ARCHIVE_BYTES,
   loadSkillManifestFromPackageFiles,
@@ -7,7 +7,7 @@ import {
   parseSkillManifest,
   readPackageFilesFromZipBuffer,
   type PackageInputFile,
-} from "@ai-skills-share/skill-package";
+} from "@myskills-app/skill-package";
 import type { ApiTokenScope } from "./auth/types.js";
 import type {
   AuthContext,
@@ -30,7 +30,7 @@ import type {
 } from "./auth/service.js";
 import type { ReviewAction, StoredSubmission, SubmissionActor } from "./submissions/types.js";
 import type { SubmissionService } from "./submissions/service.js";
-import type { SkillRepository } from "@ai-skills-share/core";
+import type { SkillRepository } from "@myskills-app/core";
 
 export interface BuildAppOptions {
   skillRepository: SkillRepository;
@@ -91,7 +91,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
 
   app.get("/health", async () => ({
     ok: true,
-    service: "ai-skills-share-api",
+    service: "myskills-app-api",
   }));
 
   app.get("/v1/skills", async (request) => {

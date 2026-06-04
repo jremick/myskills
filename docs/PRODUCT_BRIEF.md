@@ -5,7 +5,7 @@ Last updated: 2026-06-04
 
 ## Intent
 
-AI Skills Share helps teams and individual users package, review, publish, discover, install, and maintain reusable AI skills across agent runtimes and AI tools.
+MySkills helps teams and individual users package, review, publish, discover, install, and maintain reusable AI skills across agent runtimes and AI tools.
 
 The product should feel like a real software registry, not a folder browser:
 

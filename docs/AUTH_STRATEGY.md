@@ -5,7 +5,7 @@ Last updated: 2026-06-04
 
 ## Direction
 
-AI Skills Share should own its user model directly. External providers can help users sign in, but local users, roles, registration policy, sessions, MFA state, audit, and authorization remain application-owned.
+MySkills should own its user model directly. External providers can help users sign in, but local users, roles, registration policy, sessions, MFA state, audit, and authorization remain application-owned.
 
 ## Candidate Library
 

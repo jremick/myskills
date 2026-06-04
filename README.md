@@ -1,8 +1,6 @@
-# AI Skills Share
+# MySkills
 
-AI Skills Share is an open-source alpha platform for publishing, reviewing, discovering, installing, and using AI agent skills across web, API, CLI, and MCP interfaces.
-
-The project starts from the useful product lessons of a prior internal prototype, but this repository is a clean public-ready product. It does not use that prototype's identity model, company-specific terminology, or Git-repo-as-database backend.
+MySkills is an open-source alpha platform for publishing, reviewing, discovering, installing, and using AI agent skills across web, API, CLI, and MCP interfaces.
 
 ## Release Status
 
@@ -10,18 +8,13 @@ Current target: **v0.1.0-alpha.0**.
 
 This alpha is intended for evaluation, local demos, and early self-hosting feedback. It is not yet the business-safe production release: API contracts, package formats, deployment defaults, and operational guidance may still change before `v1.0`.
 
-## Working Name
+## Name
 
-Current name: **AI Skills Share**
+Current name: **MySkills**.
 
-Alternates worth considering before public launch:
+Repository slug: **myskills-app**.
 
-- **Skillforge**: stronger product name, less literal, but may be harder to find.
-- **Agent Skill Registry**: clearer for developers, more technical.
-- **Skill Garden**: friendly, but less precise.
-- **Open Skill Hub**: clear, but generic and likely crowded.
-
-Recommendation for now: keep **AI Skills Share** until the product shape is visible, then decide whether the public repo should use the more descriptive `ai-skills-share` slug or a more distinctive brand.
+Planned domain: **myskills.sh**.
 
 ## Product Goal
 
@@ -87,7 +80,7 @@ Local auth verification and password-reset notifications default to `AUTH_NOTIFI
 To run the stdio MCP server, create an API token with `skills:read` scope and start:
 
 ```bash
-AI_SKILLS_TOKEN=<api-token-with-skills-read> npm run dev:mcp
+MYSKILLS_TOKEN=<api-token-with-skills-read> npm run dev:mcp
 ```
 
 To run the stateless Streamable HTTP MCP server, start the HTTP adapter and configure MCP clients to send `Authorization: Bearer <api-token-with-skills-read>` to `POST /mcp`:
@@ -112,7 +105,7 @@ node apps/cli/dist/index.js token create --name "Local CLI" --scope profile:read
 node apps/cli/dist/index.js logout
 ```
 
-CLI bearer resolution is `--token`, then `AI_SKILLS_TOKEN`, then the stored login token scoped to the normalized API URL.
+CLI bearer resolution is `--token`, then `MYSKILLS_TOKEN`, then the stored login token scoped to the normalized API URL.
 
 ## Example Skill
 
