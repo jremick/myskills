@@ -20,3 +20,16 @@ Responsibilities:
 
 CLI tokens should be stored in the platform secret store where possible.
 
+## Current Slice
+
+Implemented commands:
+
+```text
+ai-skills validate --path <file-or-directory>
+ai-skills scan --path <file-or-directory>
+ai-skills search [query] [--api-url <url>]
+ai-skills info <skill-slug> [--api-url <url>]
+ai-skills whoami [--api-url <url>] [--token <token>]
+```
+
+`search`, `info`, and `whoami` read `AI_SKILLS_TOKEN` when `--token` is not passed. Token storage, browser login, install/export, and submission commands are still planned.

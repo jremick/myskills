@@ -14,6 +14,7 @@ Milestone 1 REST endpoints:
 - `GET /health`
 - `GET /v1/me`
 - `GET /v1/skills`
+- `GET /v1/skills/:slug`
 
 Milestone 2-3 REST endpoints:
 
@@ -74,6 +75,8 @@ ai-skills update [skill]
 ai-skills rollback <skill>
 ai-skills submit --path <dir-or-zip>
 ```
+
+Current CLI slice implements local `validate` and `scan`, plus backend-backed `search`, `info`, and token-based `whoami`. Browser login, token storage, install/export, rollback, and submit are still planned.
 
 Later maintainer/admin commands:
 

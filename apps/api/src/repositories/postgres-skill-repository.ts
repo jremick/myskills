@@ -1,7 +1,7 @@
-import { and, eq, ilike, or, sql } from "drizzle-orm";
+import { and, eq, ilike, isNotNull, or, sql, type SQL } from "drizzle-orm";
 import type { PublicSkill, SkillRepository, SkillSearchFilters, SkillPlatformVariant } from "@ai-skills-share/core";
 import type { Database } from "../db/client.js";
-import { skillPlatformVariants, skills, skillTags, skillVersions } from "../db/schema.js";
+import { skillArtifacts, skillPlatformVariants, skills, skillTags, skillVersions } from "../db/schema.js";
 
 export class PostgresSkillRepository implements SkillRepository {
   constructor(private readonly db: Database) {}
@@ -10,8 +10,7 @@ export class PostgresSkillRepository implements SkillRepository {
     const query = filters.query?.trim() ?? "";
     const limit = filters.limit ?? 50;
     const where = and(
-      eq(skills.lifecycleStatus, "approved"),
-      eq(skills.visibility, "public"),
+      visibleReleasedSkillPredicate(),
       query
         ? or(
             ilike(skills.slug, `%${query}%`),
@@ -21,6 +20,18 @@ export class PostgresSkillRepository implements SkillRepository {
         : undefined,
     );
 
+    return uniqueBySlug(await this.visibleSkillRows(where, limit * 5)).slice(0, limit);
+  }
+
+  async getVisibleSkillBySlug(slug: string): Promise<PublicSkill | null> {
+    const rows = await this.visibleSkillRows(and(
+      eq(skills.slug, slug),
+      visibleReleasedSkillPredicate(),
+    ), 1);
+    return rows[0] ?? null;
+  }
+
+  private async visibleSkillRows(where: SQL | undefined, limit: number): Promise<PublicSkill[]> {
     const rows = await this.db
       .select({
         slug: skills.slug,
@@ -52,6 +63,7 @@ export class PostgresSkillRepository implements SkillRepository {
       })
       .from(skills)
       .innerJoin(skillVersions, eq(skillVersions.skillId, skills.id))
+      .innerJoin(skillArtifacts, eq(skillArtifacts.skillVersionId, skillVersions.id))
       .leftJoin(skillPlatformVariants, eq(skillPlatformVariants.skillVersionId, skillVersions.id))
       .leftJoin(skillTags, eq(skillTags.skillId, skills.id))
       .where(where)
@@ -82,6 +94,27 @@ export class PostgresSkillRepository implements SkillRepository {
       tags: row.tags,
     }));
   }
+}
+
+function visibleReleasedSkillPredicate(): SQL | undefined {
+  return and(
+    eq(skills.lifecycleStatus, "approved"),
+    eq(skills.visibility, "public"),
+    eq(skillVersions.reviewStatus, "approved"),
+    eq(skillVersions.securityStatus, "passed"),
+    isNotNull(skillVersions.publishedAt),
+  );
+}
+
+function uniqueBySlug(skills: PublicSkill[]): PublicSkill[] {
+  const seen = new Set<string>();
+  return skills.filter((skill) => {
+    if (seen.has(skill.slug)) {
+      return false;
+    }
+    seen.add(skill.slug);
+    return true;
+  });
 }
 
 function dedupePlatforms(platforms: SkillPlatformVariant[]): SkillPlatformVariant[] {

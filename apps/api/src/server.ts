@@ -1,4 +1,5 @@
 import { createDb, createPgPool } from "./db/client.js";
+import { MemoryAuthRateLimiter } from "./auth/rate-limit.js";
 import { AuthService } from "./auth/service.js";
 import { PostgresAuthStore } from "./auth/postgres-auth-store.js";
 import { PostgresSkillRepository } from "./repositories/postgres-skill-repository.js";
@@ -10,7 +11,10 @@ const pool = createPgPool();
 const db = createDb(pool);
 const app = buildApp({
   skillRepository: new PostgresSkillRepository(db),
-  authService: new AuthService(new PostgresAuthStore(db)),
+  authService: new AuthService(new PostgresAuthStore(db), {
+    loginLimiter: new MemoryAuthRateLimiter({ maxAttempts: 10, windowMs: 15 * 60 * 1000 }),
+    registrationLimiter: new MemoryAuthRateLimiter({ maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
+  }),
   logger: process.env.NODE_ENV !== "test",
 });
 

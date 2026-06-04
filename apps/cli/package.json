@@ -1,0 +1,19 @@
+{
+  "name": "@ai-skills-share/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ai-skills": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test test/**/*.test.ts"
+  },
+  "dependencies": {
+    "@ai-skills-share/skill-package": "0.1.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6"
+  }
+}

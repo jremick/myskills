@@ -19,6 +19,8 @@ Last updated: 2026-06-04
 - Password hashes are never stored on the user record.
 - Session tokens are opaque and stored only as hashes.
 - Login uses normalized email lookup and generic invalid-credential denial.
+- Existing sessions are denied when the user is no longer active or email verified.
+- Login and registration are throttled before repeated expensive auth work.
 - Email verification before normal account use.
 - Rate limits on auth endpoints.
 - MFA support for admins and maintainers.
@@ -34,6 +36,7 @@ Last updated: 2026-06-04
 
 ### Package Safety
 
+- Public search and detail expose only approved, scan-passed, published releases with artifact records.
 - Reject archive traversal, absolute paths, symlinks, encrypted archives, unsupported compression, excessive size, and excessive file count.
 - Scan for secrets, private keys, tokens, credentials, risky shell commands, dependency install hooks, generated binaries, and unsafe prompt instructions.
 - Require maintainer approval before publication.

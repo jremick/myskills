@@ -35,6 +35,13 @@ export class MemoryAuthStore implements AuthStore {
     this.registrationMode = mode;
   }
 
+  setUserStatus(email: string, status: UserStatus): void {
+    const user = this.users.get(email.toLowerCase());
+    if (user) {
+      user.status = status;
+    }
+  }
+
   addUser(input: {
     id?: string;
     email: string;

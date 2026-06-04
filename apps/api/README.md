@@ -25,6 +25,7 @@ Implemented:
 - `POST /v1/auth/logout` current-session revocation
 - `GET /v1/me` bearer-session current user response
 - `GET /v1/skills` public approved skill search
+- `GET /v1/skills/:slug` public approved skill detail
 - Drizzle Postgres schema and migrations
 - synthetic seed data for one owner and one approved public skill
 

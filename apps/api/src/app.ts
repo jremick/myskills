@@ -52,11 +52,28 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     return { skills };
   });
 
+  app.get("/v1/skills/:slug", async (request, reply) => {
+    const slug = parseSlugParam(request.params);
+    const skill = await options.skillRepository.getVisibleSkillBySlug(slug);
+    if (!skill) {
+      return reply.code(404).send({
+        error: {
+          code: "SKILL_NOT_FOUND",
+          message: "Skill not found.",
+        },
+      });
+    }
+    return { skill };
+  });
+
   app.post("/v1/auth/register", async (request, reply) => {
     if (!options.authService) {
       throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
     }
-    const result = await options.authService.register(parseRegisterInput(request.body));
+    const result = await options.authService.register({
+      ...parseRegisterInput(request.body),
+      ip: request.ip,
+    });
     return reply.code(202).send(result);
   });
 
@@ -64,7 +81,10 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     if (!options.authService) {
       throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
     }
-    return options.authService.login(parseLoginInput(request.body));
+    return options.authService.login({
+      ...parseLoginInput(request.body),
+      ip: request.ip,
+    });
   });
 
   app.post("/v1/auth/logout", async (request, reply) => {
@@ -105,6 +125,15 @@ function parseLoginInput(input: unknown): LoginInput {
     email: requiredString(body.email, "email"),
     password: requiredString(body.password, "password"),
   };
+}
+
+function parseSlugParam(input: unknown): string {
+  const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const slug = params.slug;
+  if (typeof slug !== "string" || !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(slug) || slug.includes("--")) {
+    throw new AppError("Valid skill slug is required.", "INVALID_SKILL_SLUG", 400);
+  }
+  return slug;
 }
 
 function httpStatusCode(error: unknown): number | null {

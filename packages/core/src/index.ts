@@ -34,6 +34,7 @@ export interface SkillSearchFilters {
 
 export interface SkillRepository {
   searchVisibleSkills(filters: SkillSearchFilters): Promise<PublicSkill[]>;
+  getVisibleSkillBySlug(slug: string): Promise<PublicSkill | null>;
 }
 
 export class AppError extends Error {
@@ -49,4 +50,3 @@ export class AppError extends Error {
 export function assertNever(value: never): never {
   throw new AppError(`Unhandled value: ${String(value)}`, "UNHANDLED_VALUE", 500);
 }
-

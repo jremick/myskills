@@ -6,6 +6,7 @@ import {
   verifyPassword,
   type AuthenticatedUser,
 } from "@ai-skills-share/auth";
+import type { AuthRateLimiter } from "./rate-limit.js";
 import type { AuthResponseUser, AuthStore, AuthUserRecord } from "./types.js";
 
 const DEFAULT_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
@@ -14,17 +15,23 @@ export interface RegisterInput {
   email: string;
   password: string;
   name?: string;
+  ip?: string;
 }
 
 export interface LoginInput {
   email: string;
   password: string;
+  ip?: string;
 }
 
 export class AuthService {
   constructor(
     private readonly store: AuthStore,
-    private readonly options: { sessionTtlMs?: number } = {},
+    private readonly options: {
+      sessionTtlMs?: number;
+      loginLimiter?: AuthRateLimiter;
+      registrationLimiter?: AuthRateLimiter;
+    } = {},
   ) {}
 
   async register(input: RegisterInput): Promise<{ status: "pending" }> {
@@ -34,6 +41,7 @@ export class AuthService {
     }
 
     const email = normalizeEmail(input.email);
+    assertAllowed(this.options.registrationLimiter, rateLimitKeys("register", email, input.ip));
     const passwordHash = await hashPassword(input.password);
     await this.store.createUserWithPassword({
       email,
@@ -45,6 +53,7 @@ export class AuthService {
 
   async login(input: LoginInput): Promise<{ token: string; expiresAt: string; user: AuthResponseUser }> {
     const email = normalizeEmail(input.email);
+    assertAllowed(this.options.loginLimiter, rateLimitKeys("login", email, input.ip));
     const user = await this.store.findUserByEmailWithPassword(email);
     if (!user?.passwordHash || !(await verifyPassword(user.passwordHash, input.password))) {
       throw new AppError("Invalid email or password.", "INVALID_CREDENTIALS", 401);
@@ -74,7 +83,7 @@ export class AuthService {
       return null;
     }
     const user = await this.store.findUserBySessionTokenHash(hashSessionToken(token));
-    return user ? responseUser(user) : null;
+    return user && isUsableAuthenticatedAccount(user) ? responseUser(user) : null;
   }
 
   async logout(header: string | undefined): Promise<void> {
@@ -95,6 +104,30 @@ function responseUser(user: AuthUserRecord): AuthResponseUser {
     emailVerified: Boolean(user.emailVerifiedAt),
     mfaVerified: false,
   };
+}
+
+function isUsableAuthenticatedAccount(user: AuthUserRecord): boolean {
+  return user.status === "active" && Boolean(user.emailVerifiedAt);
+}
+
+function assertAllowed(limiter: AuthRateLimiter | undefined, keys: string[]): void {
+  if (!limiter) {
+    return;
+  }
+  for (const key of keys) {
+    const result = limiter.consume(key);
+    if (!result.allowed) {
+      throw new AppError("Too many attempts. Try again later.", "RATE_LIMITED", 429);
+    }
+  }
+}
+
+function rateLimitKeys(kind: string, email: string, ip: string | undefined): string[] {
+  const source = ip?.trim() || "unknown";
+  return [
+    `${kind}:ip:${source}`,
+    `${kind}:ip-email:${source}:${email}`,
+  ];
 }
 
 function bearerToken(header: string | undefined): string | null {

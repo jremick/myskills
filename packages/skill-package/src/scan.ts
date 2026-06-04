@@ -1,7 +1,8 @@
 export interface ScanFinding {
-  category: "secret" | "unsafe-command" | "install-hook";
+  category: "secret" | "unsafe-command" | "install-hook" | "package-structure";
   severity: "warning" | "blocking";
   message: string;
+  path?: string;
 }
 
 const secretPatterns = [
@@ -45,4 +46,3 @@ export function scanTextForPackageRisks(text: string): ScanFinding[] {
 export function hasBlockingFindings(findings: ScanFinding[]): boolean {
   return findings.some((finding) => finding.severity === "blocking");
 }
-

@@ -66,9 +66,18 @@ The API defaults to `http://localhost:3001`.
 ```bash
 curl http://localhost:3001/health
 curl http://localhost:3001/v1/skills
+curl http://localhost:3001/v1/skills/release-notes-helper
 ```
 
 The seeded owner account uses `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` from `.env`.
+
+The current CLI can validate and scan local package directories, and can search, inspect, and call `whoami` against the API:
+
+```bash
+npm run build
+node apps/cli/dist/index.js search release
+node apps/cli/dist/index.js info release-notes-helper
+```
 
 ## Verification
 
@@ -78,4 +87,4 @@ npm run check
 
 ## Current Status
 
-This is the first backend foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, seed data, package manifest validation, basic package risk scanning, and deterministic checks.
+This is the first backend foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, public skill search/detail endpoints, a starter CLI, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, seed data, package manifest validation, local package risk scanning, and deterministic checks.
