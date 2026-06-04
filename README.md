@@ -2,6 +2,10 @@
 
 MySkills is an open-source alpha platform for publishing, reviewing, discovering, installing, and using AI agent skills across web, API, CLI, and MCP interfaces.
 
+## Preview
+
+![MySkills registry browser populated with approved skills](artifacts/screenshots/myskills-populated-skills-2026-06-04.png)
+
 ## Release Status
 
 Current target: **v0.1.0-alpha.0**.
