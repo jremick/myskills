@@ -12,7 +12,6 @@ const root = process.cwd();
 
 const requiredPaths = [
   "LICENSE",
-  "CONTRIBUTING.md",
   "SECURITY.md",
   "docs/ALPHA_RELEASE_GOAL.md",
   "docs/BUSINESS_SAFE_RELEASE_GOAL.md",
@@ -25,7 +24,6 @@ const requiredPaths = [
 
 const policyFiles = [
   "README.md",
-  "CONTRIBUTING.md",
   "SECURITY.md",
   "docs/ALPHA_RELEASE_GOAL.md",
   "docs/BUSINESS_SAFE_RELEASE_GOAL.md",

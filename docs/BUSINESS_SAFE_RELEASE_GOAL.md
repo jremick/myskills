@@ -13,6 +13,7 @@ Turn the public alpha into a business-safe, production-ready open-source release
 - Identity, registration, MFA, provider mapping, token, and role lifecycles are safe under common business use.
 - Auth throttling survives restarts and multiple API replicas.
 - Package submission, scanning, review, publication, artifact delivery, install, update, and rollback have durable integrity checks and audit evidence.
+- Skill evals provide durable behavior, safety, compatibility, and regression evidence for submitted and published versions.
 - API, web, CLI, and MCP enforce the same authorization decisions.
 - Threat-model findings above accepted alpha risk are fixed, tested, or explicitly documented as unsupported.
 - Releases are reproducible and publish the agreed artifacts: source, checksums, optional images, and release notes.
@@ -31,6 +32,7 @@ Turn the public alpha into a business-safe, production-ready open-source release
 ### Package And Artifact Safety
 
 - Background scan jobs with durable status transitions, retries, and immutable scan evidence.
+- Version-aware skill eval suites, durable eval runs, and reviewer-visible eval evidence.
 - Signed or direct object delivery that keeps authorization, integrity verification, and audit intact.
 - Stronger package policy fixtures for secrets, risky commands, install hooks, binaries, generated files, and prompt-injection patterns.
 - Reviewer diff views that make package changes inspectable before approval.

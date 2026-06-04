@@ -22,6 +22,7 @@ Build a production-ready, self-hostable registry for AI skills that supports:
 
 - A web interface for browsing, submitting, reviewing, and managing skills.
 - A backend API for search, metadata, submissions, packages, users, roles, audit, and admin operations.
+- Versioned skill releases with lifecycle state, compatibility metadata, install, update, and rollback support.
 - MCP tools for agent/client discovery and guided installation.
 - A CLI for package authoring, validation, submission, install, export, update, and rollback.
 - First-party user accounts with admin-controlled registration, MFA, and optional external identity-provider integrations.
@@ -47,9 +48,9 @@ scripts/
   check-*.mjs     Repo hygiene checks.
 ```
 
-## Backend Principle
+## Registry Principle
 
-The backend is not a Git repository. GitHub can be integrated later for importing skill packages, opening review PRs, syncing examples, or publishing releases, but the canonical product state belongs in the application database and artifact store.
+MySkills is compatible with Git-hosted skill workflows, but it treats registry state, review decisions, permissions, package artifacts, and audit history as application data. That keeps it useful for individuals who publish skills from a repository and for teams that need governed workflows beyond source-control permissions.
 
 ## Local Setup
 
@@ -143,7 +144,7 @@ npm run check
 npm run release:artifacts
 ```
 
-See [docs/RELEASE.md](docs/RELEASE.md) for tag gates, artifact contents, and the GitHub release workflow.
+See [docs/RELEASE.md](docs/RELEASE.md) for tag gates, artifact contents, and the release workflow.
 
 The immediate alpha goal is tracked in [docs/ALPHA_RELEASE_GOAL.md](docs/ALPHA_RELEASE_GOAL.md). The later business-safe production release goal is tracked in [docs/BUSINESS_SAFE_RELEASE_GOAL.md](docs/BUSINESS_SAFE_RELEASE_GOAL.md).
 

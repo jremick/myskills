@@ -29,6 +29,9 @@ M1 tables are the thin backend proof. M2 tables harden auth and submissions. Lat
 - M1 `skill_artifacts`: generated opaque storage references, checksums, sizes, content type, and legacy/dev normalized text package payloads. Production package bytes live in S3-compatible object storage, while Postgres remains the system of record for artifact metadata and release policy.
 - Later `skill_dependencies`: optional relationships between skills.
 - Later `skill_examples`: examples and expected use cases.
+- Later `skill_eval_suites`: version-aware eval definitions for expected behavior, installability, compatibility, safety, and regression checks.
+- Later `skill_eval_runs`: eval executions tied to skill versions, artifacts, target platforms, and runner metadata.
+- Later `skill_eval_results`: structured result summaries, failure evidence, and reviewer-visible details.
 - M1 `skill_tags`: searchable taxonomy.
 
 ## Submissions And Review

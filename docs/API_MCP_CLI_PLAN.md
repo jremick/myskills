@@ -44,6 +44,13 @@ Milestone 2-3 REST endpoints:
 - `PUT /v1/admin/providers/:key`
 - `GET /v1/admin/audit`
 
+Later eval endpoints:
+
+- `GET /v1/skills/:slug/releases/:version/evals`
+- `POST /v1/evals/runs`
+- `GET /v1/evals/runs/:id`
+- `GET /v1/review/submissions/:id/evals`
+
 Current admin API slice implements MFA-verified session-only registration mode read/update, non-secret provider config and claim-to-role mapping management, safe user listing, user status actions, role editing with owner-only privileged-role safeguards, sanitized mutation audit events, and bounded audit listing. Invite flows, provider login/linking, and external identity lifecycle remain planned.
 
 Use OpenAPI once the first implementation slice stabilizes.
@@ -121,4 +128,5 @@ Start with a platform-neutral manifest plus one practical payload target:
 - API contract tests for every authorization path.
 - CLI smoke tests against a local API and fixture data.
 - MCP initialize, tools/list, and tools/call tests.
+- Eval fixture tests for pass, fail, warning, incompatible platform, and unsafe package cases.
 - Denied-access tests prove restricted skills are not exposed through search, info, bundle, CLI, or MCP.

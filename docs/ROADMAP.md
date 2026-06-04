@@ -7,7 +7,7 @@ Last updated: 2026-06-04
 
 - **Responsible public alpha (`v0.1.0-alpha.0`)**: make the repository public with clear alpha limits, sanitized examples, security reporting, reproducible artifacts, and fresh-clone proof.
 - **Short-term domain**: point `myskills.sh` to the public `myskills-app` repository until the website exists.
-- **Business-safe production release**: harden the alpha into an operator-ready release with stronger audit, background scanning, provider lifecycle, artifact delivery, CLI credential storage, deploy/ops guidance, and upgrade policy. See [BUSINESS_SAFE_RELEASE_GOAL.md](BUSINESS_SAFE_RELEASE_GOAL.md).
+- **Business-safe production release**: harden the alpha into an operator-ready release with stronger audit, background scanning, skill evals, provider lifecycle, artifact delivery, CLI credential storage, deploy/ops guidance, and upgrade policy. See [BUSINESS_SAFE_RELEASE_GOAL.md](BUSINESS_SAFE_RELEASE_GOAL.md).
 
 ## Milestone 0: Private Project Setup
 
@@ -37,7 +37,7 @@ Acceptance:
 
 - `npm run check` passes.
 - A skill package can be created as a DB record with an artifact reference.
-- No Git repository is required for registry operation.
+- Registry operation does not depend on a source-control host.
 - Local setup can run Postgres plus object storage through Docker Compose.
 - Production packaging has API, web, and HTTP MCP container targets, a production Compose example, deployment documentation, and a production env preflight.
 
@@ -124,7 +124,29 @@ Acceptance:
 
 Current status: public browse/search, skill detail, release metadata, export-guidance views, email/password login/logout, MFA challenge completion, current-user refresh, session-aware API calls, authenticated author `.zip` package submission, maintainer review dashboard workflows for approval/publication, and owner/admin console workflows for registration, user status actions, role updates, provider metadata/mappings, and audit review exist. Private draft management and remaining instance settings administration are still future work.
 
-## Milestone 6: MCP Production Surface
+## Milestone 6: Skill Evals
+
+Goal: make skill quality measurable before and after publication.
+
+Deliverables:
+
+- Version-aware eval suite definitions for behavior, installability, compatibility, safety, and regression checks.
+- Eval run records tied to skill versions, artifacts, target platforms, runner version, and review/submission context.
+- Maintainer-visible eval evidence in review workflows.
+- Public-safe eval summaries on approved releases.
+- CLI commands for local eval execution against package directories and archives.
+- API endpoints for eval results and submission review evidence.
+
+Acceptance:
+
+- A submitted skill version can include or trigger eval evidence without mutating previous approved versions.
+- Failed, warning, skipped, and incompatible eval results are represented distinctly.
+- Maintainers can make approval decisions with scan findings and eval evidence together.
+- Public users see safe summary status only; detailed failure evidence is authorization-gated.
+
+Current status: planned.
+
+## Milestone 7: MCP Production Surface
 
 Goal: expose safe agent-facing registry discovery.
 
@@ -144,7 +166,7 @@ Acceptance:
 
 Current status: first stdio and stateless Streamable HTTP MCP servers exist with `search_skills`, `get_skill_info`, and `get_install_instructions`. Calls require an API token with `skills:read`, reject session tokens through the API, write sanitized API-owned `mcp.session` audit events for allow/deny authorization decisions, and avoid bundle payload retrieval. Role-gated maintainer/admin tools and authoritative per-tool audit events are still future work.
 
-## Milestone 7: Public Release Hardening
+## Milestone 8: Public Release Hardening
 
 Goal: make the repo public-ready.
 
@@ -154,7 +176,7 @@ Deliverables:
 - Deployment docs for Docker Compose and at least one managed target.
 - Security review.
 - Threat model update.
-- License and contribution policy review.
+- License and security policy review.
 - Release workflow.
 - Example package set with no private content.
 
@@ -167,7 +189,7 @@ Acceptance:
 
 Current status: responsible public alpha docs, public security policy, threat model, production Docker targets, production Compose example, production env preflight, public-safe example skill package, deterministic alpha-release check, and tag-triggered release artifact workflow exist. Fresh-clone rehearsal, public visibility switch, and first reproducible alpha tag remain planned.
 
-## Milestone 8: Business-Safe Production Release
+## Milestone 9: Business-Safe Production Release
 
 Goal: turn the public alpha into a release that a business can operate with clear trust boundaries, support expectations, upgrade paths, and incident response.
 
@@ -175,6 +197,7 @@ Deliverables:
 
 - Provider login/linking and external identity lifecycle.
 - Background package scan jobs with durable scan evidence and retry policy.
+- Skill eval suites, durable eval runs, and review/release gates for quality and compatibility evidence.
 - Authoritative per-tool MCP audit events and role-gated maintainer/admin tools.
 - Platform keychain storage for CLI credentials.
 - Signed or direct object delivery that preserves authorization, integrity checks, and audit.
@@ -186,10 +209,10 @@ Acceptance:
 
 - Fresh production-like deploy rehearsal passes from a clean clone.
 - Security/threat-model findings above accepted alpha risk are closed or tracked with explicit mitigations.
-- Admin, maintainer, author, user, CLI, API, MCP, and deployment workflows have deterministic verification.
+- Admin, maintainer, author, user, CLI, API, MCP, eval, and deployment workflows have deterministic verification.
 - Upgrade from the alpha data model is tested or migration limits are clearly documented.
 
-## Milestone 9: Public Website
+## Milestone 10: Public Website
 
 Goal: build a full website for MySkills at `myskills.sh`.
 
@@ -205,7 +228,7 @@ Deliverables:
 - Example skill gallery using public-safe packages.
 - Screenshots or short demos for web, CLI, MCP, submission, review, and install workflows.
 - Release/download page for source artifacts and future containers/packages.
-- Contribution and security-reporting links.
+- Security-reporting link.
 
 Acceptance:
 

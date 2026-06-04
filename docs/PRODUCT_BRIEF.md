@@ -9,7 +9,7 @@ MySkills helps teams and individual users package, review, publish, discover, in
 
 The product should feel like a real software registry, not a folder browser:
 
-- skills have owners, versions, lifecycle states, compatibility data, validation evidence, and security status
+- skills have owners, semantic versions, lifecycle states, compatibility data, validation evidence, eval evidence, and security status
 - users can discover and install only what they are authorized to use
 - contributors can submit packages without needing write access to backend storage
 - maintainers can review, approve, deprecate, revoke, and audit skills
@@ -32,6 +32,12 @@ The product should feel like a real software registry, not a folder browser:
 - Lifecycle states: draft, private, submitted, review, approved, deprecated, revoked, archived.
 - Visibility scopes: public, authenticated users, organization, team/group, private owner, explicit users.
 - Package artifact storage and immutable release snapshots.
+
+### Evals
+
+- Skill eval suites for expected behavior, installability, compatibility, safety, and regression checks.
+- Eval runs tied to skill versions, package artifacts, target platforms, and reviewer decisions.
+- Public-safe eval summaries on approved releases, with detailed evidence available to authorized maintainers.
 
 ### Review And Governance
 
@@ -74,6 +80,5 @@ The product should feel like a real software registry, not a folder browser:
 - A marketplace or paid listing system.
 - Executing uploaded code on the server.
 - Trusting client-provided claims for authorization.
-- Using a Git repository as the application database.
+- Treating source-control hosting as the registry's authorization, review, or artifact boundary.
 - Supporting every AI client package format in the first release.
-

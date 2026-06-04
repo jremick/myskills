@@ -26,7 +26,7 @@ The alpha explicitly excludes business-critical production guarantees. API contr
 - `npm run check` passes from this repo.
 - `npm run check:alpha-release` passes.
 - Fresh clone can install dependencies, run checks, validate and scan the example package, and create release artifacts.
-- `SECURITY.md`, `CONTRIBUTING.md`, `LICENSE`, README, release docs, threat model, and roadmap are public-safe.
+- `SECURITY.md`, `LICENSE`, README, release docs, threat model, and roadmap are public-safe.
 - GitHub private vulnerability reporting is enabled before the public alpha is announced or tagged.
 - Release artifact metadata shows `dirty: false`.
 - The first public tag is `v0.1.0-alpha.0` unless `package.json` changes before release.

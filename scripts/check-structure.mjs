@@ -4,8 +4,6 @@ import { existsSync } from "node:fs";
 
 const requiredPaths = [
   "README.md",
-  "AGENTS.md",
-  "LEARNING.md",
   ".env.example",
   ".env.production.example",
   ".dockerignore",
