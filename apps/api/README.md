@@ -20,9 +20,12 @@ The API must use the database as system of record. It must not treat Git as cano
 Implemented:
 
 - `GET /health`
-- `GET /v1/me` authentication-required response
+- `POST /v1/auth/register` admin-policy-gated self registration
+- `POST /v1/auth/login` email/password login for active verified users
+- `POST /v1/auth/logout` current-session revocation
+- `GET /v1/me` bearer-session current user response
 - `GET /v1/skills` public approved skill search
-- Drizzle Postgres schema and initial migration
+- Drizzle Postgres schema and migrations
 - synthetic seed data for one owner and one approved public skill
 
 Run locally:
@@ -35,3 +38,5 @@ npm run db:migrate
 npm run db:seed
 npm run dev:api
 ```
+
+The seed command creates a verified owner account from `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` in `.env`.

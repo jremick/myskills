@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { hashPassword } from "@ai-skills-share/auth";
 import { createDb, createPgPool } from "./client.js";
 import {
   auditEvents,
   instanceSettings,
+  passwordCredentials,
   roleAssignments,
   roles,
   skillArtifacts,
@@ -14,6 +16,8 @@ import {
   users,
 } from "./schema.js";
 
+const seedOwnerEmail = (process.env.SEED_OWNER_EMAIL ?? "owner@example.com").trim().toLowerCase();
+const seedOwnerPassword = getSeedOwnerPassword();
 const pool = createPgPool();
 const db = createDb(pool);
 
@@ -32,13 +36,14 @@ async function seed() {
   const [owner] = await db
     .insert(users)
     .values({
-      email: "owner@example.com",
+      email: seedOwnerEmail,
+      normalizedEmail: seedOwnerEmail,
       name: "Instance Owner",
       status: "active",
       emailVerifiedAt: new Date(),
     })
     .onConflictDoUpdate({
-      target: users.email,
+      target: users.normalizedEmail,
       set: { status: "active", emailVerifiedAt: new Date() },
     })
     .returning();
@@ -48,6 +53,10 @@ async function seed() {
   }
 
   await db.insert(roleAssignments).values({ userId: owner.id, role: "owner" }).onConflictDoNothing();
+  await db.insert(passwordCredentials).values({
+    userId: owner.id,
+    passwordHash: await hashPassword(seedOwnerPassword),
+  }).onConflictDoNothing();
   await db.insert(instanceSettings).values({
     key: "registration",
     value: { mode: "closed" },
@@ -126,3 +135,13 @@ async function seed() {
   });
 }
 
+function getSeedOwnerPassword(): string {
+  const password = process.env.SEED_OWNER_PASSWORD;
+  if (password) {
+    return password;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SEED_OWNER_PASSWORD is required in production.");
+  }
+  return "change-me-now-please";
+}

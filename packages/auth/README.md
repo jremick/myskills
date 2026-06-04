@@ -2,12 +2,17 @@
 
 Shared authentication and authorization contracts.
 
-Planned contents:
+Implemented:
 
 - role and permission definitions
+- user status definitions
+- bcrypt password hashing helpers
+- opaque session token generation and hashing
+
+Planned contents:
+
 - provider identity mapping contracts
 - API token scope definitions
-- session and MFA policy contracts
+- MFA policy contracts
 
-Implementation-specific auth library code may live in `apps/api` until the boundary is stable.
-
+Implementation-specific route and store code lives in `apps/api` until the boundary is stable.

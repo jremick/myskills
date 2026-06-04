@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   integer,
   jsonb,
@@ -26,10 +27,28 @@ const timestamps = {
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
+  normalizedEmail: text("normalized_email").notNull().unique(),
   name: text("name").notNull().default(""),
   status: userStatus("status").notNull().default("pending"),
   emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
   ...timestamps,
+});
+
+export const passwordCredentials = pgTable("password_credentials", {
+  userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  passwordHash: text("password_hash").notNull(),
+  passwordUpdatedAt: timestamp("password_updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const authSessions = pgTable("auth_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const roles = pgTable("roles", {
@@ -43,7 +62,7 @@ export const roleAssignments = pgTable("role_assignments", {
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   role: roleName("role").notNull(),
   scopeType: text("scope_type").notNull().default("instance"),
-  scopeId: uuid("scope_id"),
+  scopeId: uuid("scope_id").notNull().default(sql`'00000000-0000-0000-0000-000000000000'::uuid`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [unique().on(table.userId, table.role, table.scopeType, table.scopeId)]);
 
@@ -137,4 +156,3 @@ export const auditEvents = pgTable("audit_events", {
   details: jsonb("details").notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
-

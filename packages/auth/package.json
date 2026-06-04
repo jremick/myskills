@@ -11,9 +11,13 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "node --test"
+    "test": "node --import tsx --test test/**/*.test.ts"
   },
   "dependencies": {
-    "@ai-skills-share/core": "0.1.0"
+    "@ai-skills-share/core": "0.1.0",
+    "bcryptjs": "^3.0.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6"
   }
 }

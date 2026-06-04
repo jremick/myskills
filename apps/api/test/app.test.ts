@@ -63,3 +63,16 @@ test("GET /v1/skills returns only public approved skills", async (t) => {
   assert.deepEqual(response.json().skills.map((skill: { slug: string }) => skill.slug), ["release-notes-helper"]);
 });
 
+test("malformed JSON requests return a client error", async (t) => {
+  const app = buildApp({ skillRepository: repository });
+  t.after(() => app.close());
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/auth/logout",
+    headers: { "content-type": "application/json" },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error.code, "INVALID_REQUEST");
+});

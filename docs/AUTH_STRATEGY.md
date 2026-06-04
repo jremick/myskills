@@ -30,6 +30,18 @@ Spike acceptance:
 - Can coexist with CLI/API token flows.
 - Does not make an external provider the source of application authorization.
 
+## Current Foundation Slice
+
+The current API implementation owns the first-party auth boundary directly:
+
+- `users.normalized_email` is the canonical login and uniqueness key.
+- Password credentials are stored separately from users and hashed with bcrypt.
+- Login creates opaque bearer session tokens; only token hashes are stored.
+- Registration is controlled by the instance registration setting and currently creates pending users.
+- Authorization still uses application roles, not provider claims.
+
+This keeps setup portable for the open-source project while leaving room to adopt Better Auth or another provider adapter for email verification, reset, MFA, passkeys, and account linking once the web runtime is in place.
+
 ## Required Product Behavior
 
 ### Registration

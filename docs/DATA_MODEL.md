@@ -3,7 +3,7 @@
 Version: 0.1.0
 Last updated: 2026-06-04
 
-This is the initial logical model. It should become migrations once the implementation stack is selected.
+This is the initial logical model. M1 tables are implemented as Drizzle/Postgres migrations and will keep evolving with the product surface.
 
 ## Milestone Scope
 
@@ -11,9 +11,10 @@ M1 tables are the thin backend proof. M2 tables harden auth and submissions. Lat
 
 ## Identity
 
-- M1 `users`: primary application users.
-- M2 `identities`: linked provider identities such as email/password, OIDC, SAML, GitHub, Google, or Cloudflare Access.
-- M2 `sessions`: browser and API sessions.
+- M1 `users`: primary application users with normalized email uniqueness.
+- M1 `password_credentials`: first-party email/password credentials.
+- M2 `identities`: linked external provider identities such as OIDC, SAML, GitHub, Google, or Cloudflare Access.
+- M1 `auth_sessions`: hashed opaque bearer sessions.
 - M2 `mfa_factors`: TOTP, passkey, recovery-code, and future factors.
 - M2 `api_tokens`: scoped hashed tokens for CLI, automation, and MCP clients.
 - M1 `roles`: global and scoped roles.

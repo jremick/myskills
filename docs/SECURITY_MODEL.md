@@ -16,6 +16,9 @@ Last updated: 2026-06-04
 
 ### Authentication
 
+- Password hashes are never stored on the user record.
+- Session tokens are opaque and stored only as hashes.
+- Login uses normalized email lookup and generic invalid-credential denial.
 - Email verification before normal account use.
 - Rate limits on auth endpoints.
 - MFA support for admins and maintainers.
@@ -58,4 +61,3 @@ Last updated: 2026-06-04
 - Package parser rejects unsafe archives.
 - Scanner blocks known secret and unsafe-command fixtures.
 - Audit sanitizer redacts sensitive fields.
-

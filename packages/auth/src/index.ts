@@ -26,3 +26,6 @@ export function canAuthor(user: AuthenticatedUser): boolean {
   return user.status === "active" && (hasRole(user, "author") || hasRole(user, "maintainer") || canAdmin(user));
 }
 
+export * from "./password.js";
+export * from "./session-token.js";
+

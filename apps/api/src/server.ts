@@ -1,4 +1,6 @@
 import { createDb, createPgPool } from "./db/client.js";
+import { AuthService } from "./auth/service.js";
+import { PostgresAuthStore } from "./auth/postgres-auth-store.js";
 import { PostgresSkillRepository } from "./repositories/postgres-skill-repository.js";
 import { buildApp } from "./app.js";
 
@@ -8,6 +10,7 @@ const pool = createPgPool();
 const db = createDb(pool);
 const app = buildApp({
   skillRepository: new PostgresSkillRepository(db),
+  authService: new AuthService(new PostgresAuthStore(db)),
   logger: process.env.NODE_ENV !== "test",
 });
 
@@ -31,4 +34,3 @@ process.on("SIGINT", () => {
 process.on("SIGTERM", () => {
   void shutdown().then(() => process.exit(0));
 });
-

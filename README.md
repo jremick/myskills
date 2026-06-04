@@ -68,6 +68,8 @@ curl http://localhost:3001/health
 curl http://localhost:3001/v1/skills
 ```
 
+The seeded owner account uses `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` from `.env`.
+
 ## Verification
 
 ```bash
@@ -76,4 +78,4 @@ npm run check
 
 ## Current Status
 
-This is the first backend foundation slice. It has workspace packages, a Fastify API, Drizzle/Postgres schema and migration, Docker Compose for Postgres plus S3-compatible object storage, seed data, package manifest validation, basic package risk scanning, and deterministic checks.
+This is the first backend foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, seed data, package manifest validation, basic package risk scanning, and deterministic checks.
