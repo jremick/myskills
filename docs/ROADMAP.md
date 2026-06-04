@@ -29,6 +29,7 @@ Deliverables:
 - TypeScript workspace packages under `apps/api`, `packages/core`, `packages/auth`, and `packages/skill-package`.
 - Fastify API scaffold.
 - Postgres migrations for users, roles, settings, skills, versions, platform variants, artifacts, scan runs/findings, jobs, and audit events.
+- Skill versioning model with semantic version uniqueness, immutable release records, release metadata, and artifact checksums.
 - Seed data and local Docker Compose.
 - Package manifest validation and basic package risk scanning.
 - API tests for health, auth-required `/v1/me`, and public approved skill search.
@@ -74,6 +75,7 @@ Goal: make skills safe and useful enough to publish privately.
 Deliverables:
 
 - Manifest schema.
+- Skill versioning workflows for submitting, reviewing, publishing, deprecating, revoking, installing, updating, and rolling back specific versions.
 - Package archive parser with traversal, symlink, encryption, compression, size, and file-count defenses.
 - Skill payload validation.
 - Secret scanning and risky-content scanning.

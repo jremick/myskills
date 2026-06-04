@@ -28,10 +28,16 @@ The product should feel like a real software registry, not a folder browser:
 ### Registry
 
 - Skill search, browse, detail, and related-skill discovery.
-- Versioned skill packages with manifest, readme, payload files, examples, changelog, and platform adapters.
 - Lifecycle states: draft, private, submitted, review, approved, deprecated, revoked, archived.
 - Visibility scopes: public, authenticated users, organization, team/group, private owner, explicit users.
 - Package artifact storage and immutable release snapshots.
+
+### Skill Versioning
+
+- Semantic skill versions with unique release records per skill.
+- Versioned skill packages with manifest, readme, payload files, examples, changelog, and platform adapters.
+- Immutable artifact checksums and release metadata for each approved version.
+- Install, update, rollback, deprecate, and revoke workflows that operate on specific skill versions.
 
 ### Evals
 
