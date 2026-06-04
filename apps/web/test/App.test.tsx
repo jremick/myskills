@@ -1,0 +1,235 @@
+import test, { afterEach } from "node:test";
+import assert from "node:assert/strict";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import type { PublicSkill } from "@ai-skills-share/core";
+import { RegistryApp } from "../src/App.js";
+import type { RegistryClient, ReleaseMetadata, SafeApiError } from "../src/api.js";
+
+test("browse page requests skills with query and renders API-returned skills", async () => {
+  setupDom();
+  const client = mockClient();
+
+  const view = render(<RegistryApp client={client} />);
+  await view.findByText("Release Notes Helper");
+  fireEvent.input(view.getByPlaceholderText("Search skills..."), { target: { value: "release" } });
+
+  await waitFor(() => assert.equal(client.searchCalls.includes("release"), true));
+  assert.equal(view.getAllByText("release-notes-helper").length, 2);
+  assert.equal(document.body.textContent?.includes("private-risk-reviewer"), false);
+});
+
+test("default registry client is stable between renders", async () => {
+  setupDom();
+  const calls: string[] = [];
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = (async (input) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.includes("/releases/")) {
+      return jsonResponse(200, { release: publicRelease() });
+    }
+    if (url.includes("/v1/skills/release-notes-helper")) {
+      return jsonResponse(200, { skill: publicSkill() });
+    }
+    return jsonResponse(200, { skills: [publicSkill()] });
+  }) as typeof fetch;
+
+  try {
+    const view = render(<RegistryApp />);
+
+    await view.findByText("Turns merged changes into concise release notes.");
+    await waitFor(() => assert.equal(calls.length, 3));
+    await delay(25);
+    assert.deepEqual(calls, [
+      "http://localhost:3001/v1/skills",
+      "http://localhost:3001/v1/skills/release-notes-helper",
+      "http://localhost:3001/v1/skills/release-notes-helper/releases/0.1.0",
+    ]);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("searching selects a matching result when the current detail is filtered out", async () => {
+  setupDom();
+  const smokeSkill = {
+    ...publicSkill("smoke-skill"),
+    title: "Smoke Skill",
+    summary: "Smoke-only detail.",
+    tags: ["smoke"],
+  };
+  const releaseSkill = publicSkill();
+  const client = mockClient({
+    skills: [smokeSkill, releaseSkill],
+    searchResults(query) {
+      return query === "release" ? [releaseSkill] : [smokeSkill, releaseSkill];
+    },
+  });
+
+  const view = render(<RegistryApp client={client} />);
+  await view.findByText("Smoke-only detail.");
+
+  fireEvent.input(view.getByPlaceholderText("Search skills..."), { target: { value: "release" } });
+
+  await view.findByText("Turns merged changes into concise release notes.");
+  assert.equal(document.body.textContent?.includes("Smoke-only detail."), false);
+  assert.equal(client.bundleCalls, 0);
+});
+
+test("empty search state does not leak denied identifiers", async () => {
+  setupDom();
+  const client = mockClient({ skills: [] });
+
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("No skills found.");
+  assert.equal(document.body.textContent?.includes("private-risk-reviewer"), false);
+  assert.equal(document.body.textContent?.includes("failed-public-skill"), false);
+});
+
+test("skill detail displays public metadata and release artifact metadata only", async () => {
+  setupDom("http://localhost/skills/release-notes-helper");
+  const client = mockClient();
+
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("Turns merged changes into concise release notes.");
+  assert.equal(view.getAllByText("0.1.0").length, 2);
+  assert.equal(view.getAllByText("codex, generic").length, 2);
+  assert.equal(view.getByText("approved").textContent, "approved");
+  assert.equal(view.getByText("passed").textContent, "passed");
+  assert.equal(document.body.textContent?.includes("storageKey"), false);
+  assert.equal(document.body.textContent?.includes("Summarize release notes."), false);
+  assert.equal(client.bundleCalls, 0);
+});
+
+test("404 detail responses render generic not found state", async () => {
+  setupDom("http://localhost/skills/private-helper");
+  const client = mockClient({
+    getSkillError: safeApiError(404, "SKILL_NOT_FOUND", "Private helper exists but is hidden."),
+  });
+
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("Skill or release not found.");
+  assert.equal(document.body.textContent?.includes("Private helper exists"), false);
+  assert.equal(document.body.textContent?.includes("private-helper"), false);
+});
+
+test("platform selection changes CLI export guidance only", async () => {
+  setupDom("http://localhost/skills/release-notes-helper");
+  const client = mockClient();
+
+  const view = render(<RegistryApp client={client} />);
+  await view.findByText(/ai-skills export release-notes-helper --version 0\.1\.0 --platform codex/);
+
+  fireEvent.click(view.getByRole("button", { name: "generic" }));
+
+  await view.findByText(/ai-skills export release-notes-helper --version 0\.1\.0 --platform generic/);
+  assert.equal(client.releaseCalls.length, 1);
+  assert.equal(client.bundleCalls, 0);
+});
+
+afterEach(() => {
+  cleanup();
+});
+
+function setupDom(url = "http://localhost/") {
+  document.body.innerHTML = "";
+  window.history.replaceState({}, "", url);
+}
+
+function mockClient(input: {
+  skills?: PublicSkill[];
+  release?: ReleaseMetadata;
+  getSkillError?: SafeApiError;
+  searchResults?: (query: string) => PublicSkill[];
+} = {}) {
+  const skills = input.skills ?? [publicSkill()];
+  const release = input.release ?? publicRelease();
+  const client: RegistryClient & {
+    bundleCalls: number;
+    releaseCalls: string[];
+    searchCalls: string[];
+  } = {
+    bundleCalls: 0,
+    releaseCalls: [],
+    searchCalls: [],
+    async searchSkills(query) {
+      client.searchCalls.push(query);
+      return input.searchResults?.(query) ?? skills;
+    },
+    async getSkill(slug) {
+      if (input.getSkillError) {
+        throw input.getSkillError;
+      }
+      const skill = skills.find((item) => item.slug === slug) ?? publicSkill(slug);
+      return skill;
+    },
+    async getRelease(slug, version) {
+      client.releaseCalls.push(`${slug}@${version}`);
+      return release;
+    },
+  };
+  return client;
+}
+
+function publicSkill(slug = "release-notes-helper"): PublicSkill {
+  return {
+    slug,
+    title: "Release Notes Helper",
+    summary: "Turns merged changes into concise release notes.",
+    lifecycleStatus: "approved",
+    visibility: "public",
+    latestVersion: "0.1.0",
+    reviewStatus: "approved",
+    securityStatus: "passed",
+    platforms: [
+      { name: "codex", installTarget: "codex-skill", status: "supported" },
+      { name: "generic", installTarget: "prompt-pack", status: "supported" },
+    ],
+    tags: ["writing", "release"],
+  };
+}
+
+function publicRelease(): ReleaseMetadata {
+  return {
+    slug: "release-notes-helper",
+    title: "Release Notes Helper",
+    summary: "Turns merged changes into concise release notes.",
+    version: "0.1.0",
+    reviewStatus: "approved",
+    securityStatus: "passed",
+    publishedAt: "2026-06-04T00:00:00.000Z",
+    platforms: [
+      { name: "codex", installTarget: "codex-skill", status: "supported" },
+      { name: "generic", installTarget: "prompt-pack", status: "supported" },
+    ],
+    artifact: {
+      sha256: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+      byteSize: 1234,
+      contentType: "application/vnd.ai-skills-share.package+json",
+    },
+  };
+}
+
+function safeApiError(status: number, code: string, message: string): SafeApiError {
+  const error = new Error(message) as SafeApiError;
+  error.status = status;
+  error.code = code;
+  return error;
+}
+
+function jsonResponse(status: number, body: Record<string, unknown>): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    async text() {
+      return JSON.stringify(body);
+    },
+  } as Response;
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}

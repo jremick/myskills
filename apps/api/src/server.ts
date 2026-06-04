@@ -18,6 +18,7 @@ const app = buildApp({
     registrationLimiter: new MemoryAuthRateLimiter({ maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
   }),
   submissionService: new SubmissionService(new PostgresSubmissionStore(db)),
+  allowedOrigins: allowedOrigins(),
   logger: process.env.NODE_ENV !== "test",
 });
 
@@ -41,3 +42,10 @@ process.on("SIGINT", () => {
 process.on("SIGTERM", () => {
   void shutdown().then(() => process.exit(0));
 });
+
+function allowedOrigins(): string[] {
+  const configured = process.env.ALLOWED_WEB_ORIGINS ?? process.env.APP_BASE_URL;
+  return configured
+    ? configured.split(",").map((origin) => origin.trim()).filter(Boolean)
+    : ["http://localhost:3000", "http://127.0.0.1:3000"];
+}

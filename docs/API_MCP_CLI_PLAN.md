@@ -7,6 +7,8 @@ Last updated: 2026-06-04
 
 API, web, CLI, and MCP must ask the same backend for authorization. No client surface may reimplement access rules as a substitute for server-side decisions.
 
+The current web slice consumes only public API decisions for skill search, skill detail, release metadata, and export guidance. It must not fetch bundle payloads during metadata browsing.
+
 ## API Surface
 
 Milestone 1 REST endpoints:

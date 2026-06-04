@@ -11,11 +11,26 @@ export interface BuildAppOptions {
   skillRepository: SkillRepository;
   authService?: AuthService;
   submissionService?: SubmissionService;
+  allowedOrigins?: string[];
   logger?: boolean;
 }
 
 export function buildApp(options: BuildAppOptions): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? false });
+  const allowedOrigins = options.allowedOrigins ?? ["http://localhost:3000", "http://127.0.0.1:3000"];
+
+  app.addHook("onRequest", async (request, reply) => {
+    const origin = request.headers.origin;
+    if (typeof origin === "string" && allowedOrigins.includes(origin)) {
+      reply.header("access-control-allow-origin", origin);
+      reply.header("vary", "Origin");
+      reply.header("access-control-allow-methods", "GET,POST,DELETE,OPTIONS");
+      reply.header("access-control-allow-headers", "authorization,content-type");
+    }
+    if (request.method === "OPTIONS") {
+      return reply.code(204).send();
+    }
+  });
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof AppError) {

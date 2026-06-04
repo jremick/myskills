@@ -55,6 +55,30 @@ test("GET /health returns service status", async (t) => {
   });
 });
 
+test("CORS allows configured web origins only", async (t) => {
+  const app = buildApp({
+    skillRepository: repository,
+    allowedOrigins: ["http://localhost:3000"],
+  });
+  t.after(() => app.close());
+
+  const allowed = await app.inject({
+    method: "OPTIONS",
+    url: "/v1/skills",
+    headers: { origin: "http://localhost:3000" },
+  });
+  const denied = await app.inject({
+    method: "OPTIONS",
+    url: "/v1/skills",
+    headers: { origin: "https://example.invalid" },
+  });
+
+  assert.equal(allowed.statusCode, 204);
+  assert.equal(allowed.headers["access-control-allow-origin"], "http://localhost:3000");
+  assert.equal(denied.statusCode, 204);
+  assert.equal(denied.headers["access-control-allow-origin"], undefined);
+});
+
 test("GET /v1/me requires authentication", async (t) => {
   const app = buildApp({ skillRepository: repository });
   t.after(() => app.close());

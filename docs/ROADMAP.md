@@ -34,7 +34,7 @@ Acceptance:
 - No Git repository is required for registry operation.
 - Local setup can run Postgres plus object storage through Docker Compose.
 
-Current status: in progress. The first API and schema slice exists with email/password session auth, hashed scoped API tokens, public search/detail endpoints, authenticated package intake with scan evidence, maintainer review approve/publish actions, authorized release metadata and bundle delivery, and a starter CLI for validation, scanning, search, info, whoami, submit, review actions, verified export, and API-token management. Archive upload/extraction, object-storage-backed artifact delivery, durable CLI token storage, MFA enforcement, and background scan jobs are still future work.
+Current status: in progress. The first API and schema slice exists with email/password session auth, hashed scoped API tokens, public search/detail endpoints, authenticated package intake with scan evidence, maintainer review approve/publish actions, authorized release metadata and bundle delivery, a React web app for public registry browsing/detail/export guidance, and a starter CLI for validation, scanning, search, info, whoami, submit, review actions, verified export, and API-token management. Archive upload/extraction, object-storage-backed artifact delivery, durable CLI token storage, MFA enforcement, and background scan jobs are still future work.
 
 ## Milestone 2: Auth And User Management Foundation
 
@@ -113,6 +113,8 @@ Acceptance:
 
 - Common user, author, maintainer, and admin workflows work in browser tests.
 - Text and controls fit on mobile and desktop.
+
+Current status: public browse/search, skill detail, release metadata, and export-guidance views exist. Authenticated submit, maintainer review dashboard, and admin console are still future work.
 
 ## Milestone 6: MCP Production Surface
 
