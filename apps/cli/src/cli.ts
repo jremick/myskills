@@ -17,6 +17,26 @@ export interface CliIo {
   stderr: (line: string) => void;
 }
 
+export interface CliPrompt {
+  text: (label: string) => Promise<string>;
+  secret: (label: string) => Promise<string>;
+}
+
+export type StoredCliTokenKind = "session" | "api";
+
+export interface StoredCliToken {
+  kind: StoredCliTokenKind;
+  token: string;
+  email?: string;
+  expiresAt?: string;
+}
+
+export interface CliTokenStore {
+  get: (apiUrl: string) => Promise<StoredCliToken | null>;
+  set: (apiUrl: string, token: StoredCliToken) => Promise<void>;
+  delete: (apiUrl: string) => Promise<void>;
+}
+
 export type FetchLike = (
   input: string,
   init?: { method?: string; headers?: Record<string, string>; body?: string },
@@ -30,6 +50,8 @@ export interface CliRuntime {
   env: Record<string, string | undefined>;
   io: CliIo;
   fetch: FetchLike;
+  prompt?: CliPrompt;
+  tokenStore?: CliTokenStore;
 }
 
 interface ParsedArgs {
@@ -56,6 +78,10 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
         return await searchCommand(parsed, runtime);
       case "info":
         return await infoCommand(parsed, runtime);
+      case "login":
+        return await loginCommand(parsed, runtime);
+      case "logout":
+        return await logoutCommand(parsed, runtime);
       case "whoami":
         return await whoamiCommand(parsed, runtime);
       case "submit":
@@ -105,7 +131,7 @@ async function searchCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     `/v1/skills${query ? `?q=${encodeURIComponent(query)}` : ""}`,
     parsed,
     runtime,
-    tokenOption(parsed, runtime) ?? undefined,
+    await tokenOption(parsed, runtime) ?? undefined,
   );
   if (parsed.options.json) {
     runtime.io.stdout(JSON.stringify(response, null, 2));
@@ -131,7 +157,7 @@ async function infoCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
     `/v1/skills/${encodeURIComponent(slug)}`,
     parsed,
     runtime,
-    tokenOption(parsed, runtime) ?? undefined,
+    await tokenOption(parsed, runtime) ?? undefined,
   );
   if (parsed.options.json) {
     runtime.io.stdout(JSON.stringify(response, null, 2));
@@ -153,10 +179,69 @@ async function infoCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
   return 0;
 }
 
+async function loginCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  if (!runtime.tokenStore) {
+    throw new CliError("No token store is configured. Set AI_SKILLS_TOKEN for one-off commands.", 1);
+  }
+  const email = optionalStringOption(parsed, "email") ?? await promptText(runtime, "Email: ");
+  const password = await promptSecret(runtime, "Password: ");
+  const loginResponse = await apiPost("/v1/auth/login", { email: email.trim(), password }, parsed, runtime);
+  const session = loginResponse.mfaRequired === true
+    ? await completeMfaLogin(loginResponse, parsed, runtime)
+    : authSessionFromResponse(loginResponse);
+
+  const apiUrl = apiBaseUrl(parsed, runtime);
+  await runtime.tokenStore.set(apiUrl, {
+    kind: "session",
+    token: session.token,
+    email: session.email,
+    expiresAt: session.expiresAt,
+  });
+  runtime.io.stdout(`${session.email ?? email.trim()}\tlogged-in\texpires=${session.expiresAt}`);
+  return 0;
+}
+
+async function completeMfaLogin(loginResponse: Record<string, unknown>, parsed: ParsedArgs, runtime: CliRuntime): Promise<AuthSession> {
+  const challengeToken = stringFromRecord(loginResponse, "challengeToken", "API login response is missing MFA challenge token.");
+  const mfaValue = (await promptSecret(runtime, "MFA code or recovery code: ")).trim();
+  if (!mfaValue) {
+    throw new CliError("MFA code is required.", 2);
+  }
+  const verifyResponse = await apiPost(
+    "/v1/auth/mfa/verify",
+    /^[0-9]{6}$/.test(mfaValue)
+      ? { challengeToken, code: mfaValue }
+      : { challengeToken, recoveryCode: mfaValue },
+    parsed,
+    runtime,
+  );
+  return authSessionFromResponse(verifyResponse);
+}
+
+async function logoutCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const resolved = await resolveToken(parsed, runtime);
+  if (!resolved) {
+    throw new CliError("Not logged in. Run ai-skills login, set AI_SKILLS_TOKEN, or pass --token.", 1);
+  }
+  if (resolved.source === "store" && resolved.stored.kind === "api") {
+    await runtime.tokenStore?.delete(apiBaseUrl(parsed, runtime));
+    runtime.io.stdout("logged out\tlocal-only\tapi-token-not-revoked");
+    return 0;
+  }
+  await apiPost("/v1/auth/logout", {}, parsed, runtime, resolved.value);
+  if (resolved.source === "store") {
+    await runtime.tokenStore?.delete(apiBaseUrl(parsed, runtime));
+    runtime.io.stdout("logged out\tserver-revoked");
+  } else {
+    runtime.io.stdout("logout requested\tstored-token-unchanged");
+  }
+  return 0;
+}
+
 async function whoamiCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
-  const token = tokenOption(parsed, runtime);
+  const token = await tokenOption(parsed, runtime);
   if (!token) {
-    throw new CliError("No token provided. Set AI_SKILLS_TOKEN or pass --token.", 1);
+    throw new CliError("No token provided. Run ai-skills login, set AI_SKILLS_TOKEN, or pass --token.", 1);
   }
   const response = await apiGet("/v1/me", parsed, runtime, token);
   if (parsed.options.json) {
@@ -169,9 +254,9 @@ async function whoamiCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
 }
 
 async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
-  const token = tokenOption(parsed, runtime);
+  const token = await tokenOption(parsed, runtime);
   if (!token) {
-    throw new CliError("No token provided. Set AI_SKILLS_TOKEN or pass --token.", 1);
+    throw new CliError("No token provided. Run ai-skills login, set AI_SKILLS_TOKEN, or pass --token.", 1);
   }
   const subcommand = parsed.args[0];
   if (subcommand === "create") {
@@ -242,9 +327,9 @@ async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
 }
 
 async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
-  const token = tokenOption(parsed, runtime);
+  const token = await tokenOption(parsed, runtime);
   if (!token) {
-    throw new CliError("No token provided. Set AI_SKILLS_TOKEN or pass --token.", 1);
+    throw new CliError("No token provided. Run ai-skills login, set AI_SKILLS_TOKEN, or pass --token.", 1);
   }
   const subcommand = parsed.args[0];
   if (subcommand === "submissions") {
@@ -302,9 +387,9 @@ async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
 }
 
 async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
-  const token = tokenOption(parsed, runtime);
+  const token = await tokenOption(parsed, runtime);
   if (!token) {
-    throw new CliError("No token provided. Set AI_SKILLS_TOKEN or pass --token.", 1);
+    throw new CliError("No token provided. Run ai-skills login, set AI_SKILLS_TOKEN, or pass --token.", 1);
   }
   const packagePath = requiredPath(parsed);
   const manifest = await loadSkillManifestFromPath(packagePath);
@@ -342,7 +427,7 @@ async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   const version = stringOption(parsed, "version");
   const platform = stringOption(parsed, "platform");
   const outputDir = stringOption(parsed, "output");
-  const token = tokenOption(parsed, runtime) ?? undefined;
+  const token = await tokenOption(parsed, runtime) ?? undefined;
   const releaseResponse = await apiGet(
     `/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}`,
     parsed,
@@ -386,7 +471,7 @@ async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
 }
 
 async function apiGet(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<Record<string, unknown>> {
-  const baseUrl = String(parsed.options["api-url"] ?? runtime.env.AI_SKILLS_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
+  const baseUrl = apiBaseUrl(parsed, runtime);
   const headers: Record<string, string> = {};
   if (token) {
     headers.authorization = `Bearer ${token}`;
@@ -402,7 +487,7 @@ async function apiGet(pathname: string, parsed: ParsedArgs, runtime: CliRuntime,
 }
 
 async function apiGetText(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<string> {
-  const baseUrl = String(parsed.options["api-url"] ?? runtime.env.AI_SKILLS_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
+  const baseUrl = apiBaseUrl(parsed, runtime);
   const headers: Record<string, string> = {};
   if (token) {
     headers.authorization = `Bearer ${token}`;
@@ -416,14 +501,17 @@ async function apiGetText(pathname: string, parsed: ParsedArgs, runtime: CliRunt
   return text;
 }
 
-async function apiPost(pathname: string, payload: unknown, parsed: ParsedArgs, runtime: CliRuntime, token: string): Promise<Record<string, unknown>> {
-  const baseUrl = String(parsed.options["api-url"] ?? runtime.env.AI_SKILLS_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
+async function apiPost(pathname: string, payload: unknown, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<Record<string, unknown>> {
+  const baseUrl = apiBaseUrl(parsed, runtime);
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+  if (token) {
+    headers.authorization = `Bearer ${token}`;
+  }
   const response = await runtime.fetch(`${baseUrl}${pathname}`, {
     method: "POST",
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-    },
+    headers,
     body: JSON.stringify(payload),
   });
   const text = await response.text();
@@ -436,7 +524,7 @@ async function apiPost(pathname: string, payload: unknown, parsed: ParsedArgs, r
 }
 
 async function apiDelete(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token: string): Promise<Record<string, unknown>> {
-  const baseUrl = String(parsed.options["api-url"] ?? runtime.env.AI_SKILLS_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
+  const baseUrl = apiBaseUrl(parsed, runtime);
   const response = await runtime.fetch(`${baseUrl}${pathname}`, {
     method: "DELETE",
     headers: {
@@ -480,12 +568,95 @@ function requiredPath(parsed: ParsedArgs): string {
   return value;
 }
 
-function tokenOption(parsed: ParsedArgs, runtime: CliRuntime): string | null {
+function apiBaseUrl(parsed: ParsedArgs, runtime: CliRuntime): string {
+  return String(parsed.options["api-url"] ?? runtime.env.AI_SKILLS_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
+}
+
+interface ResolvedToken {
+  value: string;
+  source: "option" | "env" | "store";
+  stored: StoredCliToken;
+}
+
+async function tokenOption(parsed: ParsedArgs, runtime: CliRuntime): Promise<string | null> {
+  return (await resolveToken(parsed, runtime))?.value ?? null;
+}
+
+async function resolveToken(parsed: ParsedArgs, runtime: CliRuntime): Promise<ResolvedToken | null> {
   const token = parsed.options.token;
   if (typeof token === "string" && token) {
-    return token;
+    return {
+      value: token,
+      source: "option",
+      stored: { kind: "session", token },
+    };
   }
-  return runtime.env.AI_SKILLS_TOKEN ?? null;
+  if (runtime.env.AI_SKILLS_TOKEN) {
+    return {
+      value: runtime.env.AI_SKILLS_TOKEN,
+      source: "env",
+      stored: { kind: "session", token: runtime.env.AI_SKILLS_TOKEN },
+    };
+  }
+  const stored = await runtime.tokenStore?.get(apiBaseUrl(parsed, runtime));
+  if (!stored?.token) {
+    return null;
+  }
+  return {
+    value: stored.token,
+    source: "store",
+    stored,
+  };
+}
+
+async function promptText(runtime: CliRuntime, label: string): Promise<string> {
+  if (!runtime.prompt) {
+    throw new CliError("Interactive input is unavailable. Set AI_SKILLS_TOKEN for one-off commands.", 1);
+  }
+  const value = (await runtime.prompt.text(label)).trim();
+  if (!value) {
+    throw new CliError(`${label.replace(/:\s*$/, "")} is required.`, 2);
+  }
+  return value;
+}
+
+async function promptSecret(runtime: CliRuntime, label: string): Promise<string> {
+  if (!runtime.prompt) {
+    throw new CliError("Interactive input is unavailable. Set AI_SKILLS_TOKEN for one-off commands.", 1);
+  }
+  const value = await runtime.prompt.secret(label);
+  if (!value) {
+    throw new CliError(`${label.replace(/:\s*$/, "")} is required.`, 2);
+  }
+  return value;
+}
+
+interface AuthSession {
+  token: string;
+  expiresAt: string;
+  email?: string;
+}
+
+function authSessionFromResponse(response: Record<string, unknown>): AuthSession {
+  const user = response.user;
+  let email: string | undefined;
+  if (user && typeof user === "object" && !Array.isArray(user)) {
+    const userEmail = (user as Record<string, unknown>).email;
+    email = typeof userEmail === "string" ? userEmail : undefined;
+  }
+  return {
+    token: stringFromRecord(response, "token", "API login response is missing session token."),
+    expiresAt: stringFromRecord(response, "expiresAt", "API login response is missing session expiry."),
+    email,
+  };
+}
+
+function stringFromRecord(record: Record<string, unknown>, key: string, message: string): string {
+  const value = record[key];
+  if (typeof value !== "string" || !value) {
+    throw new CliError(message, 1);
+  }
+  return value;
 }
 
 function stringOption(parsed: ParsedArgs, key: string): string {
@@ -611,6 +782,8 @@ function helpText(): string {
     "  scan --path <file-directory-or-zip>",
     "  search [query] [--api-url <url>]",
     "  info <skill-slug> [--api-url <url>]",
+    "  login [--api-url <url>] [--email <email>]",
+    "  logout [--api-url <url>] [--token <token>]",
     "  whoami [--api-url <url>] [--token <token>]",
     "  submit --path <file-directory-or-zip> [--api-url <url>] [--token <token>]",
     "  review submissions [--api-url <url>] [--token <token>]",
@@ -623,7 +796,7 @@ function helpText(): string {
     "Options:",
     "  --json              Print machine-readable JSON.",
     "  --api-url <url>     API base URL. Defaults to AI_SKILLS_API_URL or http://localhost:3001.",
-    "  --token <token>     Bearer token. Defaults to AI_SKILLS_TOKEN when available.",
+    "  --token <token>     Bearer token. Defaults to AI_SKILLS_TOKEN, then stored login token.",
   ].join("\n");
 }
 

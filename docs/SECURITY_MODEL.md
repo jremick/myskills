@@ -20,6 +20,7 @@ Last updated: 2026-06-04
 - Session tokens are opaque and stored only as hashes.
 - API tokens are opaque, scoped, stored only as hashes, and returned in plaintext only once.
 - API token management requires a session; API tokens cannot create, list, or revoke other tokens.
+- CLI login tokens are stored locally by normalized API URL with user-only file permissions; platform keychain storage remains the target hardening path.
 - Login uses normalized email lookup and generic invalid-credential denial.
 - Existing sessions are denied when the user is no longer active or email verified.
 - Login and registration are throttled before repeated expensive auth work.

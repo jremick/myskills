@@ -89,11 +89,13 @@ Provider groups, Cloudflare Access claims, OIDC claims, or SAML attributes can m
 
 ### API And CLI Tokens
 
-CLI login should use browser-based device or authorization-code flow where possible, then store a scoped application token locally.
+Current CLI login uses first-party email/password prompts, completes MFA challenges with a TOTP or recovery-code prompt, and stores the returned session token locally by normalized API URL. Browser-based device or authorization-code login remains the preferred future provider flow where possible.
 
 Token rules:
 
-- store CLI tokens in the platform secret store by default
+- store CLI tokens by API URL so local, staging, and production credentials do not cross over
+- use user-only local file permissions for the current default token store
+- move CLI tokens to the platform secret store by default when that backend is added
 - support token revocation and rotation
 - expose token names, scopes, last used time, and expiry in account settings
 - never store provider refresh tokens on the CLI

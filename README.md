@@ -84,13 +84,18 @@ The current CLI can validate and scan local package directories, search and insp
 
 ```bash
 npm run build
+node apps/cli/dist/index.js login --email "$SEED_OWNER_EMAIL"
+node apps/cli/dist/index.js whoami
 node apps/cli/dist/index.js search release
 node apps/cli/dist/index.js info release-notes-helper
 node apps/cli/dist/index.js export release-notes-helper --version 0.1.0 --platform codex --output ./tmp/release-notes-helper
-AI_SKILLS_TOKEN=<token> node apps/cli/dist/index.js submit --path ./path-to-skill
-AI_SKILLS_TOKEN=<token> node apps/cli/dist/index.js review submissions
-AI_SKILLS_TOKEN=<session-token> node apps/cli/dist/index.js token create --name "Local CLI" --scope profile:read --scope skills:read --scope skills:submit
+node apps/cli/dist/index.js submit --path ./path-to-skill
+node apps/cli/dist/index.js review submissions
+node apps/cli/dist/index.js token create --name "Local CLI" --scope profile:read --scope skills:read --scope skills:submit
+node apps/cli/dist/index.js logout
 ```
+
+CLI bearer resolution is `--token`, then `AI_SKILLS_TOKEN`, then the stored login token scoped to the normalized API URL.
 
 ## Verification
 
@@ -100,4 +105,4 @@ npm run check
 
 ## Current Status
 
-This is the first backend and product-surface foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, hashed scoped API tokens, public skill search/detail/release/bundle endpoints, MCP token introspection with `skills:read`, authenticated package intake with scan evidence, maintainer approve/publish actions, a Vite/React web browser for public registry metadata, a read-only stdio MCP server, a starter CLI with verified export and token management, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, seed data, package manifest validation, local package risk scanning, and deterministic checks.
+This is the first backend and product-surface foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, MFA challenge flow, CLI login/logout with API-URL-scoped stored sessions, hashed scoped API tokens, public skill search/detail/release/bundle endpoints, MCP token introspection with `skills:read`, authenticated package intake with scan evidence, maintainer approve/publish actions, a Vite/React web browser for public registry metadata, a read-only stdio MCP server, a starter CLI with verified export and token management, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, seed data, package manifest validation, local package risk scanning, and deterministic checks.
