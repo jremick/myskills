@@ -1,0 +1,23 @@
+# Dependencies and package manager state
+node_modules/
+.npm/
+.pnpm-store/
+
+# Build and test output
+dist/
+build/
+coverage/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# Runtime and local state
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+
+# Private migration notes and local evidence
+.private/
+

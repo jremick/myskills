@@ -1,0 +1,21 @@
+{
+  "name": "ai-skills-share",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open-source skill registry, sharing, installation, API, MCP, and CLI platform for AI agent skills.",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "check": "npm run check:structure && npm run check:privacy",
+    "check:privacy": "node scripts/check-privacy.mjs",
+    "check:structure": "node scripts/check-structure.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@11.12.1"
+}
+
