@@ -1,7 +1,8 @@
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import { AppError } from "@ai-skills-share/core";
 import { parseSkillManifest, type PackageInputFile } from "@ai-skills-share/skill-package";
-import type { AuthService, LoginInput, RegisterInput } from "./auth/service.js";
+import type { ApiTokenScope } from "./auth/types.js";
+import type { AuthContext, AuthService, CreateApiTokenRequest, LoginInput, RegisterInput } from "./auth/service.js";
 import type { ReviewAction, StoredSubmission, SubmissionActor } from "./submissions/types.js";
 import type { SubmissionService } from "./submissions/service.js";
 import type { SkillRepository } from "@ai-skills-share/core";
@@ -146,10 +147,46 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     return reply.code(204).send();
   });
 
+  app.get("/v1/auth/api-tokens", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return { tokens: await options.authService.listApiTokens(user) };
+  });
+
+  app.post("/v1/auth/api-tokens", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    const token = await options.authService.createApiToken(user, parseCreateApiTokenInput(request.body));
+    return reply.code(201).send({ token });
+  });
+
+  app.delete("/v1/auth/api-tokens/:id", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    const token = await options.authService.revokeApiToken(user, parseTokenIdParam(request.params));
+    return { token };
+  });
+
   app.get("/v1/me", async (request, reply) => {
-    const user = await options.authService?.authenticateAuthorizationHeader(request.headers.authorization);
-    if (user) {
-      return { user };
+    const context = await options.authService?.authenticateRequest(request.headers.authorization);
+    if (context) {
+      requireScope(context, "profile:read");
+      return { user: context.user };
     }
     return reply.code(401).send({
       error: {
@@ -166,8 +203,8 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     if (!options.submissionService) {
       throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
     }
-    const user = await options.authService.authenticateAuthorizationHeader(request.headers.authorization);
-    if (!user) {
+    const context = await options.authService.authenticateRequest(request.headers.authorization);
+    if (!context) {
       return reply.code(401).send({
         error: {
           code: "AUTHENTICATION_REQUIRED",
@@ -175,11 +212,12 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         },
       });
     }
+    requireScope(context, "skills:submit");
     const input = parseSubmissionInput(request.body);
     const submission = await options.submissionService.createSubmission({
       actor: {
-        id: user.id,
-        roles: user.roles,
+        id: context.user.id,
+        roles: context.user.roles,
       },
       manifest: input.manifest,
       files: input.files,
@@ -194,7 +232,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     if (!options.submissionService) {
       throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
     }
-    const actor = await authenticateActor(options.authService, request.headers.authorization);
+    const actor = await authenticateActor(options.authService, request.headers.authorization, "review:read");
     if (!actor) {
       return reply.code(401).send({
         error: {
@@ -214,7 +252,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     if (!options.submissionService) {
       throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
     }
-    const actor = await authenticateActor(options.authService, request.headers.authorization);
+    const actor = await authenticateActor(options.authService, request.headers.authorization, "review:write");
     if (!actor) {
       return reply.code(401).send({
         error: {
@@ -234,15 +272,47 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   return app;
 }
 
-async function authenticateActor(authService: AuthService, authorization: string | undefined): Promise<SubmissionActor | null> {
-  const user = await authService.authenticateAuthorizationHeader(authorization);
-  if (!user) {
+async function authenticateActor(authService: AuthService, authorization: string | undefined, scope: ApiTokenScope): Promise<SubmissionActor | null> {
+  const context = await authService.authenticateRequest(authorization);
+  if (!context) {
     return null;
   }
+  requireScope(context, scope);
   return {
-    id: user.id,
-    roles: user.roles,
+    id: context.user.id,
+    roles: context.user.roles,
   };
+}
+
+async function authenticateSessionUser(authService: AuthService, authorization: string | undefined) {
+  return authService.authenticateSessionAuthorizationHeader(authorization);
+}
+
+async function authFailureReply(authService: AuthService, authorization: string | undefined, reply: FastifyReply) {
+  const context = await authService.authenticateRequest(authorization);
+  if (context?.credential.kind === "api_token") {
+    return reply.code(403).send({
+      error: {
+        code: "SESSION_AUTH_REQUIRED",
+        message: "Session authentication is required.",
+      },
+    });
+  }
+  return reply.code(401).send({
+    error: {
+      code: "AUTHENTICATION_REQUIRED",
+      message: "Authentication is required.",
+    },
+  });
+}
+
+function requireScope(context: AuthContext, scope: ApiTokenScope): void {
+  if (context.credential.kind === "session") {
+    return;
+  }
+  if (!context.credential.scopes.includes(scope)) {
+    throw new AppError("API token scope is required.", "API_TOKEN_SCOPE_REQUIRED", 403, { scope });
+  }
 }
 
 function parseRegisterInput(input: unknown): RegisterInput {
@@ -259,6 +329,24 @@ function parseLoginInput(input: unknown): LoginInput {
   return {
     email: requiredString(body.email, "email"),
     password: requiredString(body.password, "password"),
+  };
+}
+
+function parseCreateApiTokenInput(input: unknown): CreateApiTokenRequest {
+  const body = parseJsonObject(input);
+  const rawScopes = body.scopes;
+  if (!Array.isArray(rawScopes)) {
+    throw new AppError("Token scopes are required.", "INVALID_TOKEN_SCOPES", 400);
+  }
+  return {
+    name: requiredString(body.name, "name"),
+    scopes: rawScopes.map((scope, index) => {
+      if (typeof scope !== "string") {
+        throw new AppError(`scopes[${index}] must be a string.`, "INVALID_TOKEN_SCOPES", 400);
+      }
+      return scope as ApiTokenScope;
+    }),
+    expiresAt: optionalString(body.expiresAt, "expiresAt"),
   };
 }
 
@@ -368,6 +456,15 @@ function parseSubmissionIdParam(input: unknown): string {
   const id = requiredString(params.id, "id");
   if (!/^[A-Za-z0-9-]{1,128}$/.test(id)) {
     throw new AppError("Valid submission id is required.", "INVALID_SUBMISSION_ID", 400);
+  }
+  return id;
+}
+
+function parseTokenIdParam(input: unknown): string {
+  const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const id = requiredString(params.id, "id");
+  if (!/^[A-Za-z0-9-]{1,128}$/.test(id)) {
+    throw new AppError("Valid API token id is required.", "INVALID_API_TOKEN_ID", 400);
   }
   return id;
 }

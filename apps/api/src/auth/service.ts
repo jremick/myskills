@@ -1,15 +1,27 @@
 import { AppError } from "@ai-skills-share/core";
 import {
+  createApiToken,
   createSessionToken,
+  hashApiToken,
   hashPassword,
   hashSessionToken,
   verifyPassword,
   type AuthenticatedUser,
 } from "@ai-skills-share/auth";
 import type { AuthRateLimiter } from "./rate-limit.js";
-import type { AuthResponseUser, AuthStore, AuthUserRecord } from "./types.js";
+import {
+  apiTokenScopes,
+  type ApiTokenRecord,
+  type ApiTokenScope,
+  type AuthResponseUser,
+  type AuthStore,
+  type AuthUserRecord,
+} from "./types.js";
 
 const DEFAULT_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
+const DEFAULT_API_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 90;
+const MAX_API_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 365;
+const API_TOKEN_PREFIX_LENGTH = 12;
 
 export interface RegisterInput {
   email: string;
@@ -22,6 +34,36 @@ export interface LoginInput {
   email: string;
   password: string;
   ip?: string;
+}
+
+export interface CreateApiTokenRequest {
+  name: string;
+  scopes: ApiTokenScope[];
+  expiresAt?: string;
+}
+
+export interface SafeApiToken {
+  id: string;
+  name: string;
+  tokenPrefix: string;
+  scopes: ApiTokenScope[];
+  expiresAt: string;
+  revokedAt: string | null;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreatedApiToken extends SafeApiToken {
+  token: string;
+}
+
+export interface AuthContext {
+  user: AuthResponseUser;
+  credential: {
+    kind: "session" | "api_token";
+    scopes: ApiTokenScope[];
+    tokenId?: string;
+  };
 }
 
 export class AuthService {
@@ -78,6 +120,39 @@ export class AuthService {
   }
 
   async authenticateAuthorizationHeader(header: string | undefined): Promise<AuthResponseUser | null> {
+    return (await this.authenticateRequest(header))?.user ?? null;
+  }
+
+  async authenticateRequest(header: string | undefined): Promise<AuthContext | null> {
+    const token = bearerToken(header);
+    if (!token) {
+      return null;
+    }
+    const sessionUser = await this.store.findUserBySessionTokenHash(hashSessionToken(token));
+    if (sessionUser && isUsableAuthenticatedAccount(sessionUser)) {
+      return {
+        user: responseUser(sessionUser),
+        credential: {
+          kind: "session",
+          scopes: [...apiTokenScopes],
+        },
+      };
+    }
+    const apiTokenUser = await this.store.findUserByApiTokenHash(hashApiToken(token));
+    if (apiTokenUser && isUsableAuthenticatedAccount(apiTokenUser)) {
+      return {
+        user: responseUser(apiTokenUser),
+        credential: {
+          kind: "api_token",
+          tokenId: apiTokenUser.apiTokenId,
+          scopes: apiTokenUser.apiTokenScopes,
+        },
+      };
+    }
+    return null;
+  }
+
+  async authenticateSessionAuthorizationHeader(header: string | undefined): Promise<AuthResponseUser | null> {
     const token = bearerToken(header);
     if (!token) {
       return null;
@@ -91,6 +166,35 @@ export class AuthService {
     if (token) {
       await this.store.revokeSessionByTokenHash(hashSessionToken(token));
     }
+  }
+
+  async createApiToken(actor: AuthResponseUser, input: CreateApiTokenRequest): Promise<CreatedApiToken> {
+    const token = createApiToken();
+    const expiresAt = parseApiTokenExpiry(input.expiresAt);
+    const record = await this.store.createApiToken({
+      userId: actor.id,
+      name: cleanTokenName(input.name),
+      tokenPrefix: token.slice(0, API_TOKEN_PREFIX_LENGTH),
+      tokenHash: hashApiToken(token),
+      scopes: normalizeScopes(input.scopes),
+      expiresAt,
+    });
+    return {
+      ...safeApiToken(record),
+      token,
+    };
+  }
+
+  async listApiTokens(actor: AuthResponseUser): Promise<SafeApiToken[]> {
+    return (await this.store.listApiTokensForUser(actor.id)).map(safeApiToken);
+  }
+
+  async revokeApiToken(actor: AuthResponseUser, tokenId: string): Promise<SafeApiToken> {
+    const token = await this.store.revokeApiToken({ userId: actor.id, tokenId });
+    if (!token) {
+      throw new AppError("API token not found.", "API_TOKEN_NOT_FOUND", 404);
+    }
+    return safeApiToken(token);
   }
 }
 
@@ -154,6 +258,58 @@ function cleanName(name: string | undefined): string {
     throw new AppError("Name must be a string.", "INVALID_NAME", 400);
   }
   return (name ?? "").trim().slice(0, 120);
+}
+
+function cleanTokenName(name: string): string {
+  if (typeof name !== "string" || !name.trim()) {
+    throw new AppError("Token name is required.", "INVALID_TOKEN_NAME", 400);
+  }
+  return name.trim().slice(0, 80);
+}
+
+function normalizeScopes(scopes: ApiTokenScope[]): ApiTokenScope[] {
+  if (!Array.isArray(scopes) || scopes.length === 0) {
+    throw new AppError("At least one token scope is required.", "INVALID_TOKEN_SCOPES", 400);
+  }
+  const allowed = new Set<ApiTokenScope>(apiTokenScopes);
+  const result: ApiTokenScope[] = [];
+  for (const scope of scopes) {
+    if (!allowed.has(scope)) {
+      throw new AppError("Unsupported token scope.", "INVALID_TOKEN_SCOPES", 400);
+    }
+    if (!result.includes(scope)) {
+      result.push(scope);
+    }
+  }
+  return result;
+}
+
+function parseApiTokenExpiry(input: string | undefined): Date {
+  const now = Date.now();
+  if (!input) {
+    return new Date(now + DEFAULT_API_TOKEN_TTL_MS);
+  }
+  const expiresAt = new Date(input);
+  if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= now) {
+    throw new AppError("Token expiry must be a future ISO date.", "INVALID_TOKEN_EXPIRY", 400);
+  }
+  if (expiresAt.getTime() - now > MAX_API_TOKEN_TTL_MS) {
+    throw new AppError("Token expiry cannot be more than one year away.", "INVALID_TOKEN_EXPIRY", 400);
+  }
+  return expiresAt;
+}
+
+function safeApiToken(token: ApiTokenRecord): SafeApiToken {
+  return {
+    id: token.id,
+    name: token.name,
+    tokenPrefix: token.tokenPrefix,
+    scopes: token.scopes,
+    expiresAt: token.expiresAt.toISOString(),
+    revokedAt: token.revokedAt?.toISOString() ?? null,
+    lastUsedAt: token.lastUsedAt?.toISOString() ?? null,
+    createdAt: token.createdAt.toISOString(),
+  };
 }
 
 export function asAuthenticatedUser(user: AuthResponseUser): AuthenticatedUser {

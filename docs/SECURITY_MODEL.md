@@ -18,6 +18,8 @@ Last updated: 2026-06-04
 
 - Password hashes are never stored on the user record.
 - Session tokens are opaque and stored only as hashes.
+- API tokens are opaque, scoped, stored only as hashes, and returned in plaintext only once.
+- API token management requires a session; API tokens cannot create, list, or revoke other tokens.
 - Login uses normalized email lookup and generic invalid-credential denial.
 - Existing sessions are denied when the user is no longer active or email verified.
 - Login and registration are throttled before repeated expensive auth work.
@@ -30,6 +32,7 @@ Last updated: 2026-06-04
 ### Authorization
 
 - Server-side authorization for every registry result and artifact delivery.
+- API-token access requires both local user roles and explicit token scopes.
 - Role checks for submission review, package publication, lifecycle changes, audit, and user management.
 - Generic denial responses where existence should not be revealed.
 - Tests for allow and deny paths across API, web, CLI, and MCP.
@@ -67,6 +70,7 @@ Last updated: 2026-06-04
 - Unauthenticated access is denied.
 - Unauthorized restricted skill search, info, bundle, CLI, and MCP paths do not leak existence or contents.
 - Revoked tokens stop working.
+- API tokens without the required scope cannot submit or review even when the user has the matching role.
 - MFA enforcement works for admin-required actions.
 - Package parser rejects unsafe archives.
 - Scanner blocks known secret and unsafe-command fixtures.

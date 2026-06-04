@@ -71,7 +71,7 @@ curl http://localhost:3001/v1/skills/release-notes-helper
 
 The seeded owner account uses `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` from `.env`.
 
-The current CLI can validate and scan local package directories, search and inspect approved releases, submit package text entries, run maintainer review actions, and export verified approved bundles:
+The current CLI can validate and scan local package directories, search and inspect approved releases, submit package text entries, run maintainer review actions, manage scoped API tokens, and export verified approved bundles:
 
 ```bash
 npm run build
@@ -80,6 +80,7 @@ node apps/cli/dist/index.js info release-notes-helper
 node apps/cli/dist/index.js export release-notes-helper --version 0.1.0 --platform codex --output ./tmp/release-notes-helper
 AI_SKILLS_TOKEN=<token> node apps/cli/dist/index.js submit --path ./path-to-skill
 AI_SKILLS_TOKEN=<token> node apps/cli/dist/index.js review submissions
+AI_SKILLS_TOKEN=<session-token> node apps/cli/dist/index.js token create --name "Local CLI" --scope profile:read --scope skills:submit
 ```
 
 ## Verification
@@ -90,4 +91,4 @@ npm run check
 
 ## Current Status
 
-This is the first backend foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, public skill search/detail/release/bundle endpoints, authenticated package intake with scan evidence, maintainer approve/publish actions, a starter CLI with verified export, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, seed data, package manifest validation, local package risk scanning, and deterministic checks.
+This is the first backend foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, hashed scoped API tokens, public skill search/detail/release/bundle endpoints, authenticated package intake with scan evidence, maintainer approve/publish actions, a starter CLI with verified export and token management, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, seed data, package manifest validation, local package risk scanning, and deterministic checks.

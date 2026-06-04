@@ -13,6 +13,9 @@ Milestone 1 REST endpoints:
 
 - `GET /health`
 - `GET /v1/me`
+- `GET /v1/auth/api-tokens`
+- `POST /v1/auth/api-tokens`
+- `DELETE /v1/auth/api-tokens/:id`
 - `GET /v1/skills`
 - `GET /v1/skills/:slug`
 - `GET /v1/skills/:slug/releases/:version`
@@ -75,9 +78,12 @@ ai-skills rollback <skill>
 ai-skills submit --path <dir-or-zip>
 ai-skills review submissions
 ai-skills review action <submission-id> --action <approve|publish> --reason <reason>
+ai-skills token create --name <name> --scope <scope>
+ai-skills token list
+ai-skills token revoke <token-id>
 ```
 
-Current CLI slice implements local `validate` and `scan`, backend-backed `search`, `info`, token-based `whoami`, `submit` for text-entry package intake, role-gated review list/actions, and verified `export` of approved bundle payloads. Browser login, durable token storage, install/update/rollback, and archive packaging are still planned.
+Current CLI slice implements local `validate` and `scan`, backend-backed `search`, `info`, token-based `whoami`, `submit` for text-entry package intake, role-gated review list/actions, verified `export` of approved bundle payloads, and server API-token create/list/revoke commands. Browser login, durable token storage, install/update/rollback, and archive packaging are still planned.
 
 Later maintainer/admin commands:
 

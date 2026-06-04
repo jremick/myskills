@@ -1,8 +1,12 @@
 import type { RegistrationMode, Role, UserStatus } from "@ai-skills-share/auth";
 import type {
+  ApiTokenRecord,
+  ApiTokenScope,
   AuthStore,
   AuthUserRecord,
   AuthUserWithPassword,
+  AuthUserWithApiToken,
+  CreateApiTokenInput,
   CreateSessionInput,
   CreateUserWithPasswordInput,
   CreateUserWithPasswordResult,
@@ -25,9 +29,23 @@ interface MemorySession {
   revokedAt: Date | null;
 }
 
+interface MemoryApiToken {
+  id: string;
+  userId: string;
+  name: string;
+  tokenPrefix: string;
+  tokenHash: string;
+  scopes: ApiTokenScope[];
+  expiresAt: Date;
+  revokedAt: Date | null;
+  lastUsedAt: Date | null;
+  createdAt: Date;
+}
+
 export class MemoryAuthStore implements AuthStore {
   private users = new Map<string, MemoryUser>();
   private sessions = new Map<string, MemorySession>();
+  private apiTokens = new Map<string, MemoryApiToken>();
 
   constructor(private registrationMode: RegistrationMode = "closed") {}
 
@@ -108,6 +126,61 @@ export class MemoryAuthStore implements AuthStore {
       session.revokedAt = new Date();
     }
   }
+
+  async createApiToken(input: CreateApiTokenInput): Promise<ApiTokenRecord> {
+    const token: MemoryApiToken = {
+      id: `api-token-${this.apiTokens.size + 1}`,
+      userId: input.userId,
+      name: input.name,
+      tokenPrefix: input.tokenPrefix,
+      tokenHash: input.tokenHash,
+      scopes: input.scopes,
+      expiresAt: input.expiresAt,
+      revokedAt: null,
+      lastUsedAt: null,
+      createdAt: new Date(),
+    };
+    this.apiTokens.set(token.tokenHash, token);
+    return toApiTokenRecord(token);
+  }
+
+  async listApiTokensForUser(userId: string): Promise<ApiTokenRecord[]> {
+    return [...this.apiTokens.values()]
+      .filter((token) => token.userId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map(toApiTokenRecord);
+  }
+
+  async findUserByApiTokenHash(tokenHash: string, now = new Date()): Promise<AuthUserWithApiToken | null> {
+    const token = this.apiTokens.get(tokenHash);
+    if (!token || token.revokedAt || token.expiresAt <= now) {
+      return null;
+    }
+    const user = Array.from(this.users.values()).find((candidate) => candidate.id === token.userId);
+    if (!user) {
+      return null;
+    }
+    token.lastUsedAt = now;
+    return {
+      ...toRecord(user),
+      apiTokenId: token.id,
+      apiTokenScopes: token.scopes,
+    };
+  }
+
+  async revokeApiToken(input: { userId: string; tokenId: string }): Promise<ApiTokenRecord | null> {
+    const token = [...this.apiTokens.values()].find((candidate) => (
+      candidate.id === input.tokenId &&
+      candidate.userId === input.userId
+    ));
+    if (!token) {
+      return null;
+    }
+    if (!token.revokedAt) {
+      token.revokedAt = new Date();
+    }
+    return toApiTokenRecord(token);
+  }
 }
 
 function toRecord(user: MemoryUser): AuthUserRecord {
@@ -118,5 +191,19 @@ function toRecord(user: MemoryUser): AuthUserRecord {
     status: user.status,
     emailVerifiedAt: user.emailVerifiedAt,
     roles: user.roles,
+  };
+}
+
+function toApiTokenRecord(token: MemoryApiToken): ApiTokenRecord {
+  return {
+    id: token.id,
+    userId: token.userId,
+    name: token.name,
+    tokenPrefix: token.tokenPrefix,
+    scopes: token.scopes,
+    expiresAt: token.expiresAt,
+    revokedAt: token.revokedAt,
+    lastUsedAt: token.lastUsedAt,
+    createdAt: token.createdAt,
   };
 }

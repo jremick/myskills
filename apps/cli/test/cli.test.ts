@@ -364,6 +364,136 @@ test("export refuses unsafe bundle file paths before writing", async (t) => {
   assert.match(output.stderr.join("\n"), /cannot traverse directories/);
 });
 
+test("token create requires an existing bearer token before fetch", async () => {
+  const output = createOutput();
+  let calls = 0;
+
+  const code = await runCli(["token", "create", "--name", "Local CLI", "--scope", "profile:read"], testRuntime(output, async () => {
+    calls += 1;
+    return response(500, {});
+  }));
+
+  assert.equal(code, 1);
+  assert.equal(calls, 0);
+  assert.match(output.stderr.join("\n"), /No token provided/);
+});
+
+test("token create posts requested scopes and prints plaintext once", async () => {
+  const output = createOutput();
+  let url = "";
+  let method = "";
+  let authorization = "";
+  let body: Record<string, unknown> = {};
+  const fetch: FetchLike = async (input, init) => {
+    url = String(input);
+    method = init?.method ?? "GET";
+    authorization = init?.headers?.authorization ?? "";
+    body = JSON.parse(init?.body ?? "{}");
+    return response(201, {
+      token: {
+        id: "api-token-1",
+        name: "Local CLI",
+        token: "aiss_plain-secret",
+        tokenPrefix: "aiss_plain-s",
+        scopes: ["profile:read", "skills:submit"],
+        expiresAt: "2026-12-01T00:00:00.000Z",
+      },
+    });
+  };
+
+  const code = await runCli([
+    "token",
+    "create",
+    "--name",
+    "Local CLI",
+    "--scope",
+    "profile:read",
+    "--scope",
+    "skills:submit",
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "session-token" }));
+
+  assert.equal(code, 0);
+  assert.equal(url, "http://api.test/v1/auth/api-tokens");
+  assert.equal(method, "POST");
+  assert.equal(authorization, "Bearer session-token");
+  assert.deepEqual(body, { name: "Local CLI", scopes: ["profile:read", "skills:submit"] });
+  assert.deepEqual(output.stdout, [
+    "Local CLI\taiss_plain-s\tprofile:read,skills:submit\texpires=2026-12-01T00:00:00.000Z",
+    "token: aiss_plain-secret",
+  ]);
+});
+
+test("token list prints metadata without plaintext or hashes", async () => {
+  const output = createOutput();
+  let authorization = "";
+  const fetch: FetchLike = async (_input, init) => {
+    authorization = init?.headers?.authorization ?? "";
+    return response(200, {
+      tokens: [{
+        id: "api-token-1",
+        name: "Local CLI",
+        tokenPrefix: "aiss_prefix",
+        scopes: ["profile:read"],
+        expiresAt: "2026-12-01T00:00:00.000Z",
+        revokedAt: null,
+        token: "should-not-print",
+        tokenHash: "hash-should-not-print",
+      }],
+    });
+  };
+
+  const code = await runCli(["token", "list"], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "session-token" }));
+
+  assert.equal(code, 0);
+  assert.equal(authorization, "Bearer session-token");
+  assert.equal(output.stdout.join("\n").includes("should-not-print"), false);
+  assert.equal(output.stdout.join("\n").includes("hash-should-not-print"), false);
+  assert.deepEqual(output.stdout, ["api-token-1\tLocal CLI\taiss_prefix\tprofile:read\texpires=2026-12-01T00:00:00.000Z\trevoked=-"]);
+});
+
+test("token revoke sends DELETE to the API", async () => {
+  const output = createOutput();
+  let url = "";
+  let method = "";
+  let authorization = "";
+  const fetch: FetchLike = async (input, init) => {
+    url = String(input);
+    method = init?.method ?? "GET";
+    authorization = init?.headers?.authorization ?? "";
+    return response(200, {
+      token: {
+        id: "api-token-1",
+        name: "Local CLI",
+        revokedAt: "2026-06-04T00:00:00.000Z",
+      },
+    });
+  };
+
+  const code = await runCli(["token", "revoke", "api-token-1", "--api-url", "http://api.test", "--token", "explicit-token"], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "env-token" }));
+
+  assert.equal(code, 0);
+  assert.equal(url, "http://api.test/v1/auth/api-tokens/api-token-1");
+  assert.equal(method, "DELETE");
+  assert.equal(authorization, "Bearer explicit-token");
+  assert.deepEqual(output.stdout, ["api-token-1\tLocal CLI\trevoked=2026-06-04T00:00:00.000Z"]);
+});
+
+test("token create usage errors exit without fetch", async () => {
+  const output = createOutput();
+  let calls = 0;
+
+  const code = await runCli(["token", "create", "--name", "Local CLI"], testRuntime(output, async () => {
+    calls += 1;
+    return response(500, {});
+  }, { AI_SKILLS_TOKEN: "session-token" }));
+
+  assert.equal(code, 2);
+  assert.equal(calls, 0);
+  assert.match(output.stderr.join("\n"), /--scope is required/);
+});
+
 async function writeManifest(dir: string): Promise<void> {
   await writeFile(path.join(dir, "skill.json"), JSON.stringify({
     name: "release-notes-helper",

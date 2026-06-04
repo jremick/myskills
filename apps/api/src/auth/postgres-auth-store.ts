@@ -2,6 +2,7 @@ import { and, eq, gt, isNull } from "drizzle-orm";
 import type { RegistrationMode, Role } from "@ai-skills-share/auth";
 import type { Database } from "../db/client.js";
 import {
+  apiTokens,
   authSessions,
   instanceSettings,
   passwordCredentials,
@@ -9,9 +10,13 @@ import {
   users,
 } from "../db/schema.js";
 import type {
+  ApiTokenRecord,
+  ApiTokenScope,
   AuthStore,
   AuthUserRecord,
+  AuthUserWithApiToken,
   AuthUserWithPassword,
+  CreateApiTokenInput,
   CreateSessionInput,
   CreateUserWithPasswordInput,
   CreateUserWithPasswordResult,
@@ -110,6 +115,69 @@ export class PostgresAuthStore implements AuthStore {
       .where(and(eq(authSessions.tokenHash, tokenHash), isNull(authSessions.revokedAt)));
   }
 
+  async createApiToken(input: CreateApiTokenInput): Promise<ApiTokenRecord> {
+    const [token] = await this.db
+      .insert(apiTokens)
+      .values({
+        userId: input.userId,
+        name: input.name,
+        tokenPrefix: input.tokenPrefix,
+        tokenHash: input.tokenHash,
+        scopes: input.scopes,
+        expiresAt: input.expiresAt,
+      })
+      .returning();
+    if (!token) {
+      throw new Error("API token insert failed.");
+    }
+    return toApiTokenRecord(token);
+  }
+
+  async listApiTokensForUser(userId: string): Promise<ApiTokenRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(apiTokens)
+      .where(eq(apiTokens.userId, userId))
+      .orderBy(apiTokens.createdAt);
+    return rows.reverse().map(toApiTokenRecord);
+  }
+
+  async findUserByApiTokenHash(tokenHash: string, now = new Date()): Promise<AuthUserWithApiToken | null> {
+    const [row] = await this.db
+      .select({
+        user: users,
+        tokenId: apiTokens.id,
+        scopes: apiTokens.scopes,
+      })
+      .from(apiTokens)
+      .innerJoin(users, eq(users.id, apiTokens.userId))
+      .where(and(
+        eq(apiTokens.tokenHash, tokenHash),
+        isNull(apiTokens.revokedAt),
+        gt(apiTokens.expiresAt, now),
+      ))
+      .limit(1);
+    if (!row) {
+      return null;
+    }
+    await this.db.update(apiTokens).set({ lastUsedAt: now }).where(eq(apiTokens.id, row.tokenId));
+    return {
+      ...toRecord(row.user),
+      roles: await this.rolesForUser(row.user.id),
+      apiTokenId: row.tokenId,
+      apiTokenScopes: parseApiTokenScopes(row.scopes),
+    };
+  }
+
+  async revokeApiToken(input: { userId: string; tokenId: string }): Promise<ApiTokenRecord | null> {
+    const [token] = await this.db
+      .update(apiTokens)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(apiTokens.id, input.tokenId), eq(apiTokens.userId, input.userId)))
+      .returning();
+    return token ? toApiTokenRecord(token) : null;
+  }
+
   private async rolesForUser(userId: string): Promise<Role[]> {
     const rows = await this.db
       .select({ role: roleAssignments.role })
@@ -127,4 +195,30 @@ function toRecord(user: typeof users.$inferSelect): Omit<AuthUserRecord, "roles"
     status: user.status,
     emailVerifiedAt: user.emailVerifiedAt,
   };
+}
+
+function toApiTokenRecord(token: typeof apiTokens.$inferSelect): ApiTokenRecord {
+  return {
+    id: token.id,
+    userId: token.userId,
+    name: token.name,
+    tokenPrefix: token.tokenPrefix,
+    scopes: parseApiTokenScopes(token.scopes),
+    expiresAt: token.expiresAt,
+    revokedAt: token.revokedAt,
+    lastUsedAt: token.lastUsedAt,
+    createdAt: token.createdAt,
+  };
+}
+
+function parseApiTokenScopes(input: unknown): ApiTokenScope[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+  return input.filter((scope): scope is ApiTokenScope => (
+    scope === "profile:read" ||
+    scope === "skills:submit" ||
+    scope === "review:read" ||
+    scope === "review:write"
+  ));
 }

@@ -35,7 +35,7 @@ export interface CliRuntime {
 interface ParsedArgs {
   command: string;
   args: string[];
-  options: Record<string, string | boolean>;
+  options: Record<string, string | boolean | string[]>;
 }
 
 export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {
@@ -64,6 +64,8 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
         return await reviewCommand(parsed, runtime);
       case "export":
         return await exportCommand(parsed, runtime);
+      case "token":
+        return await tokenCommand(parsed, runtime);
       default:
         throw new CliError(`Unknown command: ${parsed.command}`, 2);
     }
@@ -164,6 +166,79 @@ async function whoamiCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     runtime.io.stdout(`${user.email}\troles=${user.roles.join(",")}\tmfa=${user.mfaVerified ? "verified" : "not-verified"}`);
   }
   return 0;
+}
+
+async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const token = tokenOption(parsed, runtime);
+  if (!token) {
+    throw new CliError("No token provided. Set AI_SKILLS_TOKEN or pass --token.", 1);
+  }
+  const subcommand = parsed.args[0];
+  if (subcommand === "create") {
+    const name = stringOption(parsed, "name");
+    const scopes = stringListOption(parsed, "scope");
+    if (scopes.length === 0) {
+      throw new CliError("--scope is required.", 2);
+    }
+    const expiresAt = optionalStringOption(parsed, "expires-at");
+    const response = await apiPost("/v1/auth/api-tokens", {
+      name,
+      scopes,
+      ...(expiresAt ? { expiresAt } : {}),
+    }, parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      const created = response.token as {
+        name: string;
+        token: string;
+        tokenPrefix: string;
+        scopes: string[];
+        expiresAt: string;
+      };
+      runtime.io.stdout(`${created.name}\t${created.tokenPrefix}\t${created.scopes.join(",")}\texpires=${created.expiresAt}`);
+      runtime.io.stdout(`token: ${created.token}`);
+    }
+    return 0;
+  }
+  if (subcommand === "list") {
+    const response = await apiGet("/v1/auth/api-tokens", parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      const tokens = response.tokens as Array<{
+        id: string;
+        name: string;
+        tokenPrefix: string;
+        scopes: string[];
+        expiresAt: string;
+        revokedAt: string | null;
+      }>;
+      if (tokens.length === 0) {
+        runtime.io.stdout("No API tokens.");
+      } else {
+        for (const apiToken of tokens) {
+          runtime.io.stdout(`${apiToken.id}\t${apiToken.name}\t${apiToken.tokenPrefix}\t${apiToken.scopes.join(",")}\texpires=${apiToken.expiresAt}\trevoked=${apiToken.revokedAt ?? "-"}`);
+        }
+      }
+    }
+    return 0;
+  }
+  if (subcommand === "revoke") {
+    const tokenId = parsed.args[1];
+    if (!tokenId) {
+      throw new CliError("Usage: ai-skills token revoke <token-id>", 2);
+    }
+    const response = await apiDelete(`/v1/auth/api-tokens/${encodeURIComponent(tokenId)}`, parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      const revoked = response.token as { id: string; name: string; revokedAt: string | null };
+      runtime.io.stdout(`${revoked.id}\t${revoked.name}\trevoked=${revoked.revokedAt ?? "-"}`);
+    }
+    return 0;
+  }
+  throw new CliError("Usage: ai-skills token create|list|revoke", 2);
 }
 
 async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
@@ -360,6 +435,23 @@ async function apiPost(pathname: string, payload: unknown, parsed: ParsedArgs, r
   return body;
 }
 
+async function apiDelete(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token: string): Promise<Record<string, unknown>> {
+  const baseUrl = String(parsed.options["api-url"] ?? runtime.env.AI_SKILLS_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
+  const response = await runtime.fetch(`${baseUrl}${pathname}`, {
+    method: "DELETE",
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+  const text = await response.text();
+  const body = text ? JSON.parse(text) as Record<string, unknown> : {};
+  if (!response.ok) {
+    const error = body.error as { code?: string; message?: string } | undefined;
+    throw new CliError(error?.message ?? `API request failed with ${response.status}.`, 1);
+  }
+  return body;
+}
+
 function parseApiError(text: string): string | null {
   try {
     const body = text ? JSON.parse(text) as Record<string, unknown> : {};
@@ -407,6 +499,17 @@ function stringOption(parsed: ParsedArgs, key: string): string {
 function optionalStringOption(parsed: ParsedArgs, key: string): string | undefined {
   const value = parsed.options[key];
   return typeof value === "string" && value ? value : undefined;
+}
+
+function stringListOption(parsed: ParsedArgs, key: string): string[] {
+  const value = parsed.options[key];
+  if (typeof value === "string") {
+    return value.split(",").map((item) => item.trim()).filter(Boolean);
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => item.split(",").map((scope) => scope.trim()).filter(Boolean));
+  }
+  return [];
 }
 
 function releaseArtifact(response: Record<string, unknown>): { sha256: string; byteSize: number } {
@@ -468,7 +571,7 @@ function safeBundlePath(inputPath: string): string {
 function parseArgs(argv: string[]): ParsedArgs {
   const [command = "", ...rest] = argv;
   const args: string[] = [];
-  const options: Record<string, string | boolean> = {};
+  const options: ParsedArgs["options"] = {};
 
   for (let index = 0; index < rest.length; index += 1) {
     const value = rest[index];
@@ -485,7 +588,14 @@ function parseArgs(argv: string[]): ParsedArgs {
     if (!next || next.startsWith("--")) {
       throw new CliError(`Option --${key} requires a value.`, 2);
     }
-    options[key] = next;
+    const existing = options[key];
+    if (typeof existing === "string") {
+      options[key] = [existing, next];
+    } else if (Array.isArray(existing)) {
+      existing.push(next);
+    } else {
+      options[key] = next;
+    }
     index += 1;
   }
 
@@ -506,6 +616,9 @@ function helpText(): string {
     "  review submissions [--api-url <url>] [--token <token>]",
     "  review action <submission-id> --action <approve|publish> [--reason <text>]",
     "  export <skill-slug> --version <version> --platform <platform> --output <dir>",
+    "  token create --name <name> --scope <scope> [--scope <scope>]",
+    "  token list",
+    "  token revoke <token-id>",
     "",
     "Options:",
     "  --json              Print machine-readable JSON.",

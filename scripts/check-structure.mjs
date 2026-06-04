@@ -25,6 +25,7 @@ const requiredPaths = [
   "apps/api/migrations/0002_identity_constraints.sql",
   "apps/api/migrations/0003_scan_finding_paths.sql",
   "apps/api/migrations/0004_artifact_payloads.sql",
+  "apps/api/migrations/0005_api_tokens.sql",
   "apps/api/src/app.ts",
   "apps/api/src/auth/rate-limit.ts",
   "apps/api/src/auth/service.ts",
