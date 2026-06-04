@@ -39,6 +39,8 @@ The HTTP adapter defaults to `127.0.0.1:3002/mcp` and reads `AI_SKILLS_MCP_HOST`
 
 MCP clients should authenticate with scoped API tokens, not interactive sessions. Tool handlers must enforce both the local user role and token scope through the API auth boundary.
 
+Every `/v1/mcp/session` authorization decision is recorded by the API as a sanitized `mcp.session` audit event. The event records the allow/deny decision, safe credential kind, required scope, and reason code without bearer values, token hashes, package contents, or MCP tool arguments.
+
 Package contents should not be returned by MCP tools in the first production surface. Delivery should remain an API/CLI path with explicit authorization and audit.
 
 Tool inputs must not carry tokens or API base URLs. For stdio, configure `AI_SKILLS_TOKEN` and `AI_SKILLS_API_URL` in the MCP server process environment. For HTTP, configure only the API base URL and host/origin allowlists on the server, then send client credentials through the HTTP `Authorization` header.
@@ -46,5 +48,5 @@ Tool inputs must not carry tokens or API base URLs. For stdio, configure `AI_SKI
 ## Planned Workflows
 
 - role-gated read-only maintainer/admin tools
-- MCP audit events for allow/deny decisions
+- authoritative per-tool MCP audit events for future maintainer/admin tools
 - client compatibility notes

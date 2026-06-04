@@ -21,6 +21,7 @@ import {
 import type { AuthRateLimiter } from "./rate-limit.js";
 import {
   apiTokenScopes,
+  type AuditDecision,
   type AuditEventRecord,
   type ApiTokenRecord,
   type ApiTokenScope,
@@ -195,6 +196,21 @@ export interface SafeAuditEvent {
 
 export interface ListAdminAuditEventsInput {
   limit?: number;
+}
+
+export type McpSessionCredentialKind = "none" | "session" | "api";
+export type McpSessionAuditReason =
+  | "missing_bearer"
+  | "invalid_bearer"
+  | "api_credential_required"
+  | "missing_scope"
+  | "authorized";
+
+export interface RecordMcpSessionDecisionInput {
+  context: AuthContext | null;
+  credentialKind: McpSessionCredentialKind;
+  decision: AuditDecision;
+  reason: McpSessionAuditReason;
 }
 
 export interface AuthContext {
@@ -626,6 +642,22 @@ export class AuthService {
     assertAdmin(actor);
     const events = await this.store.listAuditEvents({ limit: normalizeAuditLimit(input.limit) });
     return events.map(safeAuditEvent);
+  }
+
+  async recordMcpSessionDecision(input: RecordMcpSessionDecisionInput): Promise<void> {
+    await this.store.recordAuditEvent({
+      actorUserId: input.context?.user.id ?? null,
+      action: "mcp.session",
+      decision: input.decision,
+      resourceType: "mcp_session",
+      resourceId: input.context?.credential.kind === "api_token" ? input.context.credential.tokenId ?? null : null,
+      details: {
+        endpoint: "/v1/mcp/session",
+        requiredScope: "skills:read",
+        credentialKind: input.credentialKind,
+        reason: input.reason,
+      },
+    });
   }
 
   private async assertCanManageMfa(actor: AuthResponseUser, password: string): Promise<void> {

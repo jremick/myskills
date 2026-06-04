@@ -65,13 +65,14 @@ Last updated: 2026-06-04
 ### Audit
 
 - Record auth events, access decisions, package delivery, submissions, reviews, lifecycle actions, admin changes, and MCP calls.
-- Admin registration and user-status mutations write sanitized audit events; admin audit listing is MFA-verified session-only and bounded.
+- Admin registration, user-status mutations, and MCP session authorization decisions write sanitized audit events; admin audit listing is MFA-verified session-only and bounded.
 - Redact tokens, cookies, passwords, provider secrets, package contents, and overly long free-text fields.
 - Export audit reports with spreadsheet formula injection defenses.
 
 ### MCP
 
 - Authenticate every MCP request.
+- Record each API-owned MCP session authorization allow/deny decision before returning the MCP auth result.
 - HTTP MCP clients must send scoped API tokens in the `Authorization` header; the HTTP adapter must validate the token before MCP protocol handling and must not use a shared server-side bearer token fallback.
 - HTTP MCP deployments must restrict Host and browser Origin headers; non-loopback binds require an explicit allowed-host configuration.
 - Default to read-only tools.

@@ -391,6 +391,12 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     }
     const context = await options.authService.authenticateRequest(request.headers.authorization);
     if (!context) {
+      await options.authService.recordMcpSessionDecision({
+        context: null,
+        credentialKind: "none",
+        decision: "deny",
+        reason: hasBearerAuthorization(request.headers.authorization) ? "invalid_bearer" : "missing_bearer",
+      });
       return reply.code(401).send({
         error: {
           code: "AUTHENTICATION_REQUIRED",
@@ -399,6 +405,12 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       });
     }
     if (context.credential.kind !== "api_token") {
+      await options.authService.recordMcpSessionDecision({
+        context,
+        credentialKind: "session",
+        decision: "deny",
+        reason: "api_credential_required",
+      });
       return reply.code(403).send({
         error: {
           code: "API_TOKEN_AUTH_REQUIRED",
@@ -406,7 +418,27 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         },
       });
     }
-    requireScope(context, "skills:read");
+    if (!context.credential.scopes.includes("skills:read")) {
+      await options.authService.recordMcpSessionDecision({
+        context,
+        credentialKind: "api",
+        decision: "deny",
+        reason: "missing_scope",
+      });
+      return reply.code(403).send({
+        error: {
+          code: "API_TOKEN_SCOPE_REQUIRED",
+          message: "API token scope is required.",
+          details: { scope: "skills:read" },
+        },
+      });
+    }
+    await options.authService.recordMcpSessionDecision({
+      context,
+      credentialKind: "api",
+      decision: "allow",
+      reason: "authorized",
+    });
     return {
       user: context.user,
       credential: {
@@ -542,6 +574,10 @@ function requireScope(context: AuthContext, scope: ApiTokenScope): void {
   if (!context.credential.scopes.includes(scope)) {
     throw new AppError("API token scope is required.", "API_TOKEN_SCOPE_REQUIRED", 403, { scope });
   }
+}
+
+function hasBearerAuthorization(authorization: string | undefined): boolean {
+  return /^Bearer\s+\S+/i.test(authorization?.trim() ?? "");
 }
 
 function parseRegisterInput(input: unknown): RegisterInput {

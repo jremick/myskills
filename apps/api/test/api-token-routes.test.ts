@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateTotpCode, hashApiToken, hashPassword } from "@ai-skills-share/auth";
+import { generateTotpCode, hashApiToken, hashPassword, hashSessionToken } from "@ai-skills-share/auth";
 import { buildApp } from "../src/app.js";
 import { AuthService } from "../src/auth/service.js";
 import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
@@ -295,6 +295,146 @@ test("MCP session requires an API token with skills read scope", async (t) => {
     headers: { authorization: `Bearer ${readToken.token}` },
   });
   assert.equal(disabled.statusCode, 401);
+});
+
+test("MCP session writes sanitized audit events for allow and deny decisions", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildTokenApp(authStore);
+  t.after(() => app.close());
+  const session = await addAndLogin(app, authStore, {
+    id: "reader-1",
+    email: "reader@example.com",
+    roles: ["user"],
+  });
+  const readToken = await createApiToken(app, session, ["skills:read"]);
+  const profileToken = await createApiToken(app, session, ["profile:read"]);
+
+  const missing = await app.inject({ method: "GET", url: "/v1/mcp/session" });
+  assert.equal(missing.statusCode, 401);
+  assert.equal(missing.json().error.code, "AUTHENTICATION_REQUIRED");
+
+  const invalid = await app.inject({
+    method: "GET",
+    url: "/v1/mcp/session",
+    headers: { authorization: "Bearer aiss_test_secret" },
+  });
+  assert.equal(invalid.statusCode, 401);
+  assert.equal(invalid.json().error.code, "AUTHENTICATION_REQUIRED");
+
+  const sessionDenied = await app.inject({
+    method: "GET",
+    url: "/v1/mcp/session",
+    headers: { authorization: `Bearer ${session}` },
+  });
+  assert.equal(sessionDenied.statusCode, 403);
+  assert.equal(sessionDenied.json().error.code, "API_TOKEN_AUTH_REQUIRED");
+
+  const wrongScope = await app.inject({
+    method: "GET",
+    url: "/v1/mcp/session",
+    headers: { authorization: `Bearer ${profileToken.token}` },
+  });
+  assert.equal(wrongScope.statusCode, 403);
+  assert.equal(wrongScope.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
+
+  const allowed = await app.inject({
+    method: "GET",
+    url: "/v1/mcp/session",
+    headers: { authorization: `Bearer ${readToken.token}` },
+  });
+  assert.equal(allowed.statusCode, 200);
+  assert.equal(allowed.json().credential.tokenId, readToken.id);
+
+  authStore.setUserStatus("reader@example.com", "disabled");
+  const disabled = await app.inject({
+    method: "GET",
+    url: "/v1/mcp/session",
+    headers: { authorization: `Bearer ${readToken.token}` },
+  });
+  assert.equal(disabled.statusCode, 401);
+
+  const events = await authStore.listAuditEvents({ limit: 10 });
+  assert.equal(events.length, 6);
+  assert.deepEqual(events.map((event) => event.action), [
+    "mcp.session",
+    "mcp.session",
+    "mcp.session",
+    "mcp.session",
+    "mcp.session",
+    "mcp.session",
+  ]);
+  assert.deepEqual(events.map((event) => event.resourceType), [
+    "mcp_session",
+    "mcp_session",
+    "mcp_session",
+    "mcp_session",
+    "mcp_session",
+    "mcp_session",
+  ]);
+  assert.deepEqual(events.map((event) => event.details.reason).sort(), [
+    "api_credential_required",
+    "authorized",
+    "invalid_bearer",
+    "invalid_bearer",
+    "missing_bearer",
+    "missing_scope",
+  ]);
+  assert.equal(events.some((event) => event.decision === "allow" && event.actorUserId === "reader-1"), true);
+  assert.equal(events.some((event) => event.decision === "deny" && event.details.credentialKind === "session"), true);
+  assert.equal(events.some((event) => event.decision === "deny" && event.details.credentialKind === "api"), true);
+  assert.equal(events.some((event) => event.decision === "deny" && event.details.credentialKind === "none"), true);
+  assert.equal(events.every((event) => event.details.endpoint === "/v1/mcp/session"), true);
+  assert.equal(events.every((event) => event.details.requiredScope === "skills:read"), true);
+
+  const serialized = JSON.stringify(events);
+  for (const forbidden of [
+    session,
+    readToken.token,
+    profileToken.token,
+    hashSessionToken(session),
+    hashApiToken(readToken.token),
+    hashApiToken(profileToken.token),
+    "aiss_test_secret",
+    "tokenHash",
+    "Authorization",
+    "Bearer",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+  assert.equal(serialized.includes("credentialKind"), true);
+  assert.equal(serialized.includes("missing_scope"), true);
+
+  const ownerSession = await addAndLoginWithMfa(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+  const adminAudit = await app.inject({
+    method: "GET",
+    url: "/v1/admin/audit?limit=10",
+    headers: { authorization: `Bearer ${ownerSession}` },
+  });
+  assert.equal(adminAudit.statusCode, 200);
+  assert.equal(adminAudit.json().events.some((event: { action: string }) => event.action === "mcp.session"), true);
+  const externalSerialized = JSON.stringify(adminAudit.json());
+  for (const forbidden of [
+    session,
+    ownerSession,
+    readToken.token,
+    profileToken.token,
+    hashSessionToken(session),
+    hashSessionToken(ownerSession),
+    hashApiToken(readToken.token),
+    hashApiToken(profileToken.token),
+    "aiss_test_secret",
+    "tokenHash",
+    "Authorization",
+    "Bearer",
+  ]) {
+    assert.equal(externalSerialized.includes(forbidden), false);
+  }
+  assert.equal(externalSerialized.includes("mcp.session"), true);
+  assert.equal(externalSerialized.includes("requiredScope"), true);
 });
 
 test("disabled users cannot keep using API tokens", async (t) => {

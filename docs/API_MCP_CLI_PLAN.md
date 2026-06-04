@@ -49,7 +49,7 @@ Use OpenAPI once the first implementation slice stabilizes.
 
 Use the official TypeScript MCP SDK for production implementation if runtime constraints allow it. Current SDK docs support MCP servers with tools and Streamable HTTP transports over common Node frameworks.
 
-Current implementation uses the stable TypeScript MCP SDK with stdio and stateless Streamable HTTP transports. MCP calls require an API token with `skills:read` scope through `GET /v1/mcp/session`; interactive session tokens are rejected for the MCP surface. The stdio adapter reads `AI_SKILLS_TOKEN`; the HTTP adapter validates each request bearer through `/v1/mcp/session` before MCP protocol handling, requires each client request to send its own `Authorization: Bearer ...` header, applies host/origin guardrails, and does not fall back to a shared server token.
+Current implementation uses the stable TypeScript MCP SDK with stdio and stateless Streamable HTTP transports. MCP calls require an API token with `skills:read` scope through `GET /v1/mcp/session`; interactive session tokens are rejected for the MCP surface. Every MCP session authorization branch writes a sanitized API-owned `mcp.session` audit event with the allow/deny decision, credential kind, required scope, and reason code. The stdio adapter reads `AI_SKILLS_TOKEN`; the HTTP adapter validates each request bearer through `/v1/mcp/session` before MCP protocol handling, requires each client request to send its own `Authorization: Bearer ...` header, applies host/origin guardrails, and does not fall back to a shared server token.
 
 Initial tools:
 
@@ -64,7 +64,7 @@ Maintainer/admin read-only tools:
 - `run_stale_skill_checks`
 - `get_registry_analytics`
 
-Write tools are deferred until the review workflow and audit model are stable.
+Write tools and per-tool MCP audit events are deferred until the review workflow and an authoritative tool-execution audit model are stable.
 
 MCP responses must not return package contents by default. Package delivery should go through API or CLI flows with explicit authorization and audit.
 
