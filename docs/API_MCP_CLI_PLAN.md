@@ -33,7 +33,11 @@ Milestone 2-3 REST endpoints:
 - `GET /v1/submissions/mine`
 - `GET /v1/admin/users`
 - `POST /v1/admin/users/:id/actions`
+- `GET /v1/admin/registration`
+- `PUT /v1/admin/registration`
 - `GET /v1/admin/audit`
+
+Current admin API slice implements MFA-verified session-only registration mode read/update, safe user listing, and user status actions. Admin audit, role editing, invite flows, and provider mapping remain planned.
 
 Use OpenAPI once the first implementation slice stabilizes.
 

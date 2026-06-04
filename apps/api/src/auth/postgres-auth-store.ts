@@ -1,5 +1,5 @@
 import { and, eq, gt, isNull } from "drizzle-orm";
-import type { RegistrationMode, Role } from "@ai-skills-share/auth";
+import type { RegistrationMode, Role, UserStatus } from "@ai-skills-share/auth";
 import type { Database } from "../db/client.js";
 import {
   apiTokens,
@@ -46,6 +46,23 @@ export class PostgresAuthStore implements AuthStore {
     return mode === "open" || mode === "request" ? mode : "closed";
   }
 
+  async setRegistrationMode(mode: RegistrationMode): Promise<RegistrationMode> {
+    await this.db
+      .insert(instanceSettings)
+      .values({
+        key: "registration",
+        value: { mode },
+      })
+      .onConflictDoUpdate({
+        target: instanceSettings.key,
+        set: {
+          value: { mode },
+          updatedAt: new Date(),
+        },
+      });
+    return mode;
+  }
+
   async createUserWithPassword(input: CreateUserWithPasswordInput): Promise<CreateUserWithPasswordResult> {
     const [user] = await this.db
       .insert(users)
@@ -72,6 +89,44 @@ export class PostgresAuthStore implements AuthStore {
     }).onConflictDoNothing();
 
     return { created: true, user: { ...toRecord(user), roles: ["user"] } };
+  }
+
+  async listUsers(): Promise<AuthUserRecord[]> {
+    const rows = await this.db.select().from(users).orderBy(users.normalizedEmail);
+    return Promise.all(rows.map(async (user) => ({
+      ...toRecord(user),
+      roles: await this.rolesForUser(user.id),
+    })));
+  }
+
+  async findUserById(userId: string): Promise<AuthUserRecord | null> {
+    const [user] = await this.db.select().from(users).where(eq(users.id, userId)).limit(1);
+    return user ? { ...toRecord(user), roles: await this.rolesForUser(user.id) } : null;
+  }
+
+  async updateUserStatus(input: { userId: string; status: UserStatus; emailVerifiedAt?: Date | null }): Promise<AuthUserRecord | null> {
+    const set: Partial<typeof users.$inferInsert> = {
+      status: input.status,
+      updatedAt: new Date(),
+    };
+    if (input.emailVerifiedAt !== undefined) {
+      set.emailVerifiedAt = input.emailVerifiedAt;
+    }
+    const [user] = await this.db
+      .update(users)
+      .set(set)
+      .where(eq(users.id, input.userId))
+      .returning();
+    return user ? { ...toRecord(user), roles: await this.rolesForUser(user.id) } : null;
+  }
+
+  async countActiveOwnersExcluding(userId: string): Promise<number> {
+    const rows = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .innerJoin(roleAssignments, eq(roleAssignments.userId, users.id))
+      .where(and(eq(roleAssignments.role, "owner"), eq(users.status, "active")));
+    return rows.filter((row) => row.id !== userId).length;
   }
 
   async findUserByEmailWithPassword(email: string): Promise<AuthUserWithPassword | null> {
@@ -126,6 +181,18 @@ export class PostgresAuthStore implements AuthStore {
       .update(authSessions)
       .set({ revokedAt: new Date() })
       .where(and(eq(authSessions.tokenHash, tokenHash), isNull(authSessions.revokedAt)));
+  }
+
+  async revokeUserCredentials(userId: string): Promise<void> {
+    const now = new Date();
+    await this.db
+      .update(authSessions)
+      .set({ revokedAt: now })
+      .where(and(eq(authSessions.userId, userId), isNull(authSessions.revokedAt)));
+    await this.db
+      .update(apiTokens)
+      .set({ revokedAt: now })
+      .where(and(eq(apiTokens.userId, userId), isNull(apiTokens.revokedAt)));
   }
 
   async createApiToken(input: CreateApiTokenInput): Promise<ApiTokenRecord> {

@@ -91,10 +91,6 @@ export class MemoryAuthStore implements AuthStore {
 
   constructor(private registrationMode: RegistrationMode = "closed") {}
 
-  setRegistrationMode(mode: RegistrationMode): void {
-    this.registrationMode = mode;
-  }
-
   setUserStatus(email: string, status: UserStatus): void {
     const user = this.users.get(email.toLowerCase());
     if (user) {
@@ -128,6 +124,11 @@ export class MemoryAuthStore implements AuthStore {
     return this.registrationMode;
   }
 
+  async setRegistrationMode(mode: RegistrationMode): Promise<RegistrationMode> {
+    this.registrationMode = mode;
+    return this.registrationMode;
+  }
+
   async createUserWithPassword(input: CreateUserWithPasswordInput): Promise<CreateUserWithPasswordResult> {
     const email = input.email.toLowerCase();
     const existing = this.users.get(email);
@@ -142,6 +143,37 @@ export class MemoryAuthStore implements AuthStore {
       passwordHash: input.passwordHash,
     });
     return { created: true, user };
+  }
+
+  async listUsers(): Promise<AuthUserRecord[]> {
+    return [...this.users.values()]
+      .sort((a, b) => a.email.localeCompare(b.email))
+      .map(toRecord);
+  }
+
+  async findUserById(userId: string): Promise<AuthUserRecord | null> {
+    const user = [...this.users.values()].find((candidate) => candidate.id === userId);
+    return user ? toRecord(user) : null;
+  }
+
+  async updateUserStatus(input: { userId: string; status: UserStatus; emailVerifiedAt?: Date | null }): Promise<AuthUserRecord | null> {
+    const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
+    if (!user) {
+      return null;
+    }
+    user.status = input.status;
+    if (input.emailVerifiedAt !== undefined) {
+      user.emailVerifiedAt = input.emailVerifiedAt;
+    }
+    return toRecord(user);
+  }
+
+  async countActiveOwnersExcluding(userId: string): Promise<number> {
+    return [...this.users.values()].filter((user) => (
+      user.id !== userId &&
+      user.status === "active" &&
+      user.roles.includes("owner")
+    )).length;
   }
 
   async findUserByEmailWithPassword(email: string): Promise<AuthUserWithPassword | null> {
@@ -166,6 +198,20 @@ export class MemoryAuthStore implements AuthStore {
     const session = this.sessions.get(tokenHash);
     if (session) {
       session.revokedAt = new Date();
+    }
+  }
+
+  async revokeUserCredentials(userId: string): Promise<void> {
+    const now = new Date();
+    for (const session of this.sessions.values()) {
+      if (session.userId === userId && !session.revokedAt) {
+        session.revokedAt = now;
+      }
+    }
+    for (const token of this.apiTokens.values()) {
+      if (token.userId === userId && !token.revokedAt) {
+        token.revokedAt = now;
+      }
     }
   }
 

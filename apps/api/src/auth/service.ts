@@ -12,7 +12,10 @@ import {
   hashSessionToken,
   verifyTotpCode,
   verifyPassword,
+  canAdmin,
   type AuthenticatedUser,
+  type RegistrationMode,
+  type UserStatus,
 } from "@ai-skills-share/auth";
 import type { AuthRateLimiter } from "./rate-limit.js";
 import {
@@ -113,6 +116,31 @@ export interface ConfirmTotpEnrollmentInput {
 export interface ConfirmTotpEnrollmentResult {
   factor: SafeMfaFactor;
   recoveryCodes: string[];
+}
+
+export interface AdminRegistrationSettings {
+  mode: RegistrationMode;
+}
+
+export interface UpdateRegistrationSettingsInput {
+  mode: RegistrationMode;
+}
+
+export type AdminUserAction = "approve" | "activate" | "disable" | "delete";
+
+export interface AdminUserActionInput {
+  userId: string;
+  action: AdminUserAction;
+}
+
+export interface SafeAdminUser {
+  id: string;
+  email: string;
+  name: string;
+  status: UserStatus;
+  roles: AuthenticatedUser["roles"];
+  emailVerified: boolean;
+  mfaEnabled: boolean;
 }
 
 export interface AuthContext {
@@ -374,6 +402,54 @@ export class AuthService {
     };
   }
 
+  async getRegistrationSettings(actor: AuthResponseUser): Promise<AdminRegistrationSettings> {
+    assertAdmin(actor);
+    return { mode: await this.store.getRegistrationMode() };
+  }
+
+  async updateRegistrationSettings(actor: AuthResponseUser, input: UpdateRegistrationSettingsInput): Promise<AdminRegistrationSettings> {
+    assertAdmin(actor);
+    const mode = normalizeRegistrationMode(input.mode);
+    return { mode: await this.store.setRegistrationMode(mode) };
+  }
+
+  async listAdminUsers(actor: AuthResponseUser): Promise<SafeAdminUser[]> {
+    assertAdmin(actor);
+    const users = await this.store.listUsers();
+    return Promise.all(users.map((user) => this.safeAdminUser(user)));
+  }
+
+  async performAdminUserAction(actor: AuthResponseUser, input: AdminUserActionInput): Promise<SafeAdminUser> {
+    assertAdmin(actor);
+    const action = normalizeAdminUserAction(input.action);
+    const userId = cleanId(input.userId, "userId");
+    const target = await this.store.findUserById(userId);
+    if (!target) {
+      throw new AppError("User not found.", "USER_NOT_FOUND", 404);
+    }
+    assertCanModifyUser(actor, target, action);
+    if ((action === "disable" || action === "delete") && target.roles.includes("owner") && target.status === "active") {
+      const otherOwnerCount = await this.store.countActiveOwnersExcluding(target.id);
+      if (otherOwnerCount === 0) {
+        throw new AppError("At least one active owner is required.", "LAST_OWNER_REQUIRED", 409);
+      }
+    }
+
+    const update = adminActionUpdate(action, target);
+    const updated = await this.store.updateUserStatus({
+      userId: target.id,
+      status: update.status,
+      emailVerifiedAt: update.emailVerifiedAt,
+    });
+    if (!updated) {
+      throw new AppError("User not found.", "USER_NOT_FOUND", 404);
+    }
+    if (action === "disable" || action === "delete") {
+      await this.store.revokeUserCredentials(target.id);
+    }
+    return this.safeAdminUser(updated);
+  }
+
   private async assertCanManageMfa(actor: AuthResponseUser, password: string): Promise<void> {
     await this.assertCanUseMfaManagementSession(actor);
     const user = await this.store.findUserByEmailWithPassword(actor.email);
@@ -422,6 +498,18 @@ export class AuthService {
 
   private mfaSecretKey(): string {
     return this.options.mfaSecretKey ?? DEV_AUTH_SECRET;
+  }
+
+  private async safeAdminUser(user: AuthUserRecord): Promise<SafeAdminUser> {
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      status: user.status,
+      roles: user.roles,
+      emailVerified: Boolean(user.emailVerifiedAt),
+      mfaEnabled: await this.store.countEnabledMfaFactors(user.id) > 0,
+    };
   }
 }
 
@@ -514,6 +602,54 @@ function cleanOpaqueToken(token: string, field: string): string {
     throw new AppError(`${field} is invalid.`, "INVALID_REQUEST_BODY", 400);
   }
   return token.trim();
+}
+
+function assertAdmin(actor: AuthResponseUser): void {
+  if (!actor.roles.some((role) => role === "owner" || role === "admin")) {
+    throw new AppError("Admin privileges are required.", "ADMIN_ROLE_REQUIRED", 403);
+  }
+  if (!actor.mfaVerified || !canAdmin(asAuthenticatedUser(actor))) {
+    throw new AppError("MFA verification is required.", "MFA_VERIFICATION_REQUIRED", 403);
+  }
+}
+
+function assertCanModifyUser(actor: AuthResponseUser, target: AuthUserRecord, action: AdminUserAction): void {
+  if (target.status === "deleted" && action !== "delete") {
+    throw new AppError("Deleted users cannot be modified.", "USER_DELETED", 409);
+  }
+  if ((action === "disable" || action === "delete") && actor.id === target.id) {
+    throw new AppError("Admins cannot disable or delete their own account.", "SELF_LOCKOUT_PREVENTED", 409);
+  }
+  if (target.roles.includes("owner") && !actor.roles.includes("owner")) {
+    throw new AppError("Owner accounts can only be modified by owners.", "OWNER_ACTION_REQUIRES_OWNER", 403);
+  }
+}
+
+function adminActionUpdate(action: AdminUserAction, target: AuthUserRecord): { status: UserStatus; emailVerifiedAt?: Date | null } {
+  if (action === "approve") {
+    return { status: "active" };
+  }
+  if (action === "activate") {
+    return { status: "active" };
+  }
+  if (action === "disable") {
+    return { status: "disabled" };
+  }
+  return { status: "deleted" };
+}
+
+function normalizeRegistrationMode(mode: RegistrationMode): RegistrationMode {
+  if (mode === "closed" || mode === "request" || mode === "open") {
+    return mode;
+  }
+  throw new AppError("Registration mode is invalid.", "INVALID_REGISTRATION_MODE", 400);
+}
+
+function normalizeAdminUserAction(action: AdminUserAction): AdminUserAction {
+  if (action === "approve" || action === "activate" || action === "disable" || action === "delete") {
+    return action;
+  }
+  throw new AppError("User action is invalid.", "INVALID_ADMIN_USER_ACTION", 400);
 }
 
 function normalizeScopes(scopes: ApiTokenScope[]): ApiTokenScope[] {

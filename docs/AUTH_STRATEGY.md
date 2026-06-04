@@ -41,6 +41,7 @@ The current API implementation owns the first-party auth boundary directly:
 - TOTP MFA stores encrypted authenticator secrets, creates short-lived opaque challenge tokens after password login, marks MFA verification on the resulting session, and stores recovery codes only as hashes.
 - Review-scoped API tokens for owner, admin, and maintainer users must be created from an MFA-verified session; review actions require an MFA-verified session or MFA-bound token.
 - Registration is controlled by the instance registration setting and currently creates pending users.
+- MFA-verified owner/admin sessions can read and update registration mode, list safe user records, and approve, activate, disable, or delete users. User disable/delete revokes existing sessions and API tokens.
 - Authorization still uses application roles, not provider claims.
 
 This keeps setup portable for the open-source project while leaving room to adopt Better Auth or another provider adapter for email verification, reset, passkeys, provider MFA, and account linking once the web runtime is in place.

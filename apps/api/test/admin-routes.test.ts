@@ -1,0 +1,479 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { generateTotpCode, hashPassword } from "@ai-skills-share/auth";
+import { buildApp } from "../src/app.js";
+import { AuthService } from "../src/auth/service.js";
+import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
+import { MemorySkillRepository } from "../src/repositories/memory-skill-repository.js";
+
+test("MFA-verified admins can manage registration mode", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAdminApp(authStore);
+  t.after(() => app.close());
+  const ownerSession = await addAndLoginWithMfa(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+
+  const readClosed = await app.inject({
+    method: "GET",
+    url: "/v1/admin/registration",
+    headers: { authorization: `Bearer ${ownerSession}` },
+  });
+  assert.equal(readClosed.statusCode, 200);
+  assert.deepEqual(readClosed.json(), { registration: { mode: "closed" } });
+
+  const setRequest = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/registration",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: { mode: "request" },
+  });
+  assert.equal(setRequest.statusCode, 200);
+  assert.deepEqual(setRequest.json(), { registration: { mode: "request" } });
+  assert.equal(await authStore.getRegistrationMode(), "request");
+
+  const registerAllowed = await app.inject({
+    method: "POST",
+    url: "/v1/auth/register",
+    payload: {
+      email: "new@example.com",
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(registerAllowed.statusCode, 202);
+
+  const invalid = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/registration",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: { mode: "invite-only" },
+  });
+  assert.equal(invalid.statusCode, 400);
+  assert.equal(invalid.json().error.code, "INVALID_REGISTRATION_MODE");
+  assert.equal(await authStore.getRegistrationMode(), "request");
+
+  const setClosed = await app.inject({
+    method: "PUT",
+    url: "/v1/admin/registration",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: { mode: "closed" },
+  });
+  assert.equal(setClosed.statusCode, 200);
+  assert.equal(await authStore.getRegistrationMode(), "closed");
+
+  const registerDenied = await app.inject({
+    method: "POST",
+    url: "/v1/auth/register",
+    payload: {
+      email: "closed@example.com",
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(registerDenied.statusCode, 403);
+  assert.equal(registerDenied.json().error.code, "REGISTRATION_CLOSED");
+});
+
+test("admin user list returns deterministic safe fields only", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAdminApp(authStore);
+  t.after(() => app.close());
+  const ownerSession = await addAndLoginWithMfa(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+  await addUser(authStore, {
+    id: "admin-1",
+    email: "admin@example.com",
+    status: "active",
+    emailVerifiedAt: new Date(),
+    roles: ["admin"],
+  });
+  await addUser(authStore, {
+    id: "pending-1",
+    email: "pending@example.com",
+    status: "pending",
+    emailVerifiedAt: null,
+    roles: ["user"],
+  });
+  await addUser(authStore, {
+    id: "disabled-1",
+    email: "disabled@example.com",
+    status: "disabled",
+    emailVerifiedAt: new Date(),
+    roles: ["user"],
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/admin/users",
+    headers: { authorization: `Bearer ${ownerSession}` },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json().users.map((user: { email: string }) => user.email), [
+    "admin@example.com",
+    "disabled@example.com",
+    "owner@example.com",
+    "pending@example.com",
+  ]);
+  const serialized = JSON.stringify(response.json());
+  for (const forbidden of ["passwordHash", "tokenHash", "secretCiphertext", "codeHash", "normalizedEmail"]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+  for (const user of response.json().users as Array<Record<string, unknown>>) {
+    assert.deepEqual(Object.keys(user).sort(), ["email", "emailVerified", "id", "mfaEnabled", "name", "roles", "status"]);
+  }
+});
+
+test("admins can approve, disable, activate, and delete users without preserving old credentials", async (t) => {
+  const authStore = new MemoryAuthStore("request");
+  const app = buildAdminApp(authStore);
+  t.after(() => app.close());
+  const ownerSession = await addAndLoginWithMfa(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+  await addUser(authStore, {
+    id: "pending-1",
+    email: "pending@example.com",
+    status: "pending",
+    emailVerifiedAt: null,
+    roles: ["user"],
+  });
+  const activeSession = await addAndLogin(app, authStore, {
+    id: "active-1",
+    email: "active@example.com",
+    roles: ["user"],
+  });
+  const activeApiToken = await createApiToken(app, activeSession, ["profile:read"]);
+
+  const approve = await app.inject({
+    method: "POST",
+    url: "/v1/admin/users/pending-1/actions",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: { action: "approve" },
+  });
+  assert.equal(approve.statusCode, 200);
+  assert.equal(approve.json().user.status, "active");
+  assert.equal(approve.json().user.emailVerified, false);
+  assert.equal((await authStore.findUserById("pending-1"))?.status, "active");
+
+  const disable = await app.inject({
+    method: "POST",
+    url: "/v1/admin/users/active-1/actions",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: { action: "disable" },
+  });
+  assert.equal(disable.statusCode, 200);
+  assert.equal(disable.json().user.status, "disabled");
+  assert.equal((await authStore.findUserById("active-1"))?.status, "disabled");
+
+  const oldSessionDenied = await app.inject({
+    method: "GET",
+    url: "/v1/me",
+    headers: { authorization: `Bearer ${activeSession}` },
+  });
+  assert.equal(oldSessionDenied.statusCode, 401);
+  const oldApiTokenDenied = await app.inject({
+    method: "GET",
+    url: "/v1/me",
+    headers: { authorization: `Bearer ${activeApiToken}` },
+  });
+  assert.equal(oldApiTokenDenied.statusCode, 401);
+
+  const activate = await app.inject({
+    method: "POST",
+    url: "/v1/admin/users/active-1/actions",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: { action: "activate" },
+  });
+  assert.equal(activate.statusCode, 200);
+  assert.equal(activate.json().user.status, "active");
+  const oldApiTokenStillDenied = await app.inject({
+    method: "GET",
+    url: "/v1/me",
+    headers: { authorization: `Bearer ${activeApiToken}` },
+  });
+  assert.equal(oldApiTokenStillDenied.statusCode, 401);
+
+  const deletedSession = await addAndLogin(app, authStore, {
+    id: "delete-1",
+    email: "delete@example.com",
+    roles: ["user"],
+  });
+  const deleted = await app.inject({
+    method: "POST",
+    url: "/v1/admin/users/delete-1/actions",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: { action: "delete" },
+  });
+  assert.equal(deleted.statusCode, 200);
+  assert.equal(deleted.json().user.status, "deleted");
+  const deletedSessionDenied = await app.inject({
+    method: "GET",
+    url: "/v1/me",
+    headers: { authorization: `Bearer ${deletedSession}` },
+  });
+  assert.equal(deletedSessionDenied.statusCode, 401);
+});
+
+test("admin user actions reject missing users and invalid actions without mutation", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAdminApp(authStore);
+  t.after(() => app.close());
+  const ownerSession = await addAndLoginWithMfa(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+  await addUser(authStore, {
+    id: "target-1",
+    email: "target@example.com",
+    status: "active",
+    emailVerifiedAt: new Date(),
+    roles: ["user"],
+  });
+  await addUser(authStore, {
+    id: "deleted-1",
+    email: "deleted@example.com",
+    status: "deleted",
+    emailVerifiedAt: new Date(),
+    roles: ["user"],
+  });
+
+  const missing = await app.inject({
+    method: "POST",
+    url: "/v1/admin/users/missing/actions",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: { action: "disable" },
+  });
+  assert.equal(missing.statusCode, 404);
+  assert.equal(missing.json().error.code, "USER_NOT_FOUND");
+
+  const invalid = await app.inject({
+    method: "POST",
+    url: "/v1/admin/users/target-1/actions",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: { action: "demote" },
+  });
+  assert.equal(invalid.statusCode, 400);
+  assert.equal(invalid.json().error.code, "INVALID_ADMIN_USER_ACTION");
+  assert.equal((await authStore.findUserById("target-1"))?.status, "active");
+
+  const restoreDeleted = await app.inject({
+    method: "POST",
+    url: "/v1/admin/users/deleted-1/actions",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: { action: "activate" },
+  });
+  assert.equal(restoreDeleted.statusCode, 409);
+  assert.equal(restoreDeleted.json().error.code, "USER_DELETED");
+  assert.equal((await authStore.findUserById("deleted-1"))?.status, "deleted");
+});
+
+test("admin routes require session auth, admin role, and MFA", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAdminApp(authStore);
+  t.after(() => app.close());
+  const ownerSessionWithoutMfa = await addAndLogin(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+  const userSessionWithMfa = await addAndLoginWithMfa(app, authStore, {
+    id: "user-1",
+    email: "user@example.com",
+    roles: ["user"],
+  });
+  const userApiToken = await createApiToken(app, userSessionWithMfa, ["profile:read"]);
+
+  const unauthenticated = await app.inject({
+    method: "GET",
+    url: "/v1/admin/users",
+  });
+  assert.equal(unauthenticated.statusCode, 401);
+  assert.equal(unauthenticated.json().error.code, "AUTHENTICATION_REQUIRED");
+
+  const apiTokenDenied = await app.inject({
+    method: "GET",
+    url: "/v1/admin/users",
+    headers: { authorization: `Bearer ${userApiToken}` },
+  });
+  assert.equal(apiTokenDenied.statusCode, 403);
+  assert.equal(apiTokenDenied.json().error.code, "SESSION_AUTH_REQUIRED");
+
+  const mfaRequired = await app.inject({
+    method: "GET",
+    url: "/v1/admin/users",
+    headers: { authorization: `Bearer ${ownerSessionWithoutMfa}` },
+  });
+  assert.equal(mfaRequired.statusCode, 403);
+  assert.equal(mfaRequired.json().error.code, "MFA_VERIFICATION_REQUIRED");
+
+  const roleRequired = await app.inject({
+    method: "GET",
+    url: "/v1/admin/users",
+    headers: { authorization: `Bearer ${userSessionWithMfa}` },
+  });
+  assert.equal(roleRequired.statusCode, 403);
+  assert.equal(roleRequired.json().error.code, "ADMIN_ROLE_REQUIRED");
+});
+
+test("admins cannot disable or delete their own account", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAdminApp(authStore);
+  t.after(() => app.close());
+  const ownerSession = await addAndLoginWithMfa(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+
+  for (const action of ["disable", "delete"]) {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/admin/users/owner-1/actions",
+      headers: { authorization: `Bearer ${ownerSession}` },
+      payload: { action },
+    });
+    assert.equal(response.statusCode, 409);
+    assert.equal(response.json().error.code, "SELF_LOCKOUT_PREVENTED");
+  }
+  assert.equal((await authStore.findUserById("owner-1"))?.status, "active");
+
+  const stillAdmin = await app.inject({
+    method: "GET",
+    url: "/v1/admin/users",
+    headers: { authorization: `Bearer ${ownerSession}` },
+  });
+  assert.equal(stillAdmin.statusCode, 200);
+});
+
+function buildAdminApp(authStore: MemoryAuthStore) {
+  return buildApp({
+    skillRepository: new MemorySkillRepository([]),
+    authService: new AuthService(authStore),
+  });
+}
+
+async function addUser(
+  authStore: MemoryAuthStore,
+  input: {
+    id: string;
+    email: string;
+    status: "pending" | "active" | "disabled" | "deleted";
+    emailVerifiedAt: Date | null;
+    roles: Array<"owner" | "admin" | "maintainer" | "author" | "user">;
+  },
+) {
+  authStore.addUser({
+    id: input.id,
+    email: input.email,
+    status: input.status,
+    emailVerifiedAt: input.emailVerifiedAt,
+    roles: input.roles,
+    passwordHash: await hashPassword("correct horse battery staple"),
+  });
+}
+
+async function addAndLogin(
+  app: ReturnType<typeof buildApp>,
+  authStore: MemoryAuthStore,
+  input: {
+    id: string;
+    email: string;
+    roles: Array<"owner" | "admin" | "maintainer" | "author" | "user">;
+  },
+): Promise<string> {
+  await addUser(authStore, {
+    ...input,
+    status: "active",
+    emailVerifiedAt: new Date(),
+  });
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: input.email,
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().mfaRequired, false);
+  return response.json().token;
+}
+
+async function addAndLoginWithMfa(
+  app: ReturnType<typeof buildApp>,
+  authStore: MemoryAuthStore,
+  input: {
+    id: string;
+    email: string;
+    roles: Array<"owner" | "admin" | "maintainer" | "author" | "user">;
+  },
+): Promise<string> {
+  const setupSession = await addAndLogin(app, authStore, input);
+  const enrollment = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/totp/enroll",
+    headers: { authorization: `Bearer ${setupSession}` },
+    payload: {
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(enrollment.statusCode, 201);
+  const confirm = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/totp/confirm",
+    headers: { authorization: `Bearer ${setupSession}` },
+    payload: {
+      factorId: enrollment.json().enrollment.factorId,
+      code: generateTotpCode(enrollment.json().enrollment.secret),
+    },
+  });
+  assert.equal(confirm.statusCode, 200);
+
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: input.email,
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(login.statusCode, 200);
+  assert.equal(login.json().mfaRequired, true);
+  const verify = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/verify",
+    payload: {
+      challengeToken: login.json().challengeToken,
+      recoveryCode: confirm.json().mfa.recoveryCodes[0],
+    },
+  });
+  assert.equal(verify.statusCode, 200);
+  assert.equal(verify.json().user.mfaVerified, true);
+  return verify.json().token;
+}
+
+async function createApiToken(
+  app: ReturnType<typeof buildApp>,
+  session: string,
+  scopes: string[],
+): Promise<string> {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/auth/api-tokens",
+    headers: { authorization: `Bearer ${session}` },
+    payload: {
+      name: `Token ${scopes.join(",")}`,
+      scopes,
+    },
+  });
+  assert.equal(response.statusCode, 201);
+  return response.json().token.token;
+}

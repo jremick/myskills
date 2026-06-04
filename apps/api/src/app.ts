@@ -5,11 +5,13 @@ import type { ApiTokenScope } from "./auth/types.js";
 import type {
   AuthContext,
   AuthService,
+  AdminUserActionInput,
   ConfirmTotpEnrollmentInput,
   CreateApiTokenRequest,
   LoginInput,
   RegisterInput,
   StartTotpEnrollmentInput,
+  UpdateRegistrationSettingsInput,
   VerifyMfaChallengeInput,
 } from "./auth/service.js";
 import type { ReviewAction, StoredSubmission, SubmissionActor } from "./submissions/types.js";
@@ -33,7 +35,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     if (typeof origin === "string" && allowedOrigins.includes(origin)) {
       reply.header("access-control-allow-origin", origin);
       reply.header("vary", "Origin");
-      reply.header("access-control-allow-methods", "GET,POST,DELETE,OPTIONS");
+      reply.header("access-control-allow-methods", "GET,POST,PUT,DELETE,OPTIONS");
       reply.header("access-control-allow-headers", "authorization,content-type");
     }
     if (request.method === "OPTIONS") {
@@ -248,6 +250,60 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     }
     const token = await options.authService.revokeApiToken(user, parseTokenIdParam(request.params));
     return { token };
+  });
+
+  app.get("/v1/admin/registration", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return { registration: await options.authService.getRegistrationSettings(user) };
+  });
+
+  app.put("/v1/admin/registration", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return {
+      registration: await options.authService.updateRegistrationSettings(
+        user,
+        parseUpdateRegistrationSettingsInput(request.body),
+      ),
+    };
+  });
+
+  app.get("/v1/admin/users", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return { users: await options.authService.listAdminUsers(user) };
+  });
+
+  app.post("/v1/admin/users/:id/actions", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return {
+      user: await options.authService.performAdminUserAction(
+        user,
+        parseAdminUserActionInput(request.params, request.body),
+      ),
+    };
   });
 
   app.get("/v1/me", async (request, reply) => {
@@ -474,6 +530,27 @@ function parseConfirmTotpEnrollmentInput(input: unknown): ConfirmTotpEnrollmentI
   };
 }
 
+function parseUpdateRegistrationSettingsInput(input: unknown): UpdateRegistrationSettingsInput {
+  const body = parseJsonObject(input);
+  const mode = requiredString(body.mode, "mode");
+  if (mode !== "closed" && mode !== "request" && mode !== "open") {
+    throw new AppError("Registration mode is invalid.", "INVALID_REGISTRATION_MODE", 400);
+  }
+  return { mode };
+}
+
+function parseAdminUserActionInput(paramsInput: unknown, bodyInput: unknown): AdminUserActionInput {
+  const body = parseJsonObject(bodyInput);
+  const action = requiredString(body.action, "action");
+  if (action !== "approve" && action !== "activate" && action !== "disable" && action !== "delete") {
+    throw new AppError("User action is invalid.", "INVALID_ADMIN_USER_ACTION", 400);
+  }
+  return {
+    userId: parseUserIdParam(paramsInput),
+    action,
+  };
+}
+
 function parseCreateApiTokenInput(input: unknown): CreateApiTokenRequest {
   const body = parseJsonObject(input);
   const rawScopes = body.scopes;
@@ -607,6 +684,15 @@ function parseTokenIdParam(input: unknown): string {
   const id = requiredString(params.id, "id");
   if (!/^[A-Za-z0-9-]{1,128}$/.test(id)) {
     throw new AppError("Valid API token id is required.", "INVALID_API_TOKEN_ID", 400);
+  }
+  return id;
+}
+
+function parseUserIdParam(input: unknown): string {
+  const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const id = requiredString(params.id, "id");
+  if (!/^[A-Za-z0-9-]{1,128}$/.test(id)) {
+    throw new AppError("Valid user id is required.", "INVALID_USER_ID", 400);
   }
   return id;
 }

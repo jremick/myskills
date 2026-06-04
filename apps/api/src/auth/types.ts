@@ -110,11 +110,17 @@ export interface MfaChallengeWithUser extends MfaChallengeRecord {
 
 export interface AuthStore {
   getRegistrationMode(): Promise<RegistrationMode>;
+  setRegistrationMode(mode: RegistrationMode): Promise<RegistrationMode>;
   createUserWithPassword(input: CreateUserWithPasswordInput): Promise<CreateUserWithPasswordResult>;
+  listUsers(): Promise<AuthUserRecord[]>;
+  findUserById(userId: string): Promise<AuthUserRecord | null>;
+  updateUserStatus(input: { userId: string; status: UserStatus; emailVerifiedAt?: Date | null }): Promise<AuthUserRecord | null>;
+  countActiveOwnersExcluding(userId: string): Promise<number>;
   findUserByEmailWithPassword(email: string): Promise<AuthUserWithPassword | null>;
   createSession(input: CreateSessionInput): Promise<void>;
   findUserBySessionTokenHash(tokenHash: string, now?: Date): Promise<AuthUserWithSession | null>;
   revokeSessionByTokenHash(tokenHash: string): Promise<void>;
+  revokeUserCredentials(userId: string): Promise<void>;
   createApiToken(input: CreateApiTokenInput): Promise<ApiTokenRecord>;
   listApiTokensForUser(userId: string): Promise<ApiTokenRecord[]>;
   findUserByApiTokenHash(tokenHash: string, now?: Date): Promise<AuthUserWithApiToken | null>;
