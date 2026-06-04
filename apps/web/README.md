@@ -11,6 +11,8 @@ Implemented:
 - skill detail and release metadata against `GET /v1/skills/:slug` and `GET /v1/skills/:slug/releases/:version`
 - metadata-only detail panel that does not fetch package bundle content during normal render
 - CLI export guidance derived from the selected release and platform
+- email/password login, MFA challenge completion, current-user refresh, and logout
+- session-aware API client calls that forward the active bearer token when present
 - responsive browse/detail layout for desktop and mobile widths
 
 Run locally:

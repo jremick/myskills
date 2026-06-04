@@ -72,7 +72,7 @@ curl http://localhost:3001/v1/skills/release-notes-helper
 
 The seeded owner account uses `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` from `.env`.
 
-Open `http://localhost:3000` to browse approved skills and inspect release export guidance in the web UI.
+Open `http://localhost:3000` to browse approved skills, inspect release export guidance, and sign in with the seeded owner account. The browser UI supports MFA challenge completion when the account requires it.
 
 Local auth verification and password-reset notifications default to `AUTH_NOTIFICATION_MODE=console`; development action links appear in the API process output. Production deployments use `AUTH_NOTIFICATION_MODE=smtp` and must set `APP_BASE_URL` to an HTTPS web origin plus SMTP settings in the environment or secret store.
 
@@ -107,4 +107,4 @@ npm run check
 
 ## Current Status
 
-This is the first backend and product-surface foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, hash-only email verification and password-reset action tokens, SMTP/dev auth notification delivery, MFA challenge flow, CLI login/logout with API-URL-scoped stored sessions, hashed scoped API tokens, public skill search/detail/release/bundle endpoints, MCP token introspection with `skills:read`, authenticated package intake with server-side archive extraction and scan evidence, maintainer approve/publish actions, a Vite/React web browser for public registry metadata, a read-only stdio MCP server, a starter CLI with verified export, local install/list/update/rollback, and token management, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, seed data, package manifest validation, local package risk scanning, and deterministic checks.
+This is the first backend and product-surface foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, hash-only email verification and password-reset action tokens, SMTP/dev auth notification delivery, MFA challenge flow, browser login/logout with session-aware API calls, CLI login/logout with API-URL-scoped stored sessions, hashed scoped API tokens, public skill search/detail/release/bundle endpoints, MCP token introspection with `skills:read`, authenticated package intake with server-side archive extraction and scan evidence, maintainer approve/publish actions, a Vite/React web browser for public registry metadata, a read-only stdio MCP server, a starter CLI with verified export, local install/list/update/rollback, and token management, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, seed data, package manifest validation, local package risk scanning, and deterministic checks.

@@ -16,10 +16,34 @@ export interface ReleaseMetadata {
   };
 }
 
+export interface WebAuthUser {
+  id: string;
+  email: string;
+  name: string;
+  status: string;
+  roles: string[];
+  emailVerified: boolean;
+  mfaVerified: boolean;
+}
+
+export type LoginResult =
+  | { mfaRequired: false; token: string; expiresAt: string; user: WebAuthUser }
+  | { mfaRequired: true; challengeToken: string; expiresAt: string; user: WebAuthUser };
+
+export interface SessionResult {
+  token: string;
+  expiresAt: string;
+  user: WebAuthUser;
+}
+
 export interface RegistryClient {
   searchSkills(query: string): Promise<PublicSkill[]>;
   getSkill(slug: string): Promise<PublicSkill>;
   getRelease(slug: string, version: string): Promise<ReleaseMetadata>;
+  login(input: { email: string; password: string }): Promise<LoginResult>;
+  verifyMfa(input: { challengeToken: string; codeOrRecoveryCode: string }): Promise<SessionResult>;
+  getMe(token?: string): Promise<WebAuthUser>;
+  logout(token?: string): Promise<void>;
 }
 
 export interface SafeApiError extends Error {
@@ -27,24 +51,57 @@ export interface SafeApiError extends Error {
   code: string;
 }
 
-export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: typeof fetch = fetch): RegistryClient {
+export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: typeof fetch = fetch, token?: string): RegistryClient {
   const root = baseUrl.replace(/\/+$/, "");
   return {
     async searchSkills(query: string) {
       const params = query.trim() ? `?q=${encodeURIComponent(query.trim())}` : "";
-      const body = await requestJson<{ skills: PublicSkill[] }>(fetchImpl, `${root}/v1/skills${params}`);
+      const body = await requestJson<{ skills: PublicSkill[] }>(fetchImpl, `${root}/v1/skills${params}`, {
+        token,
+      });
       return body.skills;
     },
     async getSkill(slug: string) {
-      const body = await requestJson<{ skill: PublicSkill }>(fetchImpl, `${root}/v1/skills/${encodeURIComponent(slug)}`);
+      const body = await requestJson<{ skill: PublicSkill }>(fetchImpl, `${root}/v1/skills/${encodeURIComponent(slug)}`, {
+        token,
+      });
       return body.skill;
     },
     async getRelease(slug: string, version: string) {
       const body = await requestJson<{ release: ReleaseMetadata }>(
         fetchImpl,
         `${root}/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}`,
+        { token },
       );
       return body.release;
+    },
+    async login(input) {
+      return requestJson<LoginResult>(fetchImpl, `${root}/v1/auth/login`, {
+        method: "POST",
+        body: input,
+      });
+    },
+    async verifyMfa(input) {
+      const body = /^[0-9]{6}$/.test(input.codeOrRecoveryCode.trim())
+        ? { challengeToken: input.challengeToken, code: input.codeOrRecoveryCode.trim() }
+        : { challengeToken: input.challengeToken, recoveryCode: input.codeOrRecoveryCode.trim() };
+      return requestJson<SessionResult>(fetchImpl, `${root}/v1/auth/mfa/verify`, {
+        method: "POST",
+        body,
+      });
+    },
+    async getMe(overrideToken) {
+      const body = await requestJson<{ user: WebAuthUser }>(fetchImpl, `${root}/v1/me`, {
+        token: overrideToken ?? token,
+      });
+      return body.user;
+    },
+    async logout(overrideToken) {
+      await requestJson<Record<string, never>>(fetchImpl, `${root}/v1/auth/logout`, {
+        method: "POST",
+        body: {},
+        token: overrideToken ?? token,
+      });
     },
   };
 }
@@ -66,9 +123,32 @@ export function safeErrorMessage(error: unknown): string {
   return "The registry is not available.";
 }
 
-async function requestJson<T>(fetchImpl: typeof fetch, url: string): Promise<T> {
+export function safeAuthErrorMessage(error: unknown): string {
+  if (isSafeApiError(error) && error.status === 429) {
+    return "Too many sign-in attempts. Try again later.";
+  }
+  if (isSafeApiError(error) && error.status >= 400 && error.status < 500) {
+    return "Sign in could not be completed.";
+  }
+  return "Authentication is not available.";
+}
+
+async function requestJson<T>(fetchImpl: typeof fetch, url: string, options: {
+  body?: unknown;
+  method?: "GET" | "POST";
+  token?: string;
+} = {}): Promise<T> {
+  const headers: Record<string, string> = { accept: "application/json" };
+  if (options.body !== undefined) {
+    headers["content-type"] = "application/json";
+  }
+  if (options.token) {
+    headers.authorization = `Bearer ${options.token}`;
+  }
   const response = await fetchImpl(url, {
-    headers: { accept: "application/json" },
+    method: options.method,
+    headers,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
   const text = await response.text();
   const body = text ? JSON.parse(text) as Record<string, unknown> : {};

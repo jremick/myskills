@@ -37,6 +37,83 @@ test("registry client fetches skill and release metadata without bundle content"
   assert.equal(calls.some((call) => call.includes("/bundle")), false);
 });
 
+test("registry client forwards bearer tokens to authorized registry reads", async () => {
+  const calls: Array<{ authorization: string; url: string }> = [];
+  const client = createRegistryClient("http://api.test", async (input, init) => {
+    const url = String(input);
+    calls.push({
+      authorization: init?.headers instanceof Headers ? init.headers.get("authorization") ?? "" : (init?.headers as Record<string, string> | undefined)?.authorization ?? "",
+      url,
+    });
+    if (url.includes("/releases/")) {
+      return jsonResponse(200, { release: { version: "0.1.0", artifact: { sha256: "abc", byteSize: 12 } } });
+    }
+    if (url.includes("/v1/skills/release-notes-helper")) {
+      return jsonResponse(200, { skill: { slug: "release-notes-helper", latestVersion: "0.1.0" } });
+    }
+    return jsonResponse(200, { skills: [] });
+  }, "session-token");
+
+  await client.searchSkills("");
+  await client.getSkill("release-notes-helper");
+  await client.getRelease("release-notes-helper", "0.1.0");
+
+  assert.deepEqual(calls.map((call) => call.authorization), [
+    "Bearer session-token",
+    "Bearer session-token",
+    "Bearer session-token",
+  ]);
+  assert.equal(calls.some((call) => call.url.includes("/bundle")), false);
+});
+
+test("registry client supports login, MFA verification, current user, and logout", async () => {
+  const calls: Array<{ body?: string; method?: string; url: string; authorization?: string }> = [];
+  const client = createRegistryClient("http://api.test", async (input, init) => {
+    calls.push({
+      body: typeof init?.body === "string" ? init.body : undefined,
+      method: init?.method,
+      url: String(input),
+      authorization: init?.headers instanceof Headers ? init.headers.get("authorization") ?? undefined : (init?.headers as Record<string, string> | undefined)?.authorization,
+    });
+    if (String(input).endsWith("/v1/auth/login")) {
+      return jsonResponse(200, {
+        mfaRequired: true,
+        challengeToken: "challenge-token",
+        expiresAt: "2026-06-04T01:00:00.000Z",
+        user: { email: "maintainer@example.com" },
+      });
+    }
+    if (String(input).endsWith("/v1/auth/mfa/verify")) {
+      return jsonResponse(200, {
+        token: "verified-session-token",
+        expiresAt: "2026-06-04T01:00:00.000Z",
+        user: { email: "maintainer@example.com" },
+      });
+    }
+    if (String(input).endsWith("/v1/me")) {
+      return jsonResponse(200, { user: { email: "maintainer@example.com", roles: ["maintainer"] } });
+    }
+    return jsonResponse(204, {});
+  });
+
+  const login = await client.login({ email: "maintainer@example.com", password: "test-password" });
+  const verified = await client.verifyMfa({ challengeToken: "challenge-token", codeOrRecoveryCode: "123456" });
+  const user = await client.getMe(verified.token);
+  await client.logout(verified.token);
+
+  assert.equal(login.mfaRequired, true);
+  assert.equal(verified.token, "verified-session-token");
+  assert.equal(user.email, "maintainer@example.com");
+  assert.deepEqual(calls.map((call) => call.url), [
+    "http://api.test/v1/auth/login",
+    "http://api.test/v1/auth/mfa/verify",
+    "http://api.test/v1/me",
+    "http://api.test/v1/auth/logout",
+  ]);
+  assert.equal(calls[2].authorization, "Bearer verified-session-token");
+  assert.equal(calls[3].authorization, "Bearer verified-session-token");
+});
+
 test("safe error messages do not render raw server internals", () => {
   const error = new Error("stack trace /Users/example token storageKey") as SafeApiError;
   error.status = 500;

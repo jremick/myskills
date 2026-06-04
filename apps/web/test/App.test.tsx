@@ -130,29 +130,108 @@ test("platform selection changes CLI export guidance only", async () => {
   assert.equal(client.bundleCalls, 0);
 });
 
+test("login stores a verified session and logout clears it", async () => {
+  setupDom();
+  const client = mockClient();
+
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.input(view.getByLabelText("Email"), { target: { value: "reader@example.com" } });
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: /sign in/i }));
+
+  await view.findByText("reader@example.com");
+  assert.equal(document.body.textContent?.includes("web-session-token"), false);
+  assert.equal(JSON.parse(window.localStorage.getItem("ai-skills-share:web-session") ?? "{}").token, "web-session-token");
+
+  fireEvent.click(view.getByLabelText("Sign out"));
+
+	  await view.findByRole("button", { name: /sign in/i });
+	  assert.equal((view.getByLabelText("Password") as HTMLInputElement).value, "");
+	  assert.equal(window.localStorage.getItem("ai-skills-share:web-session"), null);
+	  assert.equal(client.logoutCalls, 1);
+	});
+
+test("MFA login verifies the challenge before storing a session", async () => {
+  setupDom();
+  const client = mockClient({ mfaRequired: true });
+
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.input(view.getByLabelText("Email"), { target: { value: "maintainer@example.com" } });
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: /sign in/i }));
+
+  await view.findByText("MFA required.");
+  fireEvent.input(view.getByLabelText("MFA code"), { target: { value: "123456" } });
+  fireEvent.click(view.getByRole("button", { name: /verify/i }));
+
+  await view.findByText("reader@example.com");
+  assert.deepEqual(client.mfaCalls, ["123456"]);
+  assert.equal(JSON.parse(window.localStorage.getItem("ai-skills-share:web-session") ?? "{}").token, "mfa-session-token");
+});
+
+test("malformed stored sessions are ignored before signed-in render", async () => {
+  setupDom();
+  window.localStorage.setItem("ai-skills-share:web-session", JSON.stringify({
+    token: "stored-session-token",
+    expiresAt: "2026-06-04T01:00:00.000Z",
+    user: {},
+  }));
+  const client = mockClient();
+
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByRole("button", { name: /sign in/i });
+  assert.equal(window.localStorage.getItem("ai-skills-share:web-session"), null);
+});
+
+test("failed login shows auth-specific safe copy", async () => {
+  setupDom();
+  const client = mockClient({
+    loginError: safeApiError(401, "INVALID_CREDENTIALS", "Wrong password for reader@example.com."),
+  });
+
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.input(view.getByLabelText("Email"), { target: { value: "reader@example.com" } });
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: "wrong-password" } });
+  fireEvent.click(view.getByRole("button", { name: /sign in/i }));
+
+  await view.findByText("Sign in could not be completed.");
+  assert.equal(document.body.textContent?.includes("registry item"), false);
+  assert.equal(document.body.textContent?.includes("Wrong password"), false);
+  assert.equal(window.localStorage.getItem("ai-skills-share:web-session"), null);
+});
+
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
 });
 
 function setupDom(url = "http://localhost/") {
   document.body.innerHTML = "";
+  window.localStorage.clear();
   window.history.replaceState({}, "", url);
 }
 
 function mockClient(input: {
   skills?: PublicSkill[];
   release?: ReleaseMetadata;
-  getSkillError?: SafeApiError;
+	  getSkillError?: SafeApiError;
+	  loginError?: SafeApiError;
+	  mfaRequired?: boolean;
   searchResults?: (query: string) => PublicSkill[];
 } = {}) {
   const skills = input.skills ?? [publicSkill()];
   const release = input.release ?? publicRelease();
   const client: RegistryClient & {
     bundleCalls: number;
+    logoutCalls: number;
+    mfaCalls: string[];
     releaseCalls: string[];
     searchCalls: string[];
   } = {
     bundleCalls: 0,
+    logoutCalls: 0,
+    mfaCalls: [],
     releaseCalls: [],
     searchCalls: [],
     async searchSkills(query) {
@@ -170,8 +249,52 @@ function mockClient(input: {
       client.releaseCalls.push(`${slug}@${version}`);
       return release;
     },
+    async getMe() {
+      return authUser();
+    },
+	    async login() {
+	      if (input.loginError) {
+	        throw input.loginError;
+	      }
+	      return input.mfaRequired
+        ? {
+          mfaRequired: true,
+          challengeToken: "mfa-challenge-token",
+          expiresAt: "2026-06-04T01:00:00.000Z",
+          user: authUser({ email: "maintainer@example.com", mfaVerified: false }),
+        }
+        : {
+          mfaRequired: false,
+          token: "web-session-token",
+          expiresAt: "2026-06-04T01:00:00.000Z",
+          user: authUser(),
+        };
+    },
+    async logout() {
+      client.logoutCalls += 1;
+    },
+    async verifyMfa(input) {
+      client.mfaCalls.push(input.codeOrRecoveryCode);
+      return {
+        token: "mfa-session-token",
+        expiresAt: "2026-06-04T01:00:00.000Z",
+        user: authUser({ mfaVerified: true }),
+      };
+    },
   };
   return client;
+}
+
+function authUser(input: { email?: string; mfaVerified?: boolean } = {}) {
+  return {
+    id: "user-1",
+    email: input.email ?? "reader@example.com",
+    name: "Reader",
+    status: "active",
+    roles: ["author"],
+    emailVerified: true,
+    mfaVerified: input.mfaVerified ?? true,
+  };
 }
 
 function publicSkill(slug = "release-notes-helper"): PublicSkill {

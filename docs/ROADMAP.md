@@ -114,7 +114,7 @@ Acceptance:
 - Common user, author, maintainer, and admin workflows work in browser tests.
 - Text and controls fit on mobile and desktop.
 
-Current status: public browse/search, skill detail, release metadata, and export-guidance views exist. Authenticated submit, maintainer review dashboard, and admin console are still future work.
+Current status: public browse/search, skill detail, release metadata, export-guidance views, email/password login/logout, MFA challenge completion, current-user refresh, and session-aware API calls exist. Authenticated submit, maintainer review dashboard, and admin console are still future work.
 
 ## Milestone 6: MCP Production Surface
 

@@ -4,18 +4,23 @@ import {
   CircleAlert,
   Copy,
   FileCode2,
+  LogIn,
+  LogOut,
   PackageOpen,
   Search,
   ShieldCheck,
   TerminalSquare,
+  UserRound,
 } from "lucide-react";
 import type { PublicSkill } from "@ai-skills-share/core";
 import {
   createRegistryClient,
   exportCommand,
+  safeAuthErrorMessage,
   safeErrorMessage,
   type RegistryClient,
   type ReleaseMetadata,
+  type WebAuthUser,
 } from "./api.js";
 
 interface RegistryAppProps {
@@ -23,10 +28,23 @@ interface RegistryAppProps {
 }
 
 type LoadState = "idle" | "loading" | "ready" | "error";
+type AuthState = "idle" | "loading" | "mfa";
+
+interface WebSession {
+  token: string;
+  expiresAt: string;
+  user: WebAuthUser;
+}
+
+interface MfaPending {
+  challengeToken: string;
+  email: string;
+}
 
 export function RegistryApp({ client }: RegistryAppProps) {
-  const registryClient = useMemo(() => client ?? createRegistryClient(), [client]);
   const initialSlug = skillSlugFromPath(window.location.pathname);
+  const [session, setSession] = useState<WebSession | null>(() => readStoredSession());
+  const registryClient = useMemo(() => client ?? createRegistryClient(undefined, undefined, session?.token), [client, session?.token]);
   const [query, setQuery] = useState("");
   const [skills, setSkills] = useState<PublicSkill[]>([]);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(initialSlug);
@@ -36,6 +54,36 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [listState, setListState] = useState<LoadState>("idle");
   const [detailState, setDetailState] = useState<LoadState>("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [authState, setAuthState] = useState<AuthState>("idle");
+  const [mfaPending, setMfaPending] = useState<MfaPending | null>(null);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+    let active = true;
+    registryClient.getMe(session.token)
+      .then((user) => {
+        if (!active) {
+          return;
+        }
+        const nextSession = { ...session, user };
+        setSession(nextSession);
+        writeStoredSession(nextSession);
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+        setSession(null);
+        clearStoredSession();
+        setAuthMessage("Session expired.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [registryClient, session?.token]);
 
   useEffect(() => {
     let active = true;
@@ -134,10 +182,81 @@ export function RegistryApp({ client }: RegistryAppProps) {
           />
           <kbd>/</kbd>
         </label>
-        <div className={listState === "error" ? "api-state api-state-error" : "api-state"} aria-live="polite">
-          <span className="status-dot" />
-          {listState === "error" ? "API unavailable" : "API connected"}
-          <ChevronsUpDown size={16} aria-hidden="true" />
+        <div className="topbar-actions">
+          <div className={listState === "error" ? "api-state api-state-error" : "api-state"} aria-live="polite">
+            <span className="status-dot" />
+            {listState === "error" ? "API unavailable" : "API connected"}
+            <ChevronsUpDown size={16} aria-hidden="true" />
+          </div>
+          <AuthWidget
+            authMessage={authMessage}
+            authState={authState}
+            mfaPending={mfaPending}
+            onLogin={async (input) => {
+              setAuthState("loading");
+              setAuthMessage(null);
+              try {
+                const result = await registryClient.login(input);
+                if (result.mfaRequired) {
+                  setMfaPending({ challengeToken: result.challengeToken, email: input.email });
+                  setAuthState("mfa");
+                  setAuthMessage("MFA required.");
+                  return;
+                }
+                const nextSession = {
+                  token: result.token,
+                  expiresAt: result.expiresAt,
+                  user: await registryClient.getMe(result.token),
+                };
+                setSession(nextSession);
+                writeStoredSession(nextSession);
+                setAuthState("idle");
+              } catch (error) {
+                setAuthState("idle");
+                setAuthMessage(safeAuthErrorMessage(error));
+              }
+            }}
+            onLogout={async () => {
+              const token = session?.token;
+              setAuthMessage(null);
+              setSession(null);
+              clearStoredSession();
+              setMfaPending(null);
+              if (token) {
+                try {
+                  await registryClient.logout(token);
+                } catch {
+                  setAuthMessage("Signed out locally.");
+                }
+              }
+            }}
+            onVerifyMfa={async (codeOrRecoveryCode) => {
+              if (!mfaPending) {
+                return;
+              }
+              setAuthState("loading");
+              setAuthMessage(null);
+              try {
+                const result = await registryClient.verifyMfa({
+                  challengeToken: mfaPending.challengeToken,
+                  codeOrRecoveryCode,
+                });
+                const nextSession = {
+                  token: result.token,
+                  expiresAt: result.expiresAt,
+                  user: await registryClient.getMe(result.token),
+                };
+                setSession(nextSession);
+                writeStoredSession(nextSession);
+                setMfaPending(null);
+                setAuthState("idle");
+              } catch (error) {
+                setAuthState("mfa");
+                setAuthMessage(safeAuthErrorMessage(error));
+              }
+            }}
+            session={session}
+          />
         </div>
       </header>
 
@@ -202,6 +321,101 @@ export function RegistryApp({ client }: RegistryAppProps) {
       </main>
     </div>
   );
+}
+
+function AuthWidget({
+  authMessage,
+  authState,
+  mfaPending,
+  onLogin,
+  onLogout,
+  onVerifyMfa,
+  session,
+}: {
+  authMessage: string | null;
+  authState: AuthState;
+  mfaPending: MfaPending | null;
+  onLogin: (input: { email: string; password: string }) => Promise<void>;
+  onLogout: () => Promise<void>;
+  onVerifyMfa: (codeOrRecoveryCode: string) => Promise<void>;
+  session: WebSession | null;
+}) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+
+  if (session) {
+    return (
+      <div className="auth-widget signed-in" aria-label="Authenticated user">
+        <UserRound size={17} aria-hidden="true" />
+        <span>
+          <strong>{session.user.email}</strong>
+          <small>{session.user.roles.join(", ") || "user"} · {session.user.mfaVerified ? "MFA" : "no MFA"}</small>
+        </span>
+        <button type="button" onClick={() => void onLogout()} aria-label="Sign out">
+          <LogOut size={16} aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
+  if (mfaPending) {
+    return (
+      <form className="auth-widget auth-form" onSubmit={(event) => {
+        event.preventDefault();
+        void onVerifyMfa(mfaCode).finally(() => setMfaCode(""));
+      }}>
+        <input
+          aria-label="MFA code"
+          autoComplete="one-time-code"
+          disabled={authState === "loading"}
+          onChange={(event) => setMfaCode(event.target.value)}
+          placeholder="MFA code"
+          value={mfaCode}
+        />
+        <button disabled={authState === "loading" || !mfaCode.trim()} type="submit">
+          <ShieldCheck size={16} aria-hidden="true" />
+          Verify
+        </button>
+        <AuthMessage message={authMessage ?? mfaPending.email} />
+      </form>
+    );
+  }
+
+  return (
+    <form className="auth-widget auth-form" onSubmit={(event) => {
+      event.preventDefault();
+      void onLogin({ email, password }).finally(() => setPassword(""));
+    }}>
+      <input
+        aria-label="Email"
+        autoComplete="email"
+        disabled={authState === "loading"}
+        onChange={(event) => setEmail(event.target.value)}
+        placeholder="Email"
+        type="email"
+        value={email}
+      />
+      <input
+        aria-label="Password"
+        autoComplete="current-password"
+        disabled={authState === "loading"}
+        onChange={(event) => setPassword(event.target.value)}
+        placeholder="Password"
+        type="password"
+        value={password}
+      />
+      <button disabled={authState === "loading" || !email.trim() || !password} type="submit">
+        <LogIn size={16} aria-hidden="true" />
+        Sign in
+      </button>
+      <AuthMessage message={authMessage} />
+    </form>
+  );
+}
+
+function AuthMessage({ message }: { message: string | null }) {
+  return message ? <span className="auth-message" role="status">{message}</span> : null;
 }
 
 function SkillDetail({
@@ -349,4 +563,63 @@ function formatDate(input: string): string {
 function skillSlugFromPath(pathname: string): string | null {
   const match = pathname.match(/^\/skills\/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)$/);
   return match?.[1] ?? null;
+}
+
+const SESSION_STORAGE_KEY = "ai-skills-share:web-session";
+
+function readStoredSession(): WebSession | null {
+  try {
+    const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    if (!isStoredSession(parsed)) {
+      clearStoredSession();
+      return null;
+    }
+    return parsed;
+  } catch {
+    clearStoredSession();
+    return null;
+  }
+}
+
+function isStoredSession(input: unknown): input is WebSession {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return false;
+  }
+  const record = input as Partial<WebSession>;
+  return typeof record.token === "string" && record.token.length > 0
+    && typeof record.expiresAt === "string" && record.expiresAt.length > 0
+    && isStoredUser(record.user);
+}
+
+function isStoredUser(input: unknown): input is WebAuthUser {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return false;
+  }
+  const record = input as Partial<WebAuthUser>;
+  return typeof record.id === "string" && record.id.length > 0
+    && typeof record.email === "string" && record.email.length > 0
+    && typeof record.name === "string"
+    && typeof record.status === "string" && record.status.length > 0
+    && Array.isArray(record.roles) && record.roles.every((role) => typeof role === "string")
+    && typeof record.emailVerified === "boolean"
+    && typeof record.mfaVerified === "boolean";
+}
+
+function writeStoredSession(session: WebSession): void {
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+    token: session.token,
+    expiresAt: session.expiresAt,
+    user: session.user,
+  }));
+}
+
+function clearStoredSession(): void {
+  window.localStorage.removeItem(SESSION_STORAGE_KEY);
 }
