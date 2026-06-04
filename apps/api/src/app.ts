@@ -211,6 +211,38 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     });
   });
 
+  app.get("/v1/mcp/session", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const context = await options.authService.authenticateRequest(request.headers.authorization);
+    if (!context) {
+      return reply.code(401).send({
+        error: {
+          code: "AUTHENTICATION_REQUIRED",
+          message: "Authentication is required.",
+        },
+      });
+    }
+    if (context.credential.kind !== "api_token") {
+      return reply.code(403).send({
+        error: {
+          code: "API_TOKEN_AUTH_REQUIRED",
+          message: "API token authentication is required.",
+        },
+      });
+    }
+    requireScope(context, "skills:read");
+    return {
+      user: context.user,
+      credential: {
+        kind: context.credential.kind,
+        tokenId: context.credential.tokenId,
+        scopes: context.credential.scopes,
+      },
+    };
+  });
+
   app.post("/v1/submissions", async (request, reply) => {
     if (!options.authService) {
       throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);

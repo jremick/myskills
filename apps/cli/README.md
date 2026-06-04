@@ -40,3 +40,10 @@ ai-skills token revoke <token-id>
 ```
 
 `search`, `info`, `whoami`, `submit`, `review`, `export`, and `token` read `AI_SKILLS_TOKEN` when `--token` is not passed. `submit` validates and scans locally before sending package text entries to the API. `export` downloads server-authorized bundle content, verifies byte size and SHA-256 against release metadata, and writes normalized package paths under the requested output directory. `token create` prints the plaintext API token only once. Durable platform-secret storage, browser login, install/update/rollback, and archive packaging are still planned.
+
+Common scopes:
+
+- `skills:read` for MCP registry discovery.
+- `profile:read` for `whoami`.
+- `skills:submit` for author submissions.
+- `review:read` and `review:write` for maintainer review workflows.

@@ -27,6 +27,7 @@ Implemented:
 - `POST /v1/auth/api-tokens` session-only scoped API token creation
 - `DELETE /v1/auth/api-tokens/:id` session-only scoped API token revocation
 - `GET /v1/me` bearer-session or scoped API-token current user response
+- `GET /v1/mcp/session` API-token-only MCP auth check requiring `skills:read`
 - `POST /v1/submissions` authenticated package intake with scan evidence
 - `GET /v1/review/submissions` maintainer review queue
 - `POST /v1/review/submissions/:id/actions` maintainer `approve` and `publish`
@@ -39,7 +40,7 @@ Implemented:
 
 Public search, detail, release metadata, and bundle delivery all require the same safe release state: public skill, approved lifecycle, approved review, passed security status, non-null `publishedAt`, and artifact metadata. Review and publish actions require `owner`, `admin`, or `maintainer`.
 
-API tokens are hashed at rest and returned in plaintext only on creation. Token management routes require an interactive session, not another API token. Current token scopes are `profile:read`, `skills:submit`, `review:read`, and `review:write`; route checks require both the user role and the token scope.
+API tokens are hashed at rest and returned in plaintext only on creation. Token management routes require an interactive session, not another API token. Current token scopes are `profile:read`, `skills:read`, `skills:submit`, `review:read`, and `review:write`; route checks require both the user role and the token scope.
 
 Run locally:
 

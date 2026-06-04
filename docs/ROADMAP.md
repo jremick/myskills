@@ -34,7 +34,7 @@ Acceptance:
 - No Git repository is required for registry operation.
 - Local setup can run Postgres plus object storage through Docker Compose.
 
-Current status: in progress. The first API and schema slice exists with email/password session auth, hashed scoped API tokens, public search/detail endpoints, authenticated package intake with scan evidence, maintainer review approve/publish actions, authorized release metadata and bundle delivery, a React web app for public registry browsing/detail/export guidance, and a starter CLI for validation, scanning, search, info, whoami, submit, review actions, verified export, and API-token management. Archive upload/extraction, object-storage-backed artifact delivery, durable CLI token storage, MFA enforcement, and background scan jobs are still future work.
+Current status: in progress. The first API and schema slice exists with email/password session auth, hashed scoped API tokens, public search/detail endpoints, MCP token introspection with `skills:read` scope, authenticated package intake with scan evidence, maintainer review approve/publish actions, authorized release metadata and bundle delivery, a React web app for public registry browsing/detail/export guidance, a read-only MCP stdio server for registry discovery/info/install guidance, and a starter CLI for validation, scanning, search, info, whoami, submit, review actions, verified export, and API-token management. Archive upload/extraction, object-storage-backed artifact delivery, durable CLI token storage, MFA enforcement, Streamable HTTP MCP transport, MCP audit events, and background scan jobs are still future work.
 
 ## Milestone 2: Auth And User Management Foundation
 
@@ -133,6 +133,8 @@ Acceptance:
 - MCP clients can discover authorized skills.
 - MCP cannot return unauthorized metadata or package contents.
 - Tool results align with API and CLI authorization tests.
+
+Current status: first stdio MCP server exists with `search_skills`, `get_skill_info`, and `get_install_instructions`. Calls require an API token with `skills:read`, reject session tokens through the API, and avoid bundle payload retrieval. Streamable HTTP transport, role-gated maintainer/admin tools, and audit events are still future work.
 
 ## Milestone 7: Public Release Hardening
 

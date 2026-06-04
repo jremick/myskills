@@ -217,6 +217,7 @@ function parseApiTokenScopes(input: unknown): ApiTokenScope[] {
   }
   return input.filter((scope): scope is ApiTokenScope => (
     scope === "profile:read" ||
+    scope === "skills:read" ||
     scope === "skills:submit" ||
     scope === "review:read" ||
     scope === "review:write"

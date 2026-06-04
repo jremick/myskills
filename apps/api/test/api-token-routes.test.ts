@@ -205,6 +205,60 @@ test("API token scopes gate protected routes separately from roles", async (t) =
   assert.equal(approved.statusCode, 200);
 });
 
+test("MCP session requires an API token with skills read scope", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildTokenApp(authStore);
+  t.after(() => app.close());
+  const session = await addAndLogin(app, authStore, {
+    id: "reader-1",
+    email: "reader@example.com",
+    roles: ["user"],
+  });
+  const readToken = await createApiToken(app, session, ["skills:read"]);
+  const profileToken = await createApiToken(app, session, ["profile:read"]);
+
+  const missing = await app.inject({ method: "GET", url: "/v1/mcp/session" });
+  assert.equal(missing.statusCode, 401);
+  assert.equal(missing.json().error.code, "AUTHENTICATION_REQUIRED");
+
+  const sessionDenied = await app.inject({
+    method: "GET",
+    url: "/v1/mcp/session",
+    headers: { authorization: `Bearer ${session}` },
+  });
+  assert.equal(sessionDenied.statusCode, 403);
+  assert.equal(sessionDenied.json().error.code, "API_TOKEN_AUTH_REQUIRED");
+
+  const wrongScope = await app.inject({
+    method: "GET",
+    url: "/v1/mcp/session",
+    headers: { authorization: `Bearer ${profileToken.token}` },
+  });
+  assert.equal(wrongScope.statusCode, 403);
+  assert.equal(wrongScope.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
+
+  const allowed = await app.inject({
+    method: "GET",
+    url: "/v1/mcp/session",
+    headers: { authorization: `Bearer ${readToken.token}` },
+  });
+  assert.equal(allowed.statusCode, 200);
+  assert.equal(allowed.json().user.id, "reader-1");
+  assert.equal(allowed.json().credential.kind, "api_token");
+  assert.equal(allowed.json().credential.tokenId, readToken.id);
+  assert.deepEqual(allowed.json().credential.scopes, ["skills:read"]);
+  assert.equal(JSON.stringify(allowed.json()).includes(readToken.token), false);
+  assert.equal(JSON.stringify(allowed.json()).includes(hashApiToken(readToken.token)), false);
+
+  authStore.setUserStatus("reader@example.com", "disabled");
+  const disabled = await app.inject({
+    method: "GET",
+    url: "/v1/mcp/session",
+    headers: { authorization: `Bearer ${readToken.token}` },
+  });
+  assert.equal(disabled.statusCode, 401);
+});
+
 test("disabled users cannot keep using API tokens", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const app = buildTokenApp(authStore);

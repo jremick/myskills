@@ -1,6 +1,6 @@
 import type { AuthenticatedUser, RegistrationMode, UserStatus } from "@ai-skills-share/auth";
 
-export const apiTokenScopes = ["profile:read", "skills:submit", "review:read", "review:write"] as const;
+export const apiTokenScopes = ["profile:read", "skills:read", "skills:submit", "review:read", "review:write"] as const;
 
 export type ApiTokenScope = (typeof apiTokenScopes)[number];
 

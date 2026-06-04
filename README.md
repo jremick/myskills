@@ -74,6 +74,12 @@ The seeded owner account uses `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` from 
 
 Open `http://localhost:3000` to browse approved skills and inspect release export guidance in the web UI.
 
+To run the stdio MCP server, create an API token with `skills:read` scope and start:
+
+```bash
+AI_SKILLS_TOKEN=<api-token-with-skills-read> npm run dev:mcp
+```
+
 The current CLI can validate and scan local package directories, search and inspect approved releases, submit package text entries, run maintainer review actions, manage scoped API tokens, and export verified approved bundles:
 
 ```bash
@@ -83,7 +89,7 @@ node apps/cli/dist/index.js info release-notes-helper
 node apps/cli/dist/index.js export release-notes-helper --version 0.1.0 --platform codex --output ./tmp/release-notes-helper
 AI_SKILLS_TOKEN=<token> node apps/cli/dist/index.js submit --path ./path-to-skill
 AI_SKILLS_TOKEN=<token> node apps/cli/dist/index.js review submissions
-AI_SKILLS_TOKEN=<session-token> node apps/cli/dist/index.js token create --name "Local CLI" --scope profile:read --scope skills:submit
+AI_SKILLS_TOKEN=<session-token> node apps/cli/dist/index.js token create --name "Local CLI" --scope profile:read --scope skills:read --scope skills:submit
 ```
 
 ## Verification
@@ -94,4 +100,4 @@ npm run check
 
 ## Current Status
 
-This is the first backend and product-surface foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, hashed scoped API tokens, public skill search/detail/release/bundle endpoints, authenticated package intake with scan evidence, maintainer approve/publish actions, a Vite/React web browser for public registry metadata, a starter CLI with verified export and token management, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, seed data, package manifest validation, local package risk scanning, and deterministic checks.
+This is the first backend and product-surface foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, hashed scoped API tokens, public skill search/detail/release/bundle endpoints, MCP token introspection with `skills:read`, authenticated package intake with scan evidence, maintainer approve/publish actions, a Vite/React web browser for public registry metadata, a read-only stdio MCP server, a starter CLI with verified export and token management, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, seed data, package manifest validation, local package risk scanning, and deterministic checks.
