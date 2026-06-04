@@ -21,7 +21,7 @@
     "dev:mcp": "npm run dev -w @ai-skills-share/mcp",
     "dev:web": "npm run dev -w @ai-skills-share/web",
     "docker:down": "docker compose down",
-    "docker:up": "docker compose up -d postgres minio",
+    "docker:up": "docker compose up -d postgres minio minio-init",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "test": "npm test --workspaces --if-present"
   },

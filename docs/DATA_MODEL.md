@@ -26,7 +26,7 @@ M1 tables are the thin backend proof. M2 tables harden auth and submissions. Lat
 - M1 `skills`: stable skill identity, slug, title, summary, owner, visibility, and lifecycle.
 - M1 `skill_versions`: semantic versions and release notes.
 - M1 `skill_platform_variants`: target runtime metadata such as Codex, Claude, ChatGPT, generic prompt pack, or MCP resource bundle.
-- M1 `skill_artifacts`: generated storage references, checksums, sizes, content type, and normalized text package payloads for the current slice. Future object storage backends should keep the database as system of record and move package bytes out of Postgres.
+- M1 `skill_artifacts`: generated opaque storage references, checksums, sizes, content type, and legacy/dev normalized text package payloads. Production package bytes live in S3-compatible object storage, while Postgres remains the system of record for artifact metadata and release policy.
 - Later `skill_dependencies`: optional relationships between skills.
 - Later `skill_examples`: examples and expected use cases.
 - M1 `skill_tags`: searchable taxonomy.
@@ -64,6 +64,7 @@ Organization and team scoped visibility are intentionally deferred until the own
 - Skill slugs are unique per instance.
 - Skill versions are unique per skill.
 - Artifact objects are immutable after creation.
+- Object-backed artifact reads verify byte size and SHA-256 before publication or delivery.
 - Approved releases point only at scan-passed artifacts.
 - Revoked skills are not discoverable through search and are blocked at delivery.
 - Authorization denial should avoid revealing whether a restricted skill exists unless instance policy explicitly allows that visibility.

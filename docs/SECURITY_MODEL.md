@@ -51,6 +51,8 @@ Last updated: 2026-06-04
 - Submission intake requires a strict root package manifest file that matches the submitted manifest metadata; publish revalidates stored artifact manifests before release.
 - Submission is role-gated to owner, admin, maintainer, and author accounts in the current slice; MFA enforcement for admin/maintainer submission remains a remaining hardening item.
 - Server code generates artifact hashes, sizes, content type, and storage keys instead of trusting client-supplied values.
+- Object storage keys are internal, opaque, and never returned in public, CLI, web, or MCP responses.
+- Object-backed publish and bundle delivery verify stored object bytes against database size and SHA-256 metadata and fail closed on mismatch.
 - Blocking scan findings reject the submission before skill, version, or artifact records are created.
 - Warning findings remain reviewable but unpublished.
 - Submitting a new unreviewed version must not mutate or hide an already approved public release.

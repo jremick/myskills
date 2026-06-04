@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { AppError } from "@ai-skills-share/core";
 import {
   hasBlockingFindings,
@@ -56,7 +56,7 @@ export class SubmissionService {
       });
     }
 
-    const artifact = artifactMetadata(packageManifest.name, packageManifest.version, input.files);
+    const artifact = artifactMetadata(input.files);
     return this.store.createSubmission({
       ...input,
       manifest: packageManifest,
@@ -168,12 +168,12 @@ function canonicalManifest(manifest: SkillManifest): string {
   });
 }
 
-function artifactMetadata(slug: string, version: string, files: PackageInputFile[]): StoredSubmission["artifact"] {
+function artifactMetadata(files: PackageInputFile[]): StoredSubmission["artifact"] {
   const artifactPayload = canonicalArtifactPayload(files);
   const payload = JSON.stringify(artifactPayload);
   const sha256 = createHash("sha256").update(payload).digest("hex");
   return {
-    storageKey: `submissions/${slug}/${version}/${sha256}.json`,
+    storageKey: `submissions/${randomUUID()}.json`,
     sha256,
     byteSize: Buffer.byteLength(payload),
     contentType: PACKAGE_CONTENT_TYPE,

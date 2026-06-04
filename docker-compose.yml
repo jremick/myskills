@@ -32,6 +32,17 @@ services:
     volumes:
       - minio-data:/data
 
+  minio-init:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mc alias set local http://minio:9000 ai-skills-share ai-skills-share-dev
+        mc mb --ignore-existing local/ai-skills-share-dev
+
 volumes:
   postgres-data:
   minio-data:

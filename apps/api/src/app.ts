@@ -785,6 +785,8 @@ function rejectServerManagedSubmissionFields(body: Record<string, unknown>): voi
     "publishedAt",
     "storageKey",
     "sha256",
+    "byteSize",
+    "contentType",
   ];
   const present = forbidden.find((field) => field in body);
   if (present) {

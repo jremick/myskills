@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { hashPassword } from "@ai-skills-share/auth";
 import { createDb, createPgPool } from "./client.js";
@@ -141,7 +141,7 @@ async function seed() {
   await db.delete(skillArtifacts).where(eq(skillArtifacts.skillVersionId, existingVersion.id));
   await db.insert(skillArtifacts).values({
     skillVersionId: existingVersion.id,
-    storageKey: `seed/release-notes-helper/0.1.0/${createHash("sha256").update(syntheticArtifact).digest("hex")}.json`,
+    storageKey: `seed/${randomUUID()}.json`,
     sha256: createHash("sha256").update(syntheticArtifact).digest("hex"),
     byteSize: Buffer.byteLength(syntheticArtifact),
     contentType: "application/vnd.ai-skills-share.package+json",

@@ -4,8 +4,10 @@ import {
   loadSkillManifestFromPackageFiles,
   PackageManifestFileError,
 } from "@ai-skills-share/skill-package";
+import { assertArtifactBodyMatchesMetadata, parseArtifactPayload, readArtifactPayload } from "../artifacts/package-payload.js";
 import { sanitizeAuditDetails, sanitizeAuditValue } from "../audit/sanitize.js";
 import type { Database } from "../db/client.js";
+import type { ArtifactObjectStorage } from "../artifacts/storage.js";
 import {
   auditEvents,
   scanFindings,
@@ -17,7 +19,6 @@ import {
   skillVersions,
 } from "../db/schema.js";
 import type {
-  ArtifactPayload,
   CreateSubmissionInput,
   PublicBundle,
   PublicReleaseMetadata,
@@ -28,7 +29,10 @@ import type {
 } from "./types.js";
 
 export class PostgresSubmissionStore implements SubmissionStore {
-  constructor(private readonly db: Database) {}
+  constructor(
+    private readonly db: Database,
+    private readonly options: { artifactStorage?: ArtifactObjectStorage } = {},
+  ) {}
 
   async createSubmission(input: CreateSubmissionInput & {
     artifact: StoredSubmission["artifact"];
@@ -106,13 +110,15 @@ export class PostgresSubmissionStore implements SubmissionStore {
         await tx.insert(skillTags).values({ skillId: skill.id, tag }).onConflictDoNothing();
       }
 
+      await this.writeArtifactObject(input.artifact);
+
       await tx.insert(skillArtifacts).values({
         skillVersionId: version.id,
         storageKey: input.artifact.storageKey,
         sha256: input.artifact.sha256,
         byteSize: input.artifact.byteSize,
         contentType: input.artifact.contentType,
-        payload: input.artifact.payload,
+        payload: this.options.artifactStorage ? { files: [] } : input.artifact.payload,
       });
 
       const now = new Date();
@@ -345,9 +351,28 @@ export class PostgresSubmissionStore implements SubmissionStore {
         }, tx);
         throw new AppError("A succeeded package scan is required before publication.", "PACKAGE_SCAN_REQUIRED", 422);
       }
+      if (!row.storageKey || !row.sha256 || typeof row.byteSize !== "number" || !row.contentType) {
+        await this.insertReviewAudit("release.publish", "deny", input.actorId, input.submissionId, {
+          slug: row.slug,
+          version: row.version,
+          reason: "missing_artifact_metadata",
+        }, tx);
+        throw new AppError("Submission artifact metadata is required before publication.", "PACKAGE_ARTIFACT_REQUIRED", 422);
+      }
+      let artifactPayload;
       let manifest;
       try {
-        manifest = manifestFromPayload(row.artifactPayload);
+        artifactPayload = await readArtifactPayload({
+          artifactStorage: this.options.artifactStorage,
+          artifact: {
+            storageKey: row.storageKey,
+            sha256: row.sha256,
+            byteSize: row.byteSize,
+            contentType: row.contentType,
+            payload: row.artifactPayload,
+          },
+        });
+        manifest = manifestFromPayload(artifactPayload);
       } catch (error) {
         await this.insertReviewAudit("release.publish", "deny", input.actorId, input.submissionId, {
           slug: row.slug,
@@ -427,7 +452,10 @@ export class PostgresSubmissionStore implements SubmissionStore {
     }
     return {
       ...publicRelease(row),
-      payload: parseArtifactPayload(row.payload),
+      payload: await readArtifactPayload({
+        artifactStorage: this.options.artifactStorage,
+        artifact: row,
+      }),
     };
   }
 
@@ -494,6 +522,20 @@ export class PostgresSubmissionStore implements SubmissionStore {
       }),
     });
   }
+
+  private async writeArtifactObject(artifact: StoredSubmission["artifact"]): Promise<void> {
+    if (!this.options.artifactStorage) {
+      return;
+    }
+    const body = JSON.stringify(artifact.payload);
+    assertArtifactBodyMatchesMetadata(body, artifact);
+    await this.options.artifactStorage.putObject({
+      key: artifact.storageKey,
+      body,
+      contentType: artifact.contentType,
+      sha256: artifact.sha256,
+    });
+  }
 }
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -512,6 +554,10 @@ async function selectVersionForReview(db: DbLike, submissionId: string) {
       securityStatus: skillVersions.securityStatus,
       publishedAt: skillVersions.publishedAt,
       artifactId: skillArtifacts.id,
+      storageKey: skillArtifacts.storageKey,
+      sha256: skillArtifacts.sha256,
+      byteSize: skillArtifacts.byteSize,
+      contentType: skillArtifacts.contentType,
       artifactPayload: skillArtifacts.payload,
       succeededScanCount: sql<number>`count(distinct case when ${scanRuns.status} = 'succeeded' then ${scanRuns.id} end)::int`,
     })
@@ -531,6 +577,10 @@ async function selectVersionForReview(db: DbLike, submissionId: string) {
       skillVersions.securityStatus,
       skillVersions.publishedAt,
       skillArtifacts.id,
+      skillArtifacts.storageKey,
+      skillArtifacts.sha256,
+      skillArtifacts.byteSize,
+      skillArtifacts.contentType,
       skillArtifacts.payload,
     )
     .limit(1);
@@ -572,6 +622,7 @@ async function selectPublicRelease(db: DbLike, input: { slug: string; version: s
       sha256: skillArtifacts.sha256,
       byteSize: skillArtifacts.byteSize,
       contentType: skillArtifacts.contentType,
+      storageKey: skillArtifacts.storageKey,
       payload: skillArtifacts.payload,
     })
     .from(skills)
@@ -594,6 +645,7 @@ async function selectPublicRelease(db: DbLike, input: { slug: string; version: s
       skillArtifacts.sha256,
       skillArtifacts.byteSize,
       skillArtifacts.contentType,
+      skillArtifacts.storageKey,
       skillArtifacts.payload,
     )
     .limit(1);
@@ -620,31 +672,6 @@ function publicRelease(row: PublicReleaseRow): PublicReleaseMetadata {
       byteSize: row.byteSize,
       contentType: row.contentType,
     },
-  };
-}
-
-function parseArtifactPayload(input: unknown): ArtifactPayload {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new Error("Invalid artifact payload.");
-  }
-  const files = (input as { files?: unknown }).files;
-  if (!Array.isArray(files)) {
-    throw new Error("Invalid artifact payload files.");
-  }
-  return {
-    files: files.map((file) => {
-      if (!file || typeof file !== "object" || Array.isArray(file)) {
-        throw new Error("Invalid artifact payload file.");
-      }
-      const record = file as Record<string, unknown>;
-      if (typeof record.path !== "string" || typeof record.content !== "string") {
-        throw new Error("Invalid artifact payload file.");
-      }
-      return {
-        path: record.path,
-        content: record.content,
-      };
-    }),
   };
 }
 

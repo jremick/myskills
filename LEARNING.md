@@ -11,3 +11,4 @@ Record only durable lessons that should affect future work in this repo.
 - The new backend must use a proper application data model. Postgres is the initial system of record; object storage holds package artifacts; GitHub is optional workflow integration rather than canonical storage.
 - The auth model is first-party users first: email/password, email verification, admin-controlled registration, roles, sessions, MFA, account recovery, and optional external identity-provider mapping.
 - Public account recovery and verification requests must preserve account-existence privacy even during notification delivery failures; known, unknown, and temporarily undeliverable accounts should receive the same generic response.
+- Object storage is private infrastructure, not a public delivery surface. Artifact keys should stay opaque and server-only, and object-backed publish/delivery must verify stored bytes against Postgres metadata before returning package contents.

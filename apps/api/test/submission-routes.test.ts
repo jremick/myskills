@@ -430,13 +430,14 @@ test("duplicate slug and version are rejected", async (t) => {
   assert.equal(submissionStore.count(), 1);
 });
 
-test("server-local package paths and unsafe file paths are rejected", async (t) => {
+test("server-local paths, artifact metadata, and unsafe file paths are rejected", async (t) => {
   const submissionStore = new MemorySubmissionStore();
   const authStore = new MemoryAuthStore("closed");
   const app = buildSubmissionApp({ authStore, submissionStore });
   t.after(() => app.close());
   const token = await addAndLogin(app, authStore, ["author"]);
   const topLevelPath = { ...cleanSubmissionPayload(), packagePath: "/etc/passwd" };
+  const artifactMetadata = { ...cleanSubmissionPayload(), byteSize: 1234, contentType: "application/json" };
   const unsafeFilePath = cleanSubmissionPayload();
   unsafeFilePath.files[0].path = "../secret.txt";
 
@@ -445,6 +446,12 @@ test("server-local package paths and unsafe file paths are rejected", async (t) 
     url: "/v1/submissions",
     headers: { authorization: `Bearer ${token}` },
     payload: topLevelPath,
+  });
+  const artifactMetadataResponse = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload: artifactMetadata,
   });
   const unsafeFileResponse = await app.inject({
     method: "POST",
@@ -455,6 +462,8 @@ test("server-local package paths and unsafe file paths are rejected", async (t) 
 
   assert.equal(topLevelResponse.statusCode, 400);
   assert.equal(topLevelResponse.json().error.code, "UNSUPPORTED_SUBMISSION_FIELD");
+  assert.equal(artifactMetadataResponse.statusCode, 400);
+  assert.equal(artifactMetadataResponse.json().error.code, "UNSUPPORTED_SUBMISSION_FIELD");
   assert.equal(unsafeFileResponse.statusCode, 400);
   assert.equal(unsafeFileResponse.json().error.code, "INVALID_PACKAGE_PAYLOAD");
   assert.equal(submissionStore.count(), 0);

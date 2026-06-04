@@ -1,4 +1,5 @@
 import { createDb, createPgPool } from "./db/client.js";
+import { createArtifactObjectStorageFromEnv } from "./artifacts/storage.js";
 import { MemoryAuthRateLimiter } from "./auth/rate-limit.js";
 import { createAuthNotificationSinkFromEnv } from "./auth/notification.js";
 import { AuthService } from "./auth/service.js";
@@ -25,7 +26,9 @@ const app = buildApp({
     authActionTokenLimiter: new MemoryAuthRateLimiter({ maxAttempts: 10, windowMs: 15 * 60 * 1000 }),
     notificationSink: createAuthNotificationSinkFromEnv(process.env),
   }),
-  submissionService: new SubmissionService(new PostgresSubmissionStore(db)),
+  submissionService: new SubmissionService(new PostgresSubmissionStore(db, {
+    artifactStorage: createArtifactObjectStorageFromEnv(process.env),
+  })),
   allowedOrigins: allowedOrigins(),
   logger: process.env.NODE_ENV !== "test",
 });
