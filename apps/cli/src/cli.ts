@@ -475,7 +475,7 @@ function printScanResult(result: PackageScanResult, io: CliIo): void {
 function requiredPath(parsed: ParsedArgs): string {
   const value = parsed.options.path ?? parsed.args[0];
   if (typeof value !== "string" || !value) {
-    throw new CliError("A package path is required. Pass --path <file-or-directory>.", 2);
+    throw new CliError("A package path is required. Pass --path <file-directory-or-zip>.", 2);
   }
   return value;
 }
@@ -607,12 +607,12 @@ function helpText(): string {
     "ai-skills <command>",
     "",
     "Commands:",
-    "  validate --path <file-or-directory>",
-    "  scan --path <file-or-directory>",
+    "  validate --path <file-directory-or-zip>",
+    "  scan --path <file-directory-or-zip>",
     "  search [query] [--api-url <url>]",
     "  info <skill-slug> [--api-url <url>]",
     "  whoami [--api-url <url>] [--token <token>]",
-    "  submit --path <file-or-directory> [--api-url <url>] [--token <token>]",
+    "  submit --path <file-directory-or-zip> [--api-url <url>] [--token <token>]",
     "  review submissions [--api-url <url>] [--token <token>]",
     "  review action <submission-id> --action <approve|publish> [--reason <text>]",
     "  export <skill-slug> --version <version> --platform <platform> --output <dir>",

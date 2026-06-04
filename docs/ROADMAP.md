@@ -34,7 +34,7 @@ Acceptance:
 - No Git repository is required for registry operation.
 - Local setup can run Postgres plus object storage through Docker Compose.
 
-Current status: in progress. The first API and schema slice exists with email/password session auth, TOTP MFA challenge flow, hashed recovery codes, MFA-verified admin registration/user management with sanitized audit listing, hashed scoped API tokens, public search/detail endpoints, MCP token introspection with `skills:read` scope, authenticated package intake with scan evidence, MFA-gated maintainer review approve/publish actions, authorized release metadata and bundle delivery, a React web app for public registry browsing/detail/export guidance, a read-only MCP stdio server for registry discovery/info/install guidance, and a starter CLI for validation, scanning, search, info, whoami, submit, review actions, verified export, and API-token management. Archive upload/extraction, object-storage-backed artifact delivery, durable CLI token storage, Streamable HTTP MCP transport, MCP audit events, password reset, email verification flow, provider mapping, role editing, and background scan jobs are still future work.
+Current status: in progress. The first API and schema slice exists with email/password session auth, TOTP MFA challenge flow, hashed recovery codes, MFA-verified admin registration/user management with sanitized audit listing, hashed scoped API tokens, public search/detail endpoints, MCP token introspection with `skills:read` scope, authenticated package intake with scan evidence, MFA-gated maintainer review approve/publish actions, authorized release metadata and bundle delivery, local `.zip` archive parsing for package validation/submission tooling, a React web app for public registry browsing/detail/export guidance, a read-only MCP stdio server for registry discovery/info/install guidance, and a starter CLI for validation, scanning, search, info, whoami, submit, review actions, verified export, and API-token management. API archive upload/extraction, object-storage-backed artifact delivery, durable CLI token storage, Streamable HTTP MCP transport, MCP audit events, password reset, email verification flow, provider mapping, role editing, and background scan jobs are still future work.
 
 ## Milestone 2: Auth And User Management Foundation
 
@@ -66,7 +66,7 @@ Goal: make skills safe and useful enough to publish privately.
 Deliverables:
 
 - Manifest schema.
-- Package archive parser with traversal, symlink, size, and file-count defenses.
+- Package archive parser with traversal, symlink, encryption, compression, size, and file-count defenses.
 - Skill payload validation.
 - Secret scanning and risky-content scanning.
 - Drafts, submissions, review queue, approval, publish, deprecate, revoke.

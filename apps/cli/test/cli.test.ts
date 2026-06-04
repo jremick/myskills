@@ -5,6 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { runCli, type FetchLike } from "../src/cli.js";
+import { writeStoredZip } from "../../../test-support/zip-fixture.js";
 
 test("validate reads a skill manifest from disk", async (t) => {
   const dir = await makeTempPackage();
@@ -13,6 +14,19 @@ test("validate reads a skill manifest from disk", async (t) => {
   const output = createOutput();
 
   const code = await runCli(["validate", "--path", dir], testRuntime(output));
+
+  assert.equal(code, 0);
+  assert.deepEqual(output.stdout, ["valid release-notes-helper@0.1.0"]);
+});
+
+test("validate reads a skill manifest from a zip", async (t) => {
+  const dir = await makeTempPackage();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const zipPath = path.join(dir, "package.zip");
+  await writeStoredZip(zipPath, [{ path: "skill.json", content: manifestJson() }]);
+  const output = createOutput();
+
+  const code = await runCli(["validate", "--path", zipPath], testRuntime(output));
 
   assert.equal(code, 0);
   assert.deepEqual(output.stdout, ["valid release-notes-helper@0.1.0"]);
@@ -30,6 +44,23 @@ test("scan exits nonzero when package has blocking findings", async (t) => {
 
   assert.equal(code, 1);
   assert.match(output.stdout.join("\n"), /blocking\tsecret\tREADME\.md/);
+});
+
+test("scan exits nonzero when a zip package has blocking findings", async (t) => {
+  const dir = await makeTempPackage();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const zipPath = path.join(dir, "unsafe.zip");
+  const token = `ATATT${"abcdefghijklmnopqrstuvwxyz1234567890"}`;
+  await writeStoredZip(zipPath, [
+    { path: "skill.json", content: manifestJson() },
+    { path: "docs/README.md", content: `token: ${token}` },
+  ]);
+  const output = createOutput();
+
+  const code = await runCli(["scan", "--path", zipPath], testRuntime(output));
+
+  assert.equal(code, 1);
+  assert.match(output.stdout.join("\n"), /blocking\tsecret\tdocs\/README\.md/);
 });
 
 test("search prints skill rows from the API", async () => {
@@ -141,6 +172,27 @@ test("submit blocks locally when scan has blocking findings", async (t) => {
   assert.match(output.stdout.join("\n"), /blocking\tsecret\tREADME\.md/);
 });
 
+test("submit blocks locally when a zip package has blocking findings", async (t) => {
+  const dir = await makeTempPackage();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const zipPath = path.join(dir, "unsafe.zip");
+  await writeStoredZip(zipPath, [
+    { path: "skill.json", content: manifestJson() },
+    { path: "README.md", content: `token: ATATT${"abcdefghijklmnopqrstuvwxyz1234567890"}` },
+  ]);
+  const output = createOutput();
+  let calls = 0;
+
+  const code = await runCli(["submit", "--path", zipPath], testRuntime(output, async () => {
+    calls += 1;
+    return response(500, {});
+  }, { AI_SKILLS_TOKEN: "submit-token" }));
+
+  assert.equal(code, 1);
+  assert.equal(calls, 0);
+  assert.match(output.stdout.join("\n"), /blocking\tsecret\tREADME\.md/);
+});
+
 test("submit sends package entries to the API", async (t) => {
   const dir = await makeTempPackage();
   t.after(() => rm(dir, { recursive: true, force: true }));
@@ -167,6 +219,44 @@ test("submit sends package entries to the API", async (t) => {
   };
 
   const code = await runCli(["submit", "--path", dir], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "submit-token" }));
+
+  assert.equal(code, 0);
+  assert.equal(method, "POST");
+  assert.equal(authorization, "Bearer submit-token");
+  assert.equal(body.manifest?.name, "release-notes-helper");
+  assert.deepEqual(body.files?.map((file) => file.path), ["README.md", "skill.json"]);
+  assert.deepEqual(output.stdout, ["release-notes-helper@0.1.0\tunreviewed\tpassed\tfindings=0"]);
+});
+
+test("submit sends extracted zip entries to the API", async (t) => {
+  const dir = await makeTempPackage();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const zipPath = path.join(dir, "package.zip");
+  await writeStoredZip(zipPath, [
+    { path: "skill.json", content: manifestJson() },
+    { path: "README.md", content: "Summarize release notes." },
+  ]);
+  const output = createOutput();
+  let method = "";
+  let authorization = "";
+  let body: { manifest?: { name?: string }; files?: Array<{ path: string; content: string }> } = {};
+  const fetch: FetchLike = async (_input, init) => {
+    method = init?.method ?? "GET";
+    authorization = init?.headers?.authorization ?? "";
+    body = JSON.parse(init?.body ?? "{}");
+    return response(202, {
+      submission: {
+        id: "submission-1",
+        slug: "release-notes-helper",
+        version: "0.1.0",
+        reviewStatus: "unreviewed",
+        securityStatus: "passed",
+      },
+      scan: { findingCount: 0, findings: [] },
+    });
+  };
+
+  const code = await runCli(["submit", "--path", zipPath], testRuntime(output, fetch, { AI_SKILLS_TOKEN: "submit-token" }));
 
   assert.equal(code, 0);
   assert.equal(method, "POST");
@@ -495,14 +585,18 @@ test("token create usage errors exit without fetch", async () => {
 });
 
 async function writeManifest(dir: string): Promise<void> {
-  await writeFile(path.join(dir, "skill.json"), JSON.stringify({
+  await writeFile(path.join(dir, "skill.json"), manifestJson());
+}
+
+function manifestJson(): string {
+  return JSON.stringify({
     name: "release-notes-helper",
     title: "Release Notes Helper",
     summary: "Turns merged changes into concise release notes.",
     version: "0.1.0",
     license: "Apache-2.0",
     platforms: [{ name: "codex", install_target: "codex-skill" }],
-  }));
+  });
 }
 
 async function makeTempPackage(): Promise<string> {

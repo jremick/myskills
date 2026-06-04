@@ -25,12 +25,12 @@ CLI tokens should be stored in the platform secret store where possible.
 Implemented commands:
 
 ```text
-ai-skills validate --path <file-or-directory>
-ai-skills scan --path <file-or-directory>
+ai-skills validate --path <file-directory-or-zip>
+ai-skills scan --path <file-directory-or-zip>
 ai-skills search [query] [--api-url <url>]
 ai-skills info <skill-slug> [--api-url <url>]
 ai-skills whoami [--api-url <url>] [--token <token>]
-ai-skills submit --path <file-or-directory> [--api-url <url>] [--token <token>]
+ai-skills submit --path <file-directory-or-zip> [--api-url <url>] [--token <token>]
 ai-skills review submissions [--api-url <url>] [--token <token>]
 ai-skills review action <submission-id> --action <approve|publish> [--reason <text>]
 ai-skills export <skill-slug> --version <version> --platform <platform> --output <dir>
@@ -39,7 +39,7 @@ ai-skills token list
 ai-skills token revoke <token-id>
 ```
 
-`search`, `info`, `whoami`, `submit`, `review`, `export`, and `token` read `AI_SKILLS_TOKEN` when `--token` is not passed. `submit` validates and scans locally before sending package text entries to the API. `export` downloads server-authorized bundle content, verifies byte size and SHA-256 against release metadata, and writes normalized package paths under the requested output directory. `token create` prints the plaintext API token only once. Durable platform-secret storage, browser login, install/update/rollback, and archive packaging are still planned.
+`validate`, `scan`, and `submit` accept a manifest file, package directory, or local `.zip` package. `search`, `info`, `whoami`, `submit`, `review`, `export`, and `token` read `AI_SKILLS_TOKEN` when `--token` is not passed. `submit` validates and scans locally before sending normalized package text entries to the API. `export` downloads server-authorized bundle content, verifies byte size and SHA-256 against release metadata, and writes normalized package paths under the requested output directory. `token create` prints the plaintext API token only once. Durable platform-secret storage, browser login, install/update/rollback, and archive creation are still planned.
 
 Common scopes:
 
