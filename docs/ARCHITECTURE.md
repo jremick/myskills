@@ -117,14 +117,26 @@ sequenceDiagram
   end
 ```
 
+## Implementation Choices
+
+Initial choices:
+
+- Runtime: Node.js first, with Fastify for the API service.
+- Database: Postgres with Drizzle schema and SQL migrations.
+- Queue: Postgres-backed `jobs` table first; no Redis dependency until scan volume requires it.
+- Storage: S3-compatible object storage interface, with MinIO in local Docker Compose.
+- Search: Postgres full-text search first.
+- MCP: official TypeScript MCP SDK when the API authorization model is stable.
+
+These choices keep the open-source setup portable and avoid early vendor lock-in.
+
 ## Deployment Shape
 
 The first production-friendly path should support:
 
 - Docker Compose for self-hosted local and small-team deployments.
 - Postgres and S3-compatible object storage.
-- Worker or Node runtime for API depending on framework fit.
+- Node runtime for the first production path. Worker/serverless deployment can be evaluated after auth, streaming, object storage, and MCP constraints are proven.
 - Optional managed hosting recipes for Cloudflare, Fly.io, Railway, Render, or Vercel.
 
 The app should not require any single vendor to run.
-

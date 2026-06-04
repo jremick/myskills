@@ -14,26 +14,29 @@ Acceptance:
 - Privacy and structure checks pass.
 - Prior prototype reviewed without copying private source into this repo.
 
-## Milestone 1: Backend Foundation
+## Milestone 1: Backend Foundation Vertical Slice
 
-Goal: establish the proper backend.
+Goal: prove the proper backend with a thin, runnable vertical slice.
 
 Deliverables:
 
-- TypeScript API service scaffold.
-- Postgres migrations for identity, registry, packages, submissions, reviews, scans, and audit.
-- Object storage abstraction with local filesystem and S3-compatible adapters.
-- Background job runner for validation and scanning.
+- TypeScript workspace packages under `apps/api`, `packages/core`, `packages/auth`, and `packages/skill-package`.
+- Fastify API scaffold.
+- Postgres migrations for users, roles, settings, skills, versions, platform variants, artifacts, scan runs/findings, jobs, and audit events.
 - Seed data and local Docker Compose.
-- Integration tests for DB-backed skill search and artifact metadata.
+- Package manifest validation and basic package risk scanning.
+- API tests for health, auth-required `/v1/me`, and public approved skill search.
 
 Acceptance:
 
-- `npm run check` plus API tests pass.
+- `npm run check` passes.
 - A skill package can be created as a DB record with an artifact reference.
 - No Git repository is required for registry operation.
+- Local setup can run Postgres plus object storage through Docker Compose.
 
-## Milestone 2: Auth And User Management
+Current status: in progress. The first API and schema slice exists; artifact delivery, real auth flows, and scan jobs are still future work.
+
+## Milestone 2: Auth And User Management Foundation
 
 Goal: replace external identity assumptions with direct user management.
 
@@ -46,6 +49,7 @@ Deliverables:
 - Roles and scoped permissions.
 - MFA with TOTP and recovery codes.
 - Optional provider mapping spike.
+- Hashed scoped API tokens for CLI and MCP.
 
 Acceptance:
 
@@ -53,8 +57,9 @@ Acceptance:
 - Users can register only according to instance policy.
 - MFA-protected user flows pass.
 - API, web, CLI, and MCP use the same user/role decisions.
+- Disabled users and revoked tokens fail immediately.
 
-## Milestone 3: Package Validation And Registry MVP
+## Milestone 3: Package Validation, Submission, And Registry MVP
 
 Goal: make skills safe and useful enough to publish privately.
 
@@ -66,6 +71,7 @@ Deliverables:
 - Secret scanning and risky-content scanning.
 - Drafts, submissions, review queue, approval, publish, deprecate, revoke.
 - Search, detail, and authorized bundle delivery.
+- Background scan jobs and immutable artifact records.
 
 Acceptance:
 
@@ -146,4 +152,3 @@ Acceptance:
 - Secret scan passes.
 - Public docs contain no private-source carryover.
 - First public release tag is reproducible.
-

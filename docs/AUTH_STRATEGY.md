@@ -22,6 +22,14 @@ Better Auth is the current candidate for the TypeScript implementation. Its curr
 
 This is a planning decision, not a permanent lock-in. The first implementation milestone should spike Better Auth against the selected API/web runtime before committing broadly.
 
+Spike acceptance:
+
+- Works with the Node/Fastify API runtime or has a clean boundary through a dedicated auth handler.
+- Uses Postgres without forcing a second canonical user store.
+- Supports email/password, verification, password reset, admin/role controls, and two-factor plugins.
+- Can coexist with CLI/API token flows.
+- Does not make an external provider the source of application authorization.
+
 ## Required Product Behavior
 
 ### Registration
@@ -95,4 +103,3 @@ No Cloudflare feature should be required for the core open-source app.
 - Provider mapping tests for unmapped, mapped, downgraded, and revoked identities.
 - CLI token tests for storage, refresh, revocation, and scope denial.
 - API, web, and MCP authorization parity tests.
-

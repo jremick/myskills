@@ -6,6 +6,9 @@ const requiredPaths = [
   "README.md",
   "AGENTS.md",
   "LEARNING.md",
+  ".env.example",
+  "docker-compose.yml",
+  "tsconfig.base.json",
   "docs/PRODUCT_BRIEF.md",
   "docs/ARCHITECTURE.md",
   "docs/AUTH_STRATEGY.md",
@@ -16,6 +19,10 @@ const requiredPaths = [
   "docs/adr/0001-proper-backend.md",
   "docs/adr/0002-first-party-auth.md",
   "apps/api/README.md",
+  "apps/api/drizzle.config.ts",
+  "apps/api/migrations/0000_initial_foundation.sql",
+  "apps/api/src/app.ts",
+  "apps/api/src/db/schema.ts",
   "apps/web/README.md",
   "apps/cli/README.md",
   "apps/mcp/README.md",
@@ -35,4 +42,3 @@ if (missing.length > 0) {
 }
 
 console.log("Structure check passed.");
-

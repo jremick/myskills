@@ -5,51 +5,57 @@ Last updated: 2026-06-04
 
 This is the initial logical model. It should become migrations once the implementation stack is selected.
 
+## Milestone Scope
+
+M1 tables are the thin backend proof. M2 tables harden auth and submissions. Later tables wait until product semantics are clearer.
+
 ## Identity
 
-- `users`: primary application users.
-- `identities`: linked provider identities such as email/password, OIDC, SAML, GitHub, Google, or Cloudflare Access.
-- `sessions`: browser and API sessions.
-- `mfa_factors`: TOTP, passkey, recovery-code, and future factors.
-- `api_tokens`: scoped tokens for CLI, automation, and MCP clients.
-- `roles`: global and scoped roles.
-- `role_assignments`: user to role mappings, optionally scoped to organization, team, or skill.
+- M1 `users`: primary application users.
+- M2 `identities`: linked provider identities such as email/password, OIDC, SAML, GitHub, Google, or Cloudflare Access.
+- M2 `sessions`: browser and API sessions.
+- M2 `mfa_factors`: TOTP, passkey, recovery-code, and future factors.
+- M2 `api_tokens`: scoped hashed tokens for CLI, automation, and MCP clients.
+- M1 `roles`: global and scoped roles.
+- M1 `role_assignments`: user to role mappings, initially instance-scoped.
 
 ## Registry
 
-- `skills`: stable skill identity, slug, title, summary, owner, visibility, and lifecycle.
-- `skill_versions`: semantic versions and release notes.
-- `skill_platform_variants`: target runtime metadata such as Codex, Claude, ChatGPT, generic prompt pack, or MCP resource bundle.
-- `skill_artifacts`: object storage references, checksums, sizes, content type, and retention metadata.
-- `skill_dependencies`: optional relationships between skills.
-- `skill_examples`: examples and expected use cases.
-- `skill_tags`: searchable taxonomy.
+- M1 `skills`: stable skill identity, slug, title, summary, owner, visibility, and lifecycle.
+- M1 `skill_versions`: semantic versions and release notes.
+- M1 `skill_platform_variants`: target runtime metadata such as Codex, Claude, ChatGPT, generic prompt pack, or MCP resource bundle.
+- M1 `skill_artifacts`: object storage references, checksums, sizes, content type, and retention metadata.
+- Later `skill_dependencies`: optional relationships between skills.
+- Later `skill_examples`: examples and expected use cases.
+- M1 `skill_tags`: searchable taxonomy.
 
 ## Submissions And Review
 
-- `drafts`: private author workspace records.
-- `submissions`: review queue entries.
-- `submission_artifacts`: uploaded package archive and extracted normalized files.
-- `reviews`: maintainer decisions, requested changes, comments, and approvals.
-- `lifecycle_events`: approve, publish, deprecate, revoke, archive, delete, restore.
-- `scan_runs`: validation and security scan executions.
-- `scan_findings`: structured validation, secret, safety, dependency, and policy findings.
+- M2 `drafts`: private author workspace records.
+- M2 `submissions`: review queue entries.
+- M2 `submission_artifacts`: uploaded package archive and extracted normalized files.
+- M2 `reviews`: maintainer decisions, requested changes, comments, and approvals.
+- M2 `lifecycle_events`: approve, publish, deprecate, revoke, archive, delete, restore.
+- M1 `scan_runs`: validation and security scan executions.
+- M1 `scan_findings`: structured validation, secret, safety, dependency, and policy findings.
 
 ## Usage And Audit
 
-- `install_records`: user, skill version, platform, target, status, and client metadata.
-- `download_events`: package delivery records.
-- `mcp_clients`: optional registered clients.
-- `mcp_tool_events`: tool calls and decisions.
-- `audit_events`: security-relevant events with sanitized details.
-- `notifications`: user-facing events and delivery status.
+- Later `install_records`: user, skill version, platform, target, status, and client metadata.
+- Later `download_events`: package delivery records.
+- Later `mcp_clients`: optional registered clients.
+- Later `mcp_tool_events`: tool calls and decisions.
+- M1 `audit_events`: security-relevant events with sanitized details.
+- Later `notifications`: user-facing events and delivery status.
 
 ## Instance Settings
 
-- `settings`: registration mode, public browsing policy, default retention, upload limits.
-- `provider_configs`: non-secret provider metadata. Secrets live in secret stores.
-- `provider_role_mappings`: explicit claim-to-role mappings.
-- `storage_configs`: object storage metadata.
+- M1 `settings`: registration mode, public browsing policy, default retention, upload limits.
+- M2 `provider_configs`: non-secret provider metadata. Secrets live in secret stores.
+- M2 `provider_role_mappings`: explicit claim-to-role mappings.
+- Later `storage_configs`: object storage metadata.
+
+Organization and team scoped visibility are intentionally deferred until the ownership model is designed. The first implementation uses single-instance roles plus public, authenticated, and private visibility.
 
 ## Key Constraints
 
@@ -59,4 +65,3 @@ This is the initial logical model. It should become migrations once the implemen
 - Approved releases point only at scan-passed artifacts.
 - Revoked skills are not discoverable through search and are blocked at delivery.
 - Authorization denial should avoid revealing whether a restricted skill exists unless instance policy explicitly allows that visibility.
-

@@ -9,11 +9,14 @@ API, web, CLI, and MCP must ask the same backend for authorization. No client su
 
 ## API Surface
 
-Initial REST-style endpoints:
+Milestone 1 REST endpoints:
 
 - `GET /health`
 - `GET /v1/me`
 - `GET /v1/skills`
+
+Milestone 2-3 REST endpoints:
+
 - `GET /v1/skills/:slug`
 - `GET /v1/skills/:slug/releases/:version`
 - `GET /v1/skills/:slug/releases/:version/bundle?platform=...`
@@ -96,4 +99,3 @@ Start with a platform-neutral manifest plus one practical payload target:
 - CLI smoke tests against a local API and fixture data.
 - MCP initialize, tools/list, and tools/call tests.
 - Denied-access tests prove restricted skills are not exposed through search, info, bundle, CLI, or MCP.
-

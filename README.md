@@ -50,7 +50,25 @@ scripts/
 
 The backend is not a Git repository. GitHub can be integrated later for importing skill packages, opening review PRs, syncing examples, or publishing releases, but the canonical product state belongs in the application database and artifact store.
 
-## Initial Commands
+## Local Setup
+
+```bash
+npm install
+cp .env.example .env
+npm run docker:up
+npm run db:migrate
+npm run db:seed
+npm run dev:api
+```
+
+The API defaults to `http://localhost:3001`.
+
+```bash
+curl http://localhost:3001/health
+curl http://localhost:3001/v1/skills
+```
+
+## Verification
 
 ```bash
 npm run check
@@ -58,5 +76,4 @@ npm run check
 
 ## Current Status
 
-This is the initial private scaffold. The next milestone is the first implementation slice: database schema, auth baseline, package model, and a minimal API plus CLI smoke path.
-
+This is the first backend foundation slice. It has workspace packages, a Fastify API, Drizzle/Postgres schema and migration, Docker Compose for Postgres plus S3-compatible object storage, seed data, package manifest validation, basic package risk scanning, and deterministic checks.

@@ -5,17 +5,26 @@
   "description": "Open-source skill registry, sharing, installation, API, MCP, and CLI platform for AI agent skills.",
   "type": "module",
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
-    "check": "npm run check:structure && npm run check:privacy",
+    "build": "npm run build --workspaces --if-present",
+    "audit:prod": "npm audit --omit=dev",
+    "check": "npm run check:structure && npm run check:privacy && npm run scan:secrets && npm run audit:prod && npm run build && npm run test",
     "check:privacy": "node scripts/check-privacy.mjs",
-    "check:structure": "node scripts/check-structure.mjs"
+    "check:structure": "node scripts/check-structure.mjs",
+    "db:generate": "npm run db:generate -w @ai-skills-share/api",
+    "db:migrate": "npm run db:migrate -w @ai-skills-share/api",
+    "db:seed": "npm run db:seed -w @ai-skills-share/api",
+    "dev:api": "npm run dev -w @ai-skills-share/api",
+    "docker:down": "docker compose down",
+    "docker:up": "docker compose up -d postgres minio",
+    "scan:secrets": "node scripts/scan-secrets.mjs",
+    "test": "npm test --workspaces --if-present"
   },
   "engines": {
     "node": ">=20"
   },
   "packageManager": "npm@11.12.1"
 }
-
