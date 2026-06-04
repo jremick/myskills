@@ -5,6 +5,9 @@ import {
   apiTokens,
   authSessions,
   instanceSettings,
+  mfaChallenges,
+  mfaFactors,
+  mfaRecoveryCodes,
   passwordCredentials,
   roleAssignments,
   users,
@@ -15,11 +18,17 @@ import type {
   AuthStore,
   AuthUserRecord,
   AuthUserWithApiToken,
+  AuthUserWithSession,
   AuthUserWithPassword,
   CreateApiTokenInput,
+  CreateMfaChallengeInput,
+  CreateMfaTotpFactorInput,
   CreateSessionInput,
   CreateUserWithPasswordInput,
   CreateUserWithPasswordResult,
+  MfaChallengeRecord,
+  MfaChallengeWithUser,
+  MfaTotpFactorRecord,
 } from "./types.js";
 
 export class PostgresAuthStore implements AuthStore {
@@ -84,14 +93,18 @@ export class PostgresAuthStore implements AuthStore {
   }
 
   async createSession(input: CreateSessionInput): Promise<void> {
-    await this.db.insert(authSessions).values(input);
+    await this.db.insert(authSessions).values({
+      ...input,
+      mfaVerifiedAt: input.mfaVerifiedAt ?? null,
+    });
   }
 
-  async findUserBySessionTokenHash(tokenHash: string, now = new Date()): Promise<AuthUserRecord | null> {
+  async findUserBySessionTokenHash(tokenHash: string, now = new Date()): Promise<AuthUserWithSession | null> {
     const [row] = await this.db
       .select({
         user: users,
         sessionId: authSessions.id,
+        sessionMfaVerifiedAt: authSessions.mfaVerifiedAt,
       })
       .from(authSessions)
       .innerJoin(users, eq(users.id, authSessions.userId))
@@ -105,7 +118,7 @@ export class PostgresAuthStore implements AuthStore {
       return null;
     }
     await this.db.update(authSessions).set({ lastUsedAt: now }).where(eq(authSessions.id, row.sessionId));
-    return { ...toRecord(row.user), roles: await this.rolesForUser(row.user.id) };
+    return { ...toRecord(row.user), roles: await this.rolesForUser(row.user.id), sessionMfaVerifiedAt: row.sessionMfaVerifiedAt };
   }
 
   async revokeSessionByTokenHash(tokenHash: string): Promise<void> {
@@ -125,6 +138,7 @@ export class PostgresAuthStore implements AuthStore {
         tokenHash: input.tokenHash,
         scopes: input.scopes,
         expiresAt: input.expiresAt,
+        mfaVerifiedAt: input.mfaVerifiedAt ?? null,
       })
       .returning();
     if (!token) {
@@ -148,6 +162,7 @@ export class PostgresAuthStore implements AuthStore {
         user: users,
         tokenId: apiTokens.id,
         scopes: apiTokens.scopes,
+        tokenMfaVerifiedAt: apiTokens.mfaVerifiedAt,
       })
       .from(apiTokens)
       .innerJoin(users, eq(users.id, apiTokens.userId))
@@ -166,6 +181,7 @@ export class PostgresAuthStore implements AuthStore {
       roles: await this.rolesForUser(row.user.id),
       apiTokenId: row.tokenId,
       apiTokenScopes: parseApiTokenScopes(row.scopes),
+      apiTokenMfaVerifiedAt: row.tokenMfaVerifiedAt,
     };
   }
 
@@ -178,6 +194,155 @@ export class PostgresAuthStore implements AuthStore {
     return token ? toApiTokenRecord(token) : null;
   }
 
+  async countEnabledMfaFactors(userId: string): Promise<number> {
+    const rows = await this.db
+      .select({ id: mfaFactors.id })
+      .from(mfaFactors)
+      .where(and(eq(mfaFactors.userId, userId), eq(mfaFactors.status, "enabled")));
+    return rows.length;
+  }
+
+  async createMfaTotpFactor(input: CreateMfaTotpFactorInput): Promise<MfaTotpFactorRecord> {
+    const [factor] = await this.db
+      .insert(mfaFactors)
+      .values({
+        userId: input.userId,
+        label: input.label,
+        secretCiphertext: input.secretCiphertext,
+      })
+      .returning();
+    if (!factor) {
+      throw new Error("MFA factor insert failed.");
+    }
+    return toMfaTotpFactorRecord(factor);
+  }
+
+  async listMfaTotpFactorsForUser(userId: string): Promise<MfaTotpFactorRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(mfaFactors)
+      .where(eq(mfaFactors.userId, userId))
+      .orderBy(mfaFactors.createdAt);
+    return rows.filter((factor) => factor.status !== "disabled").map(toMfaTotpFactorRecord);
+  }
+
+  async listEnabledMfaTotpFactorsForUser(userId: string): Promise<MfaTotpFactorRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(mfaFactors)
+      .where(and(eq(mfaFactors.userId, userId), eq(mfaFactors.status, "enabled")))
+      .orderBy(mfaFactors.createdAt);
+    return rows.map(toMfaTotpFactorRecord);
+  }
+
+  async findMfaTotpFactorForUser(input: { userId: string; factorId: string }): Promise<MfaTotpFactorRecord | null> {
+    const [factor] = await this.db
+      .select()
+      .from(mfaFactors)
+      .where(and(eq(mfaFactors.userId, input.userId), eq(mfaFactors.id, input.factorId)))
+      .limit(1);
+    return factor ? toMfaTotpFactorRecord(factor) : null;
+  }
+
+  async enableMfaTotpFactor(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<MfaTotpFactorRecord | null> {
+    const now = new Date();
+    const [factor] = await this.db
+      .update(mfaFactors)
+      .set({
+        status: "enabled",
+        enabledAt: now,
+        disabledAt: null,
+        lastUsedCounter: input.lastUsedCounter,
+        updatedAt: now,
+      })
+      .where(and(eq(mfaFactors.userId, input.userId), eq(mfaFactors.id, input.factorId)))
+      .returning();
+    return factor ? toMfaTotpFactorRecord(factor) : null;
+  }
+
+  async updateMfaTotpFactorCounter(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<void> {
+    await this.db
+      .update(mfaFactors)
+      .set({
+        lastUsedCounter: input.lastUsedCounter,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(mfaFactors.userId, input.userId), eq(mfaFactors.id, input.factorId)));
+  }
+
+  async replaceMfaRecoveryCodes(input: { userId: string; codeHashes: string[] }): Promise<void> {
+    await this.db.delete(mfaRecoveryCodes).where(eq(mfaRecoveryCodes.userId, input.userId));
+    if (input.codeHashes.length === 0) {
+      return;
+    }
+    await this.db.insert(mfaRecoveryCodes).values(input.codeHashes.map((codeHash) => ({
+      userId: input.userId,
+      codeHash,
+    })));
+  }
+
+  async countUnusedMfaRecoveryCodes(userId: string): Promise<number> {
+    const rows = await this.db
+      .select({ id: mfaRecoveryCodes.id })
+      .from(mfaRecoveryCodes)
+      .where(and(eq(mfaRecoveryCodes.userId, userId), isNull(mfaRecoveryCodes.usedAt)));
+    return rows.length;
+  }
+
+  async consumeMfaRecoveryCode(input: { userId: string; codeHash: string }): Promise<boolean> {
+    const [code] = await this.db
+      .update(mfaRecoveryCodes)
+      .set({ usedAt: new Date() })
+      .where(and(
+        eq(mfaRecoveryCodes.userId, input.userId),
+        eq(mfaRecoveryCodes.codeHash, input.codeHash),
+        isNull(mfaRecoveryCodes.usedAt),
+      ))
+      .returning({ id: mfaRecoveryCodes.id });
+    return Boolean(code);
+  }
+
+  async createMfaChallenge(input: CreateMfaChallengeInput): Promise<MfaChallengeRecord> {
+    const [challenge] = await this.db
+      .insert(mfaChallenges)
+      .values(input)
+      .returning();
+    if (!challenge) {
+      throw new Error("MFA challenge insert failed.");
+    }
+    return toMfaChallengeRecord(challenge);
+  }
+
+  async findMfaChallengeByTokenHash(tokenHash: string, now = new Date()): Promise<MfaChallengeWithUser | null> {
+    const [row] = await this.db
+      .select({
+        challenge: mfaChallenges,
+        user: users,
+      })
+      .from(mfaChallenges)
+      .innerJoin(users, eq(users.id, mfaChallenges.userId))
+      .where(and(
+        eq(mfaChallenges.tokenHash, tokenHash),
+        isNull(mfaChallenges.usedAt),
+        gt(mfaChallenges.expiresAt, now),
+      ))
+      .limit(1);
+    if (!row) {
+      return null;
+    }
+    return {
+      ...toMfaChallengeRecord(row.challenge),
+      user: { ...toRecord(row.user), roles: await this.rolesForUser(row.user.id) },
+    };
+  }
+
+  async markMfaChallengeUsed(input: { challengeId: string; usedAt: Date }): Promise<void> {
+    await this.db
+      .update(mfaChallenges)
+      .set({ usedAt: input.usedAt })
+      .where(and(eq(mfaChallenges.id, input.challengeId), isNull(mfaChallenges.usedAt)));
+  }
+
   private async rolesForUser(userId: string): Promise<Role[]> {
     const rows = await this.db
       .select({ role: roleAssignments.role })
@@ -185,6 +350,33 @@ export class PostgresAuthStore implements AuthStore {
       .where(eq(roleAssignments.userId, userId));
     return rows.map((row) => row.role);
   }
+}
+
+function toMfaTotpFactorRecord(factor: typeof mfaFactors.$inferSelect): MfaTotpFactorRecord {
+  return {
+    id: factor.id,
+    userId: factor.userId,
+    type: factor.type,
+    status: factor.status,
+    label: factor.label,
+    secretCiphertext: factor.secretCiphertext,
+    enabledAt: factor.enabledAt,
+    disabledAt: factor.disabledAt,
+    lastUsedCounter: factor.lastUsedCounter,
+    createdAt: factor.createdAt,
+    updatedAt: factor.updatedAt,
+  };
+}
+
+function toMfaChallengeRecord(challenge: typeof mfaChallenges.$inferSelect): MfaChallengeRecord {
+  return {
+    id: challenge.id,
+    userId: challenge.userId,
+    tokenHash: challenge.tokenHash,
+    expiresAt: challenge.expiresAt,
+    usedAt: challenge.usedAt,
+    createdAt: challenge.createdAt,
+  };
 }
 
 function toRecord(user: typeof users.$inferSelect): Omit<AuthUserRecord, "roles"> {

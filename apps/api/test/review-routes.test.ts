@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { hashPassword, type Role } from "@ai-skills-share/auth";
+import { generateTotpCode, hashPassword, type Role } from "@ai-skills-share/auth";
 import { buildApp } from "../src/app.js";
 import { AuthService } from "../src/auth/service.js";
 import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
@@ -52,7 +52,7 @@ test("maintainers can approve and publish a clean public submission", async (t) 
   const app = buildReviewApp({ authStore, submissionStore });
   t.after(() => app.close());
   const authorToken = await addAndLogin(app, authStore, "author@example.com", ["author"]);
-  const maintainerToken = await addAndLogin(app, authStore, "maintainer@example.com", ["maintainer"]);
+  const maintainerToken = await addAndLoginWithMfa(app, authStore, "maintainer@example.com", ["maintainer"]);
 
   const submitResponse = await app.inject({
     method: "POST",
@@ -131,7 +131,7 @@ test("warning submissions cannot be approved or published", async (t) => {
   const app = buildReviewApp({ authStore, submissionStore });
   t.after(() => app.close());
   const authorToken = await addAndLogin(app, authStore, "author@example.com", ["author"]);
-  const maintainerToken = await addAndLogin(app, authStore, "maintainer@example.com", ["maintainer"]);
+  const maintainerToken = await addAndLoginWithMfa(app, authStore, "maintainer@example.com", ["maintainer"]);
   const payload = cleanSubmissionPayload();
   payload.files.push({
     path: "package.json",
@@ -172,7 +172,7 @@ test("release routes hide unpublished and private releases consistently", async 
   const app = buildReviewApp({ authStore, submissionStore });
   t.after(() => app.close());
   const authorToken = await addAndLogin(app, authStore, "author@example.com", ["author"]);
-  const maintainerToken = await addAndLogin(app, authStore, "maintainer@example.com", ["maintainer"]);
+  const maintainerToken = await addAndLoginWithMfa(app, authStore, "maintainer@example.com", ["maintainer"]);
 
   const unpublishedSubmit = await app.inject({
     method: "POST",
@@ -221,7 +221,7 @@ test("invalid review actions are rejected before state changes", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const app = buildReviewApp({ authStore, submissionStore });
   t.after(() => app.close());
-  const maintainerToken = await addAndLogin(app, authStore, "maintainer@example.com", ["maintainer"]);
+  const maintainerToken = await addAndLoginWithMfa(app, authStore, "maintainer@example.com", ["maintainer"]);
 
   const response = await app.inject({
     method: "POST",
@@ -268,7 +268,57 @@ async function addAndLogin(
     },
   });
   assert.equal(response.statusCode, 200);
+  assert.equal(response.json().mfaRequired, false);
   return response.json().token;
+}
+
+async function addAndLoginWithMfa(
+  app: ReturnType<typeof buildApp>,
+  authStore: MemoryAuthStore,
+  email: string,
+  roles: Role[],
+): Promise<string> {
+  const setupSession = await addAndLogin(app, authStore, email, roles);
+  const enrollment = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/totp/enroll",
+    headers: { authorization: `Bearer ${setupSession}` },
+    payload: {
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(enrollment.statusCode, 201);
+  const confirm = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/totp/confirm",
+    headers: { authorization: `Bearer ${setupSession}` },
+    payload: {
+      factorId: enrollment.json().enrollment.factorId,
+      code: generateTotpCode(enrollment.json().enrollment.secret),
+    },
+  });
+  assert.equal(confirm.statusCode, 200);
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email,
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(login.statusCode, 200);
+  assert.equal(login.json().mfaRequired, true);
+  const verify = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/verify",
+    payload: {
+      challengeToken: login.json().challengeToken,
+      recoveryCode: confirm.json().mfa.recoveryCodes[0],
+    },
+  });
+  assert.equal(verify.statusCode, 200);
+  assert.equal(verify.json().user.mfaVerified, true);
+  return verify.json().token;
 }
 
 function cleanSubmissionPayload(input: {

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   integer,
+  index,
   jsonb,
   pgEnum,
   pgTable,
@@ -18,6 +19,8 @@ export const visibilityScope = pgEnum("visibility_scope", ["public", "authentica
 export const reviewStatus = pgEnum("review_status", ["unreviewed", "changes-requested", "approved", "rejected"]);
 export const securityStatus = pgEnum("security_status", ["not-run", "passed", "warning", "failed"]);
 export const jobStatus = pgEnum("job_status", ["queued", "running", "succeeded", "failed"]);
+export const mfaFactorType = pgEnum("mfa_factor_type", ["totp"]);
+export const mfaFactorStatus = pgEnum("mfa_factor_status", ["pending", "enabled", "disabled"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -46,6 +49,7 @@ export const authSessions = pgTable("auth_sessions", {
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   tokenHash: text("token_hash").notNull().unique(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  mfaVerifiedAt: timestamp("mfa_verified_at", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -59,10 +63,49 @@ export const apiTokens = pgTable("api_tokens", {
   tokenHash: text("token_hash").notNull().unique(),
   scopes: jsonb("scopes").notNull().default([]),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  mfaVerifiedAt: timestamp("mfa_verified_at", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const mfaFactors = pgTable("mfa_factors", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: mfaFactorType("type").notNull().default("totp"),
+  status: mfaFactorStatus("status").notNull().default("pending"),
+  label: text("label").notNull().default("Authenticator app"),
+  secretCiphertext: text("secret_ciphertext").notNull(),
+  enabledAt: timestamp("enabled_at", { withTimezone: true }),
+  disabledAt: timestamp("disabled_at", { withTimezone: true }),
+  lastUsedCounter: integer("last_used_counter"),
+  ...timestamps,
+}, (table) => [
+  index("mfa_factors_user_idx").on(table.userId),
+  index("mfa_factors_enabled_idx").on(table.userId, table.status),
+]);
+
+export const mfaRecoveryCodes = pgTable("mfa_recovery_codes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull().unique(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("mfa_recovery_codes_user_idx").on(table.userId),
+]);
+
+export const mfaChallenges = pgTable("mfa_challenges", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("mfa_challenges_user_idx").on(table.userId),
+  index("mfa_challenges_active_idx").on(table.tokenHash, table.expiresAt).where(sql`${table.usedAt} IS NULL`),
+]);
 
 export const roles = pgTable("roles", {
   id: uuid("id").primaryKey().defaultRandom(),

@@ -1,10 +1,16 @@
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { AppError } from "@ai-skills-share/core";
 import {
   createApiToken,
+  createRecoveryCodes,
   createSessionToken,
+  createTotpSecret,
+  createTotpUri,
+  hashRecoveryCode,
   hashApiToken,
   hashPassword,
   hashSessionToken,
+  verifyTotpCode,
   verifyPassword,
   type AuthenticatedUser,
 } from "@ai-skills-share/auth";
@@ -16,12 +22,16 @@ import {
   type AuthResponseUser,
   type AuthStore,
   type AuthUserRecord,
+  type MfaTotpFactorRecord,
 } from "./types.js";
 
 const DEFAULT_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
+const DEFAULT_MFA_CHALLENGE_TTL_MS = 1000 * 60 * 5;
 const DEFAULT_API_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 90;
 const MAX_API_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 365;
 const API_TOKEN_PREFIX_LENGTH = 12;
+const DEFAULT_TOTP_ISSUER = "AI Skills Share";
+const DEV_AUTH_SECRET = "dev-only-ai-skills-share-auth-secret-change-before-production";
 
 export interface RegisterInput {
   email: string;
@@ -33,6 +43,17 @@ export interface RegisterInput {
 export interface LoginInput {
   email: string;
   password: string;
+  ip?: string;
+}
+
+export type LoginResult =
+  | { mfaRequired: false; token: string; expiresAt: string; user: AuthResponseUser }
+  | { mfaRequired: true; challengeToken: string; expiresAt: string; user: AuthResponseUser };
+
+export interface VerifyMfaChallengeInput {
+  challengeToken: string;
+  code?: string;
+  recoveryCode?: string;
   ip?: string;
 }
 
@@ -57,6 +78,43 @@ export interface CreatedApiToken extends SafeApiToken {
   token: string;
 }
 
+export interface MfaStatus {
+  totpEnabled: boolean;
+  recoveryCodesRemaining: number;
+  factors: SafeMfaFactor[];
+}
+
+export interface SafeMfaFactor {
+  id: string;
+  type: "totp";
+  status: "pending" | "enabled" | "disabled";
+  label: string;
+  enabledAt: string | null;
+  createdAt: string;
+}
+
+export interface StartTotpEnrollmentInput {
+  password: string;
+  label?: string;
+}
+
+export interface TotpEnrollment {
+  factorId: string;
+  label: string;
+  secret: string;
+  otpauthUrl: string;
+}
+
+export interface ConfirmTotpEnrollmentInput {
+  factorId: string;
+  code: string;
+}
+
+export interface ConfirmTotpEnrollmentResult {
+  factor: SafeMfaFactor;
+  recoveryCodes: string[];
+}
+
 export interface AuthContext {
   user: AuthResponseUser;
   credential: {
@@ -71,8 +129,12 @@ export class AuthService {
     private readonly store: AuthStore,
     private readonly options: {
       sessionTtlMs?: number;
+      mfaChallengeTtlMs?: number;
+      mfaSecretKey?: string;
+      totpIssuer?: string;
       loginLimiter?: AuthRateLimiter;
       registrationLimiter?: AuthRateLimiter;
+      mfaLimiter?: AuthRateLimiter;
     } = {},
   ) {}
 
@@ -93,7 +155,7 @@ export class AuthService {
     return { status: "pending" };
   }
 
-  async login(input: LoginInput): Promise<{ token: string; expiresAt: string; user: AuthResponseUser }> {
+  async login(input: LoginInput): Promise<LoginResult> {
     const email = normalizeEmail(input.email);
     assertAllowed(this.options.loginLimiter, rateLimitKeys("login", email, input.ip));
     const user = await this.store.findUserByEmailWithPassword(email);
@@ -102,6 +164,21 @@ export class AuthService {
     }
     if (user.status !== "active" || !user.emailVerifiedAt) {
       throw new AppError("Account is not active.", "ACCOUNT_NOT_ACTIVE", 403);
+    }
+    if (await this.store.countEnabledMfaFactors(user.id) > 0) {
+      const challengeToken = createSessionToken();
+      const expiresAt = new Date(Date.now() + (this.options.mfaChallengeTtlMs ?? DEFAULT_MFA_CHALLENGE_TTL_MS));
+      await this.store.createMfaChallenge({
+        userId: user.id,
+        tokenHash: hashSessionToken(challengeToken),
+        expiresAt,
+      });
+      return {
+        mfaRequired: true,
+        challengeToken,
+        expiresAt: expiresAt.toISOString(),
+        user: responseUser(user, false),
+      };
     }
 
     const token = createSessionToken();
@@ -113,9 +190,44 @@ export class AuthService {
     });
 
     return {
+      mfaRequired: false,
       token,
       expiresAt: expiresAt.toISOString(),
-      user: responseUser(user),
+      user: responseUser(user, false),
+    };
+  }
+
+  async verifyMfaChallenge(input: VerifyMfaChallengeInput): Promise<{ token: string; expiresAt: string; user: AuthResponseUser }> {
+    const challengeToken = cleanOpaqueToken(input.challengeToken, "challengeToken");
+    const challengeHash = hashSessionToken(challengeToken);
+    assertAllowed(this.options.mfaLimiter, rateLimitKeys("mfa", challengeHash, input.ip));
+
+    const challenge = await this.store.findMfaChallengeByTokenHash(challengeHash);
+    if (!challenge || !isUsableAuthenticatedAccount(challenge.user)) {
+      throw invalidMfaCode();
+    }
+    const verifiedAt = new Date();
+    const valid = input.recoveryCode
+      ? await this.verifyRecoveryCode(challenge.user.id, input.recoveryCode)
+      : await this.verifyTotpForUser(challenge.user.id, input.code);
+    if (!valid) {
+      throw invalidMfaCode();
+    }
+
+    await this.store.markMfaChallengeUsed({ challengeId: challenge.id, usedAt: verifiedAt });
+    const token = createSessionToken();
+    const expiresAt = new Date(Date.now() + (this.options.sessionTtlMs ?? DEFAULT_SESSION_TTL_MS));
+    await this.store.createSession({
+      userId: challenge.user.id,
+      tokenHash: hashSessionToken(token),
+      expiresAt,
+      mfaVerifiedAt: verifiedAt,
+    });
+
+    return {
+      token,
+      expiresAt: expiresAt.toISOString(),
+      user: responseUser(challenge.user, true),
     };
   }
 
@@ -131,7 +243,7 @@ export class AuthService {
     const sessionUser = await this.store.findUserBySessionTokenHash(hashSessionToken(token));
     if (sessionUser && isUsableAuthenticatedAccount(sessionUser)) {
       return {
-        user: responseUser(sessionUser),
+        user: responseUser(sessionUser, Boolean(sessionUser.sessionMfaVerifiedAt)),
         credential: {
           kind: "session",
           scopes: [...apiTokenScopes],
@@ -141,7 +253,7 @@ export class AuthService {
     const apiTokenUser = await this.store.findUserByApiTokenHash(hashApiToken(token));
     if (apiTokenUser && isUsableAuthenticatedAccount(apiTokenUser)) {
       return {
-        user: responseUser(apiTokenUser),
+        user: responseUser(apiTokenUser, Boolean(apiTokenUser.apiTokenMfaVerifiedAt)),
         credential: {
           kind: "api_token",
           tokenId: apiTokenUser.apiTokenId,
@@ -158,7 +270,7 @@ export class AuthService {
       return null;
     }
     const user = await this.store.findUserBySessionTokenHash(hashSessionToken(token));
-    return user && isUsableAuthenticatedAccount(user) ? responseUser(user) : null;
+    return user && isUsableAuthenticatedAccount(user) ? responseUser(user, Boolean(user.sessionMfaVerifiedAt)) : null;
   }
 
   async logout(header: string | undefined): Promise<void> {
@@ -170,14 +282,19 @@ export class AuthService {
 
   async createApiToken(actor: AuthResponseUser, input: CreateApiTokenRequest): Promise<CreatedApiToken> {
     const token = createApiToken();
+    const scopes = normalizeScopes(input.scopes);
+    if (requiresVerifiedMfaForApiToken(actor, scopes)) {
+      throw new AppError("MFA verification is required.", "MFA_VERIFICATION_REQUIRED", 403);
+    }
     const expiresAt = parseApiTokenExpiry(input.expiresAt);
     const record = await this.store.createApiToken({
       userId: actor.id,
       name: cleanTokenName(input.name),
       tokenPrefix: token.slice(0, API_TOKEN_PREFIX_LENGTH),
       tokenHash: hashApiToken(token),
-      scopes: normalizeScopes(input.scopes),
+      scopes,
       expiresAt,
+      mfaVerifiedAt: actor.mfaVerified ? new Date() : null,
     });
     return {
       ...safeApiToken(record),
@@ -196,9 +313,119 @@ export class AuthService {
     }
     return safeApiToken(token);
   }
+
+  async getMfaStatus(actor: AuthResponseUser): Promise<MfaStatus> {
+    const factors = await this.store.listMfaTotpFactorsForUser(actor.id);
+    return {
+      totpEnabled: factors.some((factor) => factor.status === "enabled"),
+      recoveryCodesRemaining: await this.store.countUnusedMfaRecoveryCodes(actor.id),
+      factors: factors.map(safeMfaFactor),
+    };
+  }
+
+  async startTotpEnrollment(actor: AuthResponseUser, input: StartTotpEnrollmentInput): Promise<TotpEnrollment> {
+    await this.assertCanManageMfa(actor, input.password);
+    const secret = createTotpSecret();
+    const label = cleanMfaLabel(input.label);
+    const factor = await this.store.createMfaTotpFactor({
+      userId: actor.id,
+      label,
+      secretCiphertext: encryptSecret(secret, this.mfaSecretKey()),
+    });
+    return {
+      factorId: factor.id,
+      label: factor.label,
+      secret,
+      otpauthUrl: createTotpUri({
+        issuer: this.options.totpIssuer ?? DEFAULT_TOTP_ISSUER,
+        accountName: actor.email,
+        secret,
+      }),
+    };
+  }
+
+  async confirmTotpEnrollment(actor: AuthResponseUser, input: ConfirmTotpEnrollmentInput): Promise<ConfirmTotpEnrollmentResult> {
+    await this.assertCanUseMfaManagementSession(actor);
+    const factor = await this.store.findMfaTotpFactorForUser({ userId: actor.id, factorId: cleanId(input.factorId, "factorId") });
+    if (!factor || factor.status !== "pending") {
+      throw new AppError("MFA factor not found.", "MFA_FACTOR_NOT_FOUND", 404);
+    }
+    const secret = decryptSecret(factor.secretCiphertext, this.mfaSecretKey());
+    const verification = verifyTotpCode(secret, input.code, { window: 1 });
+    if (!verification.valid || verification.counter === undefined) {
+      throw invalidMfaCode();
+    }
+    const enabled = await this.store.enableMfaTotpFactor({
+      userId: actor.id,
+      factorId: factor.id,
+      lastUsedCounter: verification.counter,
+    });
+    if (!enabled) {
+      throw new AppError("MFA factor not found.", "MFA_FACTOR_NOT_FOUND", 404);
+    }
+    const recoveryCodes = createRecoveryCodes();
+    await this.store.replaceMfaRecoveryCodes({
+      userId: actor.id,
+      codeHashes: recoveryCodes.map(hashRecoveryCode),
+    });
+    return {
+      factor: safeMfaFactor(enabled),
+      recoveryCodes,
+    };
+  }
+
+  private async assertCanManageMfa(actor: AuthResponseUser, password: string): Promise<void> {
+    await this.assertCanUseMfaManagementSession(actor);
+    const user = await this.store.findUserByEmailWithPassword(actor.email);
+    if (!user?.passwordHash || !(await verifyPassword(user.passwordHash, password))) {
+      throw new AppError("Invalid email or password.", "INVALID_CREDENTIALS", 401);
+    }
+  }
+
+  private async assertCanUseMfaManagementSession(actor: AuthResponseUser): Promise<void> {
+    const mfaEnabled = await this.store.countEnabledMfaFactors(actor.id);
+    if (mfaEnabled > 0 && !actor.mfaVerified) {
+      throw new AppError("MFA verification is required.", "MFA_VERIFICATION_REQUIRED", 403);
+    }
+  }
+
+  private async verifyTotpForUser(userId: string, code: string | undefined): Promise<boolean> {
+    if (!code) {
+      return false;
+    }
+    const factors = await this.store.listEnabledMfaTotpFactorsForUser(userId);
+    for (const factor of factors) {
+      const secret = decryptSecret(factor.secretCiphertext, this.mfaSecretKey());
+      const verification = verifyTotpCode(secret, code, { window: 1 });
+      if (verification.valid && verification.counter !== undefined && verification.counter > (factor.lastUsedCounter ?? -1)) {
+        await this.store.updateMfaTotpFactorCounter({
+          userId,
+          factorId: factor.id,
+          lastUsedCounter: verification.counter,
+        });
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private async verifyRecoveryCode(userId: string, recoveryCode: string): Promise<boolean> {
+    try {
+      return this.store.consumeMfaRecoveryCode({
+        userId,
+        codeHash: hashRecoveryCode(recoveryCode),
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  private mfaSecretKey(): string {
+    return this.options.mfaSecretKey ?? DEV_AUTH_SECRET;
+  }
 }
 
-function responseUser(user: AuthUserRecord): AuthResponseUser {
+function responseUser(user: AuthUserRecord, mfaVerified: boolean): AuthResponseUser {
   return {
     id: user.id,
     email: user.email,
@@ -206,7 +433,7 @@ function responseUser(user: AuthUserRecord): AuthResponseUser {
     status: user.status,
     roles: user.roles,
     emailVerified: Boolean(user.emailVerifiedAt),
-    mfaVerified: false,
+    mfaVerified,
   };
 }
 
@@ -267,6 +494,28 @@ function cleanTokenName(name: string): string {
   return name.trim().slice(0, 80);
 }
 
+function cleanMfaLabel(label: string | undefined): string {
+  if (label !== undefined && typeof label !== "string") {
+    throw new AppError("MFA label must be a string.", "INVALID_MFA_LABEL", 400);
+  }
+  const cleaned = (label ?? "Authenticator app").trim().slice(0, 80);
+  return cleaned || "Authenticator app";
+}
+
+function cleanId(id: string, field: string): string {
+  if (typeof id !== "string" || !/^[A-Za-z0-9-]{1,128}$/.test(id)) {
+    throw new AppError(`${field} is invalid.`, "INVALID_REQUEST_BODY", 400);
+  }
+  return id;
+}
+
+function cleanOpaqueToken(token: string, field: string): string {
+  if (typeof token !== "string" || !/^[A-Za-z0-9_-]{32,256}$/.test(token.trim())) {
+    throw new AppError(`${field} is invalid.`, "INVALID_REQUEST_BODY", 400);
+  }
+  return token.trim();
+}
+
 function normalizeScopes(scopes: ApiTokenScope[]): ApiTokenScope[] {
   if (!Array.isArray(scopes) || scopes.length === 0) {
     throw new AppError("At least one token scope is required.", "INVALID_TOKEN_SCOPES", 400);
@@ -310,6 +559,65 @@ function safeApiToken(token: ApiTokenRecord): SafeApiToken {
     lastUsedAt: token.lastUsedAt?.toISOString() ?? null,
     createdAt: token.createdAt.toISOString(),
   };
+}
+
+function safeMfaFactor(factor: MfaTotpFactorRecord): SafeMfaFactor {
+  return {
+    id: factor.id,
+    type: factor.type,
+    status: factor.status,
+    label: factor.label,
+    enabledAt: factor.enabledAt?.toISOString() ?? null,
+    createdAt: factor.createdAt.toISOString(),
+  };
+}
+
+function requiresVerifiedMfaForApiToken(actor: AuthResponseUser, scopes: ApiTokenScope[]): boolean {
+  if (actor.mfaVerified) {
+    return false;
+  }
+  const privilegedRole = actor.roles.some((role) => role === "owner" || role === "admin" || role === "maintainer");
+  const privilegedScope = scopes.some((scope) => scope === "review:read" || scope === "review:write");
+  return privilegedRole && privilegedScope;
+}
+
+function invalidMfaCode(): AppError {
+  return new AppError("Invalid MFA challenge or code.", "INVALID_MFA_CODE", 401);
+}
+
+function encryptSecret(plaintext: string, secretKey: string): string {
+  const iv = randomBytes(12);
+  const key = encryptionKey(secretKey);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return [
+    "v1",
+    iv.toString("base64url"),
+    tag.toString("base64url"),
+    ciphertext.toString("base64url"),
+  ].join(":");
+}
+
+function decryptSecret(encrypted: string, secretKey: string): string {
+  const parts = encrypted.split(":");
+  if (parts.length !== 4 || parts[0] !== "v1") {
+    throw new AppError("Stored MFA secret is invalid.", "MFA_SECRET_INVALID", 500);
+  }
+  const [, iv, tag, ciphertext] = parts;
+  const decipher = createDecipheriv("aes-256-gcm", encryptionKey(secretKey), Buffer.from(iv, "base64url"));
+  decipher.setAuthTag(Buffer.from(tag, "base64url"));
+  return Buffer.concat([
+    decipher.update(Buffer.from(ciphertext, "base64url")),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
+function encryptionKey(secretKey: string): Buffer {
+  if (typeof secretKey !== "string" || Buffer.byteLength(secretKey, "utf8") < 32) {
+    throw new AppError("AUTH_SECRET must be at least 32 bytes.", "AUTH_SECRET_REQUIRED", 500);
+  }
+  return createHash("sha256").update(secretKey, "utf8").digest();
 }
 
 export function asAuthenticatedUser(user: AuthResponseUser): AuthenticatedUser {

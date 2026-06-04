@@ -9,6 +9,8 @@ Implemented:
 - bcrypt password hashing helpers
 - opaque session token generation and hashing
 - opaque API token generation and hashing
+- TOTP generation and verification helpers
+- single-use recovery code generation and hashing helpers
 
 Planned contents:
 

@@ -2,7 +2,16 @@ import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import { AppError } from "@ai-skills-share/core";
 import { parseSkillManifest, type PackageInputFile } from "@ai-skills-share/skill-package";
 import type { ApiTokenScope } from "./auth/types.js";
-import type { AuthContext, AuthService, CreateApiTokenRequest, LoginInput, RegisterInput } from "./auth/service.js";
+import type {
+  AuthContext,
+  AuthService,
+  ConfirmTotpEnrollmentInput,
+  CreateApiTokenRequest,
+  LoginInput,
+  RegisterInput,
+  StartTotpEnrollmentInput,
+  VerifyMfaChallengeInput,
+} from "./auth/service.js";
 import type { ReviewAction, StoredSubmission, SubmissionActor } from "./submissions/types.js";
 import type { SubmissionService } from "./submissions/service.js";
 import type { SkillRepository } from "@ai-skills-share/core";
@@ -155,11 +164,55 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     });
   });
 
+  app.post("/v1/auth/mfa/verify", async (request) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    return options.authService.verifyMfaChallenge({
+      ...parseVerifyMfaChallengeInput(request.body),
+      ip: request.ip,
+    });
+  });
+
   app.post("/v1/auth/logout", async (request, reply) => {
     if (options.authService) {
       await options.authService.logout(request.headers.authorization);
     }
     return reply.code(204).send();
+  });
+
+  app.get("/v1/auth/mfa", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return { mfa: await options.authService.getMfaStatus(user) };
+  });
+
+  app.post("/v1/auth/mfa/totp/enroll", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    const enrollment = await options.authService.startTotpEnrollment(user, parseStartTotpEnrollmentInput(request.body));
+    return reply.code(201).send({ enrollment });
+  });
+
+  app.post("/v1/auth/mfa/totp/confirm", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return { mfa: await options.authService.confirmTotpEnrollment(user, parseConfirmTotpEnrollmentInput(request.body)) };
   });
 
   app.get("/v1/auth/api-tokens", async (request, reply) => {
@@ -279,7 +332,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     if (!options.submissionService) {
       throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
     }
-    const actor = await authenticateActor(options.authService, request.headers.authorization, "review:read");
+    const actor = await authenticateActor(options.authService, request.headers.authorization, "review:read", { mfaRequired: true });
     if (!actor) {
       return reply.code(401).send({
         error: {
@@ -299,7 +352,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     if (!options.submissionService) {
       throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
     }
-    const actor = await authenticateActor(options.authService, request.headers.authorization, "review:write");
+    const actor = await authenticateActor(options.authService, request.headers.authorization, "review:write", { mfaRequired: true });
     if (!actor) {
       return reply.code(401).send({
         error: {
@@ -319,16 +372,28 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   return app;
 }
 
-async function authenticateActor(authService: AuthService, authorization: string | undefined, scope: ApiTokenScope): Promise<SubmissionActor | null> {
+async function authenticateActor(
+  authService: AuthService,
+  authorization: string | undefined,
+  scope: ApiTokenScope,
+  options: { mfaRequired?: boolean } = {},
+): Promise<SubmissionActor | null> {
   const context = await authService.authenticateRequest(authorization);
   if (!context) {
     return null;
   }
   requireScope(context, scope);
+  if (options.mfaRequired && requiresMfaForRole(context) && !context.user.mfaVerified) {
+    throw new AppError("MFA verification is required.", "MFA_VERIFICATION_REQUIRED", 403);
+  }
   return {
     id: context.user.id,
     roles: context.user.roles,
   };
+}
+
+function requiresMfaForRole(context: AuthContext): boolean {
+  return context.user.roles.some((role) => role === "owner" || role === "admin" || role === "maintainer");
 }
 
 async function authenticateSessionUser(authService: AuthService, authorization: string | undefined) {
@@ -376,6 +441,36 @@ function parseLoginInput(input: unknown): LoginInput {
   return {
     email: requiredString(body.email, "email"),
     password: requiredString(body.password, "password"),
+  };
+}
+
+function parseVerifyMfaChallengeInput(input: unknown): VerifyMfaChallengeInput {
+  const body = parseJsonObject(input);
+  const code = optionalString(body.code, "code");
+  const recoveryCode = optionalString(body.recoveryCode, "recoveryCode");
+  if (Boolean(code) === Boolean(recoveryCode)) {
+    throw new AppError("Exactly one MFA code is required.", "INVALID_MFA_REQUEST", 400);
+  }
+  return {
+    challengeToken: requiredString(body.challengeToken, "challengeToken"),
+    code,
+    recoveryCode,
+  };
+}
+
+function parseStartTotpEnrollmentInput(input: unknown): StartTotpEnrollmentInput {
+  const body = parseJsonObject(input);
+  return {
+    password: requiredString(body.password, "password"),
+    label: optionalString(body.label, "label"),
+  };
+}
+
+function parseConfirmTotpEnrollmentInput(input: unknown): ConfirmTotpEnrollmentInput {
+  const body = parseJsonObject(input);
+  return {
+    factorId: requiredString(body.factorId, "factorId"),
+    code: requiredString(body.code, "code"),
   };
 }
 

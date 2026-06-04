@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hashPassword } from "@ai-skills-share/auth";
+import { generateTotpCode, hashPassword } from "@ai-skills-share/auth";
 import { buildApp } from "../src/app.js";
 import { MemoryAuthRateLimiter } from "../src/auth/rate-limit.js";
 import { AuthService } from "../src/auth/service.js";
@@ -114,7 +114,9 @@ test("active verified accounts can login, call me, and logout", async (t) => {
   assert.equal(login.statusCode, 200);
   const token = login.json().token;
   assert.equal(typeof token, "string");
+  assert.equal(login.json().mfaRequired, false);
   assert.equal(login.json().user.email, "active@example.com");
+  assert.equal(login.json().user.mfaVerified, false);
 
   const me = await app.inject({
     method: "GET",
@@ -138,6 +140,184 @@ test("active verified accounts can login, call me, and logout", async (t) => {
     headers: { authorization: `Bearer ${token}` },
   });
   assert.equal(revoked.statusCode, 401);
+});
+
+test("MFA enrollment requires a session and does not leak stored secret material", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAuthApp(authStore);
+  t.after(() => app.close());
+  const session = await addAndLogin(app, authStore, {
+    id: "mfa-user",
+    email: "mfa@example.com",
+    roles: ["user"],
+  });
+
+  const unauthenticated = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/totp/enroll",
+    payload: {
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(unauthenticated.statusCode, 401);
+  assert.equal(unauthenticated.json().error.code, "AUTHENTICATION_REQUIRED");
+
+  const enrollment = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/totp/enroll",
+    headers: { authorization: `Bearer ${session}` },
+    payload: {
+      password: "correct horse battery staple",
+      label: "Work phone",
+    },
+  });
+
+  assert.equal(enrollment.statusCode, 201);
+  assert.equal(enrollment.json().enrollment.label, "Work phone");
+  assert.match(enrollment.json().enrollment.secret, /^[A-Z2-7]{26,}$/);
+  assert.equal(enrollment.json().enrollment.otpauthUrl.startsWith("otpauth://totp/"), true);
+  assert.equal(JSON.stringify(enrollment.json()).includes("secretCiphertext"), false);
+  assert.equal(JSON.stringify(enrollment.json()).includes("codeHash"), false);
+});
+
+test("MFA enrollment requires a valid TOTP before enabling recovery codes", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAuthApp(authStore);
+  t.after(() => app.close());
+  const session = await addAndLogin(app, authStore, {
+    id: "mfa-invalid",
+    email: "mfa-invalid@example.com",
+    roles: ["user"],
+  });
+  const enrollment = await enrollTotp(app, session);
+
+  const invalid = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/totp/confirm",
+    headers: { authorization: `Bearer ${session}` },
+    payload: {
+      factorId: enrollment.factorId,
+      code: "000000",
+    },
+  });
+  assert.equal(invalid.statusCode, 401);
+  assert.equal(invalid.json().error.code, "INVALID_MFA_CODE");
+
+  const status = await app.inject({
+    method: "GET",
+    url: "/v1/auth/mfa",
+    headers: { authorization: `Bearer ${session}` },
+  });
+  assert.equal(status.statusCode, 200);
+  assert.equal(status.json().mfa.totpEnabled, false);
+  assert.equal(status.json().mfa.recoveryCodesRemaining, 0);
+});
+
+test("MFA-enabled users complete login with a challenge and single-use recovery code", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAuthApp(authStore);
+  t.after(() => app.close());
+  const session = await addAndLogin(app, authStore, {
+    id: "mfa-recovery",
+    email: "mfa-recovery@example.com",
+    roles: ["user"],
+  });
+  const enrollment = await enrollTotp(app, session);
+  const confirmed = await confirmTotp(app, session, enrollment);
+  const recoveryCode = confirmed.recoveryCodes[0];
+
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: "mfa-recovery@example.com",
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(login.statusCode, 200);
+  assert.equal(login.json().mfaRequired, true);
+  assert.equal(typeof login.json().challengeToken, "string");
+  assert.equal(login.json().token, undefined);
+
+  const verified = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/verify",
+    payload: {
+      challengeToken: login.json().challengeToken,
+      recoveryCode,
+    },
+  });
+  assert.equal(verified.statusCode, 200);
+  assert.equal(typeof verified.json().token, "string");
+  assert.equal(verified.json().user.mfaVerified, true);
+
+  const me = await app.inject({
+    method: "GET",
+    url: "/v1/me",
+    headers: { authorization: `Bearer ${verified.json().token}` },
+  });
+  assert.equal(me.statusCode, 200);
+  assert.equal(me.json().user.mfaVerified, true);
+
+  const secondLogin = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: "mfa-recovery@example.com",
+      password: "correct horse battery staple",
+    },
+  });
+  const replay = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/verify",
+    payload: {
+      challengeToken: secondLogin.json().challengeToken,
+      recoveryCode,
+    },
+  });
+  assert.equal(replay.statusCode, 401);
+  assert.equal(replay.json().error.code, "INVALID_MFA_CODE");
+});
+
+test("MFA-enabled users can complete login with TOTP", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAuthApp(authStore);
+  t.after(() => app.close());
+  const session = await addAndLogin(app, authStore, {
+    id: "mfa-totp",
+    email: "mfa-totp@example.com",
+    roles: ["user"],
+  });
+  const enrollment = await enrollTotp(app, session);
+  await confirmTotp(app, session, enrollment);
+
+  const originalDateNow = Date.now;
+  t.after(() => {
+    Date.now = originalDateNow;
+  });
+  Date.now = () => originalDateNow() + 30_000;
+
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: "mfa-totp@example.com",
+      password: "correct horse battery staple",
+    },
+  });
+  const verified = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/verify",
+    payload: {
+      challengeToken: login.json().challengeToken,
+      code: generateTotpCode(enrollment.secret),
+    },
+  });
+
+  assert.equal(login.statusCode, 200);
+  assert.equal(login.json().mfaRequired, true);
+  assert.equal(verified.statusCode, 200);
+  assert.equal(verified.json().user.mfaVerified, true);
 });
 
 test("disabled users cannot keep using existing sessions", async (t) => {
@@ -345,3 +525,79 @@ test("registration attempts are rate limited before repeated hashing", async (t)
   assert.equal(second.statusCode, 429);
   assert.equal(second.json().error.code, "RATE_LIMITED");
 });
+
+function buildAuthApp(authStore: MemoryAuthStore) {
+  return buildApp({
+    skillRepository: emptySkillRepository(),
+    authService: new AuthService(authStore),
+  });
+}
+
+async function addAndLogin(
+  app: ReturnType<typeof buildApp>,
+  authStore: MemoryAuthStore,
+  input: {
+    id?: string;
+    email: string;
+    roles?: Array<"owner" | "admin" | "maintainer" | "author" | "user">;
+  },
+): Promise<string> {
+  authStore.addUser({
+    id: input.id,
+    email: input.email,
+    status: "active",
+    emailVerifiedAt: new Date(),
+    roles: input.roles ?? ["user"],
+    passwordHash: await hashPassword("correct horse battery staple"),
+  });
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: input.email,
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().mfaRequired, false);
+  return response.json().token;
+}
+
+async function enrollTotp(app: ReturnType<typeof buildApp>, session: string): Promise<{ factorId: string; secret: string }> {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/totp/enroll",
+    headers: { authorization: `Bearer ${session}` },
+    payload: {
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(response.statusCode, 201);
+  return {
+    factorId: response.json().enrollment.factorId,
+    secret: response.json().enrollment.secret,
+  };
+}
+
+async function confirmTotp(
+  app: ReturnType<typeof buildApp>,
+  session: string,
+  enrollment: { factorId: string; secret: string },
+): Promise<{ recoveryCodes: string[] }> {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/totp/confirm",
+    headers: { authorization: `Bearer ${session}` },
+    payload: {
+      factorId: enrollment.factorId,
+      code: generateTotpCode(enrollment.secret),
+    },
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().mfa.factor.status, "enabled");
+  assert.equal(response.json().mfa.recoveryCodes.length, 10);
+  assert.equal(JSON.stringify(response.json()).includes("codeHash"), false);
+  return {
+    recoveryCodes: response.json().mfa.recoveryCodes,
+  };
+}

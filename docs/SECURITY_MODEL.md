@@ -25,7 +25,8 @@ Last updated: 2026-06-04
 - Login and registration are throttled before repeated expensive auth work.
 - Email verification before normal account use.
 - Rate limits on auth endpoints.
-- MFA support for admins and maintainers.
+- TOTP MFA uses encrypted authenticator secrets, short-lived challenge tokens, session-bound verification timestamps, and hashed single-use recovery codes.
+- Review and publish actions require MFA for owner, admin, and maintainer identities; review-scoped API tokens must be issued from an MFA-verified session.
 - Session revocation and all-session logout.
 - Admin bootstrap flow that cannot be repeated after setup.
 
@@ -41,7 +42,7 @@ Last updated: 2026-06-04
 
 - Public search and detail expose only approved, scan-passed, published releases with artifact records.
 - Submission intake accepts package text entries only; the API does not accept server-local paths or URLs.
-- Submission is role-gated to owner, admin, maintainer, and author accounts in the current slice; MFA enforcement for admin/maintainer submission remains required once MFA is implemented.
+- Submission is role-gated to owner, admin, maintainer, and author accounts in the current slice; MFA enforcement for admin/maintainer submission remains a remaining hardening item.
 - Server code generates artifact hashes, sizes, content type, and storage keys instead of trusting client-supplied values.
 - Blocking scan findings reject the submission before skill, version, or artifact records are created.
 - Warning findings remain reviewable but unpublished.
@@ -71,7 +72,7 @@ Last updated: 2026-06-04
 - Unauthorized restricted skill search, info, bundle, CLI, and MCP paths do not leak existence or contents.
 - Revoked tokens stop working.
 - API tokens without the required scope cannot submit or review even when the user has the matching role.
-- MFA enforcement works for admin-required actions.
+- MFA enrollment, challenge verification, recovery-code replay prevention, MFA-bound review token creation, and review-action MFA enforcement work.
 - Package parser rejects unsafe archives.
 - Scanner blocks known secret and unsafe-command fixtures.
 - Audit sanitizer redacts sensitive fields.

@@ -17,9 +17,14 @@ export interface AuthUserWithPassword extends AuthUserRecord {
   passwordHash: string | null;
 }
 
+export interface AuthUserWithSession extends AuthUserRecord {
+  sessionMfaVerifiedAt: Date | null;
+}
+
 export interface AuthUserWithApiToken extends AuthUserRecord {
   apiTokenId: string;
   apiTokenScopes: ApiTokenScope[];
+  apiTokenMfaVerifiedAt: Date | null;
 }
 
 export interface CreateUserWithPasswordInput {
@@ -37,6 +42,7 @@ export interface CreateSessionInput {
   userId: string;
   tokenHash: string;
   expiresAt: Date;
+  mfaVerifiedAt?: Date | null;
 }
 
 export interface ApiTokenRecord {
@@ -58,6 +64,48 @@ export interface CreateApiTokenInput {
   tokenHash: string;
   scopes: ApiTokenScope[];
   expiresAt: Date;
+  mfaVerifiedAt?: Date | null;
+}
+
+export type MfaFactorStatus = "pending" | "enabled" | "disabled";
+
+export interface MfaTotpFactorRecord {
+  id: string;
+  userId: string;
+  type: "totp";
+  status: MfaFactorStatus;
+  label: string;
+  secretCiphertext: string;
+  enabledAt: Date | null;
+  disabledAt: Date | null;
+  lastUsedCounter: number | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateMfaTotpFactorInput {
+  userId: string;
+  label: string;
+  secretCiphertext: string;
+}
+
+export interface CreateMfaChallengeInput {
+  userId: string;
+  tokenHash: string;
+  expiresAt: Date;
+}
+
+export interface MfaChallengeRecord {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  expiresAt: Date;
+  usedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface MfaChallengeWithUser extends MfaChallengeRecord {
+  user: AuthUserRecord;
 }
 
 export interface AuthStore {
@@ -65,12 +113,25 @@ export interface AuthStore {
   createUserWithPassword(input: CreateUserWithPasswordInput): Promise<CreateUserWithPasswordResult>;
   findUserByEmailWithPassword(email: string): Promise<AuthUserWithPassword | null>;
   createSession(input: CreateSessionInput): Promise<void>;
-  findUserBySessionTokenHash(tokenHash: string, now?: Date): Promise<AuthUserRecord | null>;
+  findUserBySessionTokenHash(tokenHash: string, now?: Date): Promise<AuthUserWithSession | null>;
   revokeSessionByTokenHash(tokenHash: string): Promise<void>;
   createApiToken(input: CreateApiTokenInput): Promise<ApiTokenRecord>;
   listApiTokensForUser(userId: string): Promise<ApiTokenRecord[]>;
   findUserByApiTokenHash(tokenHash: string, now?: Date): Promise<AuthUserWithApiToken | null>;
   revokeApiToken(input: { userId: string; tokenId: string }): Promise<ApiTokenRecord | null>;
+  countEnabledMfaFactors(userId: string): Promise<number>;
+  createMfaTotpFactor(input: CreateMfaTotpFactorInput): Promise<MfaTotpFactorRecord>;
+  listMfaTotpFactorsForUser(userId: string): Promise<MfaTotpFactorRecord[]>;
+  listEnabledMfaTotpFactorsForUser(userId: string): Promise<MfaTotpFactorRecord[]>;
+  findMfaTotpFactorForUser(input: { userId: string; factorId: string }): Promise<MfaTotpFactorRecord | null>;
+  enableMfaTotpFactor(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<MfaTotpFactorRecord | null>;
+  updateMfaTotpFactorCounter(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<void>;
+  replaceMfaRecoveryCodes(input: { userId: string; codeHashes: string[] }): Promise<void>;
+  countUnusedMfaRecoveryCodes(userId: string): Promise<number>;
+  consumeMfaRecoveryCode(input: { userId: string; codeHash: string }): Promise<boolean>;
+  createMfaChallenge(input: CreateMfaChallengeInput): Promise<MfaChallengeRecord>;
+  findMfaChallengeByTokenHash(tokenHash: string, now?: Date): Promise<MfaChallengeWithUser | null>;
+  markMfaChallengeUsed(input: { challengeId: string; usedAt: Date }): Promise<void>;
 }
 
 export interface AuthResponseUser {

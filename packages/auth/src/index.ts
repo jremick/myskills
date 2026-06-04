@@ -28,4 +28,5 @@ export function canAuthor(user: AuthenticatedUser): boolean {
 
 export * from "./password.js";
 export * from "./session-token.js";
-
+export * from "./totp.js";
+export * from "./recovery-code.js";

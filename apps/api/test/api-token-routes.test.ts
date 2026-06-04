@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hashApiToken, hashPassword } from "@ai-skills-share/auth";
+import { generateTotpCode, hashApiToken, hashPassword } from "@ai-skills-share/auth";
 import { buildApp } from "../src/app.js";
 import { AuthService } from "../src/auth/service.js";
 import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
@@ -90,7 +90,7 @@ test("API token management requires a session, not another API token", async (t)
     email: "owner@example.com",
     roles: ["owner"],
   });
-  const token = await createApiToken(app, session, ["profile:read", "skills:submit", "review:read", "review:write"]);
+  const token = await createApiToken(app, session, ["profile:read"]);
 
   for (const request of [
     { method: "GET", url: "/v1/auth/api-tokens" },
@@ -132,7 +132,7 @@ test("API token scopes gate protected routes separately from roles", async (t) =
     email: "user@example.com",
     roles: ["user"],
   });
-  const maintainerSession = await addAndLogin(app, authStore, {
+  const maintainerSession = await addAndLoginWithMfa(app, authStore, {
     email: "maintainer@example.com",
     roles: ["maintainer"],
   });
@@ -203,6 +203,29 @@ test("API token scopes gate protected routes separately from roles", async (t) =
     payload: { action: "approve" },
   });
   assert.equal(approved.statusCode, 200);
+});
+
+test("review API tokens require MFA-verified maintainer sessions at creation", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildTokenApp(authStore);
+  t.after(() => app.close());
+  const session = await addAndLogin(app, authStore, {
+    email: "maintainer@example.com",
+    roles: ["maintainer"],
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/auth/api-tokens",
+    headers: { authorization: `Bearer ${session}` },
+    payload: {
+      name: "Review token",
+      scopes: ["review:write"],
+    },
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.equal(response.json().error.code, "MFA_VERIFICATION_REQUIRED");
 });
 
 test("MCP session requires an API token with skills read scope", async (t) => {
@@ -338,7 +361,60 @@ async function addAndLogin(
     },
   });
   assert.equal(response.statusCode, 200);
+  assert.equal(response.json().mfaRequired, false);
   return response.json().token;
+}
+
+async function addAndLoginWithMfa(
+  app: ReturnType<typeof buildApp>,
+  authStore: MemoryAuthStore,
+  input: {
+    id?: string;
+    email: string;
+    roles: Array<"owner" | "admin" | "maintainer" | "author" | "user">;
+  },
+): Promise<string> {
+  const setupSession = await addAndLogin(app, authStore, input);
+  const enrollment = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/totp/enroll",
+    headers: { authorization: `Bearer ${setupSession}` },
+    payload: {
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(enrollment.statusCode, 201);
+  const confirm = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/totp/confirm",
+    headers: { authorization: `Bearer ${setupSession}` },
+    payload: {
+      factorId: enrollment.json().enrollment.factorId,
+      code: generateTotpCode(enrollment.json().enrollment.secret),
+    },
+  });
+  assert.equal(confirm.statusCode, 200);
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: input.email,
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(login.statusCode, 200);
+  assert.equal(login.json().mfaRequired, true);
+  const verify = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/verify",
+    payload: {
+      challengeToken: login.json().challengeToken,
+      recoveryCode: confirm.json().mfa.recoveryCodes[0],
+    },
+  });
+  assert.equal(verify.statusCode, 200);
+  assert.equal(verify.json().user.mfaVerified, true);
+  return verify.json().token;
 }
 
 async function createApiToken(
