@@ -102,6 +102,33 @@ export interface ReviewActionResult {
   publishedAt: string | null;
 }
 
+export interface SubmissionScanFinding {
+  category: string;
+  severity: "warning" | "blocking";
+  message: string;
+  path?: string;
+}
+
+export interface SubmitArchiveInput {
+  filename: string;
+  contentBase64: string;
+}
+
+export interface SubmitSkillResult {
+  submission: {
+    id: string;
+    slug: string;
+    version: string;
+    reviewStatus: string;
+    securityStatus: string;
+  };
+  scan: {
+    status: string;
+    findingCount: number;
+    findings: SubmissionScanFinding[];
+  };
+}
+
 export type LoginResult =
   | { mfaRequired: false; token: string; expiresAt: string; user: WebAuthUser }
   | { mfaRequired: true; challengeToken: string; expiresAt: string; user: WebAuthUser };
@@ -127,6 +154,7 @@ export interface RegistryClient {
   listAdminProviders(token?: string): Promise<AdminProviderConfig[]>;
   upsertAdminProvider(key: string, input: UpsertAdminProviderInput, token?: string): Promise<AdminProviderConfig>;
   listAdminAudit(limit?: number, token?: string): Promise<AdminAuditEvent[]>;
+  submitArchive(input: SubmitArchiveInput, token?: string): Promise<SubmitSkillResult>;
   listReviewSubmissions(token?: string): Promise<ReviewSubmissionSummary[]>;
   performReviewAction(submissionId: string, action: "approve" | "publish", reason?: string, token?: string): Promise<ReviewActionResult>;
 }
@@ -242,6 +270,18 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
       );
       return body.events;
     },
+    async submitArchive(input, overrideToken) {
+      return requestJson<SubmitSkillResult>(fetchImpl, `${root}/v1/submissions`, {
+        method: "POST",
+        body: {
+          archive: {
+            filename: input.filename,
+            contentBase64: input.contentBase64,
+          },
+        },
+        token: overrideToken ?? token,
+      });
+    },
     async listReviewSubmissions(overrideToken) {
       const body = await requestJson<{ submissions: ReviewSubmissionSummary[] }>(
         fetchImpl,
@@ -303,6 +343,16 @@ export function safeAdminErrorMessage(error: unknown): string {
     return "Admin change could not be saved.";
   }
   return "Admin data is not available.";
+}
+
+export function safeSubmitErrorMessage(error: unknown): string {
+  if (isSafeApiError(error) && (error.status === 401 || error.status === 403)) {
+    return "Submission requires an authorized author session. Privileged roles must complete MFA.";
+  }
+  if (isSafeApiError(error) && error.status >= 400 && error.status < 500) {
+    return "Submission could not be accepted.";
+  }
+  return "Submission service is not available.";
 }
 
 export function safeReviewErrorMessage(error: unknown): string {

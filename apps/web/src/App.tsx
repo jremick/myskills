@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   TerminalSquare,
   Trash2,
+  Upload,
   UserCog,
   UserRound,
   UsersRound,
@@ -30,6 +31,7 @@ import {
   safeAuthErrorMessage,
   safeErrorMessage,
   safeReviewErrorMessage,
+  safeSubmitErrorMessage,
   type AdminAuditEvent,
   type AdminProviderConfig,
   type AdminRegistrationMode,
@@ -39,6 +41,7 @@ import {
   type ReleaseMetadata,
   type ReviewActionResult,
   type ReviewSubmissionSummary,
+  type SubmitSkillResult,
   type WebAuthUser,
 } from "./api.js";
 
@@ -48,7 +51,7 @@ interface RegistryAppProps {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type AuthState = "idle" | "loading" | "mfa";
-type AppView = "browse" | "admin" | "review";
+type AppView = "browse" | "admin" | "review" | "submit";
 
 interface WebSession {
   token: string;
@@ -92,11 +95,14 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [mfaPending, setMfaPending] = useState<MfaPending | null>(null);
   const canUseAdmin = Boolean(session && isAdminUser(session.user));
   const canUseReview = Boolean(session && isReviewerUser(session.user));
+  const canUseSubmit = Boolean(session && isSubmitterUser(session.user));
   const activeView: AppView = view === "admin" && canUseAdmin
     ? "admin"
     : view === "review" && canUseReview
       ? "review"
-      : "browse";
+      : view === "submit" && canUseSubmit
+        ? "submit"
+        : "browse";
 
   useEffect(() => {
     if (!session) {
@@ -225,6 +231,19 @@ export function RegistryApp({ client }: RegistryAppProps) {
           <kbd>/</kbd>
         </label>
         <div className="topbar-actions">
+          {canUseSubmit && (
+            <button
+              className={activeView === "submit" ? "admin-nav active" : "admin-nav"}
+              type="button"
+              onClick={() => {
+                setView("submit");
+                window.history.replaceState({}, "", "/submit");
+              }}
+            >
+              <Upload size={16} aria-hidden="true" />
+              Submit
+            </button>
+          )}
           {canUseReview && (
             <button
               className={activeView === "review" ? "admin-nav active" : "admin-nav"}
@@ -330,6 +349,8 @@ export function RegistryApp({ client }: RegistryAppProps) {
 
       {activeView === "review" && session ? (
         <ReviewDashboard client={registryClient} session={session} />
+      ) : activeView === "submit" && session ? (
+        <SubmitDashboard client={registryClient} session={session} />
       ) : activeView === "admin" && session ? (
         <AdminConsole client={registryClient} session={session} />
       ) : (
@@ -394,6 +415,142 @@ export function RegistryApp({ client }: RegistryAppProps) {
         </main>
       )}
     </div>
+  );
+}
+
+function SubmitDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [state, setState] = useState<LoadState>("idle");
+  const [message, setMessage] = useState<string | null>(null);
+  const [result, setResult] = useState<SubmitSkillResult | null>(null);
+
+  async function submitPackage() {
+    setMessage(null);
+    setResult(null);
+    if (!file) {
+      setMessage("Choose a package archive before submitting.");
+      return;
+    }
+    if (!isZipArchive(file)) {
+      setMessage("Choose a .zip package archive.");
+      return;
+    }
+    if (file.size === 0) {
+      setMessage("Package archive is empty.");
+      return;
+    }
+    if (file.size > MAX_WEB_ARCHIVE_BYTES) {
+      setMessage("Package archive exceeds 10 MB.");
+      return;
+    }
+    setState("loading");
+    try {
+      const submitted = await client.submitArchive({
+        filename: file.name,
+        contentBase64: await fileToBase64(file),
+      }, session.token);
+      setResult(submitted);
+      setState("ready");
+    } catch (error) {
+      setMessage(safeSubmitErrorMessage(error));
+      setState("error");
+    }
+  }
+
+  return (
+    <main className="submit-workspace" aria-label="Skill package submission">
+      <section className="admin-hero">
+        <div>
+          <h1>Submit package</h1>
+          <p>{session.user.email} · {state === "loading" ? "uploading archive" : "author submission"}</p>
+        </div>
+      </section>
+
+      {message && <div className="safe-message admin-message" role="status">{message}</div>}
+
+      <section className="submit-layout">
+        <section className="submit-panel" aria-label="Package upload">
+          <div className="admin-panel-heading">
+            <span className="admin-panel-icon"><Upload size={18} aria-hidden="true" /></span>
+            <div>
+              <h2>Package archive</h2>
+              <p>{file ? `${file.name} · ${formatBytes(file.size)}` : "No file selected"}</p>
+            </div>
+          </div>
+
+          <form className="submit-form" onSubmit={(event) => {
+            event.preventDefault();
+            void submitPackage();
+          }}>
+            <label className="file-picker" htmlFor="package-archive">
+              <PackageOpen size={26} aria-hidden="true" />
+              <span>
+                <strong>{file?.name ?? "Choose .zip package"}</strong>
+                <small>{file ? formatBytes(file.size) : "Archive upload"}</small>
+              </span>
+              <input
+                accept=".zip,application/zip,application/x-zip-compressed"
+                id="package-archive"
+                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                type="file"
+              />
+            </label>
+
+            <button className="save-button" disabled={state === "loading" || !file} type="submit">
+              <Upload size={16} aria-hidden="true" />
+              Submit for review
+            </button>
+          </form>
+        </section>
+
+        <section className="submit-panel submit-result-panel" aria-label="Submission result">
+          <div className="admin-panel-heading">
+            <span className="admin-panel-icon"><ClipboardList size={18} aria-hidden="true" /></span>
+            <div>
+              <h2>Submission status</h2>
+              <p>{result ? `${result.submission.slug}@${result.submission.version}` : "Awaiting upload"}</p>
+            </div>
+          </div>
+
+          {result ? (
+            <div className="submit-result">
+              <dl className="metadata-grid">
+                <Metadata label="Submission ID" value={result.submission.id} monospace />
+                <Metadata label="Skill" value={result.submission.slug} />
+                <Metadata label="Version" value={result.submission.version} />
+                <Metadata label="Review" value={result.submission.reviewStatus} />
+                <Metadata label="Security" value={result.submission.securityStatus} />
+                <Metadata label="Findings" value={String(result.scan.findingCount)} />
+              </dl>
+              <div className="finding-list" aria-label="Scan findings">
+                {result.scan.findings.length === 0 ? (
+                  <div className="empty-state compact">
+                    <ShieldCheck size={22} aria-hidden="true" />
+                    <strong>No scan findings.</strong>
+                    <span>Ready for maintainer review.</span>
+                  </div>
+                ) : result.scan.findings.map((finding, index) => (
+                  <div className="finding-row" key={`${finding.category}-${finding.path ?? "package"}-${index}`}>
+                    <StatusToken value={finding.severity} />
+                    <span>
+                      <strong>{finding.category}</strong>
+                      <small>{finding.path ?? "package"}</small>
+                    </span>
+                    <p>{finding.message}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="empty-detail">
+              <Upload size={42} aria-hidden="true" />
+              <h2>No submission yet</h2>
+              <p>Submitted packages appear here after server validation.</p>
+            </div>
+          )}
+        </section>
+      </section>
+    </main>
   );
 }
 
@@ -1125,12 +1282,19 @@ function isReviewerUser(user: WebAuthUser): boolean {
   return isAdminUser(user) || user.roles.includes("maintainer");
 }
 
+function isSubmitterUser(user: WebAuthUser): boolean {
+  return isReviewerUser(user) || user.roles.includes("author");
+}
+
 function initialViewFromPath(pathname: string): AppView {
   if (pathname === "/admin") {
     return "admin";
   }
   if (pathname === "/review") {
     return "review";
+  }
+  if (pathname === "/submit") {
+    return "submit";
   }
   return "browse";
 }
@@ -1191,12 +1355,40 @@ function capitalize(value: string): string {
   return value.slice(0, 1).toUpperCase() + value.slice(1);
 }
 
+function isZipArchive(file: File): boolean {
+  return /^[A-Za-z0-9._-]+\.zip$/i.test(file.name);
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.slice(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function formatBytes(bytes: number): string {
+  const units = ["B", "KB", "MB"] as const;
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: unitIndex === 0 ? 0 : 1,
+  }).format(value) + ` ${units[unitIndex]}`;
+}
+
 function skillSlugFromPath(pathname: string): string | null {
   const match = pathname.match(/^\/skills\/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)$/);
   return match?.[1] ?? null;
 }
 
 const SESSION_STORAGE_KEY = "ai-skills-share:web-session";
+const MAX_WEB_ARCHIVE_BYTES = 10 * 1024 * 1024;
 
 function readStoredSession(): WebSession | null {
   try {

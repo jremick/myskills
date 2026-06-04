@@ -13,6 +13,7 @@ import type {
   ReleaseMetadata,
   ReviewSubmissionSummary,
   SafeApiError,
+  SubmitSkillResult,
 } from "../src/api.js";
 
 test("browse page requests skills with query and renders API-returned skills", async () => {
@@ -251,6 +252,68 @@ test("maintainer sessions can approve and publish review submissions without bun
   await view.findByText("Review queue is clear.");
 });
 
+test("author sessions can submit a package archive without rendering package content", async () => {
+  setupDom();
+  const client = mockClient({ user: authUser({ email: "author@example.com", roles: ["author"] }) });
+
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.input(view.getByLabelText("Email"), { target: { value: "author@example.com" } });
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: /sign in/i }));
+
+  await view.findByText("author@example.com");
+  fireEvent.click(view.getByRole("button", { name: /submit/i }));
+
+  await view.findByText("Submit package");
+  const archive = new File(["PK archive content"], "release-notes-helper.zip", { type: "application/zip" });
+  fireEvent.change(view.getByLabelText(/choose \.zip package/i), { target: { files: [archive] } });
+  fireEvent.click(view.getByRole("button", { name: /submit for review/i }));
+
+  await view.findByText("submission-1");
+  assert.equal(client.submitCalls[0]?.filename, "release-notes-helper.zip");
+  assert.equal(client.submitCalls[0]?.contentBase64, "UEsgYXJjaGl2ZSBjb250ZW50");
+  assert.equal(document.body.textContent?.includes("storageKey"), false);
+  assert.equal(document.body.textContent?.includes("PK archive content"), false);
+  assert.equal(document.body.textContent?.includes("UEsgYXJjaGl2ZSBjb250ZW50"), false);
+});
+
+test("submission result renders controlled scan warnings", async () => {
+  setupDom();
+  const client = mockClient({
+    user: authUser({ email: "author@example.com", roles: ["author"] }),
+    submitResult: {
+      ...defaultSubmitResult(),
+      scan: {
+        status: "succeeded",
+        findingCount: 1,
+        findings: [{
+          category: "install-hook",
+          severity: "warning",
+          message: "Dependency install hook requires maintainer review.",
+          path: "package.json",
+        }],
+      },
+    },
+  });
+
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.input(view.getByLabelText("Email"), { target: { value: "author@example.com" } });
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: /sign in/i }));
+
+  await view.findByText("author@example.com");
+  fireEvent.click(view.getByRole("button", { name: /submit/i }));
+  fireEvent.change(await view.findByLabelText(/choose \.zip package/i), {
+    target: { files: [new File(["warning zip"], "warning-skill.zip", { type: "application/zip" })] },
+  });
+  fireEvent.click(view.getByRole("button", { name: /submit for review/i }));
+
+  await view.findByText("install-hook");
+  await view.findByText("package.json");
+  await view.findByText("Dependency install hook requires maintainer review.");
+  assert.equal(document.body.textContent?.includes("warning zip"), false);
+});
+
 test("malformed stored sessions are ignored before signed-in render", async () => {
   setupDom();
   window.localStorage.setItem("ai-skills-share:web-session", JSON.stringify({
@@ -304,6 +367,8 @@ function mockClient(input: {
   loginError?: SafeApiError;
   mfaRequired?: boolean;
   searchResults?: (query: string) => PublicSkill[];
+  submitError?: SafeApiError;
+  submitResult?: SubmitSkillResult;
   user?: ReturnType<typeof authUser>;
 } = {}) {
   const skills = input.skills ?? [publicSkill()];
@@ -322,6 +387,7 @@ function mockClient(input: {
     releaseCalls: string[];
     reviewActions: string[];
     searchCalls: string[];
+    submitCalls: Array<{ filename: string; contentBase64: string }>;
     userActions: string[];
   } = {
     bundleCalls: 0,
@@ -332,6 +398,7 @@ function mockClient(input: {
     releaseCalls: [],
     reviewActions: [],
     searchCalls: [],
+    submitCalls: [],
     userActions: [],
     async searchSkills(query) {
       client.searchCalls.push(query);
@@ -419,6 +486,13 @@ function mockClient(input: {
     async listAdminAudit() {
       return defaultAuditEvents();
     },
+    async submitArchive(archive) {
+      client.submitCalls.push(archive);
+      if (input.submitError) {
+        throw input.submitError;
+      }
+      return input.submitResult ?? defaultSubmitResult();
+    },
     async listReviewSubmissions() {
       return reviewSubmissions;
     },
@@ -453,6 +527,23 @@ function mockClient(input: {
     },
   };
   return client;
+}
+
+function defaultSubmitResult(): SubmitSkillResult {
+  return {
+    submission: {
+      id: "submission-1",
+      slug: "release-notes-helper",
+      version: "0.1.0",
+      reviewStatus: "unreviewed",
+      securityStatus: "passed",
+    },
+    scan: {
+      status: "succeeded",
+      findingCount: 0,
+      findings: [],
+    },
+  };
 }
 
 function authUser(input: { email?: string; mfaVerified?: boolean; roles?: string[] } = {}) {

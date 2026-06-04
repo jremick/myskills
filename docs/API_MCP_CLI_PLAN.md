@@ -7,7 +7,7 @@ Last updated: 2026-06-04
 
 API, web, CLI, and MCP must ask the same backend for authorization. No client surface may reimplement access rules as a substitute for server-side decisions.
 
-The current web slice consumes backend API decisions for login, current-user refresh, public skill search, skill detail, release metadata, export guidance, maintainer review actions, and owner/admin console operations. It forwards the active bearer token when present, but it must not fetch bundle payloads during metadata browsing/review or reimplement authorization policy in client code.
+The current web slice consumes backend API decisions for login, current-user refresh, public skill search, skill detail, release metadata, export guidance, author archive submission, maintainer review actions, and owner/admin console operations. It forwards the active bearer token when present, but it must not fetch bundle payloads during metadata browsing/review or reimplement authorization policy in client code.
 
 ## API Surface
 
