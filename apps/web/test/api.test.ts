@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createRegistryClient, exportCommand, safeAdminErrorMessage, safeErrorMessage, type SafeApiError } from "../src/api.js";
+import { createRegistryClient, exportCommand, safeAdminErrorMessage, safeErrorMessage, safeReviewErrorMessage, type SafeApiError } from "../src/api.js";
 
 test("registry client searches skills through the API", async () => {
   const calls: string[] = [];
@@ -181,6 +181,55 @@ test("registry client manages admin settings with the session bearer", async () 
   assert.equal(calls[5].body?.includes("groups"), true);
 });
 
+test("registry client manages review queue with the session bearer", async () => {
+  const calls: Array<{ body?: string; method?: string; url: string; authorization?: string }> = [];
+  const client = createRegistryClient("http://api.test", async (input, init) => {
+    const url = String(input);
+    calls.push({
+      body: typeof init?.body === "string" ? init.body : undefined,
+      method: init?.method,
+      url,
+      authorization: init?.headers instanceof Headers ? init.headers.get("authorization") ?? undefined : (init?.headers as Record<string, string> | undefined)?.authorization,
+    });
+    if (url.endsWith("/v1/review/submissions") && !init?.method) {
+      return jsonResponse(200, {
+        submissions: [{
+          id: "submission-1",
+          slug: "release-notes-helper",
+          version: "0.1.0",
+          reviewStatus: "unreviewed",
+          securityStatus: "passed",
+          findingCount: 0,
+        }],
+      });
+    }
+    return jsonResponse(200, {
+      submission: {
+        id: "submission-1",
+        slug: "release-notes-helper",
+        version: "0.1.0",
+        lifecycleStatus: "review",
+        reviewStatus: "approved",
+        securityStatus: "passed",
+        publishedAt: null,
+      },
+    });
+  });
+
+  await client.listReviewSubmissions("review-session");
+  await client.performReviewAction("submission-1", "approve", "checked", "review-session");
+
+  assert.deepEqual(calls.map((call) => `${call.method ?? "GET"} ${call.url}`), [
+    "GET http://api.test/v1/review/submissions",
+    "POST http://api.test/v1/review/submissions/submission-1/actions",
+  ]);
+  assert.deepEqual(calls.map((call) => call.authorization), [
+    "Bearer review-session",
+    "Bearer review-session",
+  ]);
+  assert.equal(calls[1].body, JSON.stringify({ action: "approve", reason: "checked" }));
+});
+
 test("safe error messages do not render raw server internals", () => {
   const error = new Error("stack trace /Users/example token storageKey") as SafeApiError;
   error.status = 500;
@@ -188,6 +237,7 @@ test("safe error messages do not render raw server internals", () => {
 
   assert.equal(safeErrorMessage(error), "The registry is not available.");
   assert.equal(safeAdminErrorMessage(error), "Admin data is not available.");
+  assert.equal(safeReviewErrorMessage(error), "Review queue is not available.");
 });
 
 test("export command matches CLI contract", () => {

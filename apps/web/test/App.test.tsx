@@ -11,6 +11,7 @@ import type {
   ProviderRoleMappingInput,
   RegistryClient,
   ReleaseMetadata,
+  ReviewSubmissionSummary,
   SafeApiError,
 } from "../src/api.js";
 
@@ -189,6 +190,7 @@ test("non-admin sessions do not render the admin entry point", async () => {
 
   await view.findByText("reader@example.com");
   assert.equal(view.queryByRole("button", { name: /admin/i }), null);
+  assert.equal(view.queryByRole("button", { name: /review/i }), null);
 });
 
 test("admin sessions can manage registration, users, and provider metadata", async () => {
@@ -219,6 +221,34 @@ test("admin sessions can manage registration, users, and provider metadata", asy
 
   await waitFor(() => assert.equal(client.providerUpserts[0]?.displayName, "Cloudflare Main"));
   assert.equal(client.providerUpserts[0]?.roleMappings?.[0]?.role, "maintainer");
+});
+
+test("maintainer sessions can approve and publish review submissions without bundle content", async () => {
+  setupDom();
+  const client = mockClient({ user: authUser({ email: "maintainer@example.com", roles: ["maintainer"] }) });
+
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.input(view.getByLabelText("Email"), { target: { value: "maintainer@example.com" } });
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: /sign in/i }));
+
+  await view.findByText("maintainer@example.com");
+  assert.equal(view.queryByRole("button", { name: /admin/i }), null);
+  fireEvent.click(view.getByRole("button", { name: /review/i }));
+
+  await view.findByText("Review dashboard");
+  await waitFor(() => assert.equal(view.getAllByText("release-notes-helper@0.1.0").length >= 1, true));
+  assert.equal(document.body.textContent?.includes("storageKey"), false);
+  assert.equal(document.body.textContent?.includes("Summarize release notes."), false);
+  assert.equal(client.bundleCalls, 0);
+
+  fireEvent.input(view.getByLabelText("Reason"), { target: { value: "checked" } });
+  fireEvent.click(view.getByRole("button", { name: /approve/i }));
+  await waitFor(() => assert.deepEqual(client.reviewActions, ["submission-1:approve:checked"]));
+
+  fireEvent.click(view.getByRole("button", { name: /publish/i }));
+  await waitFor(() => assert.deepEqual(client.reviewActions, ["submission-1:approve:checked", "submission-1:publish:"]));
+  await view.findByText("Review queue is clear.");
 });
 
 test("malformed stored sessions are ignored before signed-in render", async () => {
@@ -267,6 +297,7 @@ function setupDom(url = "http://localhost/") {
 function mockClient(input: {
   adminProviders?: AdminProviderConfig[];
   adminUsers?: AdminUser[];
+  reviewSubmissions?: ReviewSubmissionSummary[];
   skills?: PublicSkill[];
   release?: ReleaseMetadata;
   getSkillError?: SafeApiError;
@@ -281,6 +312,7 @@ function mockClient(input: {
   let registrationMode: AdminRegistrationMode = "closed";
   let adminUsers = input.adminUsers ?? defaultAdminUsers();
   let adminProviders = input.adminProviders ?? defaultAdminProviders();
+  let reviewSubmissions = input.reviewSubmissions ?? defaultReviewSubmissions();
   const client: RegistryClient & {
     bundleCalls: number;
     logoutCalls: number;
@@ -288,6 +320,7 @@ function mockClient(input: {
     providerUpserts: Array<{ key: string; displayName: string; roleMappings?: ProviderRoleMappingInput[] }>;
     registrationUpdates: AdminRegistrationMode[];
     releaseCalls: string[];
+    reviewActions: string[];
     searchCalls: string[];
     userActions: string[];
   } = {
@@ -297,6 +330,7 @@ function mockClient(input: {
     providerUpserts: [],
     registrationUpdates: [],
     releaseCalls: [],
+    reviewActions: [],
     searchCalls: [],
     userActions: [],
     async searchSkills(query) {
@@ -385,6 +419,38 @@ function mockClient(input: {
     async listAdminAudit() {
       return defaultAuditEvents();
     },
+    async listReviewSubmissions() {
+      return reviewSubmissions;
+    },
+    async performReviewAction(submissionId, action, reason) {
+      client.reviewActions.push(`${submissionId}:${action}:${reason ?? ""}`);
+      if (action === "approve") {
+        reviewSubmissions = reviewSubmissions.map((submission) => (
+          submission.id === submissionId ? { ...submission, reviewStatus: "approved" } : submission
+        ));
+        return {
+          id: submissionId,
+          slug: "release-notes-helper",
+          version: "0.1.0",
+          visibility: "public",
+          lifecycleStatus: "review",
+          reviewStatus: "approved",
+          securityStatus: "passed",
+          publishedAt: null,
+        };
+      }
+      reviewSubmissions = reviewSubmissions.filter((submission) => submission.id !== submissionId);
+      return {
+        id: submissionId,
+        slug: "release-notes-helper",
+        version: "0.1.0",
+        visibility: "public",
+        lifecycleStatus: "approved",
+        reviewStatus: "approved",
+        securityStatus: "passed",
+        publishedAt: "2026-06-04T00:00:00.000Z",
+      };
+    },
   };
   return client;
 }
@@ -439,6 +505,26 @@ function defaultAuditEvents(): AdminAuditEvent[] {
       resourceType: "provider_config",
       resourceId: "provider-1",
       details: {},
+      createdAt: "2026-06-04T00:00:00.000Z",
+    },
+  ];
+}
+
+function defaultReviewSubmissions(): ReviewSubmissionSummary[] {
+  return [
+    {
+      id: "submission-1",
+      slug: "release-notes-helper",
+      title: "Release Notes Helper",
+      version: "0.1.0",
+      visibility: "public",
+      reviewStatus: "unreviewed",
+      securityStatus: "passed",
+      platforms: [
+        { name: "codex", installTarget: "codex-skill", status: "supported" },
+        { name: "generic", installTarget: "prompt-pack", status: "supported" },
+      ],
+      findingCount: 0,
       createdAt: "2026-06-04T00:00:00.000Z",
     },
   ];

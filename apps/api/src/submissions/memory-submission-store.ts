@@ -63,7 +63,10 @@ export class MemorySubmissionStore implements SubmissionStore {
 
   async listReviewSubmissions(): Promise<ReviewSubmissionSummary[]> {
     return [...this.submissions.values()]
-      .filter((submission) => ["unreviewed", "changes-requested"].includes(submission.reviewStatus))
+      .filter((submission) => (
+        ["unreviewed", "changes-requested"].includes(submission.reviewStatus) ||
+        (submission.reviewStatus === "approved" && !submission.publishedAt)
+      ))
       .map((submission) => ({
         id: submission.id,
         slug: submission.skillSlug,

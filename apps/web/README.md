@@ -13,6 +13,7 @@ Implemented:
 - CLI export guidance derived from the selected release and platform
 - email/password login, MFA challenge completion, current-user refresh, and logout
 - session-aware API client calls that forward the active bearer token when present
+- maintainer review dashboard for metadata-only review queue, approval, and publication actions
 - owner/admin admin console for registration mode, safe user status actions, non-secret provider metadata and role mappings, and audit review
 - responsive browse/detail layout for desktop and mobile widths
 
@@ -34,7 +35,6 @@ The web app defaults to `http://localhost:3000` and reads `VITE_API_BASE_URL` fo
 - view skill details and install/export guidance
 - submit packages for review
 - manage private drafts
-- review submissions
 - administer roles and remaining instance settings
 
 The web app consumes API decisions. It must not duplicate authorization policy in client code.

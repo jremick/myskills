@@ -3,6 +3,7 @@ import {
   Check,
   ChevronsUpDown,
   CircleAlert,
+  ClipboardList,
   Copy,
   FileCode2,
   LogIn,
@@ -28,6 +29,7 @@ import {
   safeAdminErrorMessage,
   safeAuthErrorMessage,
   safeErrorMessage,
+  safeReviewErrorMessage,
   type AdminAuditEvent,
   type AdminProviderConfig,
   type AdminRegistrationMode,
@@ -35,6 +37,8 @@ import {
   type ProviderRoleMappingInput,
   type RegistryClient,
   type ReleaseMetadata,
+  type ReviewActionResult,
+  type ReviewSubmissionSummary,
   type WebAuthUser,
 } from "./api.js";
 
@@ -44,7 +48,7 @@ interface RegistryAppProps {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type AuthState = "idle" | "loading" | "mfa";
-type AppView = "browse" | "admin";
+type AppView = "browse" | "admin" | "review";
 
 interface WebSession {
   token: string;
@@ -67,9 +71,11 @@ interface ProviderDraft {
   roleMappings: ProviderRoleMappingInput[];
 }
 
+type ReviewActionName = "approve" | "publish";
+
 export function RegistryApp({ client }: RegistryAppProps) {
   const initialSlug = skillSlugFromPath(window.location.pathname);
-  const [view, setView] = useState<AppView>(window.location.pathname === "/admin" ? "admin" : "browse");
+  const [view, setView] = useState<AppView>(initialViewFromPath(window.location.pathname));
   const [session, setSession] = useState<WebSession | null>(() => readStoredSession());
   const registryClient = useMemo(() => client ?? createRegistryClient(undefined, undefined, session?.token), [client, session?.token]);
   const [query, setQuery] = useState("");
@@ -85,7 +91,12 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [authState, setAuthState] = useState<AuthState>("idle");
   const [mfaPending, setMfaPending] = useState<MfaPending | null>(null);
   const canUseAdmin = Boolean(session && isAdminUser(session.user));
-  const activeView: AppView = view === "admin" && canUseAdmin ? "admin" : "browse";
+  const canUseReview = Boolean(session && isReviewerUser(session.user));
+  const activeView: AppView = view === "admin" && canUseAdmin
+    ? "admin"
+    : view === "review" && canUseReview
+      ? "review"
+      : "browse";
 
   useEffect(() => {
     if (!session) {
@@ -214,6 +225,19 @@ export function RegistryApp({ client }: RegistryAppProps) {
           <kbd>/</kbd>
         </label>
         <div className="topbar-actions">
+          {canUseReview && (
+            <button
+              className={activeView === "review" ? "admin-nav active" : "admin-nav"}
+              type="button"
+              onClick={() => {
+                setView("review");
+                window.history.replaceState({}, "", "/review");
+              }}
+            >
+              <ClipboardList size={16} aria-hidden="true" />
+              Review
+            </button>
+          )}
           {canUseAdmin && (
             <button
               className={activeView === "admin" ? "admin-nav active" : "admin-nav"}
@@ -304,7 +328,9 @@ export function RegistryApp({ client }: RegistryAppProps) {
         </div>
       </header>
 
-      {activeView === "admin" && session ? (
+      {activeView === "review" && session ? (
+        <ReviewDashboard client={registryClient} session={session} />
+      ) : activeView === "admin" && session ? (
         <AdminConsole client={registryClient} session={session} />
       ) : (
         <main className="workspace">
@@ -368,6 +394,161 @@ export function RegistryApp({ client }: RegistryAppProps) {
         </main>
       )}
     </div>
+  );
+}
+
+function ReviewDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
+  const [state, setState] = useState<LoadState>("loading");
+  const [message, setMessage] = useState<string | null>(null);
+  const [submissions, setSubmissions] = useState<ReviewSubmissionSummary[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const selected = submissions.find((submission) => submission.id === selectedId) ?? submissions[0] ?? null;
+
+  async function refreshReview() {
+    setState("loading");
+    setMessage(null);
+    try {
+      const nextSubmissions = await client.listReviewSubmissions(session.token);
+      setSubmissions(nextSubmissions);
+      setSelectedId((current) => (
+        current && nextSubmissions.some((submission) => submission.id === current)
+          ? current
+          : nextSubmissions[0]?.id ?? null
+      ));
+      setState("ready");
+    } catch (error) {
+      setMessage(safeReviewErrorMessage(error));
+      setState("error");
+    }
+  }
+
+  useEffect(() => {
+    void refreshReview();
+  }, [client, session.token]);
+
+  async function runReviewAction(submission: ReviewSubmissionSummary, action: ReviewActionName) {
+    setMessage(null);
+    try {
+      const result = await client.performReviewAction(submission.id, action, reason, session.token);
+      const nextSubmissions = await client.listReviewSubmissions(session.token);
+      setSubmissions(nextSubmissions);
+      setSelectedId(result.publishedAt ? nextSubmissions[0]?.id ?? null : result.id);
+      setReason("");
+    } catch (error) {
+      setMessage(safeReviewErrorMessage(error));
+    }
+  }
+
+  return (
+    <main className="review-workspace" aria-label="Maintainer review dashboard">
+      <section className="admin-hero">
+        <div>
+          <h1>Review dashboard</h1>
+          <p>{session.user.email} · {state === "loading" ? "loading queue" : `${submissions.length} awaiting action`}</p>
+        </div>
+        <button type="button" onClick={() => void refreshReview()}>
+          <RotateCw size={16} aria-hidden="true" />
+          Refresh
+        </button>
+      </section>
+
+      {message && <div className="safe-message admin-message" role="status">{message}</div>}
+
+      <section className="review-layout">
+        <section className="review-queue" aria-label="Review queue">
+          <div className="admin-panel-heading">
+            <span className="admin-panel-icon"><ClipboardList size={18} aria-hidden="true" /></span>
+            <div>
+              <h2>Queue</h2>
+              <p>{state === "loading" ? "Loading" : `${submissions.length} submissions`}</p>
+            </div>
+          </div>
+          <div className="review-list">
+            {submissions.map((submission) => (
+              <button
+                className={selected?.id === submission.id ? "review-row selected" : "review-row"}
+                key={submission.id}
+                type="button"
+                onClick={() => setSelectedId(submission.id)}
+              >
+                <span>
+                  <strong>{submission.title}</strong>
+                  <small>{submission.slug}@{submission.version}</small>
+                </span>
+                <StatusToken value={submission.reviewStatus} />
+                <StatusToken value={submission.securityStatus} />
+                <span className="finding-count">{submission.findingCount} findings</span>
+              </button>
+            ))}
+            {state === "ready" && submissions.length === 0 && (
+              <div className="empty-state">
+                <ShieldCheck size={22} aria-hidden="true" />
+                <strong>Review queue is clear.</strong>
+                <span>No submissions are awaiting approval or publication.</span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="review-detail" aria-label="Selected submission review">
+          {selected ? (
+            <>
+              <div className="detail-heading compact">
+                <SkillIcon slug={selected.slug} />
+                <div className="detail-title">
+                  <h2>{selected.title}</h2>
+                  <span>{selected.slug}@{selected.version}</span>
+                </div>
+                <StatusToken value={selected.reviewStatus} />
+              </div>
+              <dl className="metadata-grid review-metadata">
+                <Metadata label="Visibility" value={selected.visibility} />
+                <Metadata label="Security" value={selected.securityStatus} />
+                <Metadata label="Platforms" value={selected.platforms.map((item) => item.name).join(", ") || "-"} />
+                <Metadata label="Findings" value={String(selected.findingCount)} />
+                <Metadata label="Submitted" value={formatDate(selected.createdAt)} />
+                <Metadata label="Submission ID" value={selected.id} monospace />
+              </dl>
+
+              <label className="review-reason">
+                Reason
+                <textarea
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  placeholder="Optional review note"
+                />
+              </label>
+
+              <div className="review-actions">
+                <button
+                  disabled={selected.reviewStatus === "approved" || selected.securityStatus !== "passed"}
+                  type="button"
+                  onClick={() => void runReviewAction(selected, "approve")}
+                >
+                  <Check size={16} aria-hidden="true" />
+                  Approve
+                </button>
+                <button
+                  disabled={selected.reviewStatus !== "approved" || selected.securityStatus !== "passed"}
+                  type="button"
+                  onClick={() => void runReviewAction(selected, "publish")}
+                >
+                  <PackageOpen size={16} aria-hidden="true" />
+                  Publish
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="empty-detail">
+              <ClipboardList size={42} aria-hidden="true" />
+              <h2>No selected submission</h2>
+              <p>Approved unpublished submissions and new review requests appear here.</p>
+            </div>
+          )}
+        </section>
+      </section>
+    </main>
   );
 }
 
@@ -938,6 +1119,20 @@ function formatDate(input: string): string {
 
 function isAdminUser(user: WebAuthUser): boolean {
   return user.roles.includes("owner") || user.roles.includes("admin");
+}
+
+function isReviewerUser(user: WebAuthUser): boolean {
+  return isAdminUser(user) || user.roles.includes("maintainer");
+}
+
+function initialViewFromPath(pathname: string): AppView {
+  if (pathname === "/admin") {
+    return "admin";
+  }
+  if (pathname === "/review") {
+    return "review";
+  }
+  return "browse";
 }
 
 function emptyProviderDraft(): ProviderDraft {

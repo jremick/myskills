@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { AppError } from "@ai-skills-share/core";
 import {
   loadSkillManifestFromPackageFiles,
@@ -215,7 +215,10 @@ export class PostgresSubmissionStore implements SubmissionStore {
       .leftJoin(skillPlatformVariants, eq(skillPlatformVariants.skillVersionId, skillVersions.id))
       .leftJoin(scanRuns, eq(scanRuns.skillVersionId, skillVersions.id))
       .leftJoin(scanFindings, eq(scanFindings.scanRunId, scanRuns.id))
-      .where(inArray(skillVersions.reviewStatus, ["unreviewed", "changes-requested"]))
+      .where(or(
+        inArray(skillVersions.reviewStatus, ["unreviewed", "changes-requested"]),
+        and(eq(skillVersions.reviewStatus, "approved"), isNull(skillVersions.publishedAt)),
+      ))
       .groupBy(
         skillVersions.id,
         skills.slug,

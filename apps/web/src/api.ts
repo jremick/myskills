@@ -78,6 +78,30 @@ export interface AdminAuditEvent {
   createdAt: string;
 }
 
+export interface ReviewSubmissionSummary {
+  id: string;
+  slug: string;
+  title: string;
+  version: string;
+  visibility: string;
+  reviewStatus: string;
+  securityStatus: string;
+  platforms: Array<{ name: string; installTarget: string; status: string }>;
+  findingCount: number;
+  createdAt: string;
+}
+
+export interface ReviewActionResult {
+  id: string;
+  slug: string;
+  version: string;
+  visibility: string;
+  lifecycleStatus: string;
+  reviewStatus: string;
+  securityStatus: string;
+  publishedAt: string | null;
+}
+
 export type LoginResult =
   | { mfaRequired: false; token: string; expiresAt: string; user: WebAuthUser }
   | { mfaRequired: true; challengeToken: string; expiresAt: string; user: WebAuthUser };
@@ -103,6 +127,8 @@ export interface RegistryClient {
   listAdminProviders(token?: string): Promise<AdminProviderConfig[]>;
   upsertAdminProvider(key: string, input: UpsertAdminProviderInput, token?: string): Promise<AdminProviderConfig>;
   listAdminAudit(limit?: number, token?: string): Promise<AdminAuditEvent[]>;
+  listReviewSubmissions(token?: string): Promise<ReviewSubmissionSummary[]>;
+  performReviewAction(submissionId: string, action: "approve" | "publish", reason?: string, token?: string): Promise<ReviewActionResult>;
 }
 
 export interface SafeApiError extends Error {
@@ -216,6 +242,29 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
       );
       return body.events;
     },
+    async listReviewSubmissions(overrideToken) {
+      const body = await requestJson<{ submissions: ReviewSubmissionSummary[] }>(
+        fetchImpl,
+        `${root}/v1/review/submissions`,
+        { token: overrideToken ?? token },
+      );
+      return body.submissions;
+    },
+    async performReviewAction(submissionId, action, reason, overrideToken) {
+      const body = await requestJson<{ submission: ReviewActionResult }>(
+        fetchImpl,
+        `${root}/v1/review/submissions/${encodeURIComponent(submissionId)}/actions`,
+        {
+          method: "POST",
+          body: {
+            action,
+            ...(reason?.trim() ? { reason: reason.trim() } : {}),
+          },
+          token: overrideToken ?? token,
+        },
+      );
+      return body.submission;
+    },
   };
 }
 
@@ -254,6 +303,16 @@ export function safeAdminErrorMessage(error: unknown): string {
     return "Admin change could not be saved.";
   }
   return "Admin data is not available.";
+}
+
+export function safeReviewErrorMessage(error: unknown): string {
+  if (isSafeApiError(error) && (error.status === 401 || error.status === 403)) {
+    return "Review access requires an MFA-verified maintainer session.";
+  }
+  if (isSafeApiError(error) && error.status >= 400 && error.status < 500) {
+    return "Review action could not be completed.";
+  }
+  return "Review queue is not available.";
 }
 
 async function requestJson<T>(fetchImpl: typeof fetch, url: string, options: {

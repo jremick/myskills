@@ -83,6 +83,15 @@ test("maintainers can approve and publish a clean public submission", async (t) 
   assert.equal(approveResponse.json().submission.reviewStatus, "approved");
   assert.equal(approveResponse.json().submission.publishedAt, null);
 
+  const approvedListResponse = await app.inject({
+    method: "GET",
+    url: "/v1/review/submissions",
+    headers: { authorization: `Bearer ${maintainerToken}` },
+  });
+  assert.equal(approvedListResponse.statusCode, 200);
+  assert.equal(approvedListResponse.json().submissions[0].id, submissionId);
+  assert.equal(approvedListResponse.json().submissions[0].reviewStatus, "approved");
+
   const publishResponse = await app.inject({
     method: "POST",
     url: `/v1/review/submissions/${submissionId}/actions`,
@@ -91,6 +100,14 @@ test("maintainers can approve and publish a clean public submission", async (t) 
   });
   assert.equal(publishResponse.statusCode, 200);
   assert.equal(publishResponse.json().submission.publishedAt.length > 0, true);
+
+  const publishedListResponse = await app.inject({
+    method: "GET",
+    url: "/v1/review/submissions",
+    headers: { authorization: `Bearer ${maintainerToken}` },
+  });
+  assert.equal(publishedListResponse.statusCode, 200);
+  assert.equal(publishedListResponse.json().submissions.some((submission: { id: string }) => submission.id === submissionId), false);
 
   const releaseResponse = await app.inject({
     method: "GET",

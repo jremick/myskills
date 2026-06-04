@@ -260,7 +260,8 @@ button {
   text-align: right;
 }
 
-.admin-workspace {
+.admin-workspace,
+.review-workspace {
   display: grid;
   gap: 18px;
   padding: 20px 24px 28px;
@@ -456,14 +457,19 @@ button {
 }
 
 .status-token-active,
-.status-token-enabled {
+.status-token-enabled,
+.status-token-approved,
+.status-token-passed {
   border-color: #bfe7cc;
   color: #11632d;
   background: #f0fbf3;
 }
 
 .status-token-pending,
-.status-token-request {
+.status-token-request,
+.status-token-unreviewed,
+.status-token-changes-requested,
+.status-token-warning {
   border-color: #fde68a;
   color: #854d0e;
   background: #fffbeb;
@@ -663,6 +669,135 @@ button {
 .audit-decision.deny {
   color: #991b1b;
   background: #fef2f2;
+}
+
+.review-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.42fr) minmax(560px, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.review-queue,
+.review-detail {
+  min-width: 0;
+  border: 1px solid #d8e0ea;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.05);
+}
+
+.review-list {
+  display: grid;
+}
+
+.review-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 15px 18px;
+  border: 0;
+  border-top: 1px solid #edf1f5;
+  color: #1f2a3b;
+  text-align: left;
+  background: #ffffff;
+}
+
+.review-row:hover,
+.review-row:focus-visible {
+  outline: 0;
+  background: #f8fcfc;
+}
+
+.review-row.selected {
+  background: #effdfb;
+  box-shadow: inset 3px 0 0 #0f766e;
+}
+
+.review-row > span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.review-row strong,
+.review-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-row small,
+.finding-count {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.review-detail {
+  padding: 24px;
+}
+
+.detail-heading.compact .detail-title h2 {
+  font-size: 24px;
+}
+
+.review-metadata {
+  margin-top: 22px;
+}
+
+.review-reason {
+  display: grid;
+  gap: 8px;
+  margin-top: 22px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.review-reason textarea {
+  min-height: 92px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid #cfd8e3;
+  border-radius: 7px;
+  color: #0f172a;
+  background: #ffffff;
+  font: inherit;
+}
+
+.review-reason textarea:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+  outline: 0;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.review-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid #0f766e;
+  border-radius: 7px;
+  color: #ffffff;
+  font-weight: 650;
+  background: #0f766e;
+}
+
+.review-actions button:disabled {
+  border-color: #cbd5e1;
+  color: #64748b;
+  cursor: not-allowed;
+  background: #e2e8f0;
 }
 
 .workspace {
@@ -1041,6 +1176,7 @@ button {
   }
 
   .admin-grid,
+  .review-layout,
   .provider-layout {
     grid-template-columns: 1fr;
   }
@@ -1064,7 +1200,8 @@ button {
     padding: 14px;
   }
 
-  .admin-workspace {
+  .admin-workspace,
+  .review-workspace {
     padding: 14px;
   }
 
@@ -1139,6 +1276,24 @@ button {
 
   .audit-row time {
     text-align: left;
+  }
+
+  .review-detail {
+    padding: 20px;
+  }
+
+  .review-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .review-actions {
+    flex-direction: column;
+  }
+
+  .review-actions button {
+    width: 100%;
+    justify-content: center;
   }
 
   .result-row {
