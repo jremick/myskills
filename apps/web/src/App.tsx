@@ -1830,7 +1830,6 @@ function AccountSettings({
   const [createdApiToken, setCreatedApiToken] = useState<string | null>(null);
 
   async function refreshAccountSecurity() {
-    setState("loading");
     try {
       const [nextMfaStatus, nextApiTokens] = await Promise.all([
         client.getMfaStatus(session.token),
@@ -1849,15 +1848,20 @@ function AccountSettings({
     void refreshAccountSecurity();
   }, [client, session.token]);
 
-  async function submitPasswordChange() {
+  async function submitPasswordChange(input?: { currentPassword: string; password: string; confirmPassword: string }) {
     setMessage(null);
-    if (newPassword !== confirmNewPassword) {
+    const passwordInput = input ?? {
+      currentPassword,
+      password: newPassword,
+      confirmPassword: confirmNewPassword,
+    };
+    if (passwordInput.password !== passwordInput.confirmPassword) {
       setMessage("Passwords do not match.");
       return;
     }
     setState("loading");
     try {
-      await client.changePassword({ currentPassword, password: newPassword }, session.token);
+      await client.changePassword({ currentPassword: passwordInput.currentPassword, password: passwordInput.password }, session.token);
       onSessionInvalidated("Password changed. Sign in again with the new password.");
     } catch (error) {
       setState("error");
@@ -1865,11 +1869,12 @@ function AccountSettings({
     }
   }
 
-  async function submitEmailChange() {
+  async function submitEmailChange(input?: { email: string; password: string }) {
     setMessage(null);
     setState("loading");
     try {
-      await client.requestEmailChange({ email, password: emailPassword }, session.token);
+      const emailInput = input ?? { email, password: emailPassword };
+      await client.requestEmailChange({ email: emailInput.email, password: emailInput.password }, session.token);
       setEmail("");
       setEmailPassword("");
       setState("ready");
@@ -1880,11 +1885,11 @@ function AccountSettings({
     }
   }
 
-  async function removeMfa() {
+  async function removeMfa(passwordOverride?: string) {
     setMessage(null);
     setState("loading");
     try {
-      await client.disableTotpMfa({ password: mfaPassword }, session.token);
+      await client.disableTotpMfa({ password: passwordOverride ?? mfaPassword }, session.token);
       onSessionInvalidated("MFA removed. Sign in again to continue.");
     } catch (error) {
       setState("error");
@@ -1927,165 +1932,303 @@ function AccountSettings({
   }
 
   const mfaEnabled = Boolean(mfaStatus?.totpEnabled);
+  const activeApiTokenCount = apiTokens.filter((token) => !token.revokedAt).length;
+  const sessionMfaLabel = session.user.mfaVerified ? "verified" : "not verified";
+  const mfaPostureLabel = mfaEnabled ? (session.user.mfaVerified ? "MFA verified" : "MFA enabled") : "MFA not set";
 
   return (
     <main className="settings-workspace" aria-label="Account settings">
       {message && <div className={state === "error" ? "safe-message admin-message" : "success-message admin-message"} role="status">{message}</div>}
-      <section className="settings-grid">
-        <AccountPanel icon={<UserRound size={18} aria-hidden="true" />} title="Account" meta={session.user.email}>
-          <dl className="settings-summary">
-            <Metadata label="Email" value={session.user.email} />
-            <Metadata label="Roles" value={session.user.roles.join(", ") || "user"} />
-            <Metadata label="Session MFA" value={session.user.mfaVerified ? "verified" : "not verified"} />
-            <Metadata label="Email status" value={session.user.emailVerified ? "verified" : "unverified"} />
-          </dl>
-        </AccountPanel>
-
-        <AccountPanel icon={<Mail size={18} aria-hidden="true" />} title="Change email" meta="Requires new-address verification">
-          <form className="settings-form" onSubmit={(event) => {
-            event.preventDefault();
-            void submitEmailChange();
-          }}>
-            <label>
-              New email
-              <input autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} type="email" />
-            </label>
-            <label>
-              Current password
-              <input autoComplete="current-password" value={emailPassword} onChange={(event) => setEmailPassword(event.target.value)} type="password" />
-            </label>
-            <button className="save-button" disabled={state === "loading" || !email || !emailPassword} type="submit">
-              <Mail size={16} aria-hidden="true" />
-              Send verification
-            </button>
-          </form>
-        </AccountPanel>
-
-        <AccountPanel icon={<KeyRound size={18} aria-hidden="true" />} title="Password" meta="Current password required">
-          <form className="settings-form" onSubmit={(event) => {
-            event.preventDefault();
-            void submitPasswordChange();
-          }}>
-            <label>
-              Current password
-              <input autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} type="password" />
-            </label>
-            <label>
-              New password
-              <input autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} type="password" />
-            </label>
-            <label>
-              Confirm new password
-              <input autoComplete="new-password" value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} type="password" />
-            </label>
-            <button className="save-button" disabled={state === "loading" || !currentPassword || !newPassword || !confirmNewPassword} type="submit">
-              <Save size={16} aria-hidden="true" />
-              Change password
-            </button>
-          </form>
-        </AccountPanel>
-
-        <AccountPanel icon={<ShieldCheck size={18} aria-hidden="true" />} title="MFA" meta={mfaEnabled ? `${mfaStatus?.recoveryCodesRemaining ?? 0} recovery codes` : "Authenticator app not set"}>
-          <div className="settings-stack">
-            <div className={mfaEnabled ? "state-banner state-banner-success" : "state-banner state-banner-warning"}>
-              <ShieldCheck size={18} aria-hidden="true" />
-              <span>{mfaEnabled ? "Authenticator app MFA is enabled." : "Set up an authenticator app before using privileged owner workflows."}</span>
-            </div>
-            {mfaEnabled && (
-              <div className="settings-actions">
-                <button className="save-button" type="button" onClick={() => setMfaSetupOpen((open) => !open)}>
-                  <RotateCw size={16} aria-hidden="true" />
-                  Reset authenticator
-                </button>
-                <form className="inline-security-form" onSubmit={(event) => {
-                  event.preventDefault();
-                  void removeMfa();
-                }}>
-                  <input
-                    aria-label="Password for MFA removal"
-                    autoComplete="current-password"
-                    onChange={(event) => setMfaPassword(event.target.value)}
-                    placeholder="Current password"
-                    type="password"
-                    value={mfaPassword}
-                  />
-                  <button disabled={state === "loading" || !mfaPassword} type="submit">
-                    <X size={16} aria-hidden="true" />
-                    Remove MFA
-                  </button>
-                </form>
-              </div>
-            )}
-            {(!mfaEnabled || mfaSetupOpen) && (
-              <MfaSetupPanel
-                client={client}
-                onComplete={(result) => {
-                  setMfaStatus({
-                    totpEnabled: true,
-                    recoveryCodesRemaining: result.recoveryCodes.length,
-                    factors: [result.factor],
-                  });
-                  setMfaSetupOpen(true);
-                }}
-                session={session}
-              />
-            )}
-          </div>
-        </AccountPanel>
-
-        <AccountPanel icon={<KeyRound size={18} aria-hidden="true" />} title="API keys" meta={`${apiTokens.filter((token) => !token.revokedAt).length} active`}>
-          <div className="settings-stack">
-            <form className="settings-form" onSubmit={(event) => {
-              event.preventDefault();
-              void createAccountApiToken();
-            }}>
-              <label>
-                Key name
-                <input value={apiTokenName} onChange={(event) => setApiTokenName(event.target.value)} placeholder="CLI or MCP client" />
-              </label>
-              <label>
-                Expires at
-                <input value={apiTokenExpiresAt} onChange={(event) => setApiTokenExpiresAt(event.target.value)} placeholder="Default: 90 days" />
-              </label>
-              <div className="scope-grid" aria-label="API key scopes">
-                {API_TOKEN_SCOPE_OPTIONS.map((option) => (
-                  <label className="role-toggle" key={option.scope}>
-                    <input
-                      checked={apiTokenScopes.includes(option.scope)}
-                      onChange={() => setApiTokenScopes((current) => toggleApiTokenScope(current, option.scope))}
-                      type="checkbox"
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                ))}
-              </div>
-              <button className="save-button" disabled={state === "loading" || !apiTokenName.trim() || apiTokenScopes.length === 0} type="submit">
-                <KeyRound size={16} aria-hidden="true" />
-                Create key
-              </button>
-            </form>
-            {createdApiToken && (
-              <div className="token-reveal" role="status">
-                <span>Copy this key now. It will not be shown again.</span>
-                <code>{createdApiToken}</code>
-                <button type="button" onClick={() => void navigator.clipboard?.writeText(createdApiToken)}>
-                  <Copy size={15} aria-hidden="true" />
-                  Copy
-                </button>
-              </div>
-            )}
-            <TokenList tokens={apiTokens} onRevoke={(tokenId) => void revokeAccountApiToken(tokenId)} />
-          </div>
-        </AccountPanel>
-
-        <AccountPanel icon={<Fingerprint size={18} aria-hidden="true" />} title="Passkeys" meta="Planned security option">
-          <div className="passkey-panel">
-            <StatusToken value="planned" />
-            <p>Passkeys can be added as an option after WebAuthn credential storage, challenge expiry, relying-party ID, and origin checks are implemented in the API.</p>
-          </div>
-        </AccountPanel>
+      <section className="settings-hero">
+        <div>
+          <p className="settings-eyebrow">Account settings</p>
+          <h1>Security and access</h1>
+          <p>Manage identity, authentication, and external access for this account.</p>
+        </div>
+        <div className="settings-hero-metrics" aria-label="Account posture">
+          <SettingsMetric label="Session MFA" value={sessionMfaLabel} strong={session.user.mfaVerified} />
+          <SettingsMetric label="Active API keys" value={String(activeApiTokenCount)} />
+        </div>
       </section>
+
+      {mfaEnabled && !session.user.mfaVerified && (
+        <section className="settings-risk-banner" role="status" aria-live="polite">
+          <CircleAlert size={20} aria-hidden="true" />
+          <div>
+            <strong>MFA is enabled, but this session is not MFA verified.</strong>
+            <p>Privileged owner workflows remain locked until the next MFA sign-in.</p>
+          </div>
+          <button type="button" onClick={() => onSessionInvalidated("Sign in with MFA to continue.")}>
+            <LogIn size={16} aria-hidden="true" />
+            Sign in with MFA
+          </button>
+        </section>
+      )}
+
+      <div className="settings-layout">
+        <aside className="settings-overview" aria-label="Account summary">
+          <div className="settings-profile">
+            <span className="settings-avatar" aria-hidden="true">
+              <UserRound size={24} />
+            </span>
+            <div>
+              <strong>{session.user.email}</strong>
+              <span>{session.user.roles.join(", ") || "user"}</span>
+            </div>
+          </div>
+          <dl className="settings-summary-list">
+            <Metadata label="Email status" value={session.user.emailVerified ? "verified" : "unverified"} />
+            <Metadata label="MFA posture" value={mfaPostureLabel} />
+            <Metadata label="Recovery codes" value={mfaEnabled ? String(mfaStatus?.recoveryCodesRemaining ?? 0) : "not issued"} />
+            <Metadata label="API access" value={`${activeApiTokenCount} active`} />
+          </dl>
+        </aside>
+
+        <section className="settings-content" aria-label="Settings controls">
+          <AccountPanel icon={<Mail size={18} aria-hidden="true" />} title="Change email" meta="Requires new-address verification">
+            <form className="settings-form two-column" onSubmit={(event) => {
+              event.preventDefault();
+              const formData = new window.FormData(event.currentTarget);
+              void submitEmailChange({
+                email: String(formData.get("new-email") ?? ""),
+                password: String(formData.get("email-current-password") ?? ""),
+              });
+            }}>
+              <div className="settings-field">
+                <label>
+                  <span>New email</span>
+                  <input
+                    aria-label="New email"
+                    autoComplete="email"
+                    name="new-email"
+                    onChange={(event) => setEmail(event.target.value)}
+                    onInput={(event) => setEmail(event.currentTarget.value)}
+                    required
+                    type="email"
+                    value={email}
+                  />
+                </label>
+                <small>The new address must be verified before it replaces the current one.</small>
+              </div>
+              <div className="settings-field">
+                <label>
+                  <span>Current password</span>
+                  <input
+                    autoComplete="current-password"
+                    name="email-current-password"
+                    onChange={(event) => setEmailPassword(event.target.value)}
+                    onInput={(event) => setEmailPassword(event.currentTarget.value)}
+                    required
+                    type="password"
+                    value={emailPassword}
+                  />
+                </label>
+                <small>Required for account identity changes.</small>
+              </div>
+              <div className="settings-submit-row">
+                <button className="save-button" disabled={state === "loading"} type="submit">
+                  <Mail size={16} aria-hidden="true" />
+                  Send verification
+                </button>
+              </div>
+            </form>
+          </AccountPanel>
+
+          <AccountPanel icon={<KeyRound size={18} aria-hidden="true" />} title="Password" meta="Current password required">
+            <form className="settings-form password-grid" onSubmit={(event) => {
+              event.preventDefault();
+              const formData = new window.FormData(event.currentTarget);
+              void submitPasswordChange({
+                currentPassword: String(formData.get("current-password") ?? ""),
+                password: String(formData.get("new-password") ?? ""),
+                confirmPassword: String(formData.get("confirm-new-password") ?? ""),
+              });
+            }}>
+              <label className="span-all">
+                <span>Current password</span>
+                <input
+                  autoComplete="current-password"
+                  name="current-password"
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  onInput={(event) => setCurrentPassword(event.currentTarget.value)}
+                  required
+                  type="password"
+                  value={currentPassword}
+                />
+              </label>
+              <label>
+                <span>New password</span>
+                <input
+                  aria-label="New password"
+                  autoComplete="new-password"
+                  name="new-password"
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  onInput={(event) => setNewPassword(event.currentTarget.value)}
+                  required
+                  type="password"
+                  value={newPassword}
+                />
+              </label>
+              <label>
+                <span>Confirm new password</span>
+                <input
+                  aria-label="Confirm new password"
+                  autoComplete="new-password"
+                  name="confirm-new-password"
+                  onChange={(event) => setConfirmNewPassword(event.target.value)}
+                  onInput={(event) => setConfirmNewPassword(event.currentTarget.value)}
+                  required
+                  type="password"
+                  value={confirmNewPassword}
+                />
+              </label>
+              <div className="settings-submit-row">
+                <button className="save-button" disabled={state === "loading"} type="submit">
+                  <Save size={16} aria-hidden="true" />
+                  Change password
+                </button>
+              </div>
+            </form>
+          </AccountPanel>
+
+          <AccountPanel icon={<ShieldCheck size={18} aria-hidden="true" />} title="MFA" meta={mfaEnabled ? `${mfaStatus?.recoveryCodesRemaining ?? 0} recovery codes` : "Authenticator app not set"}>
+            <div className="settings-stack">
+              <div className={mfaEnabled ? "settings-security-state verified" : "settings-security-state attention"}>
+                <ShieldCheck size={18} aria-hidden="true" />
+                <div>
+                  <strong>{mfaEnabled ? "Authenticator app MFA is enabled." : "Authenticator app MFA is not set."}</strong>
+                  <span>{session.user.mfaVerified ? "This session is MFA verified." : "Sign in with MFA before using privileged owner workflows."}</span>
+                </div>
+              </div>
+              {mfaEnabled && (
+                <div className="settings-actions">
+                  <button className="save-button secondary-action" type="button" onClick={() => setMfaSetupOpen((open) => !open)}>
+                    <RotateCw size={16} aria-hidden="true" />
+                    Reset authenticator
+                  </button>
+                  <form className="inline-security-form" onSubmit={(event) => {
+                    event.preventDefault();
+                    const formData = new window.FormData(event.currentTarget);
+                    void removeMfa(String(formData.get("mfa-removal-password") ?? ""));
+                  }}>
+                    <label>
+                      <span>Password for MFA removal</span>
+                      <input
+                        aria-label="Password for MFA removal"
+                        autoComplete="current-password"
+                        name="mfa-removal-password"
+                        onChange={(event) => setMfaPassword(event.target.value)}
+                        onInput={(event) => setMfaPassword(event.currentTarget.value)}
+                        placeholder="Current password"
+                        required
+                        type="password"
+                        value={mfaPassword}
+                      />
+                    </label>
+                    <button disabled={state === "loading"} type="submit">
+                      <X size={16} aria-hidden="true" />
+                      Remove MFA
+                    </button>
+                  </form>
+                </div>
+              )}
+              {(!mfaEnabled || mfaSetupOpen) && (
+                <MfaSetupPanel
+                  client={client}
+                  onComplete={(result) => {
+                    setMfaStatus({
+                      totpEnabled: true,
+                      recoveryCodesRemaining: result.recoveryCodes.length,
+                      factors: [result.factor],
+                    });
+                    setMfaSetupOpen(true);
+                  }}
+                  session={session}
+                />
+              )}
+            </div>
+          </AccountPanel>
+
+          <AccountPanel icon={<KeyRound size={18} aria-hidden="true" />} title="API keys" meta={`${activeApiTokenCount} active`}>
+            <div className="settings-stack">
+              <form className="settings-form api-key-form" onSubmit={(event) => {
+                event.preventDefault();
+                void createAccountApiToken();
+              }}>
+                <label>
+                  <span>Key name</span>
+                  <input
+                    aria-label="Key name"
+                    name="api-token-name"
+                    onChange={(event) => setApiTokenName(event.target.value)}
+                    onInput={(event) => setApiTokenName(event.currentTarget.value)}
+                    placeholder="CLI or MCP client"
+                    value={apiTokenName}
+                  />
+                </label>
+                <label>
+                  <span>Expires at</span>
+                  <input
+                    aria-label="Expires at"
+                    name="api-token-expires-at"
+                    onChange={(event) => setApiTokenExpiresAt(event.target.value)}
+                    onInput={(event) => setApiTokenExpiresAt(event.currentTarget.value)}
+                    placeholder="Default: 90 days"
+                    value={apiTokenExpiresAt}
+                  />
+                </label>
+                <fieldset className="scope-grid">
+                  <legend>API key scopes</legend>
+                  {API_TOKEN_SCOPE_OPTIONS.map((option) => (
+                    <label className="role-toggle" key={option.scope}>
+                      <input
+                        checked={apiTokenScopes.includes(option.scope)}
+                        onChange={() => setApiTokenScopes((current) => toggleApiTokenScope(current, option.scope))}
+                        type="checkbox"
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </fieldset>
+                <div className="settings-submit-row">
+                  <button className="save-button" disabled={state === "loading" || !apiTokenName.trim() || apiTokenScopes.length === 0} type="submit">
+                    <KeyRound size={16} aria-hidden="true" />
+                    Create key
+                  </button>
+                </div>
+              </form>
+              {createdApiToken && (
+                <div className="token-reveal" role="status">
+                  <span>Copy this key now. It will not be shown again.</span>
+                  <code>{createdApiToken}</code>
+                  <button type="button" onClick={() => void navigator.clipboard?.writeText(createdApiToken)}>
+                    <Copy size={15} aria-hidden="true" />
+                    Copy
+                  </button>
+                </div>
+              )}
+              <TokenList tokens={apiTokens} onRevoke={(tokenId) => void revokeAccountApiToken(tokenId)} />
+            </div>
+          </AccountPanel>
+
+          <AccountPanel icon={<Fingerprint size={18} aria-hidden="true" />} title="Passkeys" meta="Planned security option">
+            <div className="passkey-panel">
+              <StatusToken value="planned" />
+              <p>Passkeys can be added after WebAuthn credential storage, challenge expiry, relying-party ID, and origin checks are implemented in the API.</p>
+            </div>
+          </AccountPanel>
+        </section>
+      </div>
     </main>
+  );
+}
+
+function SettingsMetric({ label, strong, value }: { label: string; strong?: boolean; value: string }) {
+  return (
+    <div className={strong ? "settings-metric strong" : "settings-metric"}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   );
 }
 
@@ -2096,9 +2239,9 @@ function AccountPanel({ children, icon, meta, title }: {
   title: string;
 }) {
   return (
-    <section className="admin-panel settings-panel">
-      <div className="admin-panel-heading">
-        <span className="admin-panel-icon">{icon}</span>
+    <section className="settings-panel">
+      <div className="settings-panel-heading">
+        <span className="settings-panel-icon">{icon}</span>
         <div>
           <h2>{title}</h2>
           <p>{meta}</p>
@@ -2403,11 +2546,11 @@ function MfaSetupPanel({
   const [state, setState] = useState<LoadState>("idle");
   const [message, setMessage] = useState<string | null>(null);
 
-  async function startEnrollment() {
+  async function startEnrollment(passwordOverride?: string) {
     setState("loading");
     setMessage(null);
     try {
-      const nextEnrollment = await client.startTotpEnrollment({ password, label: "1Password" }, session.token);
+      const nextEnrollment = await client.startTotpEnrollment({ password: passwordOverride ?? password, label: "1Password" }, session.token);
       setEnrollment({
         factorId: nextEnrollment.factorId,
         secret: nextEnrollment.secret,
@@ -2421,14 +2564,14 @@ function MfaSetupPanel({
     }
   }
 
-  async function confirmEnrollment() {
+  async function confirmEnrollment(codeOverride?: string) {
     if (!enrollment) {
       return;
     }
     setState("loading");
     setMessage(null);
     try {
-      const result = await client.confirmTotpEnrollment({ factorId: enrollment.factorId, code: code.trim() }, session.token);
+      const result = await client.confirmTotpEnrollment({ factorId: enrollment.factorId, code: (codeOverride ?? code).trim() }, session.token);
       setRecoveryCodes(result.recoveryCodes);
       setCode("");
       setState("ready");
@@ -2445,20 +2588,23 @@ function MfaSetupPanel({
       {!enrollment ? (
         <form onSubmit={(event) => {
           event.preventDefault();
-          void startEnrollment();
+          const formData = new window.FormData(event.currentTarget);
+          void startEnrollment(String(formData.get("mfa-setup-password") ?? ""));
         }}>
           <label className="auth-field">
             <span>Current password</span>
             <input
-              aria-label="Current password"
               autoComplete="current-password"
               disabled={state === "loading"}
+              name="mfa-setup-password"
               onChange={(event) => setPassword(event.target.value)}
+              onInput={(event) => setPassword(event.currentTarget.value)}
+              required
               type="password"
               value={password}
             />
           </label>
-          <button disabled={state === "loading" || !password} type="submit">
+          <button disabled={state === "loading"} type="submit">
             <KeyRound size={16} aria-hidden="true" />
             Continue
           </button>
@@ -2466,7 +2612,8 @@ function MfaSetupPanel({
       ) : recoveryCodes.length === 0 ? (
         <form onSubmit={(event) => {
           event.preventDefault();
-          void confirmEnrollment();
+          const formData = new window.FormData(event.currentTarget);
+          void confirmEnrollment(String(formData.get("mfa-setup-code") ?? ""));
         }}>
           <div className="mfa-secret">
             <span>Authenticator setup</span>
@@ -2480,12 +2627,15 @@ function MfaSetupPanel({
               autoComplete="one-time-code"
               disabled={state === "loading"}
               inputMode="numeric"
+              name="mfa-setup-code"
               onChange={(event) => setCode(event.target.value)}
+              onInput={(event) => setCode(event.currentTarget.value)}
               placeholder="123456"
+              required
               value={code}
             />
           </label>
-          <button disabled={state === "loading" || !code.trim()} type="submit">
+          <button disabled={state === "loading"} type="submit">
             <ShieldCheck size={16} aria-hidden="true" />
             Enable MFA
           </button>
