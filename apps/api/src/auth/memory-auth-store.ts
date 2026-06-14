@@ -518,12 +518,17 @@ export class MemoryAuthStore implements AuthStore {
     return count;
   }
 
-  async updateMfaTotpFactorCounter(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<void> {
+  async updateMfaTotpFactorCounter(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<boolean> {
     const factor = this.mfaFactors.get(input.factorId);
-    if (factor && factor.userId === input.userId) {
-      factor.lastUsedCounter = input.lastUsedCounter;
-      factor.updatedAt = new Date();
+    if (!factor || factor.userId !== input.userId) {
+      return false;
     }
+    if (factor.lastUsedCounter !== null && factor.lastUsedCounter >= input.lastUsedCounter) {
+      return false;
+    }
+    factor.lastUsedCounter = input.lastUsedCounter;
+    factor.updatedAt = new Date();
+    return true;
   }
 
   async replaceMfaRecoveryCodes(input: { userId: string; codeHashes: string[] }): Promise<void> {
@@ -584,11 +589,13 @@ export class MemoryAuthStore implements AuthStore {
     return user ? { ...toMfaChallengeRecord(challenge), user: toRecord(user) } : null;
   }
 
-  async markMfaChallengeUsed(input: { challengeId: string; usedAt: Date }): Promise<void> {
+  async markMfaChallengeUsed(input: { challengeId: string; usedAt: Date }): Promise<boolean> {
     const challenge = [...this.mfaChallenges.values()].find((candidate) => candidate.id === input.challengeId);
-    if (challenge && !challenge.usedAt) {
-      challenge.usedAt = input.usedAt;
+    if (!challenge || challenge.usedAt) {
+      return false;
     }
+    challenge.usedAt = input.usedAt;
+    return true;
   }
 
   async recordAuditEvent(input: CreateAuditEventInput): Promise<void> {

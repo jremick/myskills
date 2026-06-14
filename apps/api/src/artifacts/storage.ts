@@ -97,6 +97,7 @@ export function createArtifactObjectStorageFromEnv(env: NodeJS.ProcessEnv): Arti
   }
 
   const endpoint = optionalString(env.S3_ENDPOINT);
+  validateProductionS3Endpoint({ endpoint, production, allowInsecureEndpoint: optionalBoolean(env.S3_ALLOW_INSECURE_ENDPOINT) ?? false });
   const client = new S3Client({
     region: optionalString(env.S3_REGION) ?? "us-east-1",
     endpoint,
@@ -126,6 +127,29 @@ function requiredString(value: string | undefined, name: string): string {
     throw new Error(`${name} is required.`);
   }
   return normalized;
+}
+
+function validateProductionS3Endpoint(input: {
+  endpoint: string | undefined;
+  production: boolean;
+  allowInsecureEndpoint: boolean;
+}): void {
+  if (!input.production || !input.endpoint) {
+    return;
+  }
+  let url: URL;
+  try {
+    url = new URL(input.endpoint);
+  } catch {
+    throw new Error("S3_ENDPOINT must be a valid URL.");
+  }
+  if (url.protocol === "https:") {
+    return;
+  }
+  if (url.protocol === "http:" && input.allowInsecureEndpoint) {
+    return;
+  }
+  throw new Error("S3_ENDPOINT must use https in production unless S3_ALLOW_INSECURE_ENDPOINT=true is set for a trusted private network.");
 }
 
 function optionalString(value: string | undefined): string | undefined {

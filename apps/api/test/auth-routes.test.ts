@@ -924,6 +924,46 @@ test("MFA-enabled users complete login with a challenge and single-use recovery 
   assert.equal(replay.json().error.code, "INVALID_MFA_CODE");
 });
 
+test("MFA challenge verification fails closed when the challenge was already claimed", async (t) => {
+  class LostChallengeClaimStore extends MemoryAuthStore {
+    override async markMfaChallengeUsed(): Promise<boolean> {
+      return false;
+    }
+  }
+
+  const authStore = new LostChallengeClaimStore("closed");
+  const app = buildAuthApp(authStore);
+  t.after(() => app.close());
+  const session = await addAndLogin(app, authStore, {
+    id: "mfa-race",
+    email: "mfa-race@example.com",
+    roles: ["user"],
+  });
+  const enrollment = await enrollTotp(app, session);
+  const confirmed = await confirmTotp(app, session, enrollment);
+
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: "mfa-race@example.com",
+      password: "correct horse battery staple",
+    },
+  });
+  const verified = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/verify",
+    payload: {
+      challengeToken: login.json().challengeToken,
+      recoveryCode: confirmed.recoveryCodes[0],
+    },
+  });
+
+  assert.equal(login.statusCode, 200);
+  assert.equal(verified.statusCode, 401);
+  assert.equal(verified.json().error.code, "INVALID_MFA_CODE");
+});
+
 test("MFA-enabled users can complete login with TOTP", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const app = buildAuthApp(authStore);

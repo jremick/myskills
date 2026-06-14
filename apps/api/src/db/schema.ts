@@ -124,6 +124,13 @@ export const authActionTokens = pgTable("auth_action_tokens", {
   index("auth_action_tokens_active_idx").on(table.tokenHash, table.purpose, table.expiresAt).where(sql`${table.usedAt} IS NULL`),
 ]);
 
+export const authRateLimits = pgTable("auth_rate_limits", {
+  bucketKey: text("bucket_key").primaryKey(),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const roles = pgTable("roles", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: roleName("name").notNull().unique(),

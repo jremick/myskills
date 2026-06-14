@@ -233,13 +233,13 @@ export interface AuthStore {
   enableMfaTotpFactor(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<MfaTotpFactorRecord | null>;
   disableMfaTotpFactorsForUser(input: { userId: string; disabledAt?: Date }): Promise<number>;
   disableOtherMfaTotpFactorsForUser(input: { userId: string; factorId: string; disabledAt?: Date }): Promise<number>;
-  updateMfaTotpFactorCounter(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<void>;
+  updateMfaTotpFactorCounter(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<boolean>;
   replaceMfaRecoveryCodes(input: { userId: string; codeHashes: string[] }): Promise<void>;
   countUnusedMfaRecoveryCodes(userId: string): Promise<number>;
   consumeMfaRecoveryCode(input: { userId: string; codeHash: string }): Promise<boolean>;
   createMfaChallenge(input: CreateMfaChallengeInput): Promise<MfaChallengeRecord>;
   findMfaChallengeByTokenHash(tokenHash: string, now?: Date): Promise<MfaChallengeWithUser | null>;
-  markMfaChallengeUsed(input: { challengeId: string; usedAt: Date }): Promise<void>;
+  markMfaChallengeUsed(input: { challengeId: string; usedAt: Date }): Promise<boolean>;
   recordAuditEvent(input: CreateAuditEventInput): Promise<void>;
   listAuditEvents(input: ListAuditEventsInput): Promise<AuditEventRecord[]>;
 }

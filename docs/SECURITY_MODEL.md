@@ -27,7 +27,7 @@ This security model describes the current alpha controls. The companion threat m
 - CLI login tokens are stored locally by normalized API URL with user-only file permissions; platform keychain storage remains the target hardening path.
 - Login uses normalized email lookup and generic invalid-credential denial.
 - Existing sessions are denied when the user is no longer active or email verified.
-- Login, registration, email verification, password reset, MFA, and action-token confirmation paths are throttled before repeated expensive auth work where applicable. Alpha rate limits are process-local; distributed rate limits are required before the business-safe production release.
+- Login, registration, email verification, password reset, MFA, and action-token confirmation paths are throttled before repeated expensive auth work where applicable. Production uses shared database-backed counters so limits survive API restarts and single-region scale-out; ingress throttles and abuse alerts remain business-safe production hardening.
 - Email verification before normal account use.
 - Password reset uses generic request responses, including notification delivery failures, and revokes active sessions and API tokens after a successful credential change.
 - Rate limits on auth endpoints.
@@ -63,7 +63,7 @@ This security model describes the current alpha controls. The companion threat m
 - Submitting a new unreviewed version must not mutate or hide an already approved public release.
 - Public bundle delivery uses the same approved/public/passed/published predicate as public search and detail.
 - Reject archive traversal, absolute paths, symlinks, encrypted archives, unsupported compression, excessive size, and excessive file count.
-- The alpha scanner blocks known credential/private-key patterns, destructive shell snippets, and unsafe archive structures, and warns on dependency install hooks. Broader fixture-backed scanning for uncommon secrets, generated binaries, and unsafe prompt-instruction patterns is required before the business-safe production release.
+- The alpha scanner blocks known credential/private-key patterns, destructive shell snippets, common encoded shell execution, unsafe prompt-instruction and exfiltration patterns, and unsafe archive structures, and warns on dependency install hooks. Broader fixture-backed scanning for uncommon secrets, generated binaries, and semantic package review remains business-safe production hardening.
 - Require maintainer approval and an explicit publish action before publication.
 - Store immutable artifact hashes.
 

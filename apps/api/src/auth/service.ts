@@ -321,7 +321,7 @@ export class AuthService {
     }
 
     const email = normalizeEmail(input.email);
-    assertAllowed(this.options.registrationLimiter, rateLimitKeys("register", email, input.ip));
+    await assertAllowed(this.options.registrationLimiter, rateLimitKeys("register", email, input.ip));
     const passwordHash = await this.hashNewPassword(input.password);
     const created = await this.store.createUserWithPassword({
       email,
@@ -336,7 +336,7 @@ export class AuthService {
 
   async requestEmailVerification(input: RequestEmailVerificationInput): Promise<{ status: "pending" }> {
     const email = normalizeEmail(input.email);
-    assertAllowed(this.options.emailVerificationLimiter, rateLimitKeys("email-verification", email, input.ip));
+    await assertAllowed(this.options.emailVerificationLimiter, rateLimitKeys("email-verification", email, input.ip));
     const user = await this.store.findUserByEmailWithPassword(email);
     if (user && shouldIssueEmailVerification(user)) {
       await this.sendAuthActionToken(user, "email_verification");
@@ -347,7 +347,7 @@ export class AuthService {
   async confirmEmailVerification(input: ConfirmEmailVerificationInput): Promise<{ status: "verified" }> {
     const token = cleanOpaqueToken(input.token, "token");
     const tokenHash = hashSessionToken(token);
-    assertAllowed(
+    await assertAllowed(
       this.options.authActionTokenLimiter ?? this.options.emailVerificationLimiter,
       tokenRateLimitKeys("email-verification-confirm", tokenHash, input.ip),
     );
@@ -372,7 +372,7 @@ export class AuthService {
 
   async requestPasswordReset(input: RequestPasswordResetInput): Promise<{ status: "pending" }> {
     const email = normalizeEmail(input.email);
-    assertAllowed(this.options.passwordResetLimiter, rateLimitKeys("password-reset", email, input.ip));
+    await assertAllowed(this.options.passwordResetLimiter, rateLimitKeys("password-reset", email, input.ip));
     const user = await this.store.findUserByEmailWithPassword(email);
     if (user?.passwordHash && isUsableAuthenticatedAccount(user)) {
       await this.sendAuthActionToken(user, "password_reset");
@@ -383,7 +383,7 @@ export class AuthService {
   async confirmPasswordReset(input: ConfirmPasswordResetInput): Promise<{ status: "reset" }> {
     const token = cleanOpaqueToken(input.token, "token");
     const tokenHash = hashSessionToken(token);
-    assertAllowed(
+    await assertAllowed(
       this.options.authActionTokenLimiter ?? this.options.passwordResetLimiter,
       tokenRateLimitKeys("password-reset-confirm", tokenHash, input.ip),
     );
@@ -409,7 +409,7 @@ export class AuthService {
   }
 
   async changePassword(actor: AuthResponseUser, input: ChangePasswordInput): Promise<{ status: "changed" }> {
-    assertAllowed(this.options.passwordResetLimiter, rateLimitKeys("password-change", actor.email, input.ip));
+    await assertAllowed(this.options.passwordResetLimiter, rateLimitKeys("password-change", actor.email, input.ip));
     await this.assertCanManageAccount(actor, input.currentPassword);
     const passwordHash = await this.hashNewPassword(input.password);
     const updated = await this.store.updatePasswordCredential({
@@ -436,7 +436,7 @@ export class AuthService {
 
   async requestEmailChange(actor: AuthResponseUser, input: RequestEmailChangeInput): Promise<{ status: "pending" }> {
     const email = normalizeEmail(input.email);
-    assertAllowed(this.options.emailVerificationLimiter, rateLimitKeys("email-change", email, input.ip));
+    await assertAllowed(this.options.emailVerificationLimiter, rateLimitKeys("email-change", email, input.ip));
     await this.assertCanManageAccount(actor, input.password);
     if (email === actor.email) {
       throw new AppError("New email address must be different.", "EMAIL_UNCHANGED", 400);
@@ -462,7 +462,7 @@ export class AuthService {
   async confirmEmailChange(input: ConfirmEmailChangeInput): Promise<{ status: "changed" }> {
     const token = cleanOpaqueToken(input.token, "token");
     const tokenHash = hashSessionToken(token);
-    assertAllowed(
+    await assertAllowed(
       this.options.authActionTokenLimiter ?? this.options.emailVerificationLimiter,
       tokenRateLimitKeys("email-change-confirm", tokenHash, input.ip),
     );
@@ -506,7 +506,7 @@ export class AuthService {
 
   async login(input: LoginInput): Promise<LoginResult> {
     const email = normalizeEmail(input.email);
-    assertAllowed(this.options.loginLimiter, rateLimitKeys("login", email, input.ip));
+    await assertAllowed(this.options.loginLimiter, rateLimitKeys("login", email, input.ip));
     const user = await this.store.findUserByEmailWithPassword(email);
     if (!user?.passwordHash || !(await verifyPassword(user.passwordHash, input.password))) {
       throw new AppError("Invalid email or password.", "INVALID_CREDENTIALS", 401);
@@ -549,7 +549,7 @@ export class AuthService {
   async verifyMfaChallenge(input: VerifyMfaChallengeInput): Promise<{ token: string; expiresAt: string; user: AuthResponseUser }> {
     const challengeToken = cleanOpaqueToken(input.challengeToken, "challengeToken");
     const challengeHash = hashSessionToken(challengeToken);
-    assertAllowed(this.options.mfaLimiter, rateLimitKeys("mfa", challengeHash, input.ip));
+    await assertAllowed(this.options.mfaLimiter, rateLimitKeys("mfa", challengeHash, input.ip));
 
     const challenge = await this.store.findMfaChallengeByTokenHash(challengeHash);
     if (!challenge || !isUsableAuthenticatedAccount(challenge.user)) {
@@ -563,7 +563,10 @@ export class AuthService {
       throw invalidMfaCode();
     }
 
-    await this.store.markMfaChallengeUsed({ challengeId: challenge.id, usedAt: verifiedAt });
+    const challengeClaimed = await this.store.markMfaChallengeUsed({ challengeId: challenge.id, usedAt: verifiedAt });
+    if (!challengeClaimed) {
+      throw invalidMfaCode();
+    }
     const token = createSessionToken();
     const expiresAt = new Date(Date.now() + (this.options.sessionTtlMs ?? DEFAULT_SESSION_TTL_MS));
     await this.store.createSession({
@@ -979,12 +982,14 @@ export class AuthService {
       const secret = decryptSecret(factor.secretCiphertext, this.mfaSecretKey());
       const verification = verifyTotpCode(secret, code, { window: 1 });
       if (verification.valid && verification.counter !== undefined && verification.counter > (factor.lastUsedCounter ?? -1)) {
-        await this.store.updateMfaTotpFactorCounter({
+        const counterClaimed = await this.store.updateMfaTotpFactorCounter({
           userId,
           factorId: factor.id,
           lastUsedCounter: verification.counter,
         });
-        return true;
+        if (counterClaimed) {
+          return true;
+        }
       }
     }
     return false;
@@ -1144,12 +1149,12 @@ function shouldIssueEmailVerification(user: AuthUserRecord): boolean {
   return !user.emailVerifiedAt && user.status !== "disabled" && user.status !== "deleted";
 }
 
-function assertAllowed(limiter: AuthRateLimiter | undefined, keys: string[]): void {
+async function assertAllowed(limiter: AuthRateLimiter | undefined, keys: string[]): Promise<void> {
   if (!limiter) {
     return;
   }
   for (const key of keys) {
-    const result = limiter.consume(key);
+    const result = await limiter.consume(key);
     if (!result.allowed) {
       throw new AppError("Too many attempts. Try again later.", "RATE_LIMITED", 429);
     }

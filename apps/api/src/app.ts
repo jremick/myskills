@@ -49,6 +49,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   const allowedOrigins = options.allowedOrigins ?? ["http://localhost:3000", "http://127.0.0.1:3000"];
 
   app.addHook("onRequest", async (request, reply) => {
+    setSecurityHeaders(reply);
     const origin = request.headers.origin;
     if (typeof origin === "string" && allowedOrigins.includes(origin)) {
       reply.header("access-control-allow-origin", origin);
@@ -1147,6 +1148,15 @@ function httpStatusCode(error: unknown): number | null {
   }
   const statusCode = (error as { statusCode?: unknown }).statusCode;
   return typeof statusCode === "number" ? statusCode : null;
+}
+
+function setSecurityHeaders(reply: FastifyReply): void {
+  reply.header("strict-transport-security", "max-age=31536000; includeSubDomains");
+  reply.header("content-security-policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+  reply.header("x-frame-options", "DENY");
+  reply.header("x-content-type-options", "nosniff");
+  reply.header("referrer-policy", "no-referrer");
+  reply.header("permissions-policy", "camera=(), microphone=(), geolocation=(), payment=()");
 }
 
 function parseJsonObject(input: unknown): Record<string, unknown> {

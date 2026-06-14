@@ -70,6 +70,8 @@ Set these in Railway secret/config variables, not in repo files:
 - `S3_SECRET_ACCESS_KEY`
 - `S3_FORCE_PATH_STYLE`
 
+`S3_ENDPOINT` must use HTTPS in production. Only set `S3_ALLOW_INSECURE_ENDPOINT=true` for an explicitly trusted private-network object store; do not use it for internet-routable endpoints.
+
 SMTP remains supported for self-hosted deployments, but the Railway production deployment should use Resend's HTTPS API because outbound SMTP depends on Railway plan/network restrictions. The private-development deployment currently keeps registration closed; public account email flows should not be opened until Resend delivery is fully configured and verified.
 
 ## Resend Setup

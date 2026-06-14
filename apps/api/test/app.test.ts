@@ -53,6 +53,12 @@ test("GET /health returns service status", async (t) => {
     ok: true,
     service: "myskills-app-api",
   });
+  assert.equal(response.headers["strict-transport-security"], "max-age=31536000; includeSubDomains");
+  assert.match(String(response.headers["content-security-policy"]), /frame-ancestors 'none'/);
+  assert.equal(response.headers["x-frame-options"], "DENY");
+  assert.equal(response.headers["x-content-type-options"], "nosniff");
+  assert.equal(response.headers["referrer-policy"], "no-referrer");
+  assert.equal(response.headers["permissions-policy"], "camera=(), microphone=(), geolocation=(), payment=()");
 });
 
 test("CORS allows configured web origins only", async (t) => {
