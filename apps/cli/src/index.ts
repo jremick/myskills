@@ -6,6 +6,17 @@ import { createFileTokenStore } from "./token-store.js";
 
 const fetchImpl = (globalThis as unknown as { fetch: FetchLike }).fetch;
 
+class MuteableOutput extends Writable {
+  muted = false;
+
+  override _write(chunk: string | Buffer, _encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
+    if (!this.muted) {
+      process.stdout.write(chunk);
+    }
+    callback();
+  }
+}
+
 const exitCode = await runCli(process.argv.slice(2), {
   env: process.env,
   fetch: fetchImpl,
@@ -43,15 +54,4 @@ function createTerminalPrompt(): CliPrompt {
       }
     },
   };
-}
-
-class MuteableOutput extends Writable {
-  muted = false;
-
-  override _write(chunk: string | Buffer, _encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
-    if (!this.muted) {
-      process.stdout.write(chunk);
-    }
-    callback();
-  }
 }
