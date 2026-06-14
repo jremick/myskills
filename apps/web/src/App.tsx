@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  ArrowRight,
+  Boxes,
   Check,
-  ChevronsUpDown,
   CircleAlert,
   ClipboardList,
   Copy,
   FileCode2,
+  Fingerprint,
+  KeyRound,
+  LockKeyhole,
   LogIn,
   LogOut,
   PackageOpen,
@@ -51,7 +55,7 @@ interface RegistryAppProps {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type AuthState = "idle" | "loading" | "mfa";
-type AppView = "browse" | "admin" | "review" | "submit";
+type AppView = "landing" | "login" | "browse" | "admin" | "review" | "submit";
 
 interface WebSession {
   token: string;
@@ -89,20 +93,59 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [platform, setPlatform] = useState("codex");
   const [listState, setListState] = useState<LoadState>("idle");
   const [detailState, setDetailState] = useState<LoadState>("idle");
-  const [message, setMessage] = useState<string | null>(null);
+  const [listMessage, setListMessage] = useState<string | null>(null);
+  const [detailMessage, setDetailMessage] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [authState, setAuthState] = useState<AuthState>("idle");
   const [mfaPending, setMfaPending] = useState<MfaPending | null>(null);
   const canUseAdmin = Boolean(session && isAdminUser(session.user));
   const canUseReview = Boolean(session && isReviewerUser(session.user));
   const canUseSubmit = Boolean(session && isSubmitterUser(session.user));
-  const activeView: AppView = view === "admin" && canUseAdmin
+  const activeView: AppView = view === "landing"
+    ? "landing"
+    : !session
+    ? "login"
+    : view === "login"
+    ? "browse"
+    : view === "admin" && canUseAdmin
     ? "admin"
     : view === "review" && canUseReview
       ? "review"
       : view === "submit" && canUseSubmit
         ? "submit"
         : "browse";
+
+  useEffect(() => {
+    if (!session && view !== "landing" && view !== "login") {
+      setView("login");
+      window.history.replaceState({}, "", "/login");
+      return;
+    }
+    if (session && view === "login") {
+      setView("browse");
+      window.history.replaceState({}, "", "/registry");
+    }
+  }, [session, view]);
+
+  useEffect(() => {
+    if (activeView === "landing" || activeView === "login") {
+      return;
+    }
+    function focusSearch(event: KeyboardEvent) {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+        return;
+      }
+      event.preventDefault();
+      document.getElementById("skill-search")?.focus();
+    }
+    window.addEventListener("keydown", focusSearch);
+    return () => window.removeEventListener("keydown", focusSearch);
+  }, [activeView]);
 
   useEffect(() => {
     if (!session) {
@@ -132,14 +175,20 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }, [registryClient, session?.token]);
 
   useEffect(() => {
+    if (activeView === "landing" || activeView === "login") {
+      setListState("idle");
+      return;
+    }
     let active = true;
     setListState("loading");
+    setListMessage(null);
     registryClient.searchSkills(query)
       .then((result) => {
         if (!active) {
           return;
         }
         setSkills(result);
+        setListMessage(null);
         setListState("ready");
         setSelectedSlug((current) => {
           if (current && result.some((skill) => skill.slug === current)) {
@@ -153,15 +202,22 @@ export function RegistryApp({ client }: RegistryAppProps) {
           return;
         }
         setSkills([]);
-        setMessage(safeErrorMessage(error));
+        setSelectedSlug(null);
+        setListMessage(safeErrorMessage(error));
         setListState("error");
       });
     return () => {
       active = false;
     };
-  }, [registryClient, query]);
+  }, [activeView, registryClient, query, refreshKey]);
 
   useEffect(() => {
+    if (activeView === "landing" || activeView === "login") {
+      setSelectedSkill(null);
+      setRelease(null);
+      setDetailState("idle");
+      return;
+    }
     if (!selectedSlug) {
       setSelectedSkill(null);
       setRelease(null);
@@ -170,7 +226,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
     }
     let active = true;
     setDetailState("loading");
-    setMessage(null);
+    setDetailMessage(null);
     registryClient.getSkill(selectedSlug)
       .then(async (skill) => {
         const latestVersion = skill.latestVersion;
@@ -180,6 +236,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
         }
         setSelectedSkill(skill);
         setRelease(nextRelease);
+        setDetailMessage(null);
         setPlatform(preferredPlatform(nextRelease?.platforms ?? skill.platforms));
         setDetailState("ready");
       })
@@ -189,13 +246,13 @@ export function RegistryApp({ client }: RegistryAppProps) {
         }
         setSelectedSkill(null);
         setRelease(null);
-        setMessage(safeErrorMessage(error));
+        setDetailMessage(safeErrorMessage(error));
         setDetailState("error");
       });
     return () => {
       active = false;
     };
-  }, [registryClient, selectedSlug]);
+  }, [activeView, registryClient, selectedSlug, refreshKey]);
 
   const selectedCommand = useMemo(() => (
     selectedSkill && release ? exportCommand(selectedSkill.slug, release.version, platform) : ""
@@ -207,216 +264,482 @@ export function RegistryApp({ client }: RegistryAppProps) {
     window.history.replaceState({}, "", `/skills/${slug}`);
   }
 
+  function openLanding() {
+    setView("landing");
+    window.history.replaceState({}, "", "/");
+  }
+
+  function openLogin() {
+    setView("login");
+    window.history.replaceState({}, "", "/login");
+  }
+
+  function openRegistry() {
+    setView("browse");
+    setSelectedSlug((current) => current ?? skills[0]?.slug ?? null);
+    window.history.replaceState({}, "", "/registry");
+  }
+
+  function retryRegistry() {
+    setListMessage(null);
+    setDetailMessage(null);
+    setRefreshKey((value) => value + 1);
+  }
+
+  async function handleLogin(input: { email: string; password: string }) {
+    setAuthState("loading");
+    setAuthMessage(null);
+    try {
+      const result = await registryClient.login(input);
+      if (result.mfaRequired) {
+        setMfaPending({ challengeToken: result.challengeToken, email: input.email });
+        setAuthState("mfa");
+        setAuthMessage("MFA required.");
+        return;
+      }
+      const nextSession = {
+        token: result.token,
+        expiresAt: result.expiresAt,
+        user: await registryClient.getMe(result.token),
+      };
+      setSession(nextSession);
+      writeStoredSession(nextSession);
+      setAuthState("idle");
+      openRegistry();
+    } catch (error) {
+      setAuthState("idle");
+      setAuthMessage(safeAuthErrorMessage(error));
+    }
+  }
+
+  async function handleVerifyMfa(codeOrRecoveryCode: string) {
+    if (!mfaPending) {
+      return;
+    }
+    setAuthState("loading");
+    setAuthMessage(null);
+    try {
+      const result = await registryClient.verifyMfa({
+        challengeToken: mfaPending.challengeToken,
+        codeOrRecoveryCode,
+      });
+      const nextSession = {
+        token: result.token,
+        expiresAt: result.expiresAt,
+        user: await registryClient.getMe(result.token),
+      };
+      setSession(nextSession);
+      writeStoredSession(nextSession);
+      setMfaPending(null);
+      setAuthState("idle");
+      openRegistry();
+    } catch (error) {
+      setAuthState("mfa");
+      setAuthMessage(safeAuthErrorMessage(error));
+    }
+  }
+
+  async function handleLogout() {
+    const token = session?.token;
+    setAuthMessage(null);
+    setSession(null);
+    clearStoredSession();
+    setMfaPending(null);
+    if (token) {
+      try {
+        await registryClient.logout(token);
+      } catch {
+        setAuthMessage("Signed out locally.");
+      }
+    }
+  }
+
+  function navigateTo(nextView: AppView) {
+    setView(nextView);
+    if (nextView === "browse") {
+      setSelectedSlug((current) => current ?? skills[0]?.slug ?? null);
+    }
+    window.history.replaceState({}, "", pathForView(nextView));
+  }
+
+  if (activeView === "landing") {
+    return <MarketingLanding onLogin={openLogin} />;
+  }
+
+  if (activeView === "login") {
+    return (
+      <LoginPage
+        authMessage={authMessage}
+        authState={authState}
+        mfaPending={mfaPending}
+        onHome={openLanding}
+        onLogin={handleLogin}
+        onVerifyMfa={handleVerifyMfa}
+      />
+    );
+  }
+
+  const navItems = [
+    { view: "browse" as const, label: "Registry", icon: <Boxes size={18} aria-hidden="true" />, enabled: true },
+    { view: "submit" as const, label: "Submit", icon: <Upload size={18} aria-hidden="true" />, enabled: canUseSubmit },
+    { view: "review" as const, label: "Review", icon: <ClipboardList size={18} aria-hidden="true" />, enabled: canUseReview },
+    { view: "admin" as const, label: "Admin", icon: <Settings size={18} aria-hidden="true" />, enabled: canUseAdmin },
+  ].filter((item) => item.enabled);
+
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="/" onClick={(event) => {
+      <aside className="app-sidebar" aria-label="Primary navigation">
+        <a className="brand" href="/registry" onClick={(event) => {
           event.preventDefault();
-          setView("browse");
-          setSelectedSlug(skills[0]?.slug ?? null);
-          window.history.replaceState({}, "", "/");
+          navigateTo("browse");
         }}>
           <span className="brand-mark" aria-hidden="true">
             <img src="/brand/myskills-mark.svg" alt="" />
           </span>
           <span>MySkills</span>
         </a>
-        <label className="global-search" htmlFor="skill-search">
-          <Search size={18} aria-hidden="true" />
-          <input
-            id="skill-search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search skills..."
-            autoComplete="off"
-          />
-          <kbd>/</kbd>
-        </label>
-        <div className="topbar-actions">
-          {canUseSubmit && (
+        <nav className="side-nav">
+          {navItems.map((item) => (
             <button
-              className={activeView === "submit" ? "admin-nav active" : "admin-nav"}
+              className={activeView === item.view ? "side-nav-item active" : "side-nav-item"}
+              key={item.view}
               type="button"
-              onClick={() => {
-                setView("submit");
-                window.history.replaceState({}, "", "/submit");
-              }}
+              onClick={() => navigateTo(item.view)}
             >
-              <Upload size={16} aria-hidden="true" />
-              Submit
+              {item.icon}
+              <span>{item.label}</span>
             </button>
-          )}
-          {canUseReview && (
-            <button
-              className={activeView === "review" ? "admin-nav active" : "admin-nav"}
-              type="button"
-              onClick={() => {
-                setView("review");
-                window.history.replaceState({}, "", "/review");
-              }}
-            >
-              <ClipboardList size={16} aria-hidden="true" />
-              Review
-            </button>
-          )}
-          {canUseAdmin && (
-            <button
-              className={activeView === "admin" ? "admin-nav active" : "admin-nav"}
-              type="button"
-              onClick={() => {
-                setView("admin");
-                window.history.replaceState({}, "", "/admin");
-              }}
-            >
-              <Settings size={16} aria-hidden="true" />
-              Admin
-            </button>
-          )}
-          <div className={listState === "error" ? "api-state api-state-error" : "api-state"} aria-live="polite">
-            <span className="status-dot" />
-            {listState === "error" ? "API unavailable" : "API connected"}
-            <ChevronsUpDown size={16} aria-hidden="true" />
+          ))}
+        </nav>
+        <div className="sidebar-note">
+          <span>Private workspace</span>
+          <strong>{session?.user.roles.includes("owner") ? "Owner access" : "Approved account"}</strong>
+        </div>
+      </aside>
+
+      <div className="app-main">
+        <header className="app-topbar">
+          <a className="mobile-brand" href="/registry" onClick={(event) => {
+            event.preventDefault();
+            navigateTo("browse");
+          }}>
+            <img src="/brand/myskills-mark.svg" alt="" />
+            <span>MySkills</span>
+          </a>
+          <div className="page-heading">
+            <span>{viewKicker(activeView)}</span>
+            <strong>{viewTitle(activeView)}</strong>
           </div>
+          {activeView === "browse" && (
+            <label className="global-search" htmlFor="skill-search">
+              <Search size={18} aria-hidden="true" />
+              <input
+                id="skill-search"
+                name="skill-search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search skills..."
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <kbd>/</kbd>
+            </label>
+          )}
           <AuthWidget
             authMessage={authMessage}
             authState={authState}
             mfaPending={mfaPending}
-            onLogin={async (input) => {
-              setAuthState("loading");
-              setAuthMessage(null);
-              try {
-                const result = await registryClient.login(input);
-                if (result.mfaRequired) {
-                  setMfaPending({ challengeToken: result.challengeToken, email: input.email });
-                  setAuthState("mfa");
-                  setAuthMessage("MFA required.");
-                  return;
-                }
-                const nextSession = {
-                  token: result.token,
-                  expiresAt: result.expiresAt,
-                  user: await registryClient.getMe(result.token),
-                };
-                setSession(nextSession);
-                writeStoredSession(nextSession);
-                setAuthState("idle");
-              } catch (error) {
-                setAuthState("idle");
-                setAuthMessage(safeAuthErrorMessage(error));
-              }
-            }}
-            onLogout={async () => {
-              const token = session?.token;
-              setAuthMessage(null);
-              setSession(null);
-              clearStoredSession();
-              setMfaPending(null);
-              if (token) {
-                try {
-                  await registryClient.logout(token);
-                } catch {
-                  setAuthMessage("Signed out locally.");
-                }
-              }
-            }}
-            onVerifyMfa={async (codeOrRecoveryCode) => {
-              if (!mfaPending) {
-                return;
-              }
-              setAuthState("loading");
-              setAuthMessage(null);
-              try {
-                const result = await registryClient.verifyMfa({
-                  challengeToken: mfaPending.challengeToken,
-                  codeOrRecoveryCode,
-                });
-                const nextSession = {
-                  token: result.token,
-                  expiresAt: result.expiresAt,
-                  user: await registryClient.getMe(result.token),
-                };
-                setSession(nextSession);
-                writeStoredSession(nextSession);
-                setMfaPending(null);
-                setAuthState("idle");
-              } catch (error) {
-                setAuthState("mfa");
-                setAuthMessage(safeAuthErrorMessage(error));
-              }
-            }}
+            onLogin={handleLogin}
+            onLogout={handleLogout}
+            onVerifyMfa={handleVerifyMfa}
             session={session}
           />
-        </div>
-      </header>
+        </header>
 
-      {activeView === "review" && session ? (
-        <ReviewDashboard client={registryClient} session={session} />
-      ) : activeView === "submit" && session ? (
-        <SubmitDashboard client={registryClient} session={session} />
-      ) : activeView === "admin" && session ? (
-        <AdminConsole client={registryClient} session={session} />
-      ) : (
-        <main className="workspace">
-          <section className="results-panel" aria-label="Skill search results">
-            <div className="panel-heading">
-              <div>
-                <h1>Search results</h1>
-                <p>{resultCountText(listState, skills.length)}</p>
-              </div>
-            </div>
-            <div className="result-list">
-              {listState === "loading" && <LoadingRows />}
-              {listState !== "loading" && skills.map((skill) => (
-                <button
-                  className={skill.slug === selectedSlug ? "result-row selected" : "result-row"}
-                  key={skill.slug}
-                  type="button"
-                  onClick={() => selectSkill(skill.slug)}
-                >
-                  <SkillIcon slug={skill.slug} />
-                  <span className="result-main">
-                    <strong>{skill.title}</strong>
-                    <span>{skill.slug}</span>
-                    <span className="tag-row">{skill.tags.slice(0, 3).map((tag) => <Tag key={tag}>{tag}</Tag>)}</span>
-                  </span>
-                  <span className="version">{skill.latestVersion ?? "-"}</span>
-                  <span className="platform-icons">{skill.platforms.slice(0, 2).map((item) => item.name).join(", ")}</span>
-                  <StatusPill />
-                </button>
-              ))}
-              {listState === "ready" && skills.length === 0 && (
-                <div className="empty-state">
-                  <CircleAlert size={22} aria-hidden="true" />
-                  <strong>No skills found.</strong>
-                  <span>Try a different search term.</span>
+        <div className="app-content">
+          {activeView === "review" && session ? (
+            <ReviewDashboard client={registryClient} session={session} />
+          ) : activeView === "submit" && session ? (
+            <SubmitDashboard client={registryClient} session={session} />
+          ) : activeView === "admin" && session ? (
+            <AdminConsole client={registryClient} session={session} />
+          ) : (
+            <main className="workspace">
+              <section className="results-panel" aria-label="Skill search results">
+                <div className="panel-heading">
+                  <div>
+                    <h1>Approved registry</h1>
+                    <p>{resultCountText(listState, skills.length)}</p>
+                  </div>
                 </div>
-              )}
-            </div>
-          </section>
+                <div className="result-list">
+                  {listState === "loading" && <LoadingRows />}
+                  {listState === "error" && (
+                    <div className="safe-message panel-state" role="status" aria-live="polite">
+                      <CircleAlert size={24} aria-hidden="true" />
+                      <strong>{listMessage ?? "The registry is not available."}</strong>
+                      <span>The list could not load. Retry the registry request before selecting a skill.</span>
+                      <button className="state-action" type="button" onClick={retryRegistry}>
+                        <RotateCw size={15} aria-hidden="true" />
+                        Retry
+                      </button>
+                    </div>
+                  )}
+                  {listState !== "loading" && listState !== "error" && skills.map((skill) => (
+                    <button
+                      className={skill.slug === selectedSlug ? "result-row selected" : "result-row"}
+                      key={skill.slug}
+                      type="button"
+                      onClick={() => selectSkill(skill.slug)}
+                    >
+                      <SkillIcon slug={skill.slug} />
+                      <span className="result-main">
+                        <strong>{skill.title}</strong>
+                        <span>{skill.slug}</span>
+                        <span className="tag-row">{skill.tags.slice(0, 3).map((tag) => <Tag key={tag}>{tag}</Tag>)}</span>
+                      </span>
+                      <span className="version">{skill.latestVersion ?? "-"}</span>
+                      <span className="platform-icons">{skill.platforms.slice(0, 2).map((item) => item.name).join(", ")}</span>
+                    </button>
+                  ))}
+                  {listState === "ready" && skills.length === 0 && (
+                    <div className="empty-state">
+                      <CircleAlert size={22} aria-hidden="true" />
+                      <strong>No skills found.</strong>
+                      <span>{query.trim() ? `No approved skills match "${query.trim()}".` : "Approved skills will appear here after publication."}</span>
+                      {query.trim() && (
+                        <button className="state-action" type="button" onClick={() => setQuery("")}>
+                          Clear search
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </section>
 
-          <section className="detail-panel" aria-label="Selected skill detail">
-            {message && <div className="safe-message" role="status">{message}</div>}
-            {detailState === "loading" && <DetailSkeleton />}
-            {detailState !== "loading" && selectedSkill && release && (
-              <SkillDetail
-                command={selectedCommand}
-                platform={platform}
-                release={release}
-                selectedSkill={selectedSkill}
-                setPlatform={setPlatform}
-              />
-            )}
-            {detailState !== "loading" && !selectedSkill && !message && (
-              <div className="empty-detail">
-                <FileCode2 size={42} aria-hidden="true" />
-                <h2>Select a skill</h2>
-                <p>Choose an approved skill to inspect release metadata and export guidance.</p>
-              </div>
-            )}
-          </section>
-        </main>
-      )}
+              <section className="detail-panel" aria-label="Selected skill detail">
+                {detailMessage && (
+                  <div className="safe-message panel-state" role="status" aria-live="polite">
+                    <CircleAlert size={24} aria-hidden="true" />
+                    <strong>{detailMessage}</strong>
+                    <span>The selected skill could not load. Retry the request or choose a different approved skill.</span>
+                    <button className="state-action" type="button" onClick={retryRegistry}>
+                      <RotateCw size={15} aria-hidden="true" />
+                      Retry
+                    </button>
+                  </div>
+                )}
+                {detailState === "loading" && <DetailSkeleton />}
+                {detailState !== "loading" && !detailMessage && selectedSkill && release && (
+                  <SkillDetail
+                    command={selectedCommand}
+                    platform={platform}
+                    release={release}
+                    selectedSkill={selectedSkill}
+                    setPlatform={setPlatform}
+                  />
+                )}
+                {detailState !== "loading" && !selectedSkill && !detailMessage && (
+                  <div className="empty-detail">
+                    <FileCode2 size={42} aria-hidden="true" />
+                    <h2>Select a skill</h2>
+                    <p>Choose an approved skill to inspect release metadata and export guidance.</p>
+                  </div>
+                )}
+              </section>
+            </main>
+          )}
+        </div>
+
+        <nav className="mobile-nav" aria-label="Mobile navigation">
+          {navItems.map((item) => (
+            <a
+              className={activeView === item.view ? "mobile-nav-item active" : "mobile-nav-item"}
+              href={pathForView(item.view)}
+              key={item.view}
+              onClick={(event) => {
+                event.preventDefault();
+                navigateTo(item.view);
+              }}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </a>
+          ))}
+        </nav>
+      </div>
     </div>
+  );
+}
+
+function MarketingLanding({ onLogin }: { onLogin: () => void }) {
+  return (
+    <main className="landing-page">
+      <section className="landing-hero" aria-label="MySkills private development landing page">
+        <nav className="landing-nav" aria-label="Marketing navigation">
+          <a className="landing-brand" href="/" onClick={(event) => event.preventDefault()}>
+            <img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" />
+          </a>
+          <div className="landing-links">
+            <a href="#registry">Registry</a>
+            <a href="#trust">Trust model</a>
+            <a href="#private-development">Status</a>
+            <button type="button" onClick={onLogin}>Login</button>
+          </div>
+        </nav>
+
+        <div className="landing-hero-grid">
+          <div className="landing-hero-copy">
+            <p className="landing-status">Private development. Not open for signups.</p>
+            <h1>MySkills</h1>
+            <p className="landing-lede">
+              A governed registry for packaging, reviewing, publishing, and installing reusable AI agent skills across web, CLI, API, and MCP surfaces.
+            </p>
+            <div className="landing-actions">
+              <button className="landing-primary" type="button" onClick={onLogin}>
+                Login
+                <ArrowRight size={18} aria-hidden="true" />
+              </button>
+              <a className="landing-secondary" href="#private-development">Read current status</a>
+            </div>
+          </div>
+          <LandingPreview />
+        </div>
+      </section>
+
+      <section className="landing-band" id="registry" aria-labelledby="registry-heading">
+        <div className="landing-section-heading">
+          <span>Registry foundation</span>
+          <h2 id="registry-heading">Built around reviewed releases, not loose prompt folders.</h2>
+        </div>
+        <div className="landing-feature-layout">
+          <article className="landing-feature featured">
+            <Boxes size={24} aria-hidden="true" />
+            <h3>Versioned skill packages</h3>
+            <p>Semantic releases, artifact checksums, supported platforms, and install or rollback flows stay tied to a specific skill version.</p>
+          </article>
+          <div className="landing-feature-stack">
+            <article className="landing-feature">
+              <ShieldCheck size={24} aria-hidden="true" />
+              <h3>Maintainer review</h3>
+              <p>Submissions pass through validation, scan evidence, role-aware review, and publish decisions before they become installable.</p>
+            </article>
+            <article className="landing-feature">
+              <Fingerprint size={24} aria-hidden="true" />
+              <h3>Shared authorization</h3>
+              <p>The API owns registry decisions so web, CLI, and MCP clients use one permission boundary instead of separate local assumptions.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-band landing-split" id="trust" aria-labelledby="trust-heading">
+        <div>
+          <span className="landing-kicker">Trust boundary</span>
+          <h2 id="trust-heading">Designed for private teams before public distribution.</h2>
+        </div>
+        <div className="landing-checks">
+          <p><KeyRound size={18} aria-hidden="true" /> First-party accounts, MFA, scoped API tokens, and owner-controlled registration.</p>
+          <p><LockKeyhole size={18} aria-hidden="true" /> Package artifacts live behind authenticated delivery and integrity checks.</p>
+          <p><ShieldCheck size={18} aria-hidden="true" /> MCP starts read-only with discovery and install guidance, not package execution.</p>
+        </div>
+      </section>
+
+      <section className="landing-band landing-status-band" id="private-development" aria-labelledby="status-heading">
+        <div className="landing-section-heading">
+          <span>Current status</span>
+          <h2 id="status-heading">Private alpha work is underway.</h2>
+          <p>
+            MySkills is being prepared for a responsible public alpha. The live site will share product direction and allow owner access, but public account creation is not available yet.
+          </p>
+        </div>
+        <button className="landing-primary" type="button" onClick={onLogin}>
+          Login
+          <ArrowRight size={18} aria-hidden="true" />
+        </button>
+      </section>
+    </main>
+  );
+}
+
+function LandingPreview() {
+  return (
+    <aside className="landing-preview" aria-label="Sanitized product preview">
+      <div className="preview-chrome">
+        <span />
+        <span />
+        <span />
+      </div>
+      <div className="preview-body">
+        <div className="preview-rail">
+          <strong>MySkills</strong>
+          <span className="active">Registry</span>
+          <span>Review</span>
+          <span>Admin</span>
+        </div>
+        <div className="preview-list">
+          <p>No registry content shown</p>
+          {[
+            ["Governed package release", "reviewed", "0.8.4"],
+            ["Private team automation", "pending", "0.3.1"],
+            ["Scoped MCP installer", "approved", "1.2.0"],
+          ].map(([title, status, version]) => (
+            <div className="preview-row" key={title}>
+              <span>
+                <strong>{title}</strong>
+                <small>sanitized preview</small>
+              </span>
+              <StatusToken value={status} />
+              <code>{version}</code>
+            </div>
+          ))}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function LoginPage({
+  authMessage,
+  authState,
+  mfaPending,
+  onHome,
+  onLogin,
+  onVerifyMfa,
+}: {
+  authMessage: string | null;
+  authState: AuthState;
+  mfaPending: MfaPending | null;
+  onHome: () => void;
+  onLogin: (input: { email: string; password: string }) => Promise<void>;
+  onVerifyMfa: (codeOrRecoveryCode: string) => Promise<void>;
+}) {
+  return (
+    <main className="login-page">
+      <nav className="login-nav" aria-label="Login navigation">
+        <a className="landing-brand" href="/" onClick={(event) => {
+          event.preventDefault();
+          onHome();
+        }}>
+          <img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" />
+        </a>
+        <button className="login-back" type="button" onClick={onHome}>Public site</button>
+      </nav>
+      <section className="login-panel" aria-labelledby="login-heading">
+        <p className="landing-status">Private development. Public signups are closed.</p>
+        <h1 id="login-heading">Login</h1>
+        <p>Use an approved owner or team account to access the private registry workspace.</p>
+        <AuthWidget
+          authMessage={authMessage}
+          authState={authState}
+          mfaPending={mfaPending}
+          onLogin={onLogin}
+          onLogout={async () => undefined}
+          onVerifyMfa={onVerifyMfa}
+          session={null}
+        />
+      </section>
+    </main>
   );
 }
 
@@ -484,6 +807,10 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
             event.preventDefault();
             void submitPackage();
           }}>
+            <div className="submit-guidance">
+              <strong>Package requirements</strong>
+              <span>.zip archive, 10 MB maximum, semantic version metadata, and no private paths or install hooks without review notes.</span>
+            </div>
             <label className="file-picker" htmlFor="package-archive">
               <PackageOpen size={26} aria-hidden="true" />
               <span>
@@ -516,6 +843,19 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
 
           {result ? (
             <div className="submit-result">
+              <div className={result.scan.findings.length > 0 ? "state-banner state-banner-warning" : "state-banner state-banner-success"}>
+                {result.scan.findings.length > 0 ? (
+                  <>
+                    <CircleAlert size={18} aria-hidden="true" />
+                    <span>Review the scan warnings before a maintainer approves this package.</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck size={18} aria-hidden="true" />
+                    <span>No scan findings. The package is ready for maintainer review.</span>
+                  </>
+                )}
+              </div>
               <dl className="metadata-grid">
                 <Metadata label="Submission ID" value={result.submission.id} monospace />
                 <Metadata label="Skill" value={result.submission.slug} />
@@ -559,14 +899,25 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
 function ReviewDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
   const [state, setState] = useState<LoadState>("loading");
   const [message, setMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [submissions, setSubmissions] = useState<ReviewSubmissionSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const selected = submissions.find((submission) => submission.id === selectedId) ?? submissions[0] ?? null;
+  const approveDisabled = !selected || selected.reviewStatus === "approved" || selected.securityStatus !== "passed";
+  const publishDisabled = !selected || selected.reviewStatus !== "approved" || selected.securityStatus !== "passed";
+  const actionHint = selected
+    ? selected.securityStatus !== "passed"
+      ? "Resolve or document scan findings before approving or publishing."
+      : selected.reviewStatus === "approved"
+        ? "This submission is approved. Publish it when release notes and metadata are ready."
+        : "Approve after checking metadata, package integrity, and scan output."
+    : "";
 
   async function refreshReview() {
     setState("loading");
     setMessage(null);
+    setNotice(null);
     try {
       const nextSubmissions = await client.listReviewSubmissions(session.token);
       setSubmissions(nextSubmissions);
@@ -588,12 +939,16 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
 
   async function runReviewAction(submission: ReviewSubmissionSummary, action: ReviewActionName) {
     setMessage(null);
+    setNotice(null);
     try {
       const result = await client.performReviewAction(submission.id, action, reason, session.token);
       const nextSubmissions = await client.listReviewSubmissions(session.token);
       setSubmissions(nextSubmissions);
       setSelectedId(result.publishedAt ? nextSubmissions[0]?.id ?? null : result.id);
       setReason("");
+      setNotice(result.publishedAt
+        ? `${submission.title} was published.`
+        : `${submission.title} was approved and can now be published.`);
     } catch (error) {
       setMessage(safeReviewErrorMessage(error));
     }
@@ -613,6 +968,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
       </section>
 
       {message && <div className="safe-message admin-message" role="status">{message}</div>}
+      {notice && <div className="success-message admin-message" role="status" aria-live="polite">{notice}</div>}
 
       <section className="review-layout">
         <section className="review-queue" aria-label="Review queue">
@@ -681,7 +1037,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
 
               <div className="review-actions">
                 <button
-                  disabled={selected.reviewStatus === "approved" || selected.securityStatus !== "passed"}
+                  disabled={approveDisabled}
                   type="button"
                   onClick={() => void runReviewAction(selected, "approve")}
                 >
@@ -689,7 +1045,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
                   Approve
                 </button>
                 <button
-                  disabled={selected.reviewStatus !== "approved" || selected.securityStatus !== "passed"}
+                  disabled={publishDisabled}
                   type="button"
                   onClick={() => void runReviewAction(selected, "publish")}
                 >
@@ -697,6 +1053,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
                   Publish
                 </button>
               </div>
+              <p className="action-hint">{actionHint}</p>
             </>
           ) : (
             <div className="empty-detail">
@@ -749,6 +1106,13 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
 
   async function updateRegistration(mode: AdminRegistrationMode) {
     setMessage(null);
+    if (
+      mode === "open"
+      && registrationMode !== "open"
+      && !window.confirm("Open registration? This allows new accounts to sign up without an owner approving each request first.")
+    ) {
+      return;
+    }
     try {
       const registration = await client.updateAdminRegistration(mode, session.token);
       setRegistrationMode(registration.mode);
@@ -760,6 +1124,14 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
 
   async function performUserAction(userId: string, action: "approve" | "activate" | "disable" | "delete") {
     setMessage(null);
+    const confirmationMessage = action === "disable"
+      ? "Disable this user? They will lose access until reactivated."
+      : action === "delete"
+        ? "Delete this user? This removes access and cannot be undone from this screen."
+        : null;
+    if (confirmationMessage && !window.confirm(confirmationMessage)) {
+      return;
+    }
     try {
       const updated = await client.performAdminUserAction(userId, action, session.token);
       setUsers((current) => current.map((user) => user.id === updated.id ? updated : user));
@@ -820,6 +1192,11 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
           title="Registration"
           meta={state === "loading" ? "Loading" : registrationMode}
         >
+          <div className={`registration-posture registration-posture-${registrationMode}`}>
+            <span>{capitalize(registrationMode)}</span>
+            <strong>{registrationPostureTitle(registrationMode)}</strong>
+            <p>{registrationPostureDescription(registrationMode)}</p>
+          </div>
           <div className="segmented-control" aria-label="Registration mode">
             {(["closed", "request", "open"] as const).map((mode) => (
               <button
@@ -832,6 +1209,9 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
               </button>
             ))}
           </div>
+          <p className="admin-guidance">
+            Use request mode for private alpha access. Open registration is intentionally guarded because public signups are not ready.
+          </p>
         </AdminPanel>
 
         <AdminPanel
@@ -1141,14 +1521,21 @@ function AuthWidget({
         event.preventDefault();
         void onVerifyMfa(mfaCode).finally(() => setMfaCode(""));
       }}>
-        <input
-          aria-label="MFA code"
-          autoComplete="one-time-code"
-          disabled={authState === "loading"}
-          onChange={(event) => setMfaCode(event.target.value)}
-          placeholder="MFA code"
-          value={mfaCode}
-        />
+        <label className="auth-field">
+          <span>Verification code</span>
+          <input
+            aria-label="MFA code"
+            autoComplete="one-time-code"
+            disabled={authState === "loading"}
+            inputMode="numeric"
+            name="mfa-code"
+            onChange={(event) => setMfaCode(event.target.value)}
+            placeholder="123456"
+            spellCheck={false}
+            value={mfaCode}
+          />
+        </label>
+        <p className="auth-help">Use your authenticator app or recovery code for {mfaPending.email}.</p>
         <button disabled={authState === "loading" || !mfaCode.trim()} type="submit">
           <ShieldCheck size={16} aria-hidden="true" />
           Verify
@@ -1163,35 +1550,45 @@ function AuthWidget({
       event.preventDefault();
       void onLogin({ email, password }).finally(() => setPassword(""));
     }}>
-      <input
-        aria-label="Email"
-        autoComplete="email"
-        disabled={authState === "loading"}
-        onChange={(event) => setEmail(event.target.value)}
-        placeholder="Email"
-        type="email"
-        value={email}
-      />
-      <input
-        aria-label="Password"
-        autoComplete="current-password"
-        disabled={authState === "loading"}
-        onChange={(event) => setPassword(event.target.value)}
-        placeholder="Password"
-        type="password"
-        value={password}
-      />
+      <label className="auth-field">
+        <span>Email</span>
+        <input
+          aria-label="Email"
+          autoComplete="email"
+          disabled={authState === "loading"}
+          name="email"
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="owner@example.com"
+          spellCheck={false}
+          type="email"
+          value={email}
+        />
+      </label>
+      <label className="auth-field">
+        <span>Password</span>
+        <input
+          aria-label="Password"
+          autoComplete="current-password"
+          disabled={authState === "loading"}
+          name="password"
+          onChange={(event) => setPassword(event.target.value)}
+          placeholder="Account password"
+          type="password"
+          value={password}
+        />
+      </label>
       <button disabled={authState === "loading" || !email.trim() || !password} type="submit">
         <LogIn size={16} aria-hidden="true" />
         Sign in
       </button>
+      <p className="auth-help">Access is limited to approved private-development accounts.</p>
       <AuthMessage message={authMessage} />
     </form>
   );
 }
 
 function AuthMessage({ message }: { message: string | null }) {
-  return message ? <span className="auth-message" role="status">{message}</span> : null;
+  return message ? <span className="auth-message" role="status" aria-live="polite">{message}</span> : null;
 }
 
 function SkillDetail({
@@ -1215,7 +1612,10 @@ function SkillDetail({
           <h2>{selectedSkill.title}</h2>
           <span>{selectedSkill.slug}</span>
         </div>
-        <StatusPill />
+        <div className="detail-status" aria-label="Release status">
+          <span className={`status-token status-token-${release.reviewStatus}`}>Review {release.reviewStatus}</span>
+          <span className={`status-token status-token-${release.securityStatus}`}>Security {release.securityStatus}</span>
+        </div>
       </div>
       <p className="summary">{selectedSkill.summary}</p>
       <dl className="metadata-grid">
@@ -1267,15 +1667,6 @@ function Metadata({ label, monospace, value }: { label: string; value: string; m
       <dt>{label}</dt>
       <dd className={monospace ? "mono" : undefined}>{value}</dd>
     </div>
-  );
-}
-
-function StatusPill() {
-  return (
-    <span className="status-pill">
-      <ShieldCheck size={16} aria-hidden="true" />
-      Approved
-    </span>
   );
 }
 
@@ -1349,6 +1740,12 @@ function isSubmitterUser(user: WebAuthUser): boolean {
 }
 
 function initialViewFromPath(pathname: string): AppView {
+  if (pathname === "/") {
+    return "landing";
+  }
+  if (pathname === "/login") {
+    return "login";
+  }
   if (pathname === "/admin") {
     return "admin";
   }
@@ -1359,6 +1756,72 @@ function initialViewFromPath(pathname: string): AppView {
     return "submit";
   }
   return "browse";
+}
+
+function pathForView(view: AppView): string {
+  if (view === "landing") {
+    return "/";
+  }
+  if (view === "login") {
+    return "/login";
+  }
+  return view === "browse" ? "/registry" : `/${view}`;
+}
+
+function viewTitle(view: AppView): string {
+  switch (view) {
+    case "admin":
+      return "Admin";
+    case "review":
+      return "Review";
+    case "submit":
+      return "Submit";
+    case "browse":
+      return "Registry";
+    case "login":
+      return "Login";
+    case "landing":
+      return "MySkills";
+  }
+}
+
+function viewKicker(view: AppView): string {
+  switch (view) {
+    case "admin":
+      return "Governance";
+    case "review":
+      return "Maintainer workflow";
+    case "submit":
+      return "Author workflow";
+    case "browse":
+      return "Approved releases";
+    case "login":
+      return "Private access";
+    case "landing":
+      return "Private development";
+  }
+}
+
+function registrationPostureTitle(mode: AdminRegistrationMode): string {
+  switch (mode) {
+    case "closed":
+      return "Only existing approved accounts can access the registry.";
+    case "request":
+      return "New accounts require owner or admin approval.";
+    case "open":
+      return "New accounts can sign up without prior approval.";
+  }
+}
+
+function registrationPostureDescription(mode: AdminRegistrationMode): string {
+  switch (mode) {
+    case "closed":
+      return "Best for private development and production hardening before public alpha.";
+    case "request":
+      return "Best for controlled collaborator onboarding while review workflows are still maturing.";
+    case "open":
+      return "Use only when public onboarding, abuse handling, and support workflows are ready.";
+  }
 }
 
 function emptyProviderDraft(): ProviderDraft {
@@ -1459,7 +1922,7 @@ function formatBytes(bytes: number): string {
 }
 
 function skillSlugFromPath(pathname: string): string | null {
-  const match = pathname.match(/^\/skills\/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)$/);
+  const match = pathname.match(/^\/(?:registry\/)?skills\/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)$/);
   return match?.[1] ?? null;
 }
 

@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1
+
+ARG NODE_VERSION=22-alpine
+ARG NPM_VERSION=11.12.1
+
+FROM node:${NODE_VERSION} AS deps
+ARG NPM_VERSION
+WORKDIR /app
+RUN npm install -g npm@${NPM_VERSION}
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY packages ./packages
+COPY apps ./apps
+COPY scripts ./scripts
+RUN npm ci
+
+FROM deps AS build
+RUN npm run build -w @myskills-app/core \
+  && npm run build -w @myskills-app/auth \
+  && npm run build -w @myskills-app/skill-package \
+  && npm run build -w @myskills-app/api
+RUN npm prune --omit=dev
+
+FROM node:${NODE_VERSION} AS api
+ENV NODE_ENV=production \
+    HOST=0.0.0.0
+WORKDIR /app
+COPY --from=build /app/package.json /app/package-lock.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages ./packages
+COPY --from=build /app/apps/api/package.json ./apps/api/package.json
+COPY --from=build /app/apps/api/dist ./apps/api/dist
+COPY --from=build /app/apps/api/migrations ./apps/api/migrations
+COPY deploy/start-api.sh ./deploy/start-api.sh
+USER node
+EXPOSE 3001
+CMD ["sh", "deploy/start-api.sh"]

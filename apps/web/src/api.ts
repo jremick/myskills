@@ -338,6 +338,9 @@ export function safeAuthErrorMessage(error: unknown): string {
   if (isSafeApiError(error) && error.status === 429) {
     return "Too many sign-in attempts. Try again later.";
   }
+  if (isSafeApiError(error) && error.status === 401) {
+    return "Invalid email or password.";
+  }
   if (isSafeApiError(error) && error.status >= 400 && error.status < 500) {
     return "Sign in could not be completed.";
   }

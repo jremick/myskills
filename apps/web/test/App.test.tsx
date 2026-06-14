@@ -16,8 +16,38 @@ import type {
   SubmitSkillResult,
 } from "../src/api.js";
 
+test("landing page explains private development and opens the login page", async () => {
+  setupDom("http://localhost/");
+  const client = mockClient();
+
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByRole("heading", { name: "MySkills" });
+  assert.equal(document.body.textContent?.includes("Private development. Not open for signups."), true);
+  assert.equal(client.searchCalls.length, 0);
+
+  fireEvent.click(view.getAllByRole("button", { name: "Login" })[0]!);
+
+  await view.findByRole("heading", { name: "Login" });
+  assert.deepEqual(client.searchCalls, []);
+  assert.equal(document.body.textContent?.includes("Release Notes Helper"), false);
+  assert.equal(window.location.pathname, "/login");
+});
+
+test("anonymous registry routes resolve to login without loading skills", async () => {
+  setupDom("http://localhost/registry");
+  const client = mockClient();
+
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByRole("heading", { name: "Login" });
+  assert.deepEqual(client.searchCalls, []);
+  assert.equal(document.body.textContent?.includes("Release Notes Helper"), false);
+  assert.equal(window.location.pathname, "/login");
+});
+
 test("browse page requests skills with query and renders API-returned skills", async () => {
-  setupDom();
+  setupAuthenticatedDom();
   const client = mockClient();
 
   const view = render(<RegistryApp client={client} />);
@@ -30,12 +60,15 @@ test("browse page requests skills with query and renders API-returned skills", a
 });
 
 test("default registry client is stable between renders", async () => {
-  setupDom();
+  setupAuthenticatedDom();
   const calls: string[] = [];
   const previousFetch = globalThis.fetch;
   globalThis.fetch = (async (input) => {
     const url = String(input);
     calls.push(url);
+    if (url.includes("/v1/me")) {
+      return jsonResponse(200, { user: authUser() });
+    }
     if (url.includes("/releases/")) {
       return jsonResponse(200, { release: publicRelease() });
     }
@@ -49,9 +82,10 @@ test("default registry client is stable between renders", async () => {
     const view = render(<RegistryApp />);
 
     await view.findByText("Turns merged changes into concise release notes.");
-    await waitFor(() => assert.equal(calls.length, 3));
+    await waitFor(() => assert.equal(calls.length, 4));
     await delay(25);
     assert.deepEqual(calls, [
+      "http://localhost:3001/v1/me",
       "http://localhost:3001/v1/skills",
       "http://localhost:3001/v1/skills/release-notes-helper",
       "http://localhost:3001/v1/skills/release-notes-helper/releases/0.1.0",
@@ -62,7 +96,7 @@ test("default registry client is stable between renders", async () => {
 });
 
 test("searching selects a matching result when the current detail is filtered out", async () => {
-  setupDom();
+  setupAuthenticatedDom();
   const smokeSkill = {
     ...publicSkill("smoke-skill"),
     title: "Smoke Skill",
@@ -88,7 +122,7 @@ test("searching selects a matching result when the current detail is filtered ou
 });
 
 test("empty search state does not leak denied identifiers", async () => {
-  setupDom();
+  setupAuthenticatedDom();
   const client = mockClient({ skills: [] });
 
   const view = render(<RegistryApp client={client} />);
@@ -99,7 +133,7 @@ test("empty search state does not leak denied identifiers", async () => {
 });
 
 test("skill detail displays public metadata and release artifact metadata only", async () => {
-  setupDom("http://localhost/skills/release-notes-helper");
+  setupAuthenticatedDom("http://localhost/skills/release-notes-helper");
   const client = mockClient();
 
   const view = render(<RegistryApp client={client} />);
@@ -115,7 +149,7 @@ test("skill detail displays public metadata and release artifact metadata only",
 });
 
 test("404 detail responses render generic not found state", async () => {
-  setupDom("http://localhost/skills/private-helper");
+  setupAuthenticatedDom("http://localhost/skills/private-helper");
   const client = mockClient({
     getSkillError: safeApiError(404, "SKILL_NOT_FOUND", "Private helper exists but is hidden."),
   });
@@ -128,7 +162,7 @@ test("404 detail responses render generic not found state", async () => {
 });
 
 test("platform selection changes CLI export guidance only", async () => {
-  setupDom("http://localhost/skills/release-notes-helper");
+  setupAuthenticatedDom("http://localhost/skills/release-notes-helper");
   const client = mockClient();
 
   const view = render(<RegistryApp client={client} />);
@@ -151,6 +185,8 @@ test("login stores a verified session and logout clears it", async () => {
   fireEvent.click(view.getByRole("button", { name: /sign in/i }));
 
   await view.findByText("reader@example.com");
+  await view.findByText("Release Notes Helper");
+  assert.equal(window.location.pathname, "/registry");
   assert.equal(document.body.textContent?.includes("web-session-token"), false);
   assert.equal(JSON.parse(window.localStorage.getItem("myskills-app:web-session") ?? "{}").token, "web-session-token");
 
@@ -215,8 +251,22 @@ test("admin sessions can manage registration, users, and provider metadata", asy
   fireEvent.click(view.getByRole("button", { name: "Request" }));
   await waitFor(() => assert.deepEqual(client.registrationUpdates, ["request"]));
 
-  fireEvent.click(view.getByLabelText("Disable user"));
-  await waitFor(() => assert.deepEqual(client.userActions, ["user-2:disable"]));
+  const originalConfirm = window.confirm;
+  window.confirm = () => false;
+  fireEvent.click(view.getByRole("button", { name: "Open" }));
+  assert.deepEqual(client.registrationUpdates, ["request"]);
+
+  window.confirm = () => true;
+  fireEvent.click(view.getByRole("button", { name: "Open" }));
+  await waitFor(() => assert.deepEqual(client.registrationUpdates, ["request", "open"]));
+
+  window.confirm = () => true;
+  try {
+    fireEvent.click(view.getByLabelText("Disable user"));
+    await waitFor(() => assert.deepEqual(client.userActions, ["user-2:disable"]));
+  } finally {
+    window.confirm = originalConfirm;
+  }
 
   fireEvent.click(view.getByLabelText("Set author@example.com maintainer role"));
   await waitFor(() => assert.deepEqual(client.roleUpdates, ["user-2:maintainer,author"]));
@@ -376,7 +426,7 @@ test("failed login shows auth-specific safe copy", async () => {
   fireEvent.input(view.getByLabelText("Password"), { target: { value: "wrong-password" } });
   fireEvent.click(view.getByRole("button", { name: /sign in/i }));
 
-  await view.findByText("Sign in could not be completed.");
+  await view.findByText("Invalid email or password.");
   assert.equal(document.body.textContent?.includes("registry item"), false);
   assert.equal(document.body.textContent?.includes("Wrong password"), false);
   assert.equal(window.localStorage.getItem("myskills-app:web-session"), null);
@@ -387,10 +437,19 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-function setupDom(url = "http://localhost/") {
+function setupDom(url = "http://localhost/registry") {
   document.body.innerHTML = "";
   window.localStorage.clear();
   window.history.replaceState({}, "", url);
+}
+
+function setupAuthenticatedDom(url = "http://localhost/registry", user = authUser()) {
+  setupDom(url);
+  window.localStorage.setItem("myskills-app:web-session", JSON.stringify({
+    token: "stored-session-token",
+    expiresAt: "2026-06-04T01:00:00.000Z",
+    user,
+  }));
 }
 
 function mockClient(input: {
