@@ -36,10 +36,12 @@ import {
   safeErrorMessage,
   safeReviewErrorMessage,
   safeSubmitErrorMessage,
+  type ConfirmMfaResult,
   type AdminAuditEvent,
   type AdminProviderConfig,
   type AdminRegistrationMode,
   type AdminUser,
+  type MfaStatus,
   type ProviderRoleMappingInput,
   type RegistryClient,
   type ReleaseMetadata,
@@ -448,6 +450,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
           <AuthWidget
             authMessage={authMessage}
             authState={authState}
+            client={registryClient}
             mfaPending={mfaPending}
             onLogin={handleLogin}
             onLogout={handleLogout}
@@ -1482,6 +1485,7 @@ function StatusToken({ value }: { value: string }) {
 function AuthWidget({
   authMessage,
   authState,
+  client,
   mfaPending,
   onLogin,
   onLogout,
@@ -1490,6 +1494,7 @@ function AuthWidget({
 }: {
   authMessage: string | null;
   authState: AuthState;
+  client: RegistryClient;
   mfaPending: MfaPending | null;
   onLogin: (input: { email: string; password: string }) => Promise<void>;
   onLogout: () => Promise<void>;
@@ -1499,18 +1504,66 @@ function AuthWidget({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mfaCode, setMfaCode] = useState("");
+  const [mfaStatus, setMfaStatus] = useState<MfaStatus | null>(null);
+  const [mfaSetupOpen, setMfaSetupOpen] = useState(false);
+
+  useEffect(() => {
+    if (!session) {
+      setMfaStatus(null);
+      setMfaSetupOpen(false);
+      return;
+    }
+    let active = true;
+    client.getMfaStatus(session.token)
+      .then((status) => {
+        if (active) {
+          setMfaStatus(status);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setMfaStatus(null);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, session?.token]);
 
   if (session) {
+    const mfaEnabled = Boolean(mfaStatus?.totpEnabled || session.user.mfaVerified);
     return (
-      <div className="auth-widget signed-in" aria-label="Authenticated user">
-        <UserRound size={17} aria-hidden="true" />
-        <span>
-          <strong>{session.user.email}</strong>
-          <small>{session.user.roles.join(", ") || "user"} · {session.user.mfaVerified ? "MFA" : "no MFA"}</small>
-        </span>
-        <button type="button" onClick={() => void onLogout()} aria-label="Sign out">
-          <LogOut size={16} aria-hidden="true" />
-        </button>
+      <div className="auth-shell">
+        <div className="auth-widget signed-in" aria-label="Authenticated user">
+          <UserRound size={17} aria-hidden="true" />
+          <span>
+            <strong>{session.user.email}</strong>
+            <small>
+              {session.user.roles.join(", ") || "user"} · {session.user.mfaVerified ? "MFA verified" : mfaEnabled ? "MFA enabled" : "MFA not set"}
+            </small>
+          </span>
+          {!mfaEnabled && (
+            <button type="button" onClick={() => setMfaSetupOpen((open) => !open)} aria-label="Set up MFA">
+              <ShieldCheck size={16} aria-hidden="true" />
+            </button>
+          )}
+          <button type="button" onClick={() => void onLogout()} aria-label="Sign out">
+            <LogOut size={16} aria-hidden="true" />
+          </button>
+        </div>
+        {mfaSetupOpen && (
+          <MfaSetupPanel
+            client={client}
+            onComplete={(result) => {
+              setMfaStatus({
+                totpEnabled: true,
+                recoveryCodesRemaining: result.recoveryCodes.length,
+                factors: [result.factor],
+              });
+            }}
+            session={session}
+          />
+        )}
       </div>
     );
   }
@@ -1589,6 +1642,120 @@ function AuthWidget({
 
 function AuthMessage({ message }: { message: string | null }) {
   return message ? <span className="auth-message" role="status" aria-live="polite">{message}</span> : null;
+}
+
+function MfaSetupPanel({
+  client,
+  onComplete,
+  session,
+}: {
+  client: RegistryClient;
+  onComplete: (result: ConfirmMfaResult) => void;
+  session: WebSession;
+}) {
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [enrollment, setEnrollment] = useState<{ factorId: string; secret: string; otpauthUrl: string } | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [state, setState] = useState<LoadState>("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function startEnrollment() {
+    setState("loading");
+    setMessage(null);
+    try {
+      const nextEnrollment = await client.startTotpEnrollment({ password, label: "1Password" }, session.token);
+      setEnrollment({
+        factorId: nextEnrollment.factorId,
+        secret: nextEnrollment.secret,
+        otpauthUrl: nextEnrollment.otpauthUrl,
+      });
+      setPassword("");
+      setState("ready");
+    } catch (error) {
+      setState("error");
+      setMessage(safeAuthErrorMessage(error));
+    }
+  }
+
+  async function confirmEnrollment() {
+    if (!enrollment) {
+      return;
+    }
+    setState("loading");
+    setMessage(null);
+    try {
+      const result = await client.confirmTotpEnrollment({ factorId: enrollment.factorId, code: code.trim() }, session.token);
+      setRecoveryCodes(result.recoveryCodes);
+      setCode("");
+      setState("ready");
+      setMessage("MFA enabled. Sign out and sign in again to verify this session for privileged actions.");
+      onComplete(result);
+    } catch (error) {
+      setState("error");
+      setMessage(safeAuthErrorMessage(error));
+    }
+  }
+
+  return (
+    <section className="mfa-setup" aria-label="MFA setup">
+      {!enrollment ? (
+        <form onSubmit={(event) => {
+          event.preventDefault();
+          void startEnrollment();
+        }}>
+          <label className="auth-field">
+            <span>Current password</span>
+            <input
+              aria-label="Current password"
+              autoComplete="current-password"
+              disabled={state === "loading"}
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              value={password}
+            />
+          </label>
+          <button disabled={state === "loading" || !password} type="submit">
+            <KeyRound size={16} aria-hidden="true" />
+            Continue
+          </button>
+        </form>
+      ) : recoveryCodes.length === 0 ? (
+        <form onSubmit={(event) => {
+          event.preventDefault();
+          void confirmEnrollment();
+        }}>
+          <div className="mfa-secret">
+            <span>Authenticator setup</span>
+            <code>{enrollment.otpauthUrl}</code>
+            <small>Manual secret: {enrollment.secret}</small>
+          </div>
+          <label className="auth-field">
+            <span>Verification code</span>
+            <input
+              aria-label="MFA setup code"
+              autoComplete="one-time-code"
+              disabled={state === "loading"}
+              inputMode="numeric"
+              onChange={(event) => setCode(event.target.value)}
+              placeholder="123456"
+              value={code}
+            />
+          </label>
+          <button disabled={state === "loading" || !code.trim()} type="submit">
+            <ShieldCheck size={16} aria-hidden="true" />
+            Enable MFA
+          </button>
+        </form>
+      ) : (
+        <div className="mfa-recovery">
+          <span>Recovery codes</span>
+          <code>{recoveryCodes.join("\n")}</code>
+        </div>
+      )}
+      <AuthMessage message={message} />
+    </section>
+  );
 }
 
 function SkillDetail({

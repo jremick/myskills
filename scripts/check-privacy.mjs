@@ -6,6 +6,8 @@ import { join, relative } from "node:path";
 const root = process.cwd();
 const ignoredDirectories = new Set([
   ".git",
+  ".claude",
+  ".playwright-mcp",
   ".private",
   "node_modules",
   "dist",

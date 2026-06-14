@@ -122,6 +122,65 @@ test("registry client supports login, MFA verification, current user, and logout
   assert.equal(calls[3].authorization, "Bearer verified-session-token");
 });
 
+test("registry client supports MFA status and TOTP enrollment", async () => {
+  const calls: Array<{ body?: string; method?: string; url: string; authorization?: string }> = [];
+  const client = createRegistryClient("http://api.test", async (input, init) => {
+    const url = String(input);
+    calls.push({
+      body: typeof init?.body === "string" ? init.body : undefined,
+      method: init?.method,
+      url,
+      authorization: init?.headers instanceof Headers ? init.headers.get("authorization") ?? undefined : (init?.headers as Record<string, string> | undefined)?.authorization,
+    });
+    if (url.endsWith("/v1/auth/mfa") && !init?.method) {
+      return jsonResponse(200, { mfa: { totpEnabled: false, recoveryCodesRemaining: 0, factors: [] } });
+    }
+    if (url.endsWith("/v1/auth/mfa/totp/enroll")) {
+      return jsonResponse(201, {
+        enrollment: {
+          factorId: "factor-1",
+          label: "1Password",
+          secret: "JBSWY3DPEHPK3PXP",
+          otpauthUrl: "otpauth://totp/MySkills:owner%40example.com",
+        },
+      });
+    }
+    return jsonResponse(200, {
+      mfa: {
+        factor: {
+          id: "factor-1",
+          type: "totp",
+          status: "enabled",
+          label: "1Password",
+          enabledAt: "2026-06-14T00:00:00.000Z",
+          createdAt: "2026-06-14T00:00:00.000Z",
+        },
+        recoveryCodes: ["recovery-one"],
+      },
+    });
+  });
+
+  const status = await client.getMfaStatus("session-token");
+  const enrollment = await client.startTotpEnrollment({ password: "test-password", label: "1Password" }, "session-token");
+  const confirmation = await client.confirmTotpEnrollment({ factorId: enrollment.factorId, code: "123456" }, "session-token");
+
+  assert.equal(status.totpEnabled, false);
+  assert.equal(enrollment.secret, "JBSWY3DPEHPK3PXP");
+  assert.deepEqual(confirmation.recoveryCodes, ["recovery-one"]);
+  assert.deepEqual(calls.map((call) => `${call.method ?? "GET"} ${call.url}`), [
+    "GET http://api.test/v1/auth/mfa",
+    "POST http://api.test/v1/auth/mfa/totp/enroll",
+    "POST http://api.test/v1/auth/mfa/totp/confirm",
+  ]);
+  assert.deepEqual(calls.map((call) => call.authorization), [
+    "Bearer session-token",
+    "Bearer session-token",
+    "Bearer session-token",
+  ]);
+  assert.equal(calls[1].body, JSON.stringify({ password: "test-password", label: "1Password" }));
+  assert.equal(calls[2].body, JSON.stringify({ factorId: "factor-1", code: "123456" }));
+});
+
 test("registry client manages admin settings with the session bearer", async () => {
   const calls: Array<{ body?: string; method?: string; url: string; authorization?: string }> = [];
   const client = createRegistryClient("http://api.test", async (input, init) => {

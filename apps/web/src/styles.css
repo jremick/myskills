@@ -539,6 +539,13 @@ button:focus-visible {
   min-width: 0;
 }
 
+.auth-shell {
+  position: relative;
+  display: grid;
+  justify-items: end;
+  min-width: 0;
+}
+
 .auth-widget {
   display: inline-flex;
   align-items: center;
@@ -646,6 +653,65 @@ button:focus-visible {
   width: 34px;
   padding: 0;
   justify-content: center;
+}
+
+.mfa-setup {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 10;
+  display: grid;
+  gap: 10px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 12px;
+  border: 1px solid #d8e0ea;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.14);
+}
+
+.mfa-setup form {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mfa-secret,
+.mfa-recovery {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.mfa-secret span,
+.mfa-recovery span {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.mfa-secret code,
+.mfa-recovery code {
+  overflow: auto;
+  max-height: 150px;
+  padding: 9px;
+  border: 1px solid #d8e0ea;
+  border-radius: 7px;
+  color: #0f172a;
+  background: #f8fafc;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.mfa-secret small {
+  overflow-wrap: anywhere;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .auth-message {
@@ -2572,6 +2638,11 @@ code {
   justify-self: end;
 }
 
+.app-topbar > .auth-shell {
+  grid-column: 3;
+  justify-self: end;
+}
+
 .mobile-brand {
   display: none;
   align-items: center;
@@ -2640,6 +2711,12 @@ code {
   border-radius: 7px;
   background: var(--surface);
   box-shadow: none;
+}
+
+.mfa-setup {
+  border-color: var(--line);
+  border-radius: 7px;
+  background: var(--surface);
 }
 
 .auth-widget button,
@@ -3290,8 +3367,16 @@ code {
     grid-column: 2;
   }
 
+  .app-topbar > .auth-shell {
+    grid-column: 2;
+  }
+
   .auth-widget.signed-in {
     max-width: 176px;
+  }
+
+  .mfa-setup {
+    width: min(360px, calc(100vw - 28px));
   }
 
   .auth-widget.signed-in small {

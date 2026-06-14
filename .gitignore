@@ -21,3 +21,5 @@ coverage/
 
 # Private migration notes and local evidence
 .private/
+.claude/
+.playwright-mcp/

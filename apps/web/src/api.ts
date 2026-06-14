@@ -42,6 +42,33 @@ export interface AdminUser {
   mfaEnabled: boolean;
 }
 
+export interface MfaFactor {
+  id: string;
+  type: "totp";
+  status: "pending" | "enabled" | "disabled";
+  label: string;
+  enabledAt: string | null;
+  createdAt: string;
+}
+
+export interface MfaStatus {
+  totpEnabled: boolean;
+  recoveryCodesRemaining: number;
+  factors: MfaFactor[];
+}
+
+export interface TotpEnrollment {
+  factorId: string;
+  label: string;
+  secret: string;
+  otpauthUrl: string;
+}
+
+export interface ConfirmMfaResult {
+  factor: MfaFactor;
+  recoveryCodes: string[];
+}
+
 export interface ProviderRoleMappingInput {
   claim: string;
   value: string;
@@ -147,6 +174,9 @@ export interface RegistryClient {
   verifyMfa(input: { challengeToken: string; codeOrRecoveryCode: string }): Promise<SessionResult>;
   getMe(token?: string): Promise<WebAuthUser>;
   logout(token?: string): Promise<void>;
+  getMfaStatus(token?: string): Promise<MfaStatus>;
+  startTotpEnrollment(input: { password: string; label?: string }, token?: string): Promise<TotpEnrollment>;
+  confirmTotpEnrollment(input: { factorId: string; code: string }, token?: string): Promise<ConfirmMfaResult>;
   getAdminRegistration(token?: string): Promise<AdminRegistrationSettings>;
   updateAdminRegistration(mode: AdminRegistrationMode, token?: string): Promise<AdminRegistrationSettings>;
   listAdminUsers(token?: string): Promise<AdminUser[]>;
@@ -216,6 +246,31 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         body: {},
         token: overrideToken ?? token,
       });
+    },
+    async getMfaStatus(overrideToken) {
+      const body = await requestJson<{ mfa: MfaStatus }>(fetchImpl, `${root}/v1/auth/mfa`, {
+        token: overrideToken ?? token,
+      });
+      return body.mfa;
+    },
+    async startTotpEnrollment(input, overrideToken) {
+      const body = await requestJson<{ enrollment: TotpEnrollment }>(fetchImpl, `${root}/v1/auth/mfa/totp/enroll`, {
+        method: "POST",
+        body: {
+          password: input.password,
+          ...(input.label?.trim() ? { label: input.label.trim() } : {}),
+        },
+        token: overrideToken ?? token,
+      });
+      return body.enrollment;
+    },
+    async confirmTotpEnrollment(input, overrideToken) {
+      const body = await requestJson<{ mfa: ConfirmMfaResult }>(fetchImpl, `${root}/v1/auth/mfa/totp/confirm`, {
+        method: "POST",
+        body: input,
+        token: overrideToken ?? token,
+      });
+      return body.mfa;
     },
     async getAdminRegistration(overrideToken) {
       const body = await requestJson<{ registration: AdminRegistrationSettings }>(

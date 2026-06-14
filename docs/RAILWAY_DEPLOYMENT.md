@@ -12,7 +12,7 @@ This is the first live deployment shape for `myskills.sh`.
 - Project ID: `ab397602-ce54-43e4-9b96-2bc5217d24fe`
 - Environment: `production`
 
-Do not deploy this project into the `Axon AI Team` Railway workspace.
+Do not deploy this project into any team or work Railway workspace.
 
 ## Services
 

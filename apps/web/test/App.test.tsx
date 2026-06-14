@@ -8,6 +8,7 @@ import type {
   AdminProviderConfig,
   AdminRegistrationMode,
   AdminUser,
+  MfaStatus,
   ProviderRoleMappingInput,
   RegistryClient,
   ReleaseMetadata,
@@ -82,14 +83,15 @@ test("default registry client is stable between renders", async () => {
     const view = render(<RegistryApp />);
 
     await view.findByText("Turns merged changes into concise release notes.");
-    await waitFor(() => assert.equal(calls.length, 4));
+    await waitFor(() => assert.equal(calls.length, 5));
     await delay(25);
-    assert.deepEqual(calls, [
+    assert.deepEqual([...calls].sort(), [
+      "http://localhost:3001/v1/auth/mfa",
       "http://localhost:3001/v1/me",
       "http://localhost:3001/v1/skills",
       "http://localhost:3001/v1/skills/release-notes-helper",
       "http://localhost:3001/v1/skills/release-notes-helper/releases/0.1.0",
-    ]);
+    ].sort());
   } finally {
     globalThis.fetch = previousFetch;
   }
@@ -214,6 +216,30 @@ test("MFA login verifies the challenge before storing a session", async () => {
   await view.findByText("reader@example.com");
   assert.deepEqual(client.mfaCalls, ["123456"]);
   assert.equal(JSON.parse(window.localStorage.getItem("myskills-app:web-session") ?? "{}").token, "mfa-session-token");
+});
+
+test("signed-in users can set up MFA and save recovery codes", async () => {
+  setupDom();
+  const client = mockClient({ user: authUser({ email: "owner@example.com", roles: ["owner"], mfaVerified: false }) });
+
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.input(view.getByLabelText("Email"), { target: { value: "owner@example.com" } });
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: /sign in/i }));
+
+  await view.findByText("owner@example.com");
+  fireEvent.click(view.getByLabelText("Set up MFA"));
+  fireEvent.input(view.getByLabelText("Current password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: /continue/i }));
+
+  await view.findByText(/otpauth:\/\/totp\/MySkills/);
+  fireEvent.input(view.getByLabelText("MFA setup code"), { target: { value: "123456" } });
+  fireEvent.click(view.getByRole("button", { name: /enable mfa/i }));
+
+  await view.findByText("MFA enabled. Sign out and sign in again to verify this session for privileged actions.");
+  await view.findByText(/recovery-one/);
+  assert.deepEqual(client.mfaEnrollments, ["correct horse battery staple"]);
+  assert.deepEqual(client.mfaConfirmations, ["mfa-factor-1:123456"]);
 });
 
 test("non-admin sessions do not render the admin entry point", async () => {
@@ -461,6 +487,7 @@ function mockClient(input: {
   getSkillError?: SafeApiError;
   loginError?: SafeApiError;
   mfaRequired?: boolean;
+  mfaStatus?: MfaStatus;
   searchResults?: (query: string) => PublicSkill[];
   submitError?: SafeApiError;
   submitResult?: SubmitSkillResult;
@@ -473,8 +500,11 @@ function mockClient(input: {
   let adminUsers = input.adminUsers ?? defaultAdminUsers();
   let adminProviders = input.adminProviders ?? defaultAdminProviders();
   let reviewSubmissions = input.reviewSubmissions ?? defaultReviewSubmissions();
+  let mfaStatus = input.mfaStatus ?? defaultMfaStatus(currentUser.mfaVerified);
   const client: RegistryClient & {
     bundleCalls: number;
+    mfaConfirmations: string[];
+    mfaEnrollments: string[];
     logoutCalls: number;
     mfaCalls: string[];
     providerUpserts: Array<{ key: string; displayName: string; roleMappings?: ProviderRoleMappingInput[] }>;
@@ -487,6 +517,8 @@ function mockClient(input: {
     userActions: string[];
   } = {
     bundleCalls: 0,
+    mfaConfirmations: [],
+    mfaEnrollments: [],
     logoutCalls: 0,
     mfaCalls: [],
     providerUpserts: [],
@@ -542,6 +574,37 @@ function mockClient(input: {
         token: "mfa-session-token",
         expiresAt: "2026-06-04T01:00:00.000Z",
         user: authUser({ mfaVerified: true }),
+      };
+    },
+    async getMfaStatus() {
+      return mfaStatus;
+    },
+    async startTotpEnrollment(input) {
+      client.mfaEnrollments.push(input.password);
+      return {
+        factorId: "mfa-factor-1",
+        label: input.label ?? "Authenticator app",
+        secret: "JBSWY3DPEHPK3PXP",
+        otpauthUrl: "otpauth://totp/MySkills:owner%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=MySkills",
+      };
+    },
+    async confirmTotpEnrollment(input) {
+      client.mfaConfirmations.push(`${input.factorId}:${input.code}`);
+      mfaStatus = {
+        totpEnabled: true,
+        recoveryCodesRemaining: 2,
+        factors: [{
+          id: input.factorId,
+          type: "totp",
+          status: "enabled",
+          label: "1Password",
+          enabledAt: "2026-06-14T00:00:00.000Z",
+          createdAt: "2026-06-14T00:00:00.000Z",
+        }],
+      };
+      return {
+        factor: mfaStatus.factors[0]!,
+        recoveryCodes: ["recovery-one", "recovery-two"],
       };
     },
     async getAdminRegistration() {
@@ -657,6 +720,23 @@ function authUser(input: { email?: string; mfaVerified?: boolean; roles?: string
     roles: input.roles ?? ["author"],
     emailVerified: true,
     mfaVerified: input.mfaVerified ?? true,
+  };
+}
+
+function defaultMfaStatus(enabled: boolean): MfaStatus {
+  return {
+    totpEnabled: enabled,
+    recoveryCodesRemaining: enabled ? 10 : 0,
+    factors: enabled
+      ? [{
+        id: "mfa-factor-existing",
+        type: "totp",
+        status: "enabled",
+        label: "Authenticator app",
+        enabledAt: "2026-06-04T00:00:00.000Z",
+        createdAt: "2026-06-04T00:00:00.000Z",
+      }]
+      : [],
   };
 }
 
