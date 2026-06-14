@@ -71,6 +71,64 @@ test("authors can submit clean packages", async (t) => {
   assert.equal(submissionStore.count(), 1);
 });
 
+test("authors can list and export their own submitted skill package", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const token = await addAndLoginAs(app, authStore, "author@example.com", ["author"]);
+  const otherToken = await addAndLoginAs(app, authStore, "other-author@example.com", ["author"]);
+
+  const submitted = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload: cleanSubmissionPayload(),
+  });
+  assert.equal(submitted.statusCode, 202);
+  const submissionId = submitted.json().submission.id;
+
+  const list = await app.inject({
+    method: "GET",
+    url: "/v1/submissions/mine",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(list.statusCode, 200);
+  assert.equal(list.json().submissions[0].id, submissionId);
+  assert.equal(list.json().submissions[0].slug, "release-notes-helper");
+  assert.equal(list.json().submissions[0].artifact.sha256.length, 64);
+  assert.equal(JSON.stringify(list.json()).includes("Summarize release notes."), false);
+  assert.equal(JSON.stringify(list.json()).includes("storageKey"), false);
+
+  const bundle = await app.inject({
+    method: "GET",
+    url: `/v1/submissions/${submissionId}/bundle?platform=codex`,
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(bundle.statusCode, 200);
+  assert.equal(bundle.headers["content-type"], "application/vnd.myskills-app.package+json; charset=utf-8");
+  assert.equal(bundle.json().files.some((file: { path: string; content: string }) => (
+    file.path === "README.md" && file.content === "Summarize release notes."
+  )), true);
+  assert.equal(JSON.stringify(bundle.json()).includes("storageKey"), false);
+
+  const otherList = await app.inject({
+    method: "GET",
+    url: "/v1/submissions/mine",
+    headers: { authorization: `Bearer ${otherToken}` },
+  });
+  assert.equal(otherList.statusCode, 200);
+  assert.deepEqual(otherList.json().submissions, []);
+
+  const otherBundle = await app.inject({
+    method: "GET",
+    url: `/v1/submissions/${submissionId}/bundle`,
+    headers: { authorization: `Bearer ${otherToken}` },
+  });
+  assert.equal(otherBundle.statusCode, 404);
+  assert.equal(otherBundle.json().error.code, "SUBMISSION_NOT_FOUND");
+});
+
 test("authors can submit clean archive packages", async (t) => {
   const submissionStore = new MemorySubmissionStore();
   const authStore = new MemoryAuthStore("closed");

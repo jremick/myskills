@@ -25,6 +25,7 @@ export interface CreateSubmissionInput {
 
 export interface StoredSubmission {
   id: string;
+  ownerUserId: string;
   skillSlug: string;
   title: string;
   summary: string;
@@ -34,6 +35,7 @@ export interface StoredSubmission {
   reviewStatus: ReviewStatus;
   securityStatus: SecurityStatus;
   publishedAt: string | null;
+  createdAt: string;
   artifact: {
     storageKey: string;
     sha256: string;
@@ -73,6 +75,26 @@ export interface ReviewActionResult {
   publishedAt: string | null;
 }
 
+export interface UserSubmissionSummary {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  version: string;
+  visibility: VisibilityScope;
+  reviewStatus: ReviewStatus;
+  securityStatus: SecurityStatus;
+  platforms: SkillPlatformVariant[];
+  findingCount: number;
+  artifact: {
+    sha256: string;
+    byteSize: number;
+    contentType: string;
+  };
+  createdAt: string;
+  publishedAt: string | null;
+}
+
 export interface PublicReleaseMetadata {
   slug: string;
   title: string;
@@ -93,12 +115,18 @@ export interface PublicBundle extends PublicReleaseMetadata {
   payload: ArtifactPayload;
 }
 
+export interface UserSubmissionBundle extends UserSubmissionSummary {
+  payload: ArtifactPayload;
+}
+
 export interface SubmissionStore {
   createSubmission(input: CreateSubmissionInput & {
     artifact: StoredSubmission["artifact"];
     findings: ScanFinding[];
     securityStatus: SecurityStatus;
   }): Promise<StoredSubmission>;
+  listUserSubmissions(userId: string): Promise<UserSubmissionSummary[]>;
+  getUserSubmissionBundle(input: { userId: string; submissionId: string; platform?: string }): Promise<UserSubmissionBundle | null>;
   listReviewSubmissions(): Promise<ReviewSubmissionSummary[]>;
   approveSubmission(input: { actorId: string; submissionId: string; reason?: string }): Promise<ReviewActionResult>;
   publishSubmission(input: { actorId: string; submissionId: string; reason?: string }): Promise<ReviewActionResult>;

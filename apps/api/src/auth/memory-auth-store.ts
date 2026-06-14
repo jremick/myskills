@@ -3,6 +3,7 @@ import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type {
   AuditEventRecord,
   ApiTokenRecord,
+  AdminApiTokenRecord,
   ApiTokenScope,
   AuthActionTokenRecord,
   AuthActionTokenPurpose,
@@ -350,6 +351,15 @@ export class MemoryAuthStore implements AuthStore {
       .map(toApiTokenRecord);
   }
 
+  async listApiTokensForAdmin(): Promise<AdminApiTokenRecord[]> {
+    return [...this.apiTokens.values()]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .flatMap((token) => {
+        const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
+        return user ? [{ ...toApiTokenRecord(token), user: toRecord(user) }] : [];
+      });
+  }
+
   async findUserByApiTokenHash(tokenHash: string, now = new Date()): Promise<AuthUserWithApiToken | null> {
     const token = this.apiTokens.get(tokenHash);
     if (!token || token.revokedAt || token.expiresAt <= now) {
@@ -380,6 +390,21 @@ export class MemoryAuthStore implements AuthStore {
       token.revokedAt = new Date();
     }
     return toApiTokenRecord(token);
+  }
+
+  async revokeAnyApiToken(input: { tokenId: string }): Promise<AdminApiTokenRecord | null> {
+    const token = [...this.apiTokens.values()].find((candidate) => candidate.id === input.tokenId);
+    if (!token) {
+      return null;
+    }
+    const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
+    if (!user) {
+      return null;
+    }
+    if (!token.revokedAt) {
+      token.revokedAt = new Date();
+    }
+    return { ...toApiTokenRecord(token), user: toRecord(user) };
   }
 
   async listProviderConfigs(): Promise<ProviderConfigRecord[]> {

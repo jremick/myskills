@@ -26,6 +26,8 @@ import type {
   ReviewSubmissionSummary,
   StoredSubmission,
   SubmissionStore,
+  UserSubmissionBundle,
+  UserSubmissionSummary,
 } from "./types.js";
 
 export class PostgresSubmissionStore implements SubmissionStore {
@@ -72,6 +74,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
           title: nextLifecycle === "approved" ? existingSkill.title : input.manifest.title,
           summary: nextLifecycle === "approved" ? existingSkill.summary : input.manifest.summary,
           lifecycleStatus: nextLifecycle,
+          ownerUserId: existingSkill.ownerUserId ?? input.actor.id,
           updatedAt: new Date(),
         }).where(eq(skills.id, skill.id));
       }
@@ -175,6 +178,8 @@ export class PostgresSubmissionStore implements SubmissionStore {
         reviewStatus: version.reviewStatus,
         securityStatus: version.securityStatus,
         publishedAt: version.publishedAt?.toISOString() ?? null,
+        ownerUserId: input.actor.id,
+        createdAt: version.createdAt.toISOString(),
         artifact: input.artifact,
         scan: {
           status: "succeeded",
@@ -182,6 +187,34 @@ export class PostgresSubmissionStore implements SubmissionStore {
         },
       };
     });
+  }
+
+  async listUserSubmissions(userId: string): Promise<UserSubmissionSummary[]> {
+    const rows = await selectUserSubmissions(this.db, userId);
+    return rows.map(userSubmissionSummary);
+  }
+
+  async getUserSubmissionBundle(input: { userId: string; submissionId: string; platform?: string }): Promise<UserSubmissionBundle | null> {
+    if (!isUuid(input.submissionId)) {
+      return null;
+    }
+    const [row] = await selectUserSubmissions(this.db, input.userId, input.submissionId);
+    if (!row) {
+      return null;
+    }
+    if (input.platform && !row.platforms.some((platform) => (
+      platform.name === input.platform &&
+      platform.status === "supported"
+    ))) {
+      return null;
+    }
+    return {
+      ...userSubmissionSummary(row),
+      payload: await readArtifactPayload({
+        artifactStorage: this.options.artifactStorage,
+        artifact: row,
+      }),
+    };
   }
 
   async listReviewSubmissions(): Promise<ReviewSubmissionSummary[]> {
@@ -543,6 +576,93 @@ export class PostgresSubmissionStore implements SubmissionStore {
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type DbLike = Database | Transaction;
+
+async function selectUserSubmissions(db: DbLike, userId: string, submissionId?: string) {
+  const where = submissionId
+    ? and(eq(skills.ownerUserId, userId), eq(skillVersions.id, submissionId))
+    : eq(skills.ownerUserId, userId);
+  return db
+    .select({
+      id: skillVersions.id,
+      slug: skills.slug,
+      title: skills.title,
+      summary: skills.summary,
+      version: skillVersions.version,
+      visibility: skills.visibility,
+      reviewStatus: skillVersions.reviewStatus,
+      securityStatus: skillVersions.securityStatus,
+      publishedAt: skillVersions.publishedAt,
+      createdAt: skillVersions.createdAt,
+      platforms: sql<ReviewSubmissionSummary["platforms"]>`
+        coalesce(
+          json_agg(
+            distinct jsonb_build_object(
+              'name', ${skillPlatformVariants.name},
+              'installTarget', ${skillPlatformVariants.installTarget},
+              'status', ${skillPlatformVariants.status}
+            )
+          ) filter (where ${skillPlatformVariants.id} is not null),
+          '[]'::json
+        )
+      `,
+      findingCount: sql<number>`count(distinct ${scanFindings.id})::int`,
+      sha256: skillArtifacts.sha256,
+      byteSize: skillArtifacts.byteSize,
+      contentType: skillArtifacts.contentType,
+      storageKey: skillArtifacts.storageKey,
+      payload: skillArtifacts.payload,
+    })
+    .from(skillVersions)
+    .innerJoin(skills, eq(skillVersions.skillId, skills.id))
+    .innerJoin(skillArtifacts, eq(skillArtifacts.skillVersionId, skillVersions.id))
+    .leftJoin(skillPlatformVariants, eq(skillPlatformVariants.skillVersionId, skillVersions.id))
+    .leftJoin(scanRuns, eq(scanRuns.skillVersionId, skillVersions.id))
+    .leftJoin(scanFindings, eq(scanFindings.scanRunId, scanRuns.id))
+    .where(where)
+    .groupBy(
+      skillVersions.id,
+      skills.slug,
+      skills.title,
+      skills.summary,
+      skillVersions.version,
+      skills.visibility,
+      skillVersions.reviewStatus,
+      skillVersions.securityStatus,
+      skillVersions.publishedAt,
+      skillVersions.createdAt,
+      skillArtifacts.sha256,
+      skillArtifacts.byteSize,
+      skillArtifacts.contentType,
+      skillArtifacts.storageKey,
+      skillArtifacts.payload,
+    )
+    .orderBy(sql`${skillVersions.createdAt} desc`)
+    .limit(submissionId ? 1 : 100);
+}
+
+type UserSubmissionRow = Awaited<ReturnType<typeof selectUserSubmissions>>[number];
+
+function userSubmissionSummary(row: UserSubmissionRow): UserSubmissionSummary {
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    summary: row.summary,
+    version: row.version,
+    visibility: row.visibility,
+    reviewStatus: row.reviewStatus,
+    securityStatus: row.securityStatus,
+    platforms: row.platforms,
+    findingCount: row.findingCount,
+    artifact: {
+      sha256: row.sha256,
+      byteSize: row.byteSize,
+      contentType: row.contentType,
+    },
+    createdAt: row.createdAt.toISOString(),
+    publishedAt: row.publishedAt?.toISOString() ?? null,
+  };
+}
 
 async function selectVersionForReview(db: DbLike, submissionId: string) {
   const [row] = await db

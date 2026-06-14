@@ -1,7 +1,7 @@
 # Roadmap
 
 Version: 0.1.0-alpha.0
-Last updated: 2026-06-04
+Last updated: 2026-06-14
 
 ## Release Tracks
 
@@ -42,7 +42,7 @@ Acceptance:
 - Local setup can run Postgres plus object storage through Docker Compose.
 - Production packaging has API, web, and HTTP MCP container targets, a production Compose example, deployment documentation, and a production env preflight.
 
-Current status: in progress. The first API and schema slice exists with email/password session auth, hash-only single-use email verification and password reset action tokens, SMTP/local auth notification delivery, TOTP MFA challenge flow, hashed recovery codes, MFA-verified admin registration/user management with sanitized audit listing, MFA-verified non-secret provider config and claim-to-role mapping management, MFA-verified local role editing with owner-only privileged-role safeguards, hashed scoped API tokens, public search/detail endpoints, MCP token introspection with `skills:read` scope and API-owned session decision audit events, authenticated package intake with strict root-manifest integrity checks, MFA-gated privileged submission, server-side `.zip` archive extraction, scan evidence, S3-compatible object-storage-backed artifact writes and reads, MFA-gated maintainer review approve/publish actions with approved-unpublished queue visibility, authorized release metadata and bundle delivery, local `.zip` archive parsing for package validation/submission tooling, a React web app for public registry browsing/detail/export guidance, author `.zip` package submission, maintainer review approval/publication, and owner/admin registration/user/provider/role/audit console workflows, read-only MCP stdio and stateless Streamable HTTP servers for registry discovery/info/install guidance, a starter CLI for validation, scanning, prompt-based login/logout with API-URL-scoped stored sessions, search, info, whoami, submit, review actions, verified export, local install/list/update/rollback, and API-token management, plus first-pass production container packaging and deployment preflight checks. Queued email delivery, platform keychain CLI token storage, authoritative per-tool MCP audit events, provider login/linking, external identity lifecycle, signed-url/direct object delivery, platform-specific install adapters, background scan jobs, and release automation are still future work.
+Current status: in progress. The first API and schema slice exists with email/password session auth, hash-only single-use email verification and password reset action tokens, SMTP/local auth notification delivery, TOTP MFA challenge flow, hashed recovery codes, MFA-verified admin registration/user management with sanitized audit listing, MFA-verified non-secret provider config and claim-to-role mapping management, MFA-verified local role editing with owner-only privileged-role safeguards, hashed scoped API tokens with browser account management and admin monitoring/revocation, public search/detail endpoints, MCP token introspection with `skills:read` scope and API-owned session decision audit events, authenticated package intake with strict root-manifest integrity checks, user-owned submitted-skill export, MFA-gated privileged submission, server-side `.zip` archive extraction, scan evidence, S3-compatible object-storage-backed artifact writes and reads, MFA-gated maintainer review approve/publish actions with approved-unpublished queue visibility, authorized release metadata and bundle delivery, local `.zip` archive parsing for package validation/submission tooling, a React web app for public registry browsing/detail/export guidance, author `.zip` package submission, maintainer review approval/publication, and owner/admin registration/user/provider/role/audit console workflows, read-only MCP stdio and stateless Streamable HTTP servers for registry discovery/info/install guidance, a starter CLI for validation, scanning, prompt-based login/logout with API-URL-scoped stored sessions, search, info, whoami, submit, review actions, verified export, local install/list/update/rollback, and API-token management, plus first-pass production container packaging, opt-in web analytics support, and deployment preflight checks. Queued email delivery, platform keychain CLI token storage, authoritative per-tool MCP audit events, provider login/linking, external identity lifecycle, signed-url/direct object delivery, platform-specific install adapters, skill backup jobs, version-history browsing, background scan jobs, and release automation are still future work.
 
 ## Milestone 2: Auth And User Management Foundation
 
@@ -81,6 +81,9 @@ Deliverables:
 - Secret scanning and risky-content scanning.
 - Drafts, submissions, review queue, approval, publish, deprecate, revoke.
 - Search, detail, and authorized bundle delivery.
+- User-owned export for submitted packages and approved releases.
+- Skill backup options: account-level export archives, scheduled registry backups, and restore rehearsal guidance.
+- Version history viewing for skill owners, users, and maintainers, including release state, scan status, artifact checksums, and rollback/install guidance.
 - Background scan jobs and immutable artifact records.
 
 Acceptance:
@@ -125,7 +128,7 @@ Acceptance:
 - Common user, author, maintainer, and admin workflows work in browser tests.
 - Text and controls fit on mobile and desktop.
 
-Current status: public browse/search, skill detail, release metadata, export-guidance views, email/password login/logout, MFA challenge completion, current-user refresh, session-aware API calls, authenticated author `.zip` package submission, maintainer review dashboard workflows for approval/publication, and owner/admin console workflows for registration, user status actions, role updates, provider metadata/mappings, and audit review exist. The supplied My Skills logo and favicon kit is wired into the web app; the broader color, typography, surface, and component refresh from the identity guidelines remains planned. Private draft management and remaining instance settings administration are still future work.
+Current status: public browse/search, skill detail, release metadata, export-guidance views, email/password login/logout, password reset, account settings, MFA setup/reset/removal, current-user refresh, session-aware API calls, authenticated author `.zip` package submission, author submitted-version export, maintainer review dashboard workflows for approval/publication, user API-key management, and owner/admin console workflows for registration, user status actions, role updates, API-key monitoring/revocation, provider metadata/mappings, and audit review exist. The supplied My Skills logo and favicon kit is wired into the web app; the broader color, typography, surface, and component refresh from the identity guidelines remains planned. Private draft management, version-history viewing, backup/restore workflows, and remaining instance settings administration are still future work.
 
 ## Milestone 6: Skill Evals
 

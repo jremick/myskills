@@ -21,6 +21,8 @@ import type {
   StoredSubmission,
   SubmissionActor,
   SubmissionStore,
+  UserSubmissionBundle,
+  UserSubmissionSummary,
 } from "./types.js";
 
 const PACKAGE_CONTENT_TYPE = "application/vnd.myskills-app.package+json";
@@ -76,6 +78,27 @@ export class SubmissionService {
       throw new AppError("Review requires maintainer permissions.", "REVIEW_ROLE_REQUIRED", 403);
     }
     return this.store.listReviewSubmissions();
+  }
+
+  async listUserSubmissions(actor: SubmissionActor): Promise<UserSubmissionSummary[]> {
+    return this.store.listUserSubmissions(actor.id);
+  }
+
+  async getUserSubmissionBundle(input: { actor: SubmissionActor; submissionId: string; platform?: string }): Promise<UserSubmissionBundle | null> {
+    const bundle = await this.store.getUserSubmissionBundle({
+      userId: input.actor.id,
+      submissionId: input.submissionId,
+      platform: input.platform,
+    });
+    await this.store.recordArtifactAccess({
+      actorId: input.actor.id,
+      slug: bundle?.slug ?? "unknown",
+      version: bundle?.version ?? "unknown",
+      platform: input.platform,
+      decision: bundle ? "allow" : "deny",
+      reason: bundle ? "owner_export" : "not_owner_or_missing",
+    });
+    return bundle;
   }
 
   async performReviewAction(input: {

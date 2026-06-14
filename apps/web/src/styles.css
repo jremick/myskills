@@ -3190,6 +3190,76 @@ code {
   gap: 10px;
 }
 
+.scope-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.token-reveal {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #b7e3df;
+  border-radius: 8px;
+  background: var(--teal-soft);
+}
+
+.token-reveal span {
+  color: var(--teal-dark);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.token-reveal code {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.token-list,
+.admin-token-list,
+.submission-list {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.token-row,
+.submission-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto minmax(130px, auto) minmax(130px, auto) auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.token-row:first-child,
+.submission-row:first-child {
+  border-top: 0;
+}
+
+.admin-token-row {
+  grid-template-columns: minmax(180px, 1fr) auto minmax(160px, 0.9fr) minmax(130px, auto) auto;
+}
+
+.user-submissions-panel {
+  grid-column: 1 / -1;
+}
+
+.compact-button {
+  min-height: 36px;
+  padding: 0 11px;
+}
+
 .settings-stack .mfa-setup {
   position: static;
   width: 100%;
@@ -3694,6 +3764,18 @@ code {
 
   .admin-table-row {
     grid-template-columns: 1fr;
+  }
+
+  .token-row,
+  .submission-row,
+  .admin-token-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .token-row .icon-button,
+  .submission-row .save-button {
+    justify-self: start;
   }
 
   .admin-hero {

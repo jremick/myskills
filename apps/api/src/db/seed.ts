@@ -79,6 +79,7 @@ async function seed() {
         summary: "Turns merged changes into concise release notes with decisions, risks, and upgrade notes.",
         lifecycleStatus: "approved",
         visibility: "public",
+        ownerUserId: owner.id,
       },
     })
     .returning();

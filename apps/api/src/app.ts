@@ -459,6 +459,28 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     };
   });
 
+  app.get("/v1/admin/api-tokens", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return { tokens: await options.authService.listAdminApiTokens(user) };
+  });
+
+  app.delete("/v1/admin/api-tokens/:id", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return { token: await options.authService.revokeAdminApiToken(user, parseTokenIdParam(request.params)) };
+  });
+
   app.get("/v1/admin/audit", async (request, reply) => {
     if (!options.authService) {
       throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
@@ -546,6 +568,57 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         scopes: context.credential.scopes,
       },
     };
+  });
+
+  app.get("/v1/submissions/mine", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return {
+      submissions: await options.submissionService.listUserSubmissions({
+        id: user.id,
+        roles: user.roles,
+      }),
+    };
+  });
+
+  app.get("/v1/submissions/:id/bundle", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    const bundle = await options.submissionService.getUserSubmissionBundle({
+      actor: {
+        id: user.id,
+        roles: user.roles,
+      },
+      submissionId: parseSubmissionIdParam(request.params),
+      ...parseBundleQuery(request.query),
+    });
+    if (!bundle) {
+      return reply.code(404).send({
+        error: {
+          code: "SUBMISSION_NOT_FOUND",
+          message: "Submission not found.",
+        },
+      });
+    }
+    return reply
+      .type(bundle.artifact.contentType)
+      .send(bundle.payload);
   });
 
   app.post("/v1/submissions", async (request, reply) => {

@@ -5,6 +5,9 @@ import type { PublicSkill } from "@myskills-app/core";
 import { RegistryApp } from "../src/App.js";
 import type {
   AdminAuditEvent,
+  AdminApiToken,
+  ApiToken,
+  ApiTokenScope,
   AdminProviderConfig,
   AdminRegistrationMode,
   AdminUser,
@@ -15,6 +18,7 @@ import type {
   ReviewSubmissionSummary,
   SafeApiError,
   SubmitSkillResult,
+  UserSubmissionSummary,
 } from "../src/api.js";
 
 test("landing page explains private development and opens the login page", async () => {
@@ -278,6 +282,24 @@ test("settings can request email change and password change", async () => {
   assert.equal(window.localStorage.getItem("myskills-app:web-session"), null);
 });
 
+test("settings can create and revoke API keys", async () => {
+  setupAuthenticatedDom("http://localhost/settings", authUser({ email: "owner@example.com", roles: ["owner"] }));
+  const client = mockClient({ user: authUser({ email: "owner@example.com", roles: ["owner"] }) });
+
+  const view = render(<RegistryApp client={client} />);
+  await view.findByText("API keys");
+
+  fireEvent.input(view.getByLabelText("Key name"), { target: { value: "MCP client" } });
+  fireEvent.click(view.getByLabelText("Submit skills"));
+  fireEvent.click(view.getByRole("button", { name: /create key/i }));
+
+  await view.findByText("mysk_live_created_secret");
+  assert.deepEqual(client.apiTokenCreates, [{ name: "MCP client", scopes: ["skills:read", "skills:submit"] }]);
+
+  fireEvent.click(view.getByLabelText("Revoke CLI"));
+  await waitFor(() => assert.deepEqual(client.apiTokenRevokes, ["api-token-1"]));
+});
+
 test("non-admin sessions do not render the admin entry point", async () => {
   setupDom();
   const client = mockClient({ user: authUser({ roles: ["author"] }) });
@@ -306,9 +328,13 @@ test("admin sessions can manage registration, users, and provider metadata", asy
 
   await view.findByRole("button", { name: "Refresh" });
   await waitFor(() => assert.equal(view.getAllByText("Cloudflare Access").length >= 1, true));
+  await view.findByText("API keys");
   assert.equal(document.body.textContent?.includes("clientSecret"), false);
   assert.equal(document.body.textContent?.includes("private_key"), false);
   assert.equal((view.getByLabelText("Set author@example.com author role") as HTMLInputElement).disabled, true);
+
+  fireEvent.click(view.getByLabelText("Revoke CLI"));
+  await waitFor(() => assert.deepEqual(client.adminTokenRevokes, ["api-token-1"]));
 
   fireEvent.click(view.getByRole("button", { name: "Request" }));
   await waitFor(() => assert.deepEqual(client.registrationUpdates, ["request"]));
@@ -402,7 +428,7 @@ test("maintainer sessions can approve and publish review submissions without bun
 
 test("author sessions can submit a package archive without rendering package content", async () => {
   setupDom();
-  const client = mockClient({ user: authUser({ email: "author@example.com", roles: ["author"] }) });
+  const client = mockClient({ user: authUser({ email: "author@example.com", roles: ["author"] }), userSubmissions: [] });
 
   const view = render(<RegistryApp client={client} />);
   fireEvent.input(view.getByLabelText("Email"), { target: { value: "author@example.com" } });
@@ -418,11 +444,16 @@ test("author sessions can submit a package archive without rendering package con
   fireEvent.click(view.getByRole("button", { name: /submit for review/i }));
 
   await view.findByText("submission-1");
+  await view.findByText("My submitted skills");
   assert.equal(client.submitCalls[0]?.filename, "release-notes-helper.zip");
   assert.equal(client.submitCalls[0]?.contentBase64, "UEsgYXJjaGl2ZSBjb250ZW50");
   assert.equal(document.body.textContent?.includes("storageKey"), false);
   assert.equal(document.body.textContent?.includes("PK archive content"), false);
   assert.equal(document.body.textContent?.includes("UEsgYXJjaGl2ZSBjb250ZW50"), false);
+
+  fireEvent.click(view.getByRole("button", { name: /export/i }));
+  await waitFor(() => assert.deepEqual(client.submissionExports, ["submission-1"]));
+  assert.equal(document.body.textContent?.includes("Summarize release notes."), false);
 });
 
 test("submission result renders controlled scan warnings", async () => {
@@ -515,6 +546,8 @@ function setupAuthenticatedDom(url = "http://localhost/registry", user = authUse
 }
 
 function mockClient(input: {
+  adminApiTokens?: AdminApiToken[];
+  apiTokens?: ApiToken[];
   adminProviders?: AdminProviderConfig[];
   adminUsers?: AdminUser[];
   reviewSubmissions?: ReviewSubmissionSummary[];
@@ -527,6 +560,7 @@ function mockClient(input: {
   searchResults?: (query: string) => PublicSkill[];
   submitError?: SafeApiError;
   submitResult?: SubmitSkillResult;
+  userSubmissions?: UserSubmissionSummary[];
   user?: ReturnType<typeof authUser>;
 } = {}) {
   const skills = input.skills ?? [publicSkill()];
@@ -534,10 +568,16 @@ function mockClient(input: {
   const currentUser = input.user ?? authUser();
   let registrationMode: AdminRegistrationMode = "closed";
   let adminUsers = input.adminUsers ?? defaultAdminUsers();
+  let apiTokens = input.apiTokens ?? defaultApiTokens();
+  let adminApiTokens = input.adminApiTokens ?? defaultAdminApiTokens();
   let adminProviders = input.adminProviders ?? defaultAdminProviders();
   let reviewSubmissions = input.reviewSubmissions ?? defaultReviewSubmissions();
+  let userSubmissions = input.userSubmissions ?? defaultUserSubmissions();
   let mfaStatus = input.mfaStatus ?? defaultMfaStatus(currentUser.mfaVerified);
   const client: RegistryClient & {
+    adminTokenRevokes: string[];
+    apiTokenCreates: Array<{ name: string; scopes: ApiTokenScope[] }>;
+    apiTokenRevokes: string[];
     bundleCalls: number;
     emailChangeRequests: string[];
     mfaConfirmations: string[];
@@ -554,8 +594,12 @@ function mockClient(input: {
     roleUpdates: string[];
     searchCalls: string[];
     submitCalls: Array<{ filename: string; contentBase64: string }>;
+    submissionExports: string[];
     userActions: string[];
   } = {
+    adminTokenRevokes: [],
+    apiTokenCreates: [],
+    apiTokenRevokes: [],
     bundleCalls: 0,
     emailChangeRequests: [],
     mfaConfirmations: [],
@@ -572,6 +616,7 @@ function mockClient(input: {
     roleUpdates: [],
     searchCalls: [],
     submitCalls: [],
+    submissionExports: [],
     userActions: [],
     async searchSkills(query) {
       client.searchCalls.push(query);
@@ -681,6 +726,30 @@ function mockClient(input: {
       };
       return { status: "disabled", disabledFactors: 1 };
     },
+    async listApiTokens() {
+      return apiTokens;
+    },
+    async createApiToken(input) {
+      client.apiTokenCreates.push({ name: input.name, scopes: input.scopes });
+      const token: ApiToken & { token: string } = {
+        id: `api-token-${apiTokens.length + 1}`,
+        name: input.name,
+        tokenPrefix: "mysk_live",
+        scopes: input.scopes,
+        expiresAt: input.expiresAt ?? "2026-09-01T00:00:00.000Z",
+        revokedAt: null,
+        lastUsedAt: null,
+        createdAt: "2026-06-14T00:00:00.000Z",
+        token: "mysk_live_created_secret",
+      };
+      apiTokens = [token, ...apiTokens];
+      return token;
+    },
+    async revokeApiToken(tokenId) {
+      client.apiTokenRevokes.push(tokenId);
+      apiTokens = apiTokens.map((token) => token.id === tokenId ? { ...token, revokedAt: "2026-06-14T00:00:00.000Z" } : token);
+      return apiTokens.find((token) => token.id === tokenId) ?? defaultApiTokens()[0];
+    },
     async getAdminRegistration() {
       return { mode: registrationMode };
     },
@@ -704,6 +773,14 @@ function mockClient(input: {
       client.roleUpdates.push(`${userId}:${roles.join(",")}`);
       adminUsers = adminUsers.map((user) => user.id === userId ? { ...user, roles } : user);
       return adminUsers.find((user) => user.id === userId) ?? defaultAdminUsers()[0];
+    },
+    async listAdminApiTokens() {
+      return adminApiTokens;
+    },
+    async revokeAdminApiToken(tokenId) {
+      client.adminTokenRevokes.push(tokenId);
+      adminApiTokens = adminApiTokens.map((token) => token.id === tokenId ? { ...token, revokedAt: "2026-06-14T00:00:00.000Z" } : token);
+      return adminApiTokens.find((token) => token.id === tokenId) ?? defaultAdminApiTokens()[0];
     },
     async listAdminProviders() {
       return adminProviders;
@@ -730,7 +807,27 @@ function mockClient(input: {
       if (input.submitError) {
         throw input.submitError;
       }
-      return input.submitResult ?? defaultSubmitResult();
+      const submitResult = input.submitResult ?? defaultSubmitResult();
+      userSubmissions = [defaultUserSubmission({
+        id: submitResult.submission.id,
+        slug: submitResult.submission.slug,
+        version: submitResult.submission.version,
+        reviewStatus: submitResult.submission.reviewStatus,
+        securityStatus: submitResult.submission.securityStatus,
+      }), ...userSubmissions.filter((submission) => submission.id !== submitResult.submission.id)];
+      return submitResult;
+    },
+    async listUserSubmissions() {
+      return userSubmissions;
+    },
+    async exportUserSubmission(submissionId) {
+      client.submissionExports.push(submissionId);
+      return {
+        files: [
+          { path: "skill.json", content: "{\"name\":\"release-notes-helper\"}" },
+          { path: "README.md", content: "Summarize release notes." },
+        ],
+      };
     },
     async listReviewSubmissions() {
       return reviewSubmissions;
@@ -783,6 +880,58 @@ function defaultSubmitResult(): SubmitSkillResult {
       findings: [],
     },
   };
+}
+
+function defaultUserSubmission(input: Partial<UserSubmissionSummary> = {}): UserSubmissionSummary {
+  return {
+    id: input.id ?? "submission-owned-1",
+    slug: input.slug ?? "release-notes-helper",
+    title: input.title ?? "Release Notes Helper",
+    summary: input.summary ?? "Turns merged changes into concise release notes.",
+    version: input.version ?? "0.1.0",
+    visibility: input.visibility ?? "public",
+    reviewStatus: input.reviewStatus ?? "approved",
+    securityStatus: input.securityStatus ?? "passed",
+    platforms: input.platforms ?? [{ name: "codex", installTarget: "codex-skill", status: "supported" }],
+    findingCount: input.findingCount ?? 0,
+    artifact: input.artifact ?? {
+      sha256: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+      byteSize: 1234,
+      contentType: "application/vnd.myskills-app.package+json",
+    },
+    createdAt: input.createdAt ?? "2026-06-14T00:00:00.000Z",
+    publishedAt: input.publishedAt ?? "2026-06-14T00:00:00.000Z",
+  };
+}
+
+function defaultUserSubmissions(): UserSubmissionSummary[] {
+  return [defaultUserSubmission()];
+}
+
+function defaultApiTokens(): ApiToken[] {
+  return [{
+    id: "api-token-1",
+    name: "CLI",
+    tokenPrefix: "mysk_live",
+    scopes: ["skills:read"],
+    expiresAt: "2026-09-01T00:00:00.000Z",
+    revokedAt: null,
+    lastUsedAt: null,
+    createdAt: "2026-06-14T00:00:00.000Z",
+  }];
+}
+
+function defaultAdminApiTokens(): AdminApiToken[] {
+  return [{
+    ...defaultApiTokens()[0]!,
+    user: {
+      id: "user-2",
+      email: "author@example.com",
+      name: "Author",
+      status: "active",
+      roles: ["author"],
+    },
+  }];
 }
 
 function authUser(input: { email?: string; mfaVerified?: boolean; roles?: string[] } = {}) {

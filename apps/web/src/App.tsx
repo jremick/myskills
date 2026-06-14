@@ -8,6 +8,7 @@ import {
   CircleAlert,
   ClipboardList,
   Copy,
+  Download,
   FileCode2,
   Fingerprint,
   KeyRound,
@@ -40,7 +41,10 @@ import {
   safeErrorMessage,
   safeReviewErrorMessage,
   safeSubmitErrorMessage,
+  type AdminApiToken,
   type ConfirmMfaResult,
+  type ApiToken,
+  type ApiTokenScope,
   type AdminAuditEvent,
   type AdminProviderConfig,
   type AdminRegistrationMode,
@@ -52,6 +56,7 @@ import {
   type ReviewActionResult,
   type ReviewSubmissionSummary,
   type SubmitSkillResult,
+  type UserSubmissionSummary,
   type WebAuthUser,
 } from "./api.js";
 
@@ -85,6 +90,14 @@ interface ProviderDraft {
 }
 
 type ReviewActionName = "approve" | "publish";
+
+const API_TOKEN_SCOPE_OPTIONS: Array<{ scope: ApiTokenScope; label: string }> = [
+  { scope: "profile:read", label: "Profile" },
+  { scope: "skills:read", label: "Read skills" },
+  { scope: "skills:submit", label: "Submit skills" },
+  { scope: "review:read", label: "Review read" },
+  { scope: "review:write", label: "Review write" },
+];
 
 export function RegistryApp({ client }: RegistryAppProps) {
   const initialSlug = skillSlugFromPath(window.location.pathname);
@@ -810,8 +823,26 @@ function LoginPage({
 function SubmitDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
   const [file, setFile] = useState<File | null>(null);
   const [state, setState] = useState<LoadState>("idle");
+  const [submissionsState, setSubmissionsState] = useState<LoadState>("loading");
   const [message, setMessage] = useState<string | null>(null);
   const [result, setResult] = useState<SubmitSkillResult | null>(null);
+  const [submissions, setSubmissions] = useState<UserSubmissionSummary[]>([]);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+
+  async function refreshSubmissions() {
+    setSubmissionsState("loading");
+    try {
+      setSubmissions(await client.listUserSubmissions(session.token));
+      setSubmissionsState("ready");
+    } catch (error) {
+      setMessage(safeSubmitErrorMessage(error));
+      setSubmissionsState("error");
+    }
+  }
+
+  useEffect(() => {
+    void refreshSubmissions();
+  }, [client, session.token]);
 
   async function submitPackage() {
     setMessage(null);
@@ -840,9 +871,23 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
       }, session.token);
       setResult(submitted);
       setState("ready");
+      await refreshSubmissions();
     } catch (error) {
       setMessage(safeSubmitErrorMessage(error));
       setState("error");
+    }
+  }
+
+  async function exportSubmission(submission: UserSubmissionSummary) {
+    setMessage(null);
+    setExportingId(submission.id);
+    try {
+      const bundle = await client.exportUserSubmission(submission.id, session.token);
+      downloadJsonFile(`${submission.slug}-${submission.version}.myskills.json`, bundle);
+    } catch (error) {
+      setMessage(safeSubmitErrorMessage(error));
+    } finally {
+      setExportingId(null);
     }
   }
 
@@ -954,6 +999,45 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
               <p>Submitted packages appear here after server validation.</p>
             </div>
           )}
+        </section>
+
+        <section className="submit-panel user-submissions-panel" aria-label="My submitted skills">
+          <div className="admin-panel-heading">
+            <span className="admin-panel-icon"><PackageOpen size={18} aria-hidden="true" /></span>
+            <div>
+              <h2>My submitted skills</h2>
+              <p>{submissionsState === "loading" ? "Loading" : `${submissions.length} versions`}</p>
+            </div>
+          </div>
+          <div className="submission-list">
+            {submissions.map((submission) => (
+              <div className="submission-row" key={submission.id}>
+                <span className="cell-main">
+                  <strong>{submission.title}</strong>
+                  <small>{submission.slug}@{submission.version}</small>
+                </span>
+                <StatusToken value={submission.reviewStatus} />
+                <StatusToken value={submission.securityStatus} />
+                <span>{formatBytes(submission.artifact.byteSize)}</span>
+                <button
+                  className="save-button compact-button"
+                  disabled={exportingId === submission.id}
+                  type="button"
+                  onClick={() => void exportSubmission(submission)}
+                >
+                  <Download size={15} aria-hidden="true" />
+                  Export
+                </button>
+              </div>
+            ))}
+            {submissionsState === "ready" && submissions.length === 0 && (
+              <div className="empty-state compact">
+                <PackageOpen size={22} aria-hidden="true" />
+                <strong>No submitted skills.</strong>
+                <span>Validated submissions will appear here for export.</span>
+              </div>
+            )}
+          </div>
         </section>
       </section>
     </main>
@@ -1137,6 +1221,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
   const [message, setMessage] = useState<string | null>(null);
   const [registrationMode, setRegistrationMode] = useState<AdminRegistrationMode>("closed");
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [apiTokens, setApiTokens] = useState<AdminApiToken[]>([]);
   const [providers, setProviders] = useState<AdminProviderConfig[]>([]);
   const [auditEvents, setAuditEvents] = useState<AdminAuditEvent[]>([]);
   const [draft, setDraft] = useState<ProviderDraft>(() => emptyProviderDraft());
@@ -1146,14 +1231,16 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
     setState("loading");
     setMessage(null);
     try {
-      const [registration, nextUsers, nextProviders, nextAuditEvents] = await Promise.all([
+      const [registration, nextUsers, nextApiTokens, nextProviders, nextAuditEvents] = await Promise.all([
         client.getAdminRegistration(session.token),
         client.listAdminUsers(session.token),
+        client.listAdminApiTokens(session.token),
         client.listAdminProviders(session.token),
         client.listAdminAudit(25, session.token),
       ]);
       setRegistrationMode(registration.mode);
       setUsers(nextUsers);
+      setApiTokens(nextApiTokens);
       setProviders(nextProviders);
       setAuditEvents(nextAuditEvents);
       setDraft((current) => current.key ? current : providerToDraft(nextProviders[0]));
@@ -1210,6 +1297,17 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
     try {
       const updated = await client.updateAdminUserRoles(userId, roles, session.token);
       setUsers((current) => current.map((user) => user.id === updated.id ? updated : user));
+      setAuditEvents(await client.listAdminAudit(25, session.token));
+    } catch (error) {
+      setMessage(safeAdminErrorMessage(error));
+    }
+  }
+
+  async function revokeAdminToken(tokenId: string) {
+    setMessage(null);
+    try {
+      const token = await client.revokeAdminApiToken(tokenId, session.token);
+      setApiTokens((current) => current.map((item) => item.id === token.id ? token : item));
       setAuditEvents(await client.listAdminAudit(25, session.token));
     } catch (error) {
       setMessage(safeAdminErrorMessage(error));
@@ -1332,6 +1430,42 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
                 </span>
               </div>
             ))}
+          </div>
+        </AdminPanel>
+
+        <AdminPanel
+          icon={<KeyRound size={18} aria-hidden="true" />}
+          title="API keys"
+          meta={`${apiTokens.filter((token) => !token.revokedAt).length} active`}
+        >
+          <div className="admin-token-list">
+            {apiTokens.map((token) => (
+              <div className="token-row admin-token-row" key={token.id}>
+                <span className="cell-main">
+                  <strong>{token.name}</strong>
+                  <small>{token.user.email} · {token.tokenPrefix}...</small>
+                </span>
+                <StatusToken value={token.revokedAt ? "revoked" : "active"} />
+                <span>{token.scopes.join(", ")}</span>
+                <span>Expires {formatDate(token.expiresAt)}</span>
+                <button
+                  className="icon-button"
+                  disabled={Boolean(token.revokedAt)}
+                  type="button"
+                  onClick={() => void revokeAdminToken(token.id)}
+                  aria-label={`Revoke ${token.name}`}
+                >
+                  <Trash2 size={15} aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+            {state === "ready" && apiTokens.length === 0 && (
+              <div className="empty-state compact">
+                <KeyRound size={22} aria-hidden="true" />
+                <strong>No API keys.</strong>
+                <span>User-created keys will appear here for monitoring and revocation.</span>
+              </div>
+            )}
           </div>
         </AdminPanel>
 
@@ -1680,6 +1814,7 @@ function AccountSettings({
   session: WebSession;
 }) {
   const [mfaStatus, setMfaStatus] = useState<MfaStatus | null>(null);
+  const [apiTokens, setApiTokens] = useState<ApiToken[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [message, setMessage] = useState<string | null>(null);
   const [email, setEmail] = useState("");
@@ -1689,11 +1824,20 @@ function AccountSettings({
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [mfaPassword, setMfaPassword] = useState("");
   const [mfaSetupOpen, setMfaSetupOpen] = useState(false);
+  const [apiTokenName, setApiTokenName] = useState("");
+  const [apiTokenScopes, setApiTokenScopes] = useState<ApiTokenScope[]>(["skills:read"]);
+  const [apiTokenExpiresAt, setApiTokenExpiresAt] = useState("");
+  const [createdApiToken, setCreatedApiToken] = useState<string | null>(null);
 
-  async function refreshMfa() {
+  async function refreshAccountSecurity() {
     setState("loading");
     try {
-      setMfaStatus(await client.getMfaStatus(session.token));
+      const [nextMfaStatus, nextApiTokens] = await Promise.all([
+        client.getMfaStatus(session.token),
+        client.listApiTokens(session.token),
+      ]);
+      setMfaStatus(nextMfaStatus);
+      setApiTokens(nextApiTokens);
       setState("ready");
     } catch (error) {
       setMessage(safeAccountErrorMessage(error));
@@ -1702,7 +1846,7 @@ function AccountSettings({
   }
 
   useEffect(() => {
-    void refreshMfa();
+    void refreshAccountSecurity();
   }, [client, session.token]);
 
   async function submitPasswordChange() {
@@ -1742,6 +1886,40 @@ function AccountSettings({
     try {
       await client.disableTotpMfa({ password: mfaPassword }, session.token);
       onSessionInvalidated("MFA removed. Sign in again to continue.");
+    } catch (error) {
+      setState("error");
+      setMessage(safeAccountErrorMessage(error));
+    }
+  }
+
+  async function createAccountApiToken() {
+    setMessage(null);
+    setCreatedApiToken(null);
+    setState("loading");
+    try {
+      const token = await client.createApiToken({
+        name: apiTokenName,
+        scopes: apiTokenScopes,
+        expiresAt: apiTokenExpiresAt || undefined,
+      }, session.token);
+      setCreatedApiToken(token.token);
+      setApiTokens(await client.listApiTokens(session.token));
+      setApiTokenName("");
+      setApiTokenExpiresAt("");
+      setState("ready");
+    } catch (error) {
+      setState("error");
+      setMessage(safeAccountErrorMessage(error));
+    }
+  }
+
+  async function revokeAccountApiToken(tokenId: string) {
+    setMessage(null);
+    setState("loading");
+    try {
+      const token = await client.revokeApiToken(tokenId, session.token);
+      setApiTokens((current) => current.map((item) => item.id === token.id ? token : item));
+      setState("ready");
     } catch (error) {
       setState("error");
       setMessage(safeAccountErrorMessage(error));
@@ -1855,6 +2033,51 @@ function AccountSettings({
           </div>
         </AccountPanel>
 
+        <AccountPanel icon={<KeyRound size={18} aria-hidden="true" />} title="API keys" meta={`${apiTokens.filter((token) => !token.revokedAt).length} active`}>
+          <div className="settings-stack">
+            <form className="settings-form" onSubmit={(event) => {
+              event.preventDefault();
+              void createAccountApiToken();
+            }}>
+              <label>
+                Key name
+                <input value={apiTokenName} onChange={(event) => setApiTokenName(event.target.value)} placeholder="CLI or MCP client" />
+              </label>
+              <label>
+                Expires at
+                <input value={apiTokenExpiresAt} onChange={(event) => setApiTokenExpiresAt(event.target.value)} placeholder="Default: 90 days" />
+              </label>
+              <div className="scope-grid" aria-label="API key scopes">
+                {API_TOKEN_SCOPE_OPTIONS.map((option) => (
+                  <label className="role-toggle" key={option.scope}>
+                    <input
+                      checked={apiTokenScopes.includes(option.scope)}
+                      onChange={() => setApiTokenScopes((current) => toggleApiTokenScope(current, option.scope))}
+                      type="checkbox"
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              <button className="save-button" disabled={state === "loading" || !apiTokenName.trim() || apiTokenScopes.length === 0} type="submit">
+                <KeyRound size={16} aria-hidden="true" />
+                Create key
+              </button>
+            </form>
+            {createdApiToken && (
+              <div className="token-reveal" role="status">
+                <span>Copy this key now. It will not be shown again.</span>
+                <code>{createdApiToken}</code>
+                <button type="button" onClick={() => void navigator.clipboard?.writeText(createdApiToken)}>
+                  <Copy size={15} aria-hidden="true" />
+                  Copy
+                </button>
+              </div>
+            )}
+            <TokenList tokens={apiTokens} onRevoke={(tokenId) => void revokeAccountApiToken(tokenId)} />
+          </div>
+        </AccountPanel>
+
         <AccountPanel icon={<Fingerprint size={18} aria-hidden="true" />} title="Passkeys" meta="Planned security option">
           <div className="passkey-panel">
             <StatusToken value="planned" />
@@ -1883,6 +2106,34 @@ function AccountPanel({ children, icon, meta, title }: {
       </div>
       {children}
     </section>
+  );
+}
+
+function TokenList({ tokens, onRevoke }: { tokens: ApiToken[]; onRevoke: (tokenId: string) => void }) {
+  return (
+    <div className="token-list">
+      {tokens.map((token) => (
+        <div className="token-row" key={token.id}>
+          <span className="cell-main">
+            <strong>{token.name}</strong>
+            <small>{token.tokenPrefix}... · {token.scopes.join(", ")}</small>
+          </span>
+          <StatusToken value={token.revokedAt ? "revoked" : "active"} />
+          <span>Expires {formatDate(token.expiresAt)}</span>
+          <span>{token.lastUsedAt ? `Used ${formatDate(token.lastUsedAt)}` : "Never used"}</span>
+          <button className="icon-button" disabled={Boolean(token.revokedAt)} type="button" onClick={() => onRevoke(token.id)} aria-label={`Revoke ${token.name}`}>
+            <Trash2 size={15} aria-hidden="true" />
+          </button>
+        </div>
+      ))}
+      {tokens.length === 0 && (
+        <div className="empty-state compact">
+          <KeyRound size={22} aria-hidden="true" />
+          <strong>No API keys.</strong>
+          <span>Create a scoped key for CLI, MCP, or automation access.</span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2552,6 +2803,12 @@ function isZipArchive(file: File): boolean {
   return /^[A-Za-z0-9._-]+\.zip$/i.test(file.name);
 }
 
+function toggleApiTokenScope(scopes: ApiTokenScope[], scope: ApiTokenScope): ApiTokenScope[] {
+  return scopes.includes(scope)
+    ? scopes.filter((item) => item !== scope)
+    : [...scopes, scope];
+}
+
 async function fileToBase64(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   let binary = "";
@@ -2560,6 +2817,21 @@ async function fileToBase64(file: File): Promise<string> {
     binary += String.fromCharCode(...bytes.slice(index, index + chunkSize));
   }
   return btoa(binary);
+}
+
+function downloadJsonFile(filename: string, value: unknown): void {
+  if (typeof URL === "undefined" || typeof URL.createObjectURL !== "function") {
+    return;
+  }
+  const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function formatBytes(bytes: number): string {

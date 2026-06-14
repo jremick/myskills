@@ -42,6 +42,33 @@ export interface AdminUser {
   mfaEnabled: boolean;
 }
 
+export type ApiTokenScope = "profile:read" | "skills:read" | "skills:submit" | "review:read" | "review:write";
+
+export interface ApiToken {
+  id: string;
+  name: string;
+  tokenPrefix: string;
+  scopes: ApiTokenScope[];
+  expiresAt: string;
+  revokedAt: string | null;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreatedApiToken extends ApiToken {
+  token: string;
+}
+
+export interface AdminApiToken extends ApiToken {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    status: string;
+    roles: string[];
+  };
+}
+
 export interface MfaFactor {
   id: string;
   type: "totp";
@@ -156,6 +183,30 @@ export interface SubmitSkillResult {
   };
 }
 
+export interface UserSubmissionSummary {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  version: string;
+  visibility: string;
+  reviewStatus: string;
+  securityStatus: string;
+  platforms: Array<{ name: string; installTarget: string; status: string }>;
+  findingCount: number;
+  artifact: {
+    sha256: string;
+    byteSize: number;
+    contentType: string;
+  };
+  createdAt: string;
+  publishedAt: string | null;
+}
+
+export interface SkillPackageBundle {
+  files: Array<{ path: string; content: string }>;
+}
+
 export type LoginResult =
   | { mfaRequired: false; token: string; expiresAt: string; user: WebAuthUser }
   | { mfaRequired: true; challengeToken: string; expiresAt: string; user: WebAuthUser };
@@ -184,15 +235,22 @@ export interface RegistryClient {
   startTotpEnrollment(input: { password: string; label?: string }, token?: string): Promise<TotpEnrollment>;
   confirmTotpEnrollment(input: { factorId: string; code: string }, token?: string): Promise<ConfirmMfaResult>;
   disableTotpMfa(input: { password: string }, token?: string): Promise<{ status: "disabled"; disabledFactors: number }>;
+  listApiTokens(token?: string): Promise<ApiToken[]>;
+  createApiToken(input: { name: string; scopes: ApiTokenScope[]; expiresAt?: string }, token?: string): Promise<CreatedApiToken>;
+  revokeApiToken(tokenId: string, token?: string): Promise<ApiToken>;
   getAdminRegistration(token?: string): Promise<AdminRegistrationSettings>;
   updateAdminRegistration(mode: AdminRegistrationMode, token?: string): Promise<AdminRegistrationSettings>;
   listAdminUsers(token?: string): Promise<AdminUser[]>;
   performAdminUserAction(userId: string, action: "approve" | "activate" | "disable" | "delete", token?: string): Promise<AdminUser>;
   updateAdminUserRoles(userId: string, roles: string[], token?: string): Promise<AdminUser>;
+  listAdminApiTokens(token?: string): Promise<AdminApiToken[]>;
+  revokeAdminApiToken(tokenId: string, token?: string): Promise<AdminApiToken>;
   listAdminProviders(token?: string): Promise<AdminProviderConfig[]>;
   upsertAdminProvider(key: string, input: UpsertAdminProviderInput, token?: string): Promise<AdminProviderConfig>;
   listAdminAudit(limit?: number, token?: string): Promise<AdminAuditEvent[]>;
   submitArchive(input: SubmitArchiveInput, token?: string): Promise<SubmitSkillResult>;
+  listUserSubmissions(token?: string): Promise<UserSubmissionSummary[]>;
+  exportUserSubmission(submissionId: string, token?: string): Promise<SkillPackageBundle>;
   listReviewSubmissions(token?: string): Promise<ReviewSubmissionSummary[]>;
   performReviewAction(submissionId: string, action: "approve" | "publish", reason?: string, token?: string): Promise<ReviewActionResult>;
 }
@@ -329,6 +387,32 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
       );
       return body.mfa;
     },
+    async listApiTokens(overrideToken) {
+      const body = await requestJson<{ tokens: ApiToken[] }>(fetchImpl, `${root}/v1/auth/api-tokens`, {
+        token: overrideToken ?? token,
+      });
+      return body.tokens;
+    },
+    async createApiToken(input, overrideToken) {
+      const body = await requestJson<{ token: CreatedApiToken }>(fetchImpl, `${root}/v1/auth/api-tokens`, {
+        method: "POST",
+        body: {
+          name: input.name,
+          scopes: input.scopes,
+          ...(input.expiresAt?.trim() ? { expiresAt: input.expiresAt.trim() } : {}),
+        },
+        token: overrideToken ?? token,
+      });
+      return body.token;
+    },
+    async revokeApiToken(tokenId, overrideToken) {
+      const body = await requestJson<{ token: ApiToken }>(
+        fetchImpl,
+        `${root}/v1/auth/api-tokens/${encodeURIComponent(tokenId)}`,
+        { method: "DELETE", token: overrideToken ?? token },
+      );
+      return body.token;
+    },
     async getAdminRegistration(overrideToken) {
       const body = await requestJson<{ registration: AdminRegistrationSettings }>(
         fetchImpl,
@@ -367,6 +451,20 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
       );
       return body.user;
     },
+    async listAdminApiTokens(overrideToken) {
+      const body = await requestJson<{ tokens: AdminApiToken[] }>(fetchImpl, `${root}/v1/admin/api-tokens`, {
+        token: overrideToken ?? token,
+      });
+      return body.tokens;
+    },
+    async revokeAdminApiToken(tokenId, overrideToken) {
+      const body = await requestJson<{ token: AdminApiToken }>(
+        fetchImpl,
+        `${root}/v1/admin/api-tokens/${encodeURIComponent(tokenId)}`,
+        { method: "DELETE", token: overrideToken ?? token },
+      );
+      return body.token;
+    },
     async listAdminProviders(overrideToken) {
       const body = await requestJson<{ providers: AdminProviderConfig[] }>(
         fetchImpl,
@@ -402,6 +500,19 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         },
         token: overrideToken ?? token,
       });
+    },
+    async listUserSubmissions(overrideToken) {
+      const body = await requestJson<{ submissions: UserSubmissionSummary[] }>(fetchImpl, `${root}/v1/submissions/mine`, {
+        token: overrideToken ?? token,
+      });
+      return body.submissions;
+    },
+    async exportUserSubmission(submissionId, overrideToken) {
+      return requestJson<SkillPackageBundle>(
+        fetchImpl,
+        `${root}/v1/submissions/${encodeURIComponent(submissionId)}/bundle`,
+        { token: overrideToken ?? token },
+      );
     },
     async listReviewSubmissions(overrideToken) {
       const body = await requestJson<{ submissions: ReviewSubmissionSummary[] }>(

@@ -40,6 +40,13 @@ The API must receive `APP_BASE_URL=https://myskills.sh` and `ALLOWED_WEB_ORIGINS
 - `VITE_API_BASE_URL=/api`
 - `API_PROXY_TARGET=https://api.myskills.sh`
 
+Optional privacy-preserving analytics:
+
+- `VITE_ANALYTICS_DOMAIN=myskills.sh`
+- `VITE_ANALYTICS_SCRIPT_URL=https://plausible.io/js/script.js`
+
+Leave analytics variables unset when the deployment should not load a third-party analytics script. The web app only injects the script in production builds when `VITE_ANALYTICS_DOMAIN` is present.
+
 ## Required API Variables
 
 Set these in Railway secret/config variables, not in repo files:
@@ -112,3 +119,14 @@ During DNS cache propagation, use a public DoH resolver for deterministic checks
 curl --doh-url https://cloudflare-dns.com/dns-query https://myskills.sh/health
 curl --doh-url https://cloudflare-dns.com/dns-query https://api.myskills.sh/health
 ```
+
+## Iteration Deployment Loop
+
+The current live project is intentionally manual but can be made easier without changing hosting providers:
+
+1. Keep feature work on a branch and require GitHub CI to pass.
+2. Merge or fast-forward the Railway-connected branch only after the rendered local checks pass.
+3. Redeploy the `api` and `web` Railway services from the same commit.
+4. Run the smoke checks above and a browser login/export check before calling the iteration live.
+
+Next automation target: a GitHub Actions workflow that runs `npm run check`, deploys the Railway services with scoped Railway project tokens, and reports the resulting deployment URLs and health checks back to the pull request.

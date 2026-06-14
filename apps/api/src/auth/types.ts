@@ -86,6 +86,10 @@ export interface ApiTokenRecord {
   createdAt: Date;
 }
 
+export interface AdminApiTokenRecord extends ApiTokenRecord {
+  user: AuthUserRecord;
+}
+
 export interface CreateApiTokenInput {
   userId: string;
   name: string;
@@ -215,8 +219,10 @@ export interface AuthStore {
   revokeUserCredentials(userId: string): Promise<void>;
   createApiToken(input: CreateApiTokenInput): Promise<ApiTokenRecord>;
   listApiTokensForUser(userId: string): Promise<ApiTokenRecord[]>;
+  listApiTokensForAdmin(): Promise<AdminApiTokenRecord[]>;
   findUserByApiTokenHash(tokenHash: string, now?: Date): Promise<AuthUserWithApiToken | null>;
   revokeApiToken(input: { userId: string; tokenId: string }): Promise<ApiTokenRecord | null>;
+  revokeAnyApiToken(input: { tokenId: string }): Promise<AdminApiTokenRecord | null>;
   listProviderConfigs(): Promise<ProviderConfigRecord[]>;
   upsertProviderConfig(input: UpsertProviderConfigInput): Promise<ProviderConfigRecord>;
   countEnabledMfaFactors(userId: string): Promise<number>;

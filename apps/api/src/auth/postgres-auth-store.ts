@@ -21,6 +21,7 @@ import {
 import type {
   AuditEventRecord,
   ApiTokenRecord,
+  AdminApiTokenRecord,
   ApiTokenScope,
   AuthActionTokenRecord,
   AuthActionTokenPurpose,
@@ -344,6 +345,24 @@ export class PostgresAuthStore implements AuthStore {
     return rows.reverse().map(toApiTokenRecord);
   }
 
+  async listApiTokensForAdmin(): Promise<AdminApiTokenRecord[]> {
+    const rows = await this.db
+      .select({
+        token: apiTokens,
+        user: users,
+      })
+      .from(apiTokens)
+      .innerJoin(users, eq(users.id, apiTokens.userId))
+      .orderBy(apiTokens.createdAt);
+    return Promise.all(rows.reverse().map(async (row) => ({
+      ...toApiTokenRecord(row.token),
+      user: {
+        ...toRecord(row.user),
+        roles: await this.rolesForUser(row.user.id),
+      },
+    })));
+  }
+
   async findUserByApiTokenHash(tokenHash: string, now = new Date()): Promise<AuthUserWithApiToken | null> {
     const [row] = await this.db
       .select({
@@ -380,6 +399,19 @@ export class PostgresAuthStore implements AuthStore {
       .where(and(eq(apiTokens.id, input.tokenId), eq(apiTokens.userId, input.userId)))
       .returning();
     return token ? toApiTokenRecord(token) : null;
+  }
+
+  async revokeAnyApiToken(input: { tokenId: string }): Promise<AdminApiTokenRecord | null> {
+    const [token] = await this.db
+      .update(apiTokens)
+      .set({ revokedAt: new Date() })
+      .where(eq(apiTokens.id, input.tokenId))
+      .returning();
+    if (!token) {
+      return null;
+    }
+    const user = await this.findUserById(token.userId);
+    return user ? { ...toApiTokenRecord(token), user } : null;
   }
 
   async listProviderConfigs(): Promise<ProviderConfigRecord[]> {

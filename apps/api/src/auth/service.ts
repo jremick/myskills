@@ -26,6 +26,7 @@ import {
   type AuditDecision,
   type AuditEventRecord,
   type ApiTokenRecord,
+  type AdminApiTokenRecord,
   type ApiTokenScope,
   type AuthActionTokenPurpose,
   type AuthResponseUser,
@@ -143,6 +144,16 @@ export interface SafeApiToken {
 
 export interface CreatedApiToken extends SafeApiToken {
   token: string;
+}
+
+export interface SafeAdminApiToken extends SafeApiToken {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    status: string;
+    roles: string[];
+  };
 }
 
 export interface MfaStatus {
@@ -650,6 +661,32 @@ export class AuthService {
       throw new AppError("API token not found.", "API_TOKEN_NOT_FOUND", 404);
     }
     return safeApiToken(token);
+  }
+
+  async listAdminApiTokens(actor: AuthResponseUser): Promise<SafeAdminApiToken[]> {
+    assertAdmin(actor);
+    return (await this.store.listApiTokensForAdmin()).map(safeAdminApiToken);
+  }
+
+  async revokeAdminApiToken(actor: AuthResponseUser, tokenId: string): Promise<SafeAdminApiToken> {
+    assertAdmin(actor);
+    const token = await this.store.revokeAnyApiToken({ tokenId: cleanId(tokenId, "tokenId") });
+    if (!token) {
+      throw new AppError("API token not found.", "API_TOKEN_NOT_FOUND", 404);
+    }
+    await this.store.recordAuditEvent({
+      actorUserId: actor.id,
+      action: "admin.api_token.revoke",
+      decision: "allow",
+      resourceType: "api_token",
+      resourceId: token.id,
+      details: {
+        targetUserId: token.user.id,
+        targetEmail: token.user.email,
+        scopes: token.scopes,
+      },
+    });
+    return safeAdminApiToken(token);
   }
 
   async getMfaStatus(actor: AuthResponseUser): Promise<MfaStatus> {
@@ -1485,6 +1522,19 @@ function safeApiToken(token: ApiTokenRecord): SafeApiToken {
     revokedAt: token.revokedAt?.toISOString() ?? null,
     lastUsedAt: token.lastUsedAt?.toISOString() ?? null,
     createdAt: token.createdAt.toISOString(),
+  };
+}
+
+function safeAdminApiToken(token: AdminApiTokenRecord): SafeAdminApiToken {
+  return {
+    ...safeApiToken(token),
+    user: {
+      id: token.user.id,
+      email: token.user.email,
+      name: token.user.name,
+      status: token.user.status,
+      roles: token.user.roles,
+    },
   };
 }
 
