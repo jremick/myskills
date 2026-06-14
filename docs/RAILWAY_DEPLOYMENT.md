@@ -61,7 +61,7 @@ Set these in Railway secret/config variables, not in repo files:
 - `ALLOWED_WEB_ORIGINS=https://myskills.sh,https://www.myskills.sh`
 - `AUTH_NOTIFICATION_MODE=resend`
 - `RESEND_API_KEY`
-- `RESEND_FROM=MySkills <noreply@myskills.sh>`
+- `RESEND_FROM=MySkills <noreply@jarel.app>`
 - `ARTIFACT_STORAGE_MODE=s3`
 - `S3_ENDPOINT`
 - `S3_REGION`
@@ -74,10 +74,10 @@ SMTP remains supported for self-hosted deployments, but the Railway production d
 
 ## Resend Setup
 
-1. Add and verify the `myskills.sh` domain in Resend.
-2. Add the DNS records Resend returns to the `myskills.sh` DNS provider.
+1. Use the verified `jarel.app` sender domain in Resend for MySkills auth email.
+2. Keep `RESEND_FROM=MySkills <noreply@jarel.app>` in the Railway API service.
 3. Create a dedicated send-only Resend API key named `MySkills Railway production`.
-4. Set Railway API variables: `AUTH_NOTIFICATION_MODE=resend`, `RESEND_API_KEY`, and `RESEND_FROM=MySkills <noreply@myskills.sh>`.
+4. Set Railway API variables: `AUTH_NOTIFICATION_MODE=resend`, `RESEND_API_KEY`, and `RESEND_FROM=MySkills <noreply@jarel.app>`.
 5. Redeploy the `api` service and request a password reset for `jremick@jremick.com` to verify delivery.
 
 ## First Owner Bootstrap
