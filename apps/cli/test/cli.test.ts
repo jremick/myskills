@@ -376,6 +376,272 @@ test("review action rejects unknown actions without fetch", async () => {
   assert.match(output.stderr.join("\n"), /--action must be approve or publish/);
 });
 
+test("teams commands create, invite, and accept through the API", async () => {
+  const output = createOutput();
+  const calls: Array<{ url: string; method: string; authorization: string; body: Record<string, unknown> }> = [];
+  const fetch: FetchLike = async (input, init) => {
+    calls.push({
+      url: String(input),
+      method: init?.method ?? "GET",
+      authorization: init?.headers?.authorization ?? "",
+      body: JSON.parse(init?.body ?? "{}"),
+    });
+    const url = String(input);
+    if (url.endsWith("/v1/teams")) {
+      return response(201, {
+        team: {
+          id: "team-1",
+          name: "Platform",
+          role: "owner",
+          members: [],
+          invitations: [],
+        },
+      });
+    }
+    if (url.endsWith("/v1/teams/team-1/invitations")) {
+      return response(201, {
+        invitation: {
+          id: "invitation-1",
+          teamId: "team-1",
+          teamName: "Platform",
+          email: "user@example.com",
+          status: "pending",
+        },
+      });
+    }
+    return response(200, {
+      invitation: {
+        id: "invitation-1",
+        teamId: "team-1",
+        teamName: "Platform",
+        email: "user@example.com",
+        status: "accepted",
+      },
+    });
+  };
+  const runtime = testRuntime(output, fetch, { MYSKILLS_TOKEN: "team-token" });
+
+  const create = await runCli(["teams", "create", "Platform", "--api-url", "http://api.test"], runtime);
+  const invite = await runCli(["teams", "invite", "team-1", "--email", "user@example.com", "--api-url", "http://api.test"], runtime);
+  const accept = await runCli(["teams", "accept", "invitation-1", "--api-url", "http://api.test"], runtime);
+
+  assert.equal(create, 0);
+  assert.equal(invite, 0);
+  assert.equal(accept, 0);
+  assert.deepEqual(calls, [
+    {
+      url: "http://api.test/v1/teams",
+      method: "POST",
+      authorization: "Bearer team-token",
+      body: { name: "Platform" },
+    },
+    {
+      url: "http://api.test/v1/teams/team-1/invitations",
+      method: "POST",
+      authorization: "Bearer team-token",
+      body: { email: "user@example.com" },
+    },
+    {
+      url: "http://api.test/v1/teams/invitations/invitation-1/accept",
+      method: "POST",
+      authorization: "Bearer team-token",
+      body: {},
+    },
+  ]);
+  assert.deepEqual(output.stdout, [
+    "team-1\tPlatform\tcreated\trole=owner",
+    "invitation-1\tuser@example.com\tinvited\tteam=Platform\tstatus=pending",
+    "invitation-1\tPlatform\taccepted\tstatus=accepted",
+  ]);
+});
+
+test("teams list and skills print stable team sharing rows", async () => {
+  const output = createOutput();
+  const calls: string[] = [];
+  const fetch: FetchLike = async (input, init) => {
+    calls.push(`${init?.headers?.authorization ?? ""} ${String(input)}`);
+    if (String(input).endsWith("/v1/teams/shared-skills")) {
+      return response(200, {
+        teams: [{
+          team: { id: "team-1", name: "Platform", role: "owner" },
+          sharingWithTeam: [{
+            slug: "release-notes-helper",
+            title: "Release Notes Helper",
+            latestVersion: "0.1.0",
+          }],
+          sharedWithMe: [{
+            slug: "incident-summary",
+            title: "Incident Summary",
+            latestVersion: null,
+          }],
+        }],
+      });
+    }
+    return response(200, {
+      teams: [{
+        id: "team-1",
+        name: "Platform",
+        role: "owner",
+        members: [{ id: "user-1" }],
+        invitations: [{
+          id: "invitation-1",
+          teamId: "team-1",
+          teamName: "Platform",
+          email: "pending@example.com",
+          status: "pending",
+        }],
+      }],
+      invitations: [{
+        id: "invitation-2",
+        teamId: "team-2",
+        teamName: "Data",
+        email: "owner@example.com",
+        status: "pending",
+      }],
+    });
+  };
+  const runtime = testRuntime(output, fetch, { MYSKILLS_TOKEN: "team-token" });
+
+  const list = await runCli(["teams", "list", "--api-url", "http://api.test"], runtime);
+  const skills = await runCli(["teams", "skills", "--api-url", "http://api.test"], runtime);
+
+  assert.equal(list, 0);
+  assert.equal(skills, 0);
+  assert.deepEqual(calls, [
+    "Bearer team-token http://api.test/v1/teams",
+    "Bearer team-token http://api.test/v1/teams/shared-skills",
+  ]);
+  assert.deepEqual(output.stdout, [
+    "team\tteam-1\tPlatform\trole=owner\tmembers=1\tpending=1",
+    "invitation\tinvitation-2\tData\towner@example.com\tstatus=pending",
+    "team\tteam-1\tPlatform\trole=owner\tsharing-out=1\tshared-in=1",
+    "sharing-out\tteam-1\trelease-notes-helper\t0.1.0\tRelease Notes Helper",
+    "shared-in\tteam-1\tincident-summary\t-\tIncident Summary",
+  ]);
+});
+
+test("sharing set posts visibility, team grants, and user grants", async () => {
+  const output = createOutput();
+  let url = "";
+  let method = "";
+  let authorization = "";
+  let body: Record<string, unknown> = {};
+  const fetch: FetchLike = async (input, init) => {
+    url = String(input);
+    method = init?.method ?? "GET";
+    authorization = init?.headers?.authorization ?? "";
+    body = JSON.parse(init?.body ?? "{}");
+    return response(200, {
+      sharing: {
+        slug: "release-notes-helper",
+        title: "Release Notes Helper",
+        visibility: "team",
+        settings: sharingSettingsBody(),
+        availableTeams: [],
+        teamGrants: [{ id: "team-1", name: "Platform", role: "owner" }],
+        userGrants: [{ id: "user-1", email: "user@example.com", name: "User" }],
+      },
+    });
+  };
+
+  const code = await runCli([
+    "sharing",
+    "set",
+    "release-notes-helper",
+    "--visibility",
+    "team",
+    "--team",
+    "team-1",
+    "--team",
+    "team-2",
+    "--user",
+    "user@example.com",
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, fetch, { MYSKILLS_TOKEN: "sharing-token" }));
+
+  assert.equal(code, 0);
+  assert.equal(url, "http://api.test/v1/skills/release-notes-helper/sharing");
+  assert.equal(method, "PUT");
+  assert.equal(authorization, "Bearer sharing-token");
+  assert.deepEqual(body, {
+    visibility: "team",
+    teamIds: ["team-1", "team-2"],
+    userEmails: ["user@example.com"],
+  });
+  assert.deepEqual(output.stdout, ["release-notes-helper\tvisibility=team\tteams=Platform(team-1)\tusers=user@example.com"]);
+});
+
+test("sharing get requires a token before fetch", async () => {
+  const output = createOutput();
+  let calls = 0;
+
+  const code = await runCli(["sharing", "get", "release-notes-helper"], testRuntime(output, async () => {
+    calls += 1;
+    return response(500, {});
+  }));
+
+  assert.equal(code, 1);
+  assert.equal(calls, 0);
+  assert.match(output.stderr.join("\n"), /No token provided/);
+});
+
+test("admin sharing set merges supplied toggles with current settings", async () => {
+  const output = createOutput();
+  const calls: Array<{ url: string; method: string; authorization: string; body: Record<string, unknown> }> = [];
+  const fetch: FetchLike = async (input, init) => {
+    calls.push({
+      url: String(input),
+      method: init?.method ?? "GET",
+      authorization: init?.headers?.authorization ?? "",
+      body: JSON.parse(init?.body ?? "{}"),
+    });
+    if ((init?.method ?? "GET") === "GET") {
+      return response(200, { sharing: sharingSettingsBody() });
+    }
+    return response(200, { sharing: JSON.parse(init?.body ?? "{}") });
+  };
+
+  const code = await runCli([
+    "admin",
+    "sharing",
+    "set",
+    "--public",
+    "false",
+    "--teams",
+    "true",
+    "--user-visibility",
+    "false",
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, fetch, { MYSKILLS_TOKEN: "owner-token" }));
+
+  assert.equal(code, 0);
+  assert.deepEqual(calls, [
+    {
+      url: "http://api.test/v1/admin/sharing",
+      method: "GET",
+      authorization: "Bearer owner-token",
+      body: {},
+    },
+    {
+      url: "http://api.test/v1/admin/sharing",
+      method: "PUT",
+      authorization: "Bearer owner-token",
+      body: {
+        publicVisibilityEnabled: false,
+        authenticatedVisibilityEnabled: true,
+        teamsEnabled: true,
+        teamVisibilityEnabled: true,
+        userVisibilityEnabled: false,
+      },
+    },
+  ]);
+  assert.deepEqual(output.stdout, [
+    "public=disabled\tauthenticated=enabled\tteams=enabled\tteam-visibility=enabled\tuser-visibility=disabled",
+  ]);
+});
+
 test("export writes verified bundle files under output directory", async (t) => {
   const outputDir = await mkdtemp(path.join(os.tmpdir(), "myskills-export-"));
   t.after(() => rm(outputDir, { recursive: true, force: true }));
@@ -748,6 +1014,16 @@ function releaseBody(version: string, bundle: string) {
         contentType: "application/vnd.myskills-app.package+json",
       },
     },
+  };
+}
+
+function sharingSettingsBody() {
+  return {
+    publicVisibilityEnabled: true,
+    authenticatedVisibilityEnabled: true,
+    teamsEnabled: true,
+    teamVisibilityEnabled: true,
+    userVisibilityEnabled: true,
   };
 }
 

@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
-import { AppError } from "@myskills-app/core";
+import { AppError, type SharingSettings } from "@myskills-app/core";
 import {
   loadSkillManifestFromPackageFiles,
   PackageManifestFileError,
@@ -10,13 +10,17 @@ import type { Database } from "../db/client.js";
 import type { ArtifactObjectStorage } from "../artifacts/storage.js";
 import {
   auditEvents,
+  instanceSettings,
   scanFindings,
   scanRuns,
   skillArtifacts,
   skillPlatformVariants,
   skills,
   skillTags,
+  skillTeamGrants,
+  skillUserGrants,
   skillVersions,
+  teamMemberships,
 } from "../db/schema.js";
 import type {
   CreateSubmissionInput,
@@ -27,6 +31,14 @@ import type {
   StoredSubmission,
   SubmissionStore,
 } from "./types.js";
+
+const DEFAULT_SHARING_SETTINGS: SharingSettings = {
+  publicVisibilityEnabled: true,
+  authenticatedVisibilityEnabled: true,
+  teamsEnabled: true,
+  teamVisibilityEnabled: true,
+  userVisibilityEnabled: true,
+};
 
 export class PostgresSubmissionStore implements SubmissionStore {
   constructor(
@@ -437,13 +449,13 @@ export class PostgresSubmissionStore implements SubmissionStore {
     });
   }
 
-  async getPublicRelease(input: { slug: string; version: string }): Promise<PublicReleaseMetadata | null> {
-    const row = await selectPublicRelease(this.db, input);
+  async getPublicRelease(input: { slug: string; version: string; actorId?: string | null }): Promise<PublicReleaseMetadata | null> {
+    const row = await selectVisibleRelease(this.db, input, await getSharingSettings(this.db));
     return row ? publicRelease(row) : null;
   }
 
-  async getPublicBundle(input: { slug: string; version: string; platform?: string }): Promise<PublicBundle | null> {
-    const row = await selectPublicRelease(this.db, input);
+  async getPublicBundle(input: { slug: string; version: string; platform?: string; actorId?: string | null }): Promise<PublicBundle | null> {
+    const row = await selectVisibleRelease(this.db, input, await getSharingSettings(this.db));
     if (!row) {
       return null;
     }
@@ -593,14 +605,54 @@ async function selectVersionForReview(db: DbLike, submissionId: string) {
 function visibleReleasePredicate(): SQL | undefined {
   return and(
     eq(skills.lifecycleStatus, "approved"),
-    eq(skills.visibility, "public"),
     eq(skillVersions.reviewStatus, "approved"),
     eq(skillVersions.securityStatus, "passed"),
     isNotNull(skillVersions.publishedAt),
   );
 }
 
-async function selectPublicRelease(db: DbLike, input: { slug: string; version: string }) {
+function visibleToActorPredicate(actorId: string | null | undefined, sharing: SharingSettings): SQL | undefined {
+  const predicates: Array<SQL | undefined> = [
+    sharing.publicVisibilityEnabled ? eq(skills.visibility, "public") : undefined,
+  ];
+  if (actorId) {
+    predicates.push(eq(skills.ownerUserId, actorId));
+    if (sharing.authenticatedVisibilityEnabled) {
+      predicates.push(inArray(skills.visibility, ["authenticated", "organization"]));
+    }
+    if (sharing.teamsEnabled && sharing.teamVisibilityEnabled) {
+      predicates.push(and(
+        eq(skills.visibility, "team"),
+        sql`exists (
+          select 1
+          from ${skillTeamGrants}
+          inner join ${teamMemberships} on ${teamMemberships.teamId} = ${skillTeamGrants.teamId}
+          where ${skillTeamGrants.skillId} = ${skills.id}
+            and ${teamMemberships.userId} = ${actorId}
+        )`,
+      ));
+    }
+    if (sharing.userVisibilityEnabled) {
+      predicates.push(and(
+        eq(skills.visibility, "explicit-users"),
+        sql`exists (
+          select 1
+          from ${skillUserGrants}
+          where ${skillUserGrants.skillId} = ${skills.id}
+            and ${skillUserGrants.userId} = ${actorId}
+        )`,
+      ));
+    }
+  }
+  const active = predicates.filter((predicate): predicate is SQL => Boolean(predicate));
+  return active.length > 0 ? or(...active) : sql`false`;
+}
+
+async function selectVisibleRelease(
+  db: DbLike,
+  input: { slug: string; version: string; actorId?: string | null },
+  sharing: SharingSettings,
+) {
   const [row] = await db
     .select({
       slug: skills.slug,
@@ -636,6 +688,7 @@ async function selectPublicRelease(db: DbLike, input: { slug: string; version: s
       eq(skills.slug, input.slug),
       eq(skillVersions.version, input.version),
       visibleReleasePredicate(),
+      visibleToActorPredicate(input.actorId ?? null, sharing),
     ))
     .groupBy(
       skills.slug,
@@ -655,7 +708,7 @@ async function selectPublicRelease(db: DbLike, input: { slug: string; version: s
   return row ?? null;
 }
 
-type PublicReleaseRow = NonNullable<Awaited<ReturnType<typeof selectPublicRelease>>>;
+type PublicReleaseRow = NonNullable<Awaited<ReturnType<typeof selectVisibleRelease>>>;
 
 function publicRelease(row: PublicReleaseRow): PublicReleaseMetadata {
   if (!row.publishedAt) {
@@ -688,6 +741,29 @@ function manifestFromPayload(input: unknown) {
     }
     throw new AppError(error instanceof Error ? error.message : "Invalid artifact payload.", "INVALID_PACKAGE_PAYLOAD", 422);
   }
+}
+
+async function getSharingSettings(db: DbLike): Promise<SharingSettings> {
+  const [setting] = await db
+    .select({ value: instanceSettings.value })
+    .from(instanceSettings)
+    .where(eq(instanceSettings.key, "sharing"))
+    .limit(1);
+  return parseSharingSettings(setting?.value);
+}
+
+function parseSharingSettings(input: unknown): SharingSettings {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return DEFAULT_SHARING_SETTINGS;
+  }
+  const record = input as Partial<SharingSettings>;
+  return {
+    publicVisibilityEnabled: typeof record.publicVisibilityEnabled === "boolean" ? record.publicVisibilityEnabled : true,
+    authenticatedVisibilityEnabled: typeof record.authenticatedVisibilityEnabled === "boolean" ? record.authenticatedVisibilityEnabled : true,
+    teamsEnabled: typeof record.teamsEnabled === "boolean" ? record.teamsEnabled : true,
+    teamVisibilityEnabled: typeof record.teamVisibilityEnabled === "boolean" ? record.teamVisibilityEnabled : true,
+    userVisibilityEnabled: typeof record.userVisibilityEnabled === "boolean" ? record.userVisibilityEnabled : true,
+  };
 }
 
 function isUuid(input: string): boolean {

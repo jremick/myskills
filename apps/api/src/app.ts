@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
-import { AppError } from "@myskills-app/core";
+import { AppError, type SharingSettings, type SkillRepository, type VisibilityScope } from "@myskills-app/core";
 import {
   MAX_PACKAGE_ARCHIVE_BYTES,
   loadSkillManifestFromPackageFiles,
@@ -30,12 +30,13 @@ import type {
 } from "./auth/service.js";
 import type { ReviewAction, StoredSubmission, SubmissionActor } from "./submissions/types.js";
 import type { SubmissionService } from "./submissions/service.js";
-import type { SkillRepository } from "@myskills-app/core";
+import type { TeamService } from "./teams/service.js";
 
 export interface BuildAppOptions {
   skillRepository: SkillRepository;
   authService?: AuthService;
   submissionService?: SubmissionService;
+  teamService?: TeamService;
   allowedOrigins?: string[];
   logger?: boolean;
 }
@@ -96,9 +97,11 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
 
   app.get("/v1/skills", async (request) => {
     const query = parseQuery(request.query);
+    const user = await options.authService?.authenticateAuthorizationHeader(request.headers.authorization);
     const skills = await options.skillRepository.searchVisibleSkills({
       query: query.q,
       limit: query.limit,
+      actorId: user?.id ?? null,
     });
     return { skills };
   });
@@ -108,7 +111,11 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
     }
     const params = parseReleaseParams(request.params);
-    const release = await options.submissionService.getPublicRelease(params);
+    const user = await options.authService?.authenticateAuthorizationHeader(request.headers.authorization);
+    const release = await options.submissionService.getPublicRelease({
+      ...params,
+      actorId: user?.id ?? null,
+    });
     if (!release) {
       return reply.code(404).send({
         error: {
@@ -147,7 +154,8 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
 
   app.get("/v1/skills/:slug", async (request, reply) => {
     const slug = parseSlugParam(request.params);
-    const skill = await options.skillRepository.getVisibleSkillBySlug(slug);
+    const user = await options.authService?.authenticateAuthorizationHeader(request.headers.authorization);
+    const skill = await options.skillRepository.getVisibleSkillBySlug(slug, user?.id ?? null);
     if (!skill) {
       return reply.code(404).send({
         error: {
@@ -157,6 +165,42 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       });
     }
     return { skill };
+  });
+
+  app.get("/v1/skills/:slug/sharing", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return {
+      sharing: await options.skillRepository.getSkillSharing(parseSlugParam(request.params), {
+        id: user.id,
+        roles: user.roles,
+      }),
+    };
+  });
+
+  app.put("/v1/skills/:slug/sharing", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return {
+      sharing: await options.skillRepository.updateSkillSharing({
+        actor: {
+          id: user.id,
+          roles: user.roles,
+        },
+        slug: parseSlugParam(request.params),
+        ...parseUpdateSkillSharingInput(request.body),
+      }),
+    };
   });
 
   app.post("/v1/auth/register", async (request, reply) => {
@@ -335,6 +379,41 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     };
   });
 
+  app.get("/v1/admin/sharing", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    if (!isAdminResponseUser(user)) {
+      return reply.code(403).send({
+        error: {
+          code: "ADMIN_ROLE_REQUIRED",
+          message: "Admin access is required.",
+        },
+      });
+    }
+    return { sharing: await options.skillRepository.getSharingSettings() };
+  });
+
+  app.put("/v1/admin/sharing", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return {
+      sharing: await options.skillRepository.updateSharingSettings(
+        { id: user.id, roles: user.roles },
+        parseSharingSettingsInput(request.body),
+      ),
+    };
+  });
+
   app.get("/v1/admin/providers", async (request, reply) => {
     if (!options.authService) {
       throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
@@ -428,6 +507,95 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         message: "Authentication is required.",
       },
     });
+  });
+
+  app.get("/v1/teams", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.teamService) {
+      throw new AppError("Team service is not configured.", "TEAM_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return options.teamService.listDashboard({ id: user.id, email: user.email });
+  });
+
+  app.post("/v1/teams", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.teamService) {
+      throw new AppError("Team service is not configured.", "TEAM_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    const team = await options.teamService.createTeam({
+      actor: { id: user.id, email: user.email },
+      name: parseTeamCreateInput(request.body).name,
+      settings: await options.skillRepository.getSharingSettings(),
+    });
+    return reply.code(201).send({ team });
+  });
+
+  app.post("/v1/teams/:id/invitations", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.teamService) {
+      throw new AppError("Team service is not configured.", "TEAM_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    const invitation = await options.teamService.inviteMember({
+      actor: { id: user.id, email: user.email },
+      teamId: parseOpaqueIdParam(request.params, "id"),
+      email: parseTeamInviteInput(request.body).email,
+      settings: await options.skillRepository.getSharingSettings(),
+    });
+    return reply.code(201).send({ invitation });
+  });
+
+  app.post("/v1/teams/invitations/:id/accept", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.teamService) {
+      throw new AppError("Team service is not configured.", "TEAM_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return {
+      invitation: await options.teamService.acceptInvitation({
+        actor: { id: user.id, email: user.email },
+        invitationId: parseOpaqueIdParam(request.params, "id"),
+        settings: await options.skillRepository.getSharingSettings(),
+      }),
+    };
+  });
+
+  app.get("/v1/teams/shared-skills", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return {
+      teams: await options.skillRepository.listTeamSkillGroups({
+        id: user.id,
+        roles: user.roles,
+      }),
+    };
   });
 
   app.get("/v1/mcp/session", async (request, reply) => {
@@ -710,6 +878,44 @@ function parseUpdateRegistrationSettingsInput(input: unknown): UpdateRegistratio
   return { mode };
 }
 
+function parseSharingSettingsInput(input: unknown): SharingSettings {
+  const body = parseJsonObject(input);
+  return {
+    publicVisibilityEnabled: requiredBoolean(body.publicVisibilityEnabled, "publicVisibilityEnabled"),
+    authenticatedVisibilityEnabled: requiredBoolean(body.authenticatedVisibilityEnabled, "authenticatedVisibilityEnabled"),
+    teamsEnabled: requiredBoolean(body.teamsEnabled, "teamsEnabled"),
+    teamVisibilityEnabled: requiredBoolean(body.teamVisibilityEnabled, "teamVisibilityEnabled"),
+    userVisibilityEnabled: requiredBoolean(body.userVisibilityEnabled, "userVisibilityEnabled"),
+  };
+}
+
+function parseUpdateSkillSharingInput(input: unknown): {
+  visibility: VisibilityScope;
+  teamIds: string[];
+  userEmails: string[];
+} {
+  const body = parseJsonObject(input);
+  return {
+    visibility: parseVisibilityScope(body.visibility),
+    teamIds: parseStringArray(body.teamIds, "teamIds"),
+    userEmails: parseStringArray(body.userEmails, "userEmails"),
+  };
+}
+
+function parseTeamCreateInput(input: unknown): { name: string } {
+  const body = parseJsonObject(input);
+  return {
+    name: requiredString(body.name, "name"),
+  };
+}
+
+function parseTeamInviteInput(input: unknown): { email: string } {
+  const body = parseJsonObject(input);
+  return {
+    email: requiredString(body.email, "email"),
+  };
+}
+
 function parseAdminUserActionInput(paramsInput: unknown, bodyInput: unknown): AdminUserActionInput {
   const body = parseJsonObject(bodyInput);
   const action = requiredString(body.action, "action");
@@ -979,6 +1185,15 @@ function parseUserIdParam(input: unknown): string {
   return id;
 }
 
+function parseOpaqueIdParam(input: unknown, field: string): string {
+  const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const id = requiredString(params[field], field);
+  if (!/^[A-Za-z0-9-]{1,128}$/.test(id)) {
+    throw new AppError(`${field} is invalid.`, "INVALID_REQUEST_BODY", 400);
+  }
+  return id;
+}
+
 function parseProviderKeyParam(input: unknown): string {
   const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
   return requiredString(params.key, "key");
@@ -1024,6 +1239,47 @@ function optionalBoolean(value: unknown, field: string): boolean | undefined {
     throw new AppError(`${field} must be a boolean.`, "INVALID_REQUEST_BODY", 400);
   }
   return value;
+}
+
+function requiredBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new AppError(`${field} must be a boolean.`, "INVALID_REQUEST_BODY", 400);
+  }
+  return value;
+}
+
+function parseVisibilityScope(value: unknown): VisibilityScope {
+  const visibility = requiredString(value, "visibility");
+  if (
+    visibility !== "public" &&
+    visibility !== "authenticated" &&
+    visibility !== "organization" &&
+    visibility !== "team" &&
+    visibility !== "private" &&
+    visibility !== "explicit-users"
+  ) {
+    throw new AppError("Visibility scope is invalid.", "INVALID_VISIBILITY_SCOPE", 400);
+  }
+  return visibility;
+}
+
+function parseStringArray(value: unknown, field: string): string[] {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new AppError(`${field} must be an array.`, "INVALID_REQUEST_BODY", 400);
+  }
+  return value.map((item, index) => {
+    if (typeof item !== "string") {
+      throw new AppError(`${field}[${index}] must be a string.`, "INVALID_REQUEST_BODY", 400);
+    }
+    return item;
+  });
+}
+
+function isAdminResponseUser(user: { roles: string[] }): boolean {
+  return user.roles.includes("owner") || user.roles.includes("admin");
 }
 
 function rejectProviderSecretFields(input: unknown): void {

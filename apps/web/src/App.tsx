@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Check,
-  ChevronsUpDown,
   CircleAlert,
   ClipboardList,
   Copy,
@@ -9,6 +8,8 @@ import {
   LogIn,
   LogOut,
   PackageOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   RotateCw,
   Save,
@@ -19,11 +20,10 @@ import {
   Trash2,
   Upload,
   UserCog,
-  UserRound,
   UsersRound,
   X,
 } from "lucide-react";
-import type { PublicSkill } from "@myskills-app/core";
+import type { PublicSkill, SkillSharingDetails, TeamSharedSkillGroup, VisibilityScope } from "@myskills-app/core";
 import {
   createRegistryClient,
   exportCommand,
@@ -32,6 +32,8 @@ import {
   safeErrorMessage,
   safeReviewErrorMessage,
   safeSubmitErrorMessage,
+  safeTeamErrorMessage,
+  type AdminSharingSettings,
   type AdminAuditEvent,
   type AdminProviderConfig,
   type AdminRegistrationMode,
@@ -41,6 +43,9 @@ import {
   type ReleaseMetadata,
   type ReviewActionResult,
   type ReviewSubmissionSummary,
+  type TeamDashboard,
+  type TeamInvitation,
+  type TeamRecord,
   type SubmitSkillResult,
   type WebAuthUser,
 } from "./api.js";
@@ -51,7 +56,7 @@ interface RegistryAppProps {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type AuthState = "idle" | "loading" | "mfa";
-type AppView = "browse" | "admin" | "review" | "submit";
+type AppView = "browse" | "admin" | "review" | "submit" | "teams";
 
 interface WebSession {
   token: string;
@@ -79,6 +84,7 @@ type ReviewActionName = "approve" | "publish";
 export function RegistryApp({ client }: RegistryAppProps) {
   const initialSlug = skillSlugFromPath(window.location.pathname);
   const [view, setView] = useState<AppView>(initialViewFromPath(window.location.pathname));
+  const [navCollapsed, setNavCollapsed] = useState(true);
   const [session, setSession] = useState<WebSession | null>(() => readStoredSession());
   const registryClient = useMemo(() => client ?? createRegistryClient(undefined, undefined, session?.token), [client, session?.token]);
   const [query, setQuery] = useState("");
@@ -90,19 +96,23 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [listState, setListState] = useState<LoadState>("idle");
   const [detailState, setDetailState] = useState<LoadState>("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [topbarAction, setTopbarAction] = useState<ReactNode | null>(null);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [authState, setAuthState] = useState<AuthState>("idle");
   const [mfaPending, setMfaPending] = useState<MfaPending | null>(null);
   const canUseAdmin = Boolean(session && isAdminUser(session.user));
   const canUseReview = Boolean(session && isReviewerUser(session.user));
   const canUseSubmit = Boolean(session && isSubmitterUser(session.user));
+  const canUseTeams = Boolean(session);
   const activeView: AppView = view === "admin" && canUseAdmin
     ? "admin"
     : view === "review" && canUseReview
       ? "review"
       : view === "submit" && canUseSubmit
         ? "submit"
-        : "browse";
+        : view === "teams" && canUseTeams
+          ? "teams"
+          : "browse";
 
   useEffect(() => {
     if (!session) {
@@ -201,168 +211,159 @@ export function RegistryApp({ client }: RegistryAppProps) {
     selectedSkill && release ? exportCommand(selectedSkill.slug, release.version, platform) : ""
   ), [platform, release, selectedSkill]);
 
+  useEffect(() => {
+    if (activeView !== "review") {
+      setTopbarAction(null);
+    }
+  }, [activeView]);
+
   function selectSkill(slug: string) {
     setView("browse");
     setSelectedSlug(slug);
     window.history.replaceState({}, "", `/skills/${slug}`);
   }
 
-  return (
-    <div className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="/" onClick={(event) => {
-          event.preventDefault();
-          setView("browse");
-          setSelectedSlug(skills[0]?.slug ?? null);
-          window.history.replaceState({}, "", "/");
-        }}>
-          <span className="brand-mark" aria-hidden="true">
-            <img src="/brand/myskills-mark.svg" alt="" />
-          </span>
-          <span>MySkills</span>
-        </a>
-        <label className="global-search" htmlFor="skill-search">
-          <Search size={18} aria-hidden="true" />
-          <input
-            id="skill-search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search skills..."
-            autoComplete="off"
-          />
-          <kbd>/</kbd>
-        </label>
-        <div className="topbar-actions">
-          {canUseSubmit && (
-            <button
-              className={activeView === "submit" ? "admin-nav active" : "admin-nav"}
-              type="button"
-              onClick={() => {
-                setView("submit");
-                window.history.replaceState({}, "", "/submit");
-              }}
-            >
-              <Upload size={16} aria-hidden="true" />
-              Submit
-            </button>
-          )}
-          {canUseReview && (
-            <button
-              className={activeView === "review" ? "admin-nav active" : "admin-nav"}
-              type="button"
-              onClick={() => {
-                setView("review");
-                window.history.replaceState({}, "", "/review");
-              }}
-            >
-              <ClipboardList size={16} aria-hidden="true" />
-              Review
-            </button>
-          )}
-          {canUseAdmin && (
-            <button
-              className={activeView === "admin" ? "admin-nav active" : "admin-nav"}
-              type="button"
-              onClick={() => {
-                setView("admin");
-                window.history.replaceState({}, "", "/admin");
-              }}
-            >
-              <Settings size={16} aria-hidden="true" />
-              Admin
-            </button>
-          )}
-          <div className={listState === "error" ? "api-state api-state-error" : "api-state"} aria-live="polite">
-            <span className="status-dot" />
-            {listState === "error" ? "API unavailable" : "API connected"}
-            <ChevronsUpDown size={16} aria-hidden="true" />
-          </div>
-          <AuthWidget
-            authMessage={authMessage}
-            authState={authState}
-            mfaPending={mfaPending}
-            onLogin={async (input) => {
-              setAuthState("loading");
-              setAuthMessage(null);
-              try {
-                const result = await registryClient.login(input);
-                if (result.mfaRequired) {
-                  setMfaPending({ challengeToken: result.challengeToken, email: input.email });
-                  setAuthState("mfa");
-                  setAuthMessage("MFA required.");
-                  return;
-                }
-                const nextSession = {
-                  token: result.token,
-                  expiresAt: result.expiresAt,
-                  user: await registryClient.getMe(result.token),
-                };
-                setSession(nextSession);
-                writeStoredSession(nextSession);
-                setAuthState("idle");
-              } catch (error) {
-                setAuthState("idle");
-                setAuthMessage(safeAuthErrorMessage(error));
-              }
-            }}
-            onLogout={async () => {
-              const token = session?.token;
-              setAuthMessage(null);
-              setSession(null);
-              clearStoredSession();
-              setMfaPending(null);
-              if (token) {
-                try {
-                  await registryClient.logout(token);
-                } catch {
-                  setAuthMessage("Signed out locally.");
-                }
-              }
-            }}
-            onVerifyMfa={async (codeOrRecoveryCode) => {
-              if (!mfaPending) {
-                return;
-              }
-              setAuthState("loading");
-              setAuthMessage(null);
-              try {
-                const result = await registryClient.verifyMfa({
-                  challengeToken: mfaPending.challengeToken,
-                  codeOrRecoveryCode,
-                });
-                const nextSession = {
-                  token: result.token,
-                  expiresAt: result.expiresAt,
-                  user: await registryClient.getMe(result.token),
-                };
-                setSession(nextSession);
-                writeStoredSession(nextSession);
-                setMfaPending(null);
-                setAuthState("idle");
-              } catch (error) {
-                setAuthState("mfa");
-                setAuthMessage(safeAuthErrorMessage(error));
-              }
-            }}
-            session={session}
-          />
-        </div>
-      </header>
+  function navigateTo(nextView: AppView, pathname: string) {
+    setView(nextView);
+    if (nextView === "browse" && !selectedSlug) {
+      setSelectedSlug(skills[0]?.slug ?? null);
+    }
+    window.history.replaceState({}, "", pathname);
+  }
 
-      {activeView === "review" && session ? (
-        <ReviewDashboard client={registryClient} session={session} />
-      ) : activeView === "submit" && session ? (
-        <SubmitDashboard client={registryClient} session={session} />
-      ) : activeView === "admin" && session ? (
-        <AdminConsole client={registryClient} session={session} />
-      ) : (
-        <main className="workspace">
+  async function handleLogin(input: { email: string; password: string }) {
+    setAuthState("loading");
+    setAuthMessage(null);
+    try {
+      const result = await registryClient.login(input);
+      if (result.mfaRequired) {
+        setMfaPending({ challengeToken: result.challengeToken, email: input.email });
+        setAuthState("mfa");
+        setAuthMessage("MFA required.");
+        return;
+      }
+      const nextSession = {
+        token: result.token,
+        expiresAt: result.expiresAt,
+        user: await registryClient.getMe(result.token),
+      };
+      setSession(nextSession);
+      writeStoredSession(nextSession);
+      setAuthState("idle");
+    } catch (error) {
+      setAuthState("idle");
+      setAuthMessage(safeAuthErrorMessage(error));
+    }
+  }
+
+  async function handleLogout() {
+    const token = session?.token;
+    setAuthMessage(null);
+    setSession(null);
+    clearStoredSession();
+    setMfaPending(null);
+    if (token) {
+      try {
+        await registryClient.logout(token);
+      } catch {
+        setAuthMessage("Signed out locally.");
+      }
+    }
+  }
+
+  async function handleVerifyMfa(codeOrRecoveryCode: string) {
+    if (!mfaPending) {
+      return;
+    }
+    setAuthState("loading");
+    setAuthMessage(null);
+    try {
+      const result = await registryClient.verifyMfa({
+        challengeToken: mfaPending.challengeToken,
+        codeOrRecoveryCode,
+      });
+      const nextSession = {
+        token: result.token,
+        expiresAt: result.expiresAt,
+        user: await registryClient.getMe(result.token),
+      };
+      setSession(nextSession);
+      writeStoredSession(nextSession);
+      setMfaPending(null);
+      setAuthState("idle");
+    } catch (error) {
+      setAuthState("mfa");
+      setAuthMessage(safeAuthErrorMessage(error));
+    }
+  }
+
+  const chrome = viewChrome(activeView, skills.length);
+  const showTopbarAuth = !session;
+  const showTopbarAction = showTopbarAuth || Boolean(topbarAction);
+
+  return (
+    <div className={navCollapsed ? "app-shell nav-collapsed" : "app-shell"}>
+      <ShellNav
+        activeView={activeView}
+        canUseAdmin={canUseAdmin}
+        canUseReview={canUseReview}
+        canUseSubmit={canUseSubmit}
+        canUseTeams={canUseTeams}
+        collapsed={navCollapsed}
+        onNavigate={navigateTo}
+        onLogout={handleLogout}
+        onToggle={() => setNavCollapsed((current) => !current)}
+        session={session}
+      />
+      <div className="app-main">
+        <header className={showTopbarAction ? "topbar" : "topbar topbar-simple"}>
+          <div className="topbar-title">
+            {chrome.kicker && <span>{chrome.kicker}</span>}
+            <strong>{chrome.title}</strong>
+            <small>{chrome.description}</small>
+          </div>
+          <label className="global-search" htmlFor="skill-search">
+            <Search size={17} aria-hidden="true" />
+            <input
+              id="skill-search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search skills..."
+              autoComplete="off"
+            />
+            <kbd>/</kbd>
+          </label>
+          {showTopbarAuth && (
+            <div className="topbar-actions">
+              <AuthWidget
+                authMessage={authMessage}
+                authState={authState}
+                mfaPending={mfaPending}
+                onLogin={handleLogin}
+                onVerifyMfa={handleVerifyMfa}
+              />
+            </div>
+          )}
+          {!showTopbarAuth && topbarAction && (
+            <div className="topbar-actions">
+              {topbarAction}
+            </div>
+          )}
+        </header>
+
+        {activeView === "review" && session ? (
+          <ReviewDashboard client={registryClient} session={session} setTopbarAction={setTopbarAction} />
+        ) : activeView === "submit" && session ? (
+          <SubmitDashboard client={registryClient} session={session} />
+        ) : activeView === "teams" && session ? (
+          <TeamsDashboard client={registryClient} session={session} />
+        ) : activeView === "admin" && session ? (
+          <AdminConsole client={registryClient} session={session} />
+        ) : (
+          <main className="workspace">
           <section className="results-panel" aria-label="Skill search results">
-            <div className="panel-heading">
-              <div>
-                <h1>Search results</h1>
-                <p>{resultCountText(listState, skills.length)}</p>
-              </div>
+            <div className="result-list-header">
+              <span className="count-badge">{resultCountText(listState, skills.length)}</span>
             </div>
             <div className="result-list">
               {listState === "loading" && <LoadingRows />}
@@ -373,10 +374,8 @@ export function RegistryApp({ client }: RegistryAppProps) {
                   type="button"
                   onClick={() => selectSkill(skill.slug)}
                 >
-                  <SkillIcon slug={skill.slug} />
                   <span className="result-main">
                     <strong>{skill.title}</strong>
-                    <span>{skill.slug}</span>
                     <span className="tag-row">{skill.tags.slice(0, 3).map((tag) => <Tag key={tag}>{tag}</Tag>)}</span>
                   </span>
                   <span className="version">{skill.latestVersion ?? "-"}</span>
@@ -400,9 +399,11 @@ export function RegistryApp({ client }: RegistryAppProps) {
             {detailState !== "loading" && selectedSkill && release && (
               <SkillDetail
                 command={selectedCommand}
+                client={registryClient}
                 platform={platform}
                 release={release}
                 selectedSkill={selectedSkill}
+                session={session}
                 setPlatform={setPlatform}
               />
             )}
@@ -414,8 +415,89 @@ export function RegistryApp({ client }: RegistryAppProps) {
               </div>
             )}
           </section>
-        </main>
-      )}
+          </main>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ShellNav({
+  activeView,
+  canUseAdmin,
+  canUseReview,
+  canUseSubmit,
+  canUseTeams,
+  collapsed,
+  onNavigate,
+  onLogout,
+  onToggle,
+  session,
+}: {
+  activeView: AppView;
+  canUseAdmin: boolean;
+  canUseReview: boolean;
+  canUseSubmit: boolean;
+  canUseTeams: boolean;
+  collapsed: boolean;
+  onNavigate: (view: AppView, pathname: string) => void;
+  onLogout: () => Promise<void>;
+  onToggle: () => void;
+  session: WebSession | null;
+}) {
+  return (
+    <aside className="side-rail" aria-label="Primary navigation">
+      <a className="rail-brand" href="/" aria-label="MySkills registry" onClick={(event) => {
+        event.preventDefault();
+        onNavigate("browse", "/");
+      }}>
+        <img src="/brand/myskills-mark.svg" alt="" />
+        <span>MySkills</span>
+      </a>
+      <nav className="rail-nav">
+        <RailButton active={activeView === "browse"} icon={<PackageOpen size={18} aria-hidden="true" />} label="Skills List" onClick={() => onNavigate("browse", "/")} />
+        {canUseTeams && <RailButton active={activeView === "teams"} icon={<UsersRound size={18} aria-hidden="true" />} label="Teams" onClick={() => onNavigate("teams", "/teams")} />}
+        {canUseSubmit && <RailButton active={activeView === "submit"} icon={<Upload size={18} aria-hidden="true" />} label="Submit" onClick={() => onNavigate("submit", "/submit")} />}
+        {canUseReview && <RailButton active={activeView === "review"} icon={<ClipboardList size={18} aria-hidden="true" />} label="Review" onClick={() => onNavigate("review", "/review")} />}
+        {canUseAdmin && <RailButton active={activeView === "admin"} icon={<Settings size={18} aria-hidden="true" />} label="Admin" onClick={() => onNavigate("admin", "/admin")} />}
+      </nav>
+      <div className="rail-footer">
+        {session && <RailAccount session={session} onLogout={onLogout} />}
+        <button className="rail-toggle" type="button" aria-pressed={collapsed} onClick={onToggle}>
+          {collapsed ? <PanelLeftOpen size={18} aria-hidden="true" /> : <PanelLeftClose size={18} aria-hidden="true" />}
+          <span>{collapsed ? "Expand nav" : "Collapse nav"}</span>
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+function RailButton({ active, icon, label, onClick }: {
+  active: boolean;
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button className={active ? "rail-link active" : "rail-link"} type="button" aria-label={label} title={label} onClick={onClick}>
+      <span className="rail-icon">{icon}</span>
+      <span className="rail-label">{label}</span>
+    </button>
+  );
+}
+
+function RailAccount({ onLogout, session }: { onLogout: () => Promise<void>; session: WebSession }) {
+  const accountLabel = session.user.name || session.user.email;
+  const accountTooltip = session.user.name ? `${session.user.name} (${session.user.email})` : session.user.email;
+  return (
+    <div className="rail-account" aria-label="Authenticated user" title={accountTooltip}>
+      <span className="rail-account-text">
+        <strong>{accountLabel}</strong>
+        {session.user.name && <small>{session.user.email}</small>}
+      </span>
+      <button className="rail-account-signout" type="button" aria-label="Sign out" title={`Sign out ${accountTooltip}`} onClick={() => void onLogout()}>
+        <LogOut size={15} aria-hidden="true" />
+      </button>
     </div>
   );
 }
@@ -461,23 +543,16 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
 
   return (
     <main className="submit-workspace" aria-label="Skill package submission">
-      <section className="admin-hero">
-        <div>
-          <h1>Submit package</h1>
-          <p>{session.user.email} · {state === "loading" ? "uploading archive" : "author submission"}</p>
-        </div>
-      </section>
-
       {message && <div className="safe-message admin-message" role="status">{message}</div>}
 
-      <section className="submit-layout">
-        <section className="submit-panel" aria-label="Package upload">
-          <div className="admin-panel-heading">
-            <span className="admin-panel-icon"><Upload size={18} aria-hidden="true" /></span>
+      <section className="submit-layout refined-submit">
+        <section className="submit-panel submit-intake" aria-label="Package upload">
+          <div className="submit-section-head">
             <div>
               <h2>Package archive</h2>
-              <p>{file ? `${file.name} · ${formatBytes(file.size)}` : "No file selected"}</p>
+              <p>Upload one .zip skill package up to 10 MB.</p>
             </div>
+            <StatusToken value={state === "loading" ? "uploading" : file ? "ready" : "pending"} />
           </div>
 
           <form className="submit-form" onSubmit={(event) => {
@@ -488,7 +563,7 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
               <PackageOpen size={26} aria-hidden="true" />
               <span>
                 <strong>{file?.name ?? "Choose .zip package"}</strong>
-                <small>{file ? formatBytes(file.size) : "Archive upload"}</small>
+                <small>{file ? `${formatBytes(file.size)} selected` : "Manifest, package files, and metadata archive"}</small>
               </span>
               <input
                 accept=".zip,application/zip,application/x-zip-compressed"
@@ -500,18 +575,18 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
 
             <button className="save-button" disabled={state === "loading" || !file} type="submit">
               <Upload size={16} aria-hidden="true" />
-              Submit for review
+              {state === "loading" ? "Submitting" : "Submit for review"}
             </button>
           </form>
         </section>
 
-        <section className="submit-panel submit-result-panel" aria-label="Submission result">
-          <div className="admin-panel-heading">
-            <span className="admin-panel-icon"><ClipboardList size={18} aria-hidden="true" /></span>
+        <section className="submit-panel submit-status-panel" aria-label="Submission result">
+          <div className="submit-section-head">
             <div>
-              <h2>Submission status</h2>
-              <p>{result ? `${result.submission.slug}@${result.submission.version}` : "Awaiting upload"}</p>
+              <h2>{result ? "Submitted for review" : "Review handoff"}</h2>
+              <p>{result ? `${result.submission.slug}@${result.submission.version}` : "Server validation runs after upload."}</p>
             </div>
+            {result && <StatusToken value={result.submission.reviewStatus} />}
           </div>
 
           {result ? (
@@ -544,11 +619,11 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
               </div>
             </div>
           ) : (
-            <div className="empty-detail">
-              <Upload size={42} aria-hidden="true" />
-              <h2>No submission yet</h2>
-              <p>Submitted packages appear here after server validation.</p>
-            </div>
+            <ul className="submit-checklist" aria-label="Submission checks">
+              <li><Check size={15} aria-hidden="true" /> Package archive is required.</li>
+              <li><ShieldCheck size={15} aria-hidden="true" /> Security scan runs before maintainer review.</li>
+              <li><ClipboardList size={15} aria-hidden="true" /> Approved packages move to the review queue.</li>
+            </ul>
           )}
         </section>
       </section>
@@ -556,7 +631,15 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
   );
 }
 
-function ReviewDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
+function ReviewDashboard({
+  client,
+  session,
+  setTopbarAction,
+}: {
+  client: RegistryClient;
+  session: WebSession;
+  setTopbarAction: (action: ReactNode | null) => void;
+}) {
   const [state, setState] = useState<LoadState>("loading");
   const [message, setMessage] = useState<string | null>(null);
   const [submissions, setSubmissions] = useState<ReviewSubmissionSummary[]>([]);
@@ -564,7 +647,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
   const [reason, setReason] = useState("");
   const selected = submissions.find((submission) => submission.id === selectedId) ?? submissions[0] ?? null;
 
-  async function refreshReview() {
+  const refreshReview = useCallback(async () => {
     setState("loading");
     setMessage(null);
     try {
@@ -580,11 +663,21 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
       setMessage(safeReviewErrorMessage(error));
       setState("error");
     }
-  }
+  }, [client, session.token]);
 
   useEffect(() => {
     void refreshReview();
-  }, [client, session.token]);
+  }, [refreshReview]);
+
+  useEffect(() => {
+    setTopbarAction(
+      <button className="refresh-button" disabled={state === "loading"} type="button" onClick={() => void refreshReview()}>
+        <RotateCw size={16} aria-hidden="true" />
+        Refresh
+      </button>,
+    );
+    return () => setTopbarAction(null);
+  }, [refreshReview, setTopbarAction, state]);
 
   async function runReviewAction(submission: ReviewSubmissionSummary, action: ReviewActionName) {
     setMessage(null);
@@ -601,17 +694,6 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
 
   return (
     <main className="review-workspace" aria-label="Maintainer review dashboard">
-      <section className="admin-hero">
-        <div>
-          <h1>Review dashboard</h1>
-          <p>{session.user.email} · {state === "loading" ? "loading queue" : `${submissions.length} awaiting action`}</p>
-        </div>
-        <button type="button" onClick={() => void refreshReview()}>
-          <RotateCw size={16} aria-hidden="true" />
-          Refresh
-        </button>
-      </section>
-
       {message && <div className="safe-message admin-message" role="status">{message}</div>}
 
       <section className="review-layout">
@@ -633,7 +715,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
               >
                 <span>
                   <strong>{submission.title}</strong>
-                  <small>{submission.slug}@{submission.version}</small>
+                  <small>Version {submission.version}</small>
                 </span>
                 <StatusToken value={submission.reviewStatus} />
                 <StatusToken value={submission.securityStatus} />
@@ -654,10 +736,9 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
           {selected ? (
             <>
               <div className="detail-heading compact">
-                <SkillIcon slug={selected.slug} />
                 <div className="detail-title">
                   <h2>{selected.title}</h2>
-                  <span>{selected.slug}@{selected.version}</span>
+                  <span>Version {selected.version} | submitted {formatDate(selected.createdAt)}</span>
                 </div>
                 <StatusToken value={selected.reviewStatus} />
               </div>
@@ -711,27 +792,277 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
   );
 }
 
+function TeamsDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
+  const [state, setState] = useState<LoadState>("loading");
+  const [message, setMessage] = useState<string | null>(null);
+  const [dashboard, setDashboard] = useState<TeamDashboard>({ teams: [], invitations: [] });
+  const [sharedGroups, setSharedGroups] = useState<TeamSharedSkillGroup[]>([]);
+  const [teamName, setTeamName] = useState("");
+  const [inviteEmails, setInviteEmails] = useState<Record<string, string>>({});
+
+  const refreshTeams = useCallback(async () => {
+    setState("loading");
+    setMessage(null);
+    try {
+      const [nextDashboard, nextGroups] = await Promise.all([
+        client.listTeams(session.token),
+        client.listTeamSharedSkills(session.token),
+      ]);
+      setDashboard(nextDashboard);
+      setSharedGroups(nextGroups);
+      setState("ready");
+    } catch (error) {
+      setMessage(safeTeamErrorMessage(error));
+      setState("error");
+    }
+  }, [client, session.token]);
+
+  useEffect(() => {
+    void refreshTeams();
+  }, [refreshTeams]);
+
+  async function createTeam() {
+    if (!teamName.trim()) {
+      return;
+    }
+    setMessage(null);
+    try {
+      await client.createTeam(teamName, session.token);
+      setTeamName("");
+      await refreshTeams();
+    } catch (error) {
+      setMessage(safeTeamErrorMessage(error));
+    }
+  }
+
+  async function inviteMember(team: TeamRecord) {
+    const email = inviteEmails[team.id]?.trim();
+    if (!email) {
+      return;
+    }
+    setMessage(null);
+    try {
+      await client.inviteTeamMember(team.id, email, session.token);
+      setInviteEmails((current) => ({ ...current, [team.id]: "" }));
+      await refreshTeams();
+    } catch (error) {
+      setMessage(safeTeamErrorMessage(error));
+    }
+  }
+
+  async function acceptInvitation(invitation: TeamInvitation) {
+    setMessage(null);
+    try {
+      await client.acceptTeamInvitation(invitation.id, session.token);
+      await refreshTeams();
+    } catch (error) {
+      setMessage(safeTeamErrorMessage(error));
+    }
+  }
+
+  return (
+    <main className="teams-workspace" aria-label="Teams">
+      <section className="admin-overview" aria-label="Team summary">
+        <div className="admin-overview-title">
+          <strong>Team sharing</strong>
+          <span>{state === "loading" ? "Refreshing teams" : "Current team access"}</span>
+        </div>
+        <div className="admin-overview-metrics">
+          <div className="admin-status-item">
+            <span>Teams</span>
+            <strong>{dashboard.teams.length}</strong>
+          </div>
+          <div className="admin-status-item">
+            <span>Invitations</span>
+            <strong>{dashboard.invitations.length}</strong>
+          </div>
+          <div className="admin-status-item">
+            <span>Sharing out</span>
+            <strong>{sharedGroups.reduce((total, group) => total + group.sharingWithTeam.length, 0)}</strong>
+          </div>
+          <div className="admin-status-item">
+            <span>Shared in</span>
+            <strong>{sharedGroups.reduce((total, group) => total + group.sharedWithMe.length, 0)}</strong>
+          </div>
+        </div>
+        <button className="refresh-button" type="button" onClick={() => void refreshTeams()}>
+          <RotateCw size={16} aria-hidden="true" />
+          Refresh
+        </button>
+      </section>
+
+      {message && <div className="safe-message admin-message" role="status">{message}</div>}
+
+      <section className="teams-layout">
+        <section className="admin-section">
+          <div className="admin-section-head">
+            <span className="admin-panel-icon"><UsersRound size={18} aria-hidden="true" /></span>
+            <div>
+              <h2>Teams</h2>
+              <p>Create teams and invite members.</p>
+            </div>
+          </div>
+          <form className="team-create-row" onSubmit={(event) => {
+            event.preventDefault();
+            void createTeam();
+          }}>
+            <input
+              aria-label="Team name"
+              value={teamName}
+              onChange={(event) => setTeamName(event.target.value)}
+              placeholder="Team name"
+            />
+            <button className="save-button" disabled={!teamName.trim()} type="submit">
+              <Plus size={16} aria-hidden="true" />
+              Create
+            </button>
+          </form>
+          <div className="team-list">
+            {dashboard.teams.map((team) => (
+              <div className="team-row" key={team.id}>
+                <div className="team-row-main">
+                  <strong>{team.name}</strong>
+                  <small>{team.members.length} members | {team.invitations.length} pending</small>
+                </div>
+                <StatusToken value={team.role} />
+                <form className="team-invite-row" onSubmit={(event) => {
+                  event.preventDefault();
+                  void inviteMember(team);
+                }}>
+                  <input
+                    aria-label={`Invite user to ${team.name}`}
+                    disabled={team.role !== "owner"}
+                    value={inviteEmails[team.id] ?? ""}
+                    onChange={(event) => setInviteEmails((current) => ({ ...current, [team.id]: event.target.value }))}
+                    placeholder="user@example.com"
+                    type="email"
+                  />
+                  <button disabled={team.role !== "owner" || !inviteEmails[team.id]?.trim()} type="submit">
+                    <Plus size={15} aria-hidden="true" />
+                    Invite
+                  </button>
+                </form>
+              </div>
+            ))}
+            {state === "ready" && dashboard.teams.length === 0 && (
+              <div className="empty-state compact">
+                <UsersRound size={22} aria-hidden="true" />
+                <strong>No teams yet.</strong>
+                <span>Create a team to start sharing private skills with members.</span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="admin-section">
+          <div className="admin-section-head">
+            <span className="admin-panel-icon"><ClipboardList size={18} aria-hidden="true" /></span>
+            <div>
+              <h2>Invitations</h2>
+              <p>Pending team invitations for this account.</p>
+            </div>
+          </div>
+          <div className="invitation-list">
+            {dashboard.invitations.map((invitation) => (
+              <div className="invitation-row" key={invitation.id}>
+                <span>
+                  <strong>{invitation.teamName}</strong>
+                  <small>{invitation.email}</small>
+                </span>
+                <button className="save-button" type="button" onClick={() => void acceptInvitation(invitation)}>
+                  <Check size={16} aria-hidden="true" />
+                  Accept
+                </button>
+              </div>
+            ))}
+            {state === "ready" && dashboard.invitations.length === 0 && (
+              <div className="empty-state compact">
+                <Check size={22} aria-hidden="true" />
+                <strong>No pending invitations.</strong>
+                <span>Accepted teams appear in the team list.</span>
+              </div>
+            )}
+          </div>
+        </section>
+      </section>
+
+      <section className="team-shared-groups" aria-label="Team shared skills">
+        {sharedGroups.map((group) => (
+          <TeamSkillGroupCard group={group} key={group.team.id} />
+        ))}
+        {state === "ready" && sharedGroups.length === 0 && (
+          <div className="empty-state">
+            <PackageOpen size={24} aria-hidden="true" />
+            <strong>No team-shared skills.</strong>
+            <span>Team visibility grants will appear here grouped by team.</span>
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
+
+function TeamSkillGroupCard({ group }: { group: TeamSharedSkillGroup }) {
+  return (
+    <section className="admin-section team-skill-group">
+      <div className="admin-section-head">
+        <span className="admin-panel-icon"><UsersRound size={18} aria-hidden="true" /></span>
+        <div>
+          <h2>{group.team.name}</h2>
+          <p>{group.sharingWithTeam.length} shared by you | {group.sharedWithMe.length} shared with you</p>
+        </div>
+      </div>
+      <div className="team-skill-columns">
+        <TeamSkillList title="Sharing with this team" skills={group.sharingWithTeam} />
+        <TeamSkillList title="Shared with you" skills={group.sharedWithMe} />
+      </div>
+    </section>
+  );
+}
+
+function TeamSkillList({ skills, title }: { skills: PublicSkill[]; title: string }) {
+  return (
+    <div className="team-skill-list">
+      <h3>{title}</h3>
+      {skills.map((skill) => (
+        <div className="team-skill-row" key={skill.slug}>
+          <span>
+            <strong>{skill.title}</strong>
+            <small>{skill.latestVersion ?? "-"} | {skill.tags.slice(0, 2).join(", ") || "untagged"}</small>
+          </span>
+          <StatusToken value={skill.visibility} />
+        </div>
+      ))}
+      {skills.length === 0 && <div className="empty-inline">No skills in this group.</div>}
+    </div>
+  );
+}
+
 function AdminConsole({ client, session }: { client: RegistryClient; session: WebSession }) {
   const [state, setState] = useState<LoadState>("loading");
   const [message, setMessage] = useState<string | null>(null);
   const [registrationMode, setRegistrationMode] = useState<AdminRegistrationMode>("closed");
+  const [sharingSettings, setSharingSettings] = useState<AdminSharingSettings>(() => defaultSharingSettings());
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [providers, setProviders] = useState<AdminProviderConfig[]>([]);
   const [auditEvents, setAuditEvents] = useState<AdminAuditEvent[]>([]);
   const [draft, setDraft] = useState<ProviderDraft>(() => emptyProviderDraft());
   const sessionCanEditPrivilegedRoles = session.user.roles.includes("owner");
+  const sessionCanEditSharing = session.user.roles.includes("owner");
 
   async function refreshAdmin() {
     setState("loading");
     setMessage(null);
     try {
-      const [registration, nextUsers, nextProviders, nextAuditEvents] = await Promise.all([
+      const [registration, sharing, nextUsers, nextProviders, nextAuditEvents] = await Promise.all([
         client.getAdminRegistration(session.token),
+        client.getAdminSharing(session.token),
         client.listAdminUsers(session.token),
         client.listAdminProviders(session.token),
         client.listAdminAudit(25, session.token),
       ]);
       setRegistrationMode(registration.mode);
+      setSharingSettings(sharing);
       setUsers(nextUsers);
       setProviders(nextProviders);
       setAuditEvents(nextAuditEvents);
@@ -752,6 +1083,18 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
     try {
       const registration = await client.updateAdminRegistration(mode, session.token);
       setRegistrationMode(registration.mode);
+      setAuditEvents(await client.listAdminAudit(25, session.token));
+    } catch (error) {
+      setMessage(safeAdminErrorMessage(error));
+    }
+  }
+
+  async function updateSharingSetting(key: keyof AdminSharingSettings, value: boolean) {
+    setMessage(null);
+    const next = { ...sharingSettings, [key]: value };
+    try {
+      const saved = await client.updateAdminSharing(next, session.token);
+      setSharingSettings(saved);
       setAuditEvents(await client.listAdminAudit(25, session.token));
     } catch (error) {
       setMessage(safeAdminErrorMessage(error));
@@ -801,12 +1144,30 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
 
   return (
     <main className="admin-workspace" aria-label="Admin console">
-      <section className="admin-hero">
-        <div>
-          <h1>Admin console</h1>
-          <p>{session.user.email} · {registrationMode} registration</p>
+      <section className="admin-overview" aria-label="Admin status summary">
+        <div className="admin-overview-title">
+          <strong>Instance status</strong>
+          <span>{state === "loading" ? "Refreshing settings" : "Current governance controls"}</span>
         </div>
-        <button type="button" onClick={() => void refreshAdmin()}>
+        <div className="admin-overview-metrics">
+          <div className="admin-status-item">
+            <span>API</span>
+            <StatusToken value={state === "error" ? "unavailable" : "connected"} />
+          </div>
+          <div className="admin-status-item">
+            <span>Registration</span>
+            <strong>{registrationMode}</strong>
+          </div>
+          <div className="admin-status-item">
+            <span>Accounts</span>
+            <strong>{users.length}</strong>
+          </div>
+          <div className="admin-status-item">
+            <span>Providers</span>
+            <strong>{providers.length}</strong>
+          </div>
+        </div>
+        <button className="refresh-button" type="button" onClick={() => void refreshAdmin()}>
           <RotateCw size={16} aria-hidden="true" />
           Refresh
         </button>
@@ -814,11 +1175,12 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
 
       {message && <div className="safe-message admin-message" role="status">{message}</div>}
 
-      <section className="admin-grid">
+      <section className="admin-layout">
+        <div className="admin-content">
         <AdminPanel
           icon={<Settings size={18} aria-hidden="true" />}
-          title="Registration"
-          meta={state === "loading" ? "Loading" : registrationMode}
+          title="Registration posture"
+          meta="Opening registration changes the access boundary for this instance."
         >
           <div className="segmented-control" aria-label="Registration mode">
             {(["closed", "request", "open"] as const).map((mode) => (
@@ -835,9 +1197,21 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
         </AdminPanel>
 
         <AdminPanel
+          icon={<ShieldCheck size={18} aria-hidden="true" />}
+          title="Sharing controls"
+          meta="Instance owners choose which visibility scopes are available."
+        >
+          <SharingControls
+            disabled={!sessionCanEditSharing}
+            settings={sharingSettings}
+            onChange={(key, value) => void updateSharingSetting(key, value)}
+          />
+        </AdminPanel>
+
+        <AdminPanel
           icon={<UsersRound size={18} aria-hidden="true" />}
           title="Users"
-          meta={`${users.length} accounts`}
+          meta="Role changes are governed account actions."
         >
           <div className="admin-table user-table">
             <div className="admin-table-head">
@@ -867,7 +1241,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
                     onChange={(roles) => void updateUserRoles(user.id, roles)}
                   />
                 </span>
-                <span>{user.emailVerified ? "verified" : "unverified"} · {user.mfaEnabled ? "MFA" : "no MFA"}</span>
+                <span>{user.emailVerified ? "verified" : "unverified"} - {user.mfaEnabled ? "MFA" : "no MFA"}</span>
                 <span className="row-actions">
                   {user.status === "pending" && (
                     <IconButton label="Approve user" onClick={() => void performUserAction(user.id, "approve")}>
@@ -897,15 +1271,16 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
 
         <AdminPanel
           icon={<UserCog size={18} aria-hidden="true" />}
-          title="Provider"
-          meta={`${providers.length} configured`}
+          title="Identity providers"
+          meta="Provider settings control trusted login and role claims."
         >
           <div className="provider-layout">
             <div className="provider-list">
-              <button type="button" onClick={() => setDraft(emptyProviderDraft())}>
-                <Plus size={15} aria-hidden="true" />
-                New provider
-              </button>
+              {providers.length === 0 && (
+                <div className="provider-empty">
+                  No providers configured.
+                </div>
+              )}
               {providers.map((provider) => (
                 <button
                   className={provider.key === draft.key ? "selected" : undefined}
@@ -925,6 +1300,12 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
               event.preventDefault();
               void saveProvider();
             }}>
+              <div className="provider-form-head">
+                <span>Provider configuration</span>
+                <button className="text-button" type="button" onClick={() => setDraft(emptyProviderDraft())}>
+                  Clear form
+                </button>
+              </div>
               <label>
                 Key
                 <input value={draft.key} onChange={(event) => setDraft({ ...draft, key: event.target.value })} />
@@ -1007,8 +1388,8 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
 
         <AdminPanel
           icon={<ShieldCheck size={18} aria-hidden="true" />}
-          title="Audit"
-          meta={`${auditEvents.length} latest`}
+          title="Audit history"
+          meta="Recent decisions across registration, roles, providers, and review."
         >
           <div className="audit-list">
             {auditEvents.map((event) => (
@@ -1018,7 +1399,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
                 </span>
                 <span>
                   <strong>{event.action}</strong>
-                  <small>{event.resourceType}{event.resourceId ? ` · ${event.resourceId}` : ""}</small>
+                  <small>{event.resourceType}{event.resourceId ? ` - ${event.resourceId}` : ""}</small>
                 </span>
                 <time dateTime={event.createdAt}>{formatDate(event.createdAt)}</time>
               </div>
@@ -1026,6 +1407,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
             {state === "ready" && auditEvents.length === 0 && <div className="empty-state">No audit events.</div>}
           </div>
         </AdminPanel>
+        </div>
       </section>
     </main>
   );
@@ -1038,8 +1420,8 @@ function AdminPanel({ children, icon, meta, title }: {
   title: string;
 }) {
   return (
-    <section className="admin-panel">
-      <div className="admin-panel-heading">
+    <section className="admin-section">
+      <div className="admin-section-head">
         <span className="admin-panel-icon">{icon}</span>
         <div>
           <h2>{title}</h2>
@@ -1048,6 +1430,43 @@ function AdminPanel({ children, icon, meta, title }: {
       </div>
       {children}
     </section>
+  );
+}
+
+function SharingControls({
+  disabled,
+  onChange,
+  settings,
+}: {
+  disabled: boolean;
+  onChange: (key: keyof AdminSharingSettings, value: boolean) => void;
+  settings: AdminSharingSettings;
+}) {
+  const rows: Array<{ key: keyof AdminSharingSettings; label: string; detail: string }> = [
+    { key: "publicVisibilityEnabled", label: "Public", detail: "Skills can be visible without sign-in." },
+    { key: "authenticatedVisibilityEnabled", label: "Signed-in users", detail: "Skills can be visible to any active account." },
+    { key: "teamsEnabled", label: "Teams", detail: "Users can create teams and manage invitations." },
+    { key: "teamVisibilityEnabled", label: "Team sharing", detail: "Skills can be granted to teams." },
+    { key: "userVisibilityEnabled", label: "Individual users", detail: "Skills can be granted to specific accounts." },
+  ];
+  return (
+    <div className="sharing-controls">
+      {rows.map((row) => (
+        <label className="sharing-toggle" key={row.key}>
+          <input
+            checked={settings[row.key]}
+            disabled={disabled}
+            type="checkbox"
+            onChange={(event) => onChange(row.key, event.target.checked)}
+          />
+          <span>
+            <strong>{row.label}</strong>
+            <small>{row.detail}</small>
+          </span>
+        </label>
+      ))}
+      {disabled && <div className="warning-box">Owner role required to change sharing controls.</div>}
+    </div>
   );
 }
 
@@ -1104,36 +1523,17 @@ function AuthWidget({
   authState,
   mfaPending,
   onLogin,
-  onLogout,
   onVerifyMfa,
-  session,
 }: {
   authMessage: string | null;
   authState: AuthState;
   mfaPending: MfaPending | null;
   onLogin: (input: { email: string; password: string }) => Promise<void>;
-  onLogout: () => Promise<void>;
   onVerifyMfa: (codeOrRecoveryCode: string) => Promise<void>;
-  session: WebSession | null;
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mfaCode, setMfaCode] = useState("");
-
-  if (session) {
-    return (
-      <div className="auth-widget signed-in" aria-label="Authenticated user">
-        <UserRound size={17} aria-hidden="true" />
-        <span>
-          <strong>{session.user.email}</strong>
-          <small>{session.user.roles.join(", ") || "user"} · {session.user.mfaVerified ? "MFA" : "no MFA"}</small>
-        </span>
-        <button type="button" onClick={() => void onLogout()} aria-label="Sign out">
-          <LogOut size={16} aria-hidden="true" />
-        </button>
-      </div>
-    );
-  }
 
   if (mfaPending) {
     return (
@@ -1196,68 +1596,216 @@ function AuthMessage({ message }: { message: string | null }) {
 
 function SkillDetail({
   command,
+  client,
   platform,
   release,
   selectedSkill,
+  session,
   setPlatform,
 }: {
   command: string;
+  client: RegistryClient;
   platform: string;
   release: ReleaseMetadata;
   selectedSkill: PublicSkill;
+  session: WebSession | null;
   setPlatform: (platform: string) => void;
 }) {
+  const activePlatform = release.platforms.find((item) => item.name === platform) ?? release.platforms[0];
+  const platformNames = release.platforms.map((item) => item.name).join(", ") || "-";
+  const installTargets = Array.from(new Set(release.platforms.map((item) => item.installTarget).filter(Boolean))).join(", ") || "-";
+
   return (
-    <>
-      <div className="detail-heading">
-        <SkillIcon slug={selectedSkill.slug} large />
-        <div className="detail-title">
+    <article className="skill-detail-layout">
+      <div className="detail-hero">
+        <div className="detail-hero-copy">
           <h2>{selectedSkill.title}</h2>
-          <span>{selectedSkill.slug}</span>
+          <p>{selectedSkill.summary}</p>
         </div>
-        <StatusPill />
-      </div>
-      <p className="summary">{selectedSkill.summary}</p>
-      <dl className="metadata-grid">
-        <Metadata label="Latest version" value={release.version} />
-        <Metadata label="Platforms" value={release.platforms.map((item) => item.name).join(", ")} />
-        <Metadata label="Tags" value={selectedSkill.tags.join(", ") || "-"} />
-        <Metadata label="Released" value={formatDate(release.publishedAt)} />
-        <Metadata label="Review" value={release.reviewStatus} />
-        <Metadata label="Security" value={release.securityStatus} />
-        <Metadata label="Byte size" value={new Intl.NumberFormat().format(release.artifact.byteSize)} />
-        <Metadata label="Content type" value={release.artifact.contentType} />
-        <Metadata label="SHA-256" value={shortHash(release.artifact.sha256)} monospace />
-      </dl>
-
-      <div className="platform-select">
-        <span>Export platform</span>
-        <div>
-          {release.platforms.map((item) => (
-            <button
-              className={item.name === platform ? "platform-button active" : "platform-button"}
-              key={item.name}
-              type="button"
-              onClick={() => setPlatform(item.name)}
-            >
-              {item.name}
-            </button>
-          ))}
+        <div className="detail-status" aria-label="Release status">
+          <StatusToken value={release.reviewStatus} />
+          <StatusToken value={release.securityStatus} />
         </div>
       </div>
 
-      <div className="command-panel">
-        <div className="command-heading">
-          <TerminalSquare size={18} aria-hidden="true" />
-          <span>CLI export</span>
+      <section className="detail-section">
+        <div className="detail-section-head">
+          <p className="section-label">Install</p>
+          <div className="platform-select compact">
+            <span>Export platform</span>
+            <div>
+              {release.platforms.map((item) => (
+                <button
+                  className={item.name === platform ? "platform-button active" : "platform-button"}
+                  key={item.name}
+                  type="button"
+                  onClick={() => setPlatform(item.name)}
+                >
+                  {item.name}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-        <code>{command}</code>
-        <button type="button" onClick={() => void navigator.clipboard?.writeText(command)}>
-          <Copy size={16} aria-hidden="true" />
-          Copy
+
+        <div className="command-panel">
+          <div className="command-heading">
+            <TerminalSquare size={18} aria-hidden="true" />
+            <span>CLI export</span>
+          </div>
+          <code>{command}</code>
+          <button type="button" onClick={() => void navigator.clipboard?.writeText(command)}>
+            <Copy size={16} aria-hidden="true" />
+            Copy
+          </button>
+        </div>
+      </section>
+
+      <section className="detail-section">
+        <p className="section-label">Trust and release metadata</p>
+        <dl className="metadata-grid">
+          <Metadata label="Latest version" value={release.version} />
+          <Metadata label="Platforms" value={platformNames} />
+          <Metadata label="Review" value={`Review ${release.reviewStatus}`} />
+          <Metadata label="Security" value={`Security ${release.securityStatus}`} />
+          <Metadata label="Released" value={formatDate(release.publishedAt)} />
+          <Metadata label="Checksum" value={shortHash(release.artifact.sha256)} monospace />
+        </dl>
+      </section>
+
+      <section className="detail-section">
+        <p className="section-label">Package notes</p>
+        <dl className="metadata-grid">
+          <Metadata label="Tags" value={selectedSkill.tags.join(", ") || "-"} />
+          <Metadata label="Install target" value={activePlatform?.installTarget ?? installTargets} />
+          <Metadata label="Size" value={formatPackageSize(release.artifact.byteSize)} />
+          <Metadata label="Content type" value={release.artifact.contentType} />
+        </dl>
+      </section>
+
+      {session && selectedSkill.access?.canManageSharing && (
+        <SharingPanel client={client} selectedSkill={selectedSkill} session={session} />
+      )}
+    </article>
+  );
+}
+
+function SharingPanel({
+  client,
+  selectedSkill,
+  session,
+}: {
+  client: RegistryClient;
+  selectedSkill: PublicSkill;
+  session: WebSession;
+}) {
+  const [state, setState] = useState<LoadState>("loading");
+  const [message, setMessage] = useState<string | null>(null);
+  const [details, setDetails] = useState<SkillSharingDetails | null>(null);
+  const [visibility, setVisibility] = useState<VisibilityScope>(selectedSkill.visibility);
+  const [teamIds, setTeamIds] = useState<string[]>([]);
+  const [userEmails, setUserEmails] = useState("");
+
+  const loadSharing = useCallback(async () => {
+    setState("loading");
+    setMessage(null);
+    try {
+      const next = await client.getSkillSharing(selectedSkill.slug, session.token);
+      setDetails(next);
+      setVisibility(next.visibility);
+      setTeamIds(next.teamGrants.map((team) => team.id));
+      setUserEmails(next.userGrants.map((user) => user.email).join(", "));
+      setState("ready");
+    } catch (error) {
+      setMessage(safeTeamErrorMessage(error));
+      setState("error");
+    }
+  }, [client, selectedSkill.slug, session.token]);
+
+  useEffect(() => {
+    void loadSharing();
+  }, [loadSharing]);
+
+  async function saveSharing() {
+    if (!details) {
+      return;
+    }
+    setMessage(null);
+    try {
+      const next = await client.updateSkillSharing({
+        slug: selectedSkill.slug,
+        visibility,
+        teamIds: visibility === "team" ? teamIds : [],
+        userEmails: visibility === "explicit-users" ? splitEmails(userEmails) : [],
+      }, session.token);
+      setDetails(next);
+      setVisibility(next.visibility);
+      setTeamIds(next.teamGrants.map((team) => team.id));
+      setUserEmails(next.userGrants.map((user) => user.email).join(", "));
+      setMessage("Sharing saved.");
+    } catch (error) {
+      setMessage(safeTeamErrorMessage(error));
+    }
+  }
+
+  const settings = details?.settings ?? defaultSharingSettings();
+  const visibilityOptions: Array<{ value: VisibilityScope; label: string; enabled: boolean }> = [
+    { value: "public", label: "Public", enabled: settings.publicVisibilityEnabled },
+    { value: "authenticated", label: "Signed-in users", enabled: settings.authenticatedVisibilityEnabled },
+    { value: "private", label: "Private", enabled: true },
+    { value: "team", label: "Teams", enabled: settings.teamsEnabled && settings.teamVisibilityEnabled },
+    { value: "explicit-users", label: "Individual users", enabled: settings.userVisibilityEnabled },
+  ];
+
+  return (
+    <section className="detail-section sharing-panel">
+      <div className="detail-section-head">
+        <p className="section-label">Sharing</p>
+        <button className="save-button" disabled={state === "loading"} type="button" onClick={() => void saveSharing()}>
+          <Save size={16} aria-hidden="true" />
+          Save sharing
         </button>
       </div>
-    </>
+      {message && <div className="inline-message" role="status">{message}</div>}
+      <div className="sharing-editor">
+        <label>
+          Visibility
+          <select value={visibility} disabled={state === "loading"} onChange={(event) => setVisibility(event.target.value as VisibilityScope)}>
+            {visibilityOptions.map((option) => (
+              <option disabled={!option.enabled} key={option.value} value={option.value}>
+                {option.label}{option.enabled ? "" : " (disabled)"}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className={visibility === "team" ? "grant-box active" : "grant-box"}>
+          <strong>Teams</strong>
+          {(details?.availableTeams ?? []).map((team) => (
+            <label className="role-toggle" key={team.id}>
+              <input
+                checked={teamIds.includes(team.id)}
+                disabled={visibility !== "team"}
+                type="checkbox"
+                onChange={() => setTeamIds((current) => toggleString(current, team.id))}
+              />
+              <span>{team.name}</span>
+            </label>
+          ))}
+          {details && details.availableTeams.length === 0 && <small>No teams available.</small>}
+        </div>
+
+        <label className={visibility === "explicit-users" ? "grant-box active" : "grant-box"}>
+          <strong>Individual users</strong>
+          <input
+            disabled={visibility !== "explicit-users"}
+            value={userEmails}
+            onChange={(event) => setUserEmails(event.target.value)}
+            placeholder="user@example.com, teammate@example.com"
+          />
+        </label>
+      </div>
+    </section>
   );
 }
 
@@ -1275,15 +1823,6 @@ function StatusPill() {
     <span className="status-pill">
       <ShieldCheck size={16} aria-hidden="true" />
       Approved
-    </span>
-  );
-}
-
-function SkillIcon({ large, slug }: { slug: string; large?: boolean }) {
-  const Icon = slug.includes("query") ? FileCode2 : PackageOpen;
-  return (
-    <span className={large ? "skill-icon large" : "skill-icon"} aria-hidden="true">
-      <Icon size={large ? 34 : 26} />
     </span>
   );
 }
@@ -1310,12 +1849,48 @@ function DetailSkeleton() {
   );
 }
 
+function viewChrome(view: AppView, skillCount: number): { kicker: string; title: string; description: string } {
+  if (view === "admin") {
+    return {
+      kicker: "",
+      title: "Admin console",
+      description: "Registration, accounts, providers, and audit history.",
+    };
+  }
+  if (view === "review") {
+    return {
+      kicker: "",
+      title: "Review Dashboard",
+      description: "Pending submissions and package evidence.",
+    };
+  }
+  if (view === "submit") {
+    return {
+      kicker: "",
+      title: "Submit Skill",
+      description: "Upload packages for maintainer review.",
+    };
+  }
+  if (view === "teams") {
+    return {
+      kicker: "",
+      title: "Teams",
+      description: "Team membership, invitations, and shared skill access.",
+    };
+  }
+  return {
+    kicker: "",
+    title: "Skills List",
+    description: `${skillCount} approved ${skillCount === 1 ? "skill" : "skills"} available to this instance.`,
+  };
+}
+
 function resultCountText(state: LoadState, count: number): string {
   if (state === "loading") {
-    return "Loading registry...";
+    return "loading";
   }
   if (state === "error") {
-    return "Registry unavailable";
+    return "unavailable";
   }
   return `${count} ${count === 1 ? "result" : "results"}`;
 }
@@ -1358,6 +1933,9 @@ function initialViewFromPath(pathname: string): AppView {
   if (pathname === "/submit") {
     return "submit";
   }
+  if (pathname === "/teams") {
+    return "teams";
+  }
   return "browse";
 }
 
@@ -1399,6 +1977,16 @@ function upsertProvider(providers: AdminProviderConfig[], provider: AdminProvide
   return next.sort((a, b) => a.key.localeCompare(b.key));
 }
 
+function defaultSharingSettings(): AdminSharingSettings {
+  return {
+    publicVisibilityEnabled: true,
+    authenticatedVisibilityEnabled: true,
+    teamsEnabled: true,
+    teamVisibilityEnabled: true,
+    userVisibilityEnabled: true,
+  };
+}
+
 function updateDraftMapping(
   setDraft: (value: ProviderDraft) => void,
   draft: ProviderDraft,
@@ -1421,6 +2009,19 @@ function toggleRole(roles: string[], role: string): string[] {
     next.add(role);
   }
   return ADMIN_ROLE_OPTIONS.filter((item) => next.has(item));
+}
+
+function toggleString(values: string[], value: string): string[] {
+  return values.includes(value)
+    ? values.filter((item) => item !== value)
+    : [...values, value];
+}
+
+function splitEmails(value: string): string[] {
+  return value
+    .split(/[,\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function isPrivilegedRole(role: string): boolean {
@@ -1456,6 +2057,15 @@ function formatBytes(bytes: number): string {
   return new Intl.NumberFormat(undefined, {
     maximumFractionDigits: unitIndex === 0 ? 0 : 1,
   }).format(value) + ` ${units[unitIndex]}`;
+}
+
+function formatPackageSize(bytes: number): string {
+  const megabyte = 1024 * 1024;
+  const unit = bytes >= megabyte ? "MB" : "KB";
+  const value = bytes / (unit === "MB" ? megabyte : 1024);
+  return new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: value >= 10 ? 0 : 1,
+  }).format(value) + ` ${unit}`;
 }
 
 function skillSlugFromPath(pathname: string): string | null {

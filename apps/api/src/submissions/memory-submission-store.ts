@@ -187,12 +187,12 @@ export class MemorySubmissionStore implements SubmissionStore {
     });
   }
 
-  async getPublicRelease(input: { slug: string; version: string }): Promise<PublicReleaseMetadata | null> {
+  async getPublicRelease(input: { slug: string; version: string; actorId?: string | null }): Promise<PublicReleaseMetadata | null> {
     const submission = this.findPublicSubmission(input.slug, input.version);
     return submission ? publicRelease(submission) : null;
   }
 
-  async getPublicBundle(input: { slug: string; version: string; platform?: string }): Promise<PublicBundle | null> {
+  async getPublicBundle(input: { slug: string; version: string; platform?: string; actorId?: string | null }): Promise<PublicBundle | null> {
     const submission = this.findPublicSubmission(input.slug, input.version);
     if (!submission) {
       return null;

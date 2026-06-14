@@ -7,6 +7,7 @@ import type {
   AdminAuditEvent,
   AdminProviderConfig,
   AdminRegistrationMode,
+  AdminSharingSettings,
   AdminUser,
   ProviderRoleMappingInput,
   RegistryClient,
@@ -14,6 +15,7 @@ import type {
   ReviewSubmissionSummary,
   SafeApiError,
   SubmitSkillResult,
+  TeamDashboard,
 } from "../src/api.js";
 
 test("browse page requests skills with query and renders API-returned skills", async () => {
@@ -25,7 +27,7 @@ test("browse page requests skills with query and renders API-returned skills", a
   fireEvent.input(view.getByPlaceholderText("Search skills..."), { target: { value: "release" } });
 
   await waitFor(() => assert.equal(client.searchCalls.includes("release"), true));
-  assert.equal(view.getAllByText("release-notes-helper").length, 2);
+  assert.equal(view.getAllByText("Release Notes Helper").length >= 1, true);
   assert.equal(document.body.textContent?.includes("private-risk-reviewer"), false);
 });
 
@@ -194,6 +196,34 @@ test("non-admin sessions do not render the admin entry point", async () => {
   assert.equal(view.queryByRole("button", { name: /review/i }), null);
 });
 
+test("signed-in users can open teams, create a team, invite a member, and accept invitations", async () => {
+  setupDom();
+  const client = mockClient();
+
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.input(view.getByLabelText("Email"), { target: { value: "reader@example.com" } });
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: /sign in/i }));
+
+  await view.findByText("reader@example.com");
+  fireEvent.click(view.getByRole("button", { name: /teams/i }));
+
+  await view.findByText("Team sharing");
+  await waitFor(() => assert.equal(view.getAllByText("Platform").length >= 1, true));
+
+  fireEvent.input(view.getByLabelText("Team name"), { target: { value: "Docs" } });
+  fireEvent.click(view.getByRole("button", { name: /create/i }));
+  await waitFor(() => assert.deepEqual(client.teamCreates, ["Docs"]));
+
+  const platformInvite = view.getByLabelText("Invite user to Platform");
+  fireEvent.input(platformInvite, { target: { value: "teammate@example.com" } });
+  fireEvent.submit(platformInvite.closest("form") as HTMLFormElement);
+  await waitFor(() => assert.deepEqual(client.teamInvites, ["team-1:teammate@example.com"]));
+
+  fireEvent.click(view.getByRole("button", { name: /accept/i }));
+  await waitFor(() => assert.deepEqual(client.teamInvitationAccepts, ["invite-1"]));
+});
+
 test("admin sessions can manage registration, users, and provider metadata", async () => {
   setupDom();
   const client = mockClient({ user: authUser({ email: "owner@example.com", roles: ["owner"] }) });
@@ -273,8 +303,8 @@ test("maintainer sessions can approve and publish review submissions without bun
   assert.equal(view.queryByRole("button", { name: /admin/i }), null);
   fireEvent.click(view.getByRole("button", { name: /review/i }));
 
-  await view.findByText("Review dashboard");
-  await waitFor(() => assert.equal(view.getAllByText("release-notes-helper@0.1.0").length >= 1, true));
+  await view.findByText("Review Dashboard");
+  await waitFor(() => assert.equal(view.getAllByText("Version 0.1.0").length >= 1, true));
   assert.equal(document.body.textContent?.includes("storageKey"), false);
   assert.equal(document.body.textContent?.includes("Summarize release notes."), false);
   assert.equal(client.bundleCalls, 0);
@@ -300,7 +330,7 @@ test("author sessions can submit a package archive without rendering package con
   await view.findByText("author@example.com");
   fireEvent.click(view.getByRole("button", { name: /submit/i }));
 
-  await view.findByText("Submit package");
+  await view.findByText("Submit Skill");
   const archive = new File(["PK archive content"], "release-notes-helper.zip", { type: "application/zip" });
   fireEvent.change(view.getByLabelText(/choose \.zip package/i), { target: { files: [archive] } });
   fireEvent.click(view.getByRole("button", { name: /submit for review/i }));
@@ -395,6 +425,7 @@ function setupDom(url = "http://localhost/") {
 
 function mockClient(input: {
   adminProviders?: AdminProviderConfig[];
+  adminSharing?: AdminSharingSettings;
   adminUsers?: AdminUser[];
   reviewSubmissions?: ReviewSubmissionSummary[];
   skills?: PublicSkill[];
@@ -405,15 +436,18 @@ function mockClient(input: {
   searchResults?: (query: string) => PublicSkill[];
   submitError?: SafeApiError;
   submitResult?: SubmitSkillResult;
+  teamDashboard?: TeamDashboard;
   user?: ReturnType<typeof authUser>;
 } = {}) {
   const skills = input.skills ?? [publicSkill()];
   const release = input.release ?? publicRelease();
   const currentUser = input.user ?? authUser();
   let registrationMode: AdminRegistrationMode = "closed";
+  let sharingSettings = input.adminSharing ?? defaultSharingSettings();
   let adminUsers = input.adminUsers ?? defaultAdminUsers();
   let adminProviders = input.adminProviders ?? defaultAdminProviders();
   let reviewSubmissions = input.reviewSubmissions ?? defaultReviewSubmissions();
+  let teamDashboard = input.teamDashboard ?? defaultTeamDashboard();
   const client: RegistryClient & {
     bundleCalls: number;
     logoutCalls: number;
@@ -424,7 +458,11 @@ function mockClient(input: {
     reviewActions: string[];
     roleUpdates: string[];
     searchCalls: string[];
+    sharingUpdates: AdminSharingSettings[];
     submitCalls: Array<{ filename: string; contentBase64: string }>;
+    teamCreates: string[];
+    teamInvites: string[];
+    teamInvitationAccepts: string[];
     userActions: string[];
   } = {
     bundleCalls: 0,
@@ -436,7 +474,11 @@ function mockClient(input: {
     reviewActions: [],
     roleUpdates: [],
     searchCalls: [],
+    sharingUpdates: [],
     submitCalls: [],
+    teamCreates: [],
+    teamInvites: [],
+    teamInvitationAccepts: [],
     userActions: [],
     async searchSkills(query) {
       client.searchCalls.push(query);
@@ -492,6 +534,14 @@ function mockClient(input: {
       registrationMode = mode;
       client.registrationUpdates.push(mode);
       return { mode };
+    },
+    async getAdminSharing() {
+      return sharingSettings;
+    },
+    async updateAdminSharing(settings) {
+      sharingSettings = settings;
+      client.sharingUpdates.push(settings);
+      return settings;
     },
     async listAdminUsers() {
       return adminUsers;
@@ -568,6 +618,91 @@ function mockClient(input: {
         publishedAt: "2026-06-04T00:00:00.000Z",
       };
     },
+    async listTeams() {
+      return teamDashboard;
+    },
+    async createTeam(name) {
+      client.teamCreates.push(name);
+      const team = {
+        id: `team-${teamDashboard.teams.length + 1}`,
+        name,
+        slug: name.toLowerCase().replace(/\s+/g, "-"),
+        role: "owner" as const,
+        members: [{ id: currentUser.id, email: currentUser.email, name: currentUser.name, role: "owner" as const }],
+        invitations: [],
+        createdAt: "2026-06-04T00:00:00.000Z",
+        updatedAt: "2026-06-04T00:00:00.000Z",
+      };
+      teamDashboard = { ...teamDashboard, teams: [...teamDashboard.teams, team] };
+      return team;
+    },
+    async inviteTeamMember(teamId, email) {
+      client.teamInvites.push(`${teamId}:${email}`);
+      const invitation = {
+        id: `invite-${client.teamInvites.length}`,
+        teamId,
+        teamName: teamDashboard.teams.find((team) => team.id === teamId)?.name ?? "Team",
+        email,
+        status: "pending" as const,
+        createdAt: "2026-06-04T00:00:00.000Z",
+      };
+      teamDashboard = {
+        ...teamDashboard,
+        teams: teamDashboard.teams.map((team) => team.id === teamId
+          ? { ...team, invitations: [...team.invitations, invitation] }
+          : team),
+      };
+      return invitation;
+    },
+    async acceptTeamInvitation(invitationId) {
+      client.teamInvitationAccepts.push(invitationId);
+      const invitation = teamDashboard.invitations.find((item) => item.id === invitationId) ?? defaultTeamDashboard().invitations[0];
+      teamDashboard = {
+        teams: [...teamDashboard.teams, {
+          id: invitation.teamId,
+          name: invitation.teamName,
+          slug: invitation.teamName.toLowerCase().replace(/\s+/g, "-"),
+          role: "member",
+          members: [{ id: currentUser.id, email: currentUser.email, name: currentUser.name, role: "member" }],
+          invitations: [],
+          createdAt: invitation.createdAt,
+          updatedAt: invitation.createdAt,
+        }],
+        invitations: teamDashboard.invitations.filter((item) => item.id !== invitationId),
+      };
+      return { ...invitation, status: "accepted" };
+    },
+    async listTeamSharedSkills() {
+      return [{
+        team: { id: "team-1", name: "Platform", role: "owner" },
+        sharingWithTeam: [],
+        sharedWithMe: [],
+      }];
+    },
+    async getSkillSharing(slug) {
+      return {
+        slug,
+        title: "Release Notes Helper",
+        visibility: "public",
+        settings: sharingSettings,
+        availableTeams: teamDashboard.teams.map((team) => ({ id: team.id, name: team.name, role: team.role })),
+        teamGrants: [],
+        userGrants: [],
+      };
+    },
+    async updateSkillSharing(input) {
+      return {
+        slug: input.slug,
+        title: "Release Notes Helper",
+        visibility: input.visibility,
+        settings: sharingSettings,
+        availableTeams: teamDashboard.teams.map((team) => ({ id: team.id, name: team.name, role: team.role })),
+        teamGrants: teamDashboard.teams
+          .filter((team) => input.teamIds.includes(team.id))
+          .map((team) => ({ id: team.id, name: team.name, role: team.role })),
+        userGrants: input.userEmails.map((email, index) => ({ id: `user-${index}`, email, name: "" })),
+      };
+    },
   };
   return client;
 }
@@ -642,6 +777,45 @@ function defaultAuditEvents(): AdminAuditEvent[] {
       createdAt: "2026-06-04T00:00:00.000Z",
     },
   ];
+}
+
+function defaultSharingSettings(): AdminSharingSettings {
+  return {
+    publicVisibilityEnabled: true,
+    authenticatedVisibilityEnabled: true,
+    teamsEnabled: true,
+    teamVisibilityEnabled: true,
+    userVisibilityEnabled: true,
+  };
+}
+
+function defaultTeamDashboard(): TeamDashboard {
+  return {
+    teams: [
+      {
+        id: "team-1",
+        name: "Platform",
+        slug: "platform",
+        role: "owner",
+        members: [
+          { id: "user-1", email: "reader@example.com", name: "Reader", role: "owner" },
+        ],
+        invitations: [],
+        createdAt: "2026-06-04T00:00:00.000Z",
+        updatedAt: "2026-06-04T00:00:00.000Z",
+      },
+    ],
+    invitations: [
+      {
+        id: "invite-1",
+        teamId: "team-3",
+        teamName: "Research",
+        email: "reader@example.com",
+        status: "pending",
+        createdAt: "2026-06-04T00:00:00.000Z",
+      },
+    ],
+  };
 }
 
 function defaultReviewSubmissions(): ReviewSubmissionSummary[] {

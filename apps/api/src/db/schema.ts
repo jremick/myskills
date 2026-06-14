@@ -24,6 +24,8 @@ export const jobStatus = pgEnum("job_status", ["queued", "running", "succeeded",
 export const mfaFactorType = pgEnum("mfa_factor_type", ["totp"]);
 export const mfaFactorStatus = pgEnum("mfa_factor_status", ["pending", "enabled", "disabled"]);
 export const authActionTokenPurpose = pgEnum("auth_action_token_purpose", ["email_verification", "password_reset"]);
+export const teamMembershipRole = pgEnum("team_membership_role", ["owner", "member"]);
+export const teamInvitationStatus = pgEnum("team_invitation_status", ["pending", "accepted", "revoked"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -145,6 +147,42 @@ export const instanceSettings = pgTable("instance_settings", {
   ...timestamps,
 });
 
+export const teams = pgTable("teams", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (table) => [
+  index("teams_created_by_idx").on(table.createdByUserId),
+]);
+
+export const teamMemberships = pgTable("team_memberships", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: teamMembershipRole("role").notNull().default("member"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("team_memberships_user_idx").on(table.userId),
+  unique().on(table.teamId, table.userId),
+]);
+
+export const teamInvitations = pgTable("team_invitations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  normalizedEmail: text("normalized_email").notNull(),
+  invitedByUserId: uuid("invited_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  status: teamInvitationStatus("status").notNull().default("pending"),
+  acceptedByUserId: uuid("accepted_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  ...timestamps,
+}, (table) => [
+  index("team_invitations_recipient_idx").on(table.normalizedEmail, table.status),
+  unique().on(table.teamId, table.normalizedEmail),
+]);
+
 export const providerConfigs = pgTable("provider_configs", {
   id: uuid("id").primaryKey().defaultRandom(),
   key: text("key").notNull().unique(),
@@ -216,6 +254,24 @@ export const skillTags = pgTable("skill_tags", {
   skillId: uuid("skill_id").notNull().references(() => skills.id, { onDelete: "cascade" }),
   tag: text("tag").notNull(),
 }, (table) => [unique().on(table.skillId, table.tag)]);
+
+export const skillTeamGrants = pgTable("skill_team_grants", {
+  skillId: uuid("skill_id").notNull().references(() => skills.id, { onDelete: "cascade" }),
+  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("skill_team_grants_team_idx").on(table.teamId),
+  unique().on(table.skillId, table.teamId),
+]);
+
+export const skillUserGrants = pgTable("skill_user_grants", {
+  skillId: uuid("skill_id").notNull().references(() => skills.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("skill_user_grants_user_idx").on(table.userId),
+  unique().on(table.skillId, table.userId),
+]);
 
 export const scanRuns = pgTable("scan_runs", {
   id: uuid("id").primaryKey().defaultRandom(),

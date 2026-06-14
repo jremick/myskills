@@ -1,4 +1,10 @@
-import type { PublicSkill } from "@myskills-app/core";
+import type {
+  PublicSkill,
+  SharingSettings,
+  SkillSharingDetails,
+  TeamSharedSkillGroup,
+  VisibilityScope,
+} from "@myskills-app/core";
 
 export interface ReleaseMetadata {
   slug: string;
@@ -31,6 +37,8 @@ export type AdminRegistrationMode = "closed" | "request" | "open";
 export interface AdminRegistrationSettings {
   mode: AdminRegistrationMode;
 }
+
+export type AdminSharingSettings = SharingSettings;
 
 export interface AdminUser {
   id: string;
@@ -76,6 +84,38 @@ export interface AdminAuditEvent {
   resourceId: string | null;
   details: Record<string, unknown>;
   createdAt: string;
+}
+
+export interface TeamMember {
+  id: string;
+  email: string;
+  name: string;
+  role: "owner" | "member";
+}
+
+export interface TeamInvitation {
+  id: string;
+  teamId: string;
+  teamName: string;
+  email: string;
+  status: "pending" | "accepted" | "revoked";
+  createdAt: string;
+}
+
+export interface TeamRecord {
+  id: string;
+  name: string;
+  slug: string;
+  role: "owner" | "member";
+  members: TeamMember[];
+  invitations: TeamInvitation[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeamDashboard {
+  teams: TeamRecord[];
+  invitations: TeamInvitation[];
 }
 
 export interface ReviewSubmissionSummary {
@@ -149,6 +189,8 @@ export interface RegistryClient {
   logout(token?: string): Promise<void>;
   getAdminRegistration(token?: string): Promise<AdminRegistrationSettings>;
   updateAdminRegistration(mode: AdminRegistrationMode, token?: string): Promise<AdminRegistrationSettings>;
+  getAdminSharing(token?: string): Promise<AdminSharingSettings>;
+  updateAdminSharing(settings: AdminSharingSettings, token?: string): Promise<AdminSharingSettings>;
   listAdminUsers(token?: string): Promise<AdminUser[]>;
   performAdminUserAction(userId: string, action: "approve" | "activate" | "disable" | "delete", token?: string): Promise<AdminUser>;
   updateAdminUserRoles(userId: string, roles: string[], token?: string): Promise<AdminUser>;
@@ -158,6 +200,18 @@ export interface RegistryClient {
   submitArchive(input: SubmitArchiveInput, token?: string): Promise<SubmitSkillResult>;
   listReviewSubmissions(token?: string): Promise<ReviewSubmissionSummary[]>;
   performReviewAction(submissionId: string, action: "approve" | "publish", reason?: string, token?: string): Promise<ReviewActionResult>;
+  listTeams(token?: string): Promise<TeamDashboard>;
+  createTeam(name: string, token?: string): Promise<TeamRecord>;
+  inviteTeamMember(teamId: string, email: string, token?: string): Promise<TeamInvitation>;
+  acceptTeamInvitation(invitationId: string, token?: string): Promise<TeamInvitation>;
+  listTeamSharedSkills(token?: string): Promise<TeamSharedSkillGroup[]>;
+  getSkillSharing(slug: string, token?: string): Promise<SkillSharingDetails>;
+  updateSkillSharing(input: {
+    slug: string;
+    visibility: VisibilityScope;
+    teamIds: string[];
+    userEmails: string[];
+  }, token?: string): Promise<SkillSharingDetails>;
 }
 
 export interface SafeApiError extends Error {
@@ -232,6 +286,22 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         { method: "PUT", body: { mode }, token: overrideToken ?? token },
       );
       return body.registration;
+    },
+    async getAdminSharing(overrideToken) {
+      const body = await requestJson<{ sharing: AdminSharingSettings }>(
+        fetchImpl,
+        `${root}/v1/admin/sharing`,
+        { token: overrideToken ?? token },
+      );
+      return body.sharing;
+    },
+    async updateAdminSharing(settings, overrideToken) {
+      const body = await requestJson<{ sharing: AdminSharingSettings }>(
+        fetchImpl,
+        `${root}/v1/admin/sharing`,
+        { method: "PUT", body: settings, token: overrideToken ?? token },
+      );
+      return body.sharing;
     },
     async listAdminUsers(overrideToken) {
       const body = await requestJson<{ users: AdminUser[] }>(fetchImpl, `${root}/v1/admin/users`, {
@@ -314,6 +384,67 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
       );
       return body.submission;
     },
+    async listTeams(overrideToken) {
+      return requestJson<TeamDashboard>(fetchImpl, `${root}/v1/teams`, {
+        token: overrideToken ?? token,
+      });
+    },
+    async createTeam(name, overrideToken) {
+      const body = await requestJson<{ team: TeamRecord }>(fetchImpl, `${root}/v1/teams`, {
+        method: "POST",
+        body: { name },
+        token: overrideToken ?? token,
+      });
+      return body.team;
+    },
+    async inviteTeamMember(teamId, email, overrideToken) {
+      const body = await requestJson<{ invitation: TeamInvitation }>(
+        fetchImpl,
+        `${root}/v1/teams/${encodeURIComponent(teamId)}/invitations`,
+        { method: "POST", body: { email }, token: overrideToken ?? token },
+      );
+      return body.invitation;
+    },
+    async acceptTeamInvitation(invitationId, overrideToken) {
+      const body = await requestJson<{ invitation: TeamInvitation }>(
+        fetchImpl,
+        `${root}/v1/teams/invitations/${encodeURIComponent(invitationId)}/accept`,
+        { method: "POST", body: {}, token: overrideToken ?? token },
+      );
+      return body.invitation;
+    },
+    async listTeamSharedSkills(overrideToken) {
+      const body = await requestJson<{ teams: TeamSharedSkillGroup[] }>(
+        fetchImpl,
+        `${root}/v1/teams/shared-skills`,
+        { token: overrideToken ?? token },
+      );
+      return body.teams;
+    },
+    async getSkillSharing(slug, overrideToken) {
+      const body = await requestJson<{ sharing: SkillSharingDetails }>(
+        fetchImpl,
+        `${root}/v1/skills/${encodeURIComponent(slug)}/sharing`,
+        { token: overrideToken ?? token },
+      );
+      return body.sharing;
+    },
+    async updateSkillSharing(input, overrideToken) {
+      const body = await requestJson<{ sharing: SkillSharingDetails }>(
+        fetchImpl,
+        `${root}/v1/skills/${encodeURIComponent(input.slug)}/sharing`,
+        {
+          method: "PUT",
+          body: {
+            visibility: input.visibility,
+            teamIds: input.teamIds,
+            userEmails: input.userEmails,
+          },
+          token: overrideToken ?? token,
+        },
+      );
+      return body.sharing;
+    },
   };
 }
 
@@ -372,6 +503,16 @@ export function safeReviewErrorMessage(error: unknown): string {
     return "Review action could not be completed.";
   }
   return "Review queue is not available.";
+}
+
+export function safeTeamErrorMessage(error: unknown): string {
+  if (isSafeApiError(error) && (error.status === 401 || error.status === 403)) {
+    return "Team access requires a signed-in session with team sharing enabled.";
+  }
+  if (isSafeApiError(error) && error.status >= 400 && error.status < 500) {
+    return "Team change could not be saved.";
+  }
+  return "Team data is not available.";
 }
 
 async function requestJson<T>(fetchImpl: typeof fetch, url: string, options: {

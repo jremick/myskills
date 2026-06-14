@@ -8,6 +8,8 @@ import { PostgresSkillRepository } from "./repositories/postgres-skill-repositor
 import { buildApp } from "./app.js";
 import { SubmissionService } from "./submissions/service.js";
 import { PostgresSubmissionStore } from "./submissions/postgres-submission-store.js";
+import { TeamService } from "./teams/service.js";
+import { PostgresTeamStore } from "./teams/postgres-team-store.js";
 
 const port = Number.parseInt(process.env.PORT ?? "3001", 10);
 const host = process.env.HOST ?? "0.0.0.0";
@@ -29,6 +31,7 @@ const app = buildApp({
   submissionService: new SubmissionService(new PostgresSubmissionStore(db, {
     artifactStorage: createArtifactObjectStorageFromEnv(process.env),
   })),
+  teamService: new TeamService(new PostgresTeamStore(db)),
   allowedOrigins: allowedOrigins(),
   logger: process.env.NODE_ENV !== "test",
 });

@@ -108,8 +108,8 @@ export interface SubmissionStore {
     submissionId?: string;
     reason: string;
   }): Promise<void>;
-  getPublicRelease(input: { slug: string; version: string }): Promise<PublicReleaseMetadata | null>;
-  getPublicBundle(input: { slug: string; version: string; platform?: string }): Promise<PublicBundle | null>;
+  getPublicRelease(input: { slug: string; version: string; actorId?: string | null }): Promise<PublicReleaseMetadata | null>;
+  getPublicBundle(input: { slug: string; version: string; platform?: string; actorId?: string | null }): Promise<PublicBundle | null>;
   recordArtifactAccess(input: {
     actorId?: string | null;
     slug: string;

@@ -109,7 +109,7 @@ export class SubmissionService {
     });
   }
 
-  async getPublicRelease(input: { slug: string; version: string }): Promise<PublicReleaseMetadata | null> {
+  async getPublicRelease(input: { slug: string; version: string; actorId?: string | null }): Promise<PublicReleaseMetadata | null> {
     return this.store.getPublicRelease(input);
   }
 

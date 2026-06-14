@@ -11,6 +11,7 @@ import {
 } from "@myskills-app/skill-package";
 
 const DEFAULT_API_URL = "http://localhost:3001";
+const CLI_VISIBILITY_SCOPES = ["public", "authenticated", "organization", "team", "private", "explicit-users"] as const;
 
 export interface CliIo {
   stdout: (line: string) => void;
@@ -88,6 +89,12 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
         return await submitCommand(parsed, runtime);
       case "review":
         return await reviewCommand(parsed, runtime);
+      case "teams":
+        return await teamsCommand(parsed, runtime);
+      case "sharing":
+        return await sharingCommand(parsed, runtime);
+      case "admin":
+        return await adminCommand(parsed, runtime);
       case "export":
         return await exportCommand(parsed, runtime);
       case "install":
@@ -392,6 +399,143 @@ async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     return 0;
   }
   throw new CliError("Usage: myskills review submissions | review action <submission-id> --action <approve|publish>", 2);
+}
+
+async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const token = await requireToken(parsed, runtime);
+  const subcommand = parsed.args[0];
+  if (subcommand === "list") {
+    const response = await apiGet("/v1/teams", parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      printTeamDashboard(response, runtime.io);
+    }
+    return 0;
+  }
+  if (subcommand === "create") {
+    const name = optionalStringOption(parsed, "name") ?? parsed.args.slice(1).join(" ").trim();
+    if (!name) {
+      throw new CliError("Usage: myskills teams create <team-name> [--name <team-name>]", 2);
+    }
+    const response = await apiPost("/v1/teams", { name }, parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      const team = teamFromResponse(response);
+      runtime.io.stdout(`${team.id}\t${team.name}\tcreated\trole=${team.role}`);
+    }
+    return 0;
+  }
+  if (subcommand === "invite") {
+    const teamId = parsed.args[1];
+    if (!teamId) {
+      throw new CliError("Usage: myskills teams invite <team-id> --email <email>", 2);
+    }
+    const email = stringOption(parsed, "email");
+    const response = await apiPost(`/v1/teams/${encodeURIComponent(teamId)}/invitations`, { email }, parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      const invitation = invitationFromResponse(response);
+      runtime.io.stdout(`${invitation.id}\t${invitation.email}\tinvited\tteam=${invitation.teamName}\tstatus=${invitation.status}`);
+    }
+    return 0;
+  }
+  if (subcommand === "accept") {
+    const invitationId = parsed.args[1];
+    if (!invitationId) {
+      throw new CliError("Usage: myskills teams accept <invitation-id>", 2);
+    }
+    const response = await apiPost(`/v1/teams/invitations/${encodeURIComponent(invitationId)}/accept`, {}, parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      const invitation = invitationFromResponse(response);
+      runtime.io.stdout(`${invitation.id}\t${invitation.teamName}\taccepted\tstatus=${invitation.status}`);
+    }
+    return 0;
+  }
+  if (subcommand === "skills" || subcommand === "shared-skills") {
+    const response = await apiGet("/v1/teams/shared-skills", parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      printTeamSharedSkills(response, runtime.io);
+    }
+    return 0;
+  }
+  throw new CliError("Usage: myskills teams list|create|invite|accept|skills", 2);
+}
+
+async function sharingCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const token = await requireToken(parsed, runtime);
+  const subcommand = parsed.args[0];
+  const slug = parsed.args[1];
+  if (subcommand === "get") {
+    if (!slug) {
+      throw new CliError("Usage: myskills sharing get <skill-slug>", 2);
+    }
+    const response = await apiGet(`/v1/skills/${encodeURIComponent(parseInstallSlug(slug))}/sharing`, parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      printSkillSharing(response, runtime.io);
+    }
+    return 0;
+  }
+  if (subcommand === "set") {
+    if (!slug) {
+      throw new CliError("Usage: myskills sharing set <skill-slug> --visibility <scope> [--team <team-id>] [--user <email>]", 2);
+    }
+    const visibility = visibilityOption(parsed);
+    const response = await apiPut(`/v1/skills/${encodeURIComponent(parseInstallSlug(slug))}/sharing`, {
+      visibility,
+      teamIds: stringListOption(parsed, "team"),
+      userEmails: stringListOption(parsed, "user"),
+    }, parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      printSkillSharing(response, runtime.io);
+    }
+    return 0;
+  }
+  throw new CliError("Usage: myskills sharing get|set <skill-slug>", 2);
+}
+
+async function adminCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const token = await requireToken(parsed, runtime);
+  const resource = parsed.args[0];
+  const action = parsed.args[1];
+  if (resource !== "sharing") {
+    throw new CliError("Usage: myskills admin sharing get|set", 2);
+  }
+  if (action === "get") {
+    const response = await apiGet("/v1/admin/sharing", parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      printSharingSettings(response, runtime.io);
+    }
+    return 0;
+  }
+  if (action === "set") {
+    const updates = sharingSettingsOptionUpdates(parsed);
+    if (Object.keys(updates).length === 0) {
+      throw new CliError("At least one sharing setting option is required.", 2);
+    }
+    const currentResponse = await apiGet("/v1/admin/sharing", parsed, runtime, token);
+    const current = sharingSettingsFromResponse(currentResponse);
+    const response = await apiPut("/v1/admin/sharing", { ...current, ...updates }, parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      printSharingSettings(response, runtime.io);
+    }
+    return 0;
+  }
+  throw new CliError("Usage: myskills admin sharing get|set", 2);
 }
 
 async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
@@ -742,6 +886,60 @@ interface InstalledSkillSnapshot {
   snapshotPath: string;
 }
 
+type CliVisibilityScope = (typeof CLI_VISIBILITY_SCOPES)[number];
+
+interface CliSharingSettings {
+  publicVisibilityEnabled: boolean;
+  authenticatedVisibilityEnabled: boolean;
+  teamsEnabled: boolean;
+  teamVisibilityEnabled: boolean;
+  userVisibilityEnabled: boolean;
+}
+
+interface CliTeamSummary {
+  id: string;
+  name: string;
+  role: string;
+}
+
+interface CliUserSummary {
+  id: string;
+  email: string;
+  name: string;
+}
+
+interface CliSkillSharingDetails {
+  slug: string;
+  title: string;
+  visibility: string;
+  settings: CliSharingSettings | null;
+  availableTeams: CliTeamSummary[];
+  teamGrants: CliTeamSummary[];
+  userGrants: CliUserSummary[];
+}
+
+interface CliTeamRecord {
+  id: string;
+  name: string;
+  role: string;
+  members: unknown[];
+  invitations: CliTeamInvitation[];
+}
+
+interface CliTeamInvitation {
+  id: string;
+  teamId: string;
+  teamName: string;
+  email: string;
+  status: string;
+}
+
+interface CliSkillRow {
+  slug: string;
+  title: string;
+  latestVersion: string | null;
+}
+
 function releaseMetadata(response: Record<string, unknown>, fallback: { slug: string; version: string }): ReleaseInfo {
   const release = response.release;
   if (!release || typeof release !== "object" || Array.isArray(release)) {
@@ -896,6 +1094,233 @@ function parseStoredArtifact(input: unknown): ReleaseArtifact {
   };
 }
 
+function printTeamDashboard(response: Record<string, unknown>, io: CliIo): void {
+  const teams = arrayField(response, "teams").map(teamFromRecord);
+  const invitations = arrayField(response, "invitations").map(invitationFromRecord);
+  if (teams.length === 0 && invitations.length === 0) {
+    io.stdout("No teams or pending invitations.");
+    return;
+  }
+  for (const team of teams) {
+    io.stdout(`team\t${team.id}\t${team.name}\trole=${team.role}\tmembers=${team.members.length}\tpending=${team.invitations.length}`);
+  }
+  for (const invitation of invitations) {
+    io.stdout(`invitation\t${invitation.id}\t${invitation.teamName}\t${invitation.email}\tstatus=${invitation.status}`);
+  }
+}
+
+function printTeamSharedSkills(response: Record<string, unknown>, io: CliIo): void {
+  const groups = arrayField(response, "teams");
+  if (groups.length === 0) {
+    io.stdout("No team-shared skills.");
+    return;
+  }
+  for (const groupInput of groups) {
+    const group = recordField(groupInput, "team shared-skill group");
+    const team = teamSummaryFromRecord(group.team);
+    const sharingWithTeam = arrayField(group, "sharingWithTeam").map(skillRowFromRecord);
+    const sharedWithMe = arrayField(group, "sharedWithMe").map(skillRowFromRecord);
+    io.stdout(`team\t${team.id}\t${team.name}\trole=${team.role}\tsharing-out=${sharingWithTeam.length}\tshared-in=${sharedWithMe.length}`);
+    for (const skill of sharingWithTeam) {
+      io.stdout(`sharing-out\t${team.id}\t${skill.slug}\t${skill.latestVersion ?? "-"}\t${skill.title}`);
+    }
+    for (const skill of sharedWithMe) {
+      io.stdout(`shared-in\t${team.id}\t${skill.slug}\t${skill.latestVersion ?? "-"}\t${skill.title}`);
+    }
+  }
+}
+
+function printSkillSharing(response: Record<string, unknown>, io: CliIo): void {
+  const sharing = skillSharingFromResponse(response);
+  const teams = sharing.teamGrants.map((team) => `${team.name}(${team.id})`).join(",") || "-";
+  const users = sharing.userGrants.map((user) => user.email).join(",") || "-";
+  io.stdout(`${sharing.slug}\tvisibility=${sharing.visibility}\tteams=${teams}\tusers=${users}`);
+}
+
+function printSharingSettings(response: Record<string, unknown>, io: CliIo): void {
+  const sharing = sharingSettingsFromResponse(response);
+  io.stdout([
+    `public=${enabledLabel(sharing.publicVisibilityEnabled)}`,
+    `authenticated=${enabledLabel(sharing.authenticatedVisibilityEnabled)}`,
+    `teams=${enabledLabel(sharing.teamsEnabled)}`,
+    `team-visibility=${enabledLabel(sharing.teamVisibilityEnabled)}`,
+    `user-visibility=${enabledLabel(sharing.userVisibilityEnabled)}`,
+  ].join("\t"));
+}
+
+function teamFromResponse(response: Record<string, unknown>): CliTeamRecord {
+  return teamFromRecord(response.team);
+}
+
+function invitationFromResponse(response: Record<string, unknown>): CliTeamInvitation {
+  return invitationFromRecord(response.invitation);
+}
+
+function skillSharingFromResponse(response: Record<string, unknown>): CliSkillSharingDetails {
+  const record = recordField(response.sharing, "skill sharing");
+  return {
+    slug: requiredRecordString(record, "slug", "Skill sharing response is missing slug."),
+    title: requiredRecordString(record, "title", "Skill sharing response is missing title."),
+    visibility: requiredRecordString(record, "visibility", "Skill sharing response is missing visibility."),
+    settings: record.settings && typeof record.settings === "object" && !Array.isArray(record.settings)
+      ? sharingSettingsFromRecord(record.settings)
+      : null,
+    availableTeams: arrayField(record, "availableTeams").map(teamSummaryFromRecord),
+    teamGrants: arrayField(record, "teamGrants").map(teamSummaryFromRecord),
+    userGrants: arrayField(record, "userGrants").map(userSummaryFromRecord),
+  };
+}
+
+function sharingSettingsFromResponse(response: Record<string, unknown>): CliSharingSettings {
+  return sharingSettingsFromRecord(response.sharing);
+}
+
+function sharingSettingsFromRecord(input: unknown): CliSharingSettings {
+  const record = recordField(input, "sharing settings");
+  return {
+    publicVisibilityEnabled: requiredRecordBoolean(record, "publicVisibilityEnabled"),
+    authenticatedVisibilityEnabled: requiredRecordBoolean(record, "authenticatedVisibilityEnabled"),
+    teamsEnabled: requiredRecordBoolean(record, "teamsEnabled"),
+    teamVisibilityEnabled: requiredRecordBoolean(record, "teamVisibilityEnabled"),
+    userVisibilityEnabled: requiredRecordBoolean(record, "userVisibilityEnabled"),
+  };
+}
+
+function teamFromRecord(input: unknown): CliTeamRecord {
+  const record = recordField(input, "team");
+  return {
+    id: requiredRecordString(record, "id", "Team response is missing id."),
+    name: requiredRecordString(record, "name", "Team response is missing name."),
+    role: optionalRecordString(record, "role") ?? "-",
+    members: arrayField(record, "members"),
+    invitations: arrayField(record, "invitations").map(invitationFromRecord),
+  };
+}
+
+function invitationFromRecord(input: unknown): CliTeamInvitation {
+  const record = recordField(input, "team invitation");
+  return {
+    id: requiredRecordString(record, "id", "Team invitation response is missing id."),
+    teamId: requiredRecordString(record, "teamId", "Team invitation response is missing teamId."),
+    teamName: requiredRecordString(record, "teamName", "Team invitation response is missing teamName."),
+    email: requiredRecordString(record, "email", "Team invitation response is missing email."),
+    status: requiredRecordString(record, "status", "Team invitation response is missing status."),
+  };
+}
+
+function teamSummaryFromRecord(input: unknown): CliTeamSummary {
+  const record = recordField(input, "team summary");
+  return {
+    id: requiredRecordString(record, "id", "Team summary response is missing id."),
+    name: requiredRecordString(record, "name", "Team summary response is missing name."),
+    role: optionalRecordString(record, "role") ?? "-",
+  };
+}
+
+function userSummaryFromRecord(input: unknown): CliUserSummary {
+  const record = recordField(input, "user summary");
+  return {
+    id: requiredRecordString(record, "id", "User summary response is missing id."),
+    email: requiredRecordString(record, "email", "User summary response is missing email."),
+    name: optionalRecordString(record, "name") ?? "",
+  };
+}
+
+function skillRowFromRecord(input: unknown): CliSkillRow {
+  const record = recordField(input, "skill");
+  const latestVersion = record.latestVersion;
+  return {
+    slug: requiredRecordString(record, "slug", "Skill response is missing slug."),
+    title: requiredRecordString(record, "title", "Skill response is missing title."),
+    latestVersion: typeof latestVersion === "string" ? latestVersion : null,
+  };
+}
+
+function sharingSettingsOptionUpdates(parsed: ParsedArgs): Partial<CliSharingSettings> {
+  const updates: Partial<CliSharingSettings> = {};
+  const publicVisibilityEnabled = optionalBooleanOption(parsed, "public") ?? optionalBooleanOption(parsed, "public-visibility");
+  const authenticatedVisibilityEnabled = optionalBooleanOption(parsed, "authenticated") ?? optionalBooleanOption(parsed, "authenticated-visibility");
+  const teamsEnabled = optionalBooleanOption(parsed, "teams");
+  const teamVisibilityEnabled = optionalBooleanOption(parsed, "team-visibility");
+  const userVisibilityEnabled = optionalBooleanOption(parsed, "user-visibility");
+  if (publicVisibilityEnabled !== undefined) {
+    updates.publicVisibilityEnabled = publicVisibilityEnabled;
+  }
+  if (authenticatedVisibilityEnabled !== undefined) {
+    updates.authenticatedVisibilityEnabled = authenticatedVisibilityEnabled;
+  }
+  if (teamsEnabled !== undefined) {
+    updates.teamsEnabled = teamsEnabled;
+  }
+  if (teamVisibilityEnabled !== undefined) {
+    updates.teamVisibilityEnabled = teamVisibilityEnabled;
+  }
+  if (userVisibilityEnabled !== undefined) {
+    updates.userVisibilityEnabled = userVisibilityEnabled;
+  }
+  return updates;
+}
+
+function visibilityOption(parsed: ParsedArgs): CliVisibilityScope {
+  const value = stringOption(parsed, "visibility");
+  if (!CLI_VISIBILITY_SCOPES.includes(value as CliVisibilityScope)) {
+    throw new CliError(`--visibility must be one of: ${CLI_VISIBILITY_SCOPES.join(", ")}.`, 2);
+  }
+  return value as CliVisibilityScope;
+}
+
+function optionalBooleanOption(parsed: ParsedArgs, key: string): boolean | undefined {
+  const value = optionalStringOption(parsed, key);
+  if (value === undefined) {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on", "enabled"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off", "disabled"].includes(normalized)) {
+    return false;
+  }
+  throw new CliError(`--${key} must be true or false.`, 2);
+}
+
+function enabledLabel(value: boolean): string {
+  return value ? "enabled" : "disabled";
+}
+
+function recordField(input: unknown, label: string): Record<string, unknown> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new CliError(`API response is missing ${label}.`, 1);
+  }
+  return input as Record<string, unknown>;
+}
+
+function arrayField(record: Record<string, unknown>, key: string): unknown[] {
+  const value = record[key];
+  return Array.isArray(value) ? value : [];
+}
+
+function requiredRecordString(record: Record<string, unknown>, key: string, message: string): string {
+  const value = record[key];
+  if (typeof value !== "string" || !value) {
+    throw new CliError(message, 1);
+  }
+  return value;
+}
+
+function optionalRecordString(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function requiredRecordBoolean(record: Record<string, unknown>, key: string): boolean {
+  const value = record[key];
+  if (typeof value !== "boolean") {
+    throw new CliError(`API sharing settings response is missing ${key}.`, 1);
+  }
+  return value;
+}
+
 function installRegistryPath(root: string): string {
   return path.join(root, ".myskills-app", "installed.json");
 }
@@ -988,6 +1413,28 @@ async function apiPost(pathname: string, payload: unknown, parsed: ParsedArgs, r
   return body;
 }
 
+async function apiPut(pathname: string, payload: unknown, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<Record<string, unknown>> {
+  const baseUrl = apiBaseUrl(parsed, runtime);
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+  if (token) {
+    headers.authorization = `Bearer ${token}`;
+  }
+  const response = await runtime.fetch(`${baseUrl}${pathname}`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify(payload),
+  });
+  const text = await response.text();
+  const body = text ? JSON.parse(text) as Record<string, unknown> : {};
+  if (!response.ok) {
+    const error = body.error as { code?: string; message?: string } | undefined;
+    throw new CliError(error?.message ?? `API request failed with ${response.status}.`, 1);
+  }
+  return body;
+}
+
 async function apiDelete(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token: string): Promise<Record<string, unknown>> {
   const baseUrl = apiBaseUrl(parsed, runtime);
   const response = await runtime.fetch(`${baseUrl}${pathname}`, {
@@ -1045,6 +1492,14 @@ interface ResolvedToken {
 
 async function tokenOption(parsed: ParsedArgs, runtime: CliRuntime): Promise<string | null> {
   return (await resolveToken(parsed, runtime))?.value ?? null;
+}
+
+async function requireToken(parsed: ParsedArgs, runtime: CliRuntime): Promise<string> {
+  const token = await tokenOption(parsed, runtime);
+  if (!token) {
+    throw new CliError("No token provided. Run myskills login, set MYSKILLS_TOKEN, or pass --token.", 1);
+  }
+  return token;
 }
 
 async function resolveToken(parsed: ParsedArgs, runtime: CliRuntime): Promise<ResolvedToken | null> {
@@ -1257,6 +1712,14 @@ function helpText(): string {
     "  submit --path <file-directory-or-zip> [--api-url <url>] [--token <token>]",
     "  review submissions [--api-url <url>] [--token <token>]",
     "  review action <submission-id> --action <approve|publish> [--reason <text>]",
+    "  teams list|skills [--api-url <url>] [--token <token>]",
+    "  teams create <team-name> [--name <team-name>] [--api-url <url>] [--token <token>]",
+    "  teams invite <team-id> --email <email> [--api-url <url>] [--token <token>]",
+    "  teams accept <invitation-id> [--api-url <url>] [--token <token>]",
+    "  sharing get <skill-slug> [--api-url <url>] [--token <token>]",
+    "  sharing set <skill-slug> --visibility <scope> [--team <team-id>] [--user <email>]",
+    "  admin sharing get [--api-url <url>] [--token <token>]",
+    "  admin sharing set [--public <true|false>] [--authenticated <true|false>] [--teams <true|false>] [--team-visibility <true|false>] [--user-visibility <true|false>]",
     "  export <skill-slug> --version <version> --platform <platform> --output <dir>",
     "  install <skill-slug> [--version <version>] [--platform <platform>] [--dir <install-root>]",
     "  list [--dir <install-root>]",
