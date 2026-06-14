@@ -205,6 +205,18 @@ export class MemoryAuthStore implements AuthStore {
     return user ? toRecord(user) : null;
   }
 
+  async updateUserEmail(input: { userId: string; email: string; emailVerifiedAt: Date }): Promise<AuthUserRecord | null> {
+    const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
+    if (!user) {
+      return null;
+    }
+    this.users.delete(user.email);
+    user.email = input.email.toLowerCase();
+    user.emailVerifiedAt = input.emailVerifiedAt;
+    this.users.set(user.email, user);
+    return toRecord(user);
+  }
+
   async updateUserStatus(input: { userId: string; status: UserStatus; emailVerifiedAt?: Date | null }): Promise<AuthUserRecord | null> {
     const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
     if (!user) {
@@ -449,6 +461,36 @@ export class MemoryAuthStore implements AuthStore {
     factor.lastUsedCounter = input.lastUsedCounter;
     factor.updatedAt = now;
     return toMfaTotpFactorRecord(factor);
+  }
+
+  async disableMfaTotpFactorsForUser(input: { userId: string; disabledAt?: Date }): Promise<number> {
+    const disabledAt = input.disabledAt ?? new Date();
+    let count = 0;
+    for (const factor of this.mfaFactors.values()) {
+      if (factor.userId !== input.userId || factor.status === "disabled") {
+        continue;
+      }
+      factor.status = "disabled";
+      factor.disabledAt = disabledAt;
+      factor.updatedAt = disabledAt;
+      count += 1;
+    }
+    return count;
+  }
+
+  async disableOtherMfaTotpFactorsForUser(input: { userId: string; factorId: string; disabledAt?: Date }): Promise<number> {
+    const disabledAt = input.disabledAt ?? new Date();
+    let count = 0;
+    for (const factor of this.mfaFactors.values()) {
+      if (factor.userId !== input.userId || factor.id === input.factorId || factor.status === "disabled") {
+        continue;
+      }
+      factor.status = "disabled";
+      factor.disabledAt = disabledAt;
+      factor.updatedAt = disabledAt;
+      count += 1;
+    }
+    return count;
   }
 
   async updateMfaTotpFactorCounter(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<void> {

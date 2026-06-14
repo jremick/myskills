@@ -1,7 +1,7 @@
 import type { AuthenticatedUser, RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 
 export const apiTokenScopes = ["profile:read", "skills:read", "skills:submit", "review:read", "review:write"] as const;
-export const authActionTokenPurposes = ["email_verification", "password_reset"] as const;
+export const authActionTokenPurposes = ["email_verification", "password_reset", "email_change"] as const;
 export const providerTypes = ["oidc", "saml", "cloudflare_access", "github", "google"] as const;
 
 export type ApiTokenScope = (typeof apiTokenScopes)[number];
@@ -196,6 +196,7 @@ export interface AuthStore {
   createUserWithPassword(input: CreateUserWithPasswordInput): Promise<CreateUserWithPasswordResult>;
   listUsers(): Promise<AuthUserRecord[]>;
   findUserById(userId: string): Promise<AuthUserRecord | null>;
+  updateUserEmail(input: { userId: string; email: string; emailVerifiedAt: Date }): Promise<AuthUserRecord | null>;
   updateUserStatus(input: { userId: string; status: UserStatus; emailVerifiedAt?: Date | null }): Promise<AuthUserRecord | null>;
   updateUserRoles(input: { userId: string; roles: AuthenticatedUser["roles"] }): Promise<AuthUserRecord | null>;
   updatePasswordCredential(input: { userId: string; passwordHash: string; passwordUpdatedAt?: Date }): Promise<boolean>;
@@ -224,6 +225,8 @@ export interface AuthStore {
   listEnabledMfaTotpFactorsForUser(userId: string): Promise<MfaTotpFactorRecord[]>;
   findMfaTotpFactorForUser(input: { userId: string; factorId: string }): Promise<MfaTotpFactorRecord | null>;
   enableMfaTotpFactor(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<MfaTotpFactorRecord | null>;
+  disableMfaTotpFactorsForUser(input: { userId: string; disabledAt?: Date }): Promise<number>;
+  disableOtherMfaTotpFactorsForUser(input: { userId: string; factorId: string; disabledAt?: Date }): Promise<number>;
   updateMfaTotpFactorCounter(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<void>;
   replaceMfaRecoveryCodes(input: { userId: string; codeHashes: string[] }): Promise<void>;
   countUnusedMfaRecoveryCodes(userId: string): Promise<number>;

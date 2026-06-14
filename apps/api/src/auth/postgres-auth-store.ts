@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, ne, sql } from "drizzle-orm";
 import { AppError } from "@myskills-app/core";
 import { roles as authRoles, type RegistrationMode, type Role, type UserStatus } from "@myskills-app/auth";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
@@ -119,6 +119,20 @@ export class PostgresAuthStore implements AuthStore {
 
   async findUserById(userId: string): Promise<AuthUserRecord | null> {
     const [user] = await this.db.select().from(users).where(eq(users.id, userId)).limit(1);
+    return user ? { ...toRecord(user), roles: await this.rolesForUser(user.id) } : null;
+  }
+
+  async updateUserEmail(input: { userId: string; email: string; emailVerifiedAt: Date }): Promise<AuthUserRecord | null> {
+    const [user] = await this.db
+      .update(users)
+      .set({
+        email: input.email,
+        normalizedEmail: input.email,
+        emailVerifiedAt: input.emailVerifiedAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, input.userId))
+      .returning();
     return user ? { ...toRecord(user), roles: await this.rolesForUser(user.id) } : null;
   }
 
@@ -489,6 +503,38 @@ export class PostgresAuthStore implements AuthStore {
       .where(and(eq(mfaFactors.userId, input.userId), eq(mfaFactors.id, input.factorId)))
       .returning();
     return factor ? toMfaTotpFactorRecord(factor) : null;
+  }
+
+  async disableMfaTotpFactorsForUser(input: { userId: string; disabledAt?: Date }): Promise<number> {
+    const disabledAt = input.disabledAt ?? new Date();
+    const rows = await this.db
+      .update(mfaFactors)
+      .set({
+        status: "disabled",
+        disabledAt,
+        updatedAt: disabledAt,
+      })
+      .where(and(eq(mfaFactors.userId, input.userId), ne(mfaFactors.status, "disabled")))
+      .returning({ id: mfaFactors.id });
+    return rows.length;
+  }
+
+  async disableOtherMfaTotpFactorsForUser(input: { userId: string; factorId: string; disabledAt?: Date }): Promise<number> {
+    const disabledAt = input.disabledAt ?? new Date();
+    const rows = await this.db
+      .update(mfaFactors)
+      .set({
+        status: "disabled",
+        disabledAt,
+        updatedAt: disabledAt,
+      })
+      .where(and(
+        eq(mfaFactors.userId, input.userId),
+        ne(mfaFactors.id, input.factorId),
+        ne(mfaFactors.status, "disabled"),
+      ))
+      .returning({ id: mfaFactors.id });
+    return rows.length;
   }
 
   async updateMfaTotpFactorCounter(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<void> {

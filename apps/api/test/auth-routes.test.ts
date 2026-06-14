@@ -491,6 +491,9 @@ test("auth notification delivery failures remain generic for known and unknown a
         sendEmailVerification() {
           throw new Error("smtp token delivery failed with reset-token");
         },
+        sendEmailChangeVerification() {
+          throw new Error("smtp token delivery failed with reset-token");
+        },
         sendPasswordReset() {
           throw new Error("smtp token delivery failed with reset-token");
         },
@@ -565,6 +568,165 @@ test("password reset preserves enabled MFA state", async (t) => {
   assert.equal(login.json().mfaRequired, true);
   assert.equal(typeof login.json().challengeToken, "string");
   assert.equal(login.json().token, undefined);
+});
+
+test("authenticated password changes revoke existing credentials", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAuthApp(authStore);
+  t.after(() => app.close());
+  const session = await addAndLogin(app, authStore, {
+    id: "password-change",
+    email: "password-change@example.com",
+    roles: ["user"],
+  });
+
+  const changed = await app.inject({
+    method: "POST",
+    url: "/v1/auth/account/password",
+    headers: { authorization: `Bearer ${session}` },
+    payload: {
+      currentPassword: "correct horse battery staple",
+      password: "new correct horse battery staple",
+    },
+  });
+  assert.equal(changed.statusCode, 200);
+  assert.deepEqual(changed.json(), { status: "changed" });
+
+  const revokedSession = await app.inject({
+    method: "GET",
+    url: "/v1/me",
+    headers: { authorization: `Bearer ${session}` },
+  });
+  assert.equal(revokedSession.statusCode, 401);
+
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: "password-change@example.com",
+      password: "new correct horse battery staple",
+    },
+  });
+  assert.equal(login.statusCode, 200);
+  assert.equal(login.json().mfaRequired, false);
+});
+
+test("email changes require current password and new email verification", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const outbox = createAuthOutbox();
+  const app = buildApp({
+    skillRepository: emptySkillRepository(),
+    authService: new AuthService(authStore, { notificationSink: outbox.sink }),
+  });
+  t.after(() => app.close());
+  const session = await addAndLogin(app, authStore, {
+    id: "email-change",
+    email: "old-email@example.com",
+    roles: ["user"],
+  });
+
+  const requested = await app.inject({
+    method: "POST",
+    url: "/v1/auth/account/email-change",
+    headers: { authorization: `Bearer ${session}` },
+    payload: {
+      email: "New-Email@Example.com",
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(requested.statusCode, 202);
+  assert.deepEqual(requested.json(), { status: "pending" });
+  assert.equal(outbox.emailChanges.length, 1);
+  assert.equal(outbox.emailChanges[0].email, "new-email@example.com");
+
+  const confirmed = await app.inject({
+    method: "POST",
+    url: "/v1/auth/email-change/confirm",
+    payload: { token: outbox.emailChanges[0].token },
+  });
+  assert.equal(confirmed.statusCode, 200);
+  assert.deepEqual(confirmed.json(), { status: "changed" });
+
+  const revokedSession = await app.inject({
+    method: "GET",
+    url: "/v1/me",
+    headers: { authorization: `Bearer ${session}` },
+  });
+  assert.equal(revokedSession.statusCode, 401);
+
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: "new-email@example.com",
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(login.statusCode, 200);
+});
+
+test("MFA reset replaces old TOTP factors and removal revokes credentials", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAuthApp(authStore);
+  t.after(() => app.close());
+  const setupSession = await addAndLogin(app, authStore, {
+    id: "mfa-reset",
+    email: "mfa-reset@example.com",
+    roles: ["user"],
+  });
+  const firstEnrollment = await enrollTotp(app, setupSession);
+  const firstConfirmation = await confirmTotp(app, setupSession, firstEnrollment);
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: "mfa-reset@example.com",
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(login.statusCode, 200);
+  assert.equal(login.json().mfaRequired, true);
+  const verified = await app.inject({
+    method: "POST",
+    url: "/v1/auth/mfa/verify",
+    payload: {
+      challengeToken: login.json().challengeToken,
+      recoveryCode: firstConfirmation.recoveryCodes[0],
+    },
+  });
+  assert.equal(verified.statusCode, 200);
+  const verifiedSession = verified.json().token;
+
+  const secondEnrollment = await enrollTotp(app, verifiedSession);
+  await confirmTotp(app, verifiedSession, secondEnrollment);
+  const status = await app.inject({
+    method: "GET",
+    url: "/v1/auth/mfa",
+    headers: { authorization: `Bearer ${verifiedSession}` },
+  });
+  assert.equal(status.statusCode, 200);
+  assert.equal(status.json().mfa.totpEnabled, true);
+  assert.equal(status.json().mfa.factors.length, 1);
+  assert.equal(status.json().mfa.factors[0].id, secondEnrollment.factorId);
+
+  const removed = await app.inject({
+    method: "DELETE",
+    url: "/v1/auth/mfa/totp",
+    headers: { authorization: `Bearer ${verifiedSession}` },
+    payload: {
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(removed.statusCode, 200);
+  assert.equal(removed.json().mfa.status, "disabled");
+  assert.equal(removed.json().mfa.disabledFactors, 1);
+
+  const revokedSession = await app.inject({
+    method: "GET",
+    url: "/v1/me",
+    headers: { authorization: `Bearer ${verifiedSession}` },
+  });
+  assert.equal(revokedSession.statusCode, 401);
 });
 
 test("expired email verification and password reset tokens are denied", async (t) => {
@@ -1019,14 +1181,23 @@ function buildAuthApp(authStore: MemoryAuthStore) {
 function createAuthOutbox(): {
   sink: AuthNotificationSink;
   emailVerifications: Array<{ email: string; token: string; expiresAt: Date }>;
+  emailChanges: Array<{ email: string; token: string; expiresAt: Date }>;
   passwordResets: Array<{ email: string; token: string; expiresAt: Date }>;
 } {
   const emailVerifications: Array<{ email: string; token: string; expiresAt: Date }> = [];
+  const emailChanges: Array<{ email: string; token: string; expiresAt: Date }> = [];
   const passwordResets: Array<{ email: string; token: string; expiresAt: Date }> = [];
   return {
     sink: {
       sendEmailVerification(input) {
         emailVerifications.push({
+          email: input.email,
+          token: input.token,
+          expiresAt: input.expiresAt,
+        });
+      },
+      sendEmailChangeVerification(input) {
+        emailChanges.push({
           email: input.email,
           token: input.token,
           expiresAt: input.expiresAt,
@@ -1041,6 +1212,7 @@ function createAuthOutbox(): {
       },
     },
     emailVerifications,
+    emailChanges,
     passwordResets,
   };
 }

@@ -181,6 +181,59 @@ test("registry client supports MFA status and TOTP enrollment", async () => {
   assert.equal(calls[2].body, JSON.stringify({ factorId: "factor-1", code: "123456" }));
 });
 
+test("registry client supports account recovery and settings endpoints", async () => {
+  const calls: Array<{ body?: string; method?: string; url: string; authorization?: string }> = [];
+  const client = createRegistryClient("http://api.test", async (input, init) => {
+    const url = String(input);
+    calls.push({
+      body: typeof init?.body === "string" ? init.body : undefined,
+      method: init?.method,
+      url,
+      authorization: init?.headers instanceof Headers ? init.headers.get("authorization") ?? undefined : (init?.headers as Record<string, string> | undefined)?.authorization,
+    });
+    if (url.endsWith("/v1/auth/password-reset/confirm")) {
+      return jsonResponse(200, { status: "reset" });
+    }
+    if (url.endsWith("/v1/auth/email-verification/confirm")) {
+      return jsonResponse(200, { status: "verified" });
+    }
+    if (url.endsWith("/v1/auth/email-change/confirm")) {
+      return jsonResponse(200, { status: "changed" });
+    }
+    if (url.endsWith("/v1/auth/account/password")) {
+      return jsonResponse(200, { status: "changed" });
+    }
+    if (url.endsWith("/v1/auth/mfa/totp")) {
+      return jsonResponse(200, { mfa: { status: "disabled", disabledFactors: 1 } });
+    }
+    return jsonResponse(202, { status: "pending" });
+  });
+
+  await client.requestPasswordReset({ email: "reader@example.com" });
+  await client.confirmPasswordReset({ token: "reset-token", password: "new-password" });
+  await client.confirmEmailVerification({ token: "verify-token" });
+  await client.requestEmailChange({ email: "new@example.com", password: "current-password" }, "session-token");
+  await client.confirmEmailChange({ token: "change-token" });
+  await client.changePassword({ currentPassword: "current-password", password: "new-password" }, "session-token");
+  await client.disableTotpMfa({ password: "current-password" }, "session-token");
+
+  assert.deepEqual(calls.map((call) => `${call.method ?? "GET"} ${call.url}`), [
+    "POST http://api.test/v1/auth/password-reset/request",
+    "POST http://api.test/v1/auth/password-reset/confirm",
+    "POST http://api.test/v1/auth/email-verification/confirm",
+    "POST http://api.test/v1/auth/account/email-change",
+    "POST http://api.test/v1/auth/email-change/confirm",
+    "POST http://api.test/v1/auth/account/password",
+    "DELETE http://api.test/v1/auth/mfa/totp",
+  ]);
+  assert.equal(calls[3].authorization, "Bearer session-token");
+  assert.equal(calls[5].authorization, "Bearer session-token");
+  assert.equal(calls[6].authorization, "Bearer session-token");
+  assert.equal(calls[0].body, JSON.stringify({ email: "reader@example.com" }));
+  assert.equal(calls[3].body, JSON.stringify({ email: "new@example.com", password: "current-password" }));
+  assert.equal(calls[6].body, JSON.stringify({ password: "current-password" }));
+});
+
 test("registry client manages admin settings with the session bearer", async () => {
   const calls: Array<{ body?: string; method?: string; url: string; authorization?: string }> = [];
   const client = createRegistryClient("http://api.test", async (input, init) => {

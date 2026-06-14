@@ -17,9 +17,13 @@ test("auth action URLs are absolute and encode tokens", () => {
     authActionUrl("https://skills.example/", "password_reset", "reset token"),
     "https://skills.example/auth/reset-password#token=reset%20token",
   );
+  assert.equal(
+    authActionUrl("https://skills.example/", "email_change", "change-token"),
+    "https://skills.example/auth/change-email#token=change-token",
+  );
 });
 
-test("SMTP auth notification sink formats verification and reset messages", async () => {
+test("SMTP auth notification sink formats verification, reset, and email-change messages", async () => {
   const sent: Array<Record<string, unknown>> = [];
   const sink = new SmtpAuthNotificationSink({
     appBaseUrl: "https://skills.example",
@@ -34,8 +38,9 @@ test("SMTP auth notification sink formats verification and reset messages", asyn
 
   await sink.sendEmailVerification(notification("verify-token"));
   await sink.sendPasswordReset(notification("reset-token"));
+  await sink.sendEmailChangeVerification(notification("change-token", "new@example.com"));
 
-  assert.equal(sent.length, 2);
+  assert.equal(sent.length, 3);
   assert.equal(sent[0].from, "MySkills <noreply@example.test>");
   assert.equal(sent[0].to, "user@example.com");
   assert.equal(sent[0].subject, "Verify your MySkills email");
@@ -43,6 +48,9 @@ test("SMTP auth notification sink formats verification and reset messages", asyn
   assert.match(String(sent[0].html), /href="https:\/\/skills\.example\/auth\/verify-email#token=verify-token"/);
   assert.equal(sent[1].subject, "Reset your MySkills password");
   assert.match(String(sent[1].text), /https:\/\/skills\.example\/auth\/reset-password#token=reset-token/);
+  assert.equal(sent[2].to, "new@example.com");
+  assert.equal(sent[2].subject, "Confirm your new MySkills email");
+  assert.match(String(sent[2].text), /https:\/\/skills\.example\/auth\/change-email#token=change-token/);
 
   const serialized = JSON.stringify(sent);
   assert.equal(serialized.includes("tokenHash"), false);
@@ -184,7 +192,7 @@ test("auth notification env config validates SMTP fields", () => {
   );
 });
 
-function notification(token: string): AuthActionNotification {
+function notification(token: string, email = "user@example.com"): AuthActionNotification {
   return {
     user: {
       id: "user-1",
@@ -194,7 +202,7 @@ function notification(token: string): AuthActionNotification {
       emailVerifiedAt: new Date("2026-01-01T00:00:00.000Z"),
       roles: ["user"],
     },
-    email: "user@example.com",
+    email,
     token,
     expiresAt: new Date("2026-01-01T01:00:00.000Z"),
   };

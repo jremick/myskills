@@ -1,7 +1,7 @@
 import nodemailer, { type Transporter } from "nodemailer";
 import type { AuthActionNotification, AuthNotificationSink } from "./service.js";
 
-type AuthNotificationPurpose = "email_verification" | "password_reset";
+type AuthNotificationPurpose = "email_verification" | "password_reset" | "email_change";
 type AuthNotificationMode = "console" | "smtp" | "disabled";
 
 export interface AuthNotificationLogger {
@@ -30,6 +30,10 @@ export class ConsoleAuthNotificationSink implements AuthNotificationSink {
     this.log("password_reset", input);
   }
 
+  sendEmailChangeVerification(input: AuthActionNotification): void {
+    this.log("email_change", input);
+  }
+
   private log(purpose: AuthNotificationPurpose, input: AuthActionNotification): void {
     const url = authActionUrl(this.options.appBaseUrl, purpose, input.token);
     this.options.logger.info(`[auth-notification] ${purpose} for ${input.email}: ${url} expires=${input.expiresAt.toISOString()}`);
@@ -45,6 +49,10 @@ export class SmtpAuthNotificationSink implements AuthNotificationSink {
 
   async sendPasswordReset(input: AuthActionNotification): Promise<void> {
     await this.send("password_reset", input);
+  }
+
+  async sendEmailChangeVerification(input: AuthActionNotification): Promise<void> {
+    await this.send("email_change", input);
   }
 
   private async send(purpose: AuthNotificationPurpose, input: AuthActionNotification): Promise<void> {
@@ -103,7 +111,11 @@ export function createAuthNotificationSinkFromEnv(
 
 export function authActionUrl(appBaseUrl: string, purpose: AuthNotificationPurpose, token: string): string {
   const base = new URL(normalizeBaseUrl(appBaseUrl));
-  base.pathname = purpose === "email_verification" ? "/auth/verify-email" : "/auth/reset-password";
+  base.pathname = purpose === "email_verification"
+    ? "/auth/verify-email"
+    : purpose === "email_change"
+      ? "/auth/change-email"
+      : "/auth/reset-password";
   base.search = "";
   base.hash = "";
   base.hash = `token=${encodeURIComponent(token)}`;
@@ -117,10 +129,16 @@ function authActionMessage(
 ): { subject: string; text: string; html: string } {
   const url = authActionUrl(appBaseUrl, purpose, input.token);
   const expiresAt = input.expiresAt.toISOString();
-  const action = purpose === "email_verification" ? "verify your email address" : "reset your password";
+  const action = purpose === "email_verification"
+    ? "verify your email address"
+    : purpose === "email_change"
+      ? "confirm your new MySkills email address"
+      : "reset your password";
   const subject = purpose === "email_verification"
     ? "Verify your MySkills email"
-    : "Reset your MySkills password";
+    : purpose === "email_change"
+      ? "Confirm your new MySkills email"
+      : "Reset your MySkills password";
   const escapedUrl = escapeHtml(url);
   const escapedAction = escapeHtml(action);
   return {

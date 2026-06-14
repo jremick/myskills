@@ -23,7 +23,7 @@ export const securityStatus = pgEnum("security_status", ["not-run", "passed", "w
 export const jobStatus = pgEnum("job_status", ["queued", "running", "succeeded", "failed"]);
 export const mfaFactorType = pgEnum("mfa_factor_type", ["totp"]);
 export const mfaFactorStatus = pgEnum("mfa_factor_status", ["pending", "enabled", "disabled"]);
-export const authActionTokenPurpose = pgEnum("auth_action_token_purpose", ["email_verification", "password_reset"]);
+export const authActionTokenPurpose = pgEnum("auth_action_token_purpose", ["email_verification", "password_reset", "email_change"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

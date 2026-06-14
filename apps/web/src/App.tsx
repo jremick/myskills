@@ -3,6 +3,8 @@ import {
   ArrowRight,
   Boxes,
   Check,
+  ChevronLeft,
+  ChevronRight,
   CircleAlert,
   ClipboardList,
   Copy,
@@ -12,6 +14,7 @@ import {
   LockKeyhole,
   LogIn,
   LogOut,
+  Mail,
   PackageOpen,
   Plus,
   RotateCw,
@@ -31,6 +34,7 @@ import type { PublicSkill } from "@myskills-app/core";
 import {
   createRegistryClient,
   exportCommand,
+  safeAccountErrorMessage,
   safeAdminErrorMessage,
   safeAuthErrorMessage,
   safeErrorMessage,
@@ -57,7 +61,7 @@ interface RegistryAppProps {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type AuthState = "idle" | "loading" | "mfa";
-type AppView = "landing" | "login" | "browse" | "admin" | "review" | "submit";
+type AppView = "landing" | "login" | "reset-password" | "verify-email" | "change-email" | "browse" | "admin" | "review" | "submit" | "settings";
 
 interface WebSession {
   token: string;
@@ -101,25 +105,26 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [authState, setAuthState] = useState<AuthState>("idle");
   const [mfaPending, setMfaPending] = useState<MfaPending | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const canUseAdmin = Boolean(session && isAdminUser(session.user));
   const canUseReview = Boolean(session && isReviewerUser(session.user));
   const canUseSubmit = Boolean(session && isSubmitterUser(session.user));
-  const activeView: AppView = view === "landing"
-    ? "landing"
+  const activeView: AppView = isPublicView(view)
+    ? view
     : !session
-    ? "login"
-    : view === "login"
-    ? "browse"
-    : view === "admin" && canUseAdmin
-    ? "admin"
-    : view === "review" && canUseReview
-      ? "review"
-      : view === "submit" && canUseSubmit
-        ? "submit"
-        : "browse";
+      ? "login"
+      : view === "admin" && canUseAdmin
+        ? "admin"
+        : view === "review" && canUseReview
+          ? "review"
+          : view === "submit" && canUseSubmit
+            ? "submit"
+            : view === "settings"
+              ? "settings"
+              : "browse";
 
   useEffect(() => {
-    if (!session && view !== "landing" && view !== "login") {
+    if (!session && !isPublicView(view)) {
       setView("login");
       window.history.replaceState({}, "", "/login");
       return;
@@ -131,7 +136,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }, [session, view]);
 
   useEffect(() => {
-    if (activeView === "landing" || activeView === "login") {
+    if (activeView !== "browse") {
       return;
     }
     function focusSearch(event: KeyboardEvent) {
@@ -177,7 +182,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }, [registryClient, session?.token]);
 
   useEffect(() => {
-    if (activeView === "landing" || activeView === "login") {
+    if (activeView !== "browse") {
       setListState("idle");
       return;
     }
@@ -214,7 +219,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }, [activeView, registryClient, query, refreshKey]);
 
   useEffect(() => {
-    if (activeView === "landing" || activeView === "login") {
+    if (activeView !== "browse") {
       setSelectedSkill(null);
       setRelease(null);
       setDetailState("idle");
@@ -341,6 +346,19 @@ export function RegistryApp({ client }: RegistryAppProps) {
     }
   }
 
+  async function handlePasswordResetRequest(input: { email: string }) {
+    setAuthState("loading");
+    setAuthMessage(null);
+    try {
+      await registryClient.requestPasswordReset(input);
+      setAuthMessage("If that account exists, a password reset email has been sent.");
+    } catch (error) {
+      setAuthMessage(safeAuthErrorMessage(error));
+    } finally {
+      setAuthState("idle");
+    }
+  }
+
   async function handleLogout() {
     const token = session?.token;
     setAuthMessage(null);
@@ -356,6 +374,16 @@ export function RegistryApp({ client }: RegistryAppProps) {
     }
   }
 
+  function handleSessionInvalidated(message: string) {
+    setSession(null);
+    clearStoredSession();
+    setMfaPending(null);
+    setAuthState("idle");
+    setAuthMessage(message);
+    setView("login");
+    window.history.replaceState({}, "", "/login");
+  }
+
   function navigateTo(nextView: AppView) {
     setView(nextView);
     if (nextView === "browse") {
@@ -368,6 +396,28 @@ export function RegistryApp({ client }: RegistryAppProps) {
     return <MarketingLanding onLogin={openLogin} />;
   }
 
+  if (activeView === "reset-password") {
+    return (
+      <AuthTokenPage
+        client={registryClient}
+        kind="reset-password"
+        onHome={openLanding}
+        onLogin={openLogin}
+      />
+    );
+  }
+
+  if (activeView === "verify-email" || activeView === "change-email") {
+    return (
+      <AuthTokenPage
+        client={registryClient}
+        kind={activeView}
+        onHome={openLanding}
+        onLogin={openLogin}
+      />
+    );
+  }
+
   if (activeView === "login") {
     return (
       <LoginPage
@@ -376,6 +426,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
         mfaPending={mfaPending}
         onHome={openLanding}
         onLogin={handleLogin}
+        onPasswordReset={handlePasswordResetRequest}
         onVerifyMfa={handleVerifyMfa}
       />
     );
@@ -386,20 +437,29 @@ export function RegistryApp({ client }: RegistryAppProps) {
     { view: "submit" as const, label: "Submit", icon: <Upload size={18} aria-hidden="true" />, enabled: canUseSubmit },
     { view: "review" as const, label: "Review", icon: <ClipboardList size={18} aria-hidden="true" />, enabled: canUseReview },
     { view: "admin" as const, label: "Admin", icon: <Settings size={18} aria-hidden="true" />, enabled: canUseAdmin },
+    { view: "settings" as const, label: "Settings", icon: <UserCog size={18} aria-hidden="true" />, enabled: true },
   ].filter((item) => item.enabled);
 
   return (
-    <div className="app-shell">
+    <div className={sidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
       <aside className="app-sidebar" aria-label="Primary navigation">
-        <a className="brand" href="/registry" onClick={(event) => {
-          event.preventDefault();
-          navigateTo("browse");
-        }}>
-          <span className="brand-mark" aria-hidden="true">
-            <img src="/brand/myskills-mark.svg" alt="" />
-          </span>
-          <span>MySkills</span>
-        </a>
+        <div className="sidebar-brand-row">
+          <a className="brand" href="/registry" onClick={(event) => {
+            event.preventDefault();
+            navigateTo("browse");
+          }}>
+            <span className="brand-mark" aria-hidden="true">
+              <img src="/brand/myskills-mark.svg" alt="" />
+            </span>
+            <span>MySkills</span>
+          </a>
+          <IconButton
+            label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+          >
+            {sidebarCollapsed ? <ChevronRight size={15} aria-hidden="true" /> : <ChevronLeft size={15} aria-hidden="true" />}
+          </IconButton>
+        </div>
         <nav className="side-nav">
           {navItems.map((item) => (
             <button
@@ -407,32 +467,34 @@ export function RegistryApp({ client }: RegistryAppProps) {
               key={item.view}
               type="button"
               onClick={() => navigateTo(item.view)}
+              aria-label={sidebarCollapsed ? item.label : undefined}
+              title={sidebarCollapsed ? item.label : undefined}
             >
               {item.icon}
               <span>{item.label}</span>
             </button>
           ))}
         </nav>
-        <div className="sidebar-note">
-          <span>Private workspace</span>
-          <strong>{session?.user.roles.includes("owner") ? "Owner access" : "Approved account"}</strong>
-        </div>
+        {session && (
+          <SidebarAccount
+            collapsed={sidebarCollapsed}
+            onLogout={handleLogout}
+            onSettings={() => navigateTo("settings")}
+            session={session}
+          />
+        )}
       </aside>
 
       <div className="app-main">
-        <header className="app-topbar">
-          <a className="mobile-brand" href="/registry" onClick={(event) => {
-            event.preventDefault();
-            navigateTo("browse");
-          }}>
-            <img src="/brand/myskills-mark.svg" alt="" />
-            <span>MySkills</span>
-          </a>
-          <div className="page-heading">
-            <span>{viewKicker(activeView)}</span>
-            <strong>{viewTitle(activeView)}</strong>
-          </div>
-          {activeView === "browse" && (
+        {activeView === "browse" && (
+          <header className="app-topbar">
+            <a className="mobile-brand" href="/registry" onClick={(event) => {
+              event.preventDefault();
+              navigateTo("browse");
+            }}>
+              <img src="/brand/myskills-mark.svg" alt="" />
+              <span>MySkills</span>
+            </a>
             <label className="global-search" htmlFor="skill-search">
               <Search size={18} aria-hidden="true" />
               <input
@@ -446,18 +508,8 @@ export function RegistryApp({ client }: RegistryAppProps) {
               />
               <kbd>/</kbd>
             </label>
-          )}
-          <AuthWidget
-            authMessage={authMessage}
-            authState={authState}
-            client={registryClient}
-            mfaPending={mfaPending}
-            onLogin={handleLogin}
-            onLogout={handleLogout}
-            onVerifyMfa={handleVerifyMfa}
-            session={session}
-          />
-        </header>
+          </header>
+        )}
 
         <div className="app-content">
           {activeView === "review" && session ? (
@@ -466,6 +518,12 @@ export function RegistryApp({ client }: RegistryAppProps) {
             <SubmitDashboard client={registryClient} session={session} />
           ) : activeView === "admin" && session ? (
             <AdminConsole client={registryClient} session={session} />
+          ) : activeView === "settings" && session ? (
+            <AccountSettings
+              client={registryClient}
+              onSessionInvalidated={handleSessionInvalidated}
+              session={session}
+            />
           ) : (
             <main className="workspace">
               <section className="results-panel" aria-label="Skill search results">
@@ -708,6 +766,7 @@ function LoginPage({
   mfaPending,
   onHome,
   onLogin,
+  onPasswordReset,
   onVerifyMfa,
 }: {
   authMessage: string | null;
@@ -715,6 +774,7 @@ function LoginPage({
   mfaPending: MfaPending | null;
   onHome: () => void;
   onLogin: (input: { email: string; password: string }) => Promise<void>;
+  onPasswordReset: (input: { email: string }) => Promise<void>;
   onVerifyMfa: (codeOrRecoveryCode: string) => Promise<void>;
 }) {
   return (
@@ -738,6 +798,7 @@ function LoginPage({
           mfaPending={mfaPending}
           onLogin={onLogin}
           onLogout={async () => undefined}
+          onPasswordReset={onPasswordReset}
           onVerifyMfa={onVerifyMfa}
           session={null}
         />
@@ -1176,16 +1237,12 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
 
   return (
     <main className="admin-workspace" aria-label="Admin console">
-      <section className="admin-hero">
-        <div>
-          <h1>Admin console</h1>
-          <p>{session.user.email} · {registrationMode} registration</p>
-        </div>
-        <button type="button" onClick={() => void refreshAdmin()}>
+      <div className="workspace-actionbar">
+        <button className="save-button" type="button" onClick={() => void refreshAdmin()}>
           <RotateCw size={16} aria-hidden="true" />
           Refresh
         </button>
-      </section>
+      </div>
 
       {message && <div className="safe-message admin-message" role="status">{message}</div>}
 
@@ -1434,6 +1491,401 @@ function AdminPanel({ children, icon, meta, title }: {
   );
 }
 
+function SidebarAccount({
+  collapsed,
+  onLogout,
+  onSettings,
+  session,
+}: {
+  collapsed: boolean;
+  onLogout: () => Promise<void>;
+  onSettings: () => void;
+  session: WebSession;
+}) {
+  return (
+    <div className={collapsed ? "sidebar-account collapsed" : "sidebar-account"}>
+      <button className="sidebar-account-main" type="button" aria-label="Account settings" onClick={onSettings} title={session.user.email}>
+        <UserRound size={18} aria-hidden="true" />
+        <span>
+          <strong>{session.user.email}</strong>
+          <small>{session.user.roles.join(", ") || "user"} · {session.user.mfaVerified ? "MFA verified" : "MFA pending"}</small>
+        </span>
+      </button>
+      <IconButton label="Sign out" onClick={() => void onLogout()}>
+        <LogOut size={15} aria-hidden="true" />
+      </IconButton>
+    </div>
+  );
+}
+
+function AuthTokenPage({
+  client,
+  kind,
+  onHome,
+  onLogin,
+}: {
+  client: RegistryClient;
+  kind: "reset-password" | "verify-email" | "change-email";
+  onHome: () => void;
+  onLogin: () => void;
+}) {
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [state, setState] = useState<LoadState>(kind === "reset-password" ? "idle" : "loading");
+  const [message, setMessage] = useState<string | null>(null);
+  const token = useMemo(() => authActionTokenFromLocation(), []);
+
+  useEffect(() => {
+    if (kind === "reset-password") {
+      return;
+    }
+    let active = true;
+    async function confirmToken() {
+      setState("loading");
+      setMessage(null);
+      if (!token) {
+        setState("error");
+        setMessage("This verification link is missing its token.");
+        return;
+      }
+      try {
+        if (kind === "verify-email") {
+          await client.confirmEmailVerification({ token });
+          if (active) {
+            setMessage("Email verified. You can log in after your account is approved.");
+          }
+        } else {
+          await client.confirmEmailChange({ token });
+          if (active) {
+            setMessage("Email changed. Sign in again with the new address.");
+          }
+        }
+        if (active) {
+          setState("ready");
+        }
+      } catch (error) {
+        if (active) {
+          setState("error");
+          setMessage(safeAccountErrorMessage(error));
+        }
+      }
+    }
+    void confirmToken();
+    return () => {
+      active = false;
+    };
+  }, [client, kind, token]);
+
+  async function resetPassword() {
+    setMessage(null);
+    if (!token) {
+      setState("error");
+      setMessage("This reset link is missing its token.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setState("error");
+      setMessage("Passwords do not match.");
+      return;
+    }
+    setState("loading");
+    try {
+      await client.confirmPasswordReset({ token, password });
+      setPassword("");
+      setConfirmPassword("");
+      setState("ready");
+      setMessage("Password reset. You can log in with the new password.");
+    } catch (error) {
+      setState("error");
+      setMessage(safeAccountErrorMessage(error));
+    }
+  }
+
+  const heading = kind === "reset-password"
+    ? "Reset password"
+    : kind === "verify-email"
+      ? "Verify email"
+      : "Confirm email change";
+
+  return (
+    <main className="login-page">
+      <nav className="login-nav" aria-label="Account action navigation">
+        <a className="landing-brand" href="/" onClick={(event) => {
+          event.preventDefault();
+          onHome();
+        }}>
+          <img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" />
+        </a>
+        <button className="login-back" type="button" onClick={onLogin}>Login</button>
+      </nav>
+      <section className="login-panel" aria-labelledby="auth-token-heading">
+        <p className="landing-status">Private development. Account action required.</p>
+        <h1 id="auth-token-heading">{heading}</h1>
+        {kind === "reset-password" ? (
+          <form className="auth-widget auth-form" onSubmit={(event) => {
+            event.preventDefault();
+            void resetPassword();
+          }}>
+            <label className="auth-field">
+              <span>New password</span>
+              <input
+                aria-label="New password"
+                autoComplete="new-password"
+                disabled={state === "loading"}
+                onChange={(event) => setPassword(event.target.value)}
+                type="password"
+                value={password}
+              />
+            </label>
+            <label className="auth-field">
+              <span>Confirm password</span>
+              <input
+                aria-label="Confirm password"
+                autoComplete="new-password"
+                disabled={state === "loading"}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                type="password"
+                value={confirmPassword}
+              />
+            </label>
+            <button disabled={state === "loading" || !password || !confirmPassword} type="submit">
+              <KeyRound size={16} aria-hidden="true" />
+              Save password
+            </button>
+          </form>
+        ) : (
+          <div className={state === "error" ? "safe-message compact-message" : "success-message compact-message"} role="status" aria-live="polite">
+            {state === "loading" ? "Confirming link..." : message}
+          </div>
+        )}
+        {kind === "reset-password" && <AuthMessage message={message} />}
+        {state === "ready" && (
+          <button className="save-button" type="button" onClick={onLogin}>
+            <LogIn size={16} aria-hidden="true" />
+            Login
+          </button>
+        )}
+      </section>
+    </main>
+  );
+}
+
+function AccountSettings({
+  client,
+  onSessionInvalidated,
+  session,
+}: {
+  client: RegistryClient;
+  onSessionInvalidated: (message: string) => void;
+  session: WebSession;
+}) {
+  const [mfaStatus, setMfaStatus] = useState<MfaStatus | null>(null);
+  const [state, setState] = useState<LoadState>("loading");
+  const [message, setMessage] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [mfaPassword, setMfaPassword] = useState("");
+  const [mfaSetupOpen, setMfaSetupOpen] = useState(false);
+
+  async function refreshMfa() {
+    setState("loading");
+    try {
+      setMfaStatus(await client.getMfaStatus(session.token));
+      setState("ready");
+    } catch (error) {
+      setMessage(safeAccountErrorMessage(error));
+      setState("error");
+    }
+  }
+
+  useEffect(() => {
+    void refreshMfa();
+  }, [client, session.token]);
+
+  async function submitPasswordChange() {
+    setMessage(null);
+    if (newPassword !== confirmNewPassword) {
+      setMessage("Passwords do not match.");
+      return;
+    }
+    setState("loading");
+    try {
+      await client.changePassword({ currentPassword, password: newPassword }, session.token);
+      onSessionInvalidated("Password changed. Sign in again with the new password.");
+    } catch (error) {
+      setState("error");
+      setMessage(safeAccountErrorMessage(error));
+    }
+  }
+
+  async function submitEmailChange() {
+    setMessage(null);
+    setState("loading");
+    try {
+      await client.requestEmailChange({ email, password: emailPassword }, session.token);
+      setEmail("");
+      setEmailPassword("");
+      setState("ready");
+      setMessage("Verification email sent. Confirm the new address to complete the change.");
+    } catch (error) {
+      setState("error");
+      setMessage(safeAccountErrorMessage(error));
+    }
+  }
+
+  async function removeMfa() {
+    setMessage(null);
+    setState("loading");
+    try {
+      await client.disableTotpMfa({ password: mfaPassword }, session.token);
+      onSessionInvalidated("MFA removed. Sign in again to continue.");
+    } catch (error) {
+      setState("error");
+      setMessage(safeAccountErrorMessage(error));
+    }
+  }
+
+  const mfaEnabled = Boolean(mfaStatus?.totpEnabled);
+
+  return (
+    <main className="settings-workspace" aria-label="Account settings">
+      {message && <div className={state === "error" ? "safe-message admin-message" : "success-message admin-message"} role="status">{message}</div>}
+      <section className="settings-grid">
+        <AccountPanel icon={<UserRound size={18} aria-hidden="true" />} title="Account" meta={session.user.email}>
+          <dl className="settings-summary">
+            <Metadata label="Email" value={session.user.email} />
+            <Metadata label="Roles" value={session.user.roles.join(", ") || "user"} />
+            <Metadata label="Session MFA" value={session.user.mfaVerified ? "verified" : "not verified"} />
+            <Metadata label="Email status" value={session.user.emailVerified ? "verified" : "unverified"} />
+          </dl>
+        </AccountPanel>
+
+        <AccountPanel icon={<Mail size={18} aria-hidden="true" />} title="Change email" meta="Requires new-address verification">
+          <form className="settings-form" onSubmit={(event) => {
+            event.preventDefault();
+            void submitEmailChange();
+          }}>
+            <label>
+              New email
+              <input autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} type="email" />
+            </label>
+            <label>
+              Current password
+              <input autoComplete="current-password" value={emailPassword} onChange={(event) => setEmailPassword(event.target.value)} type="password" />
+            </label>
+            <button className="save-button" disabled={state === "loading" || !email || !emailPassword} type="submit">
+              <Mail size={16} aria-hidden="true" />
+              Send verification
+            </button>
+          </form>
+        </AccountPanel>
+
+        <AccountPanel icon={<KeyRound size={18} aria-hidden="true" />} title="Password" meta="Current password required">
+          <form className="settings-form" onSubmit={(event) => {
+            event.preventDefault();
+            void submitPasswordChange();
+          }}>
+            <label>
+              Current password
+              <input autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} type="password" />
+            </label>
+            <label>
+              New password
+              <input autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} type="password" />
+            </label>
+            <label>
+              Confirm new password
+              <input autoComplete="new-password" value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} type="password" />
+            </label>
+            <button className="save-button" disabled={state === "loading" || !currentPassword || !newPassword || !confirmNewPassword} type="submit">
+              <Save size={16} aria-hidden="true" />
+              Change password
+            </button>
+          </form>
+        </AccountPanel>
+
+        <AccountPanel icon={<ShieldCheck size={18} aria-hidden="true" />} title="MFA" meta={mfaEnabled ? `${mfaStatus?.recoveryCodesRemaining ?? 0} recovery codes` : "Authenticator app not set"}>
+          <div className="settings-stack">
+            <div className={mfaEnabled ? "state-banner state-banner-success" : "state-banner state-banner-warning"}>
+              <ShieldCheck size={18} aria-hidden="true" />
+              <span>{mfaEnabled ? "Authenticator app MFA is enabled." : "Set up an authenticator app before using privileged owner workflows."}</span>
+            </div>
+            {mfaEnabled && (
+              <div className="settings-actions">
+                <button className="save-button" type="button" onClick={() => setMfaSetupOpen((open) => !open)}>
+                  <RotateCw size={16} aria-hidden="true" />
+                  Reset authenticator
+                </button>
+                <form className="inline-security-form" onSubmit={(event) => {
+                  event.preventDefault();
+                  void removeMfa();
+                }}>
+                  <input
+                    aria-label="Password for MFA removal"
+                    autoComplete="current-password"
+                    onChange={(event) => setMfaPassword(event.target.value)}
+                    placeholder="Current password"
+                    type="password"
+                    value={mfaPassword}
+                  />
+                  <button disabled={state === "loading" || !mfaPassword} type="submit">
+                    <X size={16} aria-hidden="true" />
+                    Remove MFA
+                  </button>
+                </form>
+              </div>
+            )}
+            {(!mfaEnabled || mfaSetupOpen) && (
+              <MfaSetupPanel
+                client={client}
+                onComplete={(result) => {
+                  setMfaStatus({
+                    totpEnabled: true,
+                    recoveryCodesRemaining: result.recoveryCodes.length,
+                    factors: [result.factor],
+                  });
+                  setMfaSetupOpen(true);
+                }}
+                session={session}
+              />
+            )}
+          </div>
+        </AccountPanel>
+
+        <AccountPanel icon={<Fingerprint size={18} aria-hidden="true" />} title="Passkeys" meta="Planned security option">
+          <div className="passkey-panel">
+            <StatusToken value="planned" />
+            <p>Passkeys can be added as an option after WebAuthn credential storage, challenge expiry, relying-party ID, and origin checks are implemented in the API.</p>
+          </div>
+        </AccountPanel>
+      </section>
+    </main>
+  );
+}
+
+function AccountPanel({ children, icon, meta, title }: {
+  children: ReactNode;
+  icon: ReactNode;
+  meta: string;
+  title: string;
+}) {
+  return (
+    <section className="admin-panel settings-panel">
+      <div className="admin-panel-heading">
+        <span className="admin-panel-icon">{icon}</span>
+        <div>
+          <h2>{title}</h2>
+          <p>{meta}</p>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function IconButton({ children, label, onClick }: { children: ReactNode; label: string; onClick: () => void }) {
   return (
     <button className="icon-button" type="button" aria-label={label} title={label} onClick={onClick}>
@@ -1489,15 +1941,17 @@ function AuthWidget({
   mfaPending,
   onLogin,
   onLogout,
+  onPasswordReset,
   onVerifyMfa,
   session,
 }: {
   authMessage: string | null;
   authState: AuthState;
-  client: RegistryClient;
+  client?: RegistryClient;
   mfaPending: MfaPending | null;
   onLogin: (input: { email: string; password: string }) => Promise<void>;
   onLogout: () => Promise<void>;
+  onPasswordReset?: (input: { email: string }) => Promise<void>;
   onVerifyMfa: (codeOrRecoveryCode: string) => Promise<void>;
   session: WebSession | null;
 }) {
@@ -1506,9 +1960,10 @@ function AuthWidget({
   const [mfaCode, setMfaCode] = useState("");
   const [mfaStatus, setMfaStatus] = useState<MfaStatus | null>(null);
   const [mfaSetupOpen, setMfaSetupOpen] = useState(false);
+  const [resetMode, setResetMode] = useState(false);
 
   useEffect(() => {
-    if (!session) {
+    if (!session || !client) {
       setMfaStatus(null);
       setMfaSetupOpen(false);
       return;
@@ -1551,7 +2006,7 @@ function AuthWidget({
             <LogOut size={16} aria-hidden="true" />
           </button>
         </div>
-        {mfaSetupOpen && (
+        {mfaSetupOpen && client && (
           <MfaSetupPanel
             client={client}
             onComplete={(result) => {
@@ -1598,6 +2053,38 @@ function AuthWidget({
     );
   }
 
+  if (resetMode && onPasswordReset) {
+    return (
+      <form className="auth-widget auth-form" onSubmit={(event) => {
+        event.preventDefault();
+        void onPasswordReset({ email }).then(() => setResetMode(false));
+      }}>
+        <label className="auth-field">
+          <span>Email</span>
+          <input
+            aria-label="Reset email"
+            autoComplete="email"
+            disabled={authState === "loading"}
+            name="reset-email"
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="owner@example.com"
+            spellCheck={false}
+            type="email"
+            value={email}
+          />
+        </label>
+        <button disabled={authState === "loading" || !email.trim()} type="submit">
+          <Mail size={16} aria-hidden="true" />
+          Send reset email
+        </button>
+        <button className="link-button" disabled={authState === "loading"} type="button" onClick={() => setResetMode(false)}>
+          Back to login
+        </button>
+        <AuthMessage message={authMessage} />
+      </form>
+    );
+  }
+
   return (
     <form className="auth-widget auth-form" onSubmit={(event) => {
       event.preventDefault();
@@ -1634,6 +2121,11 @@ function AuthWidget({
         <LogIn size={16} aria-hidden="true" />
         Sign in
       </button>
+      {onPasswordReset && (
+        <button className="link-button" disabled={authState === "loading"} type="button" onClick={() => setResetMode(true)}>
+          Forgot password?
+        </button>
+      )}
       <p className="auth-help">Access is limited to approved private-development accounts.</p>
       <AuthMessage message={authMessage} />
     </form>
@@ -1689,7 +2181,7 @@ function MfaSetupPanel({
       setRecoveryCodes(result.recoveryCodes);
       setCode("");
       setState("ready");
-      setMessage("MFA enabled. Sign out and sign in again to verify this session for privileged actions.");
+      setMessage("MFA enabled. Save these recovery codes before leaving this page.");
       onComplete(result);
     } catch (error) {
       setState("error");
@@ -1906,12 +2398,29 @@ function isSubmitterUser(user: WebAuthUser): boolean {
   return isReviewerUser(user) || user.roles.includes("author");
 }
 
+function isPublicView(view: AppView): boolean {
+  return view === "landing"
+    || view === "login"
+    || view === "reset-password"
+    || view === "verify-email"
+    || view === "change-email";
+}
+
 function initialViewFromPath(pathname: string): AppView {
   if (pathname === "/") {
     return "landing";
   }
   if (pathname === "/login") {
     return "login";
+  }
+  if (pathname === "/auth/reset-password") {
+    return "reset-password";
+  }
+  if (pathname === "/auth/verify-email") {
+    return "verify-email";
+  }
+  if (pathname === "/auth/change-email") {
+    return "change-email";
   }
   if (pathname === "/admin") {
     return "admin";
@@ -1921,6 +2430,9 @@ function initialViewFromPath(pathname: string): AppView {
   }
   if (pathname === "/submit") {
     return "submit";
+  }
+  if (pathname === "/settings") {
+    return "settings";
   }
   return "browse";
 }
@@ -1932,41 +2444,16 @@ function pathForView(view: AppView): string {
   if (view === "login") {
     return "/login";
   }
+  if (view === "reset-password") {
+    return "/auth/reset-password";
+  }
+  if (view === "verify-email") {
+    return "/auth/verify-email";
+  }
+  if (view === "change-email") {
+    return "/auth/change-email";
+  }
   return view === "browse" ? "/registry" : `/${view}`;
-}
-
-function viewTitle(view: AppView): string {
-  switch (view) {
-    case "admin":
-      return "Admin";
-    case "review":
-      return "Review";
-    case "submit":
-      return "Submit";
-    case "browse":
-      return "Registry";
-    case "login":
-      return "Login";
-    case "landing":
-      return "MySkills";
-  }
-}
-
-function viewKicker(view: AppView): string {
-  switch (view) {
-    case "admin":
-      return "Governance";
-    case "review":
-      return "Maintainer workflow";
-    case "submit":
-      return "Author workflow";
-    case "browse":
-      return "Approved releases";
-    case "login":
-      return "Private access";
-    case "landing":
-      return "Private development";
-  }
 }
 
 function registrationPostureTitle(mode: AdminRegistrationMode): string {
@@ -2091,6 +2578,16 @@ function formatBytes(bytes: number): string {
 function skillSlugFromPath(pathname: string): string | null {
   const match = pathname.match(/^\/(?:registry\/)?skills\/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)$/);
   return match?.[1] ?? null;
+}
+
+function authActionTokenFromLocation(): string | null {
+  const rawHash = window.location.hash.replace(/^#/, "");
+  if (!rawHash) {
+    return null;
+  }
+  const params = new URLSearchParams(rawHash);
+  const token = params.get("token");
+  return token && token.trim() ? token.trim() : null;
 }
 
 const SESSION_STORAGE_KEY = "myskills-app:web-session";

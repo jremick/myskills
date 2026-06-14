@@ -83,10 +83,9 @@ test("default registry client is stable between renders", async () => {
     const view = render(<RegistryApp />);
 
     await view.findByText("Turns merged changes into concise release notes.");
-    await waitFor(() => assert.equal(calls.length, 5));
+    await waitFor(() => assert.equal(calls.length, 4));
     await delay(25);
     assert.deepEqual([...calls].sort(), [
-      "http://localhost:3001/v1/auth/mfa",
       "http://localhost:3001/v1/me",
       "http://localhost:3001/v1/skills",
       "http://localhost:3001/v1/skills/release-notes-helper",
@@ -200,6 +199,19 @@ test("login stores a verified session and logout clears it", async () => {
 	  assert.equal(client.logoutCalls, 1);
 	});
 
+test("login form can request a password reset email", async () => {
+  setupDom("http://localhost/login");
+  const client = mockClient();
+
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("button", { name: /forgot password/i }));
+  fireEvent.input(view.getByLabelText("Reset email"), { target: { value: "reader@example.com" } });
+  fireEvent.click(view.getByRole("button", { name: /send reset email/i }));
+
+  await view.findByText("If that account exists, a password reset email has been sent.");
+  assert.deepEqual(client.passwordResetRequests, ["reader@example.com"]);
+});
+
 test("MFA login verifies the challenge before storing a session", async () => {
   setupDom();
   const client = mockClient({ mfaRequired: true });
@@ -228,18 +240,42 @@ test("signed-in users can set up MFA and save recovery codes", async () => {
   fireEvent.click(view.getByRole("button", { name: /sign in/i }));
 
   await view.findByText("owner@example.com");
-  fireEvent.click(view.getByLabelText("Set up MFA"));
-  fireEvent.input(view.getByLabelText("Current password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: "Settings" }));
+  await view.findByText("Authenticator app not set");
+  fireEvent.input(view.getAllByLabelText("Current password").at(-1)!, { target: { value: "correct horse battery staple" } });
   fireEvent.click(view.getByRole("button", { name: /continue/i }));
 
   await view.findByText(/otpauth:\/\/totp\/MySkills/);
   fireEvent.input(view.getByLabelText("MFA setup code"), { target: { value: "123456" } });
   fireEvent.click(view.getByRole("button", { name: /enable mfa/i }));
 
-  await view.findByText("MFA enabled. Sign out and sign in again to verify this session for privileged actions.");
+  await view.findByText("MFA enabled. Save these recovery codes before leaving this page.");
   await view.findByText(/recovery-one/);
   assert.deepEqual(client.mfaEnrollments, ["correct horse battery staple"]);
   assert.deepEqual(client.mfaConfirmations, ["mfa-factor-1:123456"]);
+});
+
+test("settings can request email change and password change", async () => {
+  setupAuthenticatedDom("http://localhost/settings", authUser({ email: "owner@example.com", roles: ["owner"] }));
+  const client = mockClient({ user: authUser({ email: "owner@example.com", roles: ["owner"] }) });
+
+  const view = render(<RegistryApp client={client} />);
+  await view.findByText("Change email");
+
+  fireEvent.input(view.getByLabelText("New email"), { target: { value: "new@example.com" } });
+  fireEvent.input(view.getAllByLabelText("Current password")[0]!, { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: /send verification/i }));
+  await view.findByText("Verification email sent. Confirm the new address to complete the change.");
+  assert.deepEqual(client.emailChangeRequests, ["new@example.com:correct horse battery staple"]);
+
+  fireEvent.input(view.getAllByLabelText("Current password")[1]!, { target: { value: "correct horse battery staple" } });
+  fireEvent.input(view.getByLabelText("New password"), { target: { value: "new correct horse battery staple" } });
+  fireEvent.input(view.getByLabelText("Confirm new password"), { target: { value: "new correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: /change password/i }));
+
+  await view.findByText("Password changed. Sign in again with the new password.");
+  assert.deepEqual(client.passwordChanges, ["correct horse battery staple"]);
+  assert.equal(window.localStorage.getItem("myskills-app:web-session"), null);
 });
 
 test("non-admin sessions do not render the admin entry point", async () => {
@@ -268,7 +304,7 @@ test("admin sessions can manage registration, users, and provider metadata", asy
   await view.findByText("owner@example.com");
   fireEvent.click(view.getByRole("button", { name: /admin/i }));
 
-  await view.findByText("Admin console");
+  await view.findByRole("button", { name: "Refresh" });
   await waitFor(() => assert.equal(view.getAllByText("Cloudflare Access").length >= 1, true));
   assert.equal(document.body.textContent?.includes("clientSecret"), false);
   assert.equal(document.body.textContent?.includes("private_key"), false);
@@ -331,7 +367,7 @@ test("non-owner admin sessions cannot edit privileged target role controls", asy
   await view.findByText("admin@example.com");
   fireEvent.click(view.getByRole("button", { name: /admin/i }));
 
-  await view.findByText("Admin console");
+  await view.findByRole("button", { name: "Refresh" });
   assert.equal((view.getByLabelText("Set owner@example.com maintainer role") as HTMLInputElement).disabled, true);
   assert.equal((view.getByLabelText("Set author@example.com maintainer role") as HTMLInputElement).disabled, false);
 });
@@ -503,10 +539,14 @@ function mockClient(input: {
   let mfaStatus = input.mfaStatus ?? defaultMfaStatus(currentUser.mfaVerified);
   const client: RegistryClient & {
     bundleCalls: number;
+    emailChangeRequests: string[];
     mfaConfirmations: string[];
+    mfaDisables: string[];
     mfaEnrollments: string[];
     logoutCalls: number;
     mfaCalls: string[];
+    passwordChanges: string[];
+    passwordResetRequests: string[];
     providerUpserts: Array<{ key: string; displayName: string; roleMappings?: ProviderRoleMappingInput[] }>;
     registrationUpdates: AdminRegistrationMode[];
     releaseCalls: string[];
@@ -517,10 +557,14 @@ function mockClient(input: {
     userActions: string[];
   } = {
     bundleCalls: 0,
+    emailChangeRequests: [],
     mfaConfirmations: [],
+    mfaDisables: [],
     mfaEnrollments: [],
     logoutCalls: 0,
     mfaCalls: [],
+    passwordChanges: [],
+    passwordResetRequests: [],
     providerUpserts: [],
     registrationUpdates: [],
     releaseCalls: [],
@@ -565,8 +609,29 @@ function mockClient(input: {
           user: currentUser,
         };
     },
+    async requestPasswordReset(input) {
+      client.passwordResetRequests.push(input.email);
+      return { status: "pending" };
+    },
+    async confirmPasswordReset() {
+      return { status: "reset" };
+    },
+    async confirmEmailVerification() {
+      return { status: "verified" };
+    },
     async logout() {
       client.logoutCalls += 1;
+    },
+    async changePassword(input) {
+      client.passwordChanges.push(input.currentPassword);
+      return { status: "changed" };
+    },
+    async requestEmailChange(input) {
+      client.emailChangeRequests.push(`${input.email}:${input.password}`);
+      return { status: "pending" };
+    },
+    async confirmEmailChange() {
+      return { status: "changed" };
     },
     async verifyMfa(input) {
       client.mfaCalls.push(input.codeOrRecoveryCode);
@@ -606,6 +671,15 @@ function mockClient(input: {
         factor: mfaStatus.factors[0]!,
         recoveryCodes: ["recovery-one", "recovery-two"],
       };
+    },
+    async disableTotpMfa(input) {
+      client.mfaDisables.push(input.password);
+      mfaStatus = {
+        totpEnabled: false,
+        recoveryCodesRemaining: 0,
+        factors: [],
+      };
+      return { status: "disabled", disabledFactors: 1 };
     },
     async getAdminRegistration() {
       return { mode: registrationMode };

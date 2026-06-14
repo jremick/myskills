@@ -171,12 +171,19 @@ export interface RegistryClient {
   getSkill(slug: string): Promise<PublicSkill>;
   getRelease(slug: string, version: string): Promise<ReleaseMetadata>;
   login(input: { email: string; password: string }): Promise<LoginResult>;
+  requestPasswordReset(input: { email: string }): Promise<{ status: "pending" }>;
+  confirmPasswordReset(input: { token: string; password: string }): Promise<{ status: "reset" }>;
+  confirmEmailVerification(input: { token: string }): Promise<{ status: "verified" }>;
   verifyMfa(input: { challengeToken: string; codeOrRecoveryCode: string }): Promise<SessionResult>;
   getMe(token?: string): Promise<WebAuthUser>;
   logout(token?: string): Promise<void>;
+  changePassword(input: { currentPassword: string; password: string }, token?: string): Promise<{ status: "changed" }>;
+  requestEmailChange(input: { email: string; password: string }, token?: string): Promise<{ status: "pending" }>;
+  confirmEmailChange(input: { token: string }): Promise<{ status: "changed" }>;
   getMfaStatus(token?: string): Promise<MfaStatus>;
   startTotpEnrollment(input: { password: string; label?: string }, token?: string): Promise<TotpEnrollment>;
   confirmTotpEnrollment(input: { factorId: string; code: string }, token?: string): Promise<ConfirmMfaResult>;
+  disableTotpMfa(input: { password: string }, token?: string): Promise<{ status: "disabled"; disabledFactors: number }>;
   getAdminRegistration(token?: string): Promise<AdminRegistrationSettings>;
   updateAdminRegistration(mode: AdminRegistrationMode, token?: string): Promise<AdminRegistrationSettings>;
   listAdminUsers(token?: string): Promise<AdminUser[]>;
@@ -225,6 +232,24 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         body: input,
       });
     },
+    async requestPasswordReset(input) {
+      return requestJson<{ status: "pending" }>(fetchImpl, `${root}/v1/auth/password-reset/request`, {
+        method: "POST",
+        body: input,
+      });
+    },
+    async confirmPasswordReset(input) {
+      return requestJson<{ status: "reset" }>(fetchImpl, `${root}/v1/auth/password-reset/confirm`, {
+        method: "POST",
+        body: input,
+      });
+    },
+    async confirmEmailVerification(input) {
+      return requestJson<{ status: "verified" }>(fetchImpl, `${root}/v1/auth/email-verification/confirm`, {
+        method: "POST",
+        body: input,
+      });
+    },
     async verifyMfa(input) {
       const body = /^[0-9]{6}$/.test(input.codeOrRecoveryCode.trim())
         ? { challengeToken: input.challengeToken, code: input.codeOrRecoveryCode.trim() }
@@ -245,6 +270,26 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         method: "POST",
         body: {},
         token: overrideToken ?? token,
+      });
+    },
+    async changePassword(input, overrideToken) {
+      return requestJson<{ status: "changed" }>(fetchImpl, `${root}/v1/auth/account/password`, {
+        method: "POST",
+        body: input,
+        token: overrideToken ?? token,
+      });
+    },
+    async requestEmailChange(input, overrideToken) {
+      return requestJson<{ status: "pending" }>(fetchImpl, `${root}/v1/auth/account/email-change`, {
+        method: "POST",
+        body: input,
+        token: overrideToken ?? token,
+      });
+    },
+    async confirmEmailChange(input) {
+      return requestJson<{ status: "changed" }>(fetchImpl, `${root}/v1/auth/email-change/confirm`, {
+        method: "POST",
+        body: input,
       });
     },
     async getMfaStatus(overrideToken) {
@@ -270,6 +315,18 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         body: input,
         token: overrideToken ?? token,
       });
+      return body.mfa;
+    },
+    async disableTotpMfa(input, overrideToken) {
+      const body = await requestJson<{ mfa: { status: "disabled"; disabledFactors: number } }>(
+        fetchImpl,
+        `${root}/v1/auth/mfa/totp`,
+        {
+          method: "DELETE",
+          body: input,
+          token: overrideToken ?? token,
+        },
+      );
       return body.mfa;
     },
     async getAdminRegistration(overrideToken) {
@@ -400,6 +457,34 @@ export function safeAuthErrorMessage(error: unknown): string {
     return "Sign in could not be completed.";
   }
   return "Authentication is not available.";
+}
+
+export function safeAccountErrorMessage(error: unknown): string {
+  if (isSafeApiError(error) && error.status === 429) {
+    return "Too many attempts. Try again later.";
+  }
+  if (
+    isSafeApiError(error)
+    && (error.code === "INVALID_RESET_TOKEN" || error.code === "INVALID_VERIFICATION_TOKEN")
+  ) {
+    return "This link is invalid or expired.";
+  }
+  if (isSafeApiError(error) && error.status === 401) {
+    return "Current password is incorrect.";
+  }
+  if (isSafeApiError(error) && error.status === 403 && error.code === "MFA_VERIFICATION_REQUIRED") {
+    return "Sign in with MFA before changing this setting.";
+  }
+  if (isSafeApiError(error) && error.code === "EMAIL_ALREADY_IN_USE") {
+    return "That email address is already in use.";
+  }
+  if (isSafeApiError(error) && error.code === "INVALID_PASSWORD") {
+    return "Choose a stronger password.";
+  }
+  if (isSafeApiError(error) && error.status >= 400 && error.status < 500) {
+    return "Account change could not be completed.";
+  }
+  return "Account settings are not available.";
 }
 
 export function safeAdminErrorMessage(error: unknown): string {

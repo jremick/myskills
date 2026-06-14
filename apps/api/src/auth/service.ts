@@ -94,6 +94,23 @@ export interface ConfirmPasswordResetInput {
   ip?: string;
 }
 
+export interface ChangePasswordInput {
+  currentPassword: string;
+  password: string;
+  ip?: string;
+}
+
+export interface RequestEmailChangeInput {
+  email: string;
+  password: string;
+  ip?: string;
+}
+
+export interface ConfirmEmailChangeInput {
+  token: string;
+  ip?: string;
+}
+
 export interface AuthActionNotification {
   user: AuthUserRecord;
   email: string;
@@ -104,6 +121,7 @@ export interface AuthActionNotification {
 export interface AuthNotificationSink {
   sendEmailVerification(input: AuthActionNotification): Promise<void> | void;
   sendPasswordReset(input: AuthActionNotification): Promise<void> | void;
+  sendEmailChangeVerification(input: AuthActionNotification): Promise<void> | void;
 }
 
 export interface CreateApiTokenRequest {
@@ -162,6 +180,10 @@ export interface ConfirmTotpEnrollmentInput {
 export interface ConfirmTotpEnrollmentResult {
   factor: SafeMfaFactor;
   recoveryCodes: string[];
+}
+
+export interface DisableTotpMfaInput {
+  password: string;
 }
 
 export interface AdminRegistrationSettings {
@@ -375,6 +397,102 @@ export class AuthService {
     return { status: "reset" };
   }
 
+  async changePassword(actor: AuthResponseUser, input: ChangePasswordInput): Promise<{ status: "changed" }> {
+    assertAllowed(this.options.passwordResetLimiter, rateLimitKeys("password-change", actor.email, input.ip));
+    await this.assertCanManageAccount(actor, input.currentPassword);
+    const passwordHash = await this.hashNewPassword(input.password);
+    const updated = await this.store.updatePasswordCredential({
+      userId: actor.id,
+      passwordHash,
+      passwordUpdatedAt: new Date(),
+    });
+    if (!updated) {
+      throw new AppError("Password credential not found.", "PASSWORD_CREDENTIAL_NOT_FOUND", 404);
+    }
+    await this.store.revokeUserCredentials(actor.id);
+    await this.store.recordAuditEvent({
+      actorUserId: actor.id,
+      action: "account.password.change",
+      decision: "allow",
+      resourceType: "user",
+      resourceId: actor.id,
+      details: {
+        credentialsRevoked: true,
+      },
+    });
+    return { status: "changed" };
+  }
+
+  async requestEmailChange(actor: AuthResponseUser, input: RequestEmailChangeInput): Promise<{ status: "pending" }> {
+    const email = normalizeEmail(input.email);
+    assertAllowed(this.options.emailVerificationLimiter, rateLimitKeys("email-change", email, input.ip));
+    await this.assertCanManageAccount(actor, input.password);
+    if (email === actor.email) {
+      throw new AppError("New email address must be different.", "EMAIL_UNCHANGED", 400);
+    }
+    const existing = await this.store.findUserByEmailWithPassword(email);
+    if (existing && existing.id !== actor.id) {
+      throw new AppError("Email address is already in use.", "EMAIL_ALREADY_IN_USE", 409);
+    }
+    await this.sendAuthActionToken(asAuthUserRecord(actor), "email_change", email);
+    await this.store.recordAuditEvent({
+      actorUserId: actor.id,
+      action: "account.email_change.request",
+      decision: "allow",
+      resourceType: "user",
+      resourceId: actor.id,
+      details: {
+        targetEmail: email,
+      },
+    });
+    return { status: "pending" };
+  }
+
+  async confirmEmailChange(input: ConfirmEmailChangeInput): Promise<{ status: "changed" }> {
+    const token = cleanOpaqueToken(input.token, "token");
+    const tokenHash = hashSessionToken(token);
+    assertAllowed(
+      this.options.authActionTokenLimiter ?? this.options.emailVerificationLimiter,
+      tokenRateLimitKeys("email-change-confirm", tokenHash, input.ip),
+    );
+    const consumed = await this.store.consumeAuthActionToken({
+      tokenHash,
+      purpose: "email_change",
+      now: new Date(),
+    });
+    if (!consumed || !isUsableAuthenticatedAccount(consumed.user)) {
+      throw invalidVerificationToken();
+    }
+    const email = consumed.sentToNormalizedEmail;
+    const existing = await this.store.findUserByEmailWithPassword(email);
+    if (existing && existing.id !== consumed.user.id) {
+      throw new AppError("Email address is already in use.", "EMAIL_ALREADY_IN_USE", 409);
+    }
+    const changedAt = consumed.usedAt ?? new Date();
+    const updated = await this.store.updateUserEmail({
+      userId: consumed.user.id,
+      email,
+      emailVerifiedAt: changedAt,
+    });
+    if (!updated) {
+      throw invalidVerificationToken();
+    }
+    await this.store.revokeUserCredentials(consumed.user.id);
+    await this.store.recordAuditEvent({
+      actorUserId: consumed.user.id,
+      action: "account.email_change.confirm",
+      decision: "allow",
+      resourceType: "user",
+      resourceId: consumed.user.id,
+      details: {
+        previousEmail: consumed.user.email,
+        newEmail: email,
+        credentialsRevoked: true,
+      },
+    });
+    return { status: "changed" };
+  }
+
   async login(input: LoginInput): Promise<LoginResult> {
     const email = normalizeEmail(input.email);
     assertAllowed(this.options.loginLimiter, rateLimitKeys("login", email, input.ip));
@@ -575,6 +693,11 @@ export class AuthService {
     if (!verification.valid || verification.counter === undefined) {
       throw invalidMfaCode();
     }
+    await this.store.disableOtherMfaTotpFactorsForUser({
+      userId: actor.id,
+      factorId: factor.id,
+      disabledAt: new Date(),
+    });
     const enabled = await this.store.enableMfaTotpFactor({
       userId: actor.id,
       factorId: factor.id,
@@ -592,6 +715,29 @@ export class AuthService {
       factor: safeMfaFactor(enabled),
       recoveryCodes,
     };
+  }
+
+  async disableTotpMfa(actor: AuthResponseUser, input: DisableTotpMfaInput): Promise<{ status: "disabled"; disabledFactors: number }> {
+    await this.assertCanManageMfa(actor, input.password);
+    const disabledFactors = await this.store.disableMfaTotpFactorsForUser({
+      userId: actor.id,
+      disabledAt: new Date(),
+    });
+    await this.store.replaceMfaRecoveryCodes({ userId: actor.id, codeHashes: [] });
+    await this.store.revokeUserCredentials(actor.id);
+    await this.store.recordAuditEvent({
+      actorUserId: actor.id,
+      action: "account.mfa.disable",
+      decision: "allow",
+      resourceType: "user",
+      resourceId: actor.id,
+      details: {
+        disabledFactors,
+        recoveryCodesRemoved: true,
+        credentialsRevoked: true,
+      },
+    });
+    return { status: "disabled", disabledFactors };
   }
 
   async getRegistrationSettings(actor: AuthResponseUser): Promise<AdminRegistrationSettings> {
@@ -769,6 +915,10 @@ export class AuthService {
   }
 
   private async assertCanManageMfa(actor: AuthResponseUser, password: string): Promise<void> {
+    await this.assertCanManageAccount(actor, password);
+  }
+
+  private async assertCanManageAccount(actor: AuthResponseUser, password: string): Promise<void> {
     await this.assertCanUseMfaManagementSession(actor);
     const user = await this.store.findUserByEmailWithPassword(actor.email);
     if (!user?.passwordHash || !(await verifyPassword(user.passwordHash, password))) {
@@ -818,25 +968,26 @@ export class AuthService {
     return this.options.mfaSecretKey ?? DEV_AUTH_SECRET;
   }
 
-  private async sendAuthActionToken(user: AuthUserRecord, purpose: AuthActionTokenPurpose): Promise<void> {
+  private async sendAuthActionToken(user: AuthUserRecord, purpose: AuthActionTokenPurpose, emailOverride?: string): Promise<void> {
     const sink = this.options.notificationSink;
     if (!sink) {
       return;
     }
     const token = createSessionToken();
     const expiresAt = new Date(Date.now() + this.authActionTokenTtlMs(purpose));
+    const email = emailOverride ?? user.email;
     await this.store.createAuthActionToken({
       userId: user.id,
       purpose,
       tokenHash: hashSessionToken(token),
-      sentToNormalizedEmail: user.email,
+      sentToNormalizedEmail: email,
       expiresAt,
     });
     if (purpose === "email_verification") {
       try {
         await sink.sendEmailVerification({
           user,
-          email: user.email,
+          email,
           token,
           expiresAt,
         });
@@ -845,10 +996,23 @@ export class AuthService {
       }
       return;
     }
+    if (purpose === "email_change") {
+      try {
+        await sink.sendEmailChangeVerification({
+          user,
+          email,
+          token,
+          expiresAt,
+        });
+      } catch {
+        // Account action request endpoints must not leak delivery failures to callers.
+      }
+      return;
+    }
     try {
       await sink.sendPasswordReset({
         user,
-        email: user.email,
+        email,
         token,
         expiresAt,
       });
@@ -858,7 +1022,7 @@ export class AuthService {
   }
 
   private authActionTokenTtlMs(purpose: AuthActionTokenPurpose): number {
-    return purpose === "email_verification"
+    return purpose === "email_verification" || purpose === "email_change"
       ? this.options.emailVerificationTtlMs ?? DEFAULT_EMAIL_VERIFICATION_TTL_MS
       : this.options.passwordResetTtlMs ?? DEFAULT_PASSWORD_RESET_TTL_MS;
   }
@@ -921,6 +1085,17 @@ function responseUser(user: AuthUserRecord, mfaVerified: boolean): AuthResponseU
     roles: user.roles,
     emailVerified: Boolean(user.emailVerifiedAt),
     mfaVerified,
+  };
+}
+
+function asAuthUserRecord(user: AuthResponseUser): AuthUserRecord {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    status: user.status,
+    roles: user.roles,
+    emailVerifiedAt: user.emailVerified ? new Date() : null,
   };
 }
 

@@ -14,13 +14,17 @@ import type {
   AuthService,
   AdminUserActionInput,
   AdminUserRoleUpdateInput,
+  ChangePasswordInput,
+  ConfirmEmailChangeInput,
   ConfirmEmailVerificationInput,
   ConfirmPasswordResetInput,
   ConfirmTotpEnrollmentInput,
   CreateApiTokenRequest,
+  DisableTotpMfaInput,
   ListAdminAuditEventsInput,
   LoginInput,
   RegisterInput,
+  RequestEmailChangeInput,
   RequestEmailVerificationInput,
   RequestPasswordResetInput,
   StartTotpEnrollmentInput,
@@ -222,6 +226,16 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     });
   });
 
+  app.post("/v1/auth/email-change/confirm", async (request) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    return options.authService.confirmEmailChange({
+      ...parseEmailChangeConfirmInput(request.body),
+      ip: request.ip,
+    });
+  });
+
   app.post("/v1/auth/mfa/verify", async (request) => {
     if (!options.authService) {
       throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
@@ -237,6 +251,35 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       await options.authService.logout(request.headers.authorization);
     }
     return reply.code(204).send();
+  });
+
+  app.post("/v1/auth/account/password", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return options.authService.changePassword(user, {
+      ...parseChangePasswordInput(request.body),
+      ip: request.ip,
+    });
+  });
+
+  app.post("/v1/auth/account/email-change", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    const result = await options.authService.requestEmailChange(user, {
+      ...parseEmailChangeRequestInput(request.body),
+      ip: request.ip,
+    });
+    return reply.code(202).send(result);
   });
 
   app.get("/v1/auth/mfa", async (request, reply) => {
@@ -271,6 +314,17 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       return authFailureReply(options.authService, request.headers.authorization, reply);
     }
     return { mfa: await options.authService.confirmTotpEnrollment(user, parseConfirmTotpEnrollmentInput(request.body)) };
+  });
+
+  app.delete("/v1/auth/mfa/totp", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    return { mfa: await options.authService.disableTotpMfa(user, parseDisableTotpMfaInput(request.body)) };
   });
 
   app.get("/v1/auth/api-tokens", async (request, reply) => {
@@ -671,6 +725,29 @@ function parsePasswordResetConfirmInput(input: unknown): ConfirmPasswordResetInp
   };
 }
 
+function parseChangePasswordInput(input: unknown): ChangePasswordInput {
+  const body = parseJsonObject(input);
+  return {
+    currentPassword: requiredString(body.currentPassword, "currentPassword"),
+    password: requiredString(body.password, "password"),
+  };
+}
+
+function parseEmailChangeRequestInput(input: unknown): RequestEmailChangeInput {
+  const body = parseJsonObject(input);
+  return {
+    email: requiredString(body.email, "email"),
+    password: requiredString(body.password, "password"),
+  };
+}
+
+function parseEmailChangeConfirmInput(input: unknown): ConfirmEmailChangeInput {
+  const body = parseJsonObject(input);
+  return {
+    token: requiredString(body.token, "token"),
+  };
+}
+
 function parseVerifyMfaChallengeInput(input: unknown): VerifyMfaChallengeInput {
   const body = parseJsonObject(input);
   const code = optionalString(body.code, "code");
@@ -698,6 +775,13 @@ function parseConfirmTotpEnrollmentInput(input: unknown): ConfirmTotpEnrollmentI
   return {
     factorId: requiredString(body.factorId, "factorId"),
     code: requiredString(body.code, "code"),
+  };
+}
+
+function parseDisableTotpMfaInput(input: unknown): DisableTotpMfaInput {
+  const body = parseJsonObject(input);
+  return {
+    password: requiredString(body.password, "password"),
   };
 }
 
