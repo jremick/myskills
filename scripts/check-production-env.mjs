@@ -173,15 +173,25 @@ function validateAllowedOrigins() {
 
 function validateAuthNotifications() {
   const mode = stringValue("AUTH_NOTIFICATION_MODE") || "smtp";
-  if (mode !== "smtp") {
-    errors.push("AUTH_NOTIFICATION_MODE must be smtp in production.");
+  if (mode !== "smtp" && mode !== "resend") {
+    errors.push("AUTH_NOTIFICATION_MODE must be smtp or resend in production.");
+    return;
   }
-  requiredString("SMTP_HOST");
-  requiredString("SMTP_FROM");
-  rejectExampleValue("SMTP_HOST");
-  rejectExampleValue("SMTP_FROM");
-  if (stringValue("SMTP_TLS_REJECT_UNAUTHORIZED") === "false") {
-    errors.push("SMTP_TLS_REJECT_UNAUTHORIZED=false is not allowed in production.");
+  if (mode === "resend") {
+    requiredString("RESEND_API_KEY");
+    requiredString("RESEND_FROM");
+    rejectExampleValue("RESEND_API_KEY");
+    rejectExampleValue("RESEND_FROM");
+    return;
+  }
+  if (mode === "smtp") {
+    requiredString("SMTP_HOST");
+    requiredString("SMTP_FROM");
+    rejectExampleValue("SMTP_HOST");
+    rejectExampleValue("SMTP_FROM");
+    if (stringValue("SMTP_TLS_REJECT_UNAUTHORIZED") === "false") {
+      errors.push("SMTP_TLS_REJECT_UNAUTHORIZED=false is not allowed in production.");
+    }
   }
 }
 

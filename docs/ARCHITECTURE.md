@@ -26,7 +26,7 @@ flowchart LR
   API --> Objects["Object storage"]
   API --> Queue["Job queue"]
   API --> Audit["Audit sink"]
-  API --> Email["SMTP notifications"]
+  API --> Email["Auth email provider"]
 
   Auth --> DB
   Queue --> Scanner["Validation and security scanner"]
@@ -79,7 +79,7 @@ Background jobs handle:
 - validation and security scanning
 - checksum generation
 - index updates
-- queued notification delivery after direct SMTP is outgrown
+- queued notification delivery after direct provider calls are outgrown
 - optional Git import/export tasks
 
 ### Search

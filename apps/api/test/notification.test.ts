@@ -4,6 +4,7 @@ import {
   authActionUrl,
   ConsoleAuthNotificationSink,
   createAuthNotificationSinkFromEnv,
+  ResendAuthNotificationSink,
   SmtpAuthNotificationSink,
 } from "../src/auth/notification.js";
 import type { AuthActionNotification } from "../src/auth/service.js";
@@ -55,6 +56,69 @@ test("SMTP auth notification sink formats verification, reset, and email-change 
   const serialized = JSON.stringify(sent);
   assert.equal(serialized.includes("tokenHash"), false);
   assert.equal(serialized.includes("passwordHash"), false);
+});
+
+test("Resend auth notification sink formats verification, reset, and email-change messages", async () => {
+  const sent: Array<Record<string, unknown>> = [];
+  const sink = new ResendAuthNotificationSink({
+    appBaseUrl: "https://skills.example",
+    from: "MySkills <noreply@example.test>",
+    client: {
+      async send(message) {
+        sent.push(message);
+        return {
+          data: { id: `email-${sent.length}` },
+          error: null,
+          headers: null,
+        };
+      },
+    },
+  });
+
+  await sink.sendEmailVerification(notification("verify-token"));
+  await sink.sendPasswordReset(notification("reset-token"));
+  await sink.sendEmailChangeVerification(notification("change-token", "new@example.com"));
+
+  assert.equal(sent.length, 3);
+  assert.equal(sent[0].from, "MySkills <noreply@example.test>");
+  assert.equal(sent[0].to, "user@example.com");
+  assert.equal(sent[0].subject, "Verify your MySkills email");
+  assert.match(String(sent[0].text), /https:\/\/skills\.example\/auth\/verify-email#token=verify-token/);
+  assert.match(String(sent[0].html), /href="https:\/\/skills\.example\/auth\/verify-email#token=verify-token"/);
+  assert.equal(sent[1].subject, "Reset your MySkills password");
+  assert.match(String(sent[1].text), /https:\/\/skills\.example\/auth\/reset-password#token=reset-token/);
+  assert.equal(sent[2].to, "new@example.com");
+  assert.equal(sent[2].subject, "Confirm your new MySkills email");
+  assert.match(String(sent[2].text), /https:\/\/skills\.example\/auth\/change-email#token=change-token/);
+
+  const serialized = JSON.stringify(sent);
+  assert.equal(serialized.includes("tokenHash"), false);
+  assert.equal(serialized.includes("passwordHash"), false);
+});
+
+test("Resend auth notification sink reports provider errors", async () => {
+  const sink = new ResendAuthNotificationSink({
+    appBaseUrl: "https://skills.example",
+    from: "MySkills <noreply@example.test>",
+    client: {
+      async send() {
+        return {
+          data: null,
+          error: {
+            name: "validation_error",
+            message: "Invalid from address",
+            statusCode: 422,
+          },
+          headers: null,
+        };
+      },
+    },
+  });
+
+  await assert.rejects(
+    () => sink.sendPasswordReset(notification("reset-token")),
+    /Resend email delivery failed: validation_error Invalid from address/,
+  );
 });
 
 test("console auth notification sink logs development links only through the injected logger", () => {
@@ -133,6 +197,25 @@ test("auth notification env config rejects unsafe production modes", () => {
   );
   assert.throws(
     () => createAuthNotificationSinkFromEnv({
+      NODE_ENV: "production",
+      AUTH_NOTIFICATION_MODE: "resend",
+      APP_BASE_URL: "https://skills.example",
+      RESEND_FROM: "MySkills <noreply@example.com>",
+    }),
+    /RESEND_API_KEY is required/,
+  );
+  assert.throws(
+    () => createAuthNotificationSinkFromEnv({
+      NODE_ENV: "production",
+      AUTH_NOTIFICATION_MODE: "resend",
+      APP_BASE_URL: "https://skills.example",
+      RESEND_API_KEY: "re_test",
+      RESEND_FROM: "MySkills",
+    }),
+    /RESEND_FROM must contain an email address/,
+  );
+  assert.throws(
+    () => createAuthNotificationSinkFromEnv({
       AUTH_NOTIFICATION_MODE: "smtp",
       APP_BASE_URL: "http://localhost:3000",
       SMTP_HOST: "smtp.example.com",
@@ -149,6 +232,19 @@ test("auth notification env config rejects unsafe production modes", () => {
     }),
     /SMTP_FROM must contain an email address/,
   );
+});
+
+test("auth notification env config supports Resend in production", () => {
+  const sink = createAuthNotificationSinkFromEnv({
+    NODE_ENV: "production",
+    AUTH_NOTIFICATION_MODE: "resend",
+    APP_BASE_URL: "https://skills.example",
+    RESEND_API_KEY: "re_test",
+    RESEND_FROM: "MySkills <noreply@example.com>",
+  });
+
+  assert.ok(sink);
+  assert.equal(sink.constructor.name, "ResendAuthNotificationSink");
 });
 
 test("auth notification env config validates SMTP fields", () => {

@@ -94,7 +94,7 @@ For a managed target, use the same images and split services:
 - Run `node apps/api/dist/db/seed.js` only once for first-owner bootstrap.
 - Use managed Postgres for `DATABASE_URL`.
 - Use managed S3-compatible object storage for artifacts.
-- Use a transactional SMTP provider for auth action delivery.
+- Use a transactional email provider for auth action delivery. Resend over HTTPS is preferred on Railway; SMTP remains available for self-hosted environments that can make outbound SMTP connections.
 - Put TLS and request logging at the platform ingress layer.
 
 Minimum smoke checks after deployment:

@@ -82,9 +82,10 @@ Auth notification delivery is configured with `AUTH_NOTIFICATION_MODE`:
 
 - `console`: local development only; writes fragment-token action links to the process logger.
 - `smtp`: production mode; sends via SMTP using `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`, optional `SMTP_USER`/`SMTP_PASSWORD`, and TLS settings.
+- `resend`: production mode; sends through the Resend HTTPS API using `RESEND_API_KEY` and `RESEND_FROM`.
 - `disabled`: local development only; no verification or reset delivery.
 
-Production defaults to `smtp`, rejects `console` and `disabled`, requires `APP_BASE_URL` to use HTTPS, rejects `SMTP_TLS_REJECT_UNAUTHORIZED=false`, and builds links only from the configured `APP_BASE_URL`.
+Production defaults to `smtp` for backward compatibility, rejects `console` and `disabled`, requires `APP_BASE_URL` to use HTTPS, rejects `SMTP_TLS_REJECT_UNAUTHORIZED=false` when SMTP is selected, and builds links only from the configured `APP_BASE_URL`.
 
 Run locally:
 

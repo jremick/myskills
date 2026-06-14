@@ -11,7 +11,7 @@ Out of scope for alpha: hosted service operations, multi-instance federation, pa
 
 ## Assumptions
 
-- Deployments are self-hosted by operators who control Postgres, object storage, SMTP, TLS, and reverse proxy configuration.
+- Deployments are self-hosted by operators who control Postgres, object storage, email provider, TLS, and reverse proxy configuration.
 - Public alpha users may run the app locally or in a test environment.
 - Alpha deployments should not be treated as business-critical systems without additional operational controls.
 - Uploaded packages are untrusted until validation, scan, review, and publication gates pass.
@@ -22,7 +22,7 @@ Out of scope for alpha: hosted service operations, multi-instance federation, pa
 - User accounts, roles, sessions, MFA state, API tokens, auth action tokens, and provider mapping configuration.
 - Skill metadata, lifecycle/review state, scan findings, package artifacts, object hashes, and bundle payloads.
 - Audit events for auth, admin, package review, artifact delivery, and MCP authorization.
-- Deployment secrets for database, object storage, SMTP, token encryption, and provider integrations.
+- Deployment secrets for database, object storage, email delivery, token encryption, and provider integrations.
 - Release artifacts, checksums, and GitHub tag state.
 
 ## Trust Boundaries

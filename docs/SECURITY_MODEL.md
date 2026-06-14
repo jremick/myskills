@@ -22,7 +22,7 @@ This security model describes the current alpha controls. The companion threat m
 - Session tokens are opaque and stored only as hashes.
 - API tokens are opaque, scoped, stored only as hashes, and returned in plaintext only once.
 - Email verification and password reset tokens are opaque, short-lived, single-use, stored only as hashes, and never returned from HTTP responses.
-- Production auth action delivery requires SMTP configuration, HTTPS `APP_BASE_URL`, and TLS certificate validation. Local console delivery is rejected in production.
+- Production auth action delivery requires Resend or SMTP configuration and an HTTPS `APP_BASE_URL`. SMTP mode additionally requires TLS certificate validation. Local console delivery is rejected in production.
 - API token management requires a session; API tokens cannot create, list, or revoke other tokens.
 - CLI login tokens are stored locally by normalized API URL with user-only file permissions; platform keychain storage remains the target hardening path.
 - Login uses normalized email lookup and generic invalid-credential denial.
