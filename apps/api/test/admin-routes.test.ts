@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { generateTotpCode, hashPassword } from "@myskills-app/auth";
 import { buildApp } from "../src/app.js";
-import { AuthService } from "../src/auth/service.js";
+import { AuthService, type AuthNotificationSink } from "../src/auth/service.js";
 import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
 import { MemorySkillRepository } from "../src/repositories/memory-skill-repository.js";
 
@@ -73,6 +73,192 @@ test("MFA-verified admins can manage registration mode", async (t) => {
   });
   assert.equal(registerDenied.statusCode, 403);
   assert.equal(registerDenied.json().error.code, "REGISTRATION_CLOSED");
+});
+
+test("MFA-verified admins can invite users to register by email", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const outbox = createAuthOutbox();
+  const app = buildAdminApp(authStore, outbox.sink);
+  t.after(() => app.close());
+  const ownerSession = await addAndLoginWithMfa(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+
+  const invited = await app.inject({
+    method: "POST",
+    url: "/v1/admin/registration/invitations",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: {
+      email: "Invited@Example.com",
+      name: "Invited User",
+    },
+  });
+
+  assert.equal(invited.statusCode, 201);
+  assert.equal(invited.json().invitation.email, "invited@example.com");
+  assert.equal(typeof invited.json().invitation.expiresAt, "string");
+  assert.equal(outbox.registrationInvitations.length, 1);
+  assert.equal(outbox.registrationInvitations[0].email, "invited@example.com");
+
+  const registered = await app.inject({
+    method: "POST",
+    url: "/v1/auth/register",
+    payload: {
+      email: "invited@example.com",
+      password: "correct horse battery staple",
+      name: "Registered User",
+      inviteToken: outbox.registrationInvitations[0].token,
+    },
+  });
+
+  assert.equal(registered.statusCode, 202);
+  assert.deepEqual(registered.json(), { status: "active" });
+  const user = await authStore.findUserByEmailWithPassword("invited@example.com");
+  assert.equal(user?.status, "active");
+  assert.equal(user?.emailVerifiedAt instanceof Date, true);
+  assert.equal(user?.name, "Registered User");
+
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/login",
+    payload: {
+      email: "invited@example.com",
+      password: "correct horse battery staple",
+    },
+  });
+  assert.equal(login.statusCode, 200);
+
+  const reused = await app.inject({
+    method: "POST",
+    url: "/v1/auth/register",
+    payload: {
+      email: "invited@example.com",
+      password: "correct horse battery staple",
+      inviteToken: outbox.registrationInvitations[0].token,
+    },
+  });
+  assert.equal(reused.statusCode, 401);
+  assert.equal(reused.json().error.code, "INVALID_INVITATION_TOKEN");
+});
+
+test("registration invitation redemption is bound to the invited email without burning the token", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const outbox = createAuthOutbox();
+  const app = buildAdminApp(authStore, outbox.sink);
+  t.after(() => app.close());
+  const ownerSession = await addAndLoginWithMfa(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+
+  await app.inject({
+    method: "POST",
+    url: "/v1/admin/registration/invitations",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: {
+      email: "invited@example.com",
+      name: "Invited User",
+    },
+  });
+
+  const wrongEmail = await app.inject({
+    method: "POST",
+    url: "/v1/auth/register",
+    payload: {
+      email: "other@example.com",
+      password: "correct horse battery staple",
+      inviteToken: outbox.registrationInvitations[0].token,
+    },
+  });
+  assert.equal(wrongEmail.statusCode, 401);
+  assert.equal(wrongEmail.json().error.code, "INVALID_INVITATION_TOKEN");
+  assert.equal((await authStore.findUserByEmailWithPassword("invited@example.com"))?.passwordHash, null);
+
+  const correctEmail = await app.inject({
+    method: "POST",
+    url: "/v1/auth/register",
+    payload: {
+      email: "invited@example.com",
+      password: "correct horse battery staple",
+      inviteToken: outbox.registrationInvitations[0].token,
+    },
+  });
+  assert.equal(correctEmail.statusCode, 202);
+  assert.deepEqual(correctEmail.json(), { status: "active" });
+});
+
+test("registration invitations require notification delivery and an invitable address", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAdminApp(authStore);
+  t.after(() => app.close());
+  const ownerSession = await addAndLoginWithMfa(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+  await addUser(authStore, {
+    id: "active-1",
+    email: "active@example.com",
+    status: "active",
+    emailVerifiedAt: new Date(),
+    roles: ["user"],
+  });
+
+  const unconfigured = await app.inject({
+    method: "POST",
+    url: "/v1/admin/registration/invitations",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: {
+      email: "new@example.com",
+    },
+  });
+  assert.equal(unconfigured.statusCode, 503);
+  assert.equal(unconfigured.json().error.code, "AUTH_NOTIFICATION_UNAVAILABLE");
+  assert.equal(await authStore.findUserByEmailWithPassword("new@example.com"), null);
+
+  const existing = await app.inject({
+    method: "POST",
+    url: "/v1/admin/registration/invitations",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: {
+      email: "active@example.com",
+    },
+  });
+  assert.equal(existing.statusCode, 409);
+  assert.equal(existing.json().error.code, "USER_NOT_INVITABLE");
+});
+
+test("failed registration invitation delivery does not leave a new pending account", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildAdminApp(authStore, {
+    sendEmailVerification() {},
+    sendPasswordReset() {},
+    sendRegistrationInvitation() {
+      throw new Error("SMTP unavailable");
+    },
+  });
+  t.after(() => app.close());
+  const ownerSession = await addAndLoginWithMfa(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+
+  const failed = await app.inject({
+    method: "POST",
+    url: "/v1/admin/registration/invitations",
+    headers: { authorization: `Bearer ${ownerSession}` },
+    payload: {
+      email: "new@example.com",
+    },
+  });
+
+  assert.equal(failed.statusCode, 502);
+  assert.equal(failed.json().error.code, "INVITATION_DELIVERY_FAILED");
+  assert.equal(await authStore.findUserByEmailWithPassword("new@example.com"), null);
 });
 
 test("MFA-verified admins can manage non-secret provider configs and role mappings", async (t) => {
@@ -664,6 +850,41 @@ test("admin routes require session auth, admin role, and MFA", async (t) => {
   });
   assert.equal(roleUpdateRoleRequired.statusCode, 403);
   assert.equal(roleUpdateRoleRequired.json().error.code, "ADMIN_ROLE_REQUIRED");
+
+  const inviteUnauthenticated = await app.inject({
+    method: "POST",
+    url: "/v1/admin/registration/invitations",
+    payload: { email: "new@example.com" },
+  });
+  assert.equal(inviteUnauthenticated.statusCode, 401);
+  assert.equal(inviteUnauthenticated.json().error.code, "AUTHENTICATION_REQUIRED");
+
+  const inviteApiTokenDenied = await app.inject({
+    method: "POST",
+    url: "/v1/admin/registration/invitations",
+    headers: { authorization: `Bearer ${ownerApiToken}` },
+    payload: { email: "new@example.com" },
+  });
+  assert.equal(inviteApiTokenDenied.statusCode, 403);
+  assert.equal(inviteApiTokenDenied.json().error.code, "SESSION_AUTH_REQUIRED");
+
+  const inviteMfaRequired = await app.inject({
+    method: "POST",
+    url: "/v1/admin/registration/invitations",
+    headers: { authorization: `Bearer ${ownerSessionWithoutMfa}` },
+    payload: { email: "new@example.com" },
+  });
+  assert.equal(inviteMfaRequired.statusCode, 403);
+  assert.equal(inviteMfaRequired.json().error.code, "MFA_VERIFICATION_REQUIRED");
+
+  const inviteRoleRequired = await app.inject({
+    method: "POST",
+    url: "/v1/admin/registration/invitations",
+    headers: { authorization: `Bearer ${userSessionWithMfa}` },
+    payload: { email: "new@example.com" },
+  });
+  assert.equal(inviteRoleRequired.statusCode, 403);
+  assert.equal(inviteRoleRequired.json().error.code, "ADMIN_ROLE_REQUIRED");
 });
 
 test("admins cannot disable or delete their own account", async (t) => {
@@ -799,11 +1020,50 @@ test("MFA-verified admins can list sanitized audit events newest first", async (
   assert.equal(serialized.includes("[redacted]") || serialized.includes("[redacted-token]"), true);
 });
 
-function buildAdminApp(authStore: MemoryAuthStore) {
+function buildAdminApp(authStore: MemoryAuthStore, notificationSink?: AuthNotificationSink) {
   return buildApp({
     skillRepository: new MemorySkillRepository([]),
-    authService: new AuthService(authStore),
+    authService: new AuthService(authStore, { notificationSink }),
   });
+}
+
+function createAuthOutbox(): {
+  sink: AuthNotificationSink;
+  emailVerifications: Array<{ email: string; token: string; expiresAt: Date }>;
+  passwordResets: Array<{ email: string; token: string; expiresAt: Date }>;
+  registrationInvitations: Array<{ email: string; token: string; expiresAt: Date }>;
+} {
+  const emailVerifications: Array<{ email: string; token: string; expiresAt: Date }> = [];
+  const passwordResets: Array<{ email: string; token: string; expiresAt: Date }> = [];
+  const registrationInvitations: Array<{ email: string; token: string; expiresAt: Date }> = [];
+  return {
+    sink: {
+      sendEmailVerification(input) {
+        emailVerifications.push({
+          email: input.email,
+          token: input.token,
+          expiresAt: input.expiresAt,
+        });
+      },
+      sendPasswordReset(input) {
+        passwordResets.push({
+          email: input.email,
+          token: input.token,
+          expiresAt: input.expiresAt,
+        });
+      },
+      sendRegistrationInvitation(input) {
+        registrationInvitations.push({
+          email: input.email,
+          token: input.token,
+          expiresAt: input.expiresAt,
+        });
+      },
+    },
+    emailVerifications,
+    passwordResets,
+    registrationInvitations,
+  };
 }
 
 async function addUser(

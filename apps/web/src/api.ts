@@ -38,6 +38,11 @@ export interface AdminRegistrationSettings {
   mode: AdminRegistrationMode;
 }
 
+export interface RegistrationInvitation {
+  email: string;
+  expiresAt: string;
+}
+
 export type AdminSharingSettings = SharingSettings;
 
 export interface AdminUser {
@@ -184,11 +189,13 @@ export interface RegistryClient {
   getSkill(slug: string): Promise<PublicSkill>;
   getRelease(slug: string, version: string): Promise<ReleaseMetadata>;
   login(input: { email: string; password: string }): Promise<LoginResult>;
+  registerWithInvitation(input: { email: string; password: string; name?: string; inviteToken: string }): Promise<{ status: "pending" | "active" }>;
   verifyMfa(input: { challengeToken: string; codeOrRecoveryCode: string }): Promise<SessionResult>;
   getMe(token?: string): Promise<WebAuthUser>;
   logout(token?: string): Promise<void>;
   getAdminRegistration(token?: string): Promise<AdminRegistrationSettings>;
   updateAdminRegistration(mode: AdminRegistrationMode, token?: string): Promise<AdminRegistrationSettings>;
+  createRegistrationInvitation(input: { email: string; name?: string }, token?: string): Promise<RegistrationInvitation>;
   getAdminSharing(token?: string): Promise<AdminSharingSettings>;
   updateAdminSharing(settings: AdminSharingSettings, token?: string): Promise<AdminSharingSettings>;
   listAdminUsers(token?: string): Promise<AdminUser[]>;
@@ -249,6 +256,12 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         body: input,
       });
     },
+    async registerWithInvitation(input) {
+      return requestJson<{ status: "pending" | "active" }>(fetchImpl, `${root}/v1/auth/register`, {
+        method: "POST",
+        body: input,
+      });
+    },
     async verifyMfa(input) {
       const body = /^[0-9]{6}$/.test(input.codeOrRecoveryCode.trim())
         ? { challengeToken: input.challengeToken, code: input.codeOrRecoveryCode.trim() }
@@ -286,6 +299,14 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         { method: "PUT", body: { mode }, token: overrideToken ?? token },
       );
       return body.registration;
+    },
+    async createRegistrationInvitation(input, overrideToken) {
+      const body = await requestJson<{ invitation: RegistrationInvitation }>(
+        fetchImpl,
+        `${root}/v1/admin/registration/invitations`,
+        { method: "POST", body: input, token: overrideToken ?? token },
+      );
+      return body.invitation;
     },
     async getAdminSharing(overrideToken) {
       const body = await requestJson<{ sharing: AdminSharingSettings }>(

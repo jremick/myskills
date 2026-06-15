@@ -18,6 +18,7 @@ import type {
   ConfirmPasswordResetInput,
   ConfirmTotpEnrollmentInput,
   CreateApiTokenRequest,
+  CreateRegistrationInvitationInput,
   ListAdminAuditEventsInput,
   LoginInput,
   RegisterInput,
@@ -377,6 +378,21 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         parseUpdateRegistrationSettingsInput(request.body),
       ),
     };
+  });
+
+  app.post("/v1/admin/registration/invitations", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, request.headers.authorization);
+    if (!user) {
+      return authFailureReply(options.authService, request.headers.authorization, reply);
+    }
+    const invitation = await options.authService.createRegistrationInvitation(
+      user,
+      parseCreateRegistrationInvitationInput(request.body),
+    );
+    return reply.code(201).send({ invitation });
   });
 
   app.get("/v1/admin/sharing", async (request, reply) => {
@@ -799,6 +815,7 @@ function parseRegisterInput(input: unknown): RegisterInput {
     email: requiredString(body.email, "email"),
     password: requiredString(body.password, "password"),
     name: optionalString(body.name, "name"),
+    inviteToken: optionalString(body.inviteToken, "inviteToken"),
   };
 }
 
@@ -876,6 +893,14 @@ function parseUpdateRegistrationSettingsInput(input: unknown): UpdateRegistratio
     throw new AppError("Registration mode is invalid.", "INVALID_REGISTRATION_MODE", 400);
   }
   return { mode };
+}
+
+function parseCreateRegistrationInvitationInput(input: unknown): CreateRegistrationInvitationInput {
+  const body = parseJsonObject(input);
+  return {
+    email: requiredString(body.email, "email"),
+    name: optionalString(body.name, "name"),
+  };
 }
 
 function parseSharingSettingsInput(input: unknown): SharingSettings {

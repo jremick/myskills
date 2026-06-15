@@ -182,6 +182,28 @@ test("MFA login verifies the challenge before storing a session", async () => {
   assert.equal(JSON.parse(window.localStorage.getItem("myskills-app:web-session") ?? "{}").token, "mfa-session-token");
 });
 
+test("registration invitation links create an account and store a session", async () => {
+  setupDom("http://localhost/auth/register#token=invite-token");
+  const client = mockClient({ user: authUser({ email: "invited@example.com" }) });
+
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("Complete registration");
+  fireEvent.input(view.getByLabelText("Email"), { target: { value: "invited@example.com" } });
+  fireEvent.input(view.getByLabelText("Name"), { target: { value: "Invited User" } });
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.input(view.getByLabelText("Confirm password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: /create account/i }));
+
+  await waitFor(() => assert.deepEqual(client.inviteRegistrations, [{
+    email: "invited@example.com",
+    name: "Invited User",
+    inviteToken: "invite-token",
+  }]));
+  await view.findByText("invited@example.com");
+  assert.equal(JSON.parse(window.localStorage.getItem("myskills-app:web-session") ?? "{}").token, "web-session-token");
+});
+
 test("non-admin sessions do not render the admin entry point", async () => {
   setupDom();
   const client = mockClient({ user: authUser({ roles: ["author"] }) });
@@ -244,6 +266,12 @@ test("admin sessions can manage registration, users, and provider metadata", asy
 
   fireEvent.click(view.getByRole("button", { name: "Request" }));
   await waitFor(() => assert.deepEqual(client.registrationUpdates, ["request"]));
+
+  fireEvent.input(view.getByLabelText("Email"), { target: { value: "new@example.com" } });
+  fireEvent.input(view.getByLabelText("Name"), { target: { value: "New User" } });
+  fireEvent.click(view.getByRole("button", { name: /send invite/i }));
+  await waitFor(() => assert.deepEqual(client.registrationInvites, [{ email: "new@example.com", name: "New User" }]));
+  await view.findByText(/Invite sent to new@example\.com/);
 
   fireEvent.click(view.getByLabelText("Disable user"));
   await waitFor(() => assert.deepEqual(client.userActions, ["user-2:disable"]));
@@ -453,6 +481,8 @@ function mockClient(input: {
     logoutCalls: number;
     mfaCalls: string[];
     providerUpserts: Array<{ key: string; displayName: string; roleMappings?: ProviderRoleMappingInput[] }>;
+    registrationInvites: Array<{ email: string; name?: string }>;
+    inviteRegistrations: Array<{ email: string; name?: string; inviteToken: string }>;
     registrationUpdates: AdminRegistrationMode[];
     releaseCalls: string[];
     reviewActions: string[];
@@ -469,6 +499,8 @@ function mockClient(input: {
     logoutCalls: 0,
     mfaCalls: [],
     providerUpserts: [],
+    registrationInvites: [],
+    inviteRegistrations: [],
     registrationUpdates: [],
     releaseCalls: [],
     reviewActions: [],
@@ -516,6 +548,14 @@ function mockClient(input: {
           user: currentUser,
         };
     },
+    async registerWithInvitation(input) {
+      client.inviteRegistrations.push({
+        email: input.email,
+        name: input.name,
+        inviteToken: input.inviteToken,
+      });
+      return { status: "active" };
+    },
     async logout() {
       client.logoutCalls += 1;
     },
@@ -534,6 +574,13 @@ function mockClient(input: {
       registrationMode = mode;
       client.registrationUpdates.push(mode);
       return { mode };
+    },
+    async createRegistrationInvitation(input) {
+      client.registrationInvites.push(input);
+      return {
+        email: input.email.toLowerCase(),
+        expiresAt: "2026-06-20T00:00:00.000Z",
+      };
     },
     async getAdminSharing() {
       return sharingSettings;

@@ -1,7 +1,7 @@
 import type { AuthenticatedUser, RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 
 export const apiTokenScopes = ["profile:read", "skills:read", "skills:submit", "review:read", "review:write"] as const;
-export const authActionTokenPurposes = ["email_verification", "password_reset"] as const;
+export const authActionTokenPurposes = ["email_verification", "password_reset", "registration_invitation"] as const;
 export const providerTypes = ["oidc", "saml", "cloudflare_access", "github", "google"] as const;
 
 export type ApiTokenScope = (typeof apiTokenScopes)[number];
@@ -42,6 +42,30 @@ export interface CreateUserWithPasswordInput {
 export interface CreateUserWithPasswordResult {
   created: boolean;
   user?: AuthUserRecord;
+}
+
+export interface CreateInvitedUserInput {
+  email: string;
+  name: string;
+}
+
+export interface CreateInvitedUserResult {
+  user: AuthUserRecord;
+  created: boolean;
+}
+
+export interface CompleteRegistrationInvitationInput {
+  tokenHash: string;
+  email: string;
+  name: string;
+  passwordHash: string;
+  now?: Date;
+  usedAt?: Date;
+}
+
+export interface CompleteRegistrationInvitationResult {
+  user: AuthUserRecord;
+  usedAt: Date;
 }
 
 export interface CreateAuthActionTokenInput {
@@ -194,6 +218,9 @@ export interface AuthStore {
   getRegistrationMode(): Promise<RegistrationMode>;
   setRegistrationMode(mode: RegistrationMode): Promise<RegistrationMode>;
   createUserWithPassword(input: CreateUserWithPasswordInput): Promise<CreateUserWithPasswordResult>;
+  createInvitedUser(input: CreateInvitedUserInput): Promise<CreateInvitedUserResult | null>;
+  deletePendingInvitedUser(input: { userId: string; email: string }): Promise<boolean>;
+  completeRegistrationInvitation(input: CompleteRegistrationInvitationInput): Promise<CompleteRegistrationInvitationResult | null>;
   listUsers(): Promise<AuthUserRecord[]>;
   findUserById(userId: string): Promise<AuthUserRecord | null>;
   updateUserStatus(input: { userId: string; status: UserStatus; emailVerifiedAt?: Date | null }): Promise<AuthUserRecord | null>;

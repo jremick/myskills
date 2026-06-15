@@ -122,6 +122,37 @@ test("registry client supports login, MFA verification, current user, and logout
   assert.equal(calls[3].authorization, "Bearer verified-session-token");
 });
 
+test("registry client redeems registration invitations", async () => {
+  const calls: Array<{ body?: string; method?: string; url: string }> = [];
+  const client = createRegistryClient("http://api.test", async (input, init) => {
+    calls.push({
+      body: typeof init?.body === "string" ? init.body : undefined,
+      method: init?.method,
+      url: String(input),
+    });
+    return jsonResponse(202, { status: "active" });
+  });
+
+  const result = await client.registerWithInvitation({
+    email: "invited@example.com",
+    name: "Invited User",
+    password: "correct horse battery staple",
+    inviteToken: "invite-token",
+  });
+
+  assert.deepEqual(result, { status: "active" });
+  assert.deepEqual(calls, [{
+    method: "POST",
+    url: "http://api.test/v1/auth/register",
+    body: JSON.stringify({
+      email: "invited@example.com",
+      name: "Invited User",
+      password: "correct horse battery staple",
+      inviteToken: "invite-token",
+    }),
+  }]);
+});
+
 test("registry client manages admin settings with the session bearer", async () => {
   const calls: Array<{ body?: string; method?: string; url: string; authorization?: string }> = [];
   const client = createRegistryClient("http://api.test", async (input, init) => {
@@ -137,6 +168,9 @@ test("registry client manages admin settings with the session bearer", async () 
     }
     if (url.endsWith("/v1/admin/registration")) {
       return jsonResponse(200, { registration: { mode: "closed" } });
+    }
+    if (url.endsWith("/v1/admin/registration/invitations")) {
+      return jsonResponse(201, { invitation: { email: "new@example.com", expiresAt: "2026-06-20T00:00:00.000Z" } });
     }
     if (url.endsWith("/v1/admin/users")) {
       return jsonResponse(200, { users: [{ id: "user-1", email: "reader@example.com" }] });
@@ -158,6 +192,7 @@ test("registry client manages admin settings with the session bearer", async () 
 
   await client.getAdminRegistration("session-token");
   await client.updateAdminRegistration("request", "session-token");
+  await client.createRegistrationInvitation({ email: "new@example.com", name: "New User" }, "session-token");
   await client.listAdminUsers("session-token");
   await client.performAdminUserAction("user-1", "disable", "session-token");
   await client.updateAdminUserRoles("user-1", ["maintainer", "author"], "session-token");
@@ -173,6 +208,7 @@ test("registry client manages admin settings with the session bearer", async () 
   assert.deepEqual(calls.map((call) => `${call.method ?? "GET"} ${call.url}`), [
     "GET http://api.test/v1/admin/registration",
     "PUT http://api.test/v1/admin/registration",
+    "POST http://api.test/v1/admin/registration/invitations",
     "GET http://api.test/v1/admin/users",
     "POST http://api.test/v1/admin/users/user-1/actions",
     "PUT http://api.test/v1/admin/users/user-1/roles",
@@ -189,11 +225,13 @@ test("registry client manages admin settings with the session bearer", async () 
     "Bearer session-token",
     "Bearer session-token",
     "Bearer session-token",
+    "Bearer session-token",
   ]);
   assert.equal(calls[1].body, JSON.stringify({ mode: "request" }));
-  assert.equal(calls[3].body, JSON.stringify({ action: "disable" }));
-  assert.equal(calls[4].body, JSON.stringify({ roles: ["maintainer", "author"] }));
-  assert.equal(calls[6].body?.includes("groups"), true);
+  assert.equal(calls[2].body, JSON.stringify({ email: "new@example.com", name: "New User" }));
+  assert.equal(calls[4].body, JSON.stringify({ action: "disable" }));
+  assert.equal(calls[5].body, JSON.stringify({ roles: ["maintainer", "author"] }));
+  assert.equal(calls[7].body?.includes("groups"), true);
 });
 
 test("registry client manages review queue with the session bearer", async () => {

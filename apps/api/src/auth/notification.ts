@@ -1,7 +1,7 @@
 import nodemailer, { type Transporter } from "nodemailer";
 import type { AuthActionNotification, AuthNotificationSink } from "./service.js";
 
-type AuthNotificationPurpose = "email_verification" | "password_reset";
+type AuthNotificationPurpose = "email_verification" | "password_reset" | "registration_invitation";
 type AuthNotificationMode = "console" | "smtp" | "disabled";
 
 export interface AuthNotificationLogger {
@@ -30,6 +30,10 @@ export class ConsoleAuthNotificationSink implements AuthNotificationSink {
     this.log("password_reset", input);
   }
 
+  sendRegistrationInvitation(input: AuthActionNotification): void {
+    this.log("registration_invitation", input);
+  }
+
   private log(purpose: AuthNotificationPurpose, input: AuthActionNotification): void {
     const url = authActionUrl(this.options.appBaseUrl, purpose, input.token);
     this.options.logger.info(`[auth-notification] ${purpose} for ${input.email}: ${url} expires=${input.expiresAt.toISOString()}`);
@@ -45,6 +49,10 @@ export class SmtpAuthNotificationSink implements AuthNotificationSink {
 
   async sendPasswordReset(input: AuthActionNotification): Promise<void> {
     await this.send("password_reset", input);
+  }
+
+  async sendRegistrationInvitation(input: AuthActionNotification): Promise<void> {
+    await this.send("registration_invitation", input);
   }
 
   private async send(purpose: AuthNotificationPurpose, input: AuthActionNotification): Promise<void> {
@@ -103,7 +111,13 @@ export function createAuthNotificationSinkFromEnv(
 
 export function authActionUrl(appBaseUrl: string, purpose: AuthNotificationPurpose, token: string): string {
   const base = new URL(normalizeBaseUrl(appBaseUrl));
-  base.pathname = purpose === "email_verification" ? "/auth/verify-email" : "/auth/reset-password";
+  if (purpose === "email_verification") {
+    base.pathname = "/auth/verify-email";
+  } else if (purpose === "password_reset") {
+    base.pathname = "/auth/reset-password";
+  } else {
+    base.pathname = "/auth/register";
+  }
   base.search = "";
   base.hash = "";
   base.hash = `token=${encodeURIComponent(token)}`;
@@ -117,10 +131,8 @@ function authActionMessage(
 ): { subject: string; text: string; html: string } {
   const url = authActionUrl(appBaseUrl, purpose, input.token);
   const expiresAt = input.expiresAt.toISOString();
-  const action = purpose === "email_verification" ? "verify your email address" : "reset your password";
-  const subject = purpose === "email_verification"
-    ? "Verify your MySkills email"
-    : "Reset your MySkills password";
+  const action = authActionLabel(purpose);
+  const subject = authActionSubject(purpose);
   const escapedUrl = escapeHtml(url);
   const escapedAction = escapeHtml(action);
   return {
@@ -140,6 +152,26 @@ function authActionMessage(
       "<p>If you did not request this, you can ignore this email.</p>",
     ].join(""),
   };
+}
+
+function authActionLabel(purpose: AuthNotificationPurpose): string {
+  if (purpose === "email_verification") {
+    return "verify your email address";
+  }
+  if (purpose === "password_reset") {
+    return "reset your password";
+  }
+  return "register for MySkills";
+}
+
+function authActionSubject(purpose: AuthNotificationPurpose): string {
+  if (purpose === "email_verification") {
+    return "Verify your MySkills email";
+  }
+  if (purpose === "password_reset") {
+    return "Reset your MySkills password";
+  }
+  return "Register for MySkills";
 }
 
 function normalizeMode(mode: string): AuthNotificationMode {

@@ -33,11 +33,15 @@ import type {
   CreateAuditEventInput,
   CreateAuthActionTokenInput,
   CreateApiTokenInput,
+  CreateInvitedUserInput,
+  CreateInvitedUserResult,
   CreateMfaChallengeInput,
   CreateMfaTotpFactorInput,
   CreateSessionInput,
   CreateUserWithPasswordInput,
   CreateUserWithPasswordResult,
+  CompleteRegistrationInvitationInput,
+  CompleteRegistrationInvitationResult,
   ProviderConfigRecord,
   ProviderMappedRole,
   ProviderRoleMappingRecord,
@@ -107,6 +111,139 @@ export class PostgresAuthStore implements AuthStore {
     }).onConflictDoNothing();
 
     return { created: true, user: { ...toRecord(user), roles: ["user"] } };
+  }
+
+  async createInvitedUser(input: CreateInvitedUserInput): Promise<CreateInvitedUserResult | null> {
+    const [created] = await this.db
+      .insert(users)
+      .values({
+        email: input.email,
+        normalizedEmail: input.email,
+        name: input.name,
+        status: "pending",
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    if (created) {
+      await this.db.insert(roleAssignments).values({
+        userId: created.id,
+        role: "user",
+      }).onConflictDoNothing();
+      return { user: { ...toRecord(created), roles: ["user"] }, created: true };
+    }
+
+    const existing = await this.findUserByEmailWithPassword(input.email);
+    if (!existing || existing.status !== "pending" || existing.passwordHash !== null) {
+      return null;
+    }
+    await this.db.insert(roleAssignments).values({
+      userId: existing.id,
+      role: "user",
+    }).onConflictDoNothing();
+    return {
+      user: {
+        id: existing.id,
+        email: existing.email,
+        name: existing.name,
+        status: existing.status,
+        emailVerifiedAt: existing.emailVerifiedAt,
+        roles: await this.rolesForUser(existing.id),
+      },
+      created: false,
+    };
+  }
+
+  async deletePendingInvitedUser(input: { userId: string; email: string }): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      const [credential] = await tx
+        .select({ userId: passwordCredentials.userId })
+        .from(passwordCredentials)
+        .where(eq(passwordCredentials.userId, input.userId))
+        .limit(1);
+      if (credential) {
+        return false;
+      }
+
+      const [deleted] = await tx
+        .delete(users)
+        .where(and(
+          eq(users.id, input.userId),
+          eq(users.normalizedEmail, input.email),
+          eq(users.status, "pending"),
+        ))
+        .returning({ id: users.id });
+      return Boolean(deleted);
+    });
+  }
+
+  async completeRegistrationInvitation(input: CompleteRegistrationInvitationInput): Promise<CompleteRegistrationInvitationResult | null> {
+    const now = input.now ?? new Date();
+    const usedAt = input.usedAt ?? now;
+    const updated = await this.db.transaction(async (tx) => {
+      const inserted = await tx.execute<{ userId: string }>(sql`
+        insert into ${passwordCredentials} (user_id, password_hash, password_updated_at)
+        select ${users.id}, ${input.passwordHash}, ${usedAt}
+        from ${authActionTokens}
+        inner join ${users} on ${users.id} = ${authActionTokens.userId}
+        left join ${passwordCredentials} on ${passwordCredentials.userId} = ${users.id}
+        where ${authActionTokens.tokenHash} = ${input.tokenHash}
+          and ${authActionTokens.purpose} = ${"registration_invitation"}
+          and ${authActionTokens.sentToNormalizedEmail} = ${input.email}
+          and ${authActionTokens.usedAt} is null
+          and ${authActionTokens.expiresAt} > ${now}
+          and ${users.normalizedEmail} = ${input.email}
+          and ${users.status} = ${"pending"}
+          and ${passwordCredentials.userId} is null
+        on conflict do nothing
+        returning user_id as "userId"
+      `);
+      const insertedUserId = inserted.rows[0]?.userId;
+      if (!insertedUserId) {
+        return null;
+      }
+
+      const userUpdate: Partial<typeof users.$inferInsert> = {
+        status: "active",
+        emailVerifiedAt: usedAt,
+        updatedAt: new Date(),
+      };
+      if (input.name) {
+        userUpdate.name = input.name;
+      }
+
+      const [registered] = await tx
+        .update(users)
+        .set(userUpdate)
+        .where(and(
+          eq(users.id, insertedUserId),
+          eq(users.normalizedEmail, input.email),
+          eq(users.status, "pending"),
+        ))
+        .returning();
+      if (!registered) {
+        throw new Error("Invited user activation failed.");
+      }
+
+      const [token] = await tx
+        .update(authActionTokens)
+        .set({ usedAt })
+        .where(and(
+          eq(authActionTokens.tokenHash, input.tokenHash),
+          eq(authActionTokens.purpose, "registration_invitation"),
+          eq(authActionTokens.userId, registered.id),
+          eq(authActionTokens.sentToNormalizedEmail, input.email),
+          isNull(authActionTokens.usedAt),
+          gt(authActionTokens.expiresAt, now),
+        ))
+        .returning({ id: authActionTokens.id });
+      if (!token) {
+        throw new Error("Registration invitation token consume failed.");
+      }
+      return registered;
+    });
+
+    return updated ? { user: { ...toRecord(updated), roles: await this.rolesForUser(updated.id) }, usedAt } : null;
   }
 
   async listUsers(): Promise<AuthUserRecord[]> {

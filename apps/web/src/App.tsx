@@ -7,6 +7,7 @@ import {
   FileCode2,
   LogIn,
   LogOut,
+  MailPlus,
   PackageOpen,
   PanelLeftClose,
   PanelLeftOpen,
@@ -40,6 +41,7 @@ import {
   type AdminUser,
   type ProviderRoleMappingInput,
   type RegistryClient,
+  type RegistrationInvitation,
   type ReleaseMetadata,
   type ReviewActionResult,
   type ReviewSubmissionSummary,
@@ -87,6 +89,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [navCollapsed, setNavCollapsed] = useState(true);
   const [session, setSession] = useState<WebSession | null>(() => readStoredSession());
   const registryClient = useMemo(() => client ?? createRegistryClient(undefined, undefined, session?.token), [client, session?.token]);
+  const [registrationInviteToken, setRegistrationInviteToken] = useState<string | null>(() => registrationInviteTokenFromLocation(window.location.pathname, window.location.hash));
   const [query, setQuery] = useState("");
   const [skills, setSkills] = useState<PublicSkill[]>([]);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(initialSlug);
@@ -100,6 +103,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [authState, setAuthState] = useState<AuthState>("idle");
   const [mfaPending, setMfaPending] = useState<MfaPending | null>(null);
+  const isInviteRegistrationRoute = window.location.pathname === "/auth/register" && !session;
   const canUseAdmin = Boolean(session && isAdminUser(session.user));
   const canUseReview = Boolean(session && isReviewerUser(session.user));
   const canUseSubmit = Boolean(session && isSubmitterUser(session.user));
@@ -142,6 +146,9 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }, [registryClient, session?.token]);
 
   useEffect(() => {
+    if (isInviteRegistrationRoute) {
+      return;
+    }
     let active = true;
     setListState("loading");
     registryClient.searchSkills(query)
@@ -169,7 +176,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
     return () => {
       active = false;
     };
-  }, [registryClient, query]);
+  }, [isInviteRegistrationRoute, registryClient, query]);
 
   useEffect(() => {
     if (!selectedSlug) {
@@ -297,9 +304,28 @@ export function RegistryApp({ client }: RegistryAppProps) {
     }
   }
 
+  function completeInviteRegistration(nextSession: WebSession) {
+    setSession(nextSession);
+    writeStoredSession(nextSession);
+    setRegistrationInviteToken(null);
+    setAuthMessage(null);
+    window.history.replaceState({}, "", "/");
+    setView("browse");
+  }
+
   const chrome = viewChrome(activeView, skills.length);
   const showTopbarAuth = !session;
   const showTopbarAction = showTopbarAuth || Boolean(topbarAction);
+
+  if (isInviteRegistrationRoute) {
+    return (
+      <InviteRegistrationView
+        client={registryClient}
+        inviteToken={registrationInviteToken}
+        onComplete={completeInviteRegistration}
+      />
+    );
+  }
 
   return (
     <div className={navCollapsed ? "app-shell nav-collapsed" : "app-shell"}>
@@ -499,6 +525,130 @@ function RailAccount({ onLogout, session }: { onLogout: () => Promise<void>; ses
         <LogOut size={15} aria-hidden="true" />
       </button>
     </div>
+  );
+}
+
+function InviteRegistrationView({
+  client,
+  inviteToken,
+  onComplete,
+}: {
+  client: RegistryClient;
+  inviteToken: string | null;
+  onComplete: (session: WebSession) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [state, setState] = useState<LoadState>("idle");
+  const [message, setMessage] = useState<string | null>(inviteToken ? null : "Invitation link is invalid or expired.");
+
+  async function completeRegistration() {
+    if (!inviteToken) {
+      setMessage("Invitation link is invalid or expired.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setMessage("Passwords do not match.");
+      return;
+    }
+    setState("loading");
+    setMessage(null);
+    try {
+      await client.registerWithInvitation({
+        email,
+        name,
+        password,
+        inviteToken,
+      });
+      const login = await client.login({ email, password });
+      if (login.mfaRequired) {
+        setMessage("Registration complete. Sign in with your new password.");
+        setState("ready");
+        return;
+      }
+      const nextSession = {
+        token: login.token,
+        expiresAt: login.expiresAt,
+        user: await client.getMe(login.token),
+      };
+      onComplete(nextSession);
+    } catch (error) {
+      setMessage(safeAuthErrorMessage(error));
+      setState("error");
+    }
+  }
+
+  return (
+    <main className="invite-registration-page" aria-label="Registration invitation">
+      <section className="invite-registration-panel">
+        <div className="invite-registration-brand">
+          <img src="/brand/myskills-mark.svg" alt="" />
+          <span>MySkills</span>
+        </div>
+        <div className="invite-registration-head">
+          <MailPlus size={22} aria-hidden="true" />
+          <div>
+            <h1>Complete registration</h1>
+            <p>Use the invited email address to create your account.</p>
+          </div>
+        </div>
+        {message && <div className="safe-message admin-message" role="status">{message}</div>}
+        <form className="invite-registration-form" onSubmit={(event) => {
+          event.preventDefault();
+          void completeRegistration();
+        }}>
+          <label>
+            Email
+            <input
+              autoComplete="email"
+              disabled={state === "loading" || !inviteToken}
+              onChange={(event) => setEmail(event.target.value)}
+              type="email"
+              value={email}
+            />
+          </label>
+          <label>
+            Name
+            <input
+              autoComplete="name"
+              disabled={state === "loading" || !inviteToken}
+              onChange={(event) => setName(event.target.value)}
+              value={name}
+            />
+          </label>
+          <label>
+            Password
+            <input
+              autoComplete="new-password"
+              disabled={state === "loading" || !inviteToken}
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              value={password}
+            />
+          </label>
+          <label>
+            Confirm password
+            <input
+              autoComplete="new-password"
+              disabled={state === "loading" || !inviteToken}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              type="password"
+              value={confirmPassword}
+            />
+          </label>
+          <button
+            className="save-button"
+            disabled={state === "loading" || !inviteToken || !email.trim() || !password || !confirmPassword}
+            type="submit"
+          >
+            <LogIn size={16} aria-hidden="true" />
+            {state === "loading" ? "Registering" : "Create account"}
+          </button>
+        </form>
+      </section>
+    </main>
   );
 }
 
@@ -1047,6 +1197,9 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
   const [providers, setProviders] = useState<AdminProviderConfig[]>([]);
   const [auditEvents, setAuditEvents] = useState<AdminAuditEvent[]>([]);
   const [draft, setDraft] = useState<ProviderDraft>(() => emptyProviderDraft());
+  const [inviteDraft, setInviteDraft] = useState({ email: "", name: "" });
+  const [inviteState, setInviteState] = useState<LoadState>("idle");
+  const [lastInvitation, setLastInvitation] = useState<RegistrationInvitation | null>(null);
   const sessionCanEditPrivilegedRoles = session.user.roles.includes("owner");
   const sessionCanEditSharing = session.user.roles.includes("owner");
 
@@ -1086,6 +1239,30 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
       setAuditEvents(await client.listAdminAudit(25, session.token));
     } catch (error) {
       setMessage(safeAdminErrorMessage(error));
+    }
+  }
+
+  async function createRegistrationInvitation() {
+    setMessage(null);
+    setLastInvitation(null);
+    setInviteState("loading");
+    try {
+      const invitation = await client.createRegistrationInvitation({
+        email: inviteDraft.email,
+        name: optionalDraftValue(inviteDraft.name),
+      }, session.token);
+      setLastInvitation(invitation);
+      setInviteDraft({ email: "", name: "" });
+      const [nextUsers, nextAuditEvents] = await Promise.all([
+        client.listAdminUsers(session.token),
+        client.listAdminAudit(25, session.token),
+      ]);
+      setUsers(nextUsers);
+      setAuditEvents(nextAuditEvents);
+      setInviteState("ready");
+    } catch (error) {
+      setMessage(safeAdminErrorMessage(error));
+      setInviteState("error");
     }
   }
 
@@ -1194,6 +1371,45 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
               </button>
             ))}
           </div>
+        </AdminPanel>
+
+        <AdminPanel
+          icon={<MailPlus size={18} aria-hidden="true" />}
+          title="Registration invitations"
+          meta="Invite one user without changing the instance registration mode."
+        >
+          <form className="admin-invite-form" onSubmit={(event) => {
+            event.preventDefault();
+            void createRegistrationInvitation();
+          }}>
+            <label>
+              Email
+              <input
+                autoComplete="email"
+                onChange={(event) => setInviteDraft({ ...inviteDraft, email: event.target.value })}
+                type="email"
+                value={inviteDraft.email}
+              />
+            </label>
+            <label>
+              Name
+              <input
+                autoComplete="name"
+                onChange={(event) => setInviteDraft({ ...inviteDraft, name: event.target.value })}
+                value={inviteDraft.name}
+              />
+            </label>
+            <button className="save-button" disabled={inviteState === "loading" || !inviteDraft.email.trim()} type="submit">
+              <MailPlus size={16} aria-hidden="true" />
+              {inviteState === "loading" ? "Sending" : "Send invite"}
+            </button>
+          </form>
+          {lastInvitation && (
+            <div className="inline-success" role="status">
+              <Check size={15} aria-hidden="true" />
+              <span>Invite sent to {lastInvitation.email}. Expires {formatDate(lastInvitation.expiresAt)}.</span>
+            </div>
+          )}
         </AdminPanel>
 
         <AdminPanel
@@ -1937,6 +2153,15 @@ function initialViewFromPath(pathname: string): AppView {
     return "teams";
   }
   return "browse";
+}
+
+function registrationInviteTokenFromLocation(pathname: string, hash: string): string | null {
+  if (pathname !== "/auth/register") {
+    return null;
+  }
+  const params = new URLSearchParams(hash.replace(/^#/, ""));
+  const token = params.get("token")?.trim();
+  return token || null;
 }
 
 function emptyProviderDraft(): ProviderDraft {

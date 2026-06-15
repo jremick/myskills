@@ -43,6 +43,7 @@ const DEFAULT_SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const DEFAULT_MFA_CHALLENGE_TTL_MS = 1000 * 60 * 5;
 const DEFAULT_EMAIL_VERIFICATION_TTL_MS = 1000 * 60 * 60 * 24;
 const DEFAULT_PASSWORD_RESET_TTL_MS = 1000 * 60 * 60;
+const DEFAULT_REGISTRATION_INVITATION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const DEFAULT_API_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 90;
 const MAX_API_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 365;
 const API_TOKEN_PREFIX_LENGTH = 12;
@@ -53,6 +54,7 @@ export interface RegisterInput {
   email: string;
   password: string;
   name?: string;
+  inviteToken?: string;
   ip?: string;
 }
 
@@ -94,6 +96,16 @@ export interface ConfirmPasswordResetInput {
   ip?: string;
 }
 
+export interface CreateRegistrationInvitationInput {
+  email: string;
+  name?: string;
+}
+
+export interface SafeRegistrationInvitation {
+  email: string;
+  expiresAt: string;
+}
+
 export interface AuthActionNotification {
   user: AuthUserRecord;
   email: string;
@@ -104,6 +116,7 @@ export interface AuthActionNotification {
 export interface AuthNotificationSink {
   sendEmailVerification(input: AuthActionNotification): Promise<void> | void;
   sendPasswordReset(input: AuthActionNotification): Promise<void> | void;
+  sendRegistrationInvitation(input: AuthActionNotification): Promise<void> | void;
 }
 
 export interface CreateApiTokenRequest {
@@ -277,18 +290,29 @@ export class AuthService {
       authActionTokenLimiter?: AuthRateLimiter;
       emailVerificationTtlMs?: number;
       passwordResetTtlMs?: number;
+      registrationInvitationTtlMs?: number;
       notificationSink?: AuthNotificationSink;
     } = {},
   ) {}
 
-  async register(input: RegisterInput): Promise<{ status: "pending" }> {
+  async register(input: RegisterInput): Promise<{ status: "pending" | "active" }> {
+    const email = normalizeEmail(input.email);
+    assertAllowed(this.options.registrationLimiter, rateLimitKeys("register", email, input.ip));
+    if (input.inviteToken) {
+      return this.registerWithInvitation({
+        email,
+        password: input.password,
+        name: input.name,
+        inviteToken: input.inviteToken,
+        ip: input.ip,
+      });
+    }
+
     const mode = await this.store.getRegistrationMode();
     if (mode === "closed") {
       throw new AppError("Registration is closed.", "REGISTRATION_CLOSED", 403);
     }
 
-    const email = normalizeEmail(input.email);
-    assertAllowed(this.options.registrationLimiter, rateLimitKeys("register", email, input.ip));
     const passwordHash = await this.hashNewPassword(input.password);
     const created = await this.store.createUserWithPassword({
       email,
@@ -299,6 +323,138 @@ export class AuthService {
       await this.sendAuthActionToken(created.user, "email_verification");
     }
     return { status: "pending" };
+  }
+
+  async createRegistrationInvitation(
+    actor: AuthResponseUser,
+    input: CreateRegistrationInvitationInput,
+  ): Promise<SafeRegistrationInvitation> {
+    assertAdmin(actor);
+    const email = normalizeEmail(input.email);
+    const existing = await this.store.findUserByEmailWithPassword(email);
+    if (existing?.passwordHash || existing?.status === "active" || existing?.status === "disabled" || existing?.status === "deleted") {
+      await this.store.recordAuditEvent({
+        actorUserId: actor.id,
+        action: "admin.registration.invite",
+        decision: "deny",
+        resourceType: "user",
+        resourceId: existing?.id ?? null,
+        details: {
+          invitedEmail: email,
+          reason: "user_already_exists",
+        },
+      });
+      throw new AppError("User is not eligible for a registration invitation.", "USER_NOT_INVITABLE", 409);
+    }
+    if (!this.options.notificationSink) {
+      await this.store.recordAuditEvent({
+        actorUserId: actor.id,
+        action: "admin.registration.invite",
+        decision: "deny",
+        resourceType: "user",
+        details: {
+          invitedEmail: email,
+          reason: "notification_unavailable",
+        },
+      });
+      throw new AppError("Auth notifications are not configured.", "AUTH_NOTIFICATION_UNAVAILABLE", 503);
+    }
+
+    const invited = await this.store.createInvitedUser({
+      email,
+      name: cleanName(input.name),
+    });
+    if (!invited) {
+      await this.store.recordAuditEvent({
+        actorUserId: actor.id,
+        action: "admin.registration.invite",
+        decision: "deny",
+        resourceType: "user",
+        details: {
+          invitedEmail: email,
+          reason: "user_already_exists",
+        },
+      });
+      throw new AppError("User is not eligible for a registration invitation.", "USER_NOT_INVITABLE", 409);
+    }
+    const user = invited.user;
+    try {
+      const invitation = await this.sendAuthActionToken(user, "registration_invitation", {
+        requireSink: true,
+        swallowDeliveryErrors: false,
+      });
+      if (!invitation) {
+        throw new AppError("Auth notifications are not configured.", "AUTH_NOTIFICATION_UNAVAILABLE", 503);
+      }
+      await this.store.recordAuditEvent({
+        actorUserId: actor.id,
+        action: "admin.registration.invite",
+        decision: "allow",
+        resourceType: "user",
+        resourceId: user.id,
+        details: {
+          invitedEmail: email,
+          expiresAt: invitation.expiresAt.toISOString(),
+        },
+      });
+      return {
+        email,
+        expiresAt: invitation.expiresAt.toISOString(),
+      };
+    } catch (error) {
+      await this.store.recordAuditEvent({
+        actorUserId: actor.id,
+        action: "admin.registration.invite",
+        decision: "deny",
+        resourceType: "user",
+        resourceId: user.id,
+        details: {
+          invitedEmail: email,
+          reason: "notification_failed",
+        },
+      });
+      if (invited.created) {
+        await this.store.deletePendingInvitedUser({ userId: user.id, email });
+      }
+      throw error;
+    }
+  }
+
+  private async registerWithInvitation(input: {
+    email: string;
+    password: string;
+    name?: string;
+    inviteToken: string;
+    ip?: string;
+  }): Promise<{ status: "active" }> {
+    this.validateNewPassword(input.password);
+    const token = cleanOpaqueToken(input.inviteToken, "inviteToken");
+    const tokenHash = hashSessionToken(token);
+    assertAllowed(
+      this.options.authActionTokenLimiter ?? this.options.registrationLimiter,
+      tokenRateLimitKeys("registration-invitation-confirm", tokenHash, input.ip),
+    );
+    const passwordHash = await this.hashNewPassword(input.password);
+    const completed = await this.store.completeRegistrationInvitation({
+      tokenHash,
+      email: input.email,
+      name: cleanName(input.name),
+      passwordHash,
+    });
+    if (!completed) {
+      throw invalidInvitationToken();
+    }
+    await this.store.recordAuditEvent({
+      actorUserId: completed.user.id,
+      action: "auth.registration.invitation.accept",
+      decision: "allow",
+      resourceType: "user",
+      resourceId: completed.user.id,
+      details: {
+        invitedEmail: input.email,
+      },
+    });
+    return { status: "active" };
   }
 
   async requestEmailVerification(input: RequestEmailVerificationInput): Promise<{ status: "pending" }> {
@@ -818,10 +974,17 @@ export class AuthService {
     return this.options.mfaSecretKey ?? DEV_AUTH_SECRET;
   }
 
-  private async sendAuthActionToken(user: AuthUserRecord, purpose: AuthActionTokenPurpose): Promise<void> {
+  private async sendAuthActionToken(
+    user: AuthUserRecord,
+    purpose: AuthActionTokenPurpose,
+    options: { requireSink?: boolean; swallowDeliveryErrors?: boolean } = {},
+  ): Promise<{ expiresAt: Date } | null> {
     const sink = this.options.notificationSink;
     if (!sink) {
-      return;
+      if (options.requireSink) {
+        throw new AppError("Auth notifications are not configured.", "AUTH_NOTIFICATION_UNAVAILABLE", 503);
+      }
+      return null;
     }
     const token = createSessionToken();
     const expiresAt = new Date(Date.now() + this.authActionTokenTtlMs(purpose));
@@ -832,40 +995,54 @@ export class AuthService {
       sentToNormalizedEmail: user.email,
       expiresAt,
     });
-    if (purpose === "email_verification") {
-      try {
-        await sink.sendEmailVerification({
-          user,
-          email: user.email,
-          token,
-          expiresAt,
-        });
-      } catch {
-        // Public auth action request endpoints must not reveal account existence during delivery outages.
-      }
-      return;
-    }
+    const notification = {
+      user,
+      email: user.email,
+      token,
+      expiresAt,
+    };
     try {
-      await sink.sendPasswordReset({
-        user,
-        email: user.email,
-        token,
-        expiresAt,
-      });
+      if (purpose === "email_verification") {
+        await sink.sendEmailVerification(notification);
+      } else if (purpose === "password_reset") {
+        await sink.sendPasswordReset(notification);
+      } else {
+        await sink.sendRegistrationInvitation(notification);
+      }
     } catch {
-      // Public auth action request endpoints must not reveal account existence during delivery outages.
+      if (options.swallowDeliveryErrors ?? true) {
+        // Public auth action request endpoints must not reveal account existence during delivery outages.
+        return { expiresAt };
+      }
+      throw new AppError("Invitation email could not be sent.", "INVITATION_DELIVERY_FAILED", 502);
     }
+    return { expiresAt };
   }
 
   private authActionTokenTtlMs(purpose: AuthActionTokenPurpose): number {
-    return purpose === "email_verification"
-      ? this.options.emailVerificationTtlMs ?? DEFAULT_EMAIL_VERIFICATION_TTL_MS
-      : this.options.passwordResetTtlMs ?? DEFAULT_PASSWORD_RESET_TTL_MS;
+    if (purpose === "email_verification") {
+      return this.options.emailVerificationTtlMs ?? DEFAULT_EMAIL_VERIFICATION_TTL_MS;
+    }
+    if (purpose === "password_reset") {
+      return this.options.passwordResetTtlMs ?? DEFAULT_PASSWORD_RESET_TTL_MS;
+    }
+    return this.options.registrationInvitationTtlMs ?? DEFAULT_REGISTRATION_INVITATION_TTL_MS;
+  }
+
+  private validateNewPassword(password: string): void {
+    try {
+      validatePasswordInput(password);
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new AppError(error.message, "INVALID_PASSWORD", 400);
+      }
+      throw error;
+    }
   }
 
   private async hashNewPassword(password: string): Promise<string> {
+    this.validateNewPassword(password);
     try {
-      validatePasswordInput(password);
       return await hashPassword(password);
     } catch (error) {
       if (error instanceof Error) {
@@ -1343,6 +1520,10 @@ function invalidVerificationToken(): AppError {
 
 function invalidResetToken(): AppError {
   return new AppError("Invalid or expired reset token.", "INVALID_RESET_TOKEN", 401);
+}
+
+function invalidInvitationToken(): AppError {
+  return new AppError("Invalid or expired invitation token.", "INVALID_INVITATION_TOKEN", 401);
 }
 
 function encryptSecret(plaintext: string, secretKey: string): string {
