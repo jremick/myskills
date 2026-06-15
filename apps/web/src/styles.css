@@ -812,6 +812,51 @@ button:active:not(:disabled) {
   background: #fbfffe;
 }
 
+.admin-invite-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 18px;
+}
+
+.admin-invite-form label,
+.invite-registration-form label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: var(--ink-600);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.admin-invite-form input,
+.invite-registration-form input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 0 11px;
+  color: var(--ink-900);
+  background: #fff;
+  font: inherit;
+}
+
+.inline-success {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: calc(100% - 36px);
+  margin: 0 18px 18px;
+  padding: 9px 11px;
+  border: 1px solid var(--green-line);
+  border-radius: var(--radius-sm);
+  color: var(--green);
+  background: var(--green-soft);
+  font-size: 13px;
+}
+
 .admin-table {
   overflow-x: auto;
 }
@@ -1936,6 +1981,71 @@ button:active:not(:disabled) {
   background: rgba(30, 41, 59, 0.96);
 }
 
+.invite-registration-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(247, 250, 252, 0.94)),
+    var(--bg);
+}
+
+.invite-registration-panel {
+  width: min(100%, 520px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.invite-registration-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 18px 20px 0;
+  color: var(--ink-900);
+  font-weight: 750;
+}
+
+.invite-registration-brand img {
+  width: 28px;
+  height: 28px;
+}
+
+.invite-registration-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 20px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.invite-registration-head svg {
+  flex: 0 0 auto;
+  color: var(--teal);
+}
+
+.invite-registration-head h1 {
+  margin: 0;
+  color: var(--ink-900);
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.invite-registration-head p {
+  margin: 7px 0 0;
+  color: var(--ink-600);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.invite-registration-form {
+  display: grid;
+  gap: 13px;
+  padding: 20px;
+}
+
 .safe-message,
 .empty-state,
 .empty-detail {
@@ -2194,6 +2304,7 @@ button:active:not(:disabled) {
   }
 
   .segmented-control,
+  .admin-invite-form,
   .provider-form,
   .metadata-grid {
     grid-template-columns: 1fr;

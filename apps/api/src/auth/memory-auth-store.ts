@@ -15,11 +15,15 @@ import type {
   CreateAuditEventInput,
   CreateAuthActionTokenInput,
   CreateApiTokenInput,
+  CreateInvitedUserInput,
+  CreateInvitedUserResult,
   CreateMfaChallengeInput,
   CreateMfaTotpFactorInput,
   CreateSessionInput,
   CreateUserWithPasswordInput,
   CreateUserWithPasswordResult,
+  CompleteRegistrationInvitationInput,
+  CompleteRegistrationInvitationResult,
   ProviderConfigRecord,
   ProviderRoleMappingRecord,
   UpsertProviderConfigInput,
@@ -192,6 +196,71 @@ export class MemoryAuthStore implements AuthStore {
       passwordHash: input.passwordHash,
     });
     return { created: true, user };
+  }
+
+  async createInvitedUser(input: CreateInvitedUserInput): Promise<CreateInvitedUserResult | null> {
+    const email = input.email.toLowerCase();
+    const existing = this.users.get(email);
+    if (existing) {
+      if (existing.status !== "pending" || existing.passwordHash !== null) {
+        return null;
+      }
+      return { user: toRecord(existing), created: false };
+    }
+    return {
+      user: this.addUser({
+        email,
+        name: input.name,
+        status: "pending",
+        roles: ["user"],
+        passwordHash: null,
+      }),
+      created: true,
+    };
+  }
+
+  async deletePendingInvitedUser(input: { userId: string; email: string }): Promise<boolean> {
+    const email = input.email.toLowerCase();
+    const user = this.users.get(email);
+    if (!user || user.id !== input.userId || user.status !== "pending" || user.passwordHash !== null) {
+      return false;
+    }
+    this.users.delete(email);
+    for (const [tokenHash, token] of this.authActionTokens.entries()) {
+      if (token.userId === input.userId) {
+        this.authActionTokens.delete(tokenHash);
+      }
+    }
+    return true;
+  }
+
+  async completeRegistrationInvitation(input: CompleteRegistrationInvitationInput): Promise<CompleteRegistrationInvitationResult | null> {
+    const now = input.now ?? new Date();
+    const usedAt = input.usedAt ?? now;
+    const email = input.email.toLowerCase();
+    const token = this.authActionTokens.get(input.tokenHash);
+    if (
+      !token ||
+      token.purpose !== "registration_invitation" ||
+      token.sentToNormalizedEmail !== email ||
+      token.usedAt ||
+      token.expiresAt <= now
+    ) {
+      return null;
+    }
+    const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
+    if (!user || user.email !== email || user.status !== "pending" || user.passwordHash !== null) {
+      return null;
+    }
+
+    if (input.name) {
+      user.name = input.name;
+    }
+    user.status = "active";
+    user.emailVerifiedAt = usedAt;
+    user.passwordHash = input.passwordHash;
+    token.usedAt = usedAt;
+    return { user: toRecord(user), usedAt };
   }
 
   async listUsers(): Promise<AuthUserRecord[]> {

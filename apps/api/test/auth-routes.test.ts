@@ -1020,9 +1020,11 @@ function createAuthOutbox(): {
   sink: AuthNotificationSink;
   emailVerifications: Array<{ email: string; token: string; expiresAt: Date }>;
   passwordResets: Array<{ email: string; token: string; expiresAt: Date }>;
+  registrationInvitations: Array<{ email: string; token: string; expiresAt: Date }>;
 } {
   const emailVerifications: Array<{ email: string; token: string; expiresAt: Date }> = [];
   const passwordResets: Array<{ email: string; token: string; expiresAt: Date }> = [];
+  const registrationInvitations: Array<{ email: string; token: string; expiresAt: Date }> = [];
   return {
     sink: {
       sendEmailVerification(input) {
@@ -1039,9 +1041,17 @@ function createAuthOutbox(): {
           expiresAt: input.expiresAt,
         });
       },
+      sendRegistrationInvitation(input) {
+        registrationInvitations.push({
+          email: input.email,
+          token: input.token,
+          expiresAt: input.expiresAt,
+        });
+      },
     },
     emailVerifications,
     passwordResets,
+    registrationInvitations,
   };
 }
 

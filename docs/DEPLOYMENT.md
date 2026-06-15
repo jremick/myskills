@@ -54,7 +54,7 @@ Terminate TLS in front of the `web`, `api`, and optional `mcp-http` services. Th
 
 Required public values:
 
-- `APP_BASE_URL`: HTTPS web origin used in email verification and password-reset links.
+- `APP_BASE_URL`: HTTPS web origin used in email verification, password-reset, and registration-invitation links.
 - `VITE_API_BASE_URL`: HTTPS API origin baked into the web image at build time.
 - `ALLOWED_WEB_ORIGINS`: comma-separated browser origins allowed to call the API.
 
