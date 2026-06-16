@@ -1,19 +1,10 @@
 #!/usr/bin/env node
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 
-const root = process.cwd();
-const ignoredDirectories = new Set([
-  ".git",
-  ".private",
-  "node_modules",
-  "dist",
-  "build",
-  "coverage",
-  ".next",
-  ".turbo",
-]);
+const root = repoRoot();
 const ignoredFiles = new Set([
   "scripts/check-privacy.mjs",
   "package-lock.json",
@@ -31,7 +22,9 @@ const disallowed = [
 
 const findings = [];
 
-walk(root);
+for (const file of scanCandidates()) {
+  scanFile(file);
+}
 
 if (findings.length > 0) {
   console.error("Privacy check failed. Remove private-source carryover terms:");
@@ -43,25 +36,42 @@ if (findings.length > 0) {
 
 console.log("Privacy check passed.");
 
-function walk(directory) {
-  for (const entry of readdirSync(directory)) {
-    const path = join(directory, entry);
-    const rel = relative(root, path);
-    const stat = statSync(path);
-    if (stat.isDirectory()) {
-      if (!ignoredDirectories.has(entry)) {
-        walk(path);
-      }
-      continue;
-    }
-    if (!stat.isFile() || ignoredFiles.has(rel) || isBinaryLike(entry)) {
-      continue;
-    }
-    const text = readFileSync(path, "utf8");
-    for (const pattern of disallowed) {
-      if (pattern.test(text)) {
-        findings.push({ file: rel, pattern: pattern.toString() });
-      }
+function repoRoot() {
+  return execFileSync("git", ["rev-parse", "--show-toplevel"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  }).trim();
+}
+
+function scanCandidates() {
+  const output = execFileSync(
+    "git",
+    ["-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+    { encoding: "utf8" },
+  );
+
+  return output.split("\0").filter(Boolean).sort();
+}
+
+function scanFile(file) {
+  if (ignoredFiles.has(file) || isBinaryLike(file)) {
+    return;
+  }
+
+  const path = join(root, file);
+  if (!existsSync(path)) {
+    return;
+  }
+
+  const stat = statSync(path);
+  if (!stat.isFile()) {
+    return;
+  }
+
+  const text = readFileSync(path, "utf8");
+  for (const pattern of disallowed) {
+    if (pattern.test(text)) {
+      findings.push({ file, pattern: pattern.toString() });
     }
   }
 }
