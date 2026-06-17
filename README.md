@@ -16,7 +16,7 @@ This alpha is intended for evaluation, local demos, and early self-hosting feedb
 
 Current name: **MySkills**.
 
-Repository slug: **myskills-app**.
+Repository slug: **myskills**.
 
 Planned domain: **myskills.sh**.
 
@@ -133,7 +133,7 @@ npm run test:postgres
 
 ## Support And Security
 
-Use [GitHub Issues](https://github.com/jremick/myskills-app/issues) for public alpha bugs, setup problems, and feature requests.
+Use [GitHub Issues](https://github.com/jremick/myskills/issues) for public alpha bugs, setup problems, and feature requests.
 
 Do not report suspected vulnerabilities, exposed secrets, access-control bypasses, or package-safety escapes in public issues. Use GitHub private vulnerability reporting as described in [SECURITY.md](SECURITY.md).
 

@@ -1,13 +1,29 @@
 # Roadmap
 
 Version: 0.1.0-alpha.0
-Last updated: 2026-06-04
+Last updated: 2026-06-17
 
 ## Release Tracks
 
 - **Responsible public alpha (`v0.1.0-alpha.0`)**: make the repository public with clear alpha limits, sanitized examples, security reporting, reproducible artifacts, and fresh-clone proof.
-- **Short-term domain**: point `myskills.sh` to the public `myskills-app` repository until the website exists.
+- **Short-term domain**: point `myskills.sh` to the public `myskills` repository until the website exists.
 - **Business-safe production release**: harden the alpha into an operator-ready release with stronger audit, background scanning, skill evals, provider lifecycle, artifact delivery, CLI credential storage, deploy/ops guidance, and upgrade policy. See [BUSINESS_SAFE_RELEASE_GOAL.md](BUSINESS_SAFE_RELEASE_GOAL.md).
+
+## Current Focus
+
+- Finish the public-alpha release gate: fresh-clone rehearsal, public visibility switch, first reproducible alpha tag, and release artifact verification.
+- Keep production-hardening items tracked without blocking the responsible public alpha unless they close accepted alpha risk.
+- Complete the remaining web-app MVP gaps that affect first-user clarity: private draft management, instance settings administration, and the broader identity-system refresh.
+- Preserve the API as the canonical registry and trust boundary for sync-related work; local and connected-tool state should reconcile through reviewable changes, not silent overwrites.
+
+## Roadmap Shape
+
+- **Registry MVP**: Milestones 0-5 prove the private registry, auth, package, CLI, and web workflows.
+- **Quality and agent surfaces**: Milestones 6-7 add eval evidence and production-grade MCP access.
+- **Public alpha gate**: Milestone 8 makes the repo and first release public-ready.
+- **Production hardening**: Milestone 9 turns the alpha into an operator-ready deployment.
+- **Public website**: Milestone 10 gives `myskills.sh` a proper product and documentation surface.
+- **Future product expansion**: connected skills management, cross-tool configuration, and optional usage telemetry.
 
 ## Milestone 0: Private Project Setup
 
@@ -42,7 +58,31 @@ Acceptance:
 - Local setup can run Postgres plus object storage through Docker Compose.
 - Production packaging has API, web, and HTTP MCP container targets, a production Compose example, deployment documentation, and a production env preflight.
 
-Current status: in progress. The first API and schema slice exists with email/password session auth, hash-only single-use email verification and password reset action tokens, SMTP/local auth notification delivery, TOTP MFA challenge flow, hashed recovery codes, MFA-verified admin registration/user management with sanitized audit listing, MFA-verified non-secret provider config and claim-to-role mapping management, MFA-verified local role editing with owner-only privileged-role safeguards, hashed scoped API tokens, public search/detail endpoints, MCP token introspection with `skills:read` scope and API-owned session decision audit events, authenticated package intake with strict root-manifest integrity checks, MFA-gated privileged submission, server-side `.zip` archive extraction, scan evidence, S3-compatible object-storage-backed artifact writes and reads, MFA-gated maintainer review approve/publish actions with approved-unpublished queue visibility, authorized release metadata and bundle delivery, local `.zip` archive parsing for package validation/submission tooling, a React web app for public registry browsing/detail/export guidance, author `.zip` package submission, maintainer review approval/publication, and owner/admin registration/user/provider/role/audit console workflows, read-only MCP stdio and stateless Streamable HTTP servers for registry discovery/info/install guidance, a starter CLI for validation, scanning, prompt-based login/logout with API-URL-scoped stored sessions, search, info, whoami, submit, review actions, verified export, local install/list/update/rollback, and API-token management, plus first-pass production container packaging and deployment preflight checks. Queued email delivery, platform keychain CLI token storage, authoritative per-tool MCP audit events, provider login/linking, external identity lifecycle, signed-url/direct object delivery, platform-specific install adapters, background scan jobs, and release automation are still future work.
+Current status:
+
+Done:
+
+- Core API/schema slice, session auth, email verification/reset tokens, TOTP MFA, recovery codes, local roles, scoped API tokens, and sanitized audit listing.
+- Public search/detail endpoints, authenticated package intake, archive extraction defenses, scan evidence, artifact storage, maintainer review, publication, release metadata, and authorized bundle delivery.
+- Web workflows for public browsing, package submission, maintainer review, publication, registration/user/provider/role administration, and audit review.
+- Read-only MCP stdio and stateless Streamable HTTP discovery servers.
+- CLI workflows for validation, scanning, login/logout, search/info, submission, review actions, verified export, local install/list/update/rollback, and API-token management.
+- First-pass production container packaging and deployment preflight checks.
+
+Remaining:
+
+- Queued email delivery.
+- Platform keychain storage for CLI credentials.
+- Authoritative per-tool MCP audit events.
+- Provider login/linking and external identity lifecycle.
+- Signed or direct object delivery that preserves authorization and integrity.
+- Platform-specific install adapters.
+- Background scan jobs.
+- Release automation.
+
+Blocking next release:
+
+- Public alpha blockers are tracked in Milestone 8. Remaining production items above move to Milestone 9 unless they close an accepted alpha risk.
 
 ## Milestone 2: Auth And User Management Foundation
 
@@ -125,11 +165,28 @@ Acceptance:
 - Common user, author, maintainer, and admin workflows work in browser tests.
 - Text and controls fit on mobile and desktop.
 
-Current status: public browse/search, skill detail, release metadata, export-guidance views, email/password login/logout, MFA challenge completion, current-user refresh, session-aware API calls, authenticated author `.zip` package submission, maintainer review dashboard workflows for approval/publication, and owner/admin console workflows for registration, user status actions, role updates, provider metadata/mappings, and audit review exist. The supplied My Skills logo and favicon kit is wired into the web app; the broader color, typography, surface, and component refresh from the identity guidelines remains planned. Private draft management and remaining instance settings administration are still future work.
+Current status:
+
+Done:
+
+- Public browse/search, skill detail, release metadata, and export-guidance views.
+- Email/password login/logout, MFA challenge completion, current-user refresh, and session-aware API calls.
+- Authenticated author `.zip` package submission.
+- Maintainer review dashboard workflows for approval/publication.
+- Owner/admin console workflows for registration, user status actions, role updates, provider metadata/mappings, and audit review.
+- Supplied My Skills logo and favicon kit wired into the web app.
+
+Remaining:
+
+- Broader color, typography, surface, and component refresh from the identity guidelines.
+- Private draft management.
+- Remaining instance settings administration.
 
 ## Milestone 6: Skill Evals
 
 Goal: make skill quality measurable before and after publication.
+
+Depends on: Milestones 1, 3, and 5.
 
 Deliverables:
 
@@ -153,6 +210,8 @@ Current status: planned.
 
 Goal: expose safe agent-facing registry discovery.
 
+Depends on: Milestones 1, 2, and 4.
+
 Deliverables:
 
 - SDK-backed MCP endpoint.
@@ -167,11 +226,24 @@ Acceptance:
 - MCP cannot return unauthorized metadata or package contents.
 - Tool results align with API and CLI authorization tests.
 
-Current status: first stdio and stateless Streamable HTTP MCP servers exist with `search_skills`, `get_skill_info`, and `get_install_instructions`. Calls require an API token with `skills:read`, reject session tokens through the API, write sanitized API-owned `mcp.session` audit events for allow/deny authorization decisions, and avoid bundle payload retrieval. Role-gated maintainer/admin tools and authoritative per-tool audit events are still future work.
+Current status:
+
+Done:
+
+- First stdio and stateless Streamable HTTP MCP servers exist with `search_skills`, `get_skill_info`, and `get_install_instructions`.
+- Calls require an API token with `skills:read`, reject session tokens through the API, write sanitized API-owned `mcp.session` audit events for allow/deny authorization decisions, and avoid bundle payload retrieval.
+
+Remaining:
+
+- Role-gated maintainer/admin read tools.
+- Authoritative per-tool audit events.
+- Broader client compatibility notes and tests.
 
 ## Milestone 8: Public Release Hardening
 
 Goal: make the repo public-ready.
+
+Depends on: Milestones 0-5.
 
 Deliverables:
 
@@ -190,11 +262,29 @@ Acceptance:
 - Public docs contain no private-source carryover.
 - First public release tag is reproducible.
 
-Current status: responsible public alpha docs, public security policy, threat model, production Docker targets, production Compose example, production env preflight, public-safe example skill package, deterministic alpha-release check, and tag-triggered release artifact workflow exist. Fresh-clone rehearsal, public visibility switch, and first reproducible alpha tag remain planned.
+Current status:
+
+Done:
+
+- Responsible public-alpha docs.
+- Public security policy and threat model.
+- Production Docker targets, production Compose example, and production env preflight.
+- Public-safe example skill package.
+- Deterministic alpha-release check.
+- Tag-triggered release artifact workflow.
+
+Blocking next release:
+
+- Fresh-clone rehearsal.
+- Public visibility switch.
+- First reproducible alpha tag.
+- Release artifact verification from the public tag.
 
 ## Milestone 9: Business-Safe Production Release
 
 Goal: turn the public alpha into a release that a business can operate with clear trust boundaries, support expectations, upgrade paths, and incident response.
+
+Depends on: Milestone 8 plus the production portions of Milestones 6 and 7.
 
 Deliverables:
 
@@ -219,9 +309,11 @@ Acceptance:
 
 Goal: build a full website for MySkills at `myskills.sh`.
 
+Depends on: Milestone 8 for public-alpha positioning. The site can start before Milestone 9.
+
 Short-term:
 
-- Make the repository public as `myskills-app`.
+- Make the repository public as `myskills`.
 - Point `myskills.sh` to the public GitHub repository or a minimal redirect page.
 
 Deliverables:
@@ -238,3 +330,35 @@ Acceptance:
 - `myskills.sh` gives a new user a clear path from product overview to running the local demo.
 - Website content does not duplicate stale docs; it links to canonical repo docs where appropriate.
 - The site can be deployed independently from the app services.
+
+## Future Product Expansion
+
+These items are intentionally downstream from the public alpha and production-hardening work. They are strategic product directions, not public-alpha blockers.
+
+### Connected Skills Management
+
+Goal: let users connect their AI tools and systems to MySkills for clean, user-controlled, bi-directional skills management across apps, machines, and projects.
+
+Depends on: Milestones 4, 5, 7, and the platform-install-adapter work in Milestone 9.
+
+Deliverables:
+
+- Connected-tool model for AI systems such as Codex, ChatGPT, Claude Code, local agents, and future MCP-compatible clients.
+- Tool and instance registration flow with explicit user authorization, scopes, revocation, health checks, and last-sync status.
+- Bi-directional sync design that keeps MySkills as the canonical registry while reconciling local tool state through staged, reviewable changes.
+- Placement rules for where skills should be available, including per-tool, per-instance, per-machine, and project-level designation.
+- Configuration-management groundwork for tool-specific skill enablement, disabled-on-load state, and future app configuration updates where supported by each tool.
+- Conflict handling for local edits, remote updates, missing tools, unsupported capabilities, deleted skills, renamed projects, and immutable published versions.
+- Clean skills management interface showing which skills are enabled in which AI tools, apps, instances, machines, and projects.
+- Web workflows to add, remove, enable, disable, update, roll back, and relocate skills across connected tools.
+- CLI and API commands for connected-tool inventory, sync status, dry-run reconciliation, apply, rollback, and audit review.
+- Optional skill usage telemetry integration with per-user opt-in, transparent event types, retention controls, export/delete controls, and no required telemetry for core sync.
+
+Acceptance:
+
+- A user can connect at least two supported AI tool instances, choose which skills are available in each, and see the resulting placement state in the web UI.
+- A dry-run sync clearly separates no-op, install, update, disable, remove, conflict, and unsupported actions before anything is applied.
+- Applying a sync writes auditable records and can be rolled back where the target tool supports rollback.
+- Project-level designation works for at least one supported local tool without changing unrelated projects.
+- The management UI makes it obvious where each skill is enabled, disabled, missing, outdated, or blocked by tool limitations.
+- Optional telemetry is disabled by default, can be enabled or disabled without affecting skill sync, and exposes only documented usage events.
