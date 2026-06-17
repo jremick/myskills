@@ -1,6 +1,6 @@
 import { createDb, createPgPool } from "./db/client.js";
 import { createArtifactObjectStorageFromEnv } from "./artifacts/storage.js";
-import { MemoryAuthRateLimiter } from "./auth/rate-limit.js";
+import { PostgresAuthRateLimiter } from "./auth/rate-limit.js";
 import { createAuthNotificationSinkFromEnv } from "./auth/notification.js";
 import { AuthService } from "./auth/service.js";
 import { PostgresAuthStore } from "./auth/postgres-auth-store.js";
@@ -20,12 +20,12 @@ const app = buildApp({
   authService: new AuthService(new PostgresAuthStore(db), {
     mfaSecretKey: requiredAuthSecret(),
     totpIssuer: process.env.TOTP_ISSUER ?? "MySkills",
-    loginLimiter: new MemoryAuthRateLimiter({ maxAttempts: 10, windowMs: 15 * 60 * 1000 }),
-    registrationLimiter: new MemoryAuthRateLimiter({ maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
-    mfaLimiter: new MemoryAuthRateLimiter({ maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
-    emailVerificationLimiter: new MemoryAuthRateLimiter({ maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
-    passwordResetLimiter: new MemoryAuthRateLimiter({ maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
-    authActionTokenLimiter: new MemoryAuthRateLimiter({ maxAttempts: 10, windowMs: 15 * 60 * 1000 }),
+    loginLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 10, windowMs: 15 * 60 * 1000 }),
+    registrationLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
+    mfaLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
+    emailVerificationLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
+    passwordResetLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
+    authActionTokenLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 10, windowMs: 15 * 60 * 1000 }),
     notificationSink: createAuthNotificationSinkFromEnv(process.env),
   }),
   submissionService: new SubmissionService(new PostgresSubmissionStore(db, {

@@ -55,6 +55,60 @@ export interface AdminUser {
   mfaEnabled: boolean;
 }
 
+export type ApiTokenScope = "profile:read" | "skills:read" | "skills:submit" | "review:read" | "review:write";
+
+export interface ApiToken {
+  id: string;
+  name: string;
+  tokenPrefix: string;
+  scopes: ApiTokenScope[];
+  expiresAt: string;
+  revokedAt: string | null;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreatedApiToken extends ApiToken {
+  token: string;
+}
+
+export interface AdminApiToken extends ApiToken {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    status: string;
+    roles: string[];
+  };
+}
+
+export interface MfaFactor {
+  id: string;
+  type: "totp";
+  status: "pending" | "enabled" | "disabled";
+  label: string;
+  enabledAt: string | null;
+  createdAt: string;
+}
+
+export interface MfaStatus {
+  totpEnabled: boolean;
+  recoveryCodesRemaining: number;
+  factors: MfaFactor[];
+}
+
+export interface TotpEnrollment {
+  factorId: string;
+  label: string;
+  secret: string;
+  otpauthUrl: string;
+}
+
+export interface ConfirmMfaResult {
+  factor: MfaFactor;
+  recoveryCodes: string[];
+}
+
 export interface ProviderRoleMappingInput {
   claim: string;
   value: string;
@@ -174,6 +228,30 @@ export interface SubmitSkillResult {
   };
 }
 
+export interface UserSubmissionSummary {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  version: string;
+  visibility: string;
+  reviewStatus: string;
+  securityStatus: string;
+  platforms: Array<{ name: string; installTarget: string; status: string }>;
+  findingCount: number;
+  artifact: {
+    sha256: string;
+    byteSize: number;
+    contentType: string;
+  };
+  createdAt: string;
+  publishedAt: string | null;
+}
+
+export interface SkillPackageBundle {
+  files: Array<{ path: string; content: string }>;
+}
+
 export type LoginResult =
   | { mfaRequired: false; token: string; expiresAt: string; user: WebAuthUser }
   | { mfaRequired: true; challengeToken: string; expiresAt: string; user: WebAuthUser };
@@ -190,11 +268,22 @@ export interface RegistryClient {
   getRelease(slug: string, version: string): Promise<ReleaseMetadata>;
   login(input: { email: string; password: string }): Promise<LoginResult>;
   registerWithInvitation(input: { email: string; password: string; name?: string; inviteToken: string }): Promise<{ status: "pending" | "active" }>;
-  confirmEmailVerification(input: { token: string }): Promise<{ status: "verified" }>;
+  requestPasswordReset(input: { email: string }): Promise<{ status: "pending" }>;
   confirmPasswordReset(input: { token: string; password: string }): Promise<{ status: "reset" }>;
+  confirmEmailVerification(input: { token: string }): Promise<{ status: "verified" }>;
   verifyMfa(input: { challengeToken: string; codeOrRecoveryCode: string }): Promise<SessionResult>;
   getMe(token?: string): Promise<WebAuthUser>;
   logout(token?: string): Promise<void>;
+  changePassword(input: { currentPassword: string; password: string }, token?: string): Promise<{ status: "changed" }>;
+  requestEmailChange(input: { email: string; password: string }, token?: string): Promise<{ status: "pending" }>;
+  confirmEmailChange(input: { token: string }): Promise<{ status: "changed" }>;
+  getMfaStatus(token?: string): Promise<MfaStatus>;
+  startTotpEnrollment(input: { password: string; label?: string }, token?: string): Promise<TotpEnrollment>;
+  confirmTotpEnrollment(input: { factorId: string; code: string }, token?: string): Promise<ConfirmMfaResult>;
+  disableTotpMfa(input: { password: string }, token?: string): Promise<{ status: "disabled"; disabledFactors: number }>;
+  listApiTokens(token?: string): Promise<ApiToken[]>;
+  createApiToken(input: { name: string; scopes: ApiTokenScope[]; expiresAt?: string }, token?: string): Promise<CreatedApiToken>;
+  revokeApiToken(tokenId: string, token?: string): Promise<ApiToken>;
   getAdminRegistration(token?: string): Promise<AdminRegistrationSettings>;
   updateAdminRegistration(mode: AdminRegistrationMode, token?: string): Promise<AdminRegistrationSettings>;
   createRegistrationInvitation(input: { email: string; name?: string }, token?: string): Promise<RegistrationInvitation>;
@@ -203,10 +292,14 @@ export interface RegistryClient {
   listAdminUsers(token?: string): Promise<AdminUser[]>;
   performAdminUserAction(userId: string, action: "approve" | "activate" | "disable" | "delete", token?: string): Promise<AdminUser>;
   updateAdminUserRoles(userId: string, roles: string[], token?: string): Promise<AdminUser>;
+  listAdminApiTokens(token?: string): Promise<AdminApiToken[]>;
+  revokeAdminApiToken(tokenId: string, token?: string): Promise<AdminApiToken>;
   listAdminProviders(token?: string): Promise<AdminProviderConfig[]>;
   upsertAdminProvider(key: string, input: UpsertAdminProviderInput, token?: string): Promise<AdminProviderConfig>;
   listAdminAudit(limit?: number, token?: string): Promise<AdminAuditEvent[]>;
   submitArchive(input: SubmitArchiveInput, token?: string): Promise<SubmitSkillResult>;
+  listUserSubmissions(token?: string): Promise<UserSubmissionSummary[]>;
+  exportUserSubmission(submissionId: string, token?: string): Promise<SkillPackageBundle>;
   listReviewSubmissions(token?: string): Promise<ReviewSubmissionSummary[]>;
   performReviewAction(submissionId: string, action: "approve" | "publish", reason?: string, token?: string): Promise<ReviewActionResult>;
   listTeams(token?: string): Promise<TeamDashboard>;
@@ -264,14 +357,20 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         body: input,
       });
     },
-    async confirmEmailVerification(input) {
-      return requestJson<{ status: "verified" }>(fetchImpl, `${root}/v1/auth/email-verification/confirm`, {
+    async requestPasswordReset(input) {
+      return requestJson<{ status: "pending" }>(fetchImpl, `${root}/v1/auth/password-reset/request`, {
         method: "POST",
         body: input,
       });
     },
     async confirmPasswordReset(input) {
       return requestJson<{ status: "reset" }>(fetchImpl, `${root}/v1/auth/password-reset/confirm`, {
+        method: "POST",
+        body: input,
+      });
+    },
+    async confirmEmailVerification(input) {
+      return requestJson<{ status: "verified" }>(fetchImpl, `${root}/v1/auth/email-verification/confirm`, {
         method: "POST",
         body: input,
       });
@@ -297,6 +396,89 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         body: {},
         token: overrideToken ?? token,
       });
+    },
+    async changePassword(input, overrideToken) {
+      return requestJson<{ status: "changed" }>(fetchImpl, `${root}/v1/auth/account/password`, {
+        method: "POST",
+        body: input,
+        token: overrideToken ?? token,
+      });
+    },
+    async requestEmailChange(input, overrideToken) {
+      return requestJson<{ status: "pending" }>(fetchImpl, `${root}/v1/auth/account/email-change`, {
+        method: "POST",
+        body: input,
+        token: overrideToken ?? token,
+      });
+    },
+    async confirmEmailChange(input) {
+      return requestJson<{ status: "changed" }>(fetchImpl, `${root}/v1/auth/email-change/confirm`, {
+        method: "POST",
+        body: input,
+      });
+    },
+    async getMfaStatus(overrideToken) {
+      const body = await requestJson<{ mfa: MfaStatus }>(fetchImpl, `${root}/v1/auth/mfa`, {
+        token: overrideToken ?? token,
+      });
+      return body.mfa;
+    },
+    async startTotpEnrollment(input, overrideToken) {
+      const body = await requestJson<{ enrollment: TotpEnrollment }>(fetchImpl, `${root}/v1/auth/mfa/totp/enroll`, {
+        method: "POST",
+        body: {
+          password: input.password,
+          ...(input.label?.trim() ? { label: input.label.trim() } : {}),
+        },
+        token: overrideToken ?? token,
+      });
+      return body.enrollment;
+    },
+    async confirmTotpEnrollment(input, overrideToken) {
+      const body = await requestJson<{ mfa: ConfirmMfaResult }>(fetchImpl, `${root}/v1/auth/mfa/totp/confirm`, {
+        method: "POST",
+        body: input,
+        token: overrideToken ?? token,
+      });
+      return body.mfa;
+    },
+    async disableTotpMfa(input, overrideToken) {
+      const body = await requestJson<{ mfa: { status: "disabled"; disabledFactors: number } }>(
+        fetchImpl,
+        `${root}/v1/auth/mfa/totp`,
+        {
+          method: "DELETE",
+          body: input,
+          token: overrideToken ?? token,
+        },
+      );
+      return body.mfa;
+    },
+    async listApiTokens(overrideToken) {
+      const body = await requestJson<{ tokens: ApiToken[] }>(fetchImpl, `${root}/v1/auth/api-tokens`, {
+        token: overrideToken ?? token,
+      });
+      return body.tokens;
+    },
+    async createApiToken(input, overrideToken) {
+      const body = await requestJson<{ token: CreatedApiToken }>(fetchImpl, `${root}/v1/auth/api-tokens`, {
+        method: "POST",
+        body: {
+          name: input.name,
+          scopes: input.scopes,
+          ...(input.expiresAt?.trim() ? { expiresAt: input.expiresAt.trim() } : {}),
+        },
+        token: overrideToken ?? token,
+      });
+      return body.token;
+    },
+    async revokeApiToken(tokenId, overrideToken) {
+      const body = await requestJson<{ token: ApiToken }>(
+        fetchImpl,
+        `${root}/v1/auth/api-tokens/${encodeURIComponent(tokenId)}`,
+        { method: "DELETE", token: overrideToken ?? token },
+      );
+      return body.token;
     },
     async getAdminRegistration(overrideToken) {
       const body = await requestJson<{ registration: AdminRegistrationSettings }>(
@@ -360,6 +542,20 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
       );
       return body.user;
     },
+    async listAdminApiTokens(overrideToken) {
+      const body = await requestJson<{ tokens: AdminApiToken[] }>(fetchImpl, `${root}/v1/admin/api-tokens`, {
+        token: overrideToken ?? token,
+      });
+      return body.tokens;
+    },
+    async revokeAdminApiToken(tokenId, overrideToken) {
+      const body = await requestJson<{ token: AdminApiToken }>(
+        fetchImpl,
+        `${root}/v1/admin/api-tokens/${encodeURIComponent(tokenId)}`,
+        { method: "DELETE", token: overrideToken ?? token },
+      );
+      return body.token;
+    },
     async listAdminProviders(overrideToken) {
       const body = await requestJson<{ providers: AdminProviderConfig[] }>(
         fetchImpl,
@@ -395,6 +591,19 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         },
         token: overrideToken ?? token,
       });
+    },
+    async listUserSubmissions(overrideToken) {
+      const body = await requestJson<{ submissions: UserSubmissionSummary[] }>(fetchImpl, `${root}/v1/submissions/mine`, {
+        token: overrideToken ?? token,
+      });
+      return body.submissions;
+    },
+    async exportUserSubmission(submissionId, overrideToken) {
+      return requestJson<SkillPackageBundle>(
+        fetchImpl,
+        `${root}/v1/submissions/${encodeURIComponent(submissionId)}/bundle`,
+        { token: overrideToken ?? token },
+      );
     },
     async listReviewSubmissions(overrideToken) {
       const body = await requestJson<{ submissions: ReviewSubmissionSummary[] }>(
@@ -508,10 +717,41 @@ export function safeAuthErrorMessage(error: unknown): string {
   if (isSafeApiError(error) && error.status === 429) {
     return "Too many sign-in attempts. Try again later.";
   }
+  if (isSafeApiError(error) && error.status === 401) {
+    return "Invalid email or password.";
+  }
   if (isSafeApiError(error) && error.status >= 400 && error.status < 500) {
     return "Sign in could not be completed.";
   }
   return "Authentication is not available.";
+}
+
+export function safeAccountErrorMessage(error: unknown): string {
+  if (isSafeApiError(error) && error.status === 429) {
+    return "Too many attempts. Try again later.";
+  }
+  if (
+    isSafeApiError(error)
+    && (error.code === "INVALID_RESET_TOKEN" || error.code === "INVALID_VERIFICATION_TOKEN")
+  ) {
+    return "This link is invalid or expired.";
+  }
+  if (isSafeApiError(error) && error.status === 401) {
+    return "Current password is incorrect.";
+  }
+  if (isSafeApiError(error) && error.status === 403 && error.code === "MFA_VERIFICATION_REQUIRED") {
+    return "Sign in with MFA before changing this setting.";
+  }
+  if (isSafeApiError(error) && error.code === "EMAIL_ALREADY_IN_USE") {
+    return "That email address is already in use.";
+  }
+  if (isSafeApiError(error) && error.code === "INVALID_PASSWORD") {
+    return "Choose a stronger password.";
+  }
+  if (isSafeApiError(error) && error.status >= 400 && error.status < 500) {
+    return "Account change could not be completed.";
+  }
+  return "Account settings are not available.";
 }
 
 export function safeAdminErrorMessage(error: unknown): string {

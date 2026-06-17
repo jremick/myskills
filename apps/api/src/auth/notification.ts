@@ -1,8 +1,9 @@
 import nodemailer, { type Transporter } from "nodemailer";
+import { Resend, type CreateEmailOptions, type CreateEmailResponse } from "resend";
 import type { AuthActionNotification, AuthNotificationSink } from "./service.js";
 
-type AuthNotificationPurpose = "email_verification" | "password_reset" | "registration_invitation";
-type AuthNotificationMode = "console" | "smtp" | "disabled";
+type AuthNotificationPurpose = "email_verification" | "password_reset" | "registration_invitation" | "email_change";
+type AuthNotificationMode = "console" | "smtp" | "resend" | "disabled";
 
 export interface AuthNotificationLogger {
   info(message: string): void;
@@ -12,6 +13,14 @@ export interface SmtpAuthNotificationOptions {
   appBaseUrl: string;
   from: string;
   transporter: Pick<Transporter, "sendMail">;
+}
+
+export interface ResendAuthNotificationOptions {
+  appBaseUrl: string;
+  from: string;
+  client: {
+    send(payload: CreateEmailOptions): Promise<CreateEmailResponse>;
+  };
 }
 
 export class ConsoleAuthNotificationSink implements AuthNotificationSink {
@@ -32,6 +41,10 @@ export class ConsoleAuthNotificationSink implements AuthNotificationSink {
 
   sendRegistrationInvitation(input: AuthActionNotification): void {
     this.log("registration_invitation", input);
+  }
+
+  sendEmailChangeVerification(input: AuthActionNotification): void {
+    this.log("email_change", input);
   }
 
   private log(purpose: AuthNotificationPurpose, input: AuthActionNotification): void {
@@ -55,6 +68,10 @@ export class SmtpAuthNotificationSink implements AuthNotificationSink {
     await this.send("registration_invitation", input);
   }
 
+  async sendEmailChangeVerification(input: AuthActionNotification): Promise<void> {
+    await this.send("email_change", input);
+  }
+
   private async send(purpose: AuthNotificationPurpose, input: AuthActionNotification): Promise<void> {
     const message = authActionMessage(this.options.appBaseUrl, purpose, input);
     await this.options.transporter.sendMail({
@@ -64,6 +81,43 @@ export class SmtpAuthNotificationSink implements AuthNotificationSink {
       text: message.text,
       html: message.html,
     });
+  }
+}
+
+export class ResendAuthNotificationSink implements AuthNotificationSink {
+  constructor(private readonly options: ResendAuthNotificationOptions) {}
+
+  async sendEmailVerification(input: AuthActionNotification): Promise<void> {
+    await this.send("email_verification", input);
+  }
+
+  async sendPasswordReset(input: AuthActionNotification): Promise<void> {
+    await this.send("password_reset", input);
+  }
+
+  async sendRegistrationInvitation(input: AuthActionNotification): Promise<void> {
+    await this.send("registration_invitation", input);
+  }
+
+  async sendEmailChangeVerification(input: AuthActionNotification): Promise<void> {
+    await this.send("email_change", input);
+  }
+
+  private async send(purpose: AuthNotificationPurpose, input: AuthActionNotification): Promise<void> {
+    const message = authActionMessage(this.options.appBaseUrl, purpose, input);
+    const response = await this.options.client.send({
+      from: this.options.from,
+      to: input.email,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    });
+    if (response.error) {
+      throw new Error(`Resend email delivery failed: ${response.error.name} ${response.error.message}`);
+    }
+    if (!response.data) {
+      throw new Error("Resend email delivery failed without a response id.");
+    }
   }
 }
 
@@ -87,6 +141,15 @@ export function createAuthNotificationSinkFromEnv(
       throw new Error("AUTH_NOTIFICATION_MODE=console is not allowed in production.");
     }
     return new ConsoleAuthNotificationSink({ appBaseUrl, logger });
+  }
+
+  if (mode === "resend") {
+    const resend = new Resend(requiredString(env.RESEND_API_KEY, "RESEND_API_KEY"));
+    return new ResendAuthNotificationSink({
+      appBaseUrl,
+      from: requiredEmailHeader(env.RESEND_FROM, "RESEND_FROM"),
+      client: resend.emails,
+    });
   }
 
   const secure = optionalBoolean(env.SMTP_SECURE);
@@ -115,6 +178,8 @@ export function authActionUrl(appBaseUrl: string, purpose: AuthNotificationPurpo
     base.pathname = "/auth/verify-email";
   } else if (purpose === "password_reset") {
     base.pathname = "/auth/reset-password";
+  } else if (purpose === "email_change") {
+    base.pathname = "/auth/change-email";
   } else {
     base.pathname = "/auth/register";
   }
@@ -161,6 +226,9 @@ function authActionLabel(purpose: AuthNotificationPurpose): string {
   if (purpose === "password_reset") {
     return "reset your password";
   }
+  if (purpose === "email_change") {
+    return "confirm your new MySkills email address";
+  }
   return "register for MySkills";
 }
 
@@ -171,14 +239,17 @@ function authActionSubject(purpose: AuthNotificationPurpose): string {
   if (purpose === "password_reset") {
     return "Reset your MySkills password";
   }
+  if (purpose === "email_change") {
+    return "Confirm your new MySkills email";
+  }
   return "Register for MySkills";
 }
 
 function normalizeMode(mode: string): AuthNotificationMode {
-  if (mode === "console" || mode === "smtp" || mode === "disabled") {
+  if (mode === "console" || mode === "smtp" || mode === "resend" || mode === "disabled") {
     return mode;
   }
-  throw new Error("AUTH_NOTIFICATION_MODE must be console, smtp, or disabled.");
+  throw new Error("AUTH_NOTIFICATION_MODE must be console, smtp, resend, or disabled.");
 }
 
 function requiredAppBaseUrl(value: string | undefined, production: boolean): string {

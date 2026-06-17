@@ -62,12 +62,12 @@ Current status:
 
 Done:
 
-- Core API/schema slice, session auth, email verification/reset tokens, TOTP MFA, recovery codes, local roles, scoped API tokens, and sanitized audit listing.
-- Public search/detail endpoints, authenticated package intake, archive extraction defenses, scan evidence, artifact storage, maintainer review, publication, release metadata, and authorized bundle delivery.
+- Core API/schema slice, session auth, email verification/reset/invitation/email-change tokens, TOTP MFA, recovery codes, local roles, scoped API tokens, browser account management, admin API-token monitoring/revocation, and sanitized audit listing.
+- Public search/detail endpoints, authenticated package intake, archive extraction defenses, scan evidence, artifact storage, maintainer review, publication, release metadata, authorized bundle delivery, and user-owned submitted-skill export.
 - Web workflows for public browsing, package submission, maintainer review, publication, registration/user/provider/role administration, and audit review.
 - Read-only MCP stdio and stateless Streamable HTTP discovery servers.
 - CLI workflows for validation, scanning, login/logout, search/info, submission, review actions, verified export, local install/list/update/rollback, and API-token management.
-- First-pass production container packaging and deployment preflight checks.
+- First-pass production container packaging, opt-in web analytics support, and deployment preflight checks.
 
 Remaining:
 
@@ -77,6 +77,8 @@ Remaining:
 - Provider login/linking and external identity lifecycle.
 - Signed or direct object delivery that preserves authorization and integrity.
 - Platform-specific install adapters.
+- Skill backup jobs.
+- Version-history browsing.
 - Background scan jobs.
 - Release automation.
 
@@ -170,16 +172,19 @@ Current status:
 Done:
 
 - Public browse/search, skill detail, release metadata, and export-guidance views.
-- Email/password login/logout, MFA challenge completion, current-user refresh, and session-aware API calls.
-- Authenticated author `.zip` package submission.
+- Email/password login/logout, password reset, account settings, MFA challenge/setup/reset/removal, current-user refresh, and session-aware API calls.
+- Authenticated author `.zip` package submission and author submitted-version export.
 - Maintainer review dashboard workflows for approval/publication.
-- Owner/admin console workflows for registration, user status actions, role updates, provider metadata/mappings, and audit review.
+- User API-key management.
+- Owner/admin console workflows for registration, user status actions, role updates, API-key monitoring/revocation, provider metadata/mappings, and audit review.
 - Supplied My Skills logo and favicon kit wired into the web app.
 
 Remaining:
 
 - Broader color, typography, surface, and component refresh from the identity guidelines.
 - Private draft management.
+- Version-history viewing.
+- Backup/restore workflows.
 - Remaining instance settings administration.
 
 ## Milestone 6: Skill Evals

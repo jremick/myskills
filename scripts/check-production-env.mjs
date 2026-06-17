@@ -15,7 +15,7 @@ const warnings = [];
 
 requiredExact("NODE_ENV", "production");
 requiredUrl("APP_BASE_URL", { https: true });
-requiredUrl("VITE_API_BASE_URL", { https: true });
+requiredUrlOrAbsolutePath("VITE_API_BASE_URL", { https: true });
 rejectExampleValue("APP_BASE_URL");
 rejectExampleValue("VITE_API_BASE_URL");
 validateAllowedOrigins();
@@ -173,15 +173,25 @@ function validateAllowedOrigins() {
 
 function validateAuthNotifications() {
   const mode = stringValue("AUTH_NOTIFICATION_MODE") || "smtp";
-  if (mode !== "smtp") {
-    errors.push("AUTH_NOTIFICATION_MODE must be smtp in production.");
+  if (mode !== "smtp" && mode !== "resend") {
+    errors.push("AUTH_NOTIFICATION_MODE must be smtp or resend in production.");
+    return;
   }
-  requiredString("SMTP_HOST");
-  requiredString("SMTP_FROM");
-  rejectExampleValue("SMTP_HOST");
-  rejectExampleValue("SMTP_FROM");
-  if (stringValue("SMTP_TLS_REJECT_UNAUTHORIZED") === "false") {
-    errors.push("SMTP_TLS_REJECT_UNAUTHORIZED=false is not allowed in production.");
+  if (mode === "resend") {
+    requiredString("RESEND_API_KEY");
+    requiredString("RESEND_FROM");
+    rejectExampleValue("RESEND_API_KEY");
+    rejectExampleValue("RESEND_FROM");
+    return;
+  }
+  if (mode === "smtp") {
+    requiredString("SMTP_HOST");
+    requiredString("SMTP_FROM");
+    rejectExampleValue("SMTP_HOST");
+    rejectExampleValue("SMTP_FROM");
+    if (stringValue("SMTP_TLS_REJECT_UNAUTHORIZED") === "false") {
+      errors.push("SMTP_TLS_REJECT_UNAUTHORIZED=false is not allowed in production.");
+    }
   }
 }
 
@@ -209,6 +219,7 @@ function validateArtifactStorage() {
   const endpoint = stringValue("S3_ENDPOINT");
   if (endpoint) {
     rejectLocalUrl("S3_ENDPOINT", endpoint);
+    validateS3Endpoint(endpoint);
   }
 }
 
@@ -264,6 +275,35 @@ function requiredUrl(name, options) {
   }
 }
 
+function requiredUrlOrAbsolutePath(name, options) {
+  const value = requiredString(name);
+  if (!value) {
+    return;
+  }
+  if (value.startsWith("/") && !value.startsWith("//")) {
+    return;
+  }
+  validateUrlValue(name, value, options);
+}
+
+function validateS3Endpoint(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    errors.push(`S3_ENDPOINT must be a valid URL: ${value}`);
+    return;
+  }
+  if (url.protocol === "https:") {
+    return;
+  }
+  if (url.protocol === "http:" && booleanValue("S3_ALLOW_INSECURE_ENDPOINT")) {
+    warnings.push("S3_ALLOW_INSECURE_ENDPOINT=true is set; only use this for trusted private-network object storage.");
+    return;
+  }
+  errors.push("S3_ENDPOINT must use https unless S3_ALLOW_INSECURE_ENDPOINT=true is set for trusted private-network object storage.");
+}
+
 function rejectExampleValue(name) {
   const value = stringValue(name);
   if (value.includes("example.com") || value.includes("replace-with-")) {
@@ -305,6 +345,21 @@ function requiredString(name) {
 function stringValue(name) {
   const value = env[name];
   return typeof value === "string" ? value.trim() : "";
+}
+
+function booleanValue(name) {
+  const value = stringValue(name).toLowerCase();
+  if (!value) {
+    return false;
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  errors.push(`${name} must be true or false.`);
+  return false;
 }
 
 function csv(name) {

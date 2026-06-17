@@ -3,6 +3,7 @@ import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type {
   AuditEventRecord,
   ApiTokenRecord,
+  AdminApiTokenRecord,
   ApiTokenScope,
   AuthActionTokenRecord,
   AuthActionTokenPurpose,
@@ -274,6 +275,18 @@ export class MemoryAuthStore implements AuthStore {
     return user ? toRecord(user) : null;
   }
 
+  async updateUserEmail(input: { userId: string; email: string; emailVerifiedAt: Date }): Promise<AuthUserRecord | null> {
+    const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
+    if (!user) {
+      return null;
+    }
+    this.users.delete(user.email);
+    user.email = input.email.toLowerCase();
+    user.emailVerifiedAt = input.emailVerifiedAt;
+    this.users.set(user.email, user);
+    return toRecord(user);
+  }
+
   async updateUserStatus(input: { userId: string; status: UserStatus; emailVerifiedAt?: Date | null }): Promise<AuthUserRecord | null> {
     const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
     if (!user) {
@@ -407,6 +420,15 @@ export class MemoryAuthStore implements AuthStore {
       .map(toApiTokenRecord);
   }
 
+  async listApiTokensForAdmin(): Promise<AdminApiTokenRecord[]> {
+    return [...this.apiTokens.values()]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .flatMap((token) => {
+        const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
+        return user ? [{ ...toApiTokenRecord(token), user: toRecord(user) }] : [];
+      });
+  }
+
   async findUserByApiTokenHash(tokenHash: string, now = new Date()): Promise<AuthUserWithApiToken | null> {
     const token = this.apiTokens.get(tokenHash);
     if (!token || token.revokedAt || token.expiresAt <= now) {
@@ -437,6 +459,21 @@ export class MemoryAuthStore implements AuthStore {
       token.revokedAt = new Date();
     }
     return toApiTokenRecord(token);
+  }
+
+  async revokeAnyApiToken(input: { tokenId: string }): Promise<AdminApiTokenRecord | null> {
+    const token = [...this.apiTokens.values()].find((candidate) => candidate.id === input.tokenId);
+    if (!token) {
+      return null;
+    }
+    const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
+    if (!user) {
+      return null;
+    }
+    if (!token.revokedAt) {
+      token.revokedAt = new Date();
+    }
+    return { ...toApiTokenRecord(token), user: toRecord(user) };
   }
 
   async listProviderConfigs(): Promise<ProviderConfigRecord[]> {
@@ -520,12 +557,47 @@ export class MemoryAuthStore implements AuthStore {
     return toMfaTotpFactorRecord(factor);
   }
 
-  async updateMfaTotpFactorCounter(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<void> {
-    const factor = this.mfaFactors.get(input.factorId);
-    if (factor && factor.userId === input.userId) {
-      factor.lastUsedCounter = input.lastUsedCounter;
-      factor.updatedAt = new Date();
+  async disableMfaTotpFactorsForUser(input: { userId: string; disabledAt?: Date }): Promise<number> {
+    const disabledAt = input.disabledAt ?? new Date();
+    let count = 0;
+    for (const factor of this.mfaFactors.values()) {
+      if (factor.userId !== input.userId || factor.status === "disabled") {
+        continue;
+      }
+      factor.status = "disabled";
+      factor.disabledAt = disabledAt;
+      factor.updatedAt = disabledAt;
+      count += 1;
     }
+    return count;
+  }
+
+  async disableOtherMfaTotpFactorsForUser(input: { userId: string; factorId: string; disabledAt?: Date }): Promise<number> {
+    const disabledAt = input.disabledAt ?? new Date();
+    let count = 0;
+    for (const factor of this.mfaFactors.values()) {
+      if (factor.userId !== input.userId || factor.id === input.factorId || factor.status === "disabled") {
+        continue;
+      }
+      factor.status = "disabled";
+      factor.disabledAt = disabledAt;
+      factor.updatedAt = disabledAt;
+      count += 1;
+    }
+    return count;
+  }
+
+  async updateMfaTotpFactorCounter(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<boolean> {
+    const factor = this.mfaFactors.get(input.factorId);
+    if (!factor || factor.userId !== input.userId) {
+      return false;
+    }
+    if (factor.lastUsedCounter !== null && factor.lastUsedCounter >= input.lastUsedCounter) {
+      return false;
+    }
+    factor.lastUsedCounter = input.lastUsedCounter;
+    factor.updatedAt = new Date();
+    return true;
   }
 
   async replaceMfaRecoveryCodes(input: { userId: string; codeHashes: string[] }): Promise<void> {
@@ -586,11 +658,13 @@ export class MemoryAuthStore implements AuthStore {
     return user ? { ...toMfaChallengeRecord(challenge), user: toRecord(user) } : null;
   }
 
-  async markMfaChallengeUsed(input: { challengeId: string; usedAt: Date }): Promise<void> {
+  async markMfaChallengeUsed(input: { challengeId: string; usedAt: Date }): Promise<boolean> {
     const challenge = [...this.mfaChallenges.values()].find((candidate) => candidate.id === input.challengeId);
-    if (challenge && !challenge.usedAt) {
-      challenge.usedAt = input.usedAt;
+    if (!challenge || challenge.usedAt) {
+      return false;
     }
+    challenge.usedAt = input.usedAt;
+    return true;
   }
 
   async recordAuditEvent(input: CreateAuditEventInput): Promise<void> {

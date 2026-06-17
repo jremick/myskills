@@ -28,7 +28,7 @@ RUN npm prune --omit=dev
 FROM deps AS web-build
 ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
-RUN node -e "const value = process.env.VITE_API_BASE_URL; if (!value) throw new Error('VITE_API_BASE_URL build arg is required for the web image.'); const url = new URL(value); const local = ['localhost','127.0.0.1','::1'].includes(url.hostname); if (url.protocol !== 'https:' && !local) throw new Error('VITE_API_BASE_URL must use https outside local builds.');"
+RUN node -e "const value = process.env.VITE_API_BASE_URL; if (!value) throw new Error('VITE_API_BASE_URL build arg is required for the web image.'); if (!value.startsWith('/')) { const url = new URL(value); const local = ['localhost','127.0.0.1','::1'].includes(url.hostname); if (url.protocol !== 'https:' && !local) throw new Error('VITE_API_BASE_URL must use https outside local builds.'); }"
 RUN npm run build -w @myskills-app/core \
   && npm run build -w @myskills-app/web
 
@@ -62,6 +62,8 @@ EXPOSE 3002
 CMD ["node", "apps/mcp/dist/http-index.js"]
 
 FROM nginx:1.29-alpine AS web
-COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+ENV PORT=80 \
+    API_PROXY_TARGET=http://127.0.0.1:3001
+COPY deploy/nginx.railway.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=web-build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 80

@@ -229,6 +229,42 @@ test("artifact storage env config validates S3 settings", () => {
   assert.ok(storage);
 });
 
+test("artifact storage env config requires trusted S3 transport in production", () => {
+  assert.throws(
+    () => createArtifactObjectStorageFromEnv({
+      NODE_ENV: "production",
+      ARTIFACT_STORAGE_MODE: "s3",
+      S3_ENDPOINT: "http://object-store.internal:9000",
+      S3_REGION: "local",
+      S3_BUCKET: "myskills-app",
+      S3_ACCESS_KEY_ID: "access-key",
+      S3_SECRET_ACCESS_KEY: "secret-key",
+    }),
+    /S3_ENDPOINT must use https in production/,
+  );
+
+  assert.ok(createArtifactObjectStorageFromEnv({
+    NODE_ENV: "production",
+    ARTIFACT_STORAGE_MODE: "s3",
+    S3_ENDPOINT: "https://object-store.example.com",
+    S3_REGION: "us-east-1",
+    S3_BUCKET: "myskills-app",
+    S3_ACCESS_KEY_ID: "access-key",
+    S3_SECRET_ACCESS_KEY: "secret-key",
+  }));
+
+  assert.ok(createArtifactObjectStorageFromEnv({
+    NODE_ENV: "production",
+    ARTIFACT_STORAGE_MODE: "s3",
+    S3_ENDPOINT: "http://object-store.internal:9000",
+    S3_ALLOW_INSECURE_ENDPOINT: "true",
+    S3_REGION: "local",
+    S3_BUCKET: "myskills-app",
+    S3_ACCESS_KEY_ID: "access-key",
+    S3_SECRET_ACCESS_KEY: "secret-key",
+  }));
+});
+
 function artifactRecord(storageKey: string, body: string, options: { payload: unknown }) {
   return {
     storageKey,

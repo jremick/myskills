@@ -11,7 +11,7 @@ Out of scope for alpha: hosted service operations, multi-instance federation, pa
 
 ## Assumptions
 
-- Deployments are self-hosted by operators who control Postgres, object storage, SMTP, TLS, and reverse proxy configuration.
+- Deployments are self-hosted by operators who control Postgres, object storage, email provider, TLS, and reverse proxy configuration.
 - Public alpha users may run the app locally or in a test environment.
 - Alpha deployments should not be treated as business-critical systems without additional operational controls.
 - Uploaded packages are untrusted until validation, scan, review, and publication gates pass.
@@ -22,7 +22,7 @@ Out of scope for alpha: hosted service operations, multi-instance federation, pa
 - User accounts, roles, sessions, MFA state, API tokens, auth action tokens, and provider mapping configuration.
 - Skill metadata, lifecycle/review state, scan findings, package artifacts, object hashes, and bundle payloads.
 - Audit events for auth, admin, package review, artifact delivery, and MCP authorization.
-- Deployment secrets for database, object storage, SMTP, token encryption, and provider integrations.
+- Deployment secrets for database, object storage, email delivery, token encryption, and provider integrations.
 - Release artifacts, checksums, and GitHub tag state.
 
 ## Trust Boundaries
@@ -52,7 +52,7 @@ Out of scope for alpha: hosted service operations, multi-instance federation, pa
 | --- | --- | --- | --- | --- |
 | Unauthorized discovery of private or unsafe skills | Metadata or package-content exposure | Medium | Server-side public/review/security/publish predicates, generic denial paths, API/CLI/MCP tests | Broader cross-surface regression matrix for future role-gated MCP/admin tools |
 | Token theft or replay | Account/API misuse | Medium | Opaque hashed sessions and API tokens, scoped tokens, revocation on disable/delete/password reset, MFA-gated privileged actions | Platform keychain storage and browser/device login for CLI |
-| Auth brute force across restarts or replicas | Account takeover pressure and noisy abuse | Medium | Process-local auth throttling before expensive auth work | Distributed rate limits, ingress throttles, alerts, and restart-resistant counters |
+| Auth brute force across restarts or replicas | Account takeover pressure and noisy abuse | Medium | Shared database-backed auth throttling before expensive auth work | Ingress throttles, alerts, and higher-volume abuse controls |
 | Malicious package archive | Path traversal, unsafe install content, secret leakage | Medium | Root manifest validation, archive traversal/symlink/encryption/compression/size/file-count defenses, blocking scans, maintainer review | Background scan jobs, richer policy fixtures, deprecate/revoke workflows |
 | Malicious prompt or uncommon secret passes narrow scanner | Reviewer social engineering or private-data exposure | Medium | Baseline secret/command/install-hook rules plus maintainer review | Broader fixture-backed scanner corpus and reviewer diff views |
 | Artifact tampering or direct object exposure | Installing unreviewed or modified content | Medium | Internal opaque storage keys, API-owned object writes, byte-size and SHA-256 verification on read, fail-closed mismatch handling | Signed/direct delivery design with audit and authorization preserved |
@@ -70,7 +70,7 @@ The alpha can be public if the repo passes release checks and GitHub private vul
 
 - Per-tool MCP audit events.
 - Background scan jobs and stronger package policy fixtures.
-- Distributed auth rate limits and ingress abuse controls.
+- Ingress abuse controls and alerting around auth-rate-limit pressure.
 - Provider login/linking and external identity lifecycle.
 - Platform keychain storage for CLI credentials.
 - Signed or direct artifact delivery design with authorization and audit.

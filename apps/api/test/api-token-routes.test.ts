@@ -120,6 +120,63 @@ test("API token management requires a session, not another API token", async (t)
   assert.equal(stillWorks.statusCode, 200);
 });
 
+test("MFA-verified admins can monitor and revoke user API tokens", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildTokenApp(authStore);
+  t.after(() => app.close());
+  const authorSession = await addAndLogin(app, authStore, {
+    id: "author-1",
+    email: "author@example.com",
+    roles: ["author"],
+  });
+  const adminSession = await addAndLoginWithMfa(app, authStore, {
+    id: "owner-1",
+    email: "owner@example.com",
+    roles: ["owner"],
+  });
+  const plainSession = await addAndLogin(app, authStore, {
+    id: "plain-1",
+    email: "plain@example.com",
+    roles: ["user"],
+  });
+  const token = await createApiToken(app, authorSession, ["skills:read"]);
+
+  const denied = await app.inject({
+    method: "GET",
+    url: "/v1/admin/api-tokens",
+    headers: { authorization: `Bearer ${plainSession}` },
+  });
+  assert.equal(denied.statusCode, 403);
+  assert.equal(denied.json().error.code, "ADMIN_ROLE_REQUIRED");
+
+  const list = await app.inject({
+    method: "GET",
+    url: "/v1/admin/api-tokens",
+    headers: { authorization: `Bearer ${adminSession}` },
+  });
+  assert.equal(list.statusCode, 200);
+  assert.equal(list.json().tokens[0].id, token.id);
+  assert.equal(list.json().tokens[0].user.email, "author@example.com");
+  assert.equal(JSON.stringify(list.json()).includes(token.token), false);
+  assert.equal(JSON.stringify(list.json()).includes(hashApiToken(token.token)), false);
+
+  const revoke = await app.inject({
+    method: "DELETE",
+    url: `/v1/admin/api-tokens/${token.id}`,
+    headers: { authorization: `Bearer ${adminSession}` },
+  });
+  assert.equal(revoke.statusCode, 200);
+  assert.equal(revoke.json().token.revokedAt.length > 0, true);
+  assert.equal(revoke.json().token.user.email, "author@example.com");
+
+  const revokedUse = await app.inject({
+    method: "GET",
+    url: "/v1/me",
+    headers: { authorization: `Bearer ${token.token}` },
+  });
+  assert.equal(revokedUse.statusCode, 401);
+});
+
 test("API token scopes gate protected routes separately from roles", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const submissionStore = new MemorySubmissionStore();

@@ -122,66 +122,135 @@ test("registry client supports login, MFA verification, current user, and logout
   assert.equal(calls[3].authorization, "Bearer verified-session-token");
 });
 
-test("registry client redeems registration invitations", async () => {
-  const calls: Array<{ body?: string; method?: string; url: string }> = [];
+test("registry client supports MFA status and TOTP enrollment", async () => {
+  const calls: Array<{ body?: string; method?: string; url: string; authorization?: string }> = [];
   const client = createRegistryClient("http://api.test", async (input, init) => {
+    const url = String(input);
     calls.push({
       body: typeof init?.body === "string" ? init.body : undefined,
       method: init?.method,
-      url: String(input),
+      url,
+      authorization: init?.headers instanceof Headers ? init.headers.get("authorization") ?? undefined : (init?.headers as Record<string, string> | undefined)?.authorization,
     });
-    return jsonResponse(202, { status: "active" });
+    if (url.endsWith("/v1/auth/mfa") && !init?.method) {
+      return jsonResponse(200, { mfa: { totpEnabled: false, recoveryCodesRemaining: 0, factors: [] } });
+    }
+    if (url.endsWith("/v1/auth/mfa/totp/enroll")) {
+      return jsonResponse(201, {
+        enrollment: {
+          factorId: "factor-1",
+          label: "1Password",
+          secret: "JBSWY3DPEHPK3PXP",
+          otpauthUrl: "otpauth://totp/MySkills:owner%40example.com",
+        },
+      });
+    }
+    return jsonResponse(200, {
+      mfa: {
+        factor: {
+          id: "factor-1",
+          type: "totp",
+          status: "enabled",
+          label: "1Password",
+          enabledAt: "2026-06-14T00:00:00.000Z",
+          createdAt: "2026-06-14T00:00:00.000Z",
+        },
+        recoveryCodes: ["recovery-one"],
+      },
+    });
   });
 
-  const result = await client.registerWithInvitation({
-    email: "invited@example.com",
-    name: "Invited User",
-    password: "correct horse battery staple",
-    inviteToken: "invite-token",
-  });
+  const status = await client.getMfaStatus("session-token");
+  const enrollment = await client.startTotpEnrollment({ password: "test-password", label: "1Password" }, "session-token");
+  const confirmation = await client.confirmTotpEnrollment({ factorId: enrollment.factorId, code: "123456" }, "session-token");
 
-  assert.deepEqual(result, { status: "active" });
-  assert.deepEqual(calls, [{
-    method: "POST",
-    url: "http://api.test/v1/auth/register",
-    body: JSON.stringify({
-      email: "invited@example.com",
-      name: "Invited User",
-      password: "correct horse battery staple",
-      inviteToken: "invite-token",
-    }),
-  }]);
+  assert.equal(status.totpEnabled, false);
+  assert.equal(enrollment.secret, "JBSWY3DPEHPK3PXP");
+  assert.deepEqual(confirmation.recoveryCodes, ["recovery-one"]);
+  assert.deepEqual(calls.map((call) => `${call.method ?? "GET"} ${call.url}`), [
+    "GET http://api.test/v1/auth/mfa",
+    "POST http://api.test/v1/auth/mfa/totp/enroll",
+    "POST http://api.test/v1/auth/mfa/totp/confirm",
+  ]);
+  assert.deepEqual(calls.map((call) => call.authorization), [
+    "Bearer session-token",
+    "Bearer session-token",
+    "Bearer session-token",
+  ]);
+  assert.equal(calls[1].body, JSON.stringify({ password: "test-password", label: "1Password" }));
+  assert.equal(calls[2].body, JSON.stringify({ factorId: "factor-1", code: "123456" }));
 });
 
-test("registry client confirms email verification and password reset action tokens", async () => {
-  const calls: Array<{ body?: string; method?: string; url: string }> = [];
+test("registry client supports account recovery and settings endpoints", async () => {
+  const calls: Array<{ body?: string; method?: string; url: string; authorization?: string }> = [];
   const client = createRegistryClient("http://api.test", async (input, init) => {
+    const url = String(input);
     calls.push({
       body: typeof init?.body === "string" ? init.body : undefined,
       method: init?.method,
-      url: String(input),
+      url,
+      authorization: init?.headers instanceof Headers ? init.headers.get("authorization") ?? undefined : (init?.headers as Record<string, string> | undefined)?.authorization,
     });
-    if (String(input).endsWith("/v1/auth/email-verification/confirm")) {
+    if (url.endsWith("/v1/auth/password-reset/confirm")) {
+      return jsonResponse(200, { status: "reset" });
+    }
+    if (url.endsWith("/v1/auth/email-verification/confirm")) {
       return jsonResponse(200, { status: "verified" });
     }
-    return jsonResponse(200, { status: "reset" });
+    if (url.endsWith("/v1/auth/email-change/confirm")) {
+      return jsonResponse(200, { status: "changed" });
+    }
+    if (url.endsWith("/v1/auth/account/password")) {
+      return jsonResponse(200, { status: "changed" });
+    }
+    if (url.endsWith("/v1/auth/mfa/totp")) {
+      return jsonResponse(200, { mfa: { status: "disabled", disabledFactors: 1 } });
+    }
+    if (url.endsWith("/v1/auth/api-tokens") && !init?.method) {
+      return jsonResponse(200, { tokens: [{ id: "api-token-1", name: "CLI" }] });
+    }
+    if (url.endsWith("/v1/auth/api-tokens") && init?.method === "POST") {
+      return jsonResponse(201, { token: { id: "api-token-2", name: "MCP", token: "plain-token" } });
+    }
+    if (url.endsWith("/v1/auth/api-tokens/api-token-1")) {
+      return jsonResponse(200, { token: { id: "api-token-1", name: "CLI", revokedAt: "2026-06-14T00:00:00.000Z" } });
+    }
+    return jsonResponse(202, { status: "pending" });
   });
 
+  await client.requestPasswordReset({ email: "reader@example.com" });
+  await client.confirmPasswordReset({ token: "reset-token", password: "new-password" });
   await client.confirmEmailVerification({ token: "verify-token" });
-  await client.confirmPasswordReset({ token: "reset-token", password: "correct horse battery staple" });
+  await client.requestEmailChange({ email: "new@example.com", password: "current-password" }, "session-token");
+  await client.confirmEmailChange({ token: "change-token" });
+  await client.changePassword({ currentPassword: "current-password", password: "new-password" }, "session-token");
+  await client.disableTotpMfa({ password: "current-password" }, "session-token");
+  await client.listApiTokens("session-token");
+  await client.createApiToken({ name: "MCP", scopes: ["skills:read"] }, "session-token");
+  await client.revokeApiToken("api-token-1", "session-token");
 
-  assert.deepEqual(calls, [
-    {
-      method: "POST",
-      url: "http://api.test/v1/auth/email-verification/confirm",
-      body: JSON.stringify({ token: "verify-token" }),
-    },
-    {
-      method: "POST",
-      url: "http://api.test/v1/auth/password-reset/confirm",
-      body: JSON.stringify({ token: "reset-token", password: "correct horse battery staple" }),
-    },
+  assert.deepEqual(calls.map((call) => `${call.method ?? "GET"} ${call.url}`), [
+    "POST http://api.test/v1/auth/password-reset/request",
+    "POST http://api.test/v1/auth/password-reset/confirm",
+    "POST http://api.test/v1/auth/email-verification/confirm",
+    "POST http://api.test/v1/auth/account/email-change",
+    "POST http://api.test/v1/auth/email-change/confirm",
+    "POST http://api.test/v1/auth/account/password",
+    "DELETE http://api.test/v1/auth/mfa/totp",
+    "GET http://api.test/v1/auth/api-tokens",
+    "POST http://api.test/v1/auth/api-tokens",
+    "DELETE http://api.test/v1/auth/api-tokens/api-token-1",
   ]);
+  assert.equal(calls[3].authorization, "Bearer session-token");
+  assert.equal(calls[5].authorization, "Bearer session-token");
+  assert.equal(calls[6].authorization, "Bearer session-token");
+  assert.equal(calls[7].authorization, "Bearer session-token");
+  assert.equal(calls[8].authorization, "Bearer session-token");
+  assert.equal(calls[9].authorization, "Bearer session-token");
+  assert.equal(calls[0].body, JSON.stringify({ email: "reader@example.com" }));
+  assert.equal(calls[3].body, JSON.stringify({ email: "new@example.com", password: "current-password" }));
+  assert.equal(calls[6].body, JSON.stringify({ password: "current-password" }));
+  assert.equal(calls[8].body, JSON.stringify({ name: "MCP", scopes: ["skills:read"] }));
 });
 
 test("registry client manages admin settings with the session bearer", async () => {
@@ -200,9 +269,6 @@ test("registry client manages admin settings with the session bearer", async () 
     if (url.endsWith("/v1/admin/registration")) {
       return jsonResponse(200, { registration: { mode: "closed" } });
     }
-    if (url.endsWith("/v1/admin/registration/invitations")) {
-      return jsonResponse(201, { invitation: { email: "new@example.com", expiresAt: "2026-06-20T00:00:00.000Z" } });
-    }
     if (url.endsWith("/v1/admin/users")) {
       return jsonResponse(200, { users: [{ id: "user-1", email: "reader@example.com" }] });
     }
@@ -211,6 +277,12 @@ test("registry client manages admin settings with the session bearer", async () 
     }
     if (url.endsWith("/v1/admin/users/user-1/roles")) {
       return jsonResponse(200, { user: { id: "user-1", roles: ["maintainer", "author"] } });
+    }
+    if (url.endsWith("/v1/admin/api-tokens") && !init?.method) {
+      return jsonResponse(200, { tokens: [{ id: "api-token-1", name: "CLI", user: { email: "reader@example.com" } }] });
+    }
+    if (url.endsWith("/v1/admin/api-tokens/api-token-1")) {
+      return jsonResponse(200, { token: { id: "api-token-1", name: "CLI", revokedAt: "2026-06-14T00:00:00.000Z", user: { email: "reader@example.com" } } });
     }
     if (url.endsWith("/v1/admin/providers") && !init?.method) {
       return jsonResponse(200, { providers: [{ key: "oidc-main", roleMappings: [] }] });
@@ -223,10 +295,11 @@ test("registry client manages admin settings with the session bearer", async () 
 
   await client.getAdminRegistration("session-token");
   await client.updateAdminRegistration("request", "session-token");
-  await client.createRegistrationInvitation({ email: "new@example.com", name: "New User" }, "session-token");
   await client.listAdminUsers("session-token");
   await client.performAdminUserAction("user-1", "disable", "session-token");
   await client.updateAdminUserRoles("user-1", ["maintainer", "author"], "session-token");
+  await client.listAdminApiTokens("session-token");
+  await client.revokeAdminApiToken("api-token-1", "session-token");
   await client.listAdminProviders("session-token");
   await client.upsertAdminProvider("oidc-main", {
     type: "oidc",
@@ -239,10 +312,11 @@ test("registry client manages admin settings with the session bearer", async () 
   assert.deepEqual(calls.map((call) => `${call.method ?? "GET"} ${call.url}`), [
     "GET http://api.test/v1/admin/registration",
     "PUT http://api.test/v1/admin/registration",
-    "POST http://api.test/v1/admin/registration/invitations",
     "GET http://api.test/v1/admin/users",
     "POST http://api.test/v1/admin/users/user-1/actions",
     "PUT http://api.test/v1/admin/users/user-1/roles",
+    "GET http://api.test/v1/admin/api-tokens",
+    "DELETE http://api.test/v1/admin/api-tokens/api-token-1",
     "GET http://api.test/v1/admin/providers",
     "PUT http://api.test/v1/admin/providers/oidc-main",
     "GET http://api.test/v1/admin/audit?limit=10",
@@ -257,12 +331,12 @@ test("registry client manages admin settings with the session bearer", async () 
     "Bearer session-token",
     "Bearer session-token",
     "Bearer session-token",
+    "Bearer session-token",
   ]);
   assert.equal(calls[1].body, JSON.stringify({ mode: "request" }));
-  assert.equal(calls[2].body, JSON.stringify({ email: "new@example.com", name: "New User" }));
-  assert.equal(calls[4].body, JSON.stringify({ action: "disable" }));
-  assert.equal(calls[5].body, JSON.stringify({ roles: ["maintainer", "author"] }));
-  assert.equal(calls[7].body?.includes("groups"), true);
+  assert.equal(calls[3].body, JSON.stringify({ action: "disable" }));
+  assert.equal(calls[4].body, JSON.stringify({ roles: ["maintainer", "author"] }));
+  assert.equal(calls[8].body?.includes("groups"), true);
 });
 
 test("registry client manages review queue with the session bearer", async () => {
@@ -317,12 +391,19 @@ test("registry client manages review queue with the session bearer", async () =>
 test("registry client submits package archives with the session bearer", async () => {
   const calls: Array<{ body?: string; method?: string; url: string; authorization?: string }> = [];
   const client = createRegistryClient("http://api.test", async (input, init) => {
+    const url = String(input);
     calls.push({
       body: typeof init?.body === "string" ? init.body : undefined,
       method: init?.method,
-      url: String(input),
+      url,
       authorization: init?.headers instanceof Headers ? init.headers.get("authorization") ?? undefined : (init?.headers as Record<string, string> | undefined)?.authorization,
     });
+    if (url.endsWith("/v1/submissions/mine")) {
+      return jsonResponse(200, { submissions: [{ id: "submission-1", slug: "release-notes-helper" }] });
+    }
+    if (url.endsWith("/v1/submissions/submission-1/bundle")) {
+      return jsonResponse(200, { files: [{ path: "skill.json", content: "{}" }] });
+    }
     return jsonResponse(202, {
       submission: {
         id: "submission-1",
@@ -343,12 +424,20 @@ test("registry client submits package archives with the session bearer", async (
     filename: "release-notes-helper.zip",
     contentBase64: "UEsDBA==",
   }, "author-session");
+  await client.listUserSubmissions("author-session");
+  await client.exportUserSubmission("submission-1", "author-session");
 
   assert.equal(result.submission.id, "submission-1");
   assert.deepEqual(calls.map((call) => `${call.method ?? "GET"} ${call.url}`), [
     "POST http://api.test/v1/submissions",
+    "GET http://api.test/v1/submissions/mine",
+    "GET http://api.test/v1/submissions/submission-1/bundle",
   ]);
-  assert.equal(calls[0]?.authorization, "Bearer author-session");
+  assert.deepEqual(calls.map((call) => call.authorization), [
+    "Bearer author-session",
+    "Bearer author-session",
+    "Bearer author-session",
+  ]);
   assert.equal(calls[0]?.body, JSON.stringify({
     archive: {
       filename: "release-notes-helper.zip",

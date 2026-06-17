@@ -1,0 +1,26 @@
+# syntax=docker/dockerfile:1
+
+ARG NODE_VERSION=22-alpine
+ARG NPM_VERSION=11.12.1
+
+FROM node:${NODE_VERSION} AS build
+ARG NPM_VERSION
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+WORKDIR /app
+RUN npm install -g npm@${NPM_VERSION}
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY packages ./packages
+COPY apps ./apps
+COPY scripts ./scripts
+RUN node -e "const value = process.env.VITE_API_BASE_URL; if (!value) throw new Error('VITE_API_BASE_URL build arg is required for the web image.'); if (!value.startsWith('/')) { const url = new URL(value); if (url.protocol !== 'https:') throw new Error('VITE_API_BASE_URL must use https or a same-origin path.'); }"
+RUN npm ci \
+  && npm run build -w @myskills-app/core \
+  && npm run build -w @myskills-app/web
+
+FROM nginx:1.29-alpine AS web
+ENV PORT=80 \
+    API_PROXY_TARGET=http://127.0.0.1:3001
+COPY deploy/nginx.railway.conf.template /etc/nginx/templates/default.conf.template
+COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+EXPOSE 80

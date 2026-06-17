@@ -1,7 +1,7 @@
 import type { AuthenticatedUser, RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 
 export const apiTokenScopes = ["profile:read", "skills:read", "skills:submit", "review:read", "review:write"] as const;
-export const authActionTokenPurposes = ["email_verification", "password_reset", "registration_invitation"] as const;
+export const authActionTokenPurposes = ["email_verification", "password_reset", "registration_invitation", "email_change"] as const;
 export const providerTypes = ["oidc", "saml", "cloudflare_access", "github", "google"] as const;
 
 export type ApiTokenScope = (typeof apiTokenScopes)[number];
@@ -108,6 +108,10 @@ export interface ApiTokenRecord {
   revokedAt: Date | null;
   lastUsedAt: Date | null;
   createdAt: Date;
+}
+
+export interface AdminApiTokenRecord extends ApiTokenRecord {
+  user: AuthUserRecord;
 }
 
 export interface CreateApiTokenInput {
@@ -223,6 +227,7 @@ export interface AuthStore {
   completeRegistrationInvitation(input: CompleteRegistrationInvitationInput): Promise<CompleteRegistrationInvitationResult | null>;
   listUsers(): Promise<AuthUserRecord[]>;
   findUserById(userId: string): Promise<AuthUserRecord | null>;
+  updateUserEmail(input: { userId: string; email: string; emailVerifiedAt: Date }): Promise<AuthUserRecord | null>;
   updateUserStatus(input: { userId: string; status: UserStatus; emailVerifiedAt?: Date | null }): Promise<AuthUserRecord | null>;
   updateUserRoles(input: { userId: string; roles: AuthenticatedUser["roles"] }): Promise<AuthUserRecord | null>;
   updatePasswordCredential(input: { userId: string; passwordHash: string; passwordUpdatedAt?: Date }): Promise<boolean>;
@@ -241,8 +246,10 @@ export interface AuthStore {
   revokeUserCredentials(userId: string): Promise<void>;
   createApiToken(input: CreateApiTokenInput): Promise<ApiTokenRecord>;
   listApiTokensForUser(userId: string): Promise<ApiTokenRecord[]>;
+  listApiTokensForAdmin(): Promise<AdminApiTokenRecord[]>;
   findUserByApiTokenHash(tokenHash: string, now?: Date): Promise<AuthUserWithApiToken | null>;
   revokeApiToken(input: { userId: string; tokenId: string }): Promise<ApiTokenRecord | null>;
+  revokeAnyApiToken(input: { tokenId: string }): Promise<AdminApiTokenRecord | null>;
   listProviderConfigs(): Promise<ProviderConfigRecord[]>;
   upsertProviderConfig(input: UpsertProviderConfigInput): Promise<ProviderConfigRecord>;
   countEnabledMfaFactors(userId: string): Promise<number>;
@@ -251,13 +258,15 @@ export interface AuthStore {
   listEnabledMfaTotpFactorsForUser(userId: string): Promise<MfaTotpFactorRecord[]>;
   findMfaTotpFactorForUser(input: { userId: string; factorId: string }): Promise<MfaTotpFactorRecord | null>;
   enableMfaTotpFactor(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<MfaTotpFactorRecord | null>;
-  updateMfaTotpFactorCounter(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<void>;
+  disableMfaTotpFactorsForUser(input: { userId: string; disabledAt?: Date }): Promise<number>;
+  disableOtherMfaTotpFactorsForUser(input: { userId: string; factorId: string; disabledAt?: Date }): Promise<number>;
+  updateMfaTotpFactorCounter(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<boolean>;
   replaceMfaRecoveryCodes(input: { userId: string; codeHashes: string[] }): Promise<void>;
   countUnusedMfaRecoveryCodes(userId: string): Promise<number>;
   consumeMfaRecoveryCode(input: { userId: string; codeHash: string }): Promise<boolean>;
   createMfaChallenge(input: CreateMfaChallengeInput): Promise<MfaChallengeRecord>;
   findMfaChallengeByTokenHash(tokenHash: string, now?: Date): Promise<MfaChallengeWithUser | null>;
-  markMfaChallengeUsed(input: { challengeId: string; usedAt: Date }): Promise<void>;
+  markMfaChallengeUsed(input: { challengeId: string; usedAt: Date }): Promise<boolean>;
   recordAuditEvent(input: CreateAuditEventInput): Promise<void>;
   listAuditEvents(input: ListAuditEventsInput): Promise<AuditEventRecord[]>;
 }

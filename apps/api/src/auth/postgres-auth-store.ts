@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
 import { AppError } from "@myskills-app/core";
 import { roles as authRoles, type RegistrationMode, type Role, type UserStatus } from "@myskills-app/auth";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
@@ -21,6 +21,7 @@ import {
 import type {
   AuditEventRecord,
   ApiTokenRecord,
+  AdminApiTokenRecord,
   ApiTokenScope,
   AuthActionTokenRecord,
   AuthActionTokenPurpose,
@@ -259,6 +260,20 @@ export class PostgresAuthStore implements AuthStore {
     return user ? { ...toRecord(user), roles: await this.rolesForUser(user.id) } : null;
   }
 
+  async updateUserEmail(input: { userId: string; email: string; emailVerifiedAt: Date }): Promise<AuthUserRecord | null> {
+    const [user] = await this.db
+      .update(users)
+      .set({
+        email: input.email,
+        normalizedEmail: input.email,
+        emailVerifiedAt: input.emailVerifiedAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, input.userId))
+      .returning();
+    return user ? { ...toRecord(user), roles: await this.rolesForUser(user.id) } : null;
+  }
+
   async updateUserStatus(input: { userId: string; status: UserStatus; emailVerifiedAt?: Date | null }): Promise<AuthUserRecord | null> {
     const set: Partial<typeof users.$inferInsert> = {
       status: input.status,
@@ -467,6 +482,24 @@ export class PostgresAuthStore implements AuthStore {
     return rows.reverse().map(toApiTokenRecord);
   }
 
+  async listApiTokensForAdmin(): Promise<AdminApiTokenRecord[]> {
+    const rows = await this.db
+      .select({
+        token: apiTokens,
+        user: users,
+      })
+      .from(apiTokens)
+      .innerJoin(users, eq(users.id, apiTokens.userId))
+      .orderBy(apiTokens.createdAt);
+    return Promise.all(rows.reverse().map(async (row) => ({
+      ...toApiTokenRecord(row.token),
+      user: {
+        ...toRecord(row.user),
+        roles: await this.rolesForUser(row.user.id),
+      },
+    })));
+  }
+
   async findUserByApiTokenHash(tokenHash: string, now = new Date()): Promise<AuthUserWithApiToken | null> {
     const [row] = await this.db
       .select({
@@ -503,6 +536,19 @@ export class PostgresAuthStore implements AuthStore {
       .where(and(eq(apiTokens.id, input.tokenId), eq(apiTokens.userId, input.userId)))
       .returning();
     return token ? toApiTokenRecord(token) : null;
+  }
+
+  async revokeAnyApiToken(input: { tokenId: string }): Promise<AdminApiTokenRecord | null> {
+    const [token] = await this.db
+      .update(apiTokens)
+      .set({ revokedAt: new Date() })
+      .where(eq(apiTokens.id, input.tokenId))
+      .returning();
+    if (!token) {
+      return null;
+    }
+    const user = await this.findUserById(token.userId);
+    return user ? { ...toApiTokenRecord(token), user } : null;
   }
 
   async listProviderConfigs(): Promise<ProviderConfigRecord[]> {
@@ -628,14 +674,52 @@ export class PostgresAuthStore implements AuthStore {
     return factor ? toMfaTotpFactorRecord(factor) : null;
   }
 
-  async updateMfaTotpFactorCounter(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<void> {
-    await this.db
+  async disableMfaTotpFactorsForUser(input: { userId: string; disabledAt?: Date }): Promise<number> {
+    const disabledAt = input.disabledAt ?? new Date();
+    const rows = await this.db
+      .update(mfaFactors)
+      .set({
+        status: "disabled",
+        disabledAt,
+        updatedAt: disabledAt,
+      })
+      .where(and(eq(mfaFactors.userId, input.userId), ne(mfaFactors.status, "disabled")))
+      .returning({ id: mfaFactors.id });
+    return rows.length;
+  }
+
+  async disableOtherMfaTotpFactorsForUser(input: { userId: string; factorId: string; disabledAt?: Date }): Promise<number> {
+    const disabledAt = input.disabledAt ?? new Date();
+    const rows = await this.db
+      .update(mfaFactors)
+      .set({
+        status: "disabled",
+        disabledAt,
+        updatedAt: disabledAt,
+      })
+      .where(and(
+        eq(mfaFactors.userId, input.userId),
+        ne(mfaFactors.id, input.factorId),
+        ne(mfaFactors.status, "disabled"),
+      ))
+      .returning({ id: mfaFactors.id });
+    return rows.length;
+  }
+
+  async updateMfaTotpFactorCounter(input: { userId: string; factorId: string; lastUsedCounter: number }): Promise<boolean> {
+    const [factor] = await this.db
       .update(mfaFactors)
       .set({
         lastUsedCounter: input.lastUsedCounter,
         updatedAt: new Date(),
       })
-      .where(and(eq(mfaFactors.userId, input.userId), eq(mfaFactors.id, input.factorId)));
+      .where(and(
+        eq(mfaFactors.userId, input.userId),
+        eq(mfaFactors.id, input.factorId),
+        or(isNull(mfaFactors.lastUsedCounter), sql`${mfaFactors.lastUsedCounter} < ${input.lastUsedCounter}`),
+      ))
+      .returning({ id: mfaFactors.id });
+    return Boolean(factor);
   }
 
   async replaceMfaRecoveryCodes(input: { userId: string; codeHashes: string[] }): Promise<void> {
@@ -704,11 +788,13 @@ export class PostgresAuthStore implements AuthStore {
     };
   }
 
-  async markMfaChallengeUsed(input: { challengeId: string; usedAt: Date }): Promise<void> {
-    await this.db
+  async markMfaChallengeUsed(input: { challengeId: string; usedAt: Date }): Promise<boolean> {
+    const [challenge] = await this.db
       .update(mfaChallenges)
       .set({ usedAt: input.usedAt })
-      .where(and(eq(mfaChallenges.id, input.challengeId), isNull(mfaChallenges.usedAt)));
+      .where(and(eq(mfaChallenges.id, input.challengeId), isNull(mfaChallenges.usedAt)))
+      .returning({ id: mfaChallenges.id });
+    return Boolean(challenge);
   }
 
   async recordAuditEvent(input: CreateAuditEventInput): Promise<void> {

@@ -13,6 +13,8 @@ import type {
   ReviewSubmissionSummary,
   StoredSubmission,
   SubmissionStore,
+  UserSubmissionBundle,
+  UserSubmissionSummary,
 } from "./types.js";
 
 interface AuditRecord {
@@ -38,6 +40,7 @@ export class MemorySubmissionStore implements SubmissionStore {
     }
     const submission: StoredSubmission = {
       id: `submission-${this.submissions.size + 1}`,
+      ownerUserId: input.actor.id,
       skillSlug: input.manifest.name,
       title: input.manifest.title,
       summary: input.manifest.summary,
@@ -51,6 +54,7 @@ export class MemorySubmissionStore implements SubmissionStore {
       reviewStatus: "unreviewed",
       securityStatus: input.securityStatus,
       publishedAt: null,
+      createdAt: new Date().toISOString(),
       artifact: input.artifact,
       scan: {
         status: "succeeded",
@@ -59,6 +63,30 @@ export class MemorySubmissionStore implements SubmissionStore {
     };
     this.submissions.set(key, submission);
     return submission;
+  }
+
+  async listUserSubmissions(userId: string): Promise<UserSubmissionSummary[]> {
+    return [...this.submissions.values()]
+      .filter((submission) => submission.ownerUserId === userId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map(userSubmissionSummary);
+  }
+
+  async getUserSubmissionBundle(input: { userId: string; submissionId: string; platform?: string }): Promise<UserSubmissionBundle | null> {
+    const submission = this.findSubmission(input.submissionId);
+    if (!submission || submission.ownerUserId !== input.userId) {
+      return null;
+    }
+    if (input.platform && !submission.platforms.some((platform) => (
+      platform.name === input.platform &&
+      platform.status === "supported"
+    ))) {
+      return null;
+    }
+    return {
+      ...userSubmissionSummary(submission),
+      payload: submission.artifact.payload,
+    };
   }
 
   async listReviewSubmissions(): Promise<ReviewSubmissionSummary[]> {
@@ -270,6 +298,28 @@ function reviewActionResult(submission: StoredSubmission): ReviewActionResult {
     lifecycleStatus: submission.publishedAt ? "approved" : "review",
     reviewStatus: submission.reviewStatus,
     securityStatus: submission.securityStatus,
+    publishedAt: submission.publishedAt,
+  };
+}
+
+function userSubmissionSummary(submission: StoredSubmission): UserSubmissionSummary {
+  return {
+    id: submission.id,
+    slug: submission.skillSlug,
+    title: submission.title,
+    summary: submission.summary,
+    version: submission.version,
+    visibility: submission.visibility,
+    reviewStatus: submission.reviewStatus,
+    securityStatus: submission.securityStatus,
+    platforms: submission.platforms,
+    findingCount: submission.scan.findings.length,
+    artifact: {
+      sha256: submission.artifact.sha256,
+      byteSize: submission.artifact.byteSize,
+      contentType: submission.artifact.contentType,
+    },
+    createdAt: submission.createdAt,
     publishedAt: submission.publishedAt,
   };
 }
