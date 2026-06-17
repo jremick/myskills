@@ -17,7 +17,6 @@
     "check:prod-env": "node scripts/check-production-env.mjs",
     "check:privacy": "node scripts/check-privacy.mjs",
     "check:structure": "node scripts/check-structure.mjs",
-    "db:generate": "npm run db:generate -w @myskills-app/api",
     "db:migrate": "npm run db:migrate -w @myskills-app/api",
     "db:seed": "npm run db:seed -w @myskills-app/api",
     "dev:api": "npm run dev -w @myskills-app/api",
@@ -29,7 +28,8 @@
     "release:artifacts": "node scripts/create-release-artifacts.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "start:mcp:http": "npm run start:http -w @myskills-app/mcp",
-    "test": "npm test --workspaces --if-present"
+    "test": "npm test --workspaces --if-present",
+    "test:postgres": "npm run build && npm run test:postgres -w @myskills-app/api"
   },
   "engines": {
     "node": ">=20"

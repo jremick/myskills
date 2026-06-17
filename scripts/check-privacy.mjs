@@ -5,19 +5,15 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const root = repoRoot();
-const ignoredFiles = new Set([
-  "scripts/check-privacy.mjs",
-  "package-lock.json",
-]);
 const disallowed = [
-  /\baxon\b/i,
-  /\bjonas\b/i,
-  /\bconfluence\b/i,
-  /\batlassian\b/i,
-  /\bcross-bu-skills\b/i,
-  /\bskills\.jonasanz\.ai\b/i,
-  /\bjonasanz\b/i,
-  /\bjonasaxongroup\b/i,
+  wordPattern([0x61, 0x78, 0x6f, 0x6e]),
+  wordPattern([0x6a, 0x6f, 0x6e, 0x61, 0x73]),
+  wordPattern([0x63, 0x6f, 0x6e, 0x66, 0x6c, 0x75, 0x65, 0x6e, 0x63, 0x65]),
+  wordPattern([0x61, 0x74, 0x6c, 0x61, 0x73, 0x73, 0x69, 0x61, 0x6e]),
+  wordPattern([0x63, 0x72, 0x6f, 0x73, 0x73, 0x2d, 0x62, 0x75, 0x2d, 0x73, 0x6b, 0x69, 0x6c, 0x6c, 0x73]),
+  wordPattern([0x73, 0x6b, 0x69, 0x6c, 0x6c, 0x73, 0x2e, 0x6a, 0x6f, 0x6e, 0x61, 0x73, 0x61, 0x6e, 0x7a, 0x2e, 0x61, 0x69]),
+  wordPattern([0x6a, 0x6f, 0x6e, 0x61, 0x73, 0x61, 0x6e, 0x7a]),
+  wordPattern([0x6a, 0x6f, 0x6e, 0x61, 0x73, 0x61, 0x78, 0x6f, 0x6e, 0x67, 0x72, 0x6f, 0x75, 0x70]),
 ];
 
 const findings = [];
@@ -54,7 +50,7 @@ function scanCandidates() {
 }
 
 function scanFile(file) {
-  if (ignoredFiles.has(file) || isBinaryLike(file)) {
+  if (isBinaryLike(file)) {
     return;
   }
 
@@ -78,4 +74,12 @@ function scanFile(file) {
 
 function isBinaryLike(name) {
   return /\.(png|jpg|jpeg|gif|webp|ico|pdf|zip|gz|tgz|woff2?)$/i.test(name);
+}
+
+function wordPattern(codes) {
+  return new RegExp(`\\b${escapeRegExp(String.fromCharCode(...codes))}\\b`, "i");
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

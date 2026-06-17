@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { generateTotpCode, hashApiToken, hashPassword, hashSessionToken } from "@myskills-app/auth";
+import type { PublicSkill } from "@myskills-app/core";
 import { buildApp } from "../src/app.js";
 import { AuthService } from "../src/auth/service.js";
 import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
@@ -122,7 +123,21 @@ test("API token management requires a session, not another API token", async (t)
 test("API token scopes gate protected routes separately from roles", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const submissionStore = new MemorySubmissionStore();
-  const app = buildTokenApp(authStore, submissionStore);
+  const app = buildTokenApp(authStore, submissionStore, [
+    {
+      slug: "member-helper",
+      title: "Member Helper",
+      summary: "Visible only to signed-in registry readers.",
+      lifecycleStatus: "approved",
+      visibility: "authenticated",
+      latestVersion: "0.1.0",
+      reviewStatus: "approved",
+      securityStatus: "passed",
+      platforms: [{ name: "codex", installTarget: "codex-skill", status: "supported" }],
+      tags: ["private"],
+      ownerUserId: "author-1",
+    },
+  ]);
   t.after(() => app.close());
   const authorSession = await addAndLogin(app, authStore, {
     email: "author@example.com",
@@ -137,6 +152,7 @@ test("API token scopes gate protected routes separately from roles", async (t) =
     roles: ["maintainer"],
   });
   const profileOnly = await createApiToken(app, authorSession, ["profile:read"]);
+  const authorRead = await createApiToken(app, authorSession, ["skills:read"]);
   const authorSubmit = await createApiToken(app, authorSession, ["skills:submit"]);
   const userSubmit = await createApiToken(app, userSession, ["skills:submit"]);
   const unverifiedMaintainerSession = await addAndLogin(app, authStore, {
@@ -156,6 +172,38 @@ test("API token scopes gate protected routes separately from roles", async (t) =
   assert.equal(missingScope.statusCode, 403);
   assert.equal(missingScope.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
   assert.equal(submissionStore.count(), 0);
+
+  const profileList = await app.inject({
+    method: "GET",
+    url: "/v1/skills",
+    headers: { authorization: `Bearer ${profileOnly.token}` },
+  });
+  assert.equal(profileList.statusCode, 403);
+  assert.equal(profileList.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
+
+  const readerList = await app.inject({
+    method: "GET",
+    url: "/v1/skills",
+    headers: { authorization: `Bearer ${authorRead.token}` },
+  });
+  assert.equal(readerList.statusCode, 200);
+  assert.deepEqual(readerList.json().skills.map((skill: { slug: string }) => skill.slug), ["member-helper"]);
+
+  const profileDetail = await app.inject({
+    method: "GET",
+    url: "/v1/skills/member-helper",
+    headers: { authorization: `Bearer ${profileOnly.token}` },
+  });
+  assert.equal(profileDetail.statusCode, 403);
+  assert.equal(profileDetail.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
+
+  const readerDetail = await app.inject({
+    method: "GET",
+    url: "/v1/skills/member-helper",
+    headers: { authorization: `Bearer ${authorRead.token}` },
+  });
+  assert.equal(readerDetail.statusCode, 200);
+  assert.equal(readerDetail.json().skill.slug, "member-helper");
 
   const missingRole = await app.inject({
     method: "POST",
@@ -218,6 +266,42 @@ test("API token scopes gate protected routes separately from roles", async (t) =
     payload: { action: "approve" },
   });
   assert.equal(approved.statusCode, 200);
+
+  const published = await app.inject({
+    method: "POST",
+    url: `/v1/review/submissions/${submitted.json().submission.id}/actions`,
+    headers: { authorization: `Bearer ${reviewWrite.token}` },
+    payload: { action: "publish" },
+  });
+  assert.equal(published.statusCode, 200);
+
+  for (const url of [
+    "/v1/skills/release-notes-helper/releases/0.1.0",
+    "/v1/skills/release-notes-helper/releases/0.1.0/bundle?platform=codex",
+  ]) {
+    const missingReadScope = await app.inject({
+      method: "GET",
+      url,
+      headers: { authorization: `Bearer ${profileOnly.token}` },
+    });
+    assert.equal(missingReadScope.statusCode, 403);
+    assert.equal(missingReadScope.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
+  }
+
+  const releaseRead = await app.inject({
+    method: "GET",
+    url: "/v1/skills/release-notes-helper/releases/0.1.0",
+    headers: { authorization: `Bearer ${authorRead.token}` },
+  });
+  assert.equal(releaseRead.statusCode, 200);
+  assert.equal(releaseRead.json().release.slug, "release-notes-helper");
+
+  const bundleRead = await app.inject({
+    method: "GET",
+    url: "/v1/skills/release-notes-helper/releases/0.1.0/bundle?platform=codex",
+    headers: { authorization: `Bearer ${authorRead.token}` },
+  });
+  assert.equal(bundleRead.statusCode, 200);
 });
 
 test("review API tokens require MFA-verified maintainer sessions at creation", async (t) => {
@@ -482,9 +566,13 @@ test("invalid API token requests are rejected", async (t) => {
   }
 });
 
-function buildTokenApp(authStore: MemoryAuthStore, submissionStore = new MemorySubmissionStore()) {
+function buildTokenApp(
+  authStore: MemoryAuthStore,
+  submissionStore = new MemorySubmissionStore(),
+  skills: Array<PublicSkill & { ownerUserId?: string | null }> = [],
+) {
   return buildApp({
-    skillRepository: new MemorySkillRepository([]),
+    skillRepository: new MemorySkillRepository(skills),
     authService: new AuthService(authStore),
     submissionService: new SubmissionService(submissionStore),
   });

@@ -193,6 +193,36 @@ test("blocking findings reject without accepted records", async (t) => {
   assert.equal(submissionStore.deniedCount(), 1);
 });
 
+test("common API key patterns reject package submissions", async (t) => {
+  const cases = [
+    `OPENAI_API_KEY=sk-${"abcdefghijklmnopqrstuvwxyz1234567890ABCDEF"}`,
+    `AWS_ACCESS_KEY_ID=AKIA${"1234567890ABCDEF"}`,
+  ];
+
+  for (const content of cases) {
+    const submissionStore = new MemorySubmissionStore();
+    const authStore = new MemoryAuthStore("closed");
+    const app = buildSubmissionApp({ authStore, submissionStore });
+    t.after(() => app.close());
+    const token = await addAndLogin(app, authStore, ["author"]);
+    const payload = cleanSubmissionPayload();
+    payload.files[1].content = content;
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/submissions",
+      headers: { authorization: `Bearer ${token}` },
+      payload,
+    });
+
+    assert.equal(response.statusCode, 422);
+    assert.equal(response.json().error.code, "PACKAGE_SCAN_BLOCKED");
+    assert.equal(response.json().error.details.findings[0].category, "secret");
+    assert.equal(submissionStore.count(), 0);
+    assert.equal(submissionStore.deniedCount(), 1);
+  }
+});
+
 test("archive submissions reject blocking findings without accepted records", async (t) => {
   const submissionStore = new MemorySubmissionStore();
   const authStore = new MemoryAuthStore("closed");

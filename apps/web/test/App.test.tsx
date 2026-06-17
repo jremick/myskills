@@ -134,11 +134,11 @@ test("platform selection changes CLI export guidance only", async () => {
   const client = mockClient();
 
   const view = render(<RegistryApp client={client} />);
-  await view.findByText(/myskills export release-notes-helper --version 0\.1\.0 --platform codex/);
+  await view.findByText(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'codex'/);
 
   fireEvent.click(view.getByRole("button", { name: "generic" }));
 
-  await view.findByText(/myskills export release-notes-helper --version 0\.1\.0 --platform generic/);
+  await view.findByText(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/);
   assert.equal(client.releaseCalls.length, 1);
   assert.equal(client.bundleCalls, 0);
 });
@@ -158,11 +158,11 @@ test("login stores a verified session and logout clears it", async () => {
 
   fireEvent.click(view.getByLabelText("Sign out"));
 
-	  await view.findByRole("button", { name: /sign in/i });
-	  assert.equal((view.getByLabelText("Password") as HTMLInputElement).value, "");
-	  assert.equal(window.localStorage.getItem("myskills-app:web-session"), null);
-	  assert.equal(client.logoutCalls, 1);
-	});
+  await view.findByRole("button", { name: /sign in/i });
+  assert.equal((view.getByLabelText("Password") as HTMLInputElement).value, "");
+  assert.equal(window.localStorage.getItem("myskills-app:web-session"), null);
+  assert.equal(client.logoutCalls, 1);
+});
 
 test("MFA login verifies the challenge before storing a session", async () => {
   setupDom();
@@ -202,6 +202,37 @@ test("registration invitation links create an account and store a session", asyn
   }]));
   await view.findByText("invited@example.com");
   assert.equal(JSON.parse(window.localStorage.getItem("myskills-app:web-session") ?? "{}").token, "web-session-token");
+});
+
+test("email verification links confirm the account without loading the registry", async () => {
+  setupDom("http://localhost/auth/verify-email#token=verify-token");
+  const client = mockClient();
+
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("Email verified. You can sign in.");
+  assert.deepEqual(client.emailVerificationConfirmations, ["verify-token"]);
+  assert.deepEqual(client.searchCalls, []);
+});
+
+test("password reset links set a new password without storing a session", async () => {
+  setupDom("http://localhost/auth/reset-password#token=reset-token");
+  const client = mockClient();
+
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByRole("heading", { name: "Reset password" });
+  fireEvent.input(view.getByLabelText("New password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.input(view.getByLabelText("Confirm password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: /reset password/i }));
+
+  await view.findByText("Password reset. Sign in with your new password.");
+  assert.deepEqual(client.passwordResetConfirmations, [{
+    token: "reset-token",
+    password: "correct horse battery staple",
+  }]);
+  assert.equal(window.localStorage.getItem("myskills-app:web-session"), null);
+  assert.deepEqual(client.searchCalls, []);
 });
 
 test("non-admin sessions do not render the admin entry point", async () => {
@@ -478,8 +509,10 @@ function mockClient(input: {
   let teamDashboard = input.teamDashboard ?? defaultTeamDashboard();
   const client: RegistryClient & {
     bundleCalls: number;
+    emailVerificationConfirmations: string[];
     logoutCalls: number;
     mfaCalls: string[];
+    passwordResetConfirmations: Array<{ token: string; password: string }>;
     providerUpserts: Array<{ key: string; displayName: string; roleMappings?: ProviderRoleMappingInput[] }>;
     registrationInvites: Array<{ email: string; name?: string }>;
     inviteRegistrations: Array<{ email: string; name?: string; inviteToken: string }>;
@@ -496,8 +529,10 @@ function mockClient(input: {
     userActions: string[];
   } = {
     bundleCalls: 0,
+    emailVerificationConfirmations: [],
     logoutCalls: 0,
     mfaCalls: [],
+    passwordResetConfirmations: [],
     providerUpserts: [],
     registrationInvites: [],
     inviteRegistrations: [],
@@ -555,6 +590,14 @@ function mockClient(input: {
         inviteToken: input.inviteToken,
       });
       return { status: "active" };
+    },
+    async confirmEmailVerification(input) {
+      client.emailVerificationConfirmations.push(input.token);
+      return { status: "verified" };
+    },
+    async confirmPasswordReset(input) {
+      client.passwordResetConfirmations.push(input);
+      return { status: "reset" };
     },
     async logout() {
       client.logoutCalls += 1;

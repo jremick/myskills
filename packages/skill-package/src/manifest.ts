@@ -7,8 +7,14 @@ export const skillSlugSchema = z
   .regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/, "Use lowercase letters, numbers, and single hyphens.")
   .refine((value) => !value.includes("--"), "Consecutive hyphens are not allowed.");
 
+export const platformNameSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/, "Use lowercase letters, numbers, dots, underscores, and hyphens.");
+
 export const platformVariantSchema = z.object({
-  name: z.string().min(1).max(64),
+  name: platformNameSchema,
   install_target: z.string().min(1).max(96),
   status: z.enum(["supported", "planned", "deprecated"]).default("supported"),
 }).strict();

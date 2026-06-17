@@ -246,6 +246,7 @@ export class PostgresSkillRepository implements SkillRepository {
       .leftJoin(skillTags, eq(skillTags.skillId, skills.id))
       .where(where)
       .groupBy(
+        skills.id,
         skills.slug,
         skills.title,
         skills.summary,

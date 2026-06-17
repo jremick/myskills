@@ -190,6 +190,8 @@ export interface RegistryClient {
   getRelease(slug: string, version: string): Promise<ReleaseMetadata>;
   login(input: { email: string; password: string }): Promise<LoginResult>;
   registerWithInvitation(input: { email: string; password: string; name?: string; inviteToken: string }): Promise<{ status: "pending" | "active" }>;
+  confirmEmailVerification(input: { token: string }): Promise<{ status: "verified" }>;
+  confirmPasswordReset(input: { token: string; password: string }): Promise<{ status: "reset" }>;
   verifyMfa(input: { challengeToken: string; codeOrRecoveryCode: string }): Promise<SessionResult>;
   getMe(token?: string): Promise<WebAuthUser>;
   logout(token?: string): Promise<void>;
@@ -258,6 +260,18 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
     },
     async registerWithInvitation(input) {
       return requestJson<{ status: "pending" | "active" }>(fetchImpl, `${root}/v1/auth/register`, {
+        method: "POST",
+        body: input,
+      });
+    },
+    async confirmEmailVerification(input) {
+      return requestJson<{ status: "verified" }>(fetchImpl, `${root}/v1/auth/email-verification/confirm`, {
+        method: "POST",
+        body: input,
+      });
+    },
+    async confirmPasswordReset(input) {
+      return requestJson<{ status: "reset" }>(fetchImpl, `${root}/v1/auth/password-reset/confirm`, {
         method: "POST",
         body: input,
       });
@@ -470,7 +484,11 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
 }
 
 export function exportCommand(slug: string, version: string, platform: string): string {
-  return `myskills export ${slug} --version ${version} --platform ${platform} --output ./skills/${slug}`;
+  return `myskills export ${shellArg(slug)} --version ${shellArg(version)} --platform ${shellArg(platform)} --output ${shellArg(`./skills/${slug}`)}`;
+}
+
+function shellArg(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 export function safeErrorMessage(error: unknown): string {

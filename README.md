@@ -126,7 +126,10 @@ node apps/cli/dist/index.js scan --path examples/skills/release-notes-helper
 
 ```bash
 npm run check
+npm run test:postgres
 ```
+
+`npm run test:postgres` requires `TEST_DATABASE_URL` to point at a disposable Postgres database whose name includes `test` or `ci`. It resets that database schema before applying migrations.
 
 ## Deployment
 

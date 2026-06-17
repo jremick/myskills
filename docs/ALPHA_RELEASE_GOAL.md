@@ -1,7 +1,7 @@
 # Responsible Public Alpha Goal
 
 Version: 0.1.0-alpha.0
-Last updated: 2026-06-04
+Last updated: 2026-06-17
 
 ## Goal
 
@@ -24,6 +24,7 @@ The alpha explicitly excludes business-critical production guarantees. API contr
 ## Release Gates
 
 - `npm run check` passes from this repo.
+- `npm run test:postgres` passes against a disposable Postgres database to cover migration-backed auth flows.
 - `npm run check:alpha-release` passes.
 - Fresh clone can install dependencies, run checks, validate and scan the example package, and create release artifacts.
 - `SECURITY.md`, `LICENSE`, README, release docs, threat model, and roadmap are public-safe.
@@ -35,17 +36,18 @@ The alpha explicitly excludes business-critical production guarantees. API contr
 
 1. Confirm the local worktree is clean and synced to `origin/main`.
 2. Confirm latest GitHub CI on `main` is green.
-3. Make the repository public.
-4. Enable GitHub private vulnerability reporting.
-5. Point `myskills.sh` to the public repository as a short-term landing target.
-6. Create and push the tag:
+3. Confirm the `postgres-integration` CI job is green on `main`.
+4. Make the repository public.
+5. Enable GitHub private vulnerability reporting.
+6. Point `myskills.sh` to the public repository as a short-term landing target.
+7. Create and push the tag:
 
    ```bash
    git tag v0.1.0-alpha.0
    git push origin v0.1.0-alpha.0
    ```
 
-7. Confirm the tag-triggered release workflow succeeds and uploads artifacts.
+8. Confirm the tag-triggered release workflow succeeds and uploads artifacts.
 
 ## Stop Conditions
 

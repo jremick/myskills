@@ -31,7 +31,7 @@ export interface AiSkillsMcpHandlers {
 
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 const VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z.+-]*$/;
-const PLATFORM_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+const PLATFORM_PATTERN = /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
 
 export function createAiSkillsMcpHandlers(client: RegistryApiClient): AiSkillsMcpHandlers {
   return {
@@ -83,14 +83,18 @@ export function createAiSkillsMcpHandlers(client: RegistryApiClient): AiSkillsMc
         const release = await client.getRelease(skill.slug, version);
         const selectedPlatform = selectPlatform(release, requestedPlatform);
         const outputDir = `./skills/${skill.slug}`;
+        const slugArg = shellArg(skill.slug);
+        const versionArg = shellArg(release.version);
+        const platformArg = shellArg(selectedPlatform.name);
+        const outputDirArg = shellArg(outputDir);
         return {
           skill: safeSkill(skill),
           release: safeRelease(release),
           install: {
             platform: selectedPlatform.name,
             installTarget: selectedPlatform.installTarget,
-            cliInstallCommand: `myskills install ${skill.slug} --version ${release.version} --platform ${selectedPlatform.name}`,
-            cliExportCommand: `myskills export ${skill.slug} --version ${release.version} --platform ${selectedPlatform.name} --output ${outputDir}`,
+            cliInstallCommand: `myskills install ${slugArg} --version ${versionArg} --platform ${platformArg}`,
+            cliExportCommand: `myskills export ${slugArg} --version ${versionArg} --platform ${platformArg} --output ${outputDirArg}`,
             apiBundleEndpoint: `${client.baseUrl}/v1/skills/${encodeURIComponent(skill.slug)}/releases/${encodeURIComponent(release.version)}/bundle?platform=${encodeURIComponent(selectedPlatform.name)}`,
             authentication: client.hasToken
               ? "This MCP server will forward its configured bearer token to the API."
@@ -149,11 +153,12 @@ function safeRelease(release: ReleaseMetadata): ReleaseMetadata {
 }
 
 function selectPlatform(release: ReleaseMetadata, requestedPlatform: string | undefined): { name: string; installTarget: string; status: string } {
+  const supportedPlatforms = release.platforms.filter((item) => item.status === "supported");
   const platform = requestedPlatform
-    ? release.platforms.find((item) => item.name === requestedPlatform)
-    : release.platforms.find((item) => item.name === "codex") ?? release.platforms[0];
+    ? supportedPlatforms.find((item) => item.name === requestedPlatform)
+    : supportedPlatforms.find((item) => item.name === "codex") ?? supportedPlatforms[0];
   if (requestedPlatform && !platform) {
-    throw new ToolInputError("Requested platform is not available for that release.");
+    throw new ToolInputError("Requested platform is not supported for that release.");
   }
   if (!platform) {
     throw new ToolInputError("No supported platform is available for that release.");
@@ -219,10 +224,14 @@ function parseVersion(value: string): string {
 }
 
 function parsePlatform(value: string): string {
-  if (!PLATFORM_PATTERN.test(value)) {
+  if (value.length > 64 || !PLATFORM_PATTERN.test(value)) {
     throw new ToolInputError("Platform is invalid.");
   }
   return value;
+}
+
+function shellArg(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 function boundedLimit(value: number | undefined): number | undefined {

@@ -8,6 +8,8 @@ export interface ScanFinding {
 const secretPatterns = [
   /\bATATT[0-9A-Za-z_-]{20,}\b/,
   /\b(?:ghp|gho|ghu|ghs|ghr)_[0-9A-Za-z_]{30,}\b/,
+  /\bsk-[A-Za-z0-9_-]{32,}\b/,
+  /\bAKIA[0-9A-Z]{16}\b/,
   /-----BEGIN (?:RSA |EC |OPENSSH |)PRIVATE KEY-----/,
 ];
 

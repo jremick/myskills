@@ -29,6 +29,19 @@ test("rejects invalid skill slugs", () => {
   }));
 });
 
+test("rejects unsafe platform names", () => {
+  for (const name of ["codex skill", "codex;rm", "$(codex)", "codex|sh", "codex/skill", "-codex", "codex-"]) {
+    assert.throws(() => parseSkillManifest({
+      name: "release-notes-helper",
+      title: "Release Notes Helper",
+      summary: "Turns merged changes into concise release notes.",
+      version: "0.1.0",
+      license: "Apache-2.0",
+      platforms: [{ name, install_target: "codex-skill" }],
+    }));
+  }
+});
+
 test("rejects unknown manifest fields", () => {
   assert.throws(() => parseSkillManifest({
     name: "release-notes-helper",

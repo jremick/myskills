@@ -153,6 +153,37 @@ test("registry client redeems registration invitations", async () => {
   }]);
 });
 
+test("registry client confirms email verification and password reset action tokens", async () => {
+  const calls: Array<{ body?: string; method?: string; url: string }> = [];
+  const client = createRegistryClient("http://api.test", async (input, init) => {
+    calls.push({
+      body: typeof init?.body === "string" ? init.body : undefined,
+      method: init?.method,
+      url: String(input),
+    });
+    if (String(input).endsWith("/v1/auth/email-verification/confirm")) {
+      return jsonResponse(200, { status: "verified" });
+    }
+    return jsonResponse(200, { status: "reset" });
+  });
+
+  await client.confirmEmailVerification({ token: "verify-token" });
+  await client.confirmPasswordReset({ token: "reset-token", password: "correct horse battery staple" });
+
+  assert.deepEqual(calls, [
+    {
+      method: "POST",
+      url: "http://api.test/v1/auth/email-verification/confirm",
+      body: JSON.stringify({ token: "verify-token" }),
+    },
+    {
+      method: "POST",
+      url: "http://api.test/v1/auth/password-reset/confirm",
+      body: JSON.stringify({ token: "reset-token", password: "correct horse battery staple" }),
+    },
+  ]);
+});
+
 test("registry client manages admin settings with the session bearer", async () => {
   const calls: Array<{ body?: string; method?: string; url: string; authorization?: string }> = [];
   const client = createRegistryClient("http://api.test", async (input, init) => {
@@ -340,7 +371,7 @@ test("safe error messages do not render raw server internals", () => {
 test("export command matches CLI contract", () => {
   assert.equal(
     exportCommand("release-notes-helper", "0.1.0", "codex"),
-    "myskills export release-notes-helper --version 0.1.0 --platform codex --output ./skills/release-notes-helper",
+    "myskills export 'release-notes-helper' --version '0.1.0' --platform 'codex' --output './skills/release-notes-helper'",
   );
 });
 

@@ -82,13 +82,53 @@ test("install instructions never fetch or expose bundle package contents", async
     "http://localhost:3001/v1/skills/release-notes-helper/releases/0.1.0",
   ]);
   assert.equal(calls.some((url) => url.includes("/bundle")), false);
-  assert.match(text, /myskills install release-notes-helper --version 0\.1\.0 --platform codex/);
-  assert.match(text, /myskills export release-notes-helper --version 0\.1\.0 --platform codex/);
+  assert.match(text, /myskills install 'release-notes-helper' --version '0\.1\.0' --platform 'codex'/);
+  assert.match(text, /myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'codex'/);
   assert.match(text, /packageContentsReturned/);
   assert.equal(text.includes("storageKey"), false);
   assert.equal(text.includes("payload"), false);
   assert.equal(text.includes("files"), false);
   assert.equal(text.includes("secret package text"), false);
+});
+
+test("install instructions only select supported platforms", async () => {
+  const client = createRegistryApiClient({
+    token: "aiss_test_secret",
+    fetchImpl: async (url) => {
+      if (url.endsWith("/v1/mcp/session")) {
+        return jsonResponse(200, mcpSession());
+      }
+      if (url.endsWith("/v1/skills/release-notes-helper")) {
+        return jsonResponse(200, { skill: publicSkill() });
+      }
+      if (url.endsWith("/v1/skills/release-notes-helper/releases/0.1.0")) {
+        return jsonResponse(200, {
+          release: {
+            ...publicRelease(),
+            platforms: [
+              { name: "codex", installTarget: "codex-skill", status: "planned" },
+              { name: "generic", installTarget: "generic-bundle", status: "supported" },
+            ],
+          },
+        });
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    },
+  });
+
+  const selected = await createAiSkillsMcpHandlers(client).getInstallInstructions({
+    slug: "release-notes-helper",
+  });
+  assert.equal(selected.isError, undefined);
+  assert.match(JSON.stringify(selected), /--platform 'generic'/);
+  assert.equal(JSON.stringify(selected).includes("--platform 'codex'"), false);
+
+  const unsupported = await createAiSkillsMcpHandlers(client).getInstallInstructions({
+    slug: "release-notes-helper",
+    platform: "codex",
+  });
+  assert.equal(unsupported.isError, true);
+  assert.match(unsupported.content[0]?.text ?? "", /not supported/);
 });
 
 test("upstream denial errors are sanitized", async () => {

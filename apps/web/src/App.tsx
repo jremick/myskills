@@ -59,6 +59,9 @@ interface RegistryAppProps {
 type LoadState = "idle" | "loading" | "ready" | "error";
 type AuthState = "idle" | "loading" | "mfa";
 type AppView = "browse" | "admin" | "review" | "submit" | "teams";
+type AuthActionRoute =
+  | { kind: "email-verification"; token: string | null }
+  | { kind: "password-reset"; token: string | null };
 
 interface WebSession {
   token: string;
@@ -90,6 +93,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [session, setSession] = useState<WebSession | null>(() => readStoredSession());
   const registryClient = useMemo(() => client ?? createRegistryClient(undefined, undefined, session?.token), [client, session?.token]);
   const [registrationInviteToken, setRegistrationInviteToken] = useState<string | null>(() => registrationInviteTokenFromLocation(window.location.pathname, window.location.hash));
+  const [authActionRoute] = useState<AuthActionRoute | null>(() => authActionRouteFromLocation(window.location.pathname, window.location.hash));
   const [query, setQuery] = useState("");
   const [skills, setSkills] = useState<PublicSkill[]>([]);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(initialSlug);
@@ -104,6 +108,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [authState, setAuthState] = useState<AuthState>("idle");
   const [mfaPending, setMfaPending] = useState<MfaPending | null>(null);
   const isInviteRegistrationRoute = window.location.pathname === "/auth/register" && !session;
+  const isAuthActionRoute = Boolean(authActionRoute);
   const canUseAdmin = Boolean(session && isAdminUser(session.user));
   const canUseReview = Boolean(session && isReviewerUser(session.user));
   const canUseSubmit = Boolean(session && isSubmitterUser(session.user));
@@ -146,7 +151,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }, [registryClient, session?.token]);
 
   useEffect(() => {
-    if (isInviteRegistrationRoute) {
+    if (isInviteRegistrationRoute || isAuthActionRoute) {
       return;
     }
     let active = true;
@@ -176,7 +181,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
     return () => {
       active = false;
     };
-  }, [isInviteRegistrationRoute, registryClient, query]);
+  }, [isAuthActionRoute, isInviteRegistrationRoute, registryClient, query]);
 
   useEffect(() => {
     if (!selectedSlug) {
@@ -323,6 +328,24 @@ export function RegistryApp({ client }: RegistryAppProps) {
         client={registryClient}
         inviteToken={registrationInviteToken}
         onComplete={completeInviteRegistration}
+      />
+    );
+  }
+
+  if (authActionRoute?.kind === "email-verification") {
+    return (
+      <EmailVerificationView
+        client={registryClient}
+        token={authActionRoute.token}
+      />
+    );
+  }
+
+  if (authActionRoute?.kind === "password-reset") {
+    return (
+      <PasswordResetView
+        client={registryClient}
+        token={authActionRoute.token}
       />
     );
   }
@@ -647,6 +670,153 @@ function InviteRegistrationView({
             {state === "loading" ? "Registering" : "Create account"}
           </button>
         </form>
+      </section>
+    </main>
+  );
+}
+
+function EmailVerificationView({ client, token }: { client: RegistryClient; token: string | null }) {
+  const [state, setState] = useState<LoadState>(token ? "loading" : "error");
+  const [message, setMessage] = useState<string | null>(token ? "Verifying email..." : "Verification link is invalid or expired.");
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+    let active = true;
+    setState("loading");
+    setMessage("Verifying email...");
+    client.confirmEmailVerification({ token })
+      .then(() => {
+        if (!active) {
+          return;
+        }
+        setState("ready");
+        setMessage("Email verified. You can sign in.");
+      })
+      .catch((error: unknown) => {
+        if (!active) {
+          return;
+        }
+        setState("error");
+        setMessage(safeAuthErrorMessage(error));
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, token]);
+
+  return (
+    <AuthActionPage
+      icon={<Check size={22} aria-hidden="true" />}
+      title="Verify email"
+      description="Confirming this email address for your MySkills account."
+    >
+      {message && <div className="safe-message admin-message" role="status">{message}</div>}
+      <a className="auth-action-link" href="/" aria-disabled={state === "loading"}>Open registry</a>
+    </AuthActionPage>
+  );
+}
+
+function PasswordResetView({ client, token }: { client: RegistryClient; token: string | null }) {
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [state, setState] = useState<LoadState>(token ? "idle" : "error");
+  const [message, setMessage] = useState<string | null>(token ? null : "Password reset link is invalid or expired.");
+
+  async function resetPassword() {
+    if (!token) {
+      setMessage("Password reset link is invalid or expired.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setMessage("Passwords do not match.");
+      return;
+    }
+    setState("loading");
+    setMessage(null);
+    try {
+      await client.confirmPasswordReset({ token, password });
+      setPassword("");
+      setConfirmPassword("");
+      setState("ready");
+      setMessage("Password reset. Sign in with your new password.");
+    } catch (error) {
+      setState("error");
+      setMessage(safeAuthErrorMessage(error));
+    }
+  }
+
+  return (
+    <AuthActionPage
+      icon={<ShieldCheck size={22} aria-hidden="true" />}
+      title="Reset password"
+      description="Choose a new password for your MySkills account."
+    >
+      {message && <div className="safe-message admin-message" role="status">{message}</div>}
+      <form className="invite-registration-form" onSubmit={(event) => {
+        event.preventDefault();
+        void resetPassword();
+      }}>
+        <label>
+          New password
+          <input
+            autoComplete="new-password"
+            disabled={state === "loading" || !token || state === "ready"}
+            onChange={(event) => setPassword(event.target.value)}
+            type="password"
+            value={password}
+          />
+        </label>
+        <label>
+          Confirm password
+          <input
+            autoComplete="new-password"
+            disabled={state === "loading" || !token || state === "ready"}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            type="password"
+            value={confirmPassword}
+          />
+        </label>
+        <button
+          className="save-button"
+          disabled={state === "loading" || !token || state === "ready" || !password || !confirmPassword}
+          type="submit"
+        >
+          <ShieldCheck size={16} aria-hidden="true" />
+          {state === "loading" ? "Resetting" : "Reset password"}
+        </button>
+      </form>
+    </AuthActionPage>
+  );
+}
+
+function AuthActionPage({
+  children,
+  description,
+  icon,
+  title,
+}: {
+  children: ReactNode;
+  description: string;
+  icon: ReactNode;
+  title: string;
+}) {
+  return (
+    <main className="invite-registration-page" aria-label={title}>
+      <section className="invite-registration-panel">
+        <div className="invite-registration-brand">
+          <img src="/brand/myskills-mark.svg" alt="" />
+          <span>MySkills</span>
+        </div>
+        <div className="invite-registration-head">
+          {icon}
+          <div>
+            <h1>{title}</h1>
+            <p>{description}</p>
+          </div>
+        </div>
+        {children}
       </section>
     </main>
   );
@@ -2159,6 +2329,20 @@ function registrationInviteTokenFromLocation(pathname: string, hash: string): st
   if (pathname !== "/auth/register") {
     return null;
   }
+  return tokenFromHash(hash);
+}
+
+function authActionRouteFromLocation(pathname: string, hash: string): AuthActionRoute | null {
+  if (pathname === "/auth/verify-email") {
+    return { kind: "email-verification", token: tokenFromHash(hash) };
+  }
+  if (pathname === "/auth/reset-password") {
+    return { kind: "password-reset", token: tokenFromHash(hash) };
+  }
+  return null;
+}
+
+function tokenFromHash(hash: string): string | null {
   const params = new URLSearchParams(hash.replace(/^#/, ""));
   const token = params.get("token")?.trim();
   return token || null;

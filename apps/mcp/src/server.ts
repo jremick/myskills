@@ -60,7 +60,7 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
       inputSchema: z.object({
         slug: z.string().trim().min(1).max(120),
         version: z.string().trim().min(1).max(80).optional(),
-        platform: z.string().trim().min(1).max(64).optional(),
+        platform: z.string().trim().min(1).max(64).regex(/^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/).optional(),
       }),
       annotations: {
         readOnlyHint: true,

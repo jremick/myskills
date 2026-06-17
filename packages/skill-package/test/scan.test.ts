@@ -3,11 +3,17 @@ import assert from "node:assert/strict";
 import { hasBlockingFindings, scanTextForPackageRisks } from "../src/scan.js";
 
 test("flags secret-looking package text", () => {
-  const token = `ATATT${"abcdefghijklmnopqrstuvwxyz1234567890"}`;
-  const findings = scanTextForPackageRisks(`token: ${token}`);
+  const tokens = [
+    `ATATT${"abcdefghijklmnopqrstuvwxyz1234567890"}`,
+    `sk-${"abcdefghijklmnopqrstuvwxyz1234567890ABCDEF"}`,
+    `AKIA${"1234567890ABCDEF"}`,
+  ];
 
-  assert.equal(hasBlockingFindings(findings), true);
-  assert.equal(findings[0]?.category, "secret");
+  for (const token of tokens) {
+    const findings = scanTextForPackageRisks(`token: ${token}`);
+    assert.equal(hasBlockingFindings(findings), true);
+    assert.equal(findings[0]?.category, "secret");
+  }
 });
 
 test("flags destructive shell snippets", () => {
