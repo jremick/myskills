@@ -98,7 +98,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
 
   app.get("/v1/skills", async (request) => {
     const query = parseQuery(request.query);
-    const user = await options.authService?.authenticateAuthorizationHeader(request.headers.authorization);
+    const user = await authenticateOptionalRegistryReader(options.authService, request.headers.authorization);
     const skills = await options.skillRepository.searchVisibleSkills({
       query: query.q,
       limit: query.limit,
@@ -112,7 +112,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
     }
     const params = parseReleaseParams(request.params);
-    const user = await options.authService?.authenticateAuthorizationHeader(request.headers.authorization);
+    const user = await authenticateOptionalRegistryReader(options.authService, request.headers.authorization);
     const release = await options.submissionService.getPublicRelease({
       ...params,
       actorId: user?.id ?? null,
@@ -134,7 +134,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     }
     const params = parseReleaseParams(request.params);
     const query = parseBundleQuery(request.query);
-    const user = await options.authService?.authenticateAuthorizationHeader(request.headers.authorization);
+    const user = await authenticateOptionalRegistryReader(options.authService, request.headers.authorization);
     const bundle = await options.submissionService.getPublicBundle({
       ...params,
       platform: query.platform,
@@ -155,7 +155,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
 
   app.get("/v1/skills/:slug", async (request, reply) => {
     const slug = parseSlugParam(request.params);
-    const user = await options.authService?.authenticateAuthorizationHeader(request.headers.authorization);
+    const user = await authenticateOptionalRegistryReader(options.authService, request.headers.authorization);
     const skill = await options.skillRepository.getVisibleSkillBySlug(slug, user?.id ?? null);
     if (!skill) {
       return reply.code(404).send({
@@ -176,6 +176,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     if (!user) {
       return authFailureReply(options.authService, request.headers.authorization, reply);
     }
+    requireMfaForPrivilegedSession(user);
     return {
       sharing: await options.skillRepository.getSkillSharing(parseSlugParam(request.params), {
         id: user.id,
@@ -192,6 +193,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     if (!user) {
       return authFailureReply(options.authService, request.headers.authorization, reply);
     }
+    requireMfaForPrivilegedSession(user);
     return {
       sharing: await options.skillRepository.updateSkillSharing({
         actor: {
@@ -411,6 +413,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         },
       });
     }
+    requireMfaForPrivilegedSession(user);
     return { sharing: await options.skillRepository.getSharingSettings() };
   });
 
@@ -422,6 +425,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     if (!user) {
       return authFailureReply(options.authService, request.headers.authorization, reply);
     }
+    requireMfaForPrivilegedSession(user);
     return {
       sharing: await options.skillRepository.updateSharingSettings(
         { id: user.id, roles: user.roles },
@@ -772,6 +776,24 @@ async function authenticateActor(
 
 function requiresMfaForRole(context: AuthContext): boolean {
   return context.user.roles.some((role) => role === "owner" || role === "admin" || role === "maintainer");
+}
+
+function requireMfaForPrivilegedSession(user: { roles: string[]; mfaVerified: boolean }): void {
+  if (user.roles.some((role) => role === "owner" || role === "admin" || role === "maintainer") && !user.mfaVerified) {
+    throw new AppError("MFA verification is required.", "MFA_VERIFICATION_REQUIRED", 403);
+  }
+}
+
+async function authenticateOptionalRegistryReader(authService: AuthService | undefined, authorization: string | undefined) {
+  if (!authService || !hasBearerAuthorization(authorization)) {
+    return null;
+  }
+  const context = await authService.authenticateRequest(authorization);
+  if (!context) {
+    return null;
+  }
+  requireScope(context, "skills:read");
+  return context.user;
 }
 
 async function authenticateSessionUser(authService: AuthService, authorization: string | undefined) {
@@ -1363,7 +1385,7 @@ function parseQuery(input: unknown): { q?: string; limit?: number } {
 function parseBundleQuery(input: unknown): { platform?: string } {
   const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
   const platform = typeof params.platform === "string" && params.platform.trim() ? params.platform.trim() : undefined;
-  if (platform && !/^[A-Za-z0-9._-]{1,64}$/.test(platform)) {
+  if (platform && (platform.length > 64 || !/^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/.test(platform))) {
     throw new AppError("Valid platform is required.", "INVALID_PLATFORM", 400);
   }
   return { platform };

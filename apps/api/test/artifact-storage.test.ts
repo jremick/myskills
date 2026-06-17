@@ -112,6 +112,19 @@ test("artifact payload reader supports legacy DB payload fallback only when the 
   );
 });
 
+test("artifact payload reader fails closed when legacy DB fallback does not match metadata", async () => {
+  const expectedPayload = { files: [{ path: "README.md", content: "expected" }] };
+  const stalePayload = { files: [{ path: "README.md", content: "stale" }] };
+
+  await assert.rejects(
+    () => readArtifactPayload({
+      artifactStorage: new MemoryArtifactObjectStorage(),
+      artifact: artifactRecord("submissions/stale-legacy.json", JSON.stringify(expectedPayload), { payload: stalePayload }),
+    }),
+    hasAppErrorCode("ARTIFACT_METADATA_MISMATCH"),
+  );
+});
+
 test("artifact payload reader fails closed on object metadata mismatch even with DB payload present", async () => {
   const storage = new MemoryArtifactObjectStorage();
   const payload = { files: [{ path: "skill.json", content: "{}" }] };

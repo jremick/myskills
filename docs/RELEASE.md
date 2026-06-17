@@ -1,7 +1,7 @@
 # Release Process
 
 Version: 0.1.0-alpha.0
-Last updated: 2026-06-04
+Last updated: 2026-06-17
 
 This repo is prepared for a responsible public alpha once the checklist in [ALPHA_RELEASE_GOAL.md](ALPHA_RELEASE_GOAL.md) passes. Alpha releases are for evaluation and early self-hosting feedback, not business-critical production use.
 
@@ -12,6 +12,7 @@ Before creating a release tag:
 - Confirm `package.json` has the intended version.
 - Confirm the worktree is clean.
 - Run `npm run check`.
+- Run `npm run test:postgres` against a disposable Postgres database.
 - Run `npm run release:artifacts`.
 - Review the generated `dist/release/release-metadata.json` and `dist/release/SHA256SUMS`.
 - Confirm public docs and examples contain no private-source carryover.
@@ -21,6 +22,7 @@ Before creating a release tag:
 
 ```bash
 npm run check
+TEST_DATABASE_URL=postgres://myskills_test:myskills_test@localhost:5432/myskills_test npm run test:postgres
 npm run release:artifacts
 ```
 

@@ -2046,6 +2046,22 @@ button:active:not(:disabled) {
   padding: 20px;
 }
 
+.auth-action-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  margin: 0 20px 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 0 14px;
+  color: var(--teal-700);
+  background: var(--surface-muted);
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
 .safe-message,
 .empty-state,
 .empty-detail {

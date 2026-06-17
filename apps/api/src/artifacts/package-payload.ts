@@ -26,6 +26,7 @@ export async function readArtifactPayload(input: {
     if (!hasDbArtifactPayload(input.artifact.payload)) {
       throw new AppError("Artifact payload is unavailable.", "ARTIFACT_PAYLOAD_UNAVAILABLE", 500);
     }
+    assertArtifactBodyMatchesMetadata(JSON.stringify(input.artifact.payload), input.artifact);
     return parseArtifactPayload(input.artifact.payload);
   }
 

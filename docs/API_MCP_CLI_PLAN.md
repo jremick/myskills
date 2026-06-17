@@ -1,7 +1,7 @@
 # API, MCP, And CLI Plan
 
-Version: 0.1.0
-Last updated: 2026-06-04
+Version: 0.1.1
+Last updated: 2026-06-17
 
 ## Shared Rule
 
@@ -51,7 +51,7 @@ Later eval endpoints:
 - `GET /v1/evals/runs/:id`
 - `GET /v1/review/submissions/:id/evals`
 
-Current admin API slice implements MFA-verified session-only registration mode read/update, non-secret provider config and claim-to-role mapping management, safe user listing, user status actions, role editing with owner-only privileged-role safeguards, sanitized mutation audit events, and bounded audit listing. Invite flows, provider login/linking, and external identity lifecycle remain planned.
+Current admin API slice implements MFA-verified session-only registration mode read/update, MFA-verified registration invitations, non-secret provider config and claim-to-role mapping management, safe user listing, user status actions, role editing with owner-only privileged-role safeguards, sanitized mutation audit events, and bounded audit listing. Provider login/linking and external identity lifecycle remain planned.
 
 Use OpenAPI once the first implementation slice stabilizes.
 
