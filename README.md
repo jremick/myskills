@@ -131,6 +131,12 @@ npm run test:postgres
 
 `npm run test:postgres` requires `TEST_DATABASE_URL` to point at a disposable Postgres database whose name includes `test` or `ci`. It resets that database schema before applying migrations.
 
+## Support And Security
+
+Use [GitHub Issues](https://github.com/jremick/myskills-app/issues) for public alpha bugs, setup problems, and feature requests.
+
+Do not report suspected vulnerabilities, exposed secrets, access-control bypasses, or package-safety escapes in public issues. Use GitHub private vulnerability reporting as described in [SECURITY.md](SECURITY.md).
+
 ## Deployment
 
 Container packaging is available for production API, web, and optional HTTP MCP services:
