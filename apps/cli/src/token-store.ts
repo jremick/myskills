@@ -3,9 +3,19 @@ import os from "node:os";
 import path from "node:path";
 import type { CliTokenStore, StoredCliToken } from "./cli.js";
 
+const KEYRING_SERVICE = "ai.jarel.myskills.cli";
+
 interface TokenFilePayload {
   version: 1;
   tokens: Record<string, StoredCliToken>;
+}
+
+export function createTokenStore(env: Record<string, string | undefined> = process.env): CliTokenStore {
+  const fileStore = createFileTokenStore(env);
+  if (env.MYSKILLS_TOKEN_STORE === "file" || env.MYSKILLS_TOKEN_FILE) {
+    return fileStore;
+  }
+  return createKeyringTokenStore(fileStore);
 }
 
 export function createFileTokenStore(env: Record<string, string | undefined> = process.env): CliTokenStore {
@@ -29,6 +39,54 @@ export function createFileTokenStore(env: Record<string, string | undefined> = p
       await writePayload(filePath, payload);
     },
   };
+}
+
+function createKeyringTokenStore(fallback: CliTokenStore): CliTokenStore {
+  return {
+    async get(apiUrl) {
+      const keyringToken = await readKeyringToken(apiUrl);
+      return keyringToken ?? await fallback.get(apiUrl);
+    },
+    async set(apiUrl, token) {
+      if (await writeKeyringToken(apiUrl, token)) {
+        return;
+      }
+      await fallback.set(apiUrl, token);
+    },
+    async delete(apiUrl) {
+      await deleteKeyringToken(apiUrl);
+      await fallback.delete(apiUrl);
+    },
+  };
+}
+
+async function readKeyringToken(apiUrl: string): Promise<StoredCliToken | null> {
+  try {
+    const { Entry } = await import("@napi-rs/keyring");
+    const raw = new Entry(KEYRING_SERVICE, keyringAccount(apiUrl)).getPassword();
+    return raw ? parseStoredToken(JSON.parse(raw) as unknown) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeKeyringToken(apiUrl: string, token: StoredCliToken): Promise<boolean> {
+  try {
+    const { Entry } = await import("@napi-rs/keyring");
+    new Entry(KEYRING_SERVICE, keyringAccount(apiUrl)).setPassword(JSON.stringify(token));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function deleteKeyringToken(apiUrl: string): Promise<void> {
+  try {
+    const { Entry } = await import("@napi-rs/keyring");
+    new Entry(KEYRING_SERVICE, keyringAccount(apiUrl)).deletePassword();
+  } catch {
+    // Missing keyring support or missing credential should not block logout cleanup.
+  }
 }
 
 function tokenFilePath(env: Record<string, string | undefined>): string {
@@ -99,6 +157,10 @@ function parseStoredToken(input: unknown): StoredCliToken | null {
 
 function normalizeApiUrl(apiUrl: string): string {
   return apiUrl.replace(/\/+$/, "");
+}
+
+function keyringAccount(apiUrl: string): string {
+  return `api-url:${Buffer.from(normalizeApiUrl(apiUrl)).toString("base64url")}`;
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

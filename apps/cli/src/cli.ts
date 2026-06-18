@@ -13,6 +13,7 @@ import {
 const DEFAULT_API_URL = "http://localhost:3001";
 const CLI_VERSION = process.env.MYSKILLS_CLI_VERSION ?? "0.0.0-dev";
 const CLI_VISIBILITY_SCOPES = ["public", "authenticated", "organization", "team", "private", "explicit-users"] as const;
+const LOGIN_AUTH_METHODS = ["password", "api-key"] as const;
 
 export interface CliIo {
   stdout: (line: string) => void;
@@ -39,6 +40,11 @@ export interface CliTokenStore {
   delete: (apiUrl: string) => Promise<void>;
 }
 
+export interface CliConfigStore {
+  getApiUrl: () => string | undefined;
+  setApiUrl: (apiUrl: string) => Promise<void>;
+}
+
 export type FetchLike = (
   input: string,
   init?: { method?: string; headers?: Record<string, string>; body?: string },
@@ -52,6 +58,7 @@ export interface CliRuntime {
   env: Record<string, string | undefined>;
   io: CliIo;
   fetch: FetchLike;
+  configStore?: CliConfigStore;
   prompt?: CliPrompt;
   tokenStore?: CliTokenStore;
 }
@@ -201,9 +208,20 @@ async function infoCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
 }
 
 async function loginCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
-  if (!runtime.tokenStore) {
+  const tokenStore = runtime.tokenStore;
+  if (!tokenStore) {
     throw new CliError("No token store is configured. Set MYSKILLS_TOKEN for one-off commands.", 1);
   }
+  const apiUrl = await loginApiUrl(parsed, runtime);
+  parsed.options["api-url"] = apiUrl;
+  const method = await loginAuthMethod(parsed, runtime);
+  if (method === "api-key") {
+    return await loginWithApiKey(parsed, runtime, apiUrl, tokenStore);
+  }
+  return await loginWithPassword(parsed, runtime, apiUrl, tokenStore);
+}
+
+async function loginWithPassword(parsed: ParsedArgs, runtime: CliRuntime, apiUrl: string, tokenStore: CliTokenStore): Promise<number> {
   const email = optionalStringOption(parsed, "email") ?? await promptText(runtime, "Email: ");
   const password = await promptSecret(runtime, "Password: ");
   const loginResponse = await apiPost("/v1/auth/login", { email: email.trim(), password }, parsed, runtime);
@@ -211,14 +229,28 @@ async function loginCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
     ? await completeMfaLogin(loginResponse, parsed, runtime)
     : authSessionFromResponse(loginResponse);
 
-  const apiUrl = apiBaseUrl(parsed, runtime);
-  await runtime.tokenStore.set(apiUrl, {
+  await tokenStore.set(apiUrl, {
     kind: "session",
     token: session.token,
     email: session.email,
     expiresAt: session.expiresAt,
   });
+  await runtime.configStore?.setApiUrl(apiUrl);
   runtime.io.stdout(`${session.email ?? email.trim()}\tlogged-in\texpires=${session.expiresAt}`);
+  return 0;
+}
+
+async function loginWithApiKey(parsed: ParsedArgs, runtime: CliRuntime, apiUrl: string, tokenStore: CliTokenStore): Promise<number> {
+  const apiKey = await promptSecret(runtime, "API key: ");
+  const response = await apiGet("/v1/me", parsed, runtime, apiKey);
+  const user = response.user as { email?: string };
+  await tokenStore.set(apiUrl, {
+    kind: "api",
+    token: apiKey,
+    email: user.email,
+  });
+  await runtime.configStore?.setApiUrl(apiUrl);
+  runtime.io.stdout(`${user.email ?? "api-key"}\tapi-key-stored`);
   return 0;
 }
 
@@ -1486,8 +1518,25 @@ function requiredPath(parsed: ParsedArgs): string {
   return value;
 }
 
+type ApiUrlSource = "option" | "env" | "config" | "default";
+
+function apiBaseUrlResolution(parsed: ParsedArgs, runtime: CliRuntime): { url: string; source: ApiUrlSource } {
+  const optionValue = optionalStringOption(parsed, "api-url");
+  if (optionValue) {
+    return { url: normalizeApiUrlOption(optionValue), source: "option" };
+  }
+  if (runtime.env.MYSKILLS_API_URL) {
+    return { url: normalizeApiUrlOption(runtime.env.MYSKILLS_API_URL), source: "env" };
+  }
+  const configuredApiUrl = runtime.configStore?.getApiUrl();
+  if (configuredApiUrl) {
+    return { url: normalizeApiUrlOption(configuredApiUrl), source: "config" };
+  }
+  return { url: DEFAULT_API_URL, source: "default" };
+}
+
 function apiBaseUrl(parsed: ParsedArgs, runtime: CliRuntime): string {
-  return String(parsed.options["api-url"] ?? runtime.env.MYSKILLS_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
+  return apiBaseUrlResolution(parsed, runtime).url;
 }
 
 interface ResolvedToken {
@@ -1555,6 +1604,67 @@ async function promptSecret(runtime: CliRuntime, label: string): Promise<string>
     throw new CliError(`${label.replace(/:\s*$/, "")} is required.`, 2);
   }
   return value;
+}
+
+async function promptOptionalText(runtime: CliRuntime, label: string): Promise<string> {
+  if (!runtime.prompt) {
+    throw new CliError("Interactive input is unavailable. Set MYSKILLS_TOKEN for one-off commands.", 1);
+  }
+  return (await runtime.prompt.text(label)).trim();
+}
+
+type LoginAuthMethod = (typeof LOGIN_AUTH_METHODS)[number];
+
+async function loginApiUrl(parsed: ParsedArgs, runtime: CliRuntime): Promise<string> {
+  const resolved = apiBaseUrlResolution(parsed, runtime);
+  if (resolved.source === "option" || resolved.source === "env" || !runtime.prompt) {
+    return resolved.url;
+  }
+  const defaultUrl = resolved.source === "config" ? resolved.url : DEFAULT_API_URL;
+  const input = await promptOptionalText(runtime, `API URL [${defaultUrl}]: `);
+  return input ? normalizeApiUrlOption(input) : defaultUrl;
+}
+
+async function loginAuthMethod(parsed: ParsedArgs, runtime: CliRuntime): Promise<LoginAuthMethod> {
+  if (parsed.options["api-key"] === true) {
+    return "api-key";
+  }
+  const methodOption = optionalStringOption(parsed, "auth-method") ?? optionalStringOption(parsed, "method");
+  if (methodOption) {
+    return parseLoginAuthMethod(methodOption);
+  }
+  if (optionalStringOption(parsed, "email") || !runtime.prompt) {
+    return "password";
+  }
+  const input = await promptOptionalText(runtime, "Authentication method [password] (password/api-key): ");
+  return input ? parseLoginAuthMethod(input) : "password";
+}
+
+function parseLoginAuthMethod(input: string): LoginAuthMethod {
+  const normalized = input.trim().toLowerCase();
+  if (normalized === "password" || normalized === "email" || normalized === "user" || normalized === "username") {
+    return "password";
+  }
+  if (normalized === "api-key" || normalized === "apikey" || normalized === "api" || normalized === "key") {
+    return "api-key";
+  }
+  if (normalized === "browser" || normalized === "web") {
+    throw new CliError("Browser login is not available in this CLI/API version yet. Choose password or api-key.", 2);
+  }
+  throw new CliError(`Authentication method must be one of: ${LOGIN_AUTH_METHODS.join(", ")}.`, 2);
+}
+
+function normalizeApiUrlOption(input: string): string {
+  const trimmed = input.trim().replace(/\/+$/, "");
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("unsupported protocol");
+    }
+    return trimmed;
+  } catch {
+    throw new CliError("API URL must be a valid http:// or https:// URL.", 2);
+  }
 }
 
 interface AuthSession {
@@ -1681,7 +1791,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
     const key = value.slice(2);
-    if (key === "json") {
+    if (key === "json" || key === "api-key") {
       options[key] = true;
       continue;
     }
@@ -1713,7 +1823,8 @@ function helpText(): string {
     "  scan --path <file-directory-or-zip>",
     "  search [query] [--api-url <url>]",
     "  info <skill-slug> [--api-url <url>]",
-    "  login [--api-url <url>] [--email <email>]",
+    "  login [--api-url <url>] [--method <password|api-key>] [--email <email>]",
+    "  login --api-key [--api-url <url>]",
     "  logout [--api-url <url>] [--token <token>]",
     "  whoami [--api-url <url>] [--token <token>]",
     "  submit --path <file-directory-or-zip> [--api-url <url>] [--token <token>]",
@@ -1739,7 +1850,7 @@ function helpText(): string {
     "Options:",
     "  --version           Print CLI version.",
     "  --json              Print machine-readable JSON.",
-    "  --api-url <url>     API base URL. Defaults to MYSKILLS_API_URL or http://localhost:3001.",
+    "  --api-url <url>     API base URL. Defaults to MYSKILLS_API_URL, saved config, or http://localhost:3001.",
     "  --token <token>     Bearer token. Defaults to MYSKILLS_TOKEN, then stored login token.",
   ].join("\n");
 }

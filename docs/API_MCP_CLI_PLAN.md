@@ -105,7 +105,7 @@ myskills token list
 myskills token revoke <token-id>
 ```
 
-Current CLI slice implements local `validate` and `scan` for manifest files, directories, and `.zip` packages, prompt-based `login`, MFA login completion, `logout`, API-URL-scoped durable session-token storage, backend-backed `search`, `info`, `whoami`, `submit` for normalized directory text-entry package intake and server-extracted `.zip` archive intake, role-gated review list/actions, verified `export` of approved bundle payloads, local `install`/`list`/`update`/`rollback` with a filesystem install registry and rollback snapshots, and server API-token create/list/revoke commands. Browser login, platform keychain storage, platform-specific install adapters, and archive creation are still planned.
+Current CLI slice implements local `validate` and `scan` for manifest files, directories, and `.zip` packages, prompt-based `login` with API URL selection, saved API URL config, email/password session auth, API-key auth, MFA login completion, `logout`, API-URL-scoped durable token storage with platform keyring-first storage and file fallback, backend-backed `search`, `info`, `whoami`, `submit` for normalized directory text-entry package intake and server-extracted `.zip` archive intake, role-gated review list/actions, verified `export` of approved bundle payloads, local `install`/`list`/`update`/`rollback` with a filesystem install registry and rollback snapshots, and server API-token create/list/revoke commands. Browser/device login, platform-specific install adapters, and archive creation are still planned.
 
 Later maintainer/admin commands:
 

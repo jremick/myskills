@@ -47,7 +47,6 @@ Turn the public alpha into a business-safe, production-ready open-source release
 
 ### CLI And Install Experience
 
-- Platform keychain storage for CLI credentials.
 - Browser or web session storage hardening for production mode.
 - Browser login or device-code style login.
 - Platform-specific install adapters.

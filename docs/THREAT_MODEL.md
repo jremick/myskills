@@ -51,7 +51,7 @@ Out of scope for alpha: hosted service operations, multi-instance federation, pa
 | Threat | Impact | Alpha likelihood | Current mitigations | Remaining work |
 | --- | --- | --- | --- | --- |
 | Unauthorized discovery of private or unsafe skills | Metadata or package-content exposure | Medium | Server-side public/review/security/publish predicates, generic denial paths, API/CLI/MCP tests | Broader cross-surface regression matrix for future role-gated MCP/admin tools |
-| Token theft or replay | Account/API misuse | Medium | Opaque hashed sessions and API tokens, scoped tokens, revocation on disable/delete/password reset, MFA-gated privileged actions | Platform keychain storage and browser/device login for CLI |
+| Token theft or replay | Account/API misuse | Medium | Opaque hashed sessions and API tokens, scoped tokens, revocation on disable/delete/password reset, MFA-gated privileged actions, CLI platform keyring storage with user-only file fallback | Browser/device login for CLI |
 | Auth brute force across restarts or replicas | Account takeover pressure and noisy abuse | Medium | Shared database-backed auth throttling before expensive auth work | Ingress throttles, alerts, and higher-volume abuse controls |
 | Malicious package archive | Path traversal, unsafe install content, secret leakage | Medium | Root manifest validation, archive traversal/symlink/encryption/compression/size/file-count defenses, blocking scans, maintainer review | Background scan jobs, richer policy fixtures, deprecate/revoke workflows |
 | Malicious prompt or uncommon secret passes narrow scanner | Reviewer social engineering or private-data exposure | Medium | Baseline secret/command/install-hook rules plus maintainer review | Broader fixture-backed scanner corpus and reviewer diff views |
@@ -72,7 +72,7 @@ The alpha can be public if the repo passes release checks and GitHub private vul
 - Background scan jobs and stronger package policy fixtures.
 - Ingress abuse controls and alerting around auth-rate-limit pressure.
 - Provider login/linking and external identity lifecycle.
-- Platform keychain storage for CLI credentials.
+- Browser/device login for CLI auth.
 - Signed or direct artifact delivery design with authorization and audit.
 - Release provenance with pinned actions/images, SBOMs, signatures, and protected tags.
 - Private/org/team sharing authorization model before marketing non-public package sharing.

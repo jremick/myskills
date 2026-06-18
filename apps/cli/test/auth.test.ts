@@ -5,7 +5,7 @@ import { buildApp } from "../../api/src/app.js";
 import { AuthService } from "../../api/src/auth/service.js";
 import { MemoryAuthStore } from "../../api/src/auth/memory-auth-store.js";
 import { MemorySkillRepository } from "../../api/src/repositories/memory-skill-repository.js";
-import { runCli, type CliPrompt, type CliTokenStore, type FetchLike, type StoredCliToken } from "../src/cli.js";
+import { runCli, type CliConfigStore, type CliPrompt, type CliTokenStore, type FetchLike, type StoredCliToken } from "../src/cli.js";
 
 test("help documents login, logout, and stored token fallback", async () => {
   const output = createOutput();
@@ -13,7 +13,7 @@ test("help documents login, logout, and stored token fallback", async () => {
   const code = await runCli(["help"], testRuntime(output));
 
   assert.equal(code, 0);
-  assert.match(output.stdout.join("\n"), /login \[--api-url <url>\] \[--email <email>\]/);
+  assert.match(output.stdout.join("\n"), /login \[--api-url <url>\] \[--method <password\|api-key>\] \[--email <email>\]/);
   assert.match(output.stdout.join("\n"), /logout \[--api-url <url>\] \[--token <token>\]/);
   assert.match(output.stdout.join("\n"), /stored login token/);
 });
@@ -51,6 +51,93 @@ test("login posts prompted credentials, stores session token, and does not print
   });
   assert.equal(output.stdout.join("\n").includes("session-secret"), false);
   assert.equal(output.stderr.join("\n").includes("correct horse"), false);
+});
+
+test("interactive login asks for API URL and remembers it after successful password auth", async () => {
+  const output = createOutput();
+  const tokenStore = new MemoryTokenStore();
+  const configStore = new MemoryConfigStore();
+  const calls: string[] = [];
+  const fetch: FetchLike = async (input) => {
+    calls.push(String(input));
+    return response(200, loginSuccess("session-secret"));
+  };
+
+  const code = await runCli([
+    "login",
+  ], testRuntime(
+    output,
+    fetch,
+    {},
+    tokenStore,
+    promptFixture({
+      texts: ["http://api.test", "", "owner@example.com"],
+      secrets: ["correct horse battery staple"],
+    }),
+    configStore,
+  ));
+
+  assert.equal(code, 0);
+  assert.deepEqual(calls, ["http://api.test/v1/auth/login"]);
+  assert.equal(configStore.getApiUrl(), "http://api.test");
+  assert.equal((await tokenStore.get("http://api.test"))?.kind, "session");
+});
+
+test("interactive login can validate and store an API key without printing it", async () => {
+  const output = createOutput();
+  const tokenStore = new MemoryTokenStore();
+  const configStore = new MemoryConfigStore();
+  let authorization = "";
+  const fetch: FetchLike = async (_input, init) => {
+    authorization = init?.headers?.authorization ?? "";
+    return response(200, {
+      user: {
+        email: "owner@example.com",
+        roles: ["owner"],
+        mfaVerified: true,
+      },
+    });
+  };
+
+  const code = await runCli([
+    "login",
+    "--api-key",
+  ], testRuntime(
+    output,
+    fetch,
+    {},
+    tokenStore,
+    promptFixture({
+      texts: ["http://api.test"],
+      secrets: ["aiss_plain-secret"],
+    }),
+    configStore,
+  ));
+
+  assert.equal(code, 0);
+  assert.equal(authorization, "Bearer aiss_plain-secret");
+  assert.deepEqual(await tokenStore.get("http://api.test"), {
+    kind: "api",
+    token: "aiss_plain-secret",
+    email: "owner@example.com",
+  });
+  assert.equal(configStore.getApiUrl(), "http://api.test");
+  assert.equal(output.stdout.join("\n").includes("aiss_plain-secret"), false);
+});
+
+test("commands use saved API URL config when flag and env are absent", async () => {
+  const output = createOutput();
+  const configStore = new MemoryConfigStore("http://api.test");
+  let url = "";
+  const fetch: FetchLike = async (input) => {
+    url = String(input);
+    return response(200, { skills: [] });
+  };
+
+  const code = await runCli(["search"], testRuntime(output, fetch, {}, undefined, undefined, configStore));
+
+  assert.equal(code, 0);
+  assert.equal(url, "http://api.test/v1/skills");
 });
 
 test("login does not overwrite stored token on failed authentication", async () => {
@@ -439,10 +526,12 @@ function testRuntime(
   env: Record<string, string | undefined> = {},
   tokenStore?: CliTokenStore,
   prompt?: CliPrompt,
+  configStore?: CliConfigStore,
 ) {
   return {
     env,
     fetch,
+    configStore,
     tokenStore,
     prompt,
     io: {
@@ -498,6 +587,18 @@ function rawResponse(status: number, body: string) {
       return body;
     },
   };
+}
+
+class MemoryConfigStore implements CliConfigStore {
+  constructor(private apiUrl?: string) {}
+
+  getApiUrl(): string | undefined {
+    return this.apiUrl;
+  }
+
+  async setApiUrl(apiUrl: string): Promise<void> {
+    this.apiUrl = apiUrl.replace(/\/+$/, "");
+  }
 }
 
 class MemoryTokenStore implements CliTokenStore {

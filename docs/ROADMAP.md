@@ -66,13 +66,13 @@ Done:
 - Public search/detail endpoints, authenticated package intake, archive extraction defenses, scan evidence, artifact storage, maintainer review, publication, release metadata, authorized bundle delivery, and user-owned submitted-skill export.
 - Web workflows for public browsing, package submission, maintainer review, publication, registration/user/provider/role administration, and audit review.
 - Read-only MCP stdio and stateless Streamable HTTP discovery servers.
-- CLI workflows for validation, scanning, login/logout, search/info, submission, review actions, verified export, local install/list/update/rollback, and API-token management.
+- CLI workflows for validation, scanning, login/logout, API URL selection, keyring-first credential storage, search/info, submission, review actions, verified export, local install/list/update/rollback, and API-token management.
 - First-pass production container packaging, opt-in web analytics support, and deployment preflight checks.
 
 Remaining:
 
 - Queued email delivery.
-- Platform keychain storage for CLI credentials.
+- Browser/device login for CLI auth.
 - Authoritative per-tool MCP audit events.
 - Provider login/linking and external identity lifecycle.
 - Signed or direct object delivery that preserves authorization and integrity.
@@ -297,7 +297,7 @@ Deliverables:
 - Background package scan jobs with durable scan evidence and retry policy.
 - Skill eval suites, durable eval runs, and review/release gates for quality and compatibility evidence.
 - Authoritative per-tool MCP audit events and role-gated maintainer/admin tools.
-- Platform keychain storage for CLI credentials.
+- Browser/device login for CLI auth.
 - Signed or direct object delivery that preserves authorization, integrity checks, and audit.
 - Platform-specific install adapters.
 - Production deploy guidance with backup, restore, monitoring, logging, upgrade, and rollback runbooks.
