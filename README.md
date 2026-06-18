@@ -140,6 +140,10 @@ npm run test:postgres
 
 `npm run test:postgres` requires `TEST_DATABASE_URL` to point at a disposable Postgres database whose name includes `test` or `ci`. It resets that database schema before applying migrations.
 
+## Agent Workflows
+
+Repo-level Codex instructions live in [AGENTS.md](AGENTS.md). Codex cloud/web setup guidance, safe first-task guidance, and approval boundaries live in [docs/CODEX_CLOUD.md](docs/CODEX_CLOUD.md).
+
 ## Support And Security
 
 Use [GitHub Issues](https://github.com/jremick/myskills/issues) for public alpha bugs, setup problems, and feature requests.
