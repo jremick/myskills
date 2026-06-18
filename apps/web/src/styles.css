@@ -4364,6 +4364,19 @@ code {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .admin-table-row,
+  .admin-table-head {
+    min-width: 0;
+  }
+
+  .admin-table-head {
+    display: none;
+  }
+
+  .admin-table-row {
+    grid-template-columns: 1fr;
+  }
+
   .mobile-nav {
     position: fixed;
     right: 0;

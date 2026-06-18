@@ -1215,8 +1215,8 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
                 <StatusToken value={selected.reviewStatus} />
               </div>
               <dl className="metadata-grid review-metadata">
-                <Metadata label="Visibility" value={selected.visibility} />
-                <Metadata label="Security" value={selected.securityStatus} />
+                <Metadata label="Visibility" value={formatStatusLabel(selected.visibility)} />
+                <Metadata label="Security" value={formatStatusLabel(selected.securityStatus)} />
                 <Metadata label="Platforms" value={selected.platforms.map((item) => item.name).join(", ") || "-"} />
                 <Metadata label="Findings" value={String(selected.findingCount)} />
                 <Metadata label="Submitted" value={formatDate(selected.createdAt)} />
