@@ -418,20 +418,6 @@ button:focus-visible {
   padding-top: 66px;
 }
 
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: grid;
-  grid-template-columns: minmax(220px, 260px) minmax(260px, 1fr) minmax(520px, auto);
-  align-items: center;
-  gap: 18px;
-  padding: 16px 24px;
-  border-bottom: 1px solid #d9e1ea;
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(16px);
-}
-
 .brand {
   display: inline-flex;
   align-items: center;
@@ -528,15 +514,6 @@ button:focus-visible {
   border-color: #0f766e;
   color: #075e57;
   background: #effdfb;
-}
-
-.topbar-actions {
-  justify-self: end;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  min-width: 0;
 }
 
 .auth-shell {
@@ -2369,16 +2346,6 @@ button:focus-visible {
     justify-items: start;
   }
 
-  .topbar {
-    grid-template-columns: 1fr;
-  }
-
-  .topbar-actions {
-    justify-self: start;
-    justify-content: flex-start;
-    width: 100%;
-  }
-
   .workspace {
     grid-template-columns: 1fr;
   }
@@ -2458,10 +2425,6 @@ button:focus-visible {
     min-height: auto;
   }
 
-  .topbar {
-    padding: 14px;
-  }
-
   .brand {
     font-size: 19px;
   }
@@ -2484,27 +2447,6 @@ button:focus-visible {
 
   .admin-hero button {
     width: 100%;
-  }
-
-  .topbar-actions {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-    align-items: stretch;
-    justify-content: stretch;
-    width: 100%;
-  }
-
-  .topbar-actions .admin-nav {
-    justify-content: center;
-    width: auto;
-    min-height: 40px;
-    padding: 0 8px;
-  }
-
-  .topbar-actions .auth-widget.signed-in,
-  .topbar-actions .auth-form {
-    grid-column: 1 / -1;
   }
 
   .auth-form {
@@ -2649,13 +2591,6 @@ button:focus-visible {
     position: static;
     justify-self: start;
   }
-}
-
-@media (max-width: 420px) {
-  .topbar-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3190,29 +3125,6 @@ code {
   height: 32px;
 }
 
-.page-heading {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.page-heading span {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.page-heading strong {
-  overflow: hidden;
-  margin: 0;
-  color: var(--ink);
-  font-size: 22px;
-  line-height: 1.15;
-  letter-spacing: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .global-search {
   min-height: 42px;
   border-color: var(--line);
@@ -3541,11 +3453,6 @@ code {
   max-width: 1420px;
   margin: 0 auto;
   padding: 24px;
-}
-
-.workspace-actionbar {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .admin-hero {
@@ -4349,10 +4256,6 @@ code {
 
   .mobile-brand {
     display: inline-flex;
-  }
-
-  .page-heading {
-    display: none;
   }
 
   .global-search {
