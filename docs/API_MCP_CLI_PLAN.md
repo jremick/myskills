@@ -86,6 +86,12 @@ Initial commands:
 myskills login
 myskills logout
 myskills whoami
+myskills auth status
+myskills doctor
+myskills config get api-url
+myskills config set api-url <url>
+myskills config reset api-url
+myskills config list
 myskills init <skill-slug>
 myskills validate --path <dir-or-zip>
 myskills scan --path <dir-or-zip>
@@ -100,12 +106,15 @@ myskills rollback <skill>
 myskills submit --path <dir-or-zip>
 myskills review submissions
 myskills review action <submission-id> --action <approve|publish> --reason <reason>
+myskills teams list|create|invite|accept|skills
+myskills sharing get|set <skill>
+myskills admin sharing get|set
 myskills token create --name <name> --scope <scope>
 myskills token list
 myskills token revoke <token-id>
 ```
 
-Current CLI slice implements local `validate` and `scan` for manifest files, directories, and `.zip` packages, prompt-based `login` with API URL selection, saved API URL config, email/password session auth, API-key auth, MFA login completion, `logout`, API-URL-scoped durable token storage with platform keyring-first storage and file fallback, backend-backed `search`, `info`, `whoami`, `submit` for normalized directory text-entry package intake and server-extracted `.zip` archive intake, role-gated review list/actions, verified `export` of approved bundle payloads, local `install`/`list`/`update`/`rollback` with a filesystem install registry and rollback snapshots, and server API-token create/list/revoke commands. Browser/device login, platform-specific install adapters, and archive creation are still planned.
+Current CLI slice implements local `validate` and `scan` for manifest files, directories, and `.zip` packages, prompt-based `login` with API URL selection, saved API URL config, explicit `config` management, email/password session auth, API-key auth, MFA login completion, `auth status`, `logout`, API-URL-scoped durable token storage with platform keyring-first storage and file fallback, `doctor` diagnostics, server `/v1/capabilities`, structured JSON errors, clearer wrong-URL and unsupported-command errors, backend-backed `search`, `info`, `whoami`, `submit` for normalized directory text-entry package intake and server-extracted `.zip` archive intake, role-gated review list/actions, team and sharing administration commands, verified `export` of approved bundle payloads, local `install`/`list`/`update`/`rollback` with a filesystem install registry and rollback snapshots, and server API-token create/list/revoke commands. Browser/device login, platform-specific install adapters, and archive creation are still planned.
 
 Later maintainer/admin commands:
 

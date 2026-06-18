@@ -1,6 +1,6 @@
 {
   "name": "@jarel/myskills",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Command-line client for publishing, discovering, installing, updating, and rolling back MySkills packages.",
   "license": "Apache-2.0",
   "private": false,

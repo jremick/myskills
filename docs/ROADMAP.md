@@ -66,7 +66,7 @@ Done:
 - Public search/detail endpoints, authenticated package intake, archive extraction defenses, scan evidence, artifact storage, maintainer review, publication, release metadata, authorized bundle delivery, and user-owned submitted-skill export.
 - Web workflows for public browsing, package submission, maintainer review, publication, registration/user/provider/role administration, and audit review.
 - Read-only MCP stdio and stateless Streamable HTTP discovery servers.
-- CLI workflows for validation, scanning, login/logout, API URL selection, keyring-first credential storage, search/info, submission, review actions, verified export, local install/list/update/rollback, and API-token management.
+- CLI workflows for validation, scanning, login/logout, auth status, API URL selection/config, doctor diagnostics, keyring-first credential storage, search/info, submission, review actions, team/sharing commands, verified export, local install/list/update/rollback, and API-token management.
 - First-pass production container packaging, opt-in web analytics support, and deployment preflight checks.
 
 Remaining:

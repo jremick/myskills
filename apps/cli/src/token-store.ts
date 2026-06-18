@@ -1,7 +1,7 @@
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { CliTokenStore, StoredCliToken } from "./cli.js";
+import type { CliTokenStore, CliTokenStoreInfo, StoredCliToken } from "./cli.js";
 
 const KEYRING_SERVICE = "ai.jarel.myskills.cli";
 
@@ -38,10 +38,17 @@ export function createFileTokenStore(env: Record<string, string | undefined> = p
       }
       await writePayload(filePath, payload);
     },
+    describe() {
+      return {
+        backend: "file",
+        filePath,
+      };
+    },
   };
 }
 
 function createKeyringTokenStore(fallback: CliTokenStore): CliTokenStore {
+  const fallbackInfo = fallback.describe?.() as CliTokenStoreInfo | undefined;
   return {
     async get(apiUrl) {
       const keyringToken = await readKeyringToken(apiUrl);
@@ -56,6 +63,12 @@ function createKeyringTokenStore(fallback: CliTokenStore): CliTokenStore {
     async delete(apiUrl) {
       await deleteKeyringToken(apiUrl);
       await fallback.delete(apiUrl);
+    },
+    describe() {
+      return {
+        backend: "keyring",
+        fallbackFilePath: fallbackInfo?.filePath,
+      };
     },
   };
 }

@@ -24,7 +24,7 @@ This security model describes the current alpha controls. The companion threat m
 - Email verification, password reset, registration invitation, and email-change tokens are opaque, short-lived, single-use, stored only as hashes, and never returned from HTTP responses.
 - Production auth action delivery requires Resend or SMTP configuration and an HTTPS `APP_BASE_URL`. SMTP mode additionally requires TLS certificate validation. Local console delivery is rejected in production.
 - API token management requires a session; API tokens cannot create, list, or revoke other tokens.
-- CLI login tokens are stored by normalized API URL in the platform credential store when available, with a user-only file fallback for unsupported environments or explicit file-token configuration.
+- CLI login tokens are stored by normalized API URL in the platform credential store when available, with a user-only file fallback for unsupported environments or explicit file-token configuration. CLI auth diagnostics report token source and account metadata without printing token values.
 - Login uses normalized email lookup and generic invalid-credential denial.
 - Existing sessions are denied when the user is no longer active or email verified.
 - Login, registration, email verification, password reset, MFA, and action-token confirmation paths are throttled before repeated expensive auth work where applicable. Production uses shared database-backed counters so limits survive API restarts and single-region scale-out; ingress throttles and abuse alerts remain business-safe production hardening.

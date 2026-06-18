@@ -93,6 +93,42 @@ test("search sends bearer token when available", async () => {
   assert.equal(authorization, "Bearer read-token");
 });
 
+test("API HTML responses explain that the CLI is pointed at the web app", async () => {
+  const output = createOutput();
+  const fetch: FetchLike = async () => rawResponse(200, "<html><body>web app</body></html>");
+
+  const code = await runCli(["search", "--api-url", "https://myskills.sh"], testRuntime(output, fetch));
+
+  assert.equal(code, 1);
+  assert.match(output.stderr.join("\n"), /returned HTML instead of JSON/);
+  assert.match(output.stderr.join("\n"), /pointing the CLI at the web app/);
+  assert.match(output.stderr.join("\n"), /Current API URL: https:\/\/myskills\.sh/);
+});
+
+test("unsupported newer API endpoints produce structured JSON errors", async () => {
+  const output = createOutput();
+  const fetch: FetchLike = async () => response(404, {
+    message: "Route GET:/v1/teams not found",
+    error: "Not Found",
+    statusCode: 404,
+  });
+
+  const code = await runCli([
+    "teams",
+    "list",
+    "--api-url",
+    "http://api.test",
+    "--json",
+  ], testRuntime(output, fetch, { MYSKILLS_TOKEN: "team-token" }));
+
+  assert.equal(code, 1);
+  const parsed = JSON.parse(output.stderr.join("\n"));
+  assert.equal(parsed.error.code, "API_UNSUPPORTED_ENDPOINT");
+  assert.equal(parsed.error.status, 404);
+  assert.match(parsed.error.message, /does not support the `teams` command yet/);
+  assert.match(parsed.error.message, /myskills doctor/);
+});
+
 test("info sends bearer token when available", async () => {
   const output = createOutput();
   let authorization = "";

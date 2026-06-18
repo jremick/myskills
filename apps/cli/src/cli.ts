@@ -38,11 +38,19 @@ export interface CliTokenStore {
   get: (apiUrl: string) => Promise<StoredCliToken | null>;
   set: (apiUrl: string, token: StoredCliToken) => Promise<void>;
   delete: (apiUrl: string) => Promise<void>;
+  describe?: () => Promise<CliTokenStoreInfo> | CliTokenStoreInfo;
+}
+
+export interface CliTokenStoreInfo {
+  backend: "keyring" | "file" | "memory";
+  filePath?: string;
+  fallbackFilePath?: string;
 }
 
 export interface CliConfigStore {
   getApiUrl: () => string | undefined;
   setApiUrl: (apiUrl: string) => Promise<void>;
+  resetApiUrl: () => Promise<void>;
 }
 
 export type FetchLike = (
@@ -98,6 +106,12 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
         return await logoutCommand(parsed, runtime);
       case "whoami":
         return await whoamiCommand(parsed, runtime);
+      case "auth":
+        return await authCommand(parsed, runtime);
+      case "config":
+        return await configCommand(parsed, runtime);
+      case "doctor":
+        return await doctorCommand(parsed, runtime);
       case "submit":
         return await submitCommand(parsed, runtime);
       case "review":
@@ -125,10 +139,19 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
     }
   } catch (error) {
     if (error instanceof CliError) {
-      runtime.io.stderr(error.message);
+      if (parsed.options.json) {
+        runtime.io.stderr(JSON.stringify({ error: error.toJSON() }, null, 2));
+      } else {
+        runtime.io.stderr(error.message);
+      }
       return error.exitCode;
     }
-    runtime.io.stderr(error instanceof Error ? error.message : "Unexpected CLI failure.");
+    const message = error instanceof Error ? error.message : "Unexpected CLI failure.";
+    if (parsed.options.json) {
+      runtime.io.stderr(JSON.stringify({ error: { code: "UNEXPECTED_CLI_FAILURE", message } }, null, 2));
+    } else {
+      runtime.io.stderr(message);
+    }
     return 1;
   }
 }
@@ -304,6 +327,150 @@ async function whoamiCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     runtime.io.stdout(`${user.email}\troles=${user.roles.join(",")}\tmfa=${user.mfaVerified ? "verified" : "not-verified"}`);
   }
   return 0;
+}
+
+async function authCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const subcommand = parsed.args[0];
+  if (subcommand === "status") {
+    return await authStatusCommand(parsed, runtime);
+  }
+  throw new CliError("Usage: myskills auth status", 2, "USAGE_ERROR");
+}
+
+async function authStatusCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const api = apiBaseUrlResolution(parsed, runtime);
+  const resolved = await resolveToken(parsed, runtime);
+  if (!resolved) {
+    const status = {
+      apiUrl: api.url,
+      apiUrlSource: api.source,
+      status: "not_logged_in",
+      tokenSource: "none",
+      tokenStore: await tokenStoreInfo(runtime),
+    };
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(status, null, 2));
+    } else {
+      runtime.io.stdout(`API URL: ${status.apiUrl} (${status.apiUrlSource})`);
+      runtime.io.stdout("Status: not logged in");
+      runtime.io.stdout(`Token store: ${status.tokenStore.backend}`);
+    }
+    return 0;
+  }
+
+  const response = await apiGet("/v1/me", parsed, runtime, resolved.value);
+  const user = response.user as { email: string; roles: string[]; mfaVerified: boolean };
+  const status = {
+    apiUrl: api.url,
+    apiUrlSource: api.source,
+    status: "logged_in",
+    tokenSource: resolved.source,
+    tokenKind: resolved.stored.kind,
+    tokenStore: await tokenStoreInfo(runtime),
+    user: {
+      email: user.email,
+      roles: user.roles,
+      mfaVerified: user.mfaVerified,
+    },
+    expiresAt: resolved.stored.expiresAt ?? null,
+  };
+  if (parsed.options.json) {
+    runtime.io.stdout(JSON.stringify(status, null, 2));
+  } else {
+    runtime.io.stdout(`API URL: ${status.apiUrl} (${status.apiUrlSource})`);
+    runtime.io.stdout(`Status: logged in (${status.tokenKind}, ${status.tokenSource})`);
+    runtime.io.stdout(`User: ${user.email}`);
+    runtime.io.stdout(`Roles: ${user.roles.join(",") || "-"}`);
+    runtime.io.stdout(`MFA: ${user.mfaVerified ? "verified" : "not-verified"}`);
+    runtime.io.stdout(`Expires: ${status.expiresAt ?? "-"}`);
+    runtime.io.stdout(`Token store: ${status.tokenStore.backend}`);
+  }
+  return 0;
+}
+
+async function configCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const subcommand = parsed.args[0];
+  const key = parsed.args[1];
+  if (!runtime.configStore) {
+    throw new CliError("No config store is configured.", 1, "CONFIG_STORE_UNAVAILABLE");
+  }
+  if (subcommand === "get" && key === "api-url") {
+    const apiUrl = runtime.configStore.getApiUrl() ?? null;
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify({ apiUrl }, null, 2));
+    } else {
+      runtime.io.stdout(apiUrl ?? "unset");
+    }
+    return 0;
+  }
+  if (subcommand === "set" && key === "api-url") {
+    const apiUrl = parsed.args[2];
+    if (!apiUrl) {
+      throw new CliError("Usage: myskills config set api-url <url>", 2, "USAGE_ERROR");
+    }
+    await runtime.configStore.setApiUrl(normalizeApiUrlOption(apiUrl));
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify({ apiUrl: normalizeApiUrlOption(apiUrl) }, null, 2));
+    } else {
+      runtime.io.stdout(`api-url=${normalizeApiUrlOption(apiUrl)}`);
+    }
+    return 0;
+  }
+  if (subcommand === "reset" && key === "api-url") {
+    await runtime.configStore.resetApiUrl();
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify({ apiUrl: null }, null, 2));
+    } else {
+      runtime.io.stdout("api-url unset");
+    }
+    return 0;
+  }
+  if (subcommand === "list") {
+    const resolved = apiBaseUrlResolution(parsed, runtime);
+    const saved = runtime.configStore.getApiUrl() ?? null;
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify({ apiUrl: saved, resolvedApiUrl: resolved.url, resolvedApiUrlSource: resolved.source }, null, 2));
+    } else {
+      runtime.io.stdout(`api-url=${saved ?? "unset"}`);
+      runtime.io.stdout(`resolved-api-url=${resolved.url}\tsource=${resolved.source}`);
+    }
+    return 0;
+  }
+  throw new CliError("Usage: myskills config get api-url | config set api-url <url> | config reset api-url | config list", 2, "USAGE_ERROR");
+}
+
+async function doctorCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const api = apiBaseUrlResolution(parsed, runtime);
+  const checks: DoctorCheck[] = [];
+  checks.push(nodeVersionCheck());
+  checks.push({ name: "cli_version", ok: true, message: CLI_VERSION, details: { version: CLI_VERSION } });
+  checks.push({ name: "api_url", ok: true, message: `${api.url} (${api.source})`, details: api });
+
+  const health = await doctorHealthCheck(parsed, runtime);
+  checks.push(health);
+  const token = await resolveToken(parsed, runtime);
+  checks.push(await doctorAuthCheck(parsed, runtime, token));
+  checks.push(await doctorTokenStoreCheck(runtime));
+  checks.push(await doctorInstallDirCheck(parsed, runtime));
+  checks.push(await doctorCapabilitiesCheck(parsed, runtime));
+
+  const failed = checks.filter((check) => !check.ok);
+  const result = {
+    cliVersion: CLI_VERSION,
+    apiUrl: api.url,
+    apiUrlSource: api.source,
+    checks,
+  };
+  if (parsed.options.json) {
+    runtime.io.stdout(JSON.stringify(result, null, 2));
+  } else {
+    runtime.io.stdout(`MySkills CLI ${CLI_VERSION}`);
+    runtime.io.stdout("");
+    for (const check of checks) {
+      runtime.io.stdout(`${check.ok ? "ok" : "fail"}\t${check.name}\t${check.message}`);
+    }
+  }
+  return failed.length === 0 ? 0 : 1;
 }
 
 async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
@@ -1399,105 +1566,341 @@ function assertChildPath(root: string, target: string): void {
 }
 
 async function apiGet(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<Record<string, unknown>> {
-  const baseUrl = apiBaseUrl(parsed, runtime);
   const headers: Record<string, string> = {};
   if (token) {
     headers.authorization = `Bearer ${token}`;
   }
-  const response = await runtime.fetch(`${baseUrl}${pathname}`, { headers });
-  const text = await response.text();
-  const body = text ? JSON.parse(text) as Record<string, unknown> : {};
-  if (!response.ok) {
-    const error = body.error as { code?: string; message?: string } | undefined;
-    throw new CliError(error?.message ?? `API request failed with ${response.status}.`, 1);
-  }
-  return body;
+  return await apiJsonRequest(pathname, parsed, runtime, { headers });
 }
 
 async function apiGetText(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<string> {
-  const baseUrl = apiBaseUrl(parsed, runtime);
   const headers: Record<string, string> = {};
   if (token) {
     headers.authorization = `Bearer ${token}`;
   }
-  const response = await runtime.fetch(`${baseUrl}${pathname}`, { headers });
-  const text = await response.text();
+  const response = await apiFetch(pathname, parsed, runtime, { headers });
   if (!response.ok) {
-    const error = parseApiError(text);
-    throw new CliError(error ?? `API request failed with ${response.status}.`, 1);
+    throw apiErrorFromResponse(pathname, apiBaseUrl(parsed, runtime), response.status, response.text);
   }
-  return text;
+  return response.text;
 }
 
 async function apiPost(pathname: string, payload: unknown, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<Record<string, unknown>> {
-  const baseUrl = apiBaseUrl(parsed, runtime);
   const headers: Record<string, string> = {
     "content-type": "application/json",
   };
   if (token) {
     headers.authorization = `Bearer ${token}`;
   }
-  const response = await runtime.fetch(`${baseUrl}${pathname}`, {
+  return await apiJsonRequest(pathname, parsed, runtime, {
     method: "POST",
     headers,
     body: JSON.stringify(payload),
   });
-  const text = await response.text();
-  const body = text ? JSON.parse(text) as Record<string, unknown> : {};
-  if (!response.ok) {
-    const error = body.error as { code?: string; message?: string } | undefined;
-    throw new CliError(error?.message ?? `API request failed with ${response.status}.`, 1);
-  }
-  return body;
 }
 
 async function apiPut(pathname: string, payload: unknown, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<Record<string, unknown>> {
-  const baseUrl = apiBaseUrl(parsed, runtime);
   const headers: Record<string, string> = {
     "content-type": "application/json",
   };
   if (token) {
     headers.authorization = `Bearer ${token}`;
   }
-  const response = await runtime.fetch(`${baseUrl}${pathname}`, {
+  return await apiJsonRequest(pathname, parsed, runtime, {
     method: "PUT",
     headers,
     body: JSON.stringify(payload),
   });
-  const text = await response.text();
-  const body = text ? JSON.parse(text) as Record<string, unknown> : {};
-  if (!response.ok) {
-    const error = body.error as { code?: string; message?: string } | undefined;
-    throw new CliError(error?.message ?? `API request failed with ${response.status}.`, 1);
-  }
-  return body;
 }
 
 async function apiDelete(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token: string): Promise<Record<string, unknown>> {
-  const baseUrl = apiBaseUrl(parsed, runtime);
-  const response = await runtime.fetch(`${baseUrl}${pathname}`, {
+  return await apiJsonRequest(pathname, parsed, runtime, {
     method: "DELETE",
     headers: {
       authorization: `Bearer ${token}`,
     },
   });
-  const text = await response.text();
-  const body = text ? JSON.parse(text) as Record<string, unknown> : {};
+}
+
+async function apiJsonRequest(
+  pathname: string,
+  parsed: ParsedArgs,
+  runtime: CliRuntime,
+  init?: { method?: string; headers?: Record<string, string>; body?: string },
+): Promise<Record<string, unknown>> {
+  const baseUrl = apiBaseUrl(parsed, runtime);
+  const response = await apiFetch(pathname, parsed, runtime, init);
+  const body = parseJsonResponse(pathname, baseUrl, response.text);
   if (!response.ok) {
-    const error = body.error as { code?: string; message?: string } | undefined;
-    throw new CliError(error?.message ?? `API request failed with ${response.status}.`, 1);
+    throw apiErrorFromBody(pathname, baseUrl, response.status, body, response.text);
   }
   return body;
 }
 
-function parseApiError(text: string): string | null {
+async function apiFetch(
+  pathname: string,
+  parsed: ParsedArgs,
+  runtime: CliRuntime,
+  init?: { method?: string; headers?: Record<string, string>; body?: string },
+): Promise<{ ok: boolean; status: number; text: string }> {
+  const baseUrl = apiBaseUrl(parsed, runtime);
+  let response: Awaited<ReturnType<FetchLike>>;
+  try {
+    response = await runtime.fetch(`${baseUrl}${pathname}`, init);
+  } catch {
+    throw new CliError([
+      "Could not reach the MySkills API.",
+      "",
+      `API URL: ${baseUrl}`,
+      "Check that the API is running, or use:",
+      "  myskills <command> --api-url https://myskills.sh/api",
+    ].join("\n"), 1, "API_UNREACHABLE");
+  }
+  return {
+    ok: response.ok,
+    status: response.status,
+    text: await response.text(),
+  };
+}
+
+function parseJsonResponse(pathname: string, baseUrl: string, text: string): Record<string, unknown> {
+  if (!text) {
+    return {};
+  }
+  if (/^\s*</.test(text)) {
+    throw htmlApiError(baseUrl);
+  }
+  try {
+    const body = JSON.parse(text) as unknown;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new Error("not object");
+    }
+    return body as Record<string, unknown>;
+  } catch {
+    throw new CliError(`API response for ${pathname} was not valid JSON.`, 1, "API_INVALID_JSON");
+  }
+}
+
+function apiErrorFromBody(pathname: string, baseUrl: string, status: number, body: Record<string, unknown>, text: string): CliError {
+  if (status === 404 && isUnsupportedEndpointBody(body, text)) {
+    const command = unsupportedCommandForPath(pathname);
+    if (command) {
+      return new CliError([
+        `This MySkills server does not support the \`${command}\` command yet.`,
+        "",
+        `CLI version: ${CLI_VERSION}`,
+        `API URL: ${baseUrl}`,
+        "Run `myskills doctor` to inspect server capabilities.",
+      ].join("\n"), 1, "API_UNSUPPORTED_ENDPOINT", status);
+    }
+  }
+  const error = body.error as { code?: string; message?: string } | undefined;
+  return new CliError(error?.message ?? `API request failed with ${status}.`, 1, error?.code ?? "API_REQUEST_FAILED", status);
+}
+
+function apiErrorFromResponse(pathname: string, baseUrl: string, status: number, text: string): CliError {
+  if (/^\s*</.test(text)) {
+    return htmlApiError(baseUrl);
+  }
   try {
     const body = text ? JSON.parse(text) as Record<string, unknown> : {};
-    const error = body.error as { message?: string } | undefined;
-    return error?.message ?? null;
+    return apiErrorFromBody(pathname, baseUrl, status, body, text);
   } catch {
-    return null;
+    return new CliError(`API request failed with ${status}.`, 1, "API_REQUEST_FAILED", status);
   }
+}
+
+function htmlApiError(baseUrl: string): CliError {
+  return new CliError([
+    "The API URL returned HTML instead of JSON.",
+    "You may be pointing the CLI at the web app.",
+    "",
+    `Current API URL: ${baseUrl}`,
+    "Try: myskills <command> --api-url https://myskills.sh/api",
+  ].join("\n"), 1, "API_RETURNED_HTML");
+}
+
+function isUnsupportedEndpointBody(body: Record<string, unknown>, text: string): boolean {
+  return typeof body.message === "string" && /Route .+ not found/.test(body.message)
+    || typeof body.error === "string" && body.error === "Not Found"
+    || /Route .+ not found/.test(text);
+}
+
+function unsupportedCommandForPath(pathname: string): string | null {
+  if (pathname.startsWith("/v1/teams")) {
+    return "teams";
+  }
+  if (pathname.includes("/sharing") || pathname.startsWith("/v1/admin/sharing")) {
+    return "sharing";
+  }
+  return null;
+}
+
+interface DoctorCheck {
+  name: string;
+  ok: boolean;
+  message: string;
+  details?: object;
+}
+
+function nodeVersionCheck(): DoctorCheck {
+  const version = process.versions.node;
+  const major = Number.parseInt(version.split(".")[0] ?? "0", 10);
+  return {
+    name: "node",
+    ok: major >= 20,
+    message: `v${version} (${major >= 20 ? "satisfies >=20" : "requires >=20"})`,
+    details: { version, engine: ">=20" },
+  };
+}
+
+async function doctorHealthCheck(parsed: ParsedArgs, runtime: CliRuntime): Promise<DoctorCheck> {
+  const baseUrl = apiBaseUrl(parsed, runtime);
+  try {
+    const response = await apiFetch("/health", parsed, runtime);
+    const body = parseJsonResponse("/health", baseUrl, response.text);
+    return {
+      name: "api_health",
+      ok: response.ok,
+      message: response.ok ? "ok" : `HTTP ${response.status}`,
+      details: { status: response.status, body },
+    };
+  } catch (error) {
+    return {
+      name: "api_health",
+      ok: false,
+      message: error instanceof Error ? firstLine(error.message) : "failed",
+    };
+  }
+}
+
+async function doctorAuthCheck(parsed: ParsedArgs, runtime: CliRuntime, resolved: ResolvedToken | null): Promise<DoctorCheck> {
+  if (!resolved) {
+    return {
+      name: "auth",
+      ok: true,
+      message: "not logged in",
+      details: { status: "not_logged_in" },
+    };
+  }
+  try {
+    const response = await apiGet("/v1/me", parsed, runtime, resolved.value);
+    const user = response.user as { email?: string; roles?: string[]; mfaVerified?: boolean };
+    return {
+      name: "auth",
+      ok: true,
+      message: `${user.email ?? "unknown"} (${resolved.stored.kind}, ${resolved.source})`,
+      details: {
+        status: "logged_in",
+        tokenSource: resolved.source,
+        tokenKind: resolved.stored.kind,
+        expiresAt: resolved.stored.expiresAt ?? null,
+        user,
+      },
+    };
+  } catch (error) {
+    return {
+      name: "auth",
+      ok: false,
+      message: error instanceof Error ? firstLine(error.message) : "failed",
+    };
+  }
+}
+
+async function doctorTokenStoreCheck(runtime: CliRuntime): Promise<DoctorCheck> {
+  const info = await tokenStoreInfo(runtime);
+  if (info.backend === "file" && info.filePath) {
+    const permissions = await filePermissions(info.filePath);
+    if (permissions && permissions !== "600") {
+      return {
+        name: "token_store",
+        ok: false,
+        message: `file permissions ${permissions}; expected 600`,
+        details: { ...info, permissions },
+      };
+    }
+    return {
+      name: "token_store",
+      ok: true,
+      message: permissions ? `file ${info.filePath} (${permissions})` : `file ${info.filePath} (not created)`,
+      details: { ...info, permissions },
+    };
+  }
+  return {
+    name: "token_store",
+    ok: true,
+    message: info.backend,
+    details: info,
+  };
+}
+
+async function doctorInstallDirCheck(parsed: ParsedArgs, runtime: CliRuntime): Promise<DoctorCheck> {
+  const root = installRoot(parsed, runtime);
+  const testFile = path.join(root, ".myskills-app", "doctor-write-test");
+  try {
+    await mkdir(path.dirname(testFile), { recursive: true });
+    await writeFile(testFile, "ok\n", "utf8");
+    await rm(testFile, { force: true });
+    return {
+      name: "install_dir",
+      ok: true,
+      message: `writable ${root}`,
+      details: { path: root },
+    };
+  } catch (error) {
+    return {
+      name: "install_dir",
+      ok: false,
+      message: error instanceof Error ? firstLine(error.message) : "not writable",
+      details: { path: root },
+    };
+  }
+}
+
+async function doctorCapabilitiesCheck(parsed: ParsedArgs, runtime: CliRuntime): Promise<DoctorCheck> {
+  try {
+    const response = await apiGet("/v1/capabilities", parsed, runtime);
+    const capabilities = response.capabilities && typeof response.capabilities === "object" && !Array.isArray(response.capabilities)
+      ? response.capabilities as Record<string, unknown>
+      : {};
+    const supported = Object.entries(capabilities)
+      .filter(([, value]) => value === true)
+      .map(([key]) => key);
+    const unsupported = Object.entries(capabilities)
+      .filter(([, value]) => value === false)
+      .map(([key]) => key);
+    return {
+      name: "capabilities",
+      ok: true,
+      message: `supported=${supported.join(",") || "-"} unsupported=${unsupported.join(",") || "-"}`,
+      details: response,
+    };
+  } catch (error) {
+    return {
+      name: "capabilities",
+      ok: true,
+      message: `unknown (${error instanceof Error ? firstLine(error.message) : "not available"})`,
+    };
+  }
+}
+
+async function tokenStoreInfo(runtime: CliRuntime): Promise<CliTokenStoreInfo> {
+  return await runtime.tokenStore?.describe?.() ?? { backend: "memory" };
+}
+
+async function filePermissions(filePath: string): Promise<string | null> {
+  try {
+    return ((await stat(filePath)).mode & 0o777).toString(8).padStart(3, "0");
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function firstLine(message: string): string {
+  return message.split("\n")[0] ?? message;
 }
 
 function printScanResult(result: PackageScanResult, io: CliIo): void {
@@ -1827,6 +2230,12 @@ function helpText(): string {
     "  login --api-key [--api-url <url>]",
     "  logout [--api-url <url>] [--token <token>]",
     "  whoami [--api-url <url>] [--token <token>]",
+    "  auth status [--api-url <url>] [--token <token>]",
+    "  doctor [--api-url <url>] [--json]",
+    "  config get api-url",
+    "  config set api-url <url>",
+    "  config reset api-url",
+    "  config list",
     "  submit --path <file-directory-or-zip> [--api-url <url>] [--token <token>]",
     "  review submissions [--api-url <url>] [--token <token>]",
     "  review action <submission-id> --action <approve|publish> [--reason <text>]",
@@ -1856,7 +2265,20 @@ function helpText(): string {
 }
 
 class CliError extends Error {
-  constructor(message: string, public readonly exitCode: number) {
+  constructor(
+    message: string,
+    public readonly exitCode: number,
+    public readonly code = "CLI_ERROR",
+    public readonly status?: number,
+  ) {
     super(message);
+  }
+
+  toJSON(): { code: string; message: string; status?: number } {
+    return {
+      code: this.code,
+      message: this.message,
+      ...(this.status !== undefined ? { status: this.status } : {}),
+    };
   }
 }

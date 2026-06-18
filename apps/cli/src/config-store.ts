@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { CliConfigStore } from "./cli.js";
@@ -21,6 +21,10 @@ export function createFileConfigStore(env: Record<string, string | undefined> = 
         apiUrl: apiUrl.replace(/\/+$/, ""),
       };
       writePayload(filePath, payload);
+    },
+    async resetApiUrl() {
+      payload = { version: 1 };
+      rmSync(filePath, { force: true });
     },
   };
 }

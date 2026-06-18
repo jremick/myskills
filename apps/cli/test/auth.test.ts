@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { hashPassword } from "@myskills-app/auth";
 import { buildApp } from "../../api/src/app.js";
 import { AuthService } from "../../api/src/auth/service.js";
@@ -321,6 +324,140 @@ test("token resolution precedence is token option, env, then durable store", asy
   ]);
 });
 
+test("auth status reports the resolved API URL without fetching when not logged in", async () => {
+  const output = createOutput();
+  const configStore = new MemoryConfigStore("http://api.test");
+  let calls = 0;
+
+  const code = await runCli(["auth", "status"], testRuntime(output, async () => {
+    calls += 1;
+    return response(500, {});
+  }, {}, new MemoryTokenStore(), undefined, configStore));
+
+  assert.equal(code, 0);
+  assert.equal(calls, 0);
+  assert.deepEqual(output.stdout, [
+    "API URL: http://api.test (config)",
+    "Status: not logged in",
+    "Token store: memory",
+  ]);
+});
+
+test("auth status validates stored credentials and reports account metadata", async () => {
+  const output = createOutput();
+  const tokenStore = new MemoryTokenStore({
+    "http://api.test": {
+      kind: "session",
+      token: "stored-session",
+      email: "owner@example.com",
+      expiresAt: "2026-12-01T00:00:00.000Z",
+    },
+  });
+  let authorization = "";
+  const fetch: FetchLike = async (input, init) => {
+    assert.equal(String(input), "http://api.test/v1/me");
+    authorization = init?.headers?.authorization ?? "";
+    return response(200, {
+      user: {
+        email: "owner@example.com",
+        roles: ["owner", "maintainer"],
+        mfaVerified: true,
+      },
+    });
+  };
+
+  const code = await runCli(["auth", "status", "--api-url", "http://api.test"], testRuntime(output, fetch, {}, tokenStore));
+
+  assert.equal(code, 0);
+  assert.equal(authorization, "Bearer stored-session");
+  assert.deepEqual(output.stdout, [
+    "API URL: http://api.test (option)",
+    "Status: logged in (session, store)",
+    "User: owner@example.com",
+    "Roles: owner,maintainer",
+    "MFA: verified",
+    "Expires: 2026-12-01T00:00:00.000Z",
+    "Token store: memory",
+  ]);
+});
+
+test("config commands get, set, list, and reset the saved API URL", async () => {
+  const output = createOutput();
+  const configStore = new MemoryConfigStore();
+  const runtime = testRuntime(output, async () => response(500, {}), {}, undefined, undefined, configStore);
+
+  assert.equal(await runCli(["config", "get", "api-url"], runtime), 0);
+  assert.equal(await runCli(["config", "set", "api-url", "http://api.test/"], runtime), 0);
+  assert.equal(await runCli(["config", "list"], runtime), 0);
+  assert.equal(await runCli(["config", "reset", "api-url"], runtime), 0);
+  assert.equal(await runCli(["config", "get", "api-url"], runtime), 0);
+
+  assert.deepEqual(output.stdout, [
+    "unset",
+    "api-url=http://api.test",
+    "api-url=http://api.test",
+    "resolved-api-url=http://api.test\tsource=config",
+    "api-url unset",
+    "unset",
+  ]);
+});
+
+test("doctor checks API health, auth, token storage, install dir, and capabilities", async (t) => {
+  const installRoot = await mkdtemp(path.join(os.tmpdir(), "myskills-doctor-"));
+  t.after(() => rm(installRoot, { recursive: true, force: true }));
+  const output = createOutput();
+  const tokenStore = new MemoryTokenStore({
+    "http://api.test": { kind: "api", token: "aiss_api-token", email: "owner@example.com" },
+  });
+  const calls: string[] = [];
+  const fetch: FetchLike = async (input, init) => {
+    calls.push(`${init?.headers?.authorization ?? ""} ${String(input)}`);
+    if (String(input).endsWith("/health")) {
+      return response(200, { ok: true, service: "myskills-app-api" });
+    }
+    if (String(input).endsWith("/v1/me")) {
+      return response(200, {
+        user: {
+          email: "owner@example.com",
+          roles: ["owner"],
+          mfaVerified: true,
+        },
+      });
+    }
+    return response(200, {
+      version: "0.1.0-alpha.2",
+      capabilities: {
+        auth: true,
+        search: true,
+        export: true,
+        install: true,
+        review: true,
+        tokens: true,
+        teams: false,
+        sharing: true,
+      },
+    });
+  };
+
+  const code = await runCli([
+    "doctor",
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, fetch, { MYSKILLS_INSTALL_DIR: installRoot }, tokenStore));
+
+  assert.equal(code, 0);
+  assert.deepEqual(calls, [
+    " http://api.test/health",
+    "Bearer aiss_api-token http://api.test/v1/me",
+    " http://api.test/v1/capabilities",
+  ]);
+  assert.match(output.stdout.join("\n"), /ok\tapi_health\tok/);
+  assert.match(output.stdout.join("\n"), /ok\tauth\towner@example.com \(api, store\)/);
+  assert.match(output.stdout.join("\n"), /ok\ttoken_store\tmemory/);
+  assert.match(output.stdout.join("\n"), /ok\tinstall_dir\twritable /);
+  assert.match(output.stdout.join("\n"), /ok\tcapabilities\tsupported=auth,search,export,install,review,tokens,sharing unsupported=teams/);
+});
+
 test("stored tokens are scoped by normalized api url", async () => {
   const output = createOutput();
   const tokenStore = new MemoryTokenStore();
@@ -599,6 +736,10 @@ class MemoryConfigStore implements CliConfigStore {
   async setApiUrl(apiUrl: string): Promise<void> {
     this.apiUrl = apiUrl.replace(/\/+$/, "");
   }
+
+  async resetApiUrl(): Promise<void> {
+    this.apiUrl = undefined;
+  }
 }
 
 class MemoryTokenStore implements CliTokenStore {
@@ -620,6 +761,10 @@ class MemoryTokenStore implements CliTokenStore {
 
   async delete(apiUrl: string): Promise<void> {
     this.tokens.delete(normalizeApiUrl(apiUrl));
+  }
+
+  describe() {
+    return { backend: "memory" as const };
   }
 }
 

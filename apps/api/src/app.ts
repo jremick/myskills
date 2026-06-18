@@ -101,6 +101,20 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     service: "myskills-app-api",
   }));
 
+  app.get("/v1/capabilities", async () => ({
+    version: process.env.MYSKILLS_API_VERSION ?? "0.1.0-alpha.0",
+    capabilities: {
+      auth: Boolean(options.authService),
+      search: true,
+      export: Boolean(options.submissionService),
+      install: Boolean(options.submissionService),
+      review: Boolean(options.authService && options.submissionService),
+      tokens: Boolean(options.authService),
+      teams: Boolean(options.authService && options.teamService),
+      sharing: Boolean(options.authService),
+    },
+  }));
+
   app.get("/v1/skills", async (request) => {
     const query = parseQuery(request.query);
     const user = await authenticateOptionalRegistryReader(options.authService, request.headers.authorization);

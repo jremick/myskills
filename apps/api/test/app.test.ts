@@ -61,6 +61,28 @@ test("GET /health returns service status", async (t) => {
   assert.equal(response.headers["permissions-policy"], "camera=(), microphone=(), geolocation=(), payment=()");
 });
 
+test("GET /v1/capabilities describes enabled server features", async (t) => {
+  const app = buildApp({ skillRepository: repository });
+  t.after(() => app.close());
+
+  const response = await app.inject({ method: "GET", url: "/v1/capabilities" });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), {
+    version: process.env.MYSKILLS_API_VERSION ?? "0.1.0-alpha.0",
+    capabilities: {
+      auth: false,
+      search: true,
+      export: false,
+      install: false,
+      review: false,
+      tokens: false,
+      teams: false,
+      sharing: false,
+    },
+  });
+});
+
 test("CORS allows configured web origins only", async (t) => {
   const app = buildApp({
     skillRepository: repository,
