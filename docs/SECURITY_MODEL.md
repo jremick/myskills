@@ -1,7 +1,7 @@
 # Security Model
 
-Version: 0.1.0-alpha.0
-Last updated: 2026-06-04
+Version: 0.1.0-alpha.1
+Last updated: 2026-06-18
 
 This security model describes the current alpha controls. The companion threat model in [THREAT_MODEL.md](THREAT_MODEL.md) records attacker goals, trust boundaries, residual alpha risks, and business-safe release gates.
 
@@ -51,7 +51,7 @@ This security model describes the current alpha controls. The companion threat m
 
 ### Package Safety
 
-- Public search and detail expose only approved, scan-passed, published releases with artifact records.
+- Public search and detail expose only public skills whose skill lifecycle and selected version lifecycle are `approved` or `deprecated`, whose review is approved, whose scan has passed, whose version has a non-null publish timestamp, whose version is not deleted, and whose artifact records are intact.
 - Submission intake accepts normalized package text entries or base64 `.zip` archive uploads; the API does not accept server-local paths or URLs.
 - Submission intake requires a strict root package manifest file that matches the submitted manifest metadata; publish revalidates stored artifact manifests before release.
 - Submission is role-gated to owner, admin, maintainer, and author accounts; owner, admin, and maintainer submitters require MFA verification.
@@ -61,15 +61,18 @@ This security model describes the current alpha controls. The companion threat m
 - Blocking scan findings reject the submission before skill, version, or artifact records are created.
 - Warning findings remain reviewable but unpublished.
 - Submitting a new unreviewed version must not mutate or hide an already approved public release.
-- Public bundle delivery uses the same approved/public/passed/published predicate as public search and detail.
+- Public bundle delivery uses the same public/lifecycle-approved-or-deprecated/review-approved/passed/published/not-deleted predicate as public search and detail.
+- Deprecated releases remain visible for install/export continuity. Unpublished, revoked, archived, and deleted releases are hidden from public search, detail, metadata, and bundle delivery.
 - Reject archive traversal, absolute paths, symlinks, encrypted archives, unsupported compression, excessive size, and excessive file count.
 - The alpha scanner blocks known credential/private-key patterns, destructive shell snippets, common encoded shell execution, unsafe prompt-instruction and exfiltration patterns, and unsafe archive structures, and warns on dependency install hooks. Broader fixture-backed scanning for uncommon secrets, generated binaries, and semantic package review remains business-safe production hardening.
 - Require maintainer approval and an explicit publish action before publication.
+- Lifecycle actions change server-owned release or skill state only; they do not rewrite immutable artifact hashes or package payloads.
 - Store immutable artifact hashes.
 
 ### Audit
 
 - Record auth events, access decisions, package delivery, submissions, reviews, lifecycle actions, admin changes, and MCP calls.
+- Record lifecycle action reasons without logging package contents, tokens, or credential material.
 - Admin registration, user-status mutations, and MCP session authorization decisions write sanitized audit events; admin audit listing is MFA-verified session-only and bounded.
 - Redact tokens, cookies, passwords, provider secrets, package contents, and overly long free-text fields.
 - Export audit reports with spreadsheet formula injection defenses.
@@ -95,3 +98,4 @@ This security model describes the current alpha controls. The companion threat m
 - Scanner blocks known secret and unsafe-command fixtures.
 - Audit sanitizer redacts sensitive fields.
 - A newer unreviewed or unsafe version cannot displace a previously approved public release.
+- Unpublish, revoke, archive, and delete actions remove releases from every public metadata and bundle path; restore re-enters public paths only when the rest of the safe-release predicate still passes.

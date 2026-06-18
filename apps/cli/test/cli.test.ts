@@ -409,7 +409,121 @@ test("review action rejects unknown actions without fetch", async () => {
 
   assert.equal(code, 2);
   assert.equal(calls, 0);
-  assert.match(output.stderr.join("\n"), /--action must be approve or publish/);
+  assert.match(output.stderr.join("\n"), /--action must be approve, request-changes, reject, or publish/);
+});
+
+test("submission withdraw posts owner action", async () => {
+  const output = createOutput();
+  let url = "";
+  let method = "";
+  let body: Record<string, unknown> = {};
+  const fetch: FetchLike = async (input, init) => {
+    url = String(input);
+    method = init?.method ?? "GET";
+    body = JSON.parse(init?.body ?? "{}");
+    return response(200, {
+      submission: {
+        id: "submission-1",
+        slug: "release-notes-helper",
+        version: "0.1.0",
+        reviewStatus: "rejected",
+        lifecycleStatus: "archived",
+      },
+    });
+  };
+
+  const code = await runCli([
+    "submissions",
+    "withdraw",
+    "submission-1",
+    "--reason",
+    "wrong version",
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, fetch, { MYSKILLS_TOKEN: "author-token" }));
+
+  assert.equal(code, 0);
+  assert.equal(url, "http://api.test/v1/submissions/submission-1/actions");
+  assert.equal(method, "POST");
+  assert.deepEqual(body, { action: "withdraw", reason: "wrong version" });
+  assert.deepEqual(output.stdout, ["submission-1\trelease-notes-helper\t0.1.0\trejected\tarchived"]);
+});
+
+test("release lifecycle command posts release action", async () => {
+  const output = createOutput();
+  let url = "";
+  let method = "";
+  let body: Record<string, unknown> = {};
+  const fetch: FetchLike = async (input, init) => {
+    url = String(input);
+    method = init?.method ?? "GET";
+    body = JSON.parse(init?.body ?? "{}");
+    return response(200, {
+      release: {
+        slug: "release-notes-helper",
+        version: "0.1.0",
+        lifecycleStatus: "unpublished",
+        reviewStatus: "approved",
+        securityStatus: "passed",
+      },
+    });
+  };
+
+  const code = await runCli([
+    "releases",
+    "unpublish",
+    "release-notes-helper@0.1.0",
+    "--reason",
+    "bad docs",
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, fetch, { MYSKILLS_TOKEN: "maintainer-token" }));
+
+  assert.equal(code, 0);
+  assert.equal(url, "http://api.test/v1/skills/release-notes-helper/releases/0.1.0/actions");
+  assert.equal(method, "POST");
+  assert.deepEqual(body, { action: "unpublish", reason: "bad docs" });
+  assert.deepEqual(output.stdout, ["release-notes-helper\t0.1.0\tunpublished\tapproved\tpassed"]);
+});
+
+test("skills edit sends only requested metadata", async () => {
+  const output = createOutput();
+  let url = "";
+  let method = "";
+  let body: Record<string, unknown> = {};
+  const fetch: FetchLike = async (input, init) => {
+    url = String(input);
+    method = init?.method ?? "GET";
+    body = JSON.parse(init?.body ?? "{}");
+    return response(200, {
+      skill: {
+        slug: "release-notes-helper",
+        title: "Release Notes Assistant",
+        lifecycleStatus: "approved",
+        visibility: "public",
+      },
+    });
+  };
+
+  const code = await runCli([
+    "skills",
+    "edit",
+    "release-notes-helper",
+    "--title",
+    "Release Notes Assistant",
+    "--tag",
+    "writing",
+    "--tag",
+    "release",
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, fetch, { MYSKILLS_TOKEN: "maintainer-token" }));
+
+  assert.equal(code, 0);
+  assert.equal(url, "http://api.test/v1/skills/release-notes-helper");
+  assert.equal(method, "PUT");
+  assert.deepEqual(body, { title: "Release Notes Assistant", tags: ["writing", "release"] });
+  assert.deepEqual(output.stdout, ["release-notes-helper\tRelease Notes Assistant\tapproved\tpublic"]);
 });
 
 test("teams commands create, invite, and accept through the API", async () => {

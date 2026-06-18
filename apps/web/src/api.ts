@@ -11,6 +11,7 @@ export interface ReleaseMetadata {
   title: string;
   summary: string;
   version: string;
+  lifecycleStatus: "approved" | "deprecated";
   reviewStatus: "approved";
   securityStatus: "passed";
   publishedAt: string;
@@ -183,12 +184,19 @@ export interface ReviewSubmissionSummary {
   title: string;
   version: string;
   visibility: string;
+  lifecycleStatus: string;
   reviewStatus: string;
   securityStatus: string;
   platforms: Array<{ name: string; installTarget: string; status: string }>;
   findingCount: number;
   createdAt: string;
+  allowedActions: ReviewActionName[];
 }
+
+export type ReviewActionName = "approve" | "request-changes" | "reject" | "publish";
+export type SubmissionOwnerActionName = "withdraw";
+export type ReleaseLifecycleActionName = "deprecate" | "unpublish" | "revoke" | "restore" | "delete";
+export type SkillLifecycleActionName = "archive" | "restore" | "delete";
 
 export interface ReviewActionResult {
   id: string;
@@ -235,6 +243,7 @@ export interface UserSubmissionSummary {
   summary: string;
   version: string;
   visibility: string;
+  lifecycleStatus: string;
   reviewStatus: string;
   securityStatus: string;
   platforms: Array<{ name: string; installTarget: string; status: string }>;
@@ -246,6 +255,30 @@ export interface UserSubmissionSummary {
   };
   createdAt: string;
   publishedAt: string | null;
+  allowedActions: Array<"export" | SubmissionOwnerActionName>;
+}
+
+export interface SkillManagementSummary {
+  slug: string;
+  title: string;
+  summary: string;
+  lifecycleStatus: string;
+  visibility: VisibilityScope;
+  tags: string[];
+  allowedActions: Array<"edit" | SkillLifecycleActionName>;
+}
+
+export interface SkillReleaseSummary {
+  id: string;
+  slug: string;
+  version: string;
+  lifecycleStatus: string;
+  reviewStatus: string;
+  securityStatus: string;
+  publishedAt: string | null;
+  platforms: Array<{ name: string; installTarget: string; status: string }>;
+  findingCount: number;
+  allowedActions: ReleaseLifecycleActionName[];
 }
 
 export interface SkillPackageBundle {
@@ -300,8 +333,13 @@ export interface RegistryClient {
   submitArchive(input: SubmitArchiveInput, token?: string): Promise<SubmitSkillResult>;
   listUserSubmissions(token?: string): Promise<UserSubmissionSummary[]>;
   exportUserSubmission(submissionId: string, token?: string): Promise<SkillPackageBundle>;
+  performSubmissionAction(submissionId: string, action: SubmissionOwnerActionName, reason?: string, token?: string): Promise<UserSubmissionSummary>;
   listReviewSubmissions(token?: string): Promise<ReviewSubmissionSummary[]>;
-  performReviewAction(submissionId: string, action: "approve" | "publish", reason?: string, token?: string): Promise<ReviewActionResult>;
+  performReviewAction(submissionId: string, action: ReviewActionName, reason?: string, token?: string): Promise<ReviewActionResult>;
+  listSkillReleases(slug: string, token?: string): Promise<SkillReleaseSummary[]>;
+  updateSkillMetadata(input: { slug: string; title?: string; summary?: string; visibility?: VisibilityScope; tags?: string[]; reason?: string }, token?: string): Promise<SkillManagementSummary>;
+  performSkillAction(slug: string, action: SkillLifecycleActionName, reason?: string, token?: string): Promise<SkillManagementSummary>;
+  performReleaseAction(slug: string, version: string, action: ReleaseLifecycleActionName, reason?: string, replacement?: string, token?: string): Promise<SkillReleaseSummary>;
   listTeams(token?: string): Promise<TeamDashboard>;
   createTeam(name: string, token?: string): Promise<TeamRecord>;
   inviteTeamMember(teamId: string, email: string, token?: string): Promise<TeamInvitation>;
@@ -605,6 +643,21 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         { token: overrideToken ?? token },
       );
     },
+    async performSubmissionAction(submissionId, action, reason, overrideToken) {
+      const body = await requestJson<{ submission: UserSubmissionSummary }>(
+        fetchImpl,
+        `${root}/v1/submissions/${encodeURIComponent(submissionId)}/actions`,
+        {
+          method: "POST",
+          body: {
+            action,
+            ...(reason?.trim() ? { reason: reason.trim() } : {}),
+          },
+          token: overrideToken ?? token,
+        },
+      );
+      return body.submission;
+    },
     async listReviewSubmissions(overrideToken) {
       const body = await requestJson<{ submissions: ReviewSubmissionSummary[] }>(
         fetchImpl,
@@ -627,6 +680,63 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         },
       );
       return body.submission;
+    },
+    async listSkillReleases(slug, overrideToken) {
+      const body = await requestJson<{ releases: SkillReleaseSummary[] }>(
+        fetchImpl,
+        `${root}/v1/skills/${encodeURIComponent(slug)}/releases`,
+        { token: overrideToken ?? token },
+      );
+      return body.releases;
+    },
+    async updateSkillMetadata(input, overrideToken) {
+      const body = await requestJson<{ skill: SkillManagementSummary }>(
+        fetchImpl,
+        `${root}/v1/skills/${encodeURIComponent(input.slug)}`,
+        {
+          method: "PUT",
+          body: {
+            ...(input.title !== undefined ? { title: input.title } : {}),
+            ...(input.summary !== undefined ? { summary: input.summary } : {}),
+            ...(input.visibility !== undefined ? { visibility: input.visibility } : {}),
+            ...(input.tags !== undefined ? { tags: input.tags } : {}),
+            ...(input.reason?.trim() ? { reason: input.reason.trim() } : {}),
+          },
+          token: overrideToken ?? token,
+        },
+      );
+      return body.skill;
+    },
+    async performSkillAction(slug, action, reason, overrideToken) {
+      const body = await requestJson<{ skill: SkillManagementSummary }>(
+        fetchImpl,
+        `${root}/v1/skills/${encodeURIComponent(slug)}/actions`,
+        {
+          method: "POST",
+          body: {
+            action,
+            ...(reason?.trim() ? { reason: reason.trim() } : {}),
+          },
+          token: overrideToken ?? token,
+        },
+      );
+      return body.skill;
+    },
+    async performReleaseAction(slug, version, action, reason, replacement, overrideToken) {
+      const body = await requestJson<{ release: SkillReleaseSummary }>(
+        fetchImpl,
+        `${root}/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}/actions`,
+        {
+          method: "POST",
+          body: {
+            action,
+            ...(reason?.trim() ? { reason: reason.trim() } : {}),
+            ...(replacement?.trim() ? { replacement: replacement.trim() } : {}),
+          },
+          token: overrideToken ?? token,
+        },
+      );
+      return body.release;
     },
     async listTeams(overrideToken) {
       return requestJson<TeamDashboard>(fetchImpl, `${root}/v1/teams`, {

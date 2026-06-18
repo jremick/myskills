@@ -1,13 +1,13 @@
 # API, MCP, And CLI Plan
 
-Version: 0.1.1
-Last updated: 2026-06-17
+Version: 0.1.2
+Last updated: 2026-06-18
 
 ## Shared Rule
 
 API, web, CLI, and MCP must ask the same backend for authorization. No client surface may reimplement access rules as a substitute for server-side decisions.
 
-The current web slice consumes backend API decisions for login, current-user refresh, public skill search, skill detail, release metadata, export guidance, author archive submission, maintainer review actions, and owner/admin console operations. It forwards the active bearer token when present, but it must not fetch bundle payloads during metadata browsing/review or reimplement authorization policy in client code.
+The current web slice consumes backend API decisions for login, current-user refresh, public skill search, skill detail, release metadata, export guidance, author archive submission, author withdrawal, maintainer review actions, owner/admin lifecycle controls, and owner/admin console operations. It forwards the active bearer token when present, but it must not fetch bundle payloads during metadata browsing/review or reimplement authorization policy in client code.
 
 ## API Surface
 
@@ -24,17 +24,22 @@ Milestone 1 REST endpoints:
 - `DELETE /v1/auth/api-tokens/:id`
 - `GET /v1/skills`
 - `GET /v1/skills/:slug`
+- `GET /v1/skills/:slug/releases`
 - `GET /v1/skills/:slug/releases/:version`
 - `GET /v1/skills/:slug/releases/:version/bundle?platform=...`
 - `POST /v1/submissions`
+- `GET /v1/submissions/mine`
+- `POST /v1/submissions/:id/actions`
 - `GET /v1/review/submissions`
 - `POST /v1/review/submissions/:id/actions`
+- `PUT /v1/skills/:slug`
+- `POST /v1/skills/:slug/actions`
+- `POST /v1/skills/:slug/releases/:version/actions`
 
 Milestone 2-3 REST endpoints:
 
 - `POST /v1/drafts`
 - `GET /v1/drafts`
-- `GET /v1/submissions/mine`
 - `GET /v1/admin/users`
 - `POST /v1/admin/users/:id/actions`
 - `PUT /v1/admin/users/:id/roles`
@@ -105,7 +110,13 @@ myskills update [skill]
 myskills rollback <skill>
 myskills submit --path <dir-or-zip>
 myskills review submissions
-myskills review action <submission-id> --action <approve|publish> --reason <reason>
+myskills review action <submission-id> --action <approve|request-changes|reject|publish> --reason <reason> [--api-url <url>] [--token <token>]
+myskills submissions list
+myskills submissions withdraw <submission-id> --reason <reason> [--api-url <url>] [--token <token>]
+myskills skills edit <skill-slug> [--title <text>] [--summary <text>] [--visibility <scope>] [--tag <tag>] --reason <reason> [--api-url <url>] [--token <token>]
+myskills skills archive|restore|delete <skill-slug> --reason <reason> [--api-url <url>] [--token <token>]
+myskills releases list <skill-slug>
+myskills releases deprecate|unpublish|revoke|restore|delete <skill-slug>@<version> --reason <reason> [--api-url <url>] [--token <token>]
 myskills teams list|create|invite|accept|skills
 myskills sharing get|set <skill>
 myskills admin sharing get|set
@@ -114,7 +125,7 @@ myskills token list
 myskills token revoke <token-id>
 ```
 
-Current CLI slice implements local `validate` and `scan` for manifest files, directories, and `.zip` packages, prompt-based `login` with API URL selection, saved API URL config, explicit `config` management, email/password session auth, API-key auth, MFA login completion, `auth status`, `logout`, API-URL-scoped durable token storage with platform keyring-first storage and file fallback, `doctor` diagnostics, server `/v1/capabilities`, structured JSON errors, clearer wrong-URL and unsupported-command errors, backend-backed `search`, `info`, `whoami`, `submit` for normalized directory text-entry package intake and server-extracted `.zip` archive intake, role-gated review list/actions, team and sharing administration commands, verified `export` of approved bundle payloads, local `install`/`list`/`update`/`rollback` with a filesystem install registry and rollback snapshots, and server API-token create/list/revoke commands. Browser/device login, platform-specific install adapters, and archive creation are still planned.
+Current CLI slice implements local `validate` and `scan` for manifest files, directories, and `.zip` packages, prompt-based `login` with API URL selection, saved API URL config, explicit `config` management, email/password session auth, API-key auth, MFA login completion, `auth status`, `logout`, API-URL-scoped durable token storage with platform keyring-first storage and file fallback, `doctor` diagnostics, server `/v1/capabilities`, structured JSON errors, clearer wrong-URL and unsupported-command errors, backend-backed `search`, `info`, `whoami`, `submit` for normalized directory text-entry package intake and server-extracted `.zip` archive intake, author submission listing/withdrawal, role-gated review list/actions, skill metadata updates, skill archive/restore/delete controls, release deprecate/unpublish/revoke/restore/delete controls, team and sharing administration commands, verified `export` of approved bundle payloads, local `install`/`list`/`update`/`rollback` with a filesystem install registry and rollback snapshots, and server API-token create/list/revoke commands. Browser/device login, platform-specific install adapters, and archive creation are still planned.
 
 Later maintainer/admin commands:
 

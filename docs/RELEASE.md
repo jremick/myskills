@@ -50,20 +50,23 @@ The workflow does not publish npm packages, create a GitHub Release, or push con
 
 ## CLI npm Alpha
 
-The CLI alpha package is published as `@jarel/myskills` under the `alpha` npm dist-tag. Because `0.1.0-alpha.0` is currently the only published version, npm also reports it as `latest`; keep installation examples pinned to `@alpha` until a stable CLI release exists.
+The CLI alpha package is published as `@jarel/myskills` under the `alpha` npm dist-tag. Keep installation examples pinned to `@alpha` until a stable CLI release exists, and verify npm dist-tags before and after every alpha publish because `latest` can lag behind the alpha line.
 
 Before publishing a CLI alpha:
 
 - Run `npm run check`.
+- Run `npm view @jarel/myskills version dist-tags`.
 - Run `npm publish -w apps/cli --access public --tag alpha --dry-run`.
 - Confirm the tarball contains only `README.md`, `dist/index.js`, and `package.json`.
 - Confirm `myskills --version` works from a packed tarball or temporary global install.
 
-For the first manual alpha publish, use browser-backed npm 2FA and disable provenance because trusted publishing is not active locally:
+For manual alpha publishes, use browser-backed npm 2FA when prompted and disable provenance because trusted publishing is not active locally:
 
 ```bash
 npm publish -w apps/cli --access public --tag alpha --provenance=false
 ```
+
+Run the publish from a TTY. When npm prints `Press ENTER to open in the browser...`, press Enter and complete the passkey flow in the browser npm opens. Do not copy the printed `/auth/cli/...` URL manually; it can 404 outside npm's own web-auth polling flow.
 
 After publish, verify:
 

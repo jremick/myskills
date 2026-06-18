@@ -15,12 +15,18 @@ import type {
   CreateSubmissionInput,
   PublicBundle,
   PublicReleaseMetadata,
+  ReleaseLifecycleAction,
   ReviewAction,
   ReviewActionResult,
   ReviewSubmissionSummary,
+  SkillLifecycleAction,
+  SkillManagementSummary,
+  SkillMetadataUpdate,
   StoredSubmission,
+  SubmissionOwnerAction,
   SubmissionActor,
   SubmissionStore,
+  SkillReleaseSummary,
   UserSubmissionBundle,
   UserSubmissionSummary,
 } from "./types.js";
@@ -84,6 +90,20 @@ export class SubmissionService {
     return this.store.listUserSubmissions(actor.id);
   }
 
+  async performSubmissionOwnerAction(input: {
+    actor: SubmissionActor;
+    submissionId: string;
+    action: SubmissionOwnerAction;
+    reason?: string;
+  }): Promise<UserSubmissionSummary> {
+    return this.store.performSubmissionOwnerAction({
+      actorId: input.actor.id,
+      submissionId: input.submissionId,
+      action: input.action,
+      reason: input.reason,
+    });
+  }
+
   async getUserSubmissionBundle(input: { actor: SubmissionActor; submissionId: string; platform?: string }): Promise<UserSubmissionBundle | null> {
     const bundle = await this.store.getUserSubmissionBundle({
       userId: input.actor.id,
@@ -124,12 +144,63 @@ export class SubmissionService {
         reason: input.reason,
       });
     }
+    if (input.action === "request-changes") {
+      return this.store.requestChanges({
+        actorId: input.actor.id,
+        submissionId: input.submissionId,
+        reason: input.reason,
+      });
+    }
+    if (input.action === "reject") {
+      return this.store.rejectSubmission({
+        actorId: input.actor.id,
+        submissionId: input.submissionId,
+        reason: input.reason,
+      });
+    }
 
     return this.store.publishSubmission({
       actorId: input.actor.id,
       submissionId: input.submissionId,
       reason: input.reason,
     });
+  }
+
+  async getSkillManagement(input: { actor: SubmissionActor; slug: string }): Promise<SkillManagementSummary | null> {
+    return this.store.getSkillManagement(input);
+  }
+
+  async updateSkillMetadata(input: {
+    actor: SubmissionActor;
+    slug: string;
+    update: SkillMetadataUpdate;
+    reason?: string;
+  }): Promise<SkillManagementSummary> {
+    return this.store.updateSkillMetadata(input);
+  }
+
+  async performSkillAction(input: {
+    actor: SubmissionActor;
+    slug: string;
+    action: SkillLifecycleAction;
+    reason?: string;
+  }): Promise<SkillManagementSummary> {
+    return this.store.performSkillAction(input);
+  }
+
+  async listSkillReleases(input: { slug: string; actor?: SubmissionActor | null }): Promise<SkillReleaseSummary[]> {
+    return this.store.listSkillReleases(input);
+  }
+
+  async performReleaseAction(input: {
+    actor: SubmissionActor;
+    slug: string;
+    version: string;
+    action: ReleaseLifecycleAction;
+    reason?: string;
+    replacement?: string;
+  }): Promise<SkillReleaseSummary> {
+    return this.store.performReleaseAction(input);
   }
 
   async getPublicRelease(input: { slug: string; version: string; actorId?: string | null }): Promise<PublicReleaseMetadata | null> {

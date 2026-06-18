@@ -78,7 +78,7 @@ curl http://localhost:3001/v1/skills/release-notes-helper
 
 The seeded owner account uses `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` from `.env`.
 
-Open `http://localhost:3000` to browse approved skills, inspect release export guidance, and sign in with the seeded owner account. The browser UI supports MFA challenge completion when the account requires it, authenticated author `.zip` package submission, maintainer review approval/publication, and owner/admin console workflows for registration mode, user status actions, role updates, provider metadata/mapping management, and audit review.
+Open `http://localhost:3000` to browse approved skills, inspect release export guidance, and sign in with the seeded owner account. The browser UI supports MFA challenge completion when the account requires it, authenticated author `.zip` package submission and withdrawal, maintainer review approval/request-changes/rejection/publication, owner/admin lifecycle controls for skills and releases, and owner/admin console workflows for registration mode, user status actions, role updates, provider metadata/mapping management, and audit review.
 
 Local auth verification and password-reset notifications default to `AUTH_NOTIFICATION_MODE=console`; development action links appear in the API process output. Production deployments use `AUTH_NOTIFICATION_MODE=smtp` and must set `APP_BASE_URL` to an HTTPS web origin plus SMTP settings in the environment or secret store.
 
@@ -95,7 +95,7 @@ npm run dev:mcp:http
 curl http://127.0.0.1:3002/health
 ```
 
-The current CLI can validate and scan local package directories and `.zip` archives, search and inspect approved releases, submit package directories or server-extracted archive uploads, run maintainer review actions, manage scoped API tokens, and export verified approved bundles:
+The current CLI can validate and scan local package directories and `.zip` archives, search and inspect approved releases, submit package directories or server-extracted archive uploads, withdraw author submissions, run maintainer review actions, manage skill/release lifecycle state, manage scoped API tokens, and export verified approved bundles:
 
 ```bash
 npm run build
@@ -106,6 +106,8 @@ node apps/cli/dist/index.js info release-notes-helper
 node apps/cli/dist/index.js export release-notes-helper --version 0.1.0 --platform codex --output ./tmp/release-notes-helper
 node apps/cli/dist/index.js submit --path ./path-to-skill
 node apps/cli/dist/index.js review submissions
+node apps/cli/dist/index.js submissions list
+node apps/cli/dist/index.js releases list release-notes-helper
 node apps/cli/dist/index.js token create --name "Local CLI" --scope profile:read --scope skills:read --scope skills:submit
 node apps/cli/dist/index.js logout
 ```

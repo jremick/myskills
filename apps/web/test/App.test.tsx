@@ -149,8 +149,8 @@ test("skill detail displays public metadata and release artifact metadata only",
   await view.findByText("Turns merged changes into concise release notes.");
   assert.equal(view.getAllByText("0.1.0").length, 2);
   assert.equal(view.getAllByText("codex, generic").length, 2);
-  assert.equal(view.getByText("approved").textContent, "approved");
-  assert.equal(view.getByText("passed").textContent, "passed");
+  assert.equal(view.getByText("Approved").textContent, "Approved");
+  assert.equal(view.getByText("Passed").textContent, "Passed");
   assert.equal(document.body.textContent?.includes("storageKey"), false);
   assert.equal(document.body.textContent?.includes("Summarize release notes."), false);
   assert.equal(client.bundleCalls, 0);
@@ -268,6 +268,9 @@ test("settings can request email change and password change", async () => {
 
   const view = render(<RegistryApp client={client} />);
   await view.findByText("Change email");
+  await view.findByRole("heading", { name: "Security and access", level: 1 });
+  await view.findByText("Authenticator app MFA is enabled.");
+  assert.equal(document.body.textContent?.includes("Authenticator setup"), false);
 
   fireEvent.input(view.getByLabelText("New email"), { target: { value: "new@example.com" } });
   fireEvent.input(view.getAllByLabelText("Current password")[0]!, { target: { value: "correct horse battery staple" } });
@@ -323,8 +326,9 @@ test("signed-in users can open the teams workspace", async () => {
 
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByText("Team sharing");
+  await view.findByRole("heading", { name: "Teams", level: 1 });
   assert.equal((await view.findAllByText("Platform Team")).length >= 1, true);
+  await view.findAllByText("reader@example.com");
   await view.findByText("Release Notes Helper");
   assert.equal(client.listTeamCalls, 1);
   assert.equal(client.searchCalls.length, 0);
@@ -343,6 +347,7 @@ test("admin sessions can manage registration, users, and provider metadata", asy
   await view.findByText("owner@example.com");
   fireEvent.click(view.getByRole("button", { name: /admin/i }));
 
+  await view.findByRole("heading", { name: "Admin console", level: 1 });
   await view.findByRole("button", { name: "Refresh" });
   await waitFor(() => assert.equal(view.getAllByText("Cloudflare Access").length >= 1, true));
   await view.findByText("API keys");

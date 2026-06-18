@@ -76,6 +76,7 @@ test("GET /v1/capabilities describes enabled server features", async (t) => {
       export: false,
       install: false,
       review: false,
+      lifecycle: false,
       tokens: false,
       teams: false,
       sharing: false,

@@ -1,7 +1,7 @@
 # Data Model
 
-Version: 0.1.0
-Last updated: 2026-06-04
+Version: 0.1.1
+Last updated: 2026-06-18
 
 This is the initial logical model. M1 tables are implemented as Drizzle/Postgres migrations and will keep evolving with the product surface.
 
@@ -23,8 +23,8 @@ M1 tables are the thin backend proof. M2 tables harden auth and submissions. Lat
 
 ## Registry
 
-- M1 `skills`: stable skill identity, slug, title, summary, owner, visibility, and lifecycle.
-- M1 `skill_versions`: semantic versions and release notes.
+- M1 `skills`: stable skill identity, slug, title, summary, owner, visibility, and skill-level lifecycle.
+- M1 `skill_versions`: semantic versions, release notes, version-level lifecycle, lifecycle reason, lifecycle timestamp, and soft-delete timestamp.
 - M1 `skill_platform_variants`: target runtime metadata such as Codex, Claude, ChatGPT, generic prompt pack, or MCP resource bundle.
 - M1 `skill_artifacts`: generated opaque storage references, checksums, sizes, content type, and legacy/dev normalized text package payloads. Production package bytes live in S3-compatible object storage, while Postgres remains the system of record for artifact metadata and release policy.
 - Later `skill_dependencies`: optional relationships between skills.
@@ -40,7 +40,7 @@ M1 tables are the thin backend proof. M2 tables harden auth and submissions. Lat
 - M2 `submissions`: review queue entries.
 - M2 `submission_artifacts`: uploaded package archive and extracted normalized files.
 - M2 `reviews`: maintainer decisions, requested changes, comments, and approvals.
-- M2 `lifecycle_events`: approve, publish, deprecate, revoke, archive, delete, restore.
+- M2 `lifecycle_events`: approve, request changes, reject, publish, withdraw, deprecate, unpublish, revoke, archive, delete, restore.
 - M1 `scan_runs`: validation and security scan executions.
 - M1 `scan_findings`: structured validation, secret, safety, dependency, and policy findings.
 
@@ -68,6 +68,6 @@ Organization and team scoped visibility are intentionally deferred until the own
 - Skill versions are unique per skill.
 - Artifact objects are immutable after creation.
 - Object-backed artifact reads verify byte size and SHA-256 before publication or delivery.
-- Approved releases point only at scan-passed artifacts.
-- Revoked skills are not discoverable through search and are blocked at delivery.
+- Approved and deprecated public releases point only at scan-passed artifacts with approved review status, non-null publish timestamps, non-deleted version rows, and intact artifact records.
+- Unpublished, revoked, archived, and deleted skills or versions are not discoverable through public search and are blocked at delivery.
 - Authorization denial should avoid revealing whether a restricted skill exists unless instance policy explicitly allows that visibility.

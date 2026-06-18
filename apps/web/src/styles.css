@@ -68,7 +68,7 @@ button:focus-visible {
   border: 1px solid #cad5e2;
   border-radius: 7px;
   color: #172033;
-  font-weight: 650;
+  font-weight: 700;
   background: #ffffff;
 }
 
@@ -188,7 +188,7 @@ button:focus-visible {
   gap: 22px;
   color: #3f4b5f;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .landing-links a {
@@ -418,27 +418,13 @@ button:focus-visible {
   padding-top: 66px;
 }
 
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: grid;
-  grid-template-columns: minmax(220px, 260px) minmax(260px, 1fr) minmax(520px, auto);
-  align-items: center;
-  gap: 18px;
-  padding: 16px 24px;
-  border-bottom: 1px solid #d9e1ea;
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(16px);
-}
-
 .brand {
   display: inline-flex;
   align-items: center;
   gap: 12px;
   color: #0f172a;
   font-size: 21px;
-  font-weight: 760;
+  font-weight: 800;
   text-decoration: none;
 }
 
@@ -519,7 +505,7 @@ button:focus-visible {
   border: 1px solid #cfd8e3;
   border-radius: 8px;
   color: #243247;
-  font-weight: 650;
+  font-weight: 700;
   background: #ffffff;
 }
 
@@ -528,15 +514,6 @@ button:focus-visible {
   border-color: #0f766e;
   color: #075e57;
   background: #effdfb;
-}
-
-.topbar-actions {
-  justify-self: end;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  min-width: 0;
 }
 
 .auth-shell {
@@ -607,7 +584,7 @@ button:focus-visible {
   border: 1px solid #0f766e;
   border-radius: 7px;
   color: #ffffff;
-  font-weight: 650;
+  font-weight: 700;
   background: #0f766e;
 }
 
@@ -689,7 +666,7 @@ button:focus-visible {
 .mfa-recovery span {
   color: #334155;
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 800;
 }
 
 .mfa-secret code,
@@ -769,7 +746,7 @@ button:focus-visible {
   border: 1px solid #0f766e;
   border-radius: 7px;
   color: #ffffff;
-  font-weight: 650;
+  font-weight: 700;
   background: #0f766e;
 }
 
@@ -854,7 +831,7 @@ button:focus-visible {
   border: 1px solid #cfd8e3;
   border-radius: 7px;
   color: #334155;
-  font-weight: 650;
+  font-weight: 700;
   background: #ffffff;
 }
 
@@ -881,7 +858,7 @@ button:focus-visible {
 .admin-table-head {
   color: #64748b;
   font-size: 12px;
-  font-weight: 760;
+  font-weight: 800;
   text-transform: uppercase;
 }
 
@@ -932,10 +909,26 @@ button:focus-visible {
 .status-token-active,
 .status-token-enabled,
 .status-token-approved,
-.status-token-passed {
+.status-token-passed,
+.status-token-owner,
+.status-token-team {
   border-color: #bfe7cc;
   color: #11632d;
   background: #f0fbf3;
+}
+
+.status-token-public,
+.status-token-explicit-users {
+  border-color: #b7e3df;
+  color: #075e57;
+  background: #effdfb;
+}
+
+.status-token-member,
+.status-token-private {
+  border-color: #d4dce7;
+  color: #334155;
+  background: #f8fafc;
 }
 
 .status-token-pending,
@@ -974,7 +967,7 @@ button:focus-visible {
   gap: 5px;
   color: #334155;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 700;
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -1066,7 +1059,7 @@ button:focus-visible {
   gap: 7px;
   color: #475569;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .provider-form input,
@@ -1159,7 +1152,7 @@ button:focus-visible {
   padding: 0 8px;
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 760;
+  font-weight: 800;
   line-height: 24px;
 }
 
@@ -1195,7 +1188,7 @@ button:focus-visible {
 
 .review-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
   gap: 10px;
   align-items: center;
   width: 100%;
@@ -1295,12 +1288,26 @@ button:focus-visible {
   border: 1px solid #0f766e;
   border-radius: 7px;
   color: #ffffff;
-  font-weight: 650;
+  font-weight: 700;
   background: #0f766e;
 }
 
 .review-actions button:disabled {
   border-color: #cbd5e1;
+  color: #64748b;
+  cursor: not-allowed;
+  background: #e2e8f0;
+}
+
+.review-actions .danger-button,
+.danger-button {
+  border-color: #b42318;
+  color: #ffffff;
+  background: #b42318;
+}
+
+.danger-button:disabled {
+  border-color: #d6dde8;
   color: #64748b;
   cursor: not-allowed;
   background: #e2e8f0;
@@ -1319,6 +1326,94 @@ button:focus-visible {
   grid-template-columns: minmax(360px, 0.72fr) minmax(560px, 1fr);
   gap: 18px;
   align-items: start;
+}
+
+.lifecycle-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.metadata-edit-grid {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.7fr) minmax(220px, 1fr) minmax(180px, 0.8fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.metadata-edit-grid label {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.metadata-edit-grid input {
+  min-height: 36px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid #cfd8e3;
+  border-radius: 7px;
+  color: #0f172a;
+  background: #ffffff;
+  font: inherit;
+}
+
+.lifecycle-actions,
+.release-lifecycle-row > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lifecycle-actions button,
+.release-lifecycle-row button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #cfd8e3;
+  border-radius: 7px;
+  color: #243145;
+  font-weight: 700;
+  background: #ffffff;
+}
+
+.release-lifecycle-list {
+  display: grid;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.release-lifecycle-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto auto minmax(180px, auto);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.release-lifecycle-row:first-child {
+  border-top: 0;
+}
+
+.release-lifecycle-row span:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.release-lifecycle-row small {
+  color: var(--muted);
 }
 
 .submit-panel {
@@ -1490,6 +1585,14 @@ button:focus-visible {
   min-height: 150px;
 }
 
+.teams-hero {
+  align-items: center;
+}
+
+.teams-metrics {
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+}
+
 .teams-layout {
   display: grid;
   grid-template-columns: minmax(360px, 0.9fr) minmax(360px, 0.7fr);
@@ -1544,7 +1647,7 @@ button:focus-visible {
   border-radius: 7px;
   color: #ffffff;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 700;
   background: #0f766e;
 }
 
@@ -1565,25 +1668,46 @@ button:focus-visible {
   gap: 18px;
 }
 
+.team-card {
+  display: grid;
+  border-top: 1px solid #edf1f5;
+}
+
+.team-card:first-child {
+  border-top: 0;
+}
+
 .team-row,
 .invitation-row {
   display: grid;
   gap: 10px;
   align-items: center;
   padding: 14px 18px;
-  border-top: 1px solid #edf1f5;
 }
 
 .team-row {
   grid-template-columns: minmax(160px, 1fr) auto minmax(260px, 0.9fr);
 }
 
+.team-row > .status-token,
+.invitation-row > .status-token,
+.team-person-row > .status-token,
+.team-skill-row > .status-token {
+  justify-self: start;
+}
+
 .invitation-row {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  border-top: 1px solid #edf1f5;
+}
+
+.invitation-row:first-child {
+  border-top: 0;
 }
 
 .team-row-main,
 .invitation-row span,
+.team-person-row span,
 .team-skill-row span {
   display: grid;
   min-width: 0;
@@ -1592,23 +1716,73 @@ button:focus-visible {
 
 .team-row-main strong,
 .invitation-row strong,
+.team-person-row strong,
 .team-skill-row strong {
   overflow: hidden;
   color: #172033;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .team-row-main small,
 .invitation-row small,
+.team-person-row small,
 .team-skill-row small {
   overflow: hidden;
   color: #64748b;
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.team-permission-note {
+  justify-self: end;
+  color: #64748b;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.team-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 18px 16px;
+}
+
+.team-detail-list {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #edf1f5;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.team-detail-list h3 {
+  margin: 0;
+  padding: 10px 12px;
+  color: #334155;
+  font-size: 12.5px;
+  font-weight: 700;
+  background: #f8fafc;
+}
+
+.team-person-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px 12px;
+  border-top: 1px solid #edf1f5;
+}
+
+.team-person-row > svg {
+  color: #64748b;
 }
 
 .team-skill-columns {
@@ -1650,6 +1824,21 @@ button:focus-visible {
   border-top: 1px solid #edf1f5;
   color: #64748b;
   font-size: 12.5px;
+}
+
+.teams-loading-list {
+  display: grid;
+  gap: 10px;
+  padding: 14px 18px 18px;
+}
+
+.teams-loading-list .loading-row {
+  height: 54px;
+  margin: 0;
+}
+
+.teams-loading-list .loading-row.short {
+  width: 72%;
 }
 
 .sharing-panel {
@@ -1696,7 +1885,7 @@ button:focus-visible {
   gap: 8px;
   color: #536174;
   font-size: 12.5px;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .grant-box {
@@ -1858,7 +2047,7 @@ button:focus-visible {
   border-radius: 7px;
   color: #11632d;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 700;
   background: #f0fbf3;
   white-space: nowrap;
 }
@@ -1928,7 +2117,7 @@ button:focus-visible {
   margin: 0;
   color: #26344a;
   font-size: 15px;
-  font-weight: 560;
+  font-weight: 600;
 }
 
 .mono {
@@ -1947,7 +2136,7 @@ button:focus-visible {
 .platform-select > span {
   color: #536174;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .platform-select div {
@@ -2060,7 +2249,7 @@ button:focus-visible {
   border: 1px solid #0f766e;
   border-radius: 7px;
   color: #ffffff;
-  font-weight: 650;
+  font-weight: 700;
   background: #0f766e;
 }
 
@@ -2157,16 +2346,6 @@ button:focus-visible {
     justify-items: start;
   }
 
-  .topbar {
-    grid-template-columns: 1fr;
-  }
-
-  .topbar-actions {
-    justify-self: start;
-    justify-content: flex-start;
-    width: 100%;
-  }
-
   .workspace {
     grid-template-columns: 1fr;
   }
@@ -2174,7 +2353,10 @@ button:focus-visible {
   .admin-grid,
   .review-layout,
   .submit-layout,
-  .provider-layout {
+  .provider-layout,
+  .teams-layout,
+  .team-detail-grid,
+  .team-skill-columns {
     grid-template-columns: 1fr;
   }
 
@@ -2243,10 +2425,6 @@ button:focus-visible {
     min-height: auto;
   }
 
-  .topbar {
-    padding: 14px;
-  }
-
   .brand {
     font-size: 19px;
   }
@@ -2269,27 +2447,6 @@ button:focus-visible {
 
   .admin-hero button {
     width: 100%;
-  }
-
-  .topbar-actions {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-    align-items: stretch;
-    justify-content: stretch;
-    width: 100%;
-  }
-
-  .topbar-actions .admin-nav {
-    justify-content: center;
-    width: auto;
-    min-height: 40px;
-    padding: 0 8px;
-  }
-
-  .topbar-actions .auth-widget.signed-in,
-  .topbar-actions .auth-form {
-    grid-column: 1 / -1;
   }
 
   .auth-form {
@@ -2434,13 +2591,6 @@ button:focus-visible {
     position: static;
     justify-self: start;
   }
-}
-
-@media (max-width: 420px) {
-  .topbar-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2591,7 +2741,7 @@ code {
 .landing-section-heading > span {
   color: var(--terracotta-dark);
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 800;
   letter-spacing: 0;
   text-transform: none;
 }
@@ -2660,7 +2810,7 @@ code {
   border-radius: 7px;
   color: var(--muted);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .preview-rail .active {
@@ -2794,7 +2944,7 @@ code {
   gap: 11px;
   color: var(--ink);
   font-size: 20px;
-  font-weight: 760;
+  font-weight: 800;
   letter-spacing: 0;
 }
 
@@ -2838,7 +2988,7 @@ code {
   width: 100%;
   border: 1px solid transparent;
   color: #475569;
-  font-weight: 680;
+  font-weight: 700;
   background: transparent;
 }
 
@@ -2877,7 +3027,7 @@ code {
 .sidebar-note span {
   color: var(--muted);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .sidebar-note strong {
@@ -2966,36 +3116,13 @@ code {
   align-items: center;
   gap: 9px;
   color: var(--ink);
-  font-weight: 760;
+  font-weight: 800;
   text-decoration: none;
 }
 
 .mobile-brand img {
   width: 32px;
   height: 32px;
-}
-
-.page-heading {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.page-heading span {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 720;
-}
-
-.page-heading strong {
-  overflow: hidden;
-  margin: 0;
-  color: var(--ink);
-  font-size: 22px;
-  line-height: 1.15;
-  letter-spacing: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .global-search {
@@ -3328,11 +3455,6 @@ code {
   padding: 24px;
 }
 
-.workspace-actionbar {
-  display: flex;
-  justify-content: flex-end;
-}
-
 .admin-hero {
   padding: 0 0 18px;
   border: 0;
@@ -3376,7 +3498,7 @@ code {
   margin: 0 0 8px;
   color: var(--teal-dark);
   font-size: 12px;
-  font-weight: 760;
+  font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -3384,8 +3506,8 @@ code {
 .settings-hero h1 {
   margin: 0;
   color: var(--ink);
-  font-size: clamp(28px, 4vw, 44px);
-  line-height: 0.98;
+  font-size: 24px;
+  line-height: 1.15;
   letter-spacing: 0;
 }
 
@@ -3416,7 +3538,7 @@ code {
 .settings-metric span {
   color: var(--muted);
   font-size: 11px;
-  font-weight: 720;
+  font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -3623,7 +3745,7 @@ code {
   gap: 7px;
   color: var(--muted);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .settings-form label:not(.role-toggle) > span,
@@ -3631,7 +3753,7 @@ code {
 .scope-grid legend {
   color: var(--ink-soft);
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 800;
   letter-spacing: 0.02em;
 }
 
@@ -3786,7 +3908,7 @@ code {
 .token-row,
 .submission-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto minmax(130px, auto) minmax(130px, auto) auto;
+  grid-template-columns: minmax(180px, 1fr) auto auto minmax(130px, auto) auto auto;
   gap: 12px;
   align-items: center;
   min-width: 0;
@@ -3799,6 +3921,10 @@ code {
 .token-row:first-child,
 .submission-row:first-child {
   border-top: 0;
+}
+
+.token-row {
+  grid-template-columns: minmax(180px, 1fr) auto minmax(130px, auto) minmax(130px, auto) auto;
 }
 
 .admin-token-row {
@@ -3845,7 +3971,7 @@ code {
   border: 1px solid var(--danger);
   border-radius: 7px;
   color: #ffffff;
-  font-weight: 650;
+  font-weight: 700;
   background: var(--danger);
 }
 
@@ -3922,7 +4048,7 @@ code {
 .registration-posture span {
   color: var(--muted);
   font-size: 12px;
-  font-weight: 720;
+  font-weight: 800;
 }
 
 .registration-posture strong {
@@ -4060,7 +4186,10 @@ code {
   .review-layout,
   .submit-layout,
   .provider-layout,
-  .settings-layout {
+  .settings-layout,
+  .teams-layout,
+  .team-detail-grid,
+  .team-skill-columns {
     grid-template-columns: 1fr;
   }
 
@@ -4075,6 +4204,29 @@ code {
 
   .detail-panel {
     border-left: 1px solid var(--line);
+  }
+}
+
+@media (max-width: 1280px) {
+  .workspace,
+  .admin-grid,
+  .review-layout,
+  .submit-layout,
+  .provider-layout,
+  .settings-layout,
+  .teams-layout,
+  .team-detail-grid,
+  .team-skill-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-overview {
+    position: static;
+  }
+
+  .admin-panel:nth-child(2),
+  .admin-panel:nth-child(3) {
+    grid-column: auto;
   }
 }
 
@@ -4106,13 +4258,26 @@ code {
     display: inline-flex;
   }
 
-  .page-heading {
-    display: none;
-  }
-
   .global-search {
     grid-column: 1 / -1;
     grid-row: 2;
+  }
+
+  .teams-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-table-row,
+  .admin-table-head {
+    min-width: 0;
+  }
+
+  .admin-table-head {
+    display: none;
+  }
+
+  .admin-table-row {
+    grid-template-columns: 1fr;
   }
 
   .mobile-nav {
@@ -4363,9 +4528,16 @@ code {
 
   .teams-layout,
   .team-row,
+  .team-detail-grid,
+  .invitation-row,
   .team-skill-columns,
   .sharing-editor {
     grid-template-columns: 1fr;
+  }
+
+  .team-permission-note {
+    justify-self: start;
+    text-align: left;
   }
 
   .sharing-panel-head {

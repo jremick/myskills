@@ -31,6 +31,7 @@ export interface StoredSubmission {
   summary: string;
   version: string;
   visibility: VisibilityScope;
+  lifecycleStatus: SkillLifecycleStatus;
   platforms: SkillPlatformVariant[];
   reviewStatus: ReviewStatus;
   securityStatus: SecurityStatus;
@@ -49,7 +50,17 @@ export interface StoredSubmission {
   };
 }
 
-export type ReviewAction = "approve" | "publish";
+export type ReviewAction = "approve" | "request-changes" | "reject" | "publish";
+export type SubmissionOwnerAction = "withdraw";
+export type ReleaseLifecycleAction = "deprecate" | "unpublish" | "revoke" | "restore" | "delete";
+export type SkillLifecycleAction = "archive" | "restore" | "delete";
+
+export interface SkillMetadataUpdate {
+  title?: string;
+  summary?: string;
+  visibility?: VisibilityScope;
+  tags?: string[];
+}
 
 export interface ReviewSubmissionSummary {
   id: string;
@@ -57,11 +68,13 @@ export interface ReviewSubmissionSummary {
   title: string;
   version: string;
   visibility: VisibilityScope;
+  lifecycleStatus: SkillLifecycleStatus;
   reviewStatus: ReviewStatus;
   securityStatus: SecurityStatus;
   platforms: SkillPlatformVariant[];
   findingCount: number;
   createdAt: string;
+  allowedActions: ReviewAction[];
 }
 
 export interface ReviewActionResult {
@@ -82,6 +95,7 @@ export interface UserSubmissionSummary {
   summary: string;
   version: string;
   visibility: VisibilityScope;
+  lifecycleStatus: SkillLifecycleStatus;
   reviewStatus: ReviewStatus;
   securityStatus: SecurityStatus;
   platforms: SkillPlatformVariant[];
@@ -93,6 +107,7 @@ export interface UserSubmissionSummary {
   };
   createdAt: string;
   publishedAt: string | null;
+  allowedActions: Array<"export" | SubmissionOwnerAction>;
 }
 
 export interface PublicReleaseMetadata {
@@ -100,6 +115,7 @@ export interface PublicReleaseMetadata {
   title: string;
   summary: string;
   version: string;
+  lifecycleStatus: Extract<SkillLifecycleStatus, "approved" | "deprecated">;
   reviewStatus: "approved";
   securityStatus: "passed";
   publishedAt: string;
@@ -109,6 +125,29 @@ export interface PublicReleaseMetadata {
     byteSize: number;
     contentType: string;
   };
+}
+
+export interface SkillManagementSummary {
+  slug: string;
+  title: string;
+  summary: string;
+  lifecycleStatus: SkillLifecycleStatus;
+  visibility: VisibilityScope;
+  tags: string[];
+  allowedActions: Array<"edit" | SkillLifecycleAction>;
+}
+
+export interface SkillReleaseSummary {
+  id: string;
+  slug: string;
+  version: string;
+  lifecycleStatus: SkillLifecycleStatus;
+  reviewStatus: ReviewStatus;
+  securityStatus: SecurityStatus;
+  publishedAt: string | null;
+  platforms: SkillPlatformVariant[];
+  findingCount: number;
+  allowedActions: ReleaseLifecycleAction[];
 }
 
 export interface PublicBundle extends PublicReleaseMetadata {
@@ -127,9 +166,17 @@ export interface SubmissionStore {
   }): Promise<StoredSubmission>;
   listUserSubmissions(userId: string): Promise<UserSubmissionSummary[]>;
   getUserSubmissionBundle(input: { userId: string; submissionId: string; platform?: string }): Promise<UserSubmissionBundle | null>;
+  performSubmissionOwnerAction(input: { actorId: string; submissionId: string; action: SubmissionOwnerAction; reason?: string }): Promise<UserSubmissionSummary>;
   listReviewSubmissions(): Promise<ReviewSubmissionSummary[]>;
   approveSubmission(input: { actorId: string; submissionId: string; reason?: string }): Promise<ReviewActionResult>;
+  requestChanges(input: { actorId: string; submissionId: string; reason?: string }): Promise<ReviewActionResult>;
+  rejectSubmission(input: { actorId: string; submissionId: string; reason?: string }): Promise<ReviewActionResult>;
   publishSubmission(input: { actorId: string; submissionId: string; reason?: string }): Promise<ReviewActionResult>;
+  getSkillManagement(input: { slug: string; actor: SubmissionActor }): Promise<SkillManagementSummary | null>;
+  updateSkillMetadata(input: { slug: string; actor: SubmissionActor; update: SkillMetadataUpdate; reason?: string }): Promise<SkillManagementSummary>;
+  performSkillAction(input: { slug: string; actor: SubmissionActor; action: SkillLifecycleAction; reason?: string }): Promise<SkillManagementSummary>;
+  listSkillReleases(input: { slug: string; actor?: SubmissionActor | null }): Promise<SkillReleaseSummary[]>;
+  performReleaseAction(input: { slug: string; version: string; actor: SubmissionActor; action: ReleaseLifecycleAction; reason?: string; replacement?: string }): Promise<SkillReleaseSummary>;
   recordReviewDenied(input: {
     actorId: string;
     action: string;

@@ -1,7 +1,7 @@
 # Product Brief
 
-Version: 0.1.0
-Last updated: 2026-06-04
+Version: 0.1.1
+Last updated: 2026-06-18
 
 ## Intent
 
@@ -12,7 +12,7 @@ The product should feel like a real software registry, not a folder browser:
 - skills have owners, semantic versions, lifecycle states, compatibility data, validation evidence, eval evidence, and security status
 - users can discover and install only what they are authorized to use
 - contributors can submit packages without needing write access to backend storage
-- maintainers can review, approve, deprecate, revoke, and audit skills
+- maintainers can review, request changes, reject, approve, publish, deprecate, unpublish, revoke, and audit skills
 - API, web, CLI, and MCP surfaces use the same backend decisions
 
 ## Primary Users
@@ -28,7 +28,7 @@ The product should feel like a real software registry, not a folder browser:
 ### Registry
 
 - Skill search, browse, detail, and related-skill discovery.
-- Lifecycle states: draft, private, submitted, review, approved, deprecated, revoked, archived.
+- Lifecycle states: draft, private, submitted, review, approved, deprecated, unpublished, revoked, archived.
 - Visibility scopes: public, authenticated users, organization, team/group, private owner, explicit users.
 - Package artifact storage and immutable release snapshots.
 
@@ -37,7 +37,7 @@ The product should feel like a real software registry, not a folder browser:
 - Semantic skill versions with unique release records per skill.
 - Versioned skill packages with manifest, readme, payload files, examples, changelog, and platform adapters.
 - Immutable artifact checksums and release metadata for each approved version.
-- Install, update, rollback, deprecate, and revoke workflows that operate on specific skill versions.
+- Install, update, rollback, deprecate, unpublish, restore, revoke, and delete workflows that operate on specific skill versions.
 
 ### Evals
 
@@ -48,7 +48,9 @@ The product should feel like a real software registry, not a folder browser:
 ### Review And Governance
 
 - Submission queue with automated validation and security scan results.
-- Maintainer review states and required reasons for approval, rejection, requested changes, deprecation, revocation, and deletion.
+- Author controls for listing submitted versions, exporting owned submissions, and withdrawing unreviewed or changes-requested submissions.
+- Maintainer review states and required reasons for approval, rejection, requested changes, deprecation, unpublication, revocation, and deletion.
+- Owner/admin controls for mutable skill metadata, skill archive/restore/delete, and release lifecycle state without mutating immutable package artifacts.
 - Admin analytics for adoption, downloads, installs, submissions, review time, failures, and stale packages.
 - Audit events for auth, authorization, package access, moderation, admin actions, and MCP tool calls.
 
@@ -73,7 +75,7 @@ The product should feel like a real software registry, not a folder browser:
 - Init, validate, scan, package, submit.
 - Search, info, install, export, list, update, rollback.
 - Private workspace commands for draft packages.
-- Admin and maintainer commands for queue inspection and reports.
+- Admin and maintainer commands for queue inspection, metadata updates, and lifecycle controls.
 
 ### MCP
 

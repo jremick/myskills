@@ -33,7 +33,15 @@ import type {
   UpsertProviderConfigRequest,
   VerifyMfaChallengeInput,
 } from "./auth/service.js";
-import type { ReviewAction, StoredSubmission, SubmissionActor } from "./submissions/types.js";
+import type {
+  ReleaseLifecycleAction,
+  ReviewAction,
+  SkillLifecycleAction,
+  SkillMetadataUpdate,
+  StoredSubmission,
+  SubmissionActor,
+  SubmissionOwnerAction,
+} from "./submissions/types.js";
 import type { SubmissionService } from "./submissions/service.js";
 import type { TeamService } from "./teams/service.js";
 
@@ -109,6 +117,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       export: Boolean(options.submissionService),
       install: Boolean(options.submissionService),
       review: Boolean(options.authService && options.submissionService),
+      lifecycle: Boolean(options.authService && options.submissionService),
       tokens: Boolean(options.authService),
       teams: Boolean(options.authService && options.teamService),
       sharing: Boolean(options.authService),
@@ -124,6 +133,19 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       actorId: user?.id ?? null,
     });
     return { skills };
+  });
+
+  app.get("/v1/skills/:slug/releases", async (request) => {
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const actor = await authenticateOptionalActor(options.authService, request.headers.authorization, "skills:read");
+    return {
+      releases: await options.submissionService.listSkillReleases({
+        slug: parseSlugParam(request.params),
+        actor,
+      }),
+    };
   });
 
   app.get("/v1/skills/:slug/releases/:version", async (request, reply) => {
@@ -185,6 +207,82 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       });
     }
     return { skill };
+  });
+
+  app.put("/v1/skills/:slug", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const actor = await authenticateActor(options.authService, request.headers.authorization, "review:write", { mfaRequired: true });
+    if (!actor) {
+      return reply.code(401).send({
+        error: {
+          code: "AUTHENTICATION_REQUIRED",
+          message: "Authentication is required.",
+        },
+      });
+    }
+    return {
+      skill: await options.submissionService.updateSkillMetadata({
+        actor,
+        slug: parseSlugParam(request.params),
+        ...parseSkillMetadataUpdateInput(request.body),
+      }),
+    };
+  });
+
+  app.post("/v1/skills/:slug/actions", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const actor = await authenticateActor(options.authService, request.headers.authorization, "review:write", { mfaRequired: true });
+    if (!actor) {
+      return reply.code(401).send({
+        error: {
+          code: "AUTHENTICATION_REQUIRED",
+          message: "Authentication is required.",
+        },
+      });
+    }
+    return {
+      skill: await options.submissionService.performSkillAction({
+        actor,
+        slug: parseSlugParam(request.params),
+        ...parseSkillLifecycleActionInput(request.body),
+      }),
+    };
+  });
+
+  app.post("/v1/skills/:slug/releases/:version/actions", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const actor = await authenticateActor(options.authService, request.headers.authorization, "review:write", { mfaRequired: true });
+    if (!actor) {
+      return reply.code(401).send({
+        error: {
+          code: "AUTHENTICATION_REQUIRED",
+          message: "Authentication is required.",
+        },
+      });
+    }
+    const params = parseReleaseParams(request.params);
+    return {
+      release: await options.submissionService.performReleaseAction({
+        actor,
+        ...params,
+        ...parseReleaseLifecycleActionInput(request.body),
+      }),
+    };
   });
 
   app.get("/v1/skills/:slug/sharing", async (request, reply) => {
@@ -824,6 +922,31 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       .send(bundle.payload);
   });
 
+  app.post("/v1/submissions/:id/actions", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const actor = await authenticateActor(options.authService, request.headers.authorization, "skills:submit", { mfaRequired: true });
+    if (!actor) {
+      return reply.code(401).send({
+        error: {
+          code: "AUTHENTICATION_REQUIRED",
+          message: "Authentication is required.",
+        },
+      });
+    }
+    return {
+      submission: await options.submissionService.performSubmissionOwnerAction({
+        actor,
+        submissionId: parseSubmissionIdParam(request.params),
+        ...parseSubmissionOwnerActionInput(request.body),
+      }),
+    };
+  });
+
   app.post("/v1/submissions", async (request, reply) => {
     if (!options.authService) {
       throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
@@ -910,6 +1033,25 @@ async function authenticateActor(
   if (options.mfaRequired && requiresMfaForRole(context) && !context.user.mfaVerified) {
     throw new AppError("MFA verification is required.", "MFA_VERIFICATION_REQUIRED", 403);
   }
+  return {
+    id: context.user.id,
+    roles: context.user.roles,
+  };
+}
+
+async function authenticateOptionalActor(
+  authService: AuthService | undefined,
+  authorization: string | undefined,
+  scope: ApiTokenScope,
+): Promise<SubmissionActor | null> {
+  if (!authService || !hasBearerAuthorization(authorization)) {
+    return null;
+  }
+  const context = await authService.authenticateRequest(authorization);
+  if (!context) {
+    return null;
+  }
+  requireScope(context, scope);
   return {
     id: context.user.id,
     roles: context.user.roles,
@@ -1118,6 +1260,67 @@ function parseUpdateSkillSharingInput(input: unknown): {
     visibility: parseVisibilityScope(body.visibility),
     teamIds: parseStringArray(body.teamIds, "teamIds"),
     userEmails: parseStringArray(body.userEmails, "userEmails"),
+  };
+}
+
+function parseSkillMetadataUpdateInput(input: unknown): { update: SkillMetadataUpdate; reason?: string } {
+  const body = parseJsonObject(input);
+  const update: SkillMetadataUpdate = {};
+  if ("title" in body) {
+    update.title = requiredString(body.title, "title").trim();
+  }
+  if ("summary" in body) {
+    update.summary = requiredString(body.summary, "summary").trim();
+  }
+  if ("visibility" in body) {
+    update.visibility = parseVisibilityScope(body.visibility);
+  }
+  if ("tags" in body) {
+    update.tags = parseStringArray(body.tags, "tags").map((tag) => tag.trim()).filter(Boolean);
+  }
+  if (Object.keys(update).length === 0) {
+    throw new AppError("At least one skill metadata field is required.", "SKILL_METADATA_UPDATE_REQUIRED", 400);
+  }
+  return {
+    update,
+    reason: optionalString(body.reason, "reason"),
+  };
+}
+
+function parseSubmissionOwnerActionInput(input: unknown): { action: SubmissionOwnerAction; reason?: string } {
+  const body = parseJsonObject(input);
+  const action = requiredString(body.action, "action");
+  if (action !== "withdraw") {
+    throw new AppError("Unsupported submission action.", "INVALID_SUBMISSION_ACTION", 400);
+  }
+  return {
+    action,
+    reason: optionalString(body.reason, "reason"),
+  };
+}
+
+function parseSkillLifecycleActionInput(input: unknown): { action: SkillLifecycleAction; reason?: string } {
+  const body = parseJsonObject(input);
+  const action = requiredString(body.action, "action");
+  if (action !== "archive" && action !== "restore" && action !== "delete") {
+    throw new AppError("Unsupported skill action.", "INVALID_SKILL_ACTION", 400);
+  }
+  return {
+    action,
+    reason: optionalString(body.reason, "reason"),
+  };
+}
+
+function parseReleaseLifecycleActionInput(input: unknown): { action: ReleaseLifecycleAction; reason?: string; replacement?: string } {
+  const body = parseJsonObject(input);
+  const action = requiredString(body.action, "action");
+  if (action !== "deprecate" && action !== "unpublish" && action !== "revoke" && action !== "restore" && action !== "delete") {
+    throw new AppError("Unsupported release action.", "INVALID_RELEASE_ACTION", 400);
+  }
+  return {
+    action,
+    reason: optionalString(body.reason, "reason"),
+    replacement: optionalString(body.replacement, "replacement"),
   };
 }
 
@@ -1349,7 +1552,7 @@ function submissionResponse(submission: StoredSubmission) {
 function parseReviewActionInput(input: unknown): { action: ReviewAction; reason?: string } {
   const body = parseJsonObject(input);
   const action = requiredString(body.action, "action");
-  if (action !== "approve" && action !== "publish") {
+  if (action !== "approve" && action !== "request-changes" && action !== "reject" && action !== "publish") {
     throw new AppError("Unsupported review action.", "INVALID_REVIEW_ACTION", 400);
   }
   return {

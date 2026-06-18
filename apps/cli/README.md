@@ -49,7 +49,13 @@ myskills config reset api-url
 myskills config list
 myskills submit --path <file-directory-or-zip> [--api-url <url>] [--token <token>]
 myskills review submissions [--api-url <url>] [--token <token>]
-myskills review action <submission-id> --action <approve|publish> [--reason <text>]
+myskills review action <submission-id> --action <approve|request-changes|reject|publish> [--reason <text>] [--api-url <url>] [--token <token>]
+myskills submissions list [--api-url <url>] [--token <token>]
+myskills submissions withdraw <submission-id> [--reason <text>] [--api-url <url>] [--token <token>]
+myskills skills edit <skill-slug> [--title <text>] [--summary <text>] [--visibility <scope>] [--tag <tag>] [--reason <text>] [--api-url <url>] [--token <token>]
+myskills skills archive|restore|delete <skill-slug> [--reason <text>] [--api-url <url>] [--token <token>]
+myskills releases list <skill-slug> [--api-url <url>] [--token <token>]
+myskills releases deprecate|unpublish|revoke|restore|delete <skill-slug>@<version> [--reason <text>] [--replacement <version>] [--api-url <url>] [--token <token>]
 myskills teams list|skills [--api-url <url>] [--token <token>]
 myskills teams create <team-name> [--name <team-name>] [--api-url <url>] [--token <token>]
 myskills teams invite <team-id> --email <email> [--api-url <url>] [--token <token>]
@@ -90,7 +96,9 @@ npm install -g @jarel/myskills@alpha
 
 `config get api-url`, `config set api-url <url>`, `config reset api-url`, and `config list` manage the saved API URL. `doctor` checks the CLI version, Node version, resolved API URL, `/health`, auth status, token-store backend, install-directory writability, and `/v1/capabilities`. If the CLI is pointed at the web app instead of the API, or a newer command is sent to an older server, command errors include concrete next steps and `--json` returns structured error codes.
 
-`submit` validates and scans locally before sending package directories as normalized text entries or `.zip` packages as base64 archive uploads for server-side extraction. `export` downloads server-authorized bundle content, verifies byte size and SHA-256 against release metadata, and writes normalized package paths under the requested output directory. `install` uses the same verified bundle path, writes into `--dir`, `MYSKILLS_INSTALL_DIR`, or the user data directory, and records local state in `.myskills-app/installed.json`; `update` preserves a rollback snapshot before replacing files, and `rollback` restores the most recent snapshot. `token create` prints the plaintext API token only once and does not overwrite the stored login session. Browser/device login, platform-specific install adapters, and archive creation are still planned.
+`submit` validates and scans locally before sending package directories as normalized text entries or `.zip` packages as base64 archive uploads for server-side extraction. Authors can inspect their submitted versions with `submissions list` and withdraw unreviewed or changes-requested submissions with `submissions withdraw`. Maintainers can approve, request changes, reject, and publish submitted versions through `review action`.
+
+Published artifacts remain immutable. `skills edit` changes mutable skill metadata only, while `releases deprecate`, `releases unpublish`, `releases revoke`, `releases restore`, and `releases delete` update server-owned lifecycle state for a specific version. Deprecated releases remain visible and installable; unpublished, revoked, archived, and deleted releases are hidden from install/export queries. `export` downloads server-authorized bundle content, verifies byte size and SHA-256 against release metadata, and writes normalized package paths under the requested output directory. `install` uses the same verified bundle path, writes into `--dir`, `MYSKILLS_INSTALL_DIR`, or the user data directory, and records local state in `.myskills-app/installed.json`; `update` preserves a rollback snapshot before replacing files, and `rollback` restores the most recent snapshot. `token create` prints the plaintext API token only once and does not overwrite the stored login session. Browser/device login, platform-specific install adapters, and archive creation are still planned.
 
 Common scopes:
 

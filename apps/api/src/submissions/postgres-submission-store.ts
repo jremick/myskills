@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
-import { AppError, type SharingSettings } from "@myskills-app/core";
+import { AppError, type SharingSettings, type SkillLifecycleStatus } from "@myskills-app/core";
 import {
   loadSkillManifestFromPackageFiles,
   PackageManifestFileError,
@@ -26,9 +26,16 @@ import type {
   CreateSubmissionInput,
   PublicBundle,
   PublicReleaseMetadata,
+  ReleaseLifecycleAction,
   ReviewActionResult,
   ReviewSubmissionSummary,
+  SkillLifecycleAction,
+  SkillManagementSummary,
+  SkillMetadataUpdate,
+  SkillReleaseSummary,
   StoredSubmission,
+  SubmissionActor,
+  SubmissionOwnerAction,
   SubmissionStore,
   UserSubmissionBundle,
   UserSubmissionSummary,
@@ -104,6 +111,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
       const [version] = await tx.insert(skillVersions).values({
         skillId: skill.id,
         version: input.manifest.version,
+        lifecycleStatus: "submitted",
         reviewStatus: "unreviewed",
         securityStatus: input.securityStatus,
       }).returning();
@@ -182,6 +190,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
         summary: skill.summary,
         version: version.version,
         visibility: skill.visibility,
+        lifecycleStatus: version.lifecycleStatus,
         platforms: input.manifest.platforms.map((platform) => ({
           name: platform.name,
           installTarget: platform.install_target,
@@ -229,6 +238,52 @@ export class PostgresSubmissionStore implements SubmissionStore {
     };
   }
 
+  async performSubmissionOwnerAction(input: { actorId: string; submissionId: string; action: SubmissionOwnerAction; reason?: string }): Promise<UserSubmissionSummary> {
+    if (input.action !== "withdraw") {
+      throw new AppError("Unsupported submission action.", "INVALID_SUBMISSION_ACTION", 400);
+    }
+    if (!isUuid(input.submissionId)) {
+      await this.insertReviewAudit("submission.withdraw", "deny", input.actorId, input.submissionId, {
+        reason: "missing_submission",
+      });
+      throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+    }
+    return this.db.transaction(async (tx) => {
+      const [row] = await selectUserSubmissions(tx, input.actorId, input.submissionId);
+      if (!row) {
+        await this.insertReviewAudit("submission.withdraw", "deny", input.actorId, input.submissionId, {
+          reason: "not_owner_or_missing",
+        }, tx);
+        throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+      }
+      if (!submissionAllowedActions(row).includes("withdraw")) {
+        await this.insertReviewAudit("submission.withdraw", "deny", input.actorId, input.submissionId, {
+          slug: row.slug,
+          version: row.version,
+          reason: "not_withdrawable",
+        }, tx);
+        throw new AppError("Submission cannot be withdrawn.", "SUBMISSION_NOT_WITHDRAWABLE", 409);
+      }
+      const now = new Date();
+      const [updated] = await tx.update(skillVersions).set({
+        reviewStatus: "rejected",
+        lifecycleStatus: "archived",
+        lifecycleReason: input.reason ?? "",
+        lifecycleUpdatedAt: now,
+        deletedAt: now,
+      }).where(eq(skillVersions.id, input.submissionId)).returning();
+      if (!updated) {
+        throw new Error("Submission withdrawal failed.");
+      }
+      await this.insertReviewAudit("submission.withdraw", "allow", input.actorId, input.submissionId, {
+        slug: row.slug,
+        version: row.version,
+        reason: input.reason,
+      }, tx);
+      return userSubmissionSummary({ ...row, reviewStatus: updated.reviewStatus, lifecycleStatus: updated.lifecycleStatus });
+    });
+  }
+
   async listReviewSubmissions(): Promise<ReviewSubmissionSummary[]> {
     const rows = await this.db
       .select({
@@ -237,6 +292,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
         title: skills.title,
         version: skillVersions.version,
         visibility: skills.visibility,
+        lifecycleStatus: skillVersions.lifecycleStatus,
         reviewStatus: skillVersions.reviewStatus,
         securityStatus: skillVersions.securityStatus,
         platforms: sql<ReviewSubmissionSummary["platforms"]>`
@@ -270,6 +326,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
         skills.title,
         skillVersions.version,
         skills.visibility,
+        skillVersions.lifecycleStatus,
         skillVersions.reviewStatus,
         skillVersions.securityStatus,
         skillVersions.createdAt,
@@ -280,6 +337,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
     return rows.map((row) => ({
       ...row,
       createdAt: row.createdAt.toISOString(),
+      allowedActions: reviewAllowedActions(row),
     }));
   }
 
@@ -318,6 +376,8 @@ export class PostgresSubmissionStore implements SubmissionStore {
 
       const [updatedVersion] = await tx.update(skillVersions).set({
         reviewStatus: "approved",
+        lifecycleStatus: "review",
+        lifecycleUpdatedAt: new Date(),
       }).where(eq(skillVersions.id, input.submissionId)).returning();
       if (!updatedVersion) {
         throw new Error("Submission approval failed.");
@@ -334,11 +394,96 @@ export class PostgresSubmissionStore implements SubmissionStore {
         slug: row.slug,
         version: updatedVersion.version,
         visibility: row.visibility,
-        lifecycleStatus: row.lifecycleStatus,
+        lifecycleStatus: updatedVersion.lifecycleStatus,
         reviewStatus: updatedVersion.reviewStatus,
         securityStatus: updatedVersion.securityStatus,
         publishedAt: updatedVersion.publishedAt?.toISOString() ?? null,
       };
+    });
+  }
+
+  async requestChanges(input: { actorId: string; submissionId: string; reason?: string }): Promise<ReviewActionResult> {
+    if (!isUuid(input.submissionId)) {
+      await this.insertReviewAudit("review.request_changes", "deny", input.actorId, input.submissionId, {
+        reason: "missing_submission",
+      });
+      throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+    }
+
+    return this.db.transaction(async (tx) => {
+      const row = await selectVersionForReview(tx, input.submissionId);
+      if (!row) {
+        await this.insertReviewAudit("review.request_changes", "deny", input.actorId, input.submissionId, {
+          reason: "missing_submission",
+        }, tx);
+        throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+      }
+      if (!["unreviewed", "changes-requested"].includes(row.reviewStatus)) {
+        await this.insertReviewAudit("review.request_changes", "deny", input.actorId, input.submissionId, {
+          slug: row.slug,
+          version: row.version,
+          reason: "not_reviewable",
+        }, tx);
+        throw new AppError("Submission is not reviewable.", "SUBMISSION_NOT_REVIEWABLE", 409);
+      }
+      const [updatedVersion] = await tx.update(skillVersions).set({
+        reviewStatus: "changes-requested",
+        lifecycleStatus: "review",
+        lifecycleReason: input.reason ?? "",
+        lifecycleUpdatedAt: new Date(),
+      }).where(eq(skillVersions.id, input.submissionId)).returning();
+      if (!updatedVersion) {
+        throw new Error("Submission review update failed.");
+      }
+      await this.insertReviewAudit("review.request_changes", "allow", input.actorId, input.submissionId, {
+        slug: row.slug,
+        version: row.version,
+        reason: input.reason,
+      }, tx);
+      return reviewResultFromVersion(row, updatedVersion);
+    });
+  }
+
+  async rejectSubmission(input: { actorId: string; submissionId: string; reason?: string }): Promise<ReviewActionResult> {
+    if (!isUuid(input.submissionId)) {
+      await this.insertReviewAudit("review.reject", "deny", input.actorId, input.submissionId, {
+        reason: "missing_submission",
+      });
+      throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+    }
+
+    return this.db.transaction(async (tx) => {
+      const row = await selectVersionForReview(tx, input.submissionId);
+      if (!row) {
+        await this.insertReviewAudit("review.reject", "deny", input.actorId, input.submissionId, {
+          reason: "missing_submission",
+        }, tx);
+        throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+      }
+      if (!["unreviewed", "changes-requested"].includes(row.reviewStatus)) {
+        await this.insertReviewAudit("review.reject", "deny", input.actorId, input.submissionId, {
+          slug: row.slug,
+          version: row.version,
+          reason: "not_reviewable",
+        }, tx);
+        throw new AppError("Submission is not reviewable.", "SUBMISSION_NOT_REVIEWABLE", 409);
+      }
+      const [updatedVersion] = await tx.update(skillVersions).set({
+        reviewStatus: "rejected",
+        lifecycleStatus: "archived",
+        lifecycleReason: input.reason ?? "",
+        lifecycleUpdatedAt: new Date(),
+        deletedAt: new Date(),
+      }).where(eq(skillVersions.id, input.submissionId)).returning();
+      if (!updatedVersion) {
+        throw new Error("Submission rejection failed.");
+      }
+      await this.insertReviewAudit("review.reject", "allow", input.actorId, input.submissionId, {
+        slug: row.slug,
+        version: row.version,
+        reason: input.reason,
+      }, tx);
+      return reviewResultFromVersion(row, updatedVersion);
     });
   }
 
@@ -440,6 +585,10 @@ export class PostgresSubmissionStore implements SubmissionStore {
       const now = new Date();
       const [updatedVersion] = await tx.update(skillVersions).set({
         publishedAt: now,
+        lifecycleStatus: "approved",
+        lifecycleReason: input.reason ?? "",
+        lifecycleUpdatedAt: now,
+        deletedAt: null,
       }).where(eq(skillVersions.id, input.submissionId)).returning();
       if (!updatedVersion) {
         throw new Error("Submission publication failed.");
@@ -448,7 +597,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
         title: manifest.title,
         summary: manifest.summary,
         visibility: manifest.visibility,
-        lifecycleStatus: "approved",
+        lifecycleStatus: updatedVersion.lifecycleStatus,
         updatedAt: now,
       }).where(eq(skills.id, row.skillId));
 
@@ -468,6 +617,166 @@ export class PostgresSubmissionStore implements SubmissionStore {
         securityStatus: updatedVersion.securityStatus,
         publishedAt: updatedVersion.publishedAt?.toISOString() ?? null,
       };
+    });
+  }
+
+  async getSkillManagement(input: { slug: string; actor: SubmissionActor }): Promise<SkillManagementSummary | null> {
+    const skill = await findSkillForManagement(this.db, input.slug);
+    if (!skill) {
+      return null;
+    }
+    assertCanManageSkill(skill, input.actor);
+    return skillManagementSummary(this.db, skill);
+  }
+
+  async updateSkillMetadata(input: { slug: string; actor: SubmissionActor; update: SkillMetadataUpdate; reason?: string }): Promise<SkillManagementSummary> {
+    return this.db.transaction(async (tx) => {
+      const skill = await findSkillForManagement(tx, input.slug);
+      if (!skill) {
+        throw new AppError("Skill not found.", "SKILL_NOT_FOUND", 404);
+      }
+      assertCanManageSkill(skill, input.actor);
+      const update: Partial<typeof skills.$inferInsert> = { updatedAt: new Date() };
+      if (input.update.title !== undefined) {
+        update.title = input.update.title;
+      }
+      if (input.update.summary !== undefined) {
+        update.summary = input.update.summary;
+      }
+      if (input.update.visibility !== undefined) {
+        update.visibility = input.update.visibility;
+      }
+      await tx.update(skills).set(update).where(eq(skills.id, skill.id));
+      if (input.update.tags) {
+        await tx.delete(skillTags).where(eq(skillTags.skillId, skill.id));
+        if (input.update.tags.length > 0) {
+          await tx.insert(skillTags).values(uniqueStrings(input.update.tags).map((tag) => ({
+            skillId: skill.id,
+            tag,
+          }))).onConflictDoNothing();
+        }
+      }
+      await tx.insert(auditEvents).values({
+        actorUserId: input.actor.id,
+        action: "skill.metadata.update",
+        decision: "allow",
+        resourceType: "skill",
+        resourceId: skill.id,
+        details: sanitizeAuditDetails({
+          slug: input.slug,
+          fields: Object.keys(input.update),
+          reason: input.reason,
+        }),
+      });
+      const updatedSkill = await findSkillForManagement(tx, input.slug);
+      if (!updatedSkill) {
+        throw new Error("Skill metadata update failed.");
+      }
+      return skillManagementSummary(tx, updatedSkill);
+    });
+  }
+
+  async performSkillAction(input: { slug: string; actor: SubmissionActor; action: SkillLifecycleAction; reason?: string }): Promise<SkillManagementSummary> {
+    return this.db.transaction(async (tx) => {
+      const skill = await findSkillForManagement(tx, input.slug);
+      if (!skill) {
+        throw new AppError("Skill not found.", "SKILL_NOT_FOUND", 404);
+      }
+      assertCanManageSkill(skill, input.actor);
+      const lifecycleStatus = input.action === "restore"
+        ? await restoredSkillLifecycle(tx, skill.id)
+        : "archived";
+      await tx.update(skills).set({
+        lifecycleStatus,
+        updatedAt: new Date(),
+      }).where(eq(skills.id, skill.id));
+      await tx.insert(auditEvents).values({
+        actorUserId: input.actor.id,
+        action: `skill.${input.action}`,
+        decision: "allow",
+        resourceType: "skill",
+        resourceId: skill.id,
+        details: sanitizeAuditDetails({
+          slug: input.slug,
+          lifecycleStatus,
+          reason: input.reason,
+        }),
+      });
+      const updatedSkill = await findSkillForManagement(tx, input.slug);
+      if (!updatedSkill) {
+        throw new Error("Skill lifecycle update failed.");
+      }
+      return skillManagementSummary(tx, updatedSkill);
+    });
+  }
+
+  async listSkillReleases(input: { slug: string; actor?: SubmissionActor | null }): Promise<SkillReleaseSummary[]> {
+    const skill = await findSkillForManagement(this.db, input.slug);
+    if (!skill) {
+      return [];
+    }
+    const sharing = await getSharingSettings(this.db);
+    const canManage = Boolean(input.actor && canManageSkill(skill, input.actor));
+    const rows = await selectSkillReleaseRows(this.db, {
+      slug: input.slug,
+      where: canManage
+        ? eq(skills.slug, input.slug)
+        : and(
+            eq(skills.slug, input.slug),
+            visibleReleasePredicate(),
+            visibleToActorPredicate(input.actor?.id ?? null, sharing),
+          ),
+    });
+    return rows.map(releaseSummary);
+  }
+
+  async performReleaseAction(input: { slug: string; version: string; actor: SubmissionActor; action: ReleaseLifecycleAction; reason?: string; replacement?: string }): Promise<SkillReleaseSummary> {
+    return this.db.transaction(async (tx) => {
+      const skill = await findSkillForManagement(tx, input.slug);
+      if (!skill) {
+        throw new AppError("Release not found.", "RELEASE_NOT_FOUND", 404);
+      }
+      assertCanManageSkill(skill, input.actor);
+      const [row] = await selectSkillReleaseRows(tx, {
+        slug: input.slug,
+        where: and(eq(skills.slug, input.slug), eq(skillVersions.version, input.version)),
+        limit: 1,
+      });
+      if (!row) {
+        throw new AppError("Release not found.", "RELEASE_NOT_FOUND", 404);
+      }
+      const allowed = releaseAllowedActions(row);
+      if (!allowed.includes(input.action)) {
+        await this.insertReviewAudit(`release.${input.action}`, "deny", input.actor.id, row.id, {
+          slug: input.slug,
+          version: input.version,
+          reason: "action_not_allowed",
+        }, tx);
+        throw new AppError("Release action is not allowed.", "RELEASE_ACTION_NOT_ALLOWED", 409);
+      }
+      const now = new Date();
+      const lifecycleStatus = lifecycleForReleaseAction(input.action);
+      await tx.update(skillVersions).set({
+        lifecycleStatus,
+        lifecycleReason: input.reason ?? "",
+        lifecycleUpdatedAt: now,
+        deletedAt: input.action === "delete" ? now : null,
+      }).where(eq(skillVersions.id, row.id));
+      await this.insertReviewAudit(`release.${input.action}`, "allow", input.actor.id, row.id, {
+        slug: input.slug,
+        version: input.version,
+        replacement: input.replacement,
+        reason: input.reason,
+      }, tx);
+      const [updated] = await selectSkillReleaseRows(tx, {
+        slug: input.slug,
+        where: and(eq(skills.slug, input.slug), eq(skillVersions.version, input.version)),
+        limit: 1,
+      });
+      if (!updated) {
+        throw new Error("Release lifecycle update failed.");
+      }
+      return releaseSummary(updated);
     });
   }
 
@@ -589,6 +898,84 @@ export class PostgresSubmissionStore implements SubmissionStore {
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type DbLike = Database | Transaction;
 
+type ManagedSkillRow = NonNullable<Awaited<ReturnType<typeof findSkillForManagement>>>;
+
+async function findSkillForManagement(db: DbLike, slug: string) {
+  const [skill] = await db
+    .select({
+      id: skills.id,
+      slug: skills.slug,
+      title: skills.title,
+      summary: skills.summary,
+      lifecycleStatus: skills.lifecycleStatus,
+      visibility: skills.visibility,
+      ownerUserId: skills.ownerUserId,
+    })
+    .from(skills)
+    .where(eq(skills.slug, slug))
+    .limit(1);
+  return skill ?? null;
+}
+
+function canManageSkill(skill: { ownerUserId: string | null }, actor: SubmissionActor): boolean {
+  return skill.ownerUserId === actor.id || actor.roles.some((role) => role === "owner" || role === "admin" || role === "maintainer");
+}
+
+function assertCanManageSkill(skill: { ownerUserId: string | null }, actor: SubmissionActor): void {
+  if (!canManageSkill(skill, actor)) {
+    throw new AppError("Skill management requires owner or maintainer permissions.", "SKILL_MANAGEMENT_ROLE_REQUIRED", 403);
+  }
+}
+
+async function skillManagementSummary(db: DbLike, skill: ManagedSkillRow): Promise<SkillManagementSummary> {
+  const tags = await db
+    .select({ tag: skillTags.tag })
+    .from(skillTags)
+    .where(eq(skillTags.skillId, skill.id))
+    .orderBy(skillTags.tag);
+  return {
+    slug: skill.slug,
+    title: skill.title,
+    summary: skill.summary,
+    lifecycleStatus: skill.lifecycleStatus,
+    visibility: skill.visibility,
+    tags: tags.map((row) => row.tag),
+    allowedActions: ["edit", "archive", "restore", "delete"],
+  };
+}
+
+async function restoredSkillLifecycle(db: DbLike, skillId: string): Promise<SkillLifecycleStatus> {
+  const [visible] = await db
+    .select({ id: skillVersions.id })
+    .from(skillVersions)
+    .where(and(
+      eq(skillVersions.skillId, skillId),
+      inArray(skillVersions.lifecycleStatus, ["approved", "deprecated"]),
+      eq(skillVersions.reviewStatus, "approved"),
+      eq(skillVersions.securityStatus, "passed"),
+      isNotNull(skillVersions.publishedAt),
+      isNull(skillVersions.deletedAt),
+    ))
+    .limit(1);
+  if (visible) {
+    return "approved";
+  }
+  const [published] = await db
+    .select({ id: skillVersions.id })
+    .from(skillVersions)
+    .where(and(eq(skillVersions.skillId, skillId), isNotNull(skillVersions.publishedAt)))
+    .limit(1);
+  if (published) {
+    return "unpublished";
+  }
+  const [active] = await db
+    .select({ id: skillVersions.id })
+    .from(skillVersions)
+    .where(and(eq(skillVersions.skillId, skillId), sql`${skillVersions.reviewStatus} <> 'rejected'`))
+    .limit(1);
+  return active ? "submitted" : "archived";
+}
+
 async function selectUserSubmissions(db: DbLike, userId: string, submissionId?: string) {
   const where = submissionId
     ? and(eq(skills.ownerUserId, userId), eq(skillVersions.id, submissionId))
@@ -601,6 +988,7 @@ async function selectUserSubmissions(db: DbLike, userId: string, submissionId?: 
       summary: skills.summary,
       version: skillVersions.version,
       visibility: skills.visibility,
+      lifecycleStatus: skillVersions.lifecycleStatus,
       reviewStatus: skillVersions.reviewStatus,
       securityStatus: skillVersions.securityStatus,
       publishedAt: skillVersions.publishedAt,
@@ -638,6 +1026,7 @@ async function selectUserSubmissions(db: DbLike, userId: string, submissionId?: 
       skills.summary,
       skillVersions.version,
       skills.visibility,
+      skillVersions.lifecycleStatus,
       skillVersions.reviewStatus,
       skillVersions.securityStatus,
       skillVersions.publishedAt,
@@ -662,6 +1051,7 @@ function userSubmissionSummary(row: UserSubmissionRow): UserSubmissionSummary {
     summary: row.summary,
     version: row.version,
     visibility: row.visibility,
+    lifecycleStatus: row.lifecycleStatus,
     reviewStatus: row.reviewStatus,
     securityStatus: row.securityStatus,
     platforms: row.platforms,
@@ -673,7 +1063,149 @@ function userSubmissionSummary(row: UserSubmissionRow): UserSubmissionSummary {
     },
     createdAt: row.createdAt.toISOString(),
     publishedAt: row.publishedAt?.toISOString() ?? null,
+    allowedActions: submissionAllowedActions(row),
   };
+}
+
+async function selectSkillReleaseRows(
+  db: DbLike,
+  input: { slug: string; where: SQL | undefined; limit?: number },
+) {
+  return db
+    .select({
+      id: skillVersions.id,
+      slug: skills.slug,
+      version: skillVersions.version,
+      lifecycleStatus: skillVersions.lifecycleStatus,
+      reviewStatus: skillVersions.reviewStatus,
+      securityStatus: skillVersions.securityStatus,
+      publishedAt: skillVersions.publishedAt,
+      createdAt: skillVersions.createdAt,
+      platforms: sql<ReviewSubmissionSummary["platforms"]>`
+        coalesce(
+          json_agg(
+            distinct jsonb_build_object(
+              'name', ${skillPlatformVariants.name},
+              'installTarget', ${skillPlatformVariants.installTarget},
+              'status', ${skillPlatformVariants.status}
+            )
+          ) filter (where ${skillPlatformVariants.id} is not null),
+          '[]'::json
+        )
+      `,
+      findingCount: sql<number>`count(distinct ${scanFindings.id})::int`,
+    })
+    .from(skillVersions)
+    .innerJoin(skills, eq(skillVersions.skillId, skills.id))
+    .innerJoin(skillArtifacts, eq(skillArtifacts.skillVersionId, skillVersions.id))
+    .leftJoin(skillPlatformVariants, eq(skillPlatformVariants.skillVersionId, skillVersions.id))
+    .leftJoin(scanRuns, eq(scanRuns.skillVersionId, skillVersions.id))
+    .leftJoin(scanFindings, eq(scanFindings.scanRunId, scanRuns.id))
+    .where(input.where)
+    .groupBy(
+      skillVersions.id,
+      skills.slug,
+      skillVersions.version,
+      skillVersions.lifecycleStatus,
+      skillVersions.reviewStatus,
+      skillVersions.securityStatus,
+      skillVersions.publishedAt,
+      skillVersions.createdAt,
+    )
+    .orderBy(sql`${skillVersions.createdAt} desc`)
+    .limit(input.limit ?? 100);
+}
+
+type SkillReleaseRow = Awaited<ReturnType<typeof selectSkillReleaseRows>>[number];
+
+function releaseSummary(row: SkillReleaseRow): SkillReleaseSummary {
+  return {
+    id: row.id,
+    slug: row.slug,
+    version: row.version,
+    lifecycleStatus: row.lifecycleStatus,
+    reviewStatus: row.reviewStatus,
+    securityStatus: row.securityStatus,
+    publishedAt: row.publishedAt?.toISOString() ?? null,
+    platforms: row.platforms,
+    findingCount: row.findingCount,
+    allowedActions: releaseAllowedActions(row),
+  };
+}
+
+function reviewAllowedActions(row: { reviewStatus: ReviewSubmissionSummary["reviewStatus"]; securityStatus: ReviewSubmissionSummary["securityStatus"]; publishedAt?: Date | null }): ReviewSubmissionSummary["allowedActions"] {
+  if (row.reviewStatus === "approved" && !row.publishedAt && row.securityStatus === "passed") {
+    return ["publish"];
+  }
+  if (["unreviewed", "changes-requested"].includes(row.reviewStatus)) {
+    return row.securityStatus === "passed"
+      ? ["approve", "request-changes", "reject"]
+      : ["request-changes", "reject"];
+  }
+  return [];
+}
+
+function submissionAllowedActions(row: { reviewStatus: UserSubmissionSummary["reviewStatus"]; publishedAt?: Date | null }): UserSubmissionSummary["allowedActions"] {
+  const actions: UserSubmissionSummary["allowedActions"] = ["export"];
+  if (!row.publishedAt && ["unreviewed", "changes-requested"].includes(row.reviewStatus)) {
+    actions.push("withdraw");
+  }
+  return actions;
+}
+
+function releaseAllowedActions(row: { lifecycleStatus: SkillLifecycleStatus; reviewStatus: ReviewSubmissionSummary["reviewStatus"]; securityStatus: ReviewSubmissionSummary["securityStatus"]; publishedAt?: Date | null }): ReleaseLifecycleAction[] {
+  if (row.reviewStatus !== "approved" || row.securityStatus !== "passed") {
+    return [];
+  }
+  if (!row.publishedAt) {
+    return ["delete"];
+  }
+  if (row.lifecycleStatus === "approved") {
+    return ["deprecate", "unpublish", "revoke"];
+  }
+  if (row.lifecycleStatus === "deprecated") {
+    return ["restore", "unpublish", "revoke"];
+  }
+  if (row.lifecycleStatus === "unpublished" || row.lifecycleStatus === "revoked") {
+    return ["restore", "delete"];
+  }
+  return [];
+}
+
+function lifecycleForReleaseAction(action: ReleaseLifecycleAction): SkillLifecycleStatus {
+  if (action === "deprecate") {
+    return "deprecated";
+  }
+  if (action === "unpublish") {
+    return "unpublished";
+  }
+  if (action === "revoke") {
+    return "revoked";
+  }
+  if (action === "restore") {
+    return "approved";
+  }
+  return "archived";
+}
+
+function reviewResultFromVersion(row: Awaited<ReturnType<typeof selectVersionForReview>>, version: typeof skillVersions.$inferSelect): ReviewActionResult {
+  if (!row) {
+    throw new Error("Review row is required.");
+  }
+  return {
+    id: version.id,
+    slug: row.slug,
+    version: version.version,
+    visibility: row.visibility,
+    lifecycleStatus: version.lifecycleStatus,
+    reviewStatus: version.reviewStatus,
+    securityStatus: version.securityStatus,
+    publishedAt: version.publishedAt?.toISOString() ?? null,
+  };
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
 async function selectVersionForReview(db: DbLike, submissionId: string) {
@@ -684,7 +1216,8 @@ async function selectVersionForReview(db: DbLike, submissionId: string) {
       slug: skills.slug,
       version: skillVersions.version,
       visibility: skills.visibility,
-      lifecycleStatus: skills.lifecycleStatus,
+      skillLifecycleStatus: skills.lifecycleStatus,
+      lifecycleStatus: skillVersions.lifecycleStatus,
       reviewStatus: skillVersions.reviewStatus,
       securityStatus: skillVersions.securityStatus,
       publishedAt: skillVersions.publishedAt,
@@ -708,6 +1241,7 @@ async function selectVersionForReview(db: DbLike, submissionId: string) {
       skillVersions.version,
       skills.visibility,
       skills.lifecycleStatus,
+      skillVersions.lifecycleStatus,
       skillVersions.reviewStatus,
       skillVersions.securityStatus,
       skillVersions.publishedAt,
@@ -724,10 +1258,12 @@ async function selectVersionForReview(db: DbLike, submissionId: string) {
 
 function visibleReleasePredicate(): SQL | undefined {
   return and(
-    eq(skills.lifecycleStatus, "approved"),
+    inArray(skills.lifecycleStatus, ["approved", "deprecated"]),
+    inArray(skillVersions.lifecycleStatus, ["approved", "deprecated"]),
     eq(skillVersions.reviewStatus, "approved"),
     eq(skillVersions.securityStatus, "passed"),
     isNotNull(skillVersions.publishedAt),
+    isNull(skillVersions.deletedAt),
   );
 }
 
@@ -779,6 +1315,7 @@ async function selectVisibleRelease(
       title: skills.title,
       summary: skills.summary,
       version: skillVersions.version,
+      lifecycleStatus: skillVersions.lifecycleStatus,
       reviewStatus: skillVersions.reviewStatus,
       securityStatus: skillVersions.securityStatus,
       publishedAt: skillVersions.publishedAt,
@@ -815,6 +1352,7 @@ async function selectVisibleRelease(
       skills.title,
       skills.summary,
       skillVersions.version,
+      skillVersions.lifecycleStatus,
       skillVersions.reviewStatus,
       skillVersions.securityStatus,
       skillVersions.publishedAt,
@@ -839,6 +1377,7 @@ function publicRelease(row: PublicReleaseRow): PublicReleaseMetadata {
     title: row.title,
     summary: row.summary,
     version: row.version,
+    lifecycleStatus: row.lifecycleStatus === "deprecated" ? "deprecated" : "approved",
     reviewStatus: "approved",
     securityStatus: "passed",
     publishedAt: row.publishedAt.toISOString(),
