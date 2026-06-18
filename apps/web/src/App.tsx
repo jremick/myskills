@@ -1044,30 +1044,34 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
                   <strong>{submission.title}</strong>
                   <small>{submission.slug}@{submission.version}</small>
                 </span>
-                <StatusToken value={submission.reviewStatus} />
-                <StatusToken value={submission.lifecycleStatus} />
-                <StatusToken value={submission.securityStatus} />
-                <span>{formatBytes(submission.artifact.byteSize)}</span>
-                <button
-                  className="save-button compact-button"
-                  disabled={exportingId === submission.id}
-                  type="button"
-                  onClick={() => void exportSubmission(submission)}
-                >
-                  <Download size={15} aria-hidden="true" />
-                  Export
-                </button>
-                {(submission.allowedActions ?? []).includes("withdraw") && (
+                <span className="submission-statuses">
+                  <StatusToken value={submission.reviewStatus} />
+                  <StatusToken value={submission.lifecycleStatus} />
+                  <StatusToken value={submission.securityStatus} />
+                  <span>{formatBytes(submission.artifact.byteSize)}</span>
+                </span>
+                <span className="submission-actions">
                   <button
-                    className="danger-button compact-button"
-                    disabled={actioningId === submission.id}
+                    className="save-button compact-button"
+                    disabled={exportingId === submission.id}
                     type="button"
-                    onClick={() => void withdrawSubmission(submission)}
+                    onClick={() => void exportSubmission(submission)}
                   >
-                    <X size={15} aria-hidden="true" />
-                    Withdraw
+                    <Download size={15} aria-hidden="true" />
+                    Export
                   </button>
-                )}
+                  {(submission.allowedActions ?? []).includes("withdraw") && (
+                    <button
+                      className="danger-button compact-button"
+                      disabled={actioningId === submission.id}
+                      type="button"
+                      onClick={() => void withdrawSubmission(submission)}
+                    >
+                      <X size={15} aria-hidden="true" />
+                      Withdraw
+                    </button>
+                  )}
+                </span>
               </div>
             ))}
             {submissionsState === "ready" && submissions.length === 0 && (
@@ -1183,14 +1187,16 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
                 type="button"
                 onClick={() => setSelectedId(submission.id)}
               >
-                <span>
+                <span className="review-row-main">
                   <strong>{submission.title}</strong>
                   <small>{submission.slug}@{submission.version}</small>
                 </span>
-                <StatusToken value={submission.reviewStatus} />
-                <StatusToken value={submission.lifecycleStatus} />
-                <StatusToken value={submission.securityStatus} />
-                <span className="finding-count">{submission.findingCount} findings</span>
+                <span className="review-row-meta">
+                  <StatusToken value={submission.reviewStatus} />
+                  <StatusToken value={submission.lifecycleStatus} />
+                  <StatusToken value={submission.securityStatus} />
+                  <span className="finding-count">{submission.findingCount} findings</span>
+                </span>
               </button>
             ))}
             {state === "ready" && submissions.length === 0 && (
@@ -3111,7 +3117,7 @@ function SkillDetail({
         <Metadata label="Latest version" value={release.version} />
         <Metadata label="Platforms" value={release.platforms.map((item) => item.name).join(", ")} />
         <Metadata label="Tags" value={selectedSkill.tags.join(", ") || "-"} />
-        <Metadata label="Released" value={formatDate(release.publishedAt)} />
+        <Metadata label="Released" value={release.publishedAt ? formatDate(release.publishedAt) : "Not published"} />
         <Metadata label="Review" value={formatStatusLabel(release.reviewStatus)} />
         <Metadata label="Security" value={formatStatusLabel(release.securityStatus)} />
         <Metadata label="Byte size" value={new Intl.NumberFormat().format(release.artifact.byteSize)} />
@@ -3282,14 +3288,18 @@ function LifecyclePanel({
       <div className="release-lifecycle-list">
         {(currentRelease ? [currentRelease] : releases.slice(0, 1)).map((item) => (
           <div className="release-lifecycle-row" key={item.id}>
-            <span>
-              <strong>{item.slug}@{item.version}</strong>
-              <small>{item.publishedAt ? formatDate(item.publishedAt) : "not published"}</small>
-            </span>
-            <StatusToken value={item.lifecycleStatus} />
-            <StatusToken value={item.reviewStatus} />
-            <StatusToken value={item.securityStatus} />
-            <div>
+            <div className="release-lifecycle-meta">
+              <span>
+                <strong>{item.slug}@{item.version}</strong>
+                <small>{item.publishedAt ? formatDate(item.publishedAt) : "not published"}</small>
+              </span>
+              <span className="release-lifecycle-statuses">
+                <StatusToken value={item.lifecycleStatus} />
+                <StatusToken value={item.reviewStatus} />
+                <StatusToken value={item.securityStatus} />
+              </span>
+            </div>
+            <div className="release-lifecycle-actions">
               {item.allowedActions.map((action) => (
                 <button
                   className={action === "delete" || action === "revoke" ? "danger-button compact-button" : "compact-button"}
@@ -3374,6 +3384,7 @@ function SharingPanel({
     { value: "team", label: "Teams", enabled: settings.teamsEnabled && settings.teamVisibilityEnabled },
     { value: "explicit-users", label: "Individual users", enabled: settings.userVisibilityEnabled },
   ];
+  const availableTeams = details?.availableTeams ?? [];
 
   return (
     <section className="sharing-panel">
@@ -3402,7 +3413,7 @@ function SharingPanel({
 
         <div className={visibility === "team" ? "grant-box active" : "grant-box"}>
           <strong>Teams</strong>
-          {(details?.availableTeams ?? []).map((team) => (
+          {availableTeams.map((team) => (
             <label className="role-toggle" key={team.id}>
               <input
                 checked={teamIds.includes(team.id)}
@@ -3413,7 +3424,7 @@ function SharingPanel({
               <span>{team.name}</span>
             </label>
           ))}
-          {details && details.availableTeams.length === 0 && <small>No teams available.</small>}
+          {details && availableTeams.length === 0 && <small>No teams available.</small>}
         </div>
 
         <label className={visibility === "explicit-users" ? "grant-box active" : "grant-box"}>

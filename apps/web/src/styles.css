@@ -1168,7 +1168,7 @@ button:focus-visible {
 
 .review-layout {
   display: grid;
-  grid-template-columns: minmax(360px, 0.42fr) minmax(560px, 1fr);
+  grid-template-columns: minmax(300px, 0.38fr) minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
@@ -1188,9 +1188,9 @@ button:focus-visible {
 
 .review-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
-  gap: 10px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
   width: 100%;
   padding: 15px 18px;
   border: 0;
@@ -1215,17 +1215,25 @@ button:focus-visible {
   box-shadow: inset 3px 0 0 #0f766e;
 }
 
-.review-row > span:first-child {
+.review-row-main {
   display: grid;
   min-width: 0;
   gap: 4px;
 }
 
-.review-row strong,
-.review-row small {
+.review-row-main strong,
+.review-row-main small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.review-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .review-row small,
@@ -1235,6 +1243,7 @@ button:focus-visible {
 }
 
 .review-detail {
+  overflow: hidden;
   padding: 24px;
 }
 
@@ -1313,6 +1322,12 @@ button:focus-visible {
   background: #e2e8f0;
 }
 
+.danger-button.compact-button {
+  border: 1px solid #b42318;
+  color: #ffffff;
+  background: #b42318;
+}
+
 .action-hint {
   max-width: 620px;
   margin: 12px 0 0;
@@ -1330,23 +1345,26 @@ button:focus-visible {
 
 .lifecycle-panel {
   display: grid;
+  min-width: 0;
   gap: 14px;
   margin-top: 18px;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
+  overflow: hidden;
 }
 
 .metadata-edit-grid {
   display: grid;
-  grid-template-columns: minmax(160px, 0.7fr) minmax(220px, 1fr) minmax(180px, 0.8fr) auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   align-items: end;
 }
 
 .metadata-edit-grid label {
   display: grid;
+  min-width: 0;
   gap: 6px;
   color: #475569;
   font-size: 13px;
@@ -1362,12 +1380,23 @@ button:focus-visible {
   color: #0f172a;
   background: #ffffff;
   font: inherit;
+  text-overflow: ellipsis;
+}
+
+.metadata-edit-grid .save-button {
+  grid-column: 1 / -1;
+  justify-self: start;
+  max-width: 100%;
 }
 
 .lifecycle-actions,
-.release-lifecycle-row > div {
+.release-lifecycle-actions,
+.release-lifecycle-statuses,
+.submission-actions,
+.submission-statuses {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 
@@ -1387,6 +1416,7 @@ button:focus-visible {
 
 .release-lifecycle-list {
   display: grid;
+  min-width: 0;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   overflow: hidden;
@@ -1394,9 +1424,9 @@ button:focus-visible {
 
 .release-lifecycle-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto auto auto minmax(180px, auto);
-  gap: 10px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, auto);
+  gap: 12px;
+  align-items: start;
   min-width: 0;
   padding: 12px;
   border-top: 1px solid var(--line-soft);
@@ -1406,14 +1436,30 @@ button:focus-visible {
   border-top: 0;
 }
 
-.release-lifecycle-row span:first-child {
+.release-lifecycle-meta {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.release-lifecycle-meta > span:first-child {
   display: grid;
   gap: 3px;
   min-width: 0;
 }
 
+.release-lifecycle-row strong {
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+
 .release-lifecycle-row small {
   color: var(--muted);
+}
+
+.release-lifecycle-actions {
+  justify-content: flex-end;
+  max-width: 360px;
 }
 
 .submit-panel {
@@ -1843,22 +1889,25 @@ button:focus-visible {
 
 .sharing-panel {
   display: grid;
+  min-width: 0;
   gap: 14px;
   padding: 18px;
   border: 1px solid #d8e0ea;
   border-radius: 8px;
   background: #fbfdff;
+  overflow: hidden;
 }
 
 .sharing-panel-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 14px;
 }
 
 .sharing-panel-head > div {
   display: grid;
+  min-width: 0;
   gap: 3px;
 }
 
@@ -1870,11 +1919,12 @@ button:focus-visible {
 .sharing-panel-head span {
   color: #64748b;
   font-size: 12.5px;
+  line-height: 1.4;
 }
 
 .sharing-editor {
   display: grid;
-  grid-template-columns: minmax(180px, 0.6fr) minmax(220px, 1fr) minmax(260px, 1.1fr);
+  grid-template-columns: minmax(160px, 0.6fr) minmax(190px, 1fr) minmax(220px, 1fr);
   gap: 12px;
   align-items: start;
 }
@@ -1889,6 +1939,7 @@ button:focus-visible {
 }
 
 .grant-box {
+  min-width: 0;
   min-height: 86px;
   padding: 10px;
   border: 1px solid #edf1f5;
@@ -2056,6 +2107,10 @@ button:focus-visible {
   padding: 30px;
 }
 
+.detail-title {
+  min-width: 0;
+}
+
 .detail-heading {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -2064,6 +2119,7 @@ button:focus-visible {
 }
 
 .detail-title h2 {
+  overflow-wrap: anywhere;
   margin: 0;
   color: #0f172a;
   font-size: clamp(26px, 3vw, 34px);
@@ -2073,6 +2129,7 @@ button:focus-visible {
 
 .detail-title span {
   display: block;
+  overflow-wrap: anywhere;
   margin-top: 8px;
   color: #536174;
   font-size: 16px;
@@ -2164,6 +2221,7 @@ button:focus-visible {
 .command-panel {
   position: relative;
   display: grid;
+  min-width: 0;
   gap: 12px;
   margin-top: 16px;
   padding: 18px;
@@ -3908,7 +3966,7 @@ code {
 .token-row,
 .submission-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto auto minmax(130px, auto) auto auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) auto;
   gap: 12px;
   align-items: center;
   min-width: 0;
@@ -3927,6 +3985,25 @@ code {
   grid-template-columns: minmax(180px, 1fr) auto minmax(130px, auto) minmax(130px, auto) auto;
 }
 
+.submission-statuses,
+.submission-actions {
+  min-width: 0;
+}
+
+.submission-statuses {
+  justify-content: flex-start;
+}
+
+.submission-actions {
+  justify-content: flex-end;
+}
+
+.submission-actions .save-button,
+.submission-actions .danger-button {
+  width: auto;
+  white-space: nowrap;
+}
+
 .admin-token-row {
   grid-template-columns: minmax(180px, 1fr) auto minmax(160px, 0.9fr) minmax(130px, auto) auto;
 }
@@ -3936,8 +4013,14 @@ code {
 }
 
 .compact-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   min-height: 36px;
   padding: 0 11px;
+  border-radius: 7px;
+  font-weight: 700;
 }
 
 .settings-stack .mfa-setup {
@@ -4468,6 +4551,8 @@ code {
 
   .metadata-grid,
   .provider-form,
+  .metadata-edit-grid,
+  .release-lifecycle-row,
   .segmented-control {
     grid-template-columns: 1fr;
   }
@@ -4498,8 +4583,13 @@ code {
   }
 
   .token-row .icon-button,
-  .submission-row .save-button {
+  .submission-actions {
     justify-self: start;
+  }
+
+  .submission-actions,
+  .release-lifecycle-actions {
+    justify-content: flex-start;
   }
 
   .settings-hero,
@@ -4541,8 +4631,8 @@ code {
   }
 
   .sharing-panel-head {
+    grid-template-columns: 1fr;
     align-items: stretch;
-    flex-direction: column;
   }
 
   .sharing-panel-head .save-button {
