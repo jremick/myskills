@@ -446,6 +446,79 @@ test("registry client submits package archives with the session bearer", async (
   }));
 });
 
+test("registry client manages skill and release lifecycle controls", async () => {
+  const calls: Array<{ body?: string; method?: string; url: string; authorization?: string }> = [];
+  const client = createRegistryClient("http://api.test", async (input, init) => {
+    const url = String(input);
+    calls.push({
+      body: typeof init?.body === "string" ? init.body : undefined,
+      method: init?.method,
+      url,
+      authorization: init?.headers instanceof Headers ? init.headers.get("authorization") ?? undefined : (init?.headers as Record<string, string> | undefined)?.authorization,
+    });
+    if (url.endsWith("/v1/skills/release-notes-helper/releases") && !init?.method) {
+      return jsonResponse(200, {
+        releases: [{
+          id: "version-1",
+          slug: "release-notes-helper",
+          version: "0.1.0",
+          lifecycleStatus: "approved",
+          reviewStatus: "approved",
+          securityStatus: "passed",
+          publishedAt: "2026-06-18T00:00:00.000Z",
+          platforms: [],
+          findingCount: 0,
+          allowedActions: ["unpublish"],
+        }],
+      });
+    }
+    if (url.endsWith("/v1/skills/release-notes-helper/releases/0.1.0/actions")) {
+      return jsonResponse(200, {
+        release: {
+          id: "version-1",
+          slug: "release-notes-helper",
+          version: "0.1.0",
+          lifecycleStatus: "unpublished",
+          reviewStatus: "approved",
+          securityStatus: "passed",
+          publishedAt: "2026-06-18T00:00:00.000Z",
+          platforms: [],
+          findingCount: 0,
+          allowedActions: ["restore"],
+        },
+      });
+    }
+    return jsonResponse(200, {
+      skill: {
+        slug: "release-notes-helper",
+        title: "Release Notes Assistant",
+        summary: "Updated",
+        lifecycleStatus: "approved",
+        visibility: "public",
+        tags: ["writing"],
+        allowedActions: ["edit"],
+      },
+    });
+  });
+
+  await client.listSkillReleases("release-notes-helper", "maintainer-session");
+  await client.updateSkillMetadata({ slug: "release-notes-helper", title: "Release Notes Assistant" }, "maintainer-session");
+  await client.performReleaseAction("release-notes-helper", "0.1.0", "unpublish", "bad metadata", undefined, "maintainer-session");
+
+  assert.deepEqual(calls.map((call) => `${call.method ?? "GET"} ${call.url}`), [
+    "GET http://api.test/v1/skills/release-notes-helper/releases",
+    "PUT http://api.test/v1/skills/release-notes-helper",
+    "POST http://api.test/v1/skills/release-notes-helper/releases/0.1.0/actions",
+  ]);
+  assert.deepEqual(calls.map((call) => call.authorization), [
+    "Bearer maintainer-session",
+    "Bearer maintainer-session",
+    "Bearer maintainer-session",
+  ]);
+  assert.equal(calls[1].body, JSON.stringify({ title: "Release Notes Assistant" }));
+  assert.equal(calls[2].body, JSON.stringify({ action: "unpublish", reason: "bad metadata" }));
+});
+
 test("safe error messages do not render raw server internals", () => {
   const error = new Error("stack trace /Users/example token storageKey") as SafeApiError;
   error.status = 500;

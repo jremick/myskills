@@ -1,4 +1,4 @@
-import { and, eq, ilike, inArray, isNotNull, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, ilike, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import { AppError, type PublicSkill, type SharingSettings, type SkillAccessReason, type SkillRepository, type SkillSearchFilters, type SkillPlatformVariant, type SkillSharingActor, type SkillSharingDetails, type SkillSharingTeamSummary, type SkillSharingUserSummary, type TeamSharedSkillGroup, type UpdateSkillSharingInput, type VisibilityScope } from "@myskills-app/core";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type { Database } from "../db/client.js";
@@ -431,10 +431,12 @@ export class PostgresSkillRepository implements SkillRepository {
 
 function visibleReleasedSkillPredicate(): SQL | undefined {
   return and(
-    eq(skills.lifecycleStatus, "approved"),
+    inArray(skills.lifecycleStatus, ["approved", "deprecated"]),
+    inArray(skillVersions.lifecycleStatus, ["approved", "deprecated"]),
     eq(skillVersions.reviewStatus, "approved"),
     eq(skillVersions.securityStatus, "passed"),
     isNotNull(skillVersions.publishedAt),
+    isNull(skillVersions.deletedAt),
   );
 }
 

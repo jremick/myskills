@@ -52,17 +52,22 @@ Implemented:
 - `GET /v1/mcp/session` API-token-only MCP auth check requiring `skills:read` with sanitized allow/deny audit events
 - `GET /v1/submissions/mine` session-only submitted skill version list for the current user
 - `GET /v1/submissions/:id/bundle` session-only package export for user-owned submitted versions
+- `POST /v1/submissions/:id/actions` session-only author `withdraw`
 - `POST /v1/submissions` authenticated package intake with strict root-manifest/package-file integrity checks, JSON text-entry payloads, JSON base64 `.zip` archive payloads, server-side archive extraction, and scan evidence
 - `GET /v1/review/submissions` maintainer review queue, including approved unpublished submissions awaiting publish
-- `POST /v1/review/submissions/:id/actions` maintainer `approve` and `publish`
+- `POST /v1/review/submissions/:id/actions` maintainer `approve`, `request-changes`, `reject`, and `publish`
 - `GET /v1/skills` public approved skill search
 - `GET /v1/skills/:slug` public approved skill detail
+- `GET /v1/skills/:slug/releases` owner/admin/maintainer release lifecycle summary
+- `PUT /v1/skills/:slug` owner/admin/maintainer mutable skill metadata update
+- `POST /v1/skills/:slug/actions` owner/admin/maintainer skill `archive`, `restore`, and `delete`
 - `GET /v1/skills/:slug/releases/:version` public approved release metadata
+- `POST /v1/skills/:slug/releases/:version/actions` owner/admin/maintainer release `deprecate`, `unpublish`, `revoke`, `restore`, and `delete`
 - `GET /v1/skills/:slug/releases/:version/bundle?platform=...` public approved package payload delivery
 - Drizzle Postgres schema and migrations
 - synthetic seed data for one owner and one approved public skill
 
-Public search, detail, release metadata, and bundle delivery all require the same safe release state: public skill, approved lifecycle, approved review, passed security status, non-null `publishedAt`, and artifact metadata. Submission is open to `author` and above; `owner`, `admin`, and `maintainer` submitters require an MFA-verified session or MFA-bound API token. Review and publish actions require `owner`, `admin`, or `maintainer` and an MFA-verified session or MFA-bound API token. The review queue returns only safe metadata and excludes package file contents.
+Public search, detail, release metadata, and bundle delivery all require the same safe release state: public skill, skill lifecycle `approved` or `deprecated`, version lifecycle `approved` or `deprecated`, approved review, passed security status, non-null `publishedAt`, non-deleted version row, and artifact metadata. Deprecated releases remain visible and installable; unpublished, revoked, archived, and deleted releases are hidden from public install/export paths. Submission is open to `author` and above; `owner`, `admin`, and `maintainer` submitters require an MFA-verified session or MFA-bound API token. Review, publish, and lifecycle actions require `owner`, `admin`, or `maintainer` and an MFA-verified session or MFA-bound API token. The review queue returns only safe metadata and excludes package file contents.
 
 Package artifacts are stored through an S3-compatible object storage abstraction when `ARTIFACT_STORAGE_MODE=s3`. The API generates opaque object keys, hashes, byte sizes, and content types; submission requests cannot provide artifact metadata. Production startup defaults to S3 mode and rejects DB payload mode. Development can use `ARTIFACT_STORAGE_MODE=db`, but object-backed rows fail closed when object bytes are missing, invalid, or do not match stored metadata.
 

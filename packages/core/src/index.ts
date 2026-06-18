@@ -1,4 +1,4 @@
-export const skillLifecycleStatuses = ["draft", "private", "submitted", "review", "approved", "deprecated", "revoked", "archived"] as const;
+export const skillLifecycleStatuses = ["draft", "private", "submitted", "review", "approved", "deprecated", "unpublished", "revoked", "archived"] as const;
 export const reviewStatuses = ["unreviewed", "changes-requested", "approved", "rejected"] as const;
 export const securityStatuses = ["not-run", "passed", "warning", "failed"] as const;
 export const visibilityScopes = ["public", "authenticated", "organization", "team", "private", "explicit-users"] as const;

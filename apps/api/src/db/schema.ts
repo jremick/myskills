@@ -16,7 +16,7 @@ export const userStatus = pgEnum("user_status", ["pending", "active", "disabled"
 export const roleName = pgEnum("role_name", ["owner", "admin", "maintainer", "author", "user"]);
 export const registrationMode = pgEnum("registration_mode", ["closed", "request", "open"]);
 export const providerType = pgEnum("provider_type", ["oidc", "saml", "cloudflare_access", "github", "google"]);
-export const skillLifecycleStatus = pgEnum("skill_lifecycle_status", ["draft", "private", "submitted", "review", "approved", "deprecated", "revoked", "archived"]);
+export const skillLifecycleStatus = pgEnum("skill_lifecycle_status", ["draft", "private", "submitted", "review", "approved", "deprecated", "unpublished", "revoked", "archived"]);
 export const visibilityScope = pgEnum("visibility_scope", ["public", "authenticated", "organization", "team", "private", "explicit-users"]);
 export const reviewStatus = pgEnum("review_status", ["unreviewed", "changes-requested", "approved", "rejected"]);
 export const securityStatus = pgEnum("security_status", ["not-run", "passed", "warning", "failed"]);
@@ -236,11 +236,18 @@ export const skillVersions = pgTable("skill_versions", {
   skillId: uuid("skill_id").notNull().references(() => skills.id, { onDelete: "cascade" }),
   version: text("version").notNull(),
   releaseNotes: text("release_notes").notNull().default(""),
+  lifecycleStatus: skillLifecycleStatus("lifecycle_status").notNull().default("submitted"),
   reviewStatus: reviewStatus("review_status").notNull().default("unreviewed"),
   securityStatus: securityStatus("security_status").notNull().default("not-run"),
   publishedAt: timestamp("published_at", { withTimezone: true }),
+  lifecycleReason: text("lifecycle_reason").notNull().default(""),
+  lifecycleUpdatedAt: timestamp("lifecycle_updated_at", { withTimezone: true }),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [unique().on(table.skillId, table.version)]);
+}, (table) => [
+  index("skill_versions_lifecycle_idx").on(table.lifecycleStatus),
+  unique().on(table.skillId, table.version),
+]);
 
 export const skillPlatformVariants = pgTable("skill_platform_variants", {
   id: uuid("id").primaryKey().defaultRandom(),

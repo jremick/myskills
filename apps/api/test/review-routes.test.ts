@@ -183,6 +183,138 @@ test("warning submissions cannot be approved or published", async (t) => {
   assert.equal(publishResponse.json().error.code, "PACKAGE_SCAN_NOT_PASSED");
 });
 
+test("authors can withdraw unreviewed submissions", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildReviewApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const authorToken = await addAndLogin(app, authStore, "author@example.com", ["author"]);
+
+  const submitResponse = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${authorToken}` },
+    payload: cleanSubmissionPayload(),
+  });
+  assert.equal(submitResponse.statusCode, 202);
+  const submissionId = submitResponse.json().submission.id as string;
+
+  const withdrawResponse = await app.inject({
+    method: "POST",
+    url: `/v1/submissions/${submissionId}/actions`,
+    headers: { authorization: `Bearer ${authorToken}` },
+    payload: { action: "withdraw", reason: "superseded" },
+  });
+
+  assert.equal(withdrawResponse.statusCode, 200);
+  assert.equal(withdrawResponse.json().submission.reviewStatus, "rejected");
+  assert.equal(withdrawResponse.json().submission.lifecycleStatus, "archived");
+  assert.equal(submissionStore.auditEvents().some((event) => (
+    event.action === "submission.withdraw" &&
+    event.decision === "allow" &&
+    event.details.reason === "superseded"
+  )), true);
+});
+
+test("maintainers can request changes and reject submissions", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildReviewApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const authorToken = await addAndLogin(app, authStore, "author@example.com", ["author"]);
+  const maintainerToken = await addAndLoginWithMfa(app, authStore, "maintainer@example.com", ["maintainer"]);
+
+  const submitResponse = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${authorToken}` },
+    payload: cleanSubmissionPayload(),
+  });
+  assert.equal(submitResponse.statusCode, 202);
+  const submissionId = submitResponse.json().submission.id as string;
+
+  const changesResponse = await app.inject({
+    method: "POST",
+    url: `/v1/review/submissions/${submissionId}/actions`,
+    headers: { authorization: `Bearer ${maintainerToken}` },
+    payload: { action: "request-changes", reason: "missing examples" },
+  });
+  assert.equal(changesResponse.statusCode, 200);
+  assert.equal(changesResponse.json().submission.reviewStatus, "changes-requested");
+  assert.equal(changesResponse.json().submission.lifecycleStatus, "review");
+
+  const rejectResponse = await app.inject({
+    method: "POST",
+    url: `/v1/review/submissions/${submissionId}/actions`,
+    headers: { authorization: `Bearer ${maintainerToken}` },
+    payload: { action: "reject", reason: "unsafe pattern" },
+  });
+  assert.equal(rejectResponse.statusCode, 200);
+  assert.equal(rejectResponse.json().submission.reviewStatus, "rejected");
+  assert.equal(rejectResponse.json().submission.lifecycleStatus, "archived");
+});
+
+test("release lifecycle actions hide and restore published releases", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildReviewApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const authorToken = await addAndLogin(app, authStore, "author@example.com", ["author"]);
+  const maintainerToken = await addAndLoginWithMfa(app, authStore, "maintainer@example.com", ["maintainer"]);
+
+  const submitResponse = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${authorToken}` },
+    payload: cleanSubmissionPayload(),
+  });
+  assert.equal(submitResponse.statusCode, 202);
+  const submissionId = submitResponse.json().submission.id as string;
+  await app.inject({
+    method: "POST",
+    url: `/v1/review/submissions/${submissionId}/actions`,
+    headers: { authorization: `Bearer ${maintainerToken}` },
+    payload: { action: "approve" },
+  });
+  await app.inject({
+    method: "POST",
+    url: `/v1/review/submissions/${submissionId}/actions`,
+    headers: { authorization: `Bearer ${maintainerToken}` },
+    payload: { action: "publish" },
+  });
+
+  const unpublishResponse = await app.inject({
+    method: "POST",
+    url: "/v1/skills/release-notes-helper/releases/0.1.0/actions",
+    headers: { authorization: `Bearer ${maintainerToken}` },
+    payload: { action: "unpublish", reason: "bad metadata" },
+  });
+  assert.equal(unpublishResponse.statusCode, 200);
+  assert.equal(unpublishResponse.json().release.lifecycleStatus, "unpublished");
+
+  const hiddenResponse = await app.inject({
+    method: "GET",
+    url: "/v1/skills/release-notes-helper/releases/0.1.0",
+  });
+  assert.equal(hiddenResponse.statusCode, 404);
+
+  const restoreResponse = await app.inject({
+    method: "POST",
+    url: "/v1/skills/release-notes-helper/releases/0.1.0/actions",
+    headers: { authorization: `Bearer ${maintainerToken}` },
+    payload: { action: "restore", reason: "metadata fixed" },
+  });
+  assert.equal(restoreResponse.statusCode, 200);
+  assert.equal(restoreResponse.json().release.lifecycleStatus, "approved");
+
+  const visibleResponse = await app.inject({
+    method: "GET",
+    url: "/v1/skills/release-notes-helper/releases/0.1.0",
+  });
+  assert.equal(visibleResponse.statusCode, 200);
+  assert.equal(visibleResponse.json().release.lifecycleStatus, "approved");
+});
+
 test("publish revalidates the stored package manifest", async (t) => {
   const submissionStore = new MemorySubmissionStore();
   const authStore = new MemoryAuthStore("closed");

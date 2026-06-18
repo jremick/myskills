@@ -116,6 +116,12 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
         return await submitCommand(parsed, runtime);
       case "review":
         return await reviewCommand(parsed, runtime);
+      case "submissions":
+        return await submissionsCommand(parsed, runtime);
+      case "skills":
+        return await skillsCommand(parsed, runtime);
+      case "releases":
+        return await releasesCommand(parsed, runtime);
       case "teams":
         return await teamsCommand(parsed, runtime);
       case "sharing":
@@ -578,11 +584,11 @@ async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   if (subcommand === "action") {
     const submissionId = parsed.args[1];
     if (!submissionId) {
-      throw new CliError("Usage: myskills review action <submission-id> --action <approve|publish>", 2);
+      throw new CliError("Usage: myskills review action <submission-id> --action <approve|request-changes|reject|publish> [--reason <text>] [--api-url <url>] [--token <token>]", 2);
     }
     const action = stringOption(parsed, "action");
-    if (action !== "approve" && action !== "publish") {
-      throw new CliError("--action must be approve or publish.", 2);
+    if (action !== "approve" && action !== "request-changes" && action !== "reject" && action !== "publish") {
+      throw new CliError("--action must be approve, request-changes, reject, or publish.", 2);
     }
     const reason = optionalStringOption(parsed, "reason");
     const response = await apiPost(`/v1/review/submissions/${encodeURIComponent(submissionId)}/actions`, {
@@ -603,7 +609,147 @@ async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     }
     return 0;
   }
-  throw new CliError("Usage: myskills review submissions | review action <submission-id> --action <approve|publish>", 2);
+  throw new CliError("Usage: myskills review submissions | review action <submission-id> --action <approve|request-changes|reject|publish> [--reason <text>]", 2);
+}
+
+async function submissionsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const token = await requireToken(parsed, runtime);
+  const subcommand = parsed.args[0];
+  if (subcommand === "list" || subcommand === "mine") {
+    const response = await apiGet("/v1/submissions/mine", parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      const submissions = arrayField(response, "submissions");
+      if (submissions.length === 0) {
+        runtime.io.stdout("No submissions.");
+      } else {
+        for (const value of submissions) {
+          const submission = recordField(value, "submission");
+          runtime.io.stdout([
+            requiredRecordString(submission, "id", "Submission response is missing id."),
+            `${requiredRecordString(submission, "slug", "Submission response is missing slug.")}@${requiredRecordString(submission, "version", "Submission response is missing version.")}`,
+            optionalRecordString(submission, "reviewStatus") ?? "-",
+            optionalRecordString(submission, "lifecycleStatus") ?? "-",
+            optionalRecordString(submission, "securityStatus") ?? "-",
+          ].join("\t"));
+        }
+      }
+    }
+    return 0;
+  }
+  if (subcommand === "withdraw") {
+    const submissionId = parsed.args[1];
+    if (!submissionId) {
+      throw new CliError("Usage: myskills submissions withdraw <submission-id> [--reason <text>] [--api-url <url>] [--token <token>]", 2);
+    }
+    const response = await apiPost(`/v1/submissions/${encodeURIComponent(submissionId)}/actions`, {
+      action: "withdraw",
+      ...reasonPayload(parsed),
+    }, parsed, runtime, token);
+    printNamedRecord(response, "submission", runtime.io, ["id", "slug", "version", "reviewStatus", "lifecycleStatus"]);
+    return 0;
+  }
+  throw new CliError("Usage: myskills submissions list | submissions withdraw <submission-id> [--reason <text>] [--api-url <url>] [--token <token>]", 2);
+}
+
+async function skillsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const token = await requireToken(parsed, runtime);
+  const subcommand = parsed.args[0];
+  const slug = parsed.args[1];
+  if (subcommand === "edit") {
+    if (!slug) {
+      throw new CliError("Usage: myskills skills edit <skill-slug> [--title <text>] [--summary <text>] [--visibility <scope>] [--tag <tag>] [--reason <text>] [--api-url <url>] [--token <token>]", 2);
+    }
+    const payload: Record<string, unknown> = {
+      ...reasonPayload(parsed),
+    };
+    const title = optionalStringOption(parsed, "title");
+    const summary = optionalStringOption(parsed, "summary");
+    const visibility = optionalStringOption(parsed, "visibility");
+    const tags = stringListOption(parsed, "tag");
+    if (title !== undefined) {
+      payload.title = title;
+    }
+    if (summary !== undefined) {
+      payload.summary = summary;
+    }
+    if (visibility !== undefined) {
+      if (!CLI_VISIBILITY_SCOPES.includes(visibility as CliVisibilityScope)) {
+        throw new CliError(`--visibility must be one of: ${CLI_VISIBILITY_SCOPES.join(", ")}.`, 2);
+      }
+      payload.visibility = visibility;
+    }
+    if (tags.length > 0) {
+      payload.tags = tags;
+    }
+    if (Object.keys(payload).every((key) => key === "reason")) {
+      throw new CliError("At least one metadata option is required.", 2);
+    }
+    const response = await apiPut(`/v1/skills/${encodeURIComponent(parseInstallSlug(slug))}`, payload, parsed, runtime, token);
+    printNamedRecord(response, "skill", runtime.io, ["slug", "title", "lifecycleStatus", "visibility"]);
+    return 0;
+  }
+  if (subcommand === "archive" || subcommand === "restore" || subcommand === "delete") {
+    if (!slug) {
+      throw new CliError("Usage: myskills skills archive|restore|delete <skill-slug> [--reason <text>] [--api-url <url>] [--token <token>]", 2);
+    }
+    const response = await apiPost(`/v1/skills/${encodeURIComponent(parseInstallSlug(slug))}/actions`, {
+      action: subcommand,
+      ...reasonPayload(parsed),
+    }, parsed, runtime, token);
+    printNamedRecord(response, "skill", runtime.io, ["slug", "title", "lifecycleStatus", "visibility"]);
+    return 0;
+  }
+  throw new CliError("Usage: myskills skills edit|archive|restore|delete <skill-slug> [--api-url <url>] [--token <token>]", 2);
+}
+
+async function releasesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const subcommand = parsed.args[0];
+  if (subcommand === "list") {
+    const slug = parsed.args[1];
+    if (!slug) {
+      throw new CliError("Usage: myskills releases list <skill-slug>", 2);
+    }
+    const token = await tokenOption(parsed, runtime) ?? undefined;
+    const response = await apiGet(`/v1/skills/${encodeURIComponent(parseInstallSlug(slug))}/releases`, parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      const releases = arrayField(response, "releases");
+      if (releases.length === 0) {
+        runtime.io.stdout("No releases.");
+      } else {
+        for (const value of releases) {
+          const release = recordField(value, "release");
+          runtime.io.stdout([
+            `${requiredRecordString(release, "slug", "Release response is missing slug.")}@${requiredRecordString(release, "version", "Release response is missing version.")}`,
+            optionalRecordString(release, "lifecycleStatus") ?? "-",
+            optionalRecordString(release, "reviewStatus") ?? "-",
+            optionalRecordString(release, "securityStatus") ?? "-",
+            `published=${optionalRecordString(release, "publishedAt") ?? "-"}`,
+          ].join("\t"));
+        }
+      }
+    }
+    return 0;
+  }
+  if (["deprecate", "unpublish", "revoke", "restore", "delete"].includes(subcommand ?? "")) {
+    const target = parsed.args[1];
+    if (!target) {
+      throw new CliError("Usage: myskills releases deprecate|unpublish|revoke|restore|delete <skill-slug>@<version> [--reason <text>] [--replacement <version>] [--api-url <url>] [--token <token>]", 2);
+    }
+    const { slug, version } = parseReleaseTarget(target);
+    const token = await requireToken(parsed, runtime);
+    const response = await apiPost(`/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}/actions`, {
+      action: subcommand,
+      ...reasonPayload(parsed),
+      ...(optionalStringOption(parsed, "replacement") ? { replacement: optionalStringOption(parsed, "replacement") } : {}),
+    }, parsed, runtime, token);
+    printNamedRecord(response, "release", runtime.io, ["slug", "version", "lifecycleStatus", "reviewStatus", "securityStatus"]);
+    return 0;
+  }
+  throw new CliError("Usage: myskills releases list <skill-slug> | releases deprecate|unpublish|revoke|restore|delete <skill-slug>@<version> [--api-url <url>] [--token <token>]", 2);
 }
 
 async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
@@ -1500,6 +1646,29 @@ function recordField(input: unknown, label: string): Record<string, unknown> {
   return input as Record<string, unknown>;
 }
 
+function printNamedRecord(response: Record<string, unknown>, key: string, io: CliIo, fields: string[]): void {
+  const record = recordField(response[key], key);
+  io.stdout(fields.map((field) => optionalRecordString(record, field) ?? "-").join("\t"));
+}
+
+function reasonPayload(parsed: ParsedArgs): Record<string, string> {
+  const reason = optionalStringOption(parsed, "reason");
+  return reason ? { reason } : {};
+}
+
+function parseReleaseTarget(target: string): { slug: string; version: string } {
+  const separator = target.lastIndexOf("@");
+  if (separator <= 0 || separator === target.length - 1) {
+    throw new CliError("Release target must be <skill-slug>@<version>.", 2);
+  }
+  const slug = parseInstallSlug(target.slice(0, separator));
+  const version = target.slice(separator + 1);
+  if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)) {
+    throw new CliError("Release version is invalid.", 2);
+  }
+  return { slug, version };
+}
+
 function arrayField(record: Record<string, unknown>, key: string): unknown[] {
   const value = record[key];
   return Array.isArray(value) ? value : [];
@@ -2238,7 +2407,13 @@ function helpText(): string {
     "  config list",
     "  submit --path <file-directory-or-zip> [--api-url <url>] [--token <token>]",
     "  review submissions [--api-url <url>] [--token <token>]",
-    "  review action <submission-id> --action <approve|publish> [--reason <text>]",
+    "  review action <submission-id> --action <approve|request-changes|reject|publish> [--reason <text>] [--api-url <url>] [--token <token>]",
+    "  submissions list [--api-url <url>] [--token <token>]",
+    "  submissions withdraw <submission-id> [--reason <text>] [--api-url <url>] [--token <token>]",
+    "  skills edit <skill-slug> [--title <text>] [--summary <text>] [--visibility <scope>] [--tag <tag>] [--reason <text>] [--api-url <url>] [--token <token>]",
+    "  skills archive|restore|delete <skill-slug> [--reason <text>] [--api-url <url>] [--token <token>]",
+    "  releases list <skill-slug> [--api-url <url>] [--token <token>]",
+    "  releases deprecate|unpublish|revoke|restore|delete <skill-slug>@<version> [--reason <text>] [--replacement <version>] [--api-url <url>] [--token <token>]",
     "  teams list|skills [--api-url <url>] [--token <token>]",
     "  teams create <team-name> [--name <team-name>] [--api-url <url>] [--token <token>]",
     "  teams invite <team-id> --email <email> [--api-url <url>] [--token <token>]",

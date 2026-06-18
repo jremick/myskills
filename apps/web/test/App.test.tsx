@@ -149,8 +149,8 @@ test("skill detail displays public metadata and release artifact metadata only",
   await view.findByText("Turns merged changes into concise release notes.");
   assert.equal(view.getAllByText("0.1.0").length, 2);
   assert.equal(view.getAllByText("codex, generic").length, 2);
-  assert.equal(view.getByText("approved").textContent, "approved");
-  assert.equal(view.getByText("passed").textContent, "passed");
+  assert.equal(view.getByText("Approved").textContent, "Approved");
+  assert.equal(view.getByText("Passed").textContent, "Passed");
   assert.equal(document.body.textContent?.includes("storageKey"), false);
   assert.equal(document.body.textContent?.includes("Summarize release notes."), false);
   assert.equal(client.bundleCalls, 0);
@@ -323,8 +323,9 @@ test("signed-in users can open the teams workspace", async () => {
 
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByText("Team sharing");
+  await view.findByRole("heading", { name: "Teams", level: 1 });
   assert.equal((await view.findAllByText("Platform Team")).length >= 1, true);
+  await view.findAllByText("reader@example.com");
   await view.findByText("Release Notes Helper");
   assert.equal(client.listTeamCalls, 1);
   assert.equal(client.searchCalls.length, 0);
