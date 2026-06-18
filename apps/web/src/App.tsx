@@ -1620,6 +1620,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
   const [auditEvents, setAuditEvents] = useState<AdminAuditEvent[]>([]);
   const [draft, setDraft] = useState<ProviderDraft>(() => emptyProviderDraft());
   const sessionCanEditPrivilegedRoles = session.user.roles.includes("owner");
+  const adminInitialLoading = state === "loading" && users.length === 0 && apiTokens.length === 0 && providers.length === 0 && auditEvents.length === 0;
 
   async function refreshAdmin() {
     setState("loading");
@@ -1729,12 +1730,16 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
 
   return (
     <main className="admin-workspace" aria-label="Admin console">
-      <div className="workspace-actionbar">
-        <button className="save-button" type="button" onClick={() => void refreshAdmin()}>
+      <section className="admin-hero" aria-labelledby="admin-console-heading">
+        <div>
+          <h1 id="admin-console-heading">Admin console</h1>
+          <p>{session.user.email} · {adminInitialLoading ? "loading accounts" : `${users.length} accounts`}</p>
+        </div>
+        <button type="button" onClick={() => void refreshAdmin()}>
           <RotateCw size={16} aria-hidden="true" />
           Refresh
         </button>
-      </div>
+      </section>
 
       {message && <div className="safe-message admin-message" role="status">{message}</div>}
 
@@ -1744,26 +1749,32 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
           title="Registration"
           meta={state === "loading" ? "Loading" : registrationMode}
         >
-          <div className={`registration-posture registration-posture-${registrationMode}`}>
-            <span>{capitalize(registrationMode)}</span>
-            <strong>{registrationPostureTitle(registrationMode)}</strong>
-            <p>{registrationPostureDescription(registrationMode)}</p>
-          </div>
-          <div className="segmented-control" aria-label="Registration mode">
-            {(["closed", "request", "open"] as const).map((mode) => (
-              <button
-                className={registrationMode === mode ? "active" : undefined}
-                key={mode}
-                type="button"
-                onClick={() => void updateRegistration(mode)}
-              >
-                {capitalize(mode)}
-              </button>
-            ))}
-          </div>
-          <p className="admin-guidance">
-            Use request mode for private alpha access. Open registration is intentionally guarded because public signups are not ready.
-          </p>
+          {adminInitialLoading ? (
+            <LoadingRows />
+          ) : (
+            <>
+              <div className={`registration-posture registration-posture-${registrationMode}`}>
+                <span>{capitalize(registrationMode)}</span>
+                <strong>{registrationPostureTitle(registrationMode)}</strong>
+                <p>{registrationPostureDescription(registrationMode)}</p>
+              </div>
+              <div className="segmented-control" aria-label="Registration mode">
+                {(["closed", "request", "open"] as const).map((mode) => (
+                  <button
+                    className={registrationMode === mode ? "active" : undefined}
+                    key={mode}
+                    type="button"
+                    onClick={() => void updateRegistration(mode)}
+                  >
+                    {capitalize(mode)}
+                  </button>
+                ))}
+              </div>
+              <p className="admin-guidance">
+                Use request mode for private alpha access. Open registration is intentionally guarded because public signups are not ready.
+              </p>
+            </>
+          )}
         </AdminPanel>
 
         <AdminPanel
@@ -1779,6 +1790,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
               <span>Security</span>
               <span>Actions</span>
             </div>
+            {adminInitialLoading && <LoadingRows />}
             {users.map((user) => (
               <div className="admin-table-row" key={user.id}>
                 <span className="cell-main">
@@ -1833,6 +1845,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
           meta={`${apiTokens.filter((token) => !token.revokedAt).length} active`}
         >
           <div className="admin-token-list">
+            {adminInitialLoading && <LoadingRows />}
             {apiTokens.map((token) => (
               <div className="token-row admin-token-row" key={token.id}>
                 <span className="cell-main">
@@ -1868,109 +1881,113 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
           title="Provider"
           meta={`${providers.length} configured`}
         >
-          <div className="provider-layout">
-            <div className="provider-list">
-              <button type="button" onClick={() => setDraft(emptyProviderDraft())}>
-                <Plus size={15} aria-hidden="true" />
-                New provider
-              </button>
-              {providers.map((provider) => (
-                <button
-                  className={provider.key === draft.key ? "selected" : undefined}
-                  key={provider.key}
-                  type="button"
-                  onClick={() => setDraft(providerToDraft(provider))}
-                >
-                  <span>
-                    <strong>{provider.displayName}</strong>
-                    <small>{provider.key}</small>
-                  </span>
-                  <StatusToken value={provider.enabled ? "enabled" : "disabled"} />
+          {adminInitialLoading ? (
+            <LoadingRows />
+          ) : (
+            <div className="provider-layout">
+              <div className="provider-list">
+                <button type="button" onClick={() => setDraft(emptyProviderDraft())}>
+                  <Plus size={15} aria-hidden="true" />
+                  New provider
                 </button>
-              ))}
-            </div>
-            <form className="provider-form" onSubmit={(event) => {
-              event.preventDefault();
-              void saveProvider();
-            }}>
-              <label>
-                Key
-                <input value={draft.key} onChange={(event) => setDraft({ ...draft, key: event.target.value })} />
-              </label>
-              <label>
-                Type
-                <select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as ProviderDraft["type"] })}>
-                  <option value="oidc">OIDC</option>
-                  <option value="saml">SAML</option>
-                  <option value="cloudflare_access">Cloudflare Access</option>
-                  <option value="github">GitHub</option>
-                  <option value="google">Google</option>
-                </select>
-              </label>
-              <label>
-                Display name
-                <input value={draft.displayName} onChange={(event) => setDraft({ ...draft, displayName: event.target.value })} />
-              </label>
-              <label>
-                Issuer
-                <input value={draft.issuer} onChange={(event) => setDraft({ ...draft, issuer: event.target.value })} />
-              </label>
-              <label>
-                Client ID
-                <input value={draft.clientId} onChange={(event) => setDraft({ ...draft, clientId: event.target.value })} />
-              </label>
-              <label className="toggle-row">
-                <input checked={draft.enabled} type="checkbox" onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} />
-                Enabled
-              </label>
-
-              <div className="mapping-editor">
-                <div className="mapping-heading">
-                  <span>Role mappings</span>
-                  <button type="button" onClick={() => setDraft({
-                    ...draft,
-                    roleMappings: [...draft.roleMappings, { claim: "", value: "", role: "user" }],
-                  })}>
-                    <Plus size={15} aria-hidden="true" />
-                    Add
+                {providers.map((provider) => (
+                  <button
+                    className={provider.key === draft.key ? "selected" : undefined}
+                    key={provider.key}
+                    type="button"
+                    onClick={() => setDraft(providerToDraft(provider))}
+                  >
+                    <span>
+                      <strong>{provider.displayName}</strong>
+                      <small>{provider.key}</small>
+                    </span>
+                    <StatusToken value={provider.enabled ? "enabled" : "disabled"} />
                   </button>
-                </div>
-                {draft.roleMappings.map((mapping, index) => (
-                  <div className="mapping-row" key={index}>
-                    <input
-                      aria-label={`Mapping ${index + 1} claim`}
-                      value={mapping.claim}
-                      onChange={(event) => updateDraftMapping(setDraft, draft, index, { claim: event.target.value })}
-                    />
-                    <input
-                      aria-label={`Mapping ${index + 1} value`}
-                      value={mapping.value}
-                      onChange={(event) => updateDraftMapping(setDraft, draft, index, { value: event.target.value })}
-                    />
-                    <select
-                      aria-label={`Mapping ${index + 1} role`}
-                      value={mapping.role}
-                      onChange={(event) => updateDraftMapping(setDraft, draft, index, { role: event.target.value })}
-                    >
-                      <option value="user">user</option>
-                      <option value="author">author</option>
-                      <option value="maintainer">maintainer</option>
-                    </select>
-                    <IconButton label={`Remove mapping ${index + 1}`} onClick={() => setDraft({
-                      ...draft,
-                      roleMappings: draft.roleMappings.filter((_, itemIndex) => itemIndex !== index),
-                    })}>
-                      <Trash2 size={14} aria-hidden="true" />
-                    </IconButton>
-                  </div>
                 ))}
               </div>
-              <button className="save-button" type="submit">
-                <Save size={16} aria-hidden="true" />
-                Save provider
-              </button>
-            </form>
-          </div>
+              <form className="provider-form" onSubmit={(event) => {
+                event.preventDefault();
+                void saveProvider();
+              }}>
+                <label>
+                  Key
+                  <input value={draft.key} onChange={(event) => setDraft({ ...draft, key: event.target.value })} />
+                </label>
+                <label>
+                  Type
+                  <select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as ProviderDraft["type"] })}>
+                    <option value="oidc">OIDC</option>
+                    <option value="saml">SAML</option>
+                    <option value="cloudflare_access">Cloudflare Access</option>
+                    <option value="github">GitHub</option>
+                    <option value="google">Google</option>
+                  </select>
+                </label>
+                <label>
+                  Display name
+                  <input value={draft.displayName} onChange={(event) => setDraft({ ...draft, displayName: event.target.value })} />
+                </label>
+                <label>
+                  Issuer
+                  <input value={draft.issuer} onChange={(event) => setDraft({ ...draft, issuer: event.target.value })} />
+                </label>
+                <label>
+                  Client ID
+                  <input value={draft.clientId} onChange={(event) => setDraft({ ...draft, clientId: event.target.value })} />
+                </label>
+                <label className="toggle-row">
+                  <input checked={draft.enabled} type="checkbox" onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} />
+                  Enabled
+                </label>
+
+                <div className="mapping-editor">
+                  <div className="mapping-heading">
+                    <span>Role mappings</span>
+                    <button type="button" onClick={() => setDraft({
+                      ...draft,
+                      roleMappings: [...draft.roleMappings, { claim: "", value: "", role: "user" }],
+                    })}>
+                      <Plus size={15} aria-hidden="true" />
+                      Add
+                    </button>
+                  </div>
+                  {draft.roleMappings.map((mapping, index) => (
+                    <div className="mapping-row" key={index}>
+                      <input
+                        aria-label={`Mapping ${index + 1} claim`}
+                        value={mapping.claim}
+                        onChange={(event) => updateDraftMapping(setDraft, draft, index, { claim: event.target.value })}
+                      />
+                      <input
+                        aria-label={`Mapping ${index + 1} value`}
+                        value={mapping.value}
+                        onChange={(event) => updateDraftMapping(setDraft, draft, index, { value: event.target.value })}
+                      />
+                      <select
+                        aria-label={`Mapping ${index + 1} role`}
+                        value={mapping.role}
+                        onChange={(event) => updateDraftMapping(setDraft, draft, index, { role: event.target.value })}
+                      >
+                        <option value="user">user</option>
+                        <option value="author">author</option>
+                        <option value="maintainer">maintainer</option>
+                      </select>
+                      <IconButton label={`Remove mapping ${index + 1}`} onClick={() => setDraft({
+                        ...draft,
+                        roleMappings: draft.roleMappings.filter((_, itemIndex) => itemIndex !== index),
+                      })}>
+                        <Trash2 size={14} aria-hidden="true" />
+                      </IconButton>
+                    </div>
+                  ))}
+                </div>
+                <button className="save-button" type="submit">
+                  <Save size={16} aria-hidden="true" />
+                  Save provider
+                </button>
+              </form>
+            </div>
+          )}
         </AdminPanel>
 
         <AdminPanel
@@ -1979,6 +1996,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
           meta={`${auditEvents.length} latest`}
         >
           <div className="audit-list">
+            {adminInitialLoading && <LoadingRows />}
             {auditEvents.map((event) => (
               <div className="audit-row" key={event.id}>
                 <span className={event.decision === "allow" ? "audit-decision allow" : "audit-decision deny"}>
@@ -2327,8 +2345,11 @@ function AccountSettings({
 
   const mfaEnabled = Boolean(mfaStatus?.totpEnabled);
   const activeApiTokenCount = apiTokens.filter((token) => !token.revokedAt).length;
+  const accountInitialLoading = state === "loading" && mfaStatus === null;
   const sessionMfaLabel = session.user.mfaVerified ? "verified" : "not verified";
-  const mfaPostureLabel = mfaEnabled ? (session.user.mfaVerified ? "MFA verified" : "MFA enabled") : "MFA not set";
+  const mfaPostureLabel = accountInitialLoading ? "Loading" : mfaEnabled ? (session.user.mfaVerified ? "MFA verified" : "MFA enabled") : "MFA not set";
+  const apiTokenCountLabel = accountInitialLoading ? "Loading" : String(activeApiTokenCount);
+  const recoveryCodeLabel = accountInitialLoading ? "Loading" : mfaEnabled ? String(mfaStatus?.recoveryCodesRemaining ?? 0) : "not issued";
 
   return (
     <main className="settings-workspace" aria-label="Account settings">
@@ -2341,11 +2362,11 @@ function AccountSettings({
         </div>
         <div className="settings-hero-metrics" aria-label="Account posture">
           <SettingsMetric label="Session MFA" value={sessionMfaLabel} strong={session.user.mfaVerified} />
-          <SettingsMetric label="Active API keys" value={String(activeApiTokenCount)} />
+          <SettingsMetric label="Active API keys" value={apiTokenCountLabel} />
         </div>
       </section>
 
-      {mfaEnabled && !session.user.mfaVerified && (
+      {!accountInitialLoading && mfaEnabled && !session.user.mfaVerified && (
         <section className="settings-risk-banner" role="status" aria-live="polite">
           <CircleAlert size={20} aria-hidden="true" />
           <div>
@@ -2373,8 +2394,8 @@ function AccountSettings({
           <dl className="settings-summary-list">
             <Metadata label="Email status" value={session.user.emailVerified ? "verified" : "unverified"} />
             <Metadata label="MFA posture" value={mfaPostureLabel} />
-            <Metadata label="Recovery codes" value={mfaEnabled ? String(mfaStatus?.recoveryCodesRemaining ?? 0) : "not issued"} />
-            <Metadata label="API access" value={`${activeApiTokenCount} active`} />
+            <Metadata label="Recovery codes" value={recoveryCodeLabel} />
+            <Metadata label="API access" value={accountInitialLoading ? "Loading" : `${activeApiTokenCount} active`} />
           </dl>
         </aside>
 
@@ -2485,65 +2506,69 @@ function AccountSettings({
             </form>
           </AccountPanel>
 
-          <AccountPanel icon={<ShieldCheck size={18} aria-hidden="true" />} title="MFA" meta={mfaEnabled ? `${mfaStatus?.recoveryCodesRemaining ?? 0} recovery codes` : "Authenticator app not set"}>
-            <div className="settings-stack">
-              <div className={mfaEnabled ? "settings-security-state verified" : "settings-security-state attention"}>
-                <ShieldCheck size={18} aria-hidden="true" />
-                <div>
-                  <strong>{mfaEnabled ? "Authenticator app MFA is enabled." : "Authenticator app MFA is not set."}</strong>
-                  <span>{session.user.mfaVerified ? "This session is MFA verified." : "Sign in with MFA before using privileged owner workflows."}</span>
+          <AccountPanel icon={<ShieldCheck size={18} aria-hidden="true" />} title="MFA" meta={accountInitialLoading ? "Loading" : mfaEnabled ? `${mfaStatus?.recoveryCodesRemaining ?? 0} recovery codes` : "Authenticator app not set"}>
+            {accountInitialLoading ? (
+              <LoadingRows />
+            ) : (
+              <div className="settings-stack">
+                <div className={mfaEnabled ? "settings-security-state verified" : "settings-security-state attention"}>
+                  <ShieldCheck size={18} aria-hidden="true" />
+                  <div>
+                    <strong>{mfaEnabled ? "Authenticator app MFA is enabled." : "Authenticator app MFA is not set."}</strong>
+                    <span>{session.user.mfaVerified ? "This session is MFA verified." : "Sign in with MFA before using privileged owner workflows."}</span>
+                  </div>
                 </div>
-              </div>
-              {mfaEnabled && (
-                <div className="settings-actions">
-                  <button className="save-button secondary-action" type="button" onClick={() => setMfaSetupOpen((open) => !open)}>
-                    <RotateCw size={16} aria-hidden="true" />
-                    Reset authenticator
-                  </button>
-                  <form className="inline-security-form" onSubmit={(event) => {
-                    event.preventDefault();
-                    const formData = new window.FormData(event.currentTarget);
-                    void removeMfa(String(formData.get("mfa-removal-password") ?? ""));
-                  }}>
-                    <label>
-                      <span>Password for MFA removal</span>
-                      <input
-                        aria-label="Password for MFA removal"
-                        autoComplete="current-password"
-                        name="mfa-removal-password"
-                        onChange={(event) => setMfaPassword(event.target.value)}
-                        onInput={(event) => setMfaPassword(event.currentTarget.value)}
-                        placeholder="Current password"
-                        required
-                        type="password"
-                        value={mfaPassword}
-                      />
-                    </label>
-                    <button disabled={state === "loading"} type="submit">
-                      <X size={16} aria-hidden="true" />
-                      Remove MFA
+                {mfaEnabled && (
+                  <div className="settings-actions">
+                    <button className="save-button secondary-action" type="button" onClick={() => setMfaSetupOpen((open) => !open)}>
+                      <RotateCw size={16} aria-hidden="true" />
+                      Reset authenticator
                     </button>
-                  </form>
-                </div>
-              )}
-              {(!mfaEnabled || mfaSetupOpen) && (
-                <MfaSetupPanel
-                  client={client}
-                  onComplete={(result) => {
-                    setMfaStatus({
-                      totpEnabled: true,
-                      recoveryCodesRemaining: result.recoveryCodes.length,
-                      factors: [result.factor],
-                    });
-                    setMfaSetupOpen(true);
-                  }}
-                  session={session}
-                />
-              )}
-            </div>
+                    <form className="inline-security-form" onSubmit={(event) => {
+                      event.preventDefault();
+                      const formData = new window.FormData(event.currentTarget);
+                      void removeMfa(String(formData.get("mfa-removal-password") ?? ""));
+                    }}>
+                      <label>
+                        <span>Password for MFA removal</span>
+                        <input
+                          aria-label="Password for MFA removal"
+                          autoComplete="current-password"
+                          name="mfa-removal-password"
+                          onChange={(event) => setMfaPassword(event.target.value)}
+                          onInput={(event) => setMfaPassword(event.currentTarget.value)}
+                          placeholder="Current password"
+                          required
+                          type="password"
+                          value={mfaPassword}
+                        />
+                      </label>
+                      <button disabled={state === "loading"} type="submit">
+                        <X size={16} aria-hidden="true" />
+                        Remove MFA
+                      </button>
+                    </form>
+                  </div>
+                )}
+                {(!mfaEnabled || mfaSetupOpen) && (
+                  <MfaSetupPanel
+                    client={client}
+                    onComplete={(result) => {
+                      setMfaStatus({
+                        totpEnabled: true,
+                        recoveryCodesRemaining: result.recoveryCodes.length,
+                        factors: [result.factor],
+                      });
+                      setMfaSetupOpen(true);
+                    }}
+                    session={session}
+                  />
+                )}
+              </div>
+            )}
           </AccountPanel>
 
-          <AccountPanel icon={<KeyRound size={18} aria-hidden="true" />} title="API keys" meta={`${activeApiTokenCount} active`}>
+          <AccountPanel icon={<KeyRound size={18} aria-hidden="true" />} title="API keys" meta={accountInitialLoading ? "Loading" : `${activeApiTokenCount} active`}>
             <div className="settings-stack">
               <form className="settings-form api-key-form" onSubmit={(event) => {
                 event.preventDefault();
@@ -2601,7 +2626,7 @@ function AccountSettings({
                   </button>
                 </div>
               )}
-              <TokenList tokens={apiTokens} onRevoke={(tokenId) => void revokeAccountApiToken(tokenId)} />
+              {accountInitialLoading ? <LoadingRows /> : <TokenList tokens={apiTokens} onRevoke={(tokenId) => void revokeAccountApiToken(tokenId)} />}
             </div>
           </AccountPanel>
 

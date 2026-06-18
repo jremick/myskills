@@ -1211,7 +1211,7 @@ button:focus-visible {
 
 .review-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
   gap: 10px;
   align-items: center;
   width: 100%;
@@ -3599,8 +3599,8 @@ code {
 .settings-hero h1 {
   margin: 0;
   color: var(--ink);
-  font-size: clamp(28px, 4vw, 44px);
-  line-height: 0.98;
+  font-size: 24px;
+  line-height: 1.15;
   letter-spacing: 0;
 }
 
@@ -4014,6 +4014,10 @@ code {
 .token-row:first-child,
 .submission-row:first-child {
   border-top: 0;
+}
+
+.token-row {
+  grid-template-columns: minmax(180px, 1fr) auto minmax(130px, auto) minmax(130px, auto) auto;
 }
 
 .admin-token-row {
