@@ -1,7 +1,7 @@
 # Release Process
 
 Version: 0.1.0-alpha.0
-Last updated: 2026-06-17
+Last updated: 2026-06-18
 
 This repo is prepared for a responsible public alpha once the checklist in [ALPHA_RELEASE_GOAL.md](ALPHA_RELEASE_GOAL.md) passes. Alpha releases are for evaluation and early self-hosting feedback, not business-critical production use.
 
@@ -47,3 +47,30 @@ git push origin "v${VERSION}"
 The GitHub release workflow runs on `v*.*.*` tags. It installs the repo-declared npm version, checks that the pushed tag matches `package.json`, runs `npm run check`, creates artifacts with `--require-tag`, builds the API, web, and HTTP MCP Docker targets, and uploads the release artifact bundle.
 
 The workflow does not publish npm packages, create a GitHub Release, or push container images yet. Those should be enabled after the business-safe release publishing policy is decided.
+
+## CLI npm Alpha
+
+The CLI alpha package is published as `@jarel/myskills` under the `alpha` npm dist-tag. Because `0.1.0-alpha.0` is currently the only published version, npm also reports it as `latest`; keep installation examples pinned to `@alpha` until a stable CLI release exists.
+
+Before publishing a CLI alpha:
+
+- Run `npm run check`.
+- Run `npm publish -w apps/cli --access public --tag alpha --dry-run`.
+- Confirm the tarball contains only `README.md`, `dist/index.js`, and `package.json`.
+- Confirm `myskills --version` works from a packed tarball or temporary global install.
+
+For the first manual alpha publish, use browser-backed npm 2FA and disable provenance because trusted publishing is not active locally:
+
+```bash
+npm publish -w apps/cli --access public --tag alpha --provenance=false
+```
+
+After publish, verify:
+
+```bash
+npm view @jarel/myskills version dist-tags
+npm install -g @jarel/myskills@alpha
+myskills --version
+```
+
+Future npm publishes should move to GitHub Actions trusted publishing with provenance instead of manual local publishing.

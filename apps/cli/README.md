@@ -1,8 +1,14 @@
-# CLI App
+# MySkills CLI
 
 Command-line client for MySkills.
 
-Planned command name:
+Package:
+
+```text
+@jarel/myskills
+```
+
+Command:
 
 ```text
 myskills
@@ -25,6 +31,8 @@ CLI tokens should be stored in the platform secret store where possible.
 Implemented commands:
 
 ```text
+myskills version
+myskills --version
 myskills validate --path <file-directory-or-zip>
 myskills scan --path <file-directory-or-zip>
 myskills search [query] [--api-url <url>]
@@ -43,6 +51,21 @@ myskills rollback <skill-slug> [--dir <install-root>]
 myskills token create --name <name> --scope <scope> [--scope <scope>]
 myskills token list
 myskills token revoke <token-id>
+```
+
+## Public Alpha Install
+
+The first public alpha package is distributed through npm under the `alpha` tag:
+
+```bash
+npm install -g @jarel/myskills@alpha
+myskills --version
+```
+
+Update the CLI with:
+
+```bash
+npm install -g @jarel/myskills@alpha
 ```
 
 `validate`, `scan`, and `submit` accept a manifest file, package directory, or local `.zip` package. `login` prompts for the password, handles MFA challenges with a TOTP or recovery code prompt, and stores the returned session token by normalized API URL. Token resolution is `--token`, then `MYSKILLS_TOKEN`, then the stored login token. The default token store writes `tokens.json` under `MYSKILLS_CONFIG_DIR`, `MYSKILLS_TOKEN_FILE`, or the user config directory with user-only file permissions. `logout` revokes stored session tokens and clears the local entry; stored API tokens are removed locally and must be revoked with `token revoke`.

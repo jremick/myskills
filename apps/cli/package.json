@@ -1,20 +1,48 @@
 {
-  "name": "@myskills-app/cli",
+  "name": "@jarel/myskills",
   "version": "0.1.0-alpha.0",
+  "description": "Command-line client for publishing, discovering, installing, updating, and rolling back MySkills packages.",
   "license": "Apache-2.0",
-  "private": true,
+  "private": false,
   "type": "module",
   "bin": {
-    "myskills": "./dist/index.js"
+    "myskills": "dist/index.js"
+  },
+  "files": [
+    "dist/index.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jremick/myskills.git",
+    "directory": "apps/cli"
+  },
+  "homepage": "https://github.com/jremick/myskills#readme",
+  "bugs": {
+    "url": "https://github.com/jremick/myskills/issues"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "cli",
+    "skills",
+    "registry"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha",
+    "provenance": true
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node ../../scripts/build-cli-bundle.mjs",
     "test": "node ../../scripts/run-node-tests.mjs --import tsx --extensions .test.ts"
   },
-  "dependencies": {
-    "@myskills-app/skill-package": "0.1.0-alpha.0"
-  },
   "devDependencies": {
+    "@myskills-app/skill-package": "0.1.0-alpha.0",
+    "esbuild": "^0.28.1",
     "tsx": "^4.20.6"
   }
 }

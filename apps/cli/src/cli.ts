@@ -11,6 +11,7 @@ import {
 } from "@myskills-app/skill-package";
 
 const DEFAULT_API_URL = "http://localhost:3001";
+const CLI_VERSION = process.env.MYSKILLS_CLI_VERSION ?? "0.0.0-dev";
 const CLI_VISIBILITY_SCOPES = ["public", "authenticated", "organization", "team", "private", "explicit-users"] as const;
 
 export interface CliIo {
@@ -70,6 +71,11 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
       case "--help":
       case "-h":
         runtime.io.stdout(helpText());
+        return 0;
+      case "version":
+      case "--version":
+      case "-v":
+        runtime.io.stdout(CLI_VERSION);
         return 0;
       case "validate":
         return await validateCommand(parsed, runtime);
@@ -1702,6 +1708,7 @@ function helpText(): string {
     "myskills <command>",
     "",
     "Commands:",
+    "  version",
     "  validate --path <file-directory-or-zip>",
     "  scan --path <file-directory-or-zip>",
     "  search [query] [--api-url <url>]",
@@ -1730,6 +1737,7 @@ function helpText(): string {
     "  token revoke <token-id>",
     "",
     "Options:",
+    "  --version           Print CLI version.",
     "  --json              Print machine-readable JSON.",
     "  --api-url <url>     API base URL. Defaults to MYSKILLS_API_URL or http://localhost:3001.",
     "  --token <token>     Bearer token. Defaults to MYSKILLS_TOKEN, then stored login token.",

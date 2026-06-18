@@ -110,6 +110,13 @@ node apps/cli/dist/index.js token create --name "Local CLI" --scope profile:read
 node apps/cli/dist/index.js logout
 ```
 
+The public alpha CLI package is available through npm:
+
+```bash
+npm install -g @jarel/myskills@alpha
+myskills --version
+```
+
 CLI bearer resolution is `--token`, then `MYSKILLS_TOKEN`, then the stored login token scoped to the normalized API URL.
 
 ## Example Skill
