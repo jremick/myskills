@@ -82,9 +82,11 @@ brew services start postgresql@17
 PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH"
 createdb -h localhost -p 5432 myskills_test
 TEST_DATABASE_URL=postgres://localhost:5432/myskills_test npm run test:postgres
+brew services stop postgresql@17
 ```
 
 If `myskills_test` already exists, skip `createdb`. The test runner resets the target schema and refuses database names that do not include `test` or `ci`.
+Unless the task needs live human testing against a running local database, stop Postgres after the test finishes.
 
 Use production/deployment checks only with explicit approval:
 
