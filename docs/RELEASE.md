@@ -26,6 +26,8 @@ TEST_DATABASE_URL=postgres://myskills_test:myskills_test@localhost:5432/myskills
 npm run release:artifacts
 ```
 
+Local Postgres integration checks must use a disposable database name containing `test` or `ci`; stop any local database service started only for that check afterward unless live human testing needs it.
+
 The artifact script writes:
 
 - `myskills-app-<version>-source.tar`: source archive created from `HEAD`.
