@@ -94,6 +94,7 @@ async function seed() {
       skillId: skill.id,
       version: "0.1.0",
       releaseNotes: "Initial synthetic seed package.",
+      lifecycleStatus: "approved",
       reviewStatus: "approved",
       securityStatus: "passed",
       publishedAt: new Date(),
