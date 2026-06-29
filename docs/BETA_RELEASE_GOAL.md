@@ -1,6 +1,6 @@
 # Public Beta Release Goal
 
-Version: 0.1.0-alpha.0
+Version: 0.1.0-beta.0
 Last updated: 2026-06-30
 
 ## Goal
@@ -8,6 +8,8 @@ Last updated: 2026-06-30
 Ship MySkills as a public beta that real external users can install, inspect, self-host experimentally, and evaluate with clear support, security, compatibility, and upgrade expectations.
 
 The beta is still prerelease software. It is not the final business-safe production release.
+
+Target release: `v0.1.0-beta.0`.
 
 ## Beta Gate
 

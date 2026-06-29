@@ -1,11 +1,11 @@
 # Release Process
 
-Version: 0.1.0-alpha.0
-Last updated: 2026-06-18
+Version: 0.1.0-beta.0
+Last updated: 2026-06-30
 
-This repo is prepared for a responsible public alpha once the checklist in [ALPHA_RELEASE_GOAL.md](ALPHA_RELEASE_GOAL.md) passes. Alpha releases are for evaluation and early self-hosting feedback, not business-critical production use.
+This repo is prepared for a responsible public beta once the checklist in [BETA_RELEASE_GOAL.md](BETA_RELEASE_GOAL.md) passes. Beta releases are still prerelease software, but they should have a tested first-run path, documented compatibility, support boundaries, upgrade expectations, and release notes.
 
-Public beta release criteria are tracked in [BETA_RELEASE_GOAL.md](BETA_RELEASE_GOAL.md). Beta releases are still prerelease software, but they should have a tested first-run path, documented compatibility, support boundaries, upgrade expectations, and release notes.
+The earlier public-alpha criteria remain archived in [ALPHA_RELEASE_GOAL.md](ALPHA_RELEASE_GOAL.md).
 
 ## Release Gates
 

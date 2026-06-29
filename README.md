@@ -1,13 +1,13 @@
 # MySkills
 
-MySkills is an open-source alpha platform for publishing, reviewing, discovering, installing, and using AI agent skills across web, API, CLI, and MCP interfaces.
+MySkills is an open-source beta platform for publishing, reviewing, discovering, installing, and using AI agent skills across web, API, CLI, and MCP interfaces.
 
 <p>
   <a href="https://github.com/jremick/myskills/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/jremick/myskills/actions/workflows/ci.yml/badge.svg"/></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache_2.0-blue.svg"/></a>
   <img alt="Node" src="https://img.shields.io/badge/node-20.x-brightgreen.svg"/>
   <a href="docs/"><img alt="Docs" src="https://img.shields.io/badge/docs-available-orange.svg"/></a>
-  <img alt="Status" src="https://img.shields.io/badge/status-public_alpha-yellow.svg"/>
+  <img alt="Status" src="https://img.shields.io/badge/status-public_beta-yellow.svg"/>
 </p>
 
 ## Preview
@@ -16,11 +16,11 @@ MySkills is an open-source alpha platform for publishing, reviewing, discovering
 
 ## Release Status
 
-Current target: **v0.1.0-alpha.0**.
+Current target: **v0.1.0-beta.0**.
 
-This alpha is intended for evaluation, local demos, and early self-hosting feedback. It is not yet the business-safe production release: API contracts, package formats, deployment defaults, and operational guidance may still change before `v1.0`.
+This beta is intended for real external trial use with documented compatibility, support, and upgrade expectations. It is still prerelease software and not yet the business-safe production release: API contracts, package formats, deployment defaults, and operational guidance may still change before `v1.0`.
 
-Next target: **public beta**. The beta gate is tracked in [docs/BETA_RELEASE_GOAL.md](docs/BETA_RELEASE_GOAL.md). Beta is intended for real external trial use with documented compatibility, support, and upgrade expectations, but it is still prerelease software.
+The beta gate is tracked in [docs/BETA_RELEASE_GOAL.md](docs/BETA_RELEASE_GOAL.md).
 
 ## Name
 
