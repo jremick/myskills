@@ -1,6 +1,6 @@
 # Compatibility
 
-Version: 0.1.0-alpha.0
+Version: 0.1.0-beta.0
 Last updated: 2026-06-30
 
 This document states the expected support surface for the public beta track. MySkills is still prerelease software, so compatibility is narrower than a stable `v1.0` release.

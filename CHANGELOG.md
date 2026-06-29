@@ -1,14 +1,19 @@
 # Changelog
 
-All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between alpha and beta releases and will be called out in this file.
+All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
 ## Unreleased
+
+No unreleased changes yet.
+
+## 0.1.0-beta.0 - 2026-06-30
 
 ### Added
 
 - Public beta readiness docs for support, contribution, compatibility, and upgrade expectations.
 - GitHub issue and pull request templates for public triage.
 - Dependabot configuration for npm, GitHub Actions, and Docker manifests.
+- Refreshed beta web console UI and design-system components.
 
 ### Fixed
 

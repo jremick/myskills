@@ -1,6 +1,6 @@
 {
   "name": "@myskills-app/api",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-beta.0",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
@@ -15,9 +15,9 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1061.0",
-    "@myskills-app/auth": "0.1.0-alpha.0",
-    "@myskills-app/core": "0.1.0-alpha.0",
-    "@myskills-app/skill-package": "0.1.0-alpha.0",
+    "@myskills-app/auth": "0.1.0-beta.0",
+    "@myskills-app/core": "0.1.0-beta.0",
+    "@myskills-app/skill-package": "0.1.0-beta.0",
     "drizzle-orm": "^0.45.0",
     "fastify": "^5.6.2",
     "nodemailer": "^9.0.1",
