@@ -1,6 +1,6 @@
 # Support
 
-MySkills is public alpha software moving toward public beta. Support is best effort and focused on bugs, setup problems, security reports, and concrete product feedback.
+MySkills is public beta software. Support is best effort and focused on bugs, setup problems, security reports, and concrete product feedback.
 
 ## Supported Channels
 
@@ -11,7 +11,7 @@ Do not post secrets, API tokens, `.env` contents, private package contents, prod
 
 ## Current Support Scope
 
-Supported for alpha/beta feedback:
+Supported for beta feedback:
 
 - Fresh-clone setup and local self-hosting experiments.
 - API, web, CLI, and MCP behavior documented in this repository.

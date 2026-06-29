@@ -69,7 +69,7 @@ test("GET /v1/capabilities describes enabled server features", async (t) => {
 
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.json(), {
-    version: process.env.MYSKILLS_API_VERSION ?? "0.1.0-beta.0",
+    version: process.env.MYSKILLS_API_VERSION ?? "0.1.0-beta.1",
     capabilities: {
       auth: false,
       search: true,

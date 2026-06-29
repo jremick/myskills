@@ -6,6 +6,12 @@ All notable user-facing changes will be tracked here. MySkills is still prerelea
 
 No unreleased changes yet.
 
+## 0.1.0-beta.1 - 2026-06-30
+
+### Fixed
+
+- Updated hosted web, support, security, and contribution copy from public-alpha wording to public-beta wording while keeping hosted signups owner-gated.
+
 ## 0.1.0-beta.0 - 2026-06-30
 
 ### Added

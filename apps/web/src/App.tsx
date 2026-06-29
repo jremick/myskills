@@ -682,7 +682,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
 function MarketingLanding({ onLogin }: { onLogin: () => void }) {
   return (
     <main className="landing-page">
-      <section className="landing-hero" aria-label="MySkills private development landing page">
+      <section className="landing-hero" aria-label="MySkills public beta landing page">
         <nav className="landing-nav" aria-label="Marketing navigation">
           <a className="landing-brand" href="/" onClick={(event) => event.preventDefault()}>
             <img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" />
@@ -697,7 +697,7 @@ function MarketingLanding({ onLogin }: { onLogin: () => void }) {
 
         <div className="landing-hero-grid">
           <div className="landing-hero-copy">
-            <p className="landing-status">Private development. Not open for signups.</p>
+            <p className="landing-status">Public beta. Hosted signups are owner-gated.</p>
             <h1>MySkills</h1>
             <p className="landing-lede">
               A governed registry for packaging, reviewing, publishing, and installing reusable AI agent skills across web, CLI, API, and MCP surfaces.
@@ -743,7 +743,7 @@ function MarketingLanding({ onLogin }: { onLogin: () => void }) {
       <section className="landing-band landing-split" id="trust" aria-labelledby="trust-heading">
         <div>
           <span className="landing-kicker">Trust boundary</span>
-          <h2 id="trust-heading">Designed for private teams before public distribution.</h2>
+          <h2 id="trust-heading">Designed for governed teams before broad public onboarding.</h2>
         </div>
         <div className="landing-checks">
           <p><KeyRound size={18} aria-hidden="true" /> First-party accounts, MFA, scoped API tokens, and owner-controlled registration.</p>
@@ -755,9 +755,9 @@ function MarketingLanding({ onLogin }: { onLogin: () => void }) {
       <section className="landing-band landing-status-band" id="private-development" aria-labelledby="status-heading">
         <div className="landing-section-heading">
           <span>Current status</span>
-          <h2 id="status-heading">Private alpha work is underway.</h2>
+          <h2 id="status-heading">Public beta release is live.</h2>
           <p>
-            MySkills is being prepared for a responsible public alpha. The live site will share product direction and allow owner access, but public account creation is not available yet.
+            MySkills is available for external trial use and experimental self-hosting. This hosted registry remains owner-gated while public account creation, abuse handling, and support workflows mature.
           </p>
         </div>
         <Button className="landing-primary shadcn-action-button" size="sm" type="button" onClick={onLogin}>
@@ -835,7 +835,7 @@ function LoginPage({
         <Button className="login-back shadcn-action-button" size="sm" type="button" variant="outline" onClick={onHome}>Public site</Button>
       </nav>
       <section className="login-panel" aria-labelledby="login-heading">
-        <p className="landing-status">Private development. Public signups are closed.</p>
+        <p className="landing-status">Public beta. Hosted signups are closed.</p>
         <h1 id="login-heading">Login</h1>
         <p>Use an approved owner or team account to access the private registry workspace.</p>
         <AuthWidget
@@ -1862,7 +1862,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
                 ))}
               </div>
               <p className="admin-guidance">
-                Use request mode for private alpha access. Open registration is intentionally guarded because public signups are not ready.
+                Use request mode for controlled beta access. Open registration is intentionally guarded until public onboarding and abuse handling are ready.
               </p>
             </>
           )}
@@ -2260,7 +2260,7 @@ function AuthTokenPage({
         <Button className="login-back shadcn-action-button" size="sm" type="button" variant="outline" onClick={onLogin}>Login</Button>
       </nav>
       <section className="login-panel" aria-labelledby="auth-token-heading">
-        <p className="landing-status">Private development. Account action required.</p>
+        <p className="landing-status">Public beta. Account action required.</p>
         <h1 id="auth-token-heading">{heading}</h1>
         {kind === "reset-password" ? (
           <form className="auth-widget auth-form" onSubmit={(event) => {
@@ -3729,7 +3729,7 @@ function registrationPostureTitle(mode: AdminRegistrationMode): string {
 function registrationPostureDescription(mode: AdminRegistrationMode): string {
   switch (mode) {
     case "closed":
-      return "Best for private development and production hardening before public alpha.";
+      return "Best for owner-gated beta operation and production hardening before public onboarding.";
     case "request":
       return "Best for controlled collaborator onboarding while review workflows are still maturing.";
     case "open":

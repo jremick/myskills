@@ -1,10 +1,10 @@
 # Security Policy
 
-MySkills is currently in public alpha. The project is suitable for evaluation and early self-hosting, but it is not yet a business-critical production platform.
+MySkills is currently in public beta. The project is suitable for evaluation and experimental self-hosting, but it is not yet a business-critical production platform.
 
 ## Supported Versions
 
-Only the latest `main` branch and latest tagged alpha release receive security attention during alpha.
+Only the latest `main` branch and latest tagged beta release receive security attention during beta.
 
 ## Reporting A Vulnerability
 
@@ -19,7 +19,7 @@ Include:
 - reproduction steps or proof of impact
 - whether the report involves private data, credentials, or package contents
 
-Expected response during alpha: best-effort triage, no SLA.
+Expected response during beta: best-effort triage, no SLA.
 
 ## Security Principles
 
