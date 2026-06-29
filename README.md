@@ -2,6 +2,14 @@
 
 MySkills is an open-source alpha platform for publishing, reviewing, discovering, installing, and using AI agent skills across web, API, CLI, and MCP interfaces.
 
+<p>
+  <a href="https://github.com/jremick/myskills/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/jremick/myskills/actions/workflows/ci.yml/badge.svg"/></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache_2.0-blue.svg"/></a>
+  <img alt="Node" src="https://img.shields.io/badge/node-20.x-brightgreen.svg"/>
+  <a href="docs/"><img alt="Docs" src="https://img.shields.io/badge/docs-available-orange.svg"/></a>
+  <img alt="Status" src="https://img.shields.io/badge/status-public_alpha-yellow.svg"/>
+</p>
+
 ## Preview
 
 ![MySkills registry browser populated with approved skills](artifacts/screenshots/myskills-populated-skills-2026-06-04.png)
@@ -11,6 +19,8 @@ MySkills is an open-source alpha platform for publishing, reviewing, discovering
 Current target: **v0.1.0-alpha.0**.
 
 This alpha is intended for evaluation, local demos, and early self-hosting feedback. It is not yet the business-safe production release: API contracts, package formats, deployment defaults, and operational guidance may still change before `v1.0`.
+
+Next target: **public beta**. The beta gate is tracked in [docs/BETA_RELEASE_GOAL.md](docs/BETA_RELEASE_GOAL.md). Beta is intended for real external trial use with documented compatibility, support, and upgrade expectations, but it is still prerelease software.
 
 ## Name
 
@@ -146,6 +156,8 @@ Use [GitHub Issues](https://github.com/jremick/myskills/issues) for public alpha
 
 Do not report suspected vulnerabilities, exposed secrets, access-control bypasses, or package-safety escapes in public issues. Use GitHub private vulnerability reporting as described in [SECURITY.md](SECURITY.md).
 
+See [SUPPORT.md](SUPPORT.md) for support boundaries and [CONTRIBUTING.md](CONTRIBUTING.md) for contribution expectations.
+
 ## Deployment
 
 Container packaging is available for production API, web, and optional HTTP MCP services:
@@ -156,6 +168,12 @@ docker compose --env-file .env.production -f docker-compose.production.example.y
 ```
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for production Compose, migration/seed order, reverse proxy requirements, and managed-container deployment guidance.
+
+## Compatibility And Upgrades
+
+The public beta compatibility surface is documented in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md). Prerelease upgrade and migration expectations are documented in [docs/UPGRADE_POLICY.md](docs/UPGRADE_POLICY.md).
+
+Known prerelease limitations include provider login/linking, background scan jobs, durable eval runs, browser/device CLI login, platform-specific install adapters, and fully rehearsed production backup/restore runbooks.
 
 ## Release
 
@@ -168,7 +186,9 @@ npm run release:artifacts
 
 See [docs/RELEASE.md](docs/RELEASE.md) for tag gates, artifact contents, and the release workflow.
 
-The immediate alpha goal is tracked in [docs/ALPHA_RELEASE_GOAL.md](docs/ALPHA_RELEASE_GOAL.md). The later business-safe production release goal is tracked in [docs/BUSINESS_SAFE_RELEASE_GOAL.md](docs/BUSINESS_SAFE_RELEASE_GOAL.md).
+The immediate alpha goal is tracked in [docs/ALPHA_RELEASE_GOAL.md](docs/ALPHA_RELEASE_GOAL.md). The public beta goal is tracked in [docs/BETA_RELEASE_GOAL.md](docs/BETA_RELEASE_GOAL.md). The later business-safe production release goal is tracked in [docs/BUSINESS_SAFE_RELEASE_GOAL.md](docs/BUSINESS_SAFE_RELEASE_GOAL.md).
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes and user-facing changes.
 
 ## License
 

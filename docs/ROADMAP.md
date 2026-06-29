@@ -6,12 +6,14 @@ Last updated: 2026-06-18
 ## Release Tracks
 
 - **Responsible public alpha (`v0.1.0-alpha.0`)**: make the repository public with clear alpha limits, sanitized examples, security reporting, reproducible artifacts, and fresh-clone proof.
+- **Public beta release**: make external trial use credible with branch protection, support/contribution surfaces, compatibility documentation, upgrade policy, issue templates, changelog, and fresh-clone rehearsal. See [BETA_RELEASE_GOAL.md](BETA_RELEASE_GOAL.md).
 - **Short-term domain**: point `myskills.sh` to the public `myskills` repository until the website exists.
 - **Business-safe production release**: harden the alpha into an operator-ready release with stronger audit, background scanning, skill evals, provider lifecycle, artifact delivery, CLI credential storage, deploy/ops guidance, and upgrade policy. See [BUSINESS_SAFE_RELEASE_GOAL.md](BUSINESS_SAFE_RELEASE_GOAL.md).
 
 ## Current Focus
 
 - Finish the public-alpha release gate: fresh-clone rehearsal, public visibility switch, first reproducible alpha tag, and release artifact verification.
+- Close the public-beta readiness gate: support/contribution/changelog surfaces, compatibility and upgrade expectations, default-branch protection, GitHub security settings, clean first-run rehearsal, and release notes.
 - Keep production-hardening items tracked without blocking the responsible public alpha unless they close accepted alpha risk.
 - Complete the remaining web-app MVP gaps that affect first-user clarity: private draft management, version-history polish, instance settings administration, and the broader identity-system refresh.
 - Preserve the API as the canonical registry and trust boundary for sync-related work; local and connected-tool state should reconcile through reviewable changes, not silent overwrites.

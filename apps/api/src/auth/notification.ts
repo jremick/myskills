@@ -80,6 +80,8 @@ export class SmtpAuthNotificationSink implements AuthNotificationSink {
       subject: message.subject,
       text: message.text,
       html: message.html,
+      disableFileAccess: true,
+      disableUrlAccess: true,
     });
   }
 }

@@ -5,6 +5,8 @@ Last updated: 2026-06-18
 
 This repo is prepared for a responsible public alpha once the checklist in [ALPHA_RELEASE_GOAL.md](ALPHA_RELEASE_GOAL.md) passes. Alpha releases are for evaluation and early self-hosting feedback, not business-critical production use.
 
+Public beta release criteria are tracked in [BETA_RELEASE_GOAL.md](BETA_RELEASE_GOAL.md). Beta releases are still prerelease software, but they should have a tested first-run path, documented compatibility, support boundaries, upgrade expectations, and release notes.
+
 ## Release Gates
 
 Before creating a release tag:
@@ -17,6 +19,7 @@ Before creating a release tag:
 - Review the generated `dist/release/release-metadata.json` and `dist/release/SHA256SUMS`.
 - Confirm public docs and examples contain no private-source carryover.
 - Confirm GitHub private vulnerability reporting is enabled before announcing the public alpha or pushing the public alpha tag.
+- For beta tags, confirm `main` branch protection, GitHub security settings, support/contribution docs, compatibility docs, upgrade policy, and changelog are current.
 
 ## Local Artifact Build
 
@@ -47,6 +50,16 @@ git push origin "v${VERSION}"
 The GitHub release workflow runs on `v*.*.*` tags. It installs the repo-declared npm version, checks that the pushed tag matches `package.json`, runs `npm run check`, creates artifacts with `--require-tag`, builds the API, web, and HTTP MCP Docker targets, and uploads the release artifact bundle.
 
 The workflow does not publish npm packages, create a GitHub Release, or push container images yet. Those should be enabled after the business-safe release publishing policy is decided.
+
+## Public Beta Notes
+
+Before a beta release:
+
+- Update root and workspace package versions consistently.
+- Update [CHANGELOG.md](../CHANGELOG.md) with user-facing changes, known limitations, and breaking changes.
+- Run the fresh-clone rehearsal described in [BETA_RELEASE_GOAL.md](BETA_RELEASE_GOAL.md).
+- Draft GitHub release notes from a file and publish with `--notes-file` or the GitHub release UI.
+- Keep npm publishing explicit and separate from the GitHub source/artifact release unless trusted publishing has been configured.
 
 ## CLI npm Alpha
 

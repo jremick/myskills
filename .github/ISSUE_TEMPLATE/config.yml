@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability report
+    url: https://github.com/jremick/myskills/security/advisories/new
+    about: Report suspected vulnerabilities privately. Do not open public security issues.
+  - name: Support policy
+    url: https://github.com/jremick/myskills/blob/main/SUPPORT.md
+    about: Read what is supported during alpha and beta.

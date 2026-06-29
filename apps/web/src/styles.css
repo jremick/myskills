@@ -1,4 +1,68 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted-background);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-invert: var(--invert);
+  --color-invert-foreground: var(--invert-foreground);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
 :root {
+  --background: var(--bg, #f6f7f8);
+  --foreground: var(--ink, #111827);
+  --card: var(--surface, #ffffff);
+  --card-foreground: var(--ink, #111827);
+  --popover: var(--surface, #ffffff);
+  --popover-foreground: var(--ink, #111827);
+  --primary: var(--teal, #0f766e);
+  --primary-foreground: #ffffff;
+  --secondary: var(--surface-soft, #f9faf9);
+  --secondary-foreground: var(--ink-soft, #2f3a4a);
+  --muted-background: var(--surface-soft, #f9faf9);
+  --muted-foreground: var(--muted, #667385);
+  --accent: var(--teal-soft, #edf8f6);
+  --accent-foreground: var(--teal-dark, #075e57);
+  --destructive: var(--danger, #a33030);
+  --destructive-foreground: #ffffff;
+  --border: var(--line, #dce3e8);
+  --input: var(--line, #dce3e8);
+  --ring: var(--teal, #0f766e);
+  --info: #6d5bd0;
+  --info-foreground: #ffffff;
+  --success-foreground: #ffffff;
+  --warning-foreground: #111827;
+  --invert: var(--surface-strong, #111827);
+  --invert-foreground: #ffffff;
+  --radius: 0.5rem;
   color: #101827;
   background: #f8fafc;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -4031,7 +4095,7 @@ code {
 
 .inline-security-form {
   display: grid;
-  grid-template-columns: minmax(0, 260px) auto;
+  grid-template-columns: minmax(0, 260px) max-content;
   gap: 10px;
   align-items: end;
   padding: 12px;
@@ -4063,6 +4127,11 @@ code {
   color: #64748b;
   cursor: not-allowed;
   background: #e2e8f0;
+}
+
+.inline-security-form .shadcn-action-button {
+  justify-self: start;
+  width: auto;
 }
 
 .passkey-panel {
@@ -4657,5 +4726,989 @@ code {
   .mobile-brand span {
     display: inline;
     font-size: 16px;
+  }
+}
+
+/* shadcn/ReUI adoption slice: core app workflows */
+.shadcn-registry-workspace,
+.shadcn-review-workspace,
+.shadcn-admin-workspace,
+.shadcn-settings-workspace,
+.shadcn-submit-workspace,
+.teams-workspace {
+  width: 100%;
+  max-width: 1420px;
+  margin: 0 auto;
+  gap: 18px;
+}
+
+.shadcn-review-hero,
+.shadcn-admin-hero,
+.shadcn-settings-hero,
+.shadcn-submit-hero,
+.shadcn-teams-hero {
+  align-items: flex-end;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 4px 0 18px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.shadcn-review-hero h1 {
+  margin-top: 8px;
+}
+
+.shadcn-settings-hero h1 {
+  margin-top: 8px;
+}
+
+.shadcn-review-eyebrow {
+  border-color: rgba(15, 118, 110, 0.22);
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+}
+
+.shadcn-registry-layout,
+.shadcn-review-layout,
+.shadcn-submit-layout,
+.shadcn-teams-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.92fr) minmax(480px, 1.08fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.shadcn-registry-layout {
+  grid-template-columns: minmax(320px, 0.68fr) minmax(620px, 1.32fr);
+}
+
+.shadcn-console-card.review-queue,
+.shadcn-console-card.review-detail,
+.shadcn-console-card.registry-results-panel,
+.shadcn-console-card.registry-detail-panel,
+.shadcn-console-card.submit-panel,
+.shadcn-console-card.teams-access-panel,
+.shadcn-console-card.team-skill-group {
+  gap: 0;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.05);
+}
+
+.shadcn-console-card.review-detail,
+.shadcn-console-card.registry-detail-panel {
+  min-height: 560px;
+}
+
+.review-registry-heading,
+.shadcn-card-header {
+  display: flex;
+  grid-template-rows: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line-soft);
+  background: #fbfcfc;
+}
+
+.shadcn-card-header [data-slot="card-title"] {
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.shadcn-card-header [data-slot="card-description"] {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.review-card-content,
+.shadcn-submit-form,
+.shadcn-submit-result,
+.teams-access-content,
+.team-skill-group > [data-slot="card-content"] {
+  padding: 0;
+}
+
+.shadcn-submit-form {
+  padding: 18px;
+}
+
+.submit-form-fields {
+  display: grid;
+  gap: 16px;
+}
+
+.shadcn-submit-result {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+
+.shadcn-submission-list {
+  display: grid;
+  padding: 0;
+}
+
+.shadcn-submit-panel .empty-detail {
+  min-height: 280px;
+}
+
+.shadcn-review-list {
+  display: grid;
+  gap: 0;
+  align-content: start;
+  grid-auto-rows: min-content;
+  min-height: 560px;
+  padding: 0;
+}
+
+.review-registry-row {
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  gap: 14px;
+  min-height: 104px;
+}
+
+.review-registry-main {
+  gap: 6px;
+}
+
+.review-registry-main > span:not(.tag-row) {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-registry-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.shadcn-finding-badge {
+  flex: 0 0 auto;
+  border-radius: 6px;
+  color: var(--ink-soft);
+  background: var(--surface-soft);
+}
+
+.review-registry-finding {
+  justify-self: end;
+}
+
+.shadcn-detail-header {
+  border-bottom: 1px solid var(--line-soft);
+  padding: 24px;
+  background: #ffffff;
+}
+
+.shadcn-detail-title-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+}
+
+.shadcn-detail-title [data-slot="card-title"] {
+  color: var(--ink);
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.shadcn-detail-title [data-slot="card-description"] {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+}
+
+.shadcn-detail-content {
+  display: grid;
+  gap: 20px;
+  padding: 22px 24px 24px;
+}
+
+.shadcn-metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.shadcn-metadata-grid > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.6fr) minmax(0, 1fr);
+  gap: 14px;
+  min-width: 0;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.shadcn-metadata-grid > div:nth-child(odd) {
+  padding-right: 22px;
+}
+
+.shadcn-metadata-grid > div:nth-child(even) {
+  padding-left: 22px;
+}
+
+.shadcn-metadata-grid dt {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.shadcn-metadata-grid dd {
+  overflow: hidden;
+  margin: 0;
+  color: var(--ink);
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-status-badge {
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.review-status-badge-approved,
+.review-status-badge-passed {
+  border-color: #bfe7cc;
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.review-status-badge-unreviewed,
+.review-status-badge-review,
+.review-status-badge-changes-requested,
+.review-status-badge-warning {
+  border-color: #f2d08c;
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.review-status-badge-rejected,
+.review-status-badge-failed,
+.review-status-badge-disabled {
+  border-color: #efc3c3;
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.review-textarea {
+  min-height: 92px;
+  border-color: var(--line);
+  background: #ffffff;
+  font: inherit;
+}
+
+.shadcn-review-reason {
+  display: grid;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.review-textarea:focus-visible {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+.shadcn-action-bar {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.shadcn-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+.shadcn-action-bar .action-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.shadcn-admin-workspace .admin-grid {
+  grid-template-columns: minmax(340px, 0.76fr) minmax(560px, 1.24fr);
+  gap: 18px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.reui-admin-section {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.reui-admin-frame {
+  --frame-radius: 8px;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.reui-admin-panel {
+  padding: 0;
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.05);
+}
+
+.reui-admin-heading {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.reui-admin-heading [data-slot="frame-panel-title"] {
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.reui-admin-heading [data-slot="frame-panel-description"] {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.shadcn-admin-workspace .admin-token-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.shadcn-admin-workspace .admin-token-row .cell-main {
+  flex: 1 1 190px;
+  min-width: 0;
+}
+
+.shadcn-admin-workspace .admin-token-row .status-token {
+  flex: 0 0 auto;
+}
+
+.shadcn-admin-workspace .admin-token-row .icon-button {
+  flex: 0 0 32px;
+  margin-left: auto;
+}
+
+.shadcn-admin-workspace .admin-token-scopes,
+.shadcn-admin-workspace .admin-token-expiry {
+  flex: 1 1 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.reui-settings-section {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.reui-settings-frame {
+  --frame-radius: 8px;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.reui-settings-panel {
+  padding: 0;
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.05);
+}
+
+.reui-settings-heading {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.reui-settings-heading [data-slot="frame-panel-title"] {
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.reui-settings-heading [data-slot="frame-panel-description"] {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.settings-input[data-slot="input"] {
+  min-height: 40px;
+  border-color: var(--line);
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: none;
+  font: inherit;
+}
+
+.settings-input[data-slot="input"]:focus-visible {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+.teams-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: min(640px, 100%);
+}
+
+.teams-header-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(74px, auto));
+  gap: 7px;
+  margin: 0;
+}
+
+.teams-header-metrics > div {
+  display: grid;
+  gap: 2px;
+  min-width: 74px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.teams-header-metrics dt {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.teams-header-metrics dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.teams-access-panel,
+.teams-shared-column {
+  align-self: stretch;
+}
+
+.teams-combined-heading,
+.team-skill-group .shadcn-card-header,
+.shadcn-submit-panel .shadcn-card-header {
+  justify-content: flex-start;
+}
+
+.teams-access-content {
+  display: grid;
+}
+
+.shadcn-team-create-row {
+  padding: 14px 16px;
+  border-top: 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.shadcn-team-create-row input,
+.team-invite-row input {
+  min-height: 32px;
+  font-size: 13px;
+}
+
+.teams-combined-section {
+  display: grid;
+}
+
+.teams-combined-section + .teams-combined-section {
+  border-top: 1px solid var(--line);
+}
+
+.teams-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-soft);
+}
+
+.teams-section-heading h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.teams-section-heading span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.team-row {
+  grid-template-columns: minmax(160px, 1fr) auto;
+  padding: 14px 16px;
+}
+
+.team-invite-row {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.team-detail-grid {
+  padding: 0 16px 16px;
+}
+
+.invitation-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 13px 16px;
+}
+
+.teams-shared-column {
+  display: grid;
+  gap: 18px;
+}
+
+.teams-shared-empty .empty-state,
+.team-skill-group .empty-state {
+  border: 0;
+}
+
+.team-skill-columns {
+  padding: 14px;
+}
+
+.registry-card-content,
+.registry-result-list {
+  padding: 0;
+}
+
+.registry-results-panel .shadcn-card-header,
+.registry-detail-panel .registry-detail-header {
+  background:
+    linear-gradient(90deg, rgba(15, 118, 110, 0.08), transparent 42%),
+    #fbfcfc;
+}
+
+.registry-result-list {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-height: 0;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.registry-result-row {
+  grid-template-columns: 42px minmax(0, 1fr);
+  min-height: 84px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.registry-result-row:hover,
+.registry-result-row:focus-visible {
+  border-color: #b7e3df;
+  background: #f8fcfc;
+}
+
+.registry-result-row.selected {
+  border-color: #8fd3ca;
+  background: #f1fbf9;
+  box-shadow: inset 4px 0 0 var(--teal);
+}
+
+.registry-version-badge {
+  grid-column: 2;
+  justify-self: end;
+  border-radius: 6px;
+  color: var(--ink-soft);
+  background: var(--surface-soft);
+}
+
+.registry-result-row .registry-version-badge,
+.registry-result-row .platform-icons {
+  justify-self: start;
+}
+
+.registry-result-row .platform-icons {
+  grid-column: 2;
+  font-size: 12.5px;
+}
+
+.registry-detail-header {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.registry-detail-content {
+  gap: 18px;
+}
+
+.registry-detail-content .summary {
+  max-width: 860px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.registry-detail-status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.registry-metadata-grid {
+  border-bottom: 0;
+  border-top: 0;
+  gap: 10px;
+}
+
+.registry-metadata-grid > div {
+  grid-template-columns: 1fr;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #fbfcfc;
+}
+
+.registry-metadata-grid > div:nth-child(odd),
+.registry-metadata-grid > div:nth-child(even) {
+  padding-right: 12px;
+  padding-left: 12px;
+}
+
+.registry-metadata-grid dt {
+  font-size: 11.5px;
+  text-transform: uppercase;
+}
+
+.registry-metadata-grid dd {
+  font-size: 14px;
+}
+
+.registry-platform-select {
+  margin-top: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.registry-platform-select .platform-button {
+  min-height: 27px;
+  padding: 0 9px;
+}
+
+.registry-command-panel {
+  margin-top: 0;
+  border: 1px solid #1f2937;
+  box-shadow: none;
+}
+
+.registry-state-content {
+  display: grid;
+  min-height: 560px;
+  padding: 0;
+}
+
+.registry-state-content .safe-message,
+.registry-state-content .empty-detail {
+  min-height: 100%;
+  border: 0;
+}
+
+.lifecycle-panel.reui-registry-frame,
+.sharing-panel.reui-registry-frame {
+  --frame-radius: 8px;
+  gap: 3px;
+  margin-top: 0;
+  padding: 3px;
+  border: 1px solid #cde8e5;
+  background: #eff8f7;
+  box-shadow: none;
+}
+
+.reui-registry-panel {
+  padding: 0;
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.05);
+}
+
+.reui-registry-heading {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.reui-registry-panel > .metadata-edit-grid,
+.reui-registry-panel > .lifecycle-actions,
+.reui-registry-panel > .release-lifecycle-list,
+.reui-registry-panel > .sharing-editor {
+  margin: 14px 16px 16px;
+}
+
+.reui-registry-panel > .lifecycle-actions,
+.reui-registry-panel > .release-lifecycle-list {
+  margin-top: 0;
+}
+
+.reui-registry-panel > .safe-message.compact,
+.reui-registry-panel > .inline-message {
+  min-height: auto;
+  margin: 14px 16px 0;
+  justify-items: start;
+  text-align: left;
+}
+
+.reui-registry-panel .sharing-panel-head {
+  padding: 16px;
+  border-bottom: 1px solid var(--line-soft);
+  background: #fbfcfc;
+}
+
+.reui-registry-panel .sharing-editor {
+  margin-top: 14px;
+}
+
+.reui-registry-panel .sharing-editor .role-toggle input {
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+  min-height: 14px;
+  padding: 0;
+  border-radius: 3px;
+}
+
+.registry-input[data-slot="input"],
+.auth-input[data-slot="input"] {
+  min-height: 32px;
+  border-color: var(--line);
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: none;
+  font: inherit;
+}
+
+.registry-input[data-slot="input"]:focus-visible,
+.auth-input[data-slot="input"]:focus-visible {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+.login-page .shadcn-action-button,
+.landing-page .shadcn-action-button,
+.auth-widget .shadcn-action-button {
+  min-height: 31px;
+  padding: 0 10px;
+  gap: 5px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 650;
+  box-shadow: none;
+}
+
+.auth-widget .shadcn-action-button[data-size="icon-sm"] {
+  min-width: 31px;
+  width: 31px;
+  padding: 0;
+}
+
+.login-page .shadcn-action-button[data-variant="outline"],
+.auth-widget .shadcn-action-button[data-variant="outline"] {
+  border-color: var(--line);
+  color: var(--ink-soft);
+  background: #ffffff;
+}
+
+.login-page .shadcn-action-button[data-variant="outline"]:hover,
+.auth-widget .shadcn-action-button[data-variant="outline"]:hover {
+  border-color: var(--teal);
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+}
+
+.landing-page .landing-primary.shadcn-action-button {
+  min-height: 31px;
+  padding: 0 13px;
+}
+
+.landing-page .landing-links .shadcn-action-button {
+  min-height: 31px;
+  padding: 0 10px;
+}
+
+.app-shell .save-button,
+.app-shell .state-action,
+.app-shell .admin-hero button:not(.icon-button),
+.app-shell .review-actions button,
+.app-shell .team-invite-row button,
+.app-shell .mapping-heading button,
+.app-shell .provider-list > button:first-child,
+.app-shell .shadcn-action-button {
+  min-height: 27px;
+  padding: 0 9px;
+  gap: 5px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 650;
+  box-shadow: none;
+}
+
+.app-shell .shadcn-action-button svg,
+.app-shell .save-button svg,
+.app-shell .review-actions button svg,
+.app-shell .team-invite-row button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.app-shell .shadcn-action-button[data-variant="outline"],
+.app-shell .team-invite-row button[data-variant="outline"],
+.app-shell .invitation-row button[data-variant="outline"],
+.app-shell .teams-refresh-button[data-variant="outline"] {
+  border-color: var(--line);
+  color: var(--ink-soft);
+  background: #ffffff;
+}
+
+.app-shell .shadcn-action-button[data-variant="outline"]:hover,
+.app-shell .team-invite-row button[data-variant="outline"]:hover,
+.app-shell .invitation-row button[data-variant="outline"]:hover,
+.app-shell .teams-refresh-button[data-variant="outline"]:hover {
+  border-color: var(--teal);
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+}
+
+.app-shell .shadcn-action-button[data-variant="default"],
+.app-shell .save-button {
+  border-color: #a7d8d3;
+  color: var(--teal-dark);
+  background: #e7f6f4;
+}
+
+.app-shell .shadcn-action-button[data-variant="default"]:hover,
+.app-shell .save-button:hover {
+  border-color: var(--teal);
+  color: #064e49;
+  background: #d9f0ed;
+}
+
+.app-shell .shadcn-action-button[data-variant="destructive"] {
+  border-color: #f2b8b5;
+  color: #991b1b;
+  background: #fef2f2;
+}
+
+.app-shell .shadcn-action-button[data-variant="destructive"]:hover {
+  border-color: #dc2626;
+  color: #ffffff;
+  background: #b42318;
+}
+
+.app-shell .shadcn-action-button[data-variant="secondary"] {
+  border-color: var(--line);
+  color: var(--ink-soft);
+  background: var(--surface-soft);
+}
+
+@media (max-width: 1280px) {
+  .shadcn-admin-workspace .admin-grid,
+  .shadcn-review-layout,
+  .shadcn-submit-layout,
+  .shadcn-teams-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .teams-hero-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 960px) {
+  .shadcn-metadata-grid,
+  .shadcn-metadata-grid > div,
+  .team-detail-grid,
+  .team-skill-columns,
+  .sharing-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .shadcn-metadata-grid > div:nth-child(odd),
+  .shadcn-metadata-grid > div:nth-child(even) {
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  .shadcn-detail-title-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .shadcn-detail-title-row .review-status-badge {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .teams-header-metrics {
+    grid-template-columns: repeat(2, minmax(74px, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .review-registry-row,
+  .registry-result-row,
+  .team-row,
+  .invitation-row,
+  .team-invite-row,
+  .shadcn-team-create-row {
+    grid-template-columns: 1fr;
+  }
+
+  .review-registry-row > .skill-icon {
+    display: none;
+  }
+
+  .review-registry-finding {
+    justify-self: start;
   }
 }

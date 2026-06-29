@@ -50,6 +50,8 @@ test("SMTP auth notification sink formats verification, reset, invitation, and e
   assert.equal(sent[0].from, "MySkills <noreply@example.test>");
   assert.equal(sent[0].to, "user@example.com");
   assert.equal(sent[0].subject, "Verify your MySkills email");
+  assert.equal(sent[0].disableFileAccess, true);
+  assert.equal(sent[0].disableUrlAccess, true);
   assert.match(String(sent[0].text), /https:\/\/skills\.example\/auth\/verify-email#token=verify-token/);
   assert.match(String(sent[0].html), /href="https:\/\/skills\.example\/auth\/verify-email#token=verify-token"/);
   assert.equal(sent[1].subject, "Reset your MySkills password");

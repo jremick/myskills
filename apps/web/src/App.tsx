@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ArrowRight,
   Boxes,
@@ -32,6 +38,12 @@ import {
   X,
 } from "lucide-react";
 import type { PublicSkill, SkillSharingDetails, TeamSharedSkillGroup, VisibilityScope } from "@myskills-app/core";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Frame, FrameDescription, FrameHeader, FramePanel, FrameTitle } from "@/components/reui/frame";
 import {
   createRegistryClient,
   exportCommand,
@@ -550,70 +562,75 @@ export function RegistryApp({ client }: RegistryAppProps) {
               session={session}
             />
           ) : (
-            <main className="workspace">
-              <section className="results-panel" aria-label="Skill search results">
-                <div className="panel-heading">
+            <main className="workspace shadcn-registry-workspace shadcn-registry-layout">
+              <Card className="results-panel registry-results-panel shadcn-console-card" aria-label="Skill search results">
+                <CardHeader className="panel-heading review-registry-heading shadcn-card-header">
                   <div>
-                    <h1>Approved registry</h1>
-                    <p>{resultCountText(listState, skills.length)}</p>
+                    <CardTitle>Approved registry</CardTitle>
+                    <CardDescription>{resultCountText(listState, skills.length)}</CardDescription>
                   </div>
-                </div>
-                <div className="result-list">
-                  {listState === "loading" && <LoadingRows />}
-                  {listState === "error" && (
+                  <Badge className="shadcn-review-eyebrow" variant="outline">Registry</Badge>
+                </CardHeader>
+                <CardContent className="review-card-content registry-card-content">
+                  <div className="result-list shadcn-review-list registry-result-list">
+                    {listState === "loading" && <LoadingRows />}
+                    {listState === "error" && (
+                      <div className="safe-message panel-state" role="status" aria-live="polite">
+                        <CircleAlert size={24} aria-hidden="true" />
+                        <strong>{listMessage ?? "The registry is not available."}</strong>
+                        <span>The list could not load. Retry the registry request before selecting a skill.</span>
+                        <Button className="state-action shadcn-action-button" size="sm" type="button" variant="outline" onClick={retryRegistry}>
+                          <RotateCw size={15} aria-hidden="true" />
+                          Retry
+                        </Button>
+                      </div>
+                    )}
+                    {listState !== "loading" && listState !== "error" && skills.map((skill) => (
+                      <button
+                        className={skill.slug === selectedSlug ? "result-row review-registry-row registry-result-row selected" : "result-row review-registry-row registry-result-row"}
+                        key={skill.slug}
+                        type="button"
+                        onClick={() => selectSkill(skill.slug)}
+                      >
+                        <SkillIcon slug={skill.slug} />
+                        <span className="result-main review-registry-main">
+                          <strong>{skill.title}</strong>
+                          <span>{skill.slug}</span>
+                          <span className="tag-row review-registry-tags">{skill.tags.slice(0, 3).map((tag) => <Tag key={tag}>{tag}</Tag>)}</span>
+                        </span>
+                        <Badge className="registry-version-badge" variant="secondary">{skill.latestVersion ?? "-"}</Badge>
+                        <span className="platform-icons">{skill.platforms.slice(0, 2).map((item) => item.name).join(", ")}</span>
+                      </button>
+                    ))}
+                    {listState === "ready" && skills.length === 0 && (
+                      <div className="empty-state">
+                        <CircleAlert size={22} aria-hidden="true" />
+                        <strong>No skills found.</strong>
+                        <span>{query.trim() ? `No approved skills match "${query.trim()}".` : "Approved skills will appear here after publication."}</span>
+                        {query.trim() && (
+                          <Button className="state-action shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => setQuery("")}>
+                            Clear search
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="detail-panel registry-detail-panel shadcn-console-card" aria-label="Selected skill detail">
+                {detailMessage && (
+                  <CardContent className="registry-state-content">
                     <div className="safe-message panel-state" role="status" aria-live="polite">
                       <CircleAlert size={24} aria-hidden="true" />
-                      <strong>{listMessage ?? "The registry is not available."}</strong>
-                      <span>The list could not load. Retry the registry request before selecting a skill.</span>
-                      <button className="state-action" type="button" onClick={retryRegistry}>
+                      <strong>{detailMessage}</strong>
+                      <span>The selected skill could not load. Retry the request or choose a different approved skill.</span>
+                      <Button className="state-action shadcn-action-button" size="sm" type="button" variant="outline" onClick={retryRegistry}>
                         <RotateCw size={15} aria-hidden="true" />
                         Retry
-                      </button>
+                      </Button>
                     </div>
-                  )}
-                  {listState !== "loading" && listState !== "error" && skills.map((skill) => (
-                    <button
-                      className={skill.slug === selectedSlug ? "result-row selected" : "result-row"}
-                      key={skill.slug}
-                      type="button"
-                      onClick={() => selectSkill(skill.slug)}
-                    >
-                      <SkillIcon slug={skill.slug} />
-                      <span className="result-main">
-                        <strong>{skill.title}</strong>
-                        <span>{skill.slug}</span>
-                        <span className="tag-row">{skill.tags.slice(0, 3).map((tag) => <Tag key={tag}>{tag}</Tag>)}</span>
-                      </span>
-                      <span className="version">{skill.latestVersion ?? "-"}</span>
-                      <span className="platform-icons">{skill.platforms.slice(0, 2).map((item) => item.name).join(", ")}</span>
-                    </button>
-                  ))}
-                  {listState === "ready" && skills.length === 0 && (
-                    <div className="empty-state">
-                      <CircleAlert size={22} aria-hidden="true" />
-                      <strong>No skills found.</strong>
-                      <span>{query.trim() ? `No approved skills match "${query.trim()}".` : "Approved skills will appear here after publication."}</span>
-                      {query.trim() && (
-                        <button className="state-action" type="button" onClick={() => setQuery("")}>
-                          Clear search
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              <section className="detail-panel" aria-label="Selected skill detail">
-                {detailMessage && (
-                  <div className="safe-message panel-state" role="status" aria-live="polite">
-                    <CircleAlert size={24} aria-hidden="true" />
-                    <strong>{detailMessage}</strong>
-                    <span>The selected skill could not load. Retry the request or choose a different approved skill.</span>
-                    <button className="state-action" type="button" onClick={retryRegistry}>
-                      <RotateCw size={15} aria-hidden="true" />
-                      Retry
-                    </button>
-                  </div>
+                  </CardContent>
                 )}
                 {detailState === "loading" && <DetailSkeleton />}
                 {detailState !== "loading" && !detailMessage && selectedSkill && release && (
@@ -628,13 +645,15 @@ export function RegistryApp({ client }: RegistryAppProps) {
                   />
                 )}
                 {detailState !== "loading" && !selectedSkill && !detailMessage && (
-                  <div className="empty-detail">
-                    <FileCode2 size={42} aria-hidden="true" />
-                    <h2>Select a skill</h2>
-                    <p>Choose an approved skill to inspect release metadata and export guidance.</p>
-                  </div>
+                  <CardContent className="registry-state-content">
+                    <div className="empty-detail">
+                      <FileCode2 size={42} aria-hidden="true" />
+                      <h2>Select a skill</h2>
+                      <p>Choose an approved skill to inspect release metadata and export guidance.</p>
+                    </div>
+                  </CardContent>
                 )}
-              </section>
+              </Card>
             </main>
           )}
         </div>
@@ -672,7 +691,7 @@ function MarketingLanding({ onLogin }: { onLogin: () => void }) {
             <a href="#registry">Registry</a>
             <a href="#trust">Trust model</a>
             <a href="#private-development">Status</a>
-            <button type="button" onClick={onLogin}>Login</button>
+            <Button className="shadcn-action-button" size="sm" type="button" onClick={onLogin}>Login</Button>
           </div>
         </nav>
 
@@ -684,10 +703,10 @@ function MarketingLanding({ onLogin }: { onLogin: () => void }) {
               A governed registry for packaging, reviewing, publishing, and installing reusable AI agent skills across web, CLI, API, and MCP surfaces.
             </p>
             <div className="landing-actions">
-              <button className="landing-primary" type="button" onClick={onLogin}>
+              <Button className="landing-primary shadcn-action-button" size="sm" type="button" onClick={onLogin}>
                 Login
                 <ArrowRight size={18} aria-hidden="true" />
-              </button>
+              </Button>
               <a className="landing-secondary" href="#private-development">Read current status</a>
             </div>
           </div>
@@ -741,10 +760,10 @@ function MarketingLanding({ onLogin }: { onLogin: () => void }) {
             MySkills is being prepared for a responsible public alpha. The live site will share product direction and allow owner access, but public account creation is not available yet.
           </p>
         </div>
-        <button className="landing-primary" type="button" onClick={onLogin}>
+        <Button className="landing-primary shadcn-action-button" size="sm" type="button" onClick={onLogin}>
           Login
           <ArrowRight size={18} aria-hidden="true" />
-        </button>
+        </Button>
       </section>
     </main>
   );
@@ -813,7 +832,7 @@ function LoginPage({
         }}>
           <img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" />
         </a>
-        <button className="login-back" type="button" onClick={onHome}>Public site</button>
+        <Button className="login-back shadcn-action-button" size="sm" type="button" variant="outline" onClick={onHome}>Public site</Button>
       </nav>
       <section className="login-panel" aria-labelledby="login-heading">
         <p className="landing-status">Private development. Public signups are closed.</p>
@@ -920,9 +939,10 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
   }
 
   return (
-    <main className="submit-workspace" aria-label="Skill package submission">
-      <section className="admin-hero">
+    <main className="submit-workspace shadcn-submit-workspace" aria-label="Skill package submission">
+      <section className="admin-hero shadcn-submit-hero">
         <div>
+          <Badge className="shadcn-review-eyebrow" variant="outline">Author workflow</Badge>
           <h1>Submit package</h1>
           <p>{session.user.email} · {state === "loading" ? "uploading archive" : "author submission"}</p>
         </div>
@@ -930,56 +950,58 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
 
       {message && <div className="safe-message admin-message" role="status">{message}</div>}
 
-      <section className="submit-layout">
-        <section className="submit-panel" aria-label="Package upload">
-          <div className="admin-panel-heading">
+      <section className="submit-layout shadcn-submit-layout">
+        <Card className="submit-panel shadcn-submit-panel shadcn-console-card" aria-label="Package upload">
+          <CardHeader className="admin-panel-heading shadcn-card-header">
             <span className="admin-panel-icon"><Upload size={18} aria-hidden="true" /></span>
             <div>
-              <h2>Package archive</h2>
-              <p>{file ? `${file.name} · ${formatBytes(file.size)}` : "No file selected"}</p>
+              <CardTitle>Package archive</CardTitle>
+              <CardDescription>{file ? `${file.name} · ${formatBytes(file.size)}` : "No file selected"}</CardDescription>
             </div>
-          </div>
+          </CardHeader>
 
-          <form className="submit-form" onSubmit={(event) => {
-            event.preventDefault();
-            void submitPackage();
-          }}>
-            <div className="submit-guidance">
-              <strong>Package requirements</strong>
-              <span>.zip archive, 10 MB maximum, semantic version metadata, and no private paths or install hooks without review notes.</span>
-            </div>
-            <label className="file-picker" htmlFor="package-archive">
-              <PackageOpen size={26} aria-hidden="true" />
-              <span>
-                <strong>{file?.name ?? "Choose .zip package"}</strong>
-                <small>{file ? formatBytes(file.size) : "Archive upload"}</small>
-              </span>
-              <input
-                accept=".zip,application/zip,application/x-zip-compressed"
-                id="package-archive"
-                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                type="file"
-              />
-            </label>
+          <CardContent className="submit-form shadcn-submit-form">
+            <form className="submit-form-fields" onSubmit={(event) => {
+              event.preventDefault();
+              void submitPackage();
+            }}>
+              <div className="submit-guidance">
+                <strong>Package requirements</strong>
+                <span>.zip archive, 10 MB maximum, semantic version metadata, and no private paths or install hooks without review notes.</span>
+              </div>
+              <label className="file-picker" htmlFor="package-archive">
+                <PackageOpen size={26} aria-hidden="true" />
+                <span>
+                  <strong>{file?.name ?? "Choose .zip package"}</strong>
+                  <small>{file ? formatBytes(file.size) : "Archive upload"}</small>
+                </span>
+                <input
+                  accept=".zip,application/zip,application/x-zip-compressed"
+                  id="package-archive"
+                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                  type="file"
+                />
+              </label>
 
-            <button className="save-button" disabled={state === "loading" || !file} type="submit">
-              <Upload size={16} aria-hidden="true" />
-              Submit for review
-            </button>
-          </form>
-        </section>
+              <Button className="save-button shadcn-action-button" disabled={state === "loading" || !file} size="sm" type="submit">
+                <Upload size={16} aria-hidden="true" />
+                Submit for review
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
 
-        <section className="submit-panel submit-result-panel" aria-label="Submission result">
-          <div className="admin-panel-heading">
+        <Card className="submit-panel submit-result-panel shadcn-submit-panel shadcn-console-card" aria-label="Submission result">
+          <CardHeader className="admin-panel-heading shadcn-card-header">
             <span className="admin-panel-icon"><ClipboardList size={18} aria-hidden="true" /></span>
             <div>
-              <h2>Submission status</h2>
-              <p>{result ? `${result.submission.slug}@${result.submission.version}` : "Awaiting upload"}</p>
+              <CardTitle>Submission status</CardTitle>
+              <CardDescription>{result ? `${result.submission.slug}@${result.submission.version}` : "Awaiting upload"}</CardDescription>
             </div>
-          </div>
+          </CardHeader>
 
           {result ? (
-            <div className="submit-result">
+            <CardContent className="submit-result shadcn-submit-result">
               <div className={result.scan.findings.length > 0 ? "state-banner state-banner-warning" : "state-banner state-banner-success"}>
                 {result.scan.findings.length > 0 ? (
                   <>
@@ -1019,7 +1041,7 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
                   </div>
                 ))}
               </div>
-            </div>
+            </CardContent>
           ) : (
             <div className="empty-detail">
               <Upload size={42} aria-hidden="true" />
@@ -1027,17 +1049,17 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
               <p>Submitted packages appear here after server validation.</p>
             </div>
           )}
-        </section>
+        </Card>
 
-        <section className="submit-panel user-submissions-panel" aria-label="My submitted skills">
-          <div className="admin-panel-heading">
+        <Card className="submit-panel user-submissions-panel shadcn-submit-panel shadcn-console-card" aria-label="My submitted skills">
+          <CardHeader className="admin-panel-heading shadcn-card-header">
             <span className="admin-panel-icon"><PackageOpen size={18} aria-hidden="true" /></span>
             <div>
-              <h2>My submitted skills</h2>
-              <p>{submissionsState === "loading" ? "Loading" : `${submissions.length} versions`}</p>
+              <CardTitle>My submitted skills</CardTitle>
+              <CardDescription>{submissionsState === "loading" ? "Loading" : `${submissions.length} versions`}</CardDescription>
             </div>
-          </div>
-          <div className="submission-list">
+          </CardHeader>
+          <CardContent className="submission-list shadcn-submission-list">
             {submissions.map((submission) => (
               <div className="submission-row" key={submission.id}>
                 <span className="cell-main">
@@ -1051,25 +1073,29 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
                   <span>{formatBytes(submission.artifact.byteSize)}</span>
                 </span>
                 <span className="submission-actions">
-                  <button
-                    className="save-button compact-button"
+                  <Button
+                    className="save-button compact-button shadcn-action-button"
                     disabled={exportingId === submission.id}
+                    size="sm"
                     type="button"
+                    variant="outline"
                     onClick={() => void exportSubmission(submission)}
                   >
                     <Download size={15} aria-hidden="true" />
                     Export
-                  </button>
+                  </Button>
                   {(submission.allowedActions ?? []).includes("withdraw") && (
-                    <button
-                      className="danger-button compact-button"
+                    <Button
+                      className="danger-button compact-button shadcn-action-button"
                       disabled={actioningId === submission.id}
+                      size="sm"
                       type="button"
+                      variant="destructive"
                       onClick={() => void withdrawSubmission(submission)}
                     >
                       <X size={15} aria-hidden="true" />
                       Withdraw
-                    </button>
+                    </Button>
                   )}
                 </span>
               </div>
@@ -1081,8 +1107,8 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
                 <span>Validated submissions will appear here for export.</span>
               </div>
             )}
-          </div>
-        </section>
+          </CardContent>
+        </Card>
       </section>
     </main>
   );
@@ -1155,125 +1181,163 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
   }
 
   return (
-    <main className="review-workspace" aria-label="Maintainer review dashboard">
-      <section className="admin-hero">
+    <main className="review-workspace shadcn-review-workspace" aria-label="Maintainer review dashboard">
+      <section className="admin-hero shadcn-review-hero">
         <div>
+          <Badge className="shadcn-review-eyebrow" variant="outline">Maintainer workflow</Badge>
           <h1>Review dashboard</h1>
           <p>{session.user.email} · {state === "loading" ? "loading queue" : `${submissions.length} awaiting action`}</p>
         </div>
-        <button type="button" onClick={() => void refreshReview()}>
+        <Button className="shadcn-action-button" size="sm" type="button" onClick={() => void refreshReview()}>
           <RotateCw size={16} aria-hidden="true" />
           Refresh
-        </button>
+        </Button>
       </section>
 
       {message && <div className="safe-message admin-message" role="status">{message}</div>}
       {notice && <div className="success-message admin-message" role="status" aria-live="polite">{notice}</div>}
 
-      <section className="review-layout">
-        <section className="review-queue" aria-label="Review queue">
-          <div className="admin-panel-heading">
-            <span className="admin-panel-icon"><ClipboardList size={18} aria-hidden="true" /></span>
+      <section className="review-layout shadcn-review-layout">
+        <Card className="results-panel review-queue review-registry-panel shadcn-console-card" aria-label="Review queue">
+          <CardHeader className="panel-heading review-registry-heading shadcn-card-header">
             <div>
-              <h2>Queue</h2>
-              <p>{state === "loading" ? "Loading" : `${submissions.length} submissions`}</p>
+              <CardTitle>Queue</CardTitle>
+              <CardDescription>{state === "loading" ? "Loading" : `${submissions.length} submissions`}</CardDescription>
             </div>
-          </div>
-          <div className="review-list">
-            {submissions.map((submission) => (
-              <button
-                className={selected?.id === submission.id ? "review-row selected" : "review-row"}
-                key={submission.id}
-                type="button"
-                onClick={() => setSelectedId(submission.id)}
-              >
-                <span className="review-row-main">
-                  <strong>{submission.title}</strong>
-                  <small>{submission.slug}@{submission.version}</small>
-                </span>
-                <span className="review-row-meta">
-                  <StatusToken value={submission.reviewStatus} />
-                  <StatusToken value={submission.lifecycleStatus} />
-                  <StatusToken value={submission.securityStatus} />
-                  <span className="finding-count">{submission.findingCount} findings</span>
-                </span>
-              </button>
-            ))}
-            {state === "ready" && submissions.length === 0 && (
-              <div className="empty-state">
-                <ShieldCheck size={22} aria-hidden="true" />
-                <strong>Review queue is clear.</strong>
-                <span>No submissions are awaiting approval or publication.</span>
-              </div>
-            )}
-          </div>
-        </section>
+            <Badge className="shadcn-review-eyebrow" variant="outline">Maintainer</Badge>
+          </CardHeader>
+          <CardContent className="review-card-content">
+            <div className="result-list shadcn-review-list">
+              {submissions.map((submission) => (
+                <button
+                  className={selected?.id === submission.id ? "result-row review-registry-row selected" : "result-row review-registry-row"}
+                  key={submission.id}
+                  type="button"
+                  onClick={() => setSelectedId(submission.id)}
+                >
+                  <SkillIcon slug={submission.slug} />
+                  <span className="result-main review-registry-main">
+                    <strong>{submission.title}</strong>
+                    <span>{submission.slug}@{submission.version}</span>
+                    <span className="tag-row review-registry-tags">
+                      <ReviewStatusBadge value={submission.reviewStatus} />
+                      <ReviewStatusBadge value={submission.lifecycleStatus} />
+                      <ReviewStatusBadge value={submission.securityStatus} />
+                    </span>
+                  </span>
+                  <Badge className="shadcn-finding-badge review-registry-finding" variant="secondary">{submission.findingCount} findings</Badge>
+                </button>
+              ))}
+              {state === "ready" && submissions.length === 0 && (
+                <div className="empty-state">
+                  <ShieldCheck size={22} aria-hidden="true" />
+                  <strong>Review queue is clear.</strong>
+                  <span>No submissions are awaiting approval or publication.</span>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-        <section className="review-detail" aria-label="Selected submission review">
+        <Card className="detail-panel review-detail shadcn-console-card" aria-label="Selected submission review">
           {selected ? (
             <>
-              <div className="detail-heading compact">
-                <SkillIcon slug={selected.slug} />
-                <div className="detail-title">
-                  <h2>{selected.title}</h2>
-                  <span>{selected.slug}@{selected.version}</span>
+              <CardHeader className="shadcn-detail-header">
+                <div className="shadcn-detail-title-row">
+                  <SkillIcon slug={selected.slug} />
+                  <div className="detail-title shadcn-detail-title">
+                    <CardTitle>{selected.title}</CardTitle>
+                    <CardDescription>{selected.slug}@{selected.version}</CardDescription>
+                  </div>
+                  <ReviewStatusBadge value={selected.reviewStatus} />
                 </div>
-                <StatusToken value={selected.reviewStatus} />
-              </div>
-              <dl className="metadata-grid review-metadata">
-                <Metadata label="Visibility" value={formatStatusLabel(selected.visibility)} />
-                <Metadata label="Security" value={formatStatusLabel(selected.securityStatus)} />
-                <Metadata label="Platforms" value={selected.platforms.map((item) => item.name).join(", ") || "-"} />
-                <Metadata label="Findings" value={String(selected.findingCount)} />
-                <Metadata label="Submitted" value={formatDate(selected.createdAt)} />
-                <Metadata label="Submission ID" value={selected.id} monospace />
-              </dl>
+              </CardHeader>
+              <CardContent className="shadcn-detail-content">
+                <dl className="shadcn-metadata-grid">
+                  <div>
+                    <dt>Visibility</dt>
+                    <dd>{formatStatusLabel(selected.visibility)}</dd>
+                  </div>
+                  <div>
+                    <dt>Security</dt>
+                    <dd>{formatStatusLabel(selected.securityStatus)}</dd>
+                  </div>
+                  <div>
+                    <dt>Platforms</dt>
+                    <dd>{selected.platforms.map((item) => item.name).join(", ") || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>Findings</dt>
+                    <dd>{String(selected.findingCount)}</dd>
+                  </div>
+                  <div>
+                    <dt>Submitted</dt>
+                    <dd>{formatDate(selected.createdAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Submission ID</dt>
+                    <dd className="mono">{selected.id}</dd>
+                  </div>
+                </dl>
 
-              <label className="review-reason">
-                Reason
-                <textarea
-                  value={reason}
-                  onChange={(event) => setReason(event.target.value)}
-                  placeholder="Optional review note"
-                />
-              </label>
+                <label className="shadcn-review-reason">
+                  <span>Reason</span>
+                  <Textarea
+                    className="review-textarea"
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                    placeholder="Optional review note"
+                  />
+                </label>
 
-              <div className="review-actions">
-                <button
-                  disabled={approveDisabled}
-                  type="button"
-                  onClick={() => void runReviewAction(selected, "approve")}
-                >
-                  <Check size={16} aria-hidden="true" />
-                  Approve
-                </button>
-                <button
-                  disabled={requestChangesDisabled}
-                  type="button"
-                  onClick={() => void runReviewAction(selected, "request-changes")}
-                >
-                  <RotateCw size={16} aria-hidden="true" />
-                  Request changes
-                </button>
-                <button
-                  className="danger-button"
-                  disabled={rejectDisabled}
-                  type="button"
-                  onClick={() => void runReviewAction(selected, "reject")}
-                >
-                  <X size={16} aria-hidden="true" />
-                  Reject
-                </button>
-                <button
-                  disabled={publishDisabled}
-                  type="button"
-                  onClick={() => void runReviewAction(selected, "publish")}
-                >
-                  <PackageOpen size={16} aria-hidden="true" />
-                  Publish
-                </button>
-              </div>
-              <p className="action-hint">{actionHint}</p>
+                <div className="shadcn-action-bar">
+                  <div className="review-actions shadcn-review-actions">
+                    <Button
+                      className="shadcn-action-button"
+                      disabled={approveDisabled}
+                      size="sm"
+                      type="button"
+                      onClick={() => void runReviewAction(selected, "approve")}
+                    >
+                      <Check size={16} aria-hidden="true" />
+                      Approve
+                    </Button>
+                    <Button
+                      className="shadcn-action-button"
+                      disabled={requestChangesDisabled}
+                      size="sm"
+                      type="button"
+                      onClick={() => void runReviewAction(selected, "request-changes")}
+                    >
+                      <RotateCw size={16} aria-hidden="true" />
+                      Request changes
+                    </Button>
+                    <Button
+                      className="shadcn-action-button"
+                      disabled={rejectDisabled}
+                      variant="destructive"
+                      size="sm"
+                      type="button"
+                      onClick={() => void runReviewAction(selected, "reject")}
+                    >
+                      <X size={16} aria-hidden="true" />
+                      Reject
+                    </Button>
+                    <Button
+                      className="shadcn-action-button"
+                      disabled={publishDisabled}
+                      variant="secondary"
+                      size="sm"
+                      type="button"
+                      onClick={() => void runReviewAction(selected, "publish")}
+                    >
+                      <PackageOpen size={16} aria-hidden="true" />
+                      Publish
+                    </Button>
+                  </div>
+                  <p className="action-hint">{actionHint}</p>
+                </div>
+              </CardContent>
             </>
           ) : (
             <div className="empty-detail">
@@ -1282,7 +1346,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
               <p>Approved unpublished submissions and new review requests appear here.</p>
             </div>
           )}
-        </section>
+        </Card>
       </section>
     </main>
   );
@@ -1377,194 +1441,214 @@ function TeamsDashboard({ client, session }: { client: RegistryClient; session: 
 
   return (
     <main className="teams-workspace" aria-label="Teams">
-      <section className="admin-hero teams-hero" aria-labelledby="teams-heading">
+      <section className="admin-hero teams-hero shadcn-teams-hero" aria-labelledby="teams-heading">
         <div>
           <h1 id="teams-heading">Teams</h1>
           <p>{session.user.email} · {state === "loading" ? "refreshing team access" : `${teamCount} teams`}</p>
         </div>
-        <button type="button" onClick={() => void refreshTeams()}>
-          <RotateCw size={16} aria-hidden="true" />
-          Refresh
-        </button>
-      </section>
-
-      <section className="settings-hero-metrics teams-metrics" aria-label="Team summary">
-        <div className="settings-metric">
-          <span>Teams</span>
-          <strong>{teamCount}</strong>
-        </div>
-        <div className="settings-metric">
-          <span>Invitations</span>
-          <strong>{invitationCount}</strong>
-        </div>
-        <div className="settings-metric">
-          <span>Skills you share</span>
-          <strong>{sharedByYouCount}</strong>
-        </div>
-        <div className="settings-metric">
-          <span>Shared with you</span>
-          <strong>{sharedWithYouCount}</strong>
+        <div className="teams-hero-actions">
+          <dl className="teams-header-metrics" aria-label="Team summary">
+            <div>
+              <dt>Teams</dt>
+              <dd>{teamCount}</dd>
+            </div>
+            <div>
+              <dt>Invitations</dt>
+              <dd>{invitationCount}</dd>
+            </div>
+            <div>
+              <dt>Sharing</dt>
+              <dd>{sharedByYouCount}</dd>
+            </div>
+            <div>
+              <dt>Shared</dt>
+              <dd>{sharedWithYouCount}</dd>
+            </div>
+          </dl>
+          <Button className="shadcn-action-button teams-refresh-button" size="sm" type="button" variant="outline" onClick={() => void refreshTeams()}>
+            <RotateCw size={16} aria-hidden="true" />
+            Refresh
+          </Button>
         </div>
       </section>
 
       {message && <div className="safe-message admin-message" role="status">{message}</div>}
 
-      <section className="teams-layout">
-        <section className="admin-panel">
-          <div className="admin-panel-heading">
+      <section className="teams-layout shadcn-teams-layout">
+        <Card className="teams-access-panel shadcn-console-card" aria-label="Teams and invitations">
+          <CardHeader className="admin-panel-heading shadcn-card-header teams-combined-heading">
             <span className="admin-panel-icon"><UsersRound size={18} aria-hidden="true" /></span>
             <div>
-              <h2>Teams</h2>
-              <p>Create teams, review members, and invite owners or members.</p>
+              <CardTitle>Teams and invitations</CardTitle>
+              <CardDescription>Create teams, review members, and accept pending invites.</CardDescription>
             </div>
-          </div>
-          <form className="team-create-row" onSubmit={(event) => {
-            event.preventDefault();
-            void createTeam();
-          }}>
-            <input
-              aria-label="Team name"
-              value={teamName}
-              onChange={(event) => setTeamName(event.target.value)}
-              placeholder="Team name"
-            />
-            <button className="save-button" disabled={!teamName.trim()} type="submit">
-              <Plus size={16} aria-hidden="true" />
-              Create
-            </button>
-          </form>
-          <div className="team-list">
-            {state === "loading" && <TeamsLoadingRows />}
-            {state !== "loading" && dashboard.teams.map((team) => (
-              <article className="team-card" key={team.id}>
-                <div className="team-row">
-                  <div className="team-row-main">
-                    <strong>{team.name}</strong>
-                    <small>{team.members.length} members · {team.invitations.length} pending · {team.slug}</small>
-                  </div>
-                  <StatusToken value={team.role} />
-                  {team.role === "owner" ? (
-                    <form className="team-invite-row" onSubmit={(event) => {
-                      event.preventDefault();
-                      void inviteMember(team);
-                    }}>
-                      <input
-                        aria-label={`Invite user to ${team.name}`}
-                        value={inviteEmails[team.id] ?? ""}
-                        onChange={(event) => setInviteEmails((current) => ({ ...current, [team.id]: event.target.value }))}
-                        placeholder="user@example.com"
-                        type="email"
-                      />
-                      <button disabled={!inviteEmails[team.id]?.trim()} type="submit">
-                        <Plus size={15} aria-hidden="true" />
-                        Invite
-                      </button>
-                    </form>
-                  ) : (
-                    <span className="team-permission-note">Invite access limited to owners</span>
-                  )}
-                </div>
+          </CardHeader>
+          <CardContent className="teams-access-content">
+            <form className="team-create-row shadcn-team-create-row" onSubmit={(event) => {
+              event.preventDefault();
+              void createTeam();
+            }}>
+              <Input
+                aria-label="Team name"
+                value={teamName}
+                onChange={(event) => setTeamName(event.target.value)}
+                placeholder="Team name"
+              />
+              <Button className="save-button shadcn-action-button" disabled={!teamName.trim()} size="sm" type="submit">
+                <Plus size={16} aria-hidden="true" />
+                Create
+              </Button>
+            </form>
 
-                <div className="team-detail-grid">
-                  <div className="team-detail-list">
-                    <h3>Members</h3>
-                    {team.members.map((member) => (
-                      <div className="team-person-row" key={member.id}>
-                        <UserRound size={15} aria-hidden="true" />
-                        <span>
-                          <strong>{member.name || member.email}</strong>
-                          <small>{member.email}</small>
-                        </span>
-                        <StatusToken value={member.role} />
+            <section className="teams-combined-section" aria-labelledby="team-list-heading">
+              <div className="teams-section-heading">
+                <h2 id="team-list-heading">Teams</h2>
+                <span>{teamCount} active</span>
+              </div>
+              <div className="team-list">
+                {state === "loading" && <TeamsLoadingRows />}
+                {state !== "loading" && dashboard.teams.map((team) => (
+                  <article className="team-card" key={team.id}>
+                    <div className="team-row">
+                      <div className="team-row-main">
+                        <strong>{team.name}</strong>
+                        <small>{team.members.length} members · {team.invitations.length} pending · {team.slug}</small>
                       </div>
-                    ))}
-                    {team.members.length === 0 && <div className="empty-inline">No members returned for this team.</div>}
-                  </div>
+                      <StatusToken value={team.role} />
+                      {team.role === "owner" ? (
+                        <form className="team-invite-row" onSubmit={(event) => {
+                          event.preventDefault();
+                          void inviteMember(team);
+                        }}>
+                          <Input
+                            aria-label={`Invite user to ${team.name}`}
+                            value={inviteEmails[team.id] ?? ""}
+                            onChange={(event) => setInviteEmails((current) => ({ ...current, [team.id]: event.target.value }))}
+                            placeholder="user@example.com"
+                            type="email"
+                          />
+                          <Button className="shadcn-action-button" disabled={!inviteEmails[team.id]?.trim()} size="sm" type="submit" variant="outline">
+                            <Plus size={15} aria-hidden="true" />
+                            Invite
+                          </Button>
+                        </form>
+                      ) : (
+                        <span className="team-permission-note">Invite access limited to owners</span>
+                      )}
+                    </div>
 
-                  <div className="team-detail-list">
-                    <h3>Pending invitations</h3>
-                    {team.invitations.map((invitation) => (
-                      <div className="team-person-row" key={invitation.id}>
-                        <Mail size={15} aria-hidden="true" />
-                        <span>
-                          <strong>{invitation.email}</strong>
-                          <small>Sent {formatDate(invitation.createdAt)}</small>
-                        </span>
-                        <StatusToken value={invitation.status} />
+                    <div className="team-detail-grid">
+                      <div className="team-detail-list">
+                        <h3>Members</h3>
+                        {team.members.map((member) => (
+                          <div className="team-person-row" key={member.id}>
+                            <UserRound size={15} aria-hidden="true" />
+                            <span>
+                              <strong>{member.name || member.email}</strong>
+                              <small>{member.email}</small>
+                            </span>
+                            <StatusToken value={member.role} />
+                          </div>
+                        ))}
+                        {team.members.length === 0 && <div className="empty-inline">No members returned for this team.</div>}
                       </div>
-                    ))}
-                    {team.invitations.length === 0 && <div className="empty-inline">No pending invitations.</div>}
+
+                      <div className="team-detail-list">
+                        <h3>Pending invitations</h3>
+                        {team.invitations.map((invitation) => (
+                          <div className="team-person-row" key={invitation.id}>
+                            <Mail size={15} aria-hidden="true" />
+                            <span>
+                              <strong>{invitation.email}</strong>
+                              <small>Sent {formatDate(invitation.createdAt)}</small>
+                            </span>
+                            <StatusToken value={invitation.status} />
+                          </div>
+                        ))}
+                        {team.invitations.length === 0 && <div className="empty-inline">No pending invitations.</div>}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+                {state === "ready" && dashboard.teams.length === 0 && (
+                  <div className="empty-state compact">
+                    <UsersRound size={22} aria-hidden="true" />
+                    <strong>No teams yet.</strong>
+                    <span>Create a team to start sharing private skills with members.</span>
                   </div>
+                )}
+              </div>
+            </section>
+
+            <section className="teams-combined-section" aria-labelledby="team-invitations-heading">
+              <div className="teams-section-heading">
+                <h2 id="team-invitations-heading">Invitations</h2>
+                <span>{invitationCount} pending</span>
+              </div>
+              <div className="invitation-list">
+                {state === "loading" && <TeamsLoadingRows />}
+                {state !== "loading" && dashboard.invitations.map((invitation) => (
+                  <div className="invitation-row" key={invitation.id}>
+                    <span>
+                      <strong>{invitation.teamName}</strong>
+                      <small>{invitation.email} · sent {formatDate(invitation.createdAt)}</small>
+                    </span>
+                    <StatusToken value={invitation.status} />
+                    <Button className="save-button shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void acceptInvitation(invitation)}>
+                      <Check size={16} aria-hidden="true" />
+                      Accept
+                    </Button>
+                  </div>
+                ))}
+                {state === "ready" && dashboard.invitations.length === 0 && (
+                  <div className="empty-state compact">
+                    <Check size={22} aria-hidden="true" />
+                    <strong>No pending invitations.</strong>
+                    <span>Accepted teams appear in the team list.</span>
+                  </div>
+                )}
+              </div>
+            </section>
+          </CardContent>
+        </Card>
+
+        <section className="team-shared-groups teams-shared-column" aria-label="Team shared skills">
+          {state === "loading" && (
+            <Card className="team-skill-group shadcn-console-card">
+              <CardHeader className="admin-panel-heading shadcn-card-header">
+                <span className="admin-panel-icon"><PackageOpen size={18} aria-hidden="true" /></span>
+                <div>
+                  <CardTitle>Shared skills</CardTitle>
+                  <CardDescription>Loading team visibility grants.</CardDescription>
                 </div>
-              </article>
-            ))}
-            {state === "ready" && dashboard.teams.length === 0 && (
-              <div className="empty-state compact">
-                <UsersRound size={22} aria-hidden="true" />
-                <strong>No teams yet.</strong>
-                <span>Create a team to start sharing private skills with members.</span>
-              </div>
-            )}
-          </div>
+              </CardHeader>
+              <CardContent>
+                <TeamsLoadingRows />
+              </CardContent>
+            </Card>
+          )}
+          {state !== "loading" && sharedGroups.map((group) => (
+            <TeamSkillGroupCard group={group} key={group.team.id} />
+          ))}
+          {state === "ready" && sharedGroups.length === 0 && (
+            <Card className="team-skill-group teams-shared-empty shadcn-console-card">
+              <CardHeader className="admin-panel-heading shadcn-card-header">
+                <span className="admin-panel-icon"><PackageOpen size={18} aria-hidden="true" /></span>
+                <div>
+                  <CardTitle>Shared skills</CardTitle>
+                  <CardDescription>Team visibility grants grouped by team.</CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="empty-state compact">
+                  <PackageOpen size={24} aria-hidden="true" />
+                  <strong>No team-shared skills.</strong>
+                  <span>Team visibility grants will appear here grouped by team.</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </section>
-
-        <section className="admin-panel">
-          <div className="admin-panel-heading">
-            <span className="admin-panel-icon"><ClipboardList size={18} aria-hidden="true" /></span>
-            <div>
-              <h2>Invitations</h2>
-              <p>Pending team invitations for this account.</p>
-            </div>
-          </div>
-          <div className="invitation-list">
-            {state === "loading" && <TeamsLoadingRows />}
-            {state !== "loading" && dashboard.invitations.map((invitation) => (
-              <div className="invitation-row" key={invitation.id}>
-                <span>
-                  <strong>{invitation.teamName}</strong>
-                  <small>{invitation.email} · sent {formatDate(invitation.createdAt)}</small>
-                </span>
-                <StatusToken value={invitation.status} />
-                <button className="save-button" type="button" onClick={() => void acceptInvitation(invitation)}>
-                  <Check size={16} aria-hidden="true" />
-                  Accept
-                </button>
-              </div>
-            ))}
-            {state === "ready" && dashboard.invitations.length === 0 && (
-              <div className="empty-state compact">
-                <Check size={22} aria-hidden="true" />
-                <strong>No pending invitations.</strong>
-                <span>Accepted teams appear in the team list.</span>
-              </div>
-            )}
-          </div>
-        </section>
-      </section>
-
-      <section className="team-shared-groups" aria-label="Team shared skills">
-        {state === "loading" && (
-          <section className="admin-panel team-skill-group">
-            <div className="admin-panel-heading">
-              <span className="admin-panel-icon"><PackageOpen size={18} aria-hidden="true" /></span>
-              <div>
-                <h2>Shared skills</h2>
-                <p>Loading team visibility grants.</p>
-              </div>
-            </div>
-            <TeamsLoadingRows />
-          </section>
-        )}
-        {state !== "loading" && sharedGroups.map((group) => (
-          <TeamSkillGroupCard group={group} key={group.team.id} />
-        ))}
-        {state === "ready" && sharedGroups.length === 0 && (
-          <div className="empty-state">
-            <PackageOpen size={24} aria-hidden="true" />
-            <strong>No team-shared skills.</strong>
-            <span>Team visibility grants will appear here grouped by team.</span>
-          </div>
-        )}
       </section>
     </main>
   );
@@ -1582,19 +1666,19 @@ function TeamsLoadingRows() {
 
 function TeamSkillGroupCard({ group }: { group: TeamSharedSkillGroup }) {
   return (
-    <section className="admin-panel team-skill-group">
-      <div className="admin-panel-heading">
+    <Card className="team-skill-group shadcn-console-card">
+      <CardHeader className="admin-panel-heading shadcn-card-header">
         <span className="admin-panel-icon"><UsersRound size={18} aria-hidden="true" /></span>
         <div>
-          <h2>{group.team.name}</h2>
-          <p>{group.sharingWithTeam.length} shared by you · {group.sharedWithMe.length} shared with you</p>
+          <CardTitle>{group.team.name}</CardTitle>
+          <CardDescription>{group.sharingWithTeam.length} shared by you · {group.sharedWithMe.length} shared with you</CardDescription>
         </div>
-      </div>
-      <div className="team-skill-columns">
+      </CardHeader>
+      <CardContent className="team-skill-columns">
         <TeamSkillList title="Sharing with this team" skills={group.sharingWithTeam} />
         <TeamSkillList title="Shared with you" skills={group.sharedWithMe} />
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1735,16 +1819,17 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
   }
 
   return (
-    <main className="admin-workspace" aria-label="Admin console">
-      <section className="admin-hero" aria-labelledby="admin-console-heading">
+    <main className="admin-workspace shadcn-admin-workspace" aria-label="Admin console">
+      <section className="admin-hero shadcn-admin-hero" aria-labelledby="admin-console-heading">
         <div>
+          <Badge className="shadcn-review-eyebrow" variant="outline">Owner workflow</Badge>
           <h1 id="admin-console-heading">Admin console</h1>
           <p>{session.user.email} · {adminInitialLoading ? "loading accounts" : `${users.length} accounts`}</p>
         </div>
-        <button type="button" onClick={() => void refreshAdmin()}>
+        <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void refreshAdmin()}>
           <RotateCw size={16} aria-hidden="true" />
           Refresh
-        </button>
+        </Button>
       </section>
 
       {message && <div className="safe-message admin-message" role="status">{message}</div>}
@@ -1859,8 +1944,8 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
                   <small>{token.user.email} · {token.tokenPrefix}...</small>
                 </span>
                 <StatusToken value={token.revokedAt ? "revoked" : "active"} />
-                <span>{token.scopes.join(", ")}</span>
-                <span>Expires {formatDate(token.expiresAt)}</span>
+                <span className="admin-token-scopes">{token.scopes.join(", ")}</span>
+                <span className="admin-token-expiry">Expires {formatDate(token.expiresAt)}</span>
                 <button
                   className="icon-button"
                   disabled={Boolean(token.revokedAt)}
@@ -2030,15 +2115,19 @@ function AdminPanel({ children, icon, meta, title }: {
   title: string;
 }) {
   return (
-    <section className="admin-panel">
-      <div className="admin-panel-heading">
-        <span className="admin-panel-icon">{icon}</span>
-        <div>
-          <h2>{title}</h2>
-          <p>{meta}</p>
-        </div>
-      </div>
-      {children}
+    <section className="admin-panel reui-admin-section">
+      <Frame className="reui-admin-frame" dense spacing="xs" variant="ghost">
+        <FramePanel className="reui-admin-panel">
+          <FrameHeader className="admin-panel-heading reui-admin-heading">
+            <span className="admin-panel-icon">{icon}</span>
+            <div>
+              <FrameTitle>{title}</FrameTitle>
+              <FrameDescription>{meta}</FrameDescription>
+            </div>
+          </FrameHeader>
+          {children}
+        </FramePanel>
+      </Frame>
     </section>
   );
 }
@@ -2168,7 +2257,7 @@ function AuthTokenPage({
         }}>
           <img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" />
         </a>
-        <button className="login-back" type="button" onClick={onLogin}>Login</button>
+        <Button className="login-back shadcn-action-button" size="sm" type="button" variant="outline" onClick={onLogin}>Login</Button>
       </nav>
       <section className="login-panel" aria-labelledby="auth-token-heading">
         <p className="landing-status">Private development. Account action required.</p>
@@ -2180,7 +2269,8 @@ function AuthTokenPage({
           }}>
             <label className="auth-field">
               <span>New password</span>
-              <input
+              <Input
+                className="auth-input"
                 aria-label="New password"
                 autoComplete="new-password"
                 disabled={state === "loading"}
@@ -2191,7 +2281,8 @@ function AuthTokenPage({
             </label>
             <label className="auth-field">
               <span>Confirm password</span>
-              <input
+              <Input
+                className="auth-input"
                 aria-label="Confirm password"
                 autoComplete="new-password"
                 disabled={state === "loading"}
@@ -2200,10 +2291,10 @@ function AuthTokenPage({
                 value={confirmPassword}
               />
             </label>
-            <button disabled={state === "loading" || !password || !confirmPassword} type="submit">
+            <Button className="shadcn-action-button" disabled={state === "loading" || !password || !confirmPassword} size="sm" type="submit">
               <KeyRound size={16} aria-hidden="true" />
               Save password
-            </button>
+            </Button>
           </form>
         ) : (
           <div className={state === "error" ? "safe-message compact-message" : "success-message compact-message"} role="status" aria-live="polite">
@@ -2212,10 +2303,10 @@ function AuthTokenPage({
         )}
         {kind === "reset-password" && <AuthMessage message={message} />}
         {state === "ready" && (
-          <button className="save-button" type="button" onClick={onLogin}>
+          <Button className="save-button shadcn-action-button" size="sm" type="button" onClick={onLogin}>
             <LogIn size={16} aria-hidden="true" />
             Login
-          </button>
+          </Button>
         )}
       </section>
     </main>
@@ -2358,11 +2449,11 @@ function AccountSettings({
   const recoveryCodeLabel = accountInitialLoading ? "Loading" : mfaEnabled ? String(mfaStatus?.recoveryCodesRemaining ?? 0) : "not issued";
 
   return (
-    <main className="settings-workspace" aria-label="Account settings">
+    <main className="settings-workspace shadcn-settings-workspace" aria-label="Account settings">
       {message && <div className={state === "error" ? "safe-message admin-message" : "success-message admin-message"} role="status">{message}</div>}
-      <section className="settings-hero">
+      <section className="settings-hero shadcn-settings-hero">
         <div>
-          <p className="settings-eyebrow">Account settings</p>
+          <Badge className="settings-eyebrow shadcn-review-eyebrow" variant="outline">Account settings</Badge>
           <h1>Security and access</h1>
           <p>Manage identity, authentication, and external access for this account.</p>
         </div>
@@ -2379,10 +2470,10 @@ function AccountSettings({
             <strong>MFA is enabled, but this session is not MFA verified.</strong>
             <p>Privileged owner workflows remain locked until the next MFA sign-in.</p>
           </div>
-          <button type="button" onClick={() => onSessionInvalidated("Sign in with MFA to continue.")}>
+          <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => onSessionInvalidated("Sign in with MFA to continue.")}>
             <LogIn size={16} aria-hidden="true" />
             Sign in with MFA
-          </button>
+          </Button>
         </section>
       )}
 
@@ -2418,7 +2509,8 @@ function AccountSettings({
               <div className="settings-field">
                 <label>
                   <span>New email</span>
-                  <input
+                  <Input
+                    className="settings-input"
                     aria-label="New email"
                     autoComplete="email"
                     name="new-email"
@@ -2434,7 +2526,8 @@ function AccountSettings({
               <div className="settings-field">
                 <label>
                   <span>Current password</span>
-                  <input
+                  <Input
+                    className="settings-input"
                     autoComplete="current-password"
                     name="email-current-password"
                     onChange={(event) => setEmailPassword(event.target.value)}
@@ -2447,10 +2540,10 @@ function AccountSettings({
                 <small>Required for account identity changes.</small>
               </div>
               <div className="settings-submit-row">
-                <button className="save-button" disabled={state === "loading"} type="submit">
+                <Button className="save-button shadcn-action-button" disabled={state === "loading"} size="sm" type="submit">
                   <Mail size={16} aria-hidden="true" />
                   Send verification
-                </button>
+                </Button>
               </div>
             </form>
           </AccountPanel>
@@ -2467,7 +2560,8 @@ function AccountSettings({
             }}>
               <label className="span-all">
                 <span>Current password</span>
-                <input
+                <Input
+                  className="settings-input"
                   autoComplete="current-password"
                   name="current-password"
                   onChange={(event) => setCurrentPassword(event.target.value)}
@@ -2479,7 +2573,8 @@ function AccountSettings({
               </label>
               <label>
                 <span>New password</span>
-                <input
+                <Input
+                  className="settings-input"
                   aria-label="New password"
                   autoComplete="new-password"
                   name="new-password"
@@ -2492,7 +2587,8 @@ function AccountSettings({
               </label>
               <label>
                 <span>Confirm new password</span>
-                <input
+                <Input
+                  className="settings-input"
                   aria-label="Confirm new password"
                   autoComplete="new-password"
                   name="confirm-new-password"
@@ -2504,10 +2600,10 @@ function AccountSettings({
                 />
               </label>
               <div className="settings-submit-row">
-                <button className="save-button" disabled={state === "loading"} type="submit">
+                <Button className="save-button shadcn-action-button" disabled={state === "loading"} size="sm" type="submit">
                   <Save size={16} aria-hidden="true" />
                   Change password
-                </button>
+                </Button>
               </div>
             </form>
           </AccountPanel>
@@ -2526,10 +2622,10 @@ function AccountSettings({
                 </div>
                 {mfaEnabled && (
                   <div className="settings-actions">
-                    <button className="save-button secondary-action" type="button" onClick={() => setMfaSetupOpen((open) => !open)}>
+                    <Button className="save-button shadcn-action-button secondary-action" size="sm" type="button" variant="outline" onClick={() => setMfaSetupOpen((open) => !open)}>
                       <RotateCw size={16} aria-hidden="true" />
                       Reset authenticator
-                    </button>
+                    </Button>
                     <form className="inline-security-form" onSubmit={(event) => {
                       event.preventDefault();
                       const formData = new window.FormData(event.currentTarget);
@@ -2537,7 +2633,8 @@ function AccountSettings({
                     }}>
                       <label>
                         <span>Password for MFA removal</span>
-                        <input
+                        <Input
+                          className="settings-input"
                           aria-label="Password for MFA removal"
                           autoComplete="current-password"
                           name="mfa-removal-password"
@@ -2549,10 +2646,10 @@ function AccountSettings({
                           value={mfaPassword}
                         />
                       </label>
-                      <button disabled={state === "loading"} type="submit">
+                      <Button className="shadcn-action-button" disabled={state === "loading"} size="sm" type="submit" variant="destructive">
                         <X size={16} aria-hidden="true" />
                         Remove MFA
-                      </button>
+                      </Button>
                     </form>
                   </div>
                 )}
@@ -2582,7 +2679,8 @@ function AccountSettings({
               }}>
                 <label>
                   <span>Key name</span>
-                  <input
+                  <Input
+                    className="settings-input"
                     aria-label="Key name"
                     name="api-token-name"
                     onChange={(event) => setApiTokenName(event.target.value)}
@@ -2593,7 +2691,8 @@ function AccountSettings({
                 </label>
                 <label>
                   <span>Expires at</span>
-                  <input
+                  <Input
+                    className="settings-input"
                     aria-label="Expires at"
                     name="api-token-expires-at"
                     onChange={(event) => setApiTokenExpiresAt(event.target.value)}
@@ -2616,20 +2715,20 @@ function AccountSettings({
                   ))}
                 </fieldset>
                 <div className="settings-submit-row">
-                  <button className="save-button" disabled={state === "loading" || !apiTokenName.trim() || apiTokenScopes.length === 0} type="submit">
+                  <Button className="save-button shadcn-action-button" disabled={state === "loading" || !apiTokenName.trim() || apiTokenScopes.length === 0} size="sm" type="submit">
                     <KeyRound size={16} aria-hidden="true" />
                     Create key
-                  </button>
+                  </Button>
                 </div>
               </form>
               {createdApiToken && (
                 <div className="token-reveal" role="status">
                   <span>Copy this key now. It will not be shown again.</span>
                   <code>{createdApiToken}</code>
-                  <button type="button" onClick={() => void navigator.clipboard?.writeText(createdApiToken)}>
+                  <Button className="shadcn-action-button" size="sm" type="button" onClick={() => void navigator.clipboard?.writeText(createdApiToken)}>
                     <Copy size={15} aria-hidden="true" />
                     Copy
-                  </button>
+                  </Button>
                 </div>
               )}
               {accountInitialLoading ? <LoadingRows /> : <TokenList tokens={apiTokens} onRevoke={(tokenId) => void revokeAccountApiToken(tokenId)} />}
@@ -2664,15 +2763,19 @@ function AccountPanel({ children, icon, meta, title }: {
   title: string;
 }) {
   return (
-    <section className="settings-panel">
-      <div className="settings-panel-heading">
-        <span className="settings-panel-icon">{icon}</span>
-        <div>
-          <h2>{title}</h2>
-          <p>{meta}</p>
-        </div>
-      </div>
-      {children}
+    <section className="settings-panel reui-settings-section">
+      <Frame className="reui-settings-frame" dense spacing="xs" variant="ghost">
+        <FramePanel className="reui-settings-panel">
+          <FrameHeader className="settings-panel-heading reui-settings-heading">
+            <span className="settings-panel-icon">{icon}</span>
+            <div>
+              <FrameTitle>{title}</FrameTitle>
+              <FrameDescription>{meta}</FrameDescription>
+            </div>
+          </FrameHeader>
+          {children}
+        </FramePanel>
+      </Frame>
     </section>
   );
 }
@@ -2754,6 +2857,15 @@ function StatusToken({ value }: { value?: string }) {
   return <span className={`status-token status-token-${statusValue}`}>{formatStatusLabel(statusValue)}</span>;
 }
 
+function ReviewStatusBadge({ value }: { value?: string }) {
+  const statusValue = value ?? "unknown";
+  return (
+    <Badge className={`review-status-badge review-status-badge-${statusValue}`} variant="outline">
+      {formatStatusLabel(statusValue)}
+    </Badge>
+  );
+}
+
 function formatStatusLabel(value: string) {
   const label = value.replace(/[-_]+/g, " ");
   return label.charAt(0).toUpperCase() + label.slice(1);
@@ -2823,13 +2935,13 @@ function AuthWidget({
             </small>
           </span>
           {!mfaEnabled && (
-            <button type="button" onClick={() => setMfaSetupOpen((open) => !open)} aria-label="Set up MFA">
+            <Button className="shadcn-action-button" size="icon-sm" type="button" variant="outline" onClick={() => setMfaSetupOpen((open) => !open)} aria-label="Set up MFA">
               <ShieldCheck size={16} aria-hidden="true" />
-            </button>
+            </Button>
           )}
-          <button type="button" onClick={() => void onLogout()} aria-label="Sign out">
+          <Button className="shadcn-action-button" size="icon-sm" type="button" variant="outline" onClick={() => void onLogout()} aria-label="Sign out">
             <LogOut size={16} aria-hidden="true" />
-          </button>
+          </Button>
         </div>
         {mfaSetupOpen && client && (
           <MfaSetupPanel
@@ -2856,7 +2968,8 @@ function AuthWidget({
       }}>
         <label className="auth-field">
           <span>Verification code</span>
-          <input
+          <Input
+            className="auth-input"
             aria-label="MFA code"
             autoComplete="one-time-code"
             disabled={authState === "loading"}
@@ -2869,10 +2982,10 @@ function AuthWidget({
           />
         </label>
         <p className="auth-help">Use your authenticator app or recovery code for {mfaPending.email}.</p>
-        <button disabled={authState === "loading" || !mfaCode.trim()} type="submit">
+        <Button className="shadcn-action-button" disabled={authState === "loading" || !mfaCode.trim()} size="sm" type="submit">
           <ShieldCheck size={16} aria-hidden="true" />
           Verify
-        </button>
+        </Button>
         <AuthMessage message={authMessage ?? mfaPending.email} />
       </form>
     );
@@ -2886,7 +2999,8 @@ function AuthWidget({
       }}>
         <label className="auth-field">
           <span>Email</span>
-          <input
+          <Input
+            className="auth-input"
             aria-label="Reset email"
             autoComplete="email"
             disabled={authState === "loading"}
@@ -2898,13 +3012,13 @@ function AuthWidget({
             value={email}
           />
         </label>
-        <button disabled={authState === "loading" || !email.trim()} type="submit">
+        <Button className="shadcn-action-button" disabled={authState === "loading" || !email.trim()} size="sm" type="submit">
           <Mail size={16} aria-hidden="true" />
           Send reset email
-        </button>
-        <button className="link-button" disabled={authState === "loading"} type="button" onClick={() => setResetMode(false)}>
+        </Button>
+        <Button className="link-button shadcn-action-button" disabled={authState === "loading"} size="sm" type="button" variant="link" onClick={() => setResetMode(false)}>
           Back to login
-        </button>
+        </Button>
         <AuthMessage message={authMessage} />
       </form>
     );
@@ -2917,7 +3031,8 @@ function AuthWidget({
     }}>
       <label className="auth-field">
         <span>Email</span>
-        <input
+        <Input
+          className="auth-input"
           aria-label="Email"
           autoComplete="email"
           disabled={authState === "loading"}
@@ -2931,7 +3046,8 @@ function AuthWidget({
       </label>
       <label className="auth-field">
         <span>Password</span>
-        <input
+        <Input
+          className="auth-input"
           aria-label="Password"
           autoComplete="current-password"
           disabled={authState === "loading"}
@@ -2942,14 +3058,14 @@ function AuthWidget({
           value={password}
         />
       </label>
-      <button disabled={authState === "loading" || !email.trim() || !password} type="submit">
+      <Button className="shadcn-action-button" disabled={authState === "loading" || !email.trim() || !password} size="sm" type="submit">
         <LogIn size={16} aria-hidden="true" />
         Sign in
-      </button>
+      </Button>
       {onPasswordReset && (
-        <button className="link-button" disabled={authState === "loading"} type="button" onClick={() => setResetMode(true)}>
+        <Button className="link-button shadcn-action-button" disabled={authState === "loading"} size="sm" type="button" variant="link" onClick={() => setResetMode(true)}>
           Forgot password?
-        </button>
+        </Button>
       )}
       <p className="auth-help">Access is limited to approved private-development accounts.</p>
       <AuthMessage message={authMessage} />
@@ -3024,7 +3140,8 @@ function MfaSetupPanel({
         }}>
           <label className="auth-field">
             <span>Current password</span>
-            <input
+            <Input
+              className="settings-input"
               autoComplete="current-password"
               disabled={state === "loading"}
               name="mfa-setup-password"
@@ -3035,10 +3152,10 @@ function MfaSetupPanel({
               value={password}
             />
           </label>
-          <button disabled={state === "loading"} type="submit">
+          <Button className="shadcn-action-button" disabled={state === "loading"} size="sm" type="submit">
             <KeyRound size={16} aria-hidden="true" />
             Continue
-          </button>
+          </Button>
         </form>
       ) : recoveryCodes.length === 0 ? (
         <form onSubmit={(event) => {
@@ -3053,7 +3170,8 @@ function MfaSetupPanel({
           </div>
           <label className="auth-field">
             <span>Verification code</span>
-            <input
+            <Input
+              className="settings-input"
               aria-label="MFA setup code"
               autoComplete="one-time-code"
               disabled={state === "loading"}
@@ -3066,10 +3184,10 @@ function MfaSetupPanel({
               value={code}
             />
           </label>
-          <button disabled={state === "loading"} type="submit">
+          <Button className="shadcn-action-button" disabled={state === "loading"} size="sm" type="submit">
             <ShieldCheck size={16} aria-hidden="true" />
             Enable MFA
-          </button>
+          </Button>
         </form>
       ) : (
         <div className="mfa-recovery">
@@ -3101,69 +3219,79 @@ function SkillDetail({
 }) {
   return (
     <>
-      <div className="detail-heading">
-        <SkillIcon slug={selectedSkill.slug} large />
-        <div className="detail-title">
-          <h2>{selectedSkill.title}</h2>
-          <span>{selectedSkill.slug}</span>
+      <CardHeader className="shadcn-detail-header registry-detail-header">
+        <div className="detail-heading shadcn-detail-title-row">
+          <SkillIcon slug={selectedSkill.slug} large />
+          <div className="detail-title shadcn-detail-title">
+            <CardTitle>{selectedSkill.title}</CardTitle>
+            <CardDescription>{selectedSkill.slug}</CardDescription>
+          </div>
+          <div className="detail-status registry-detail-status" aria-label="Release status">
+            <Badge className={`review-status-badge review-status-badge-${release.reviewStatus}`} variant="outline">
+              Review {formatStatusLabel(release.reviewStatus)}
+            </Badge>
+            <Badge className={`review-status-badge review-status-badge-${release.securityStatus}`} variant="outline">
+              Security {formatStatusLabel(release.securityStatus)}
+            </Badge>
+          </div>
         </div>
-        <div className="detail-status" aria-label="Release status">
-          <span className={`status-token status-token-${release.reviewStatus}`}>Review {formatStatusLabel(release.reviewStatus)}</span>
-          <span className={`status-token status-token-${release.securityStatus}`}>Security {formatStatusLabel(release.securityStatus)}</span>
-        </div>
-      </div>
-      <p className="summary">{selectedSkill.summary}</p>
-      <dl className="metadata-grid">
-        <Metadata label="Latest version" value={release.version} />
-        <Metadata label="Platforms" value={release.platforms.map((item) => item.name).join(", ")} />
-        <Metadata label="Tags" value={selectedSkill.tags.join(", ") || "-"} />
-        <Metadata label="Released" value={release.publishedAt ? formatDate(release.publishedAt) : "Not published"} />
-        <Metadata label="Review" value={formatStatusLabel(release.reviewStatus)} />
-        <Metadata label="Security" value={formatStatusLabel(release.securityStatus)} />
-        <Metadata label="Byte size" value={new Intl.NumberFormat().format(release.artifact.byteSize)} />
-        <Metadata label="Content type" value={release.artifact.contentType} />
-        <Metadata label="SHA-256" value={shortHash(release.artifact.sha256)} monospace />
-      </dl>
+      </CardHeader>
+      <CardContent className="shadcn-detail-content registry-detail-content">
+        <p className="summary">{selectedSkill.summary}</p>
+        <dl className="metadata-grid shadcn-metadata-grid registry-metadata-grid">
+          <Metadata label="Latest version" value={release.version} />
+          <Metadata label="Platforms" value={release.platforms.map((item) => item.name).join(", ")} />
+          <Metadata label="Tags" value={selectedSkill.tags.join(", ") || "-"} />
+          <Metadata label="Released" value={release.publishedAt ? formatDate(release.publishedAt) : "Not published"} />
+          <Metadata label="Review" value={formatStatusLabel(release.reviewStatus)} />
+          <Metadata label="Security" value={formatStatusLabel(release.securityStatus)} />
+          <Metadata label="Byte size" value={new Intl.NumberFormat().format(release.artifact.byteSize)} />
+          <Metadata label="Content type" value={release.artifact.contentType} />
+          <Metadata label="SHA-256" value={shortHash(release.artifact.sha256)} monospace />
+        </dl>
 
-      <div className="platform-select">
-        <span>Export platform</span>
-        <div>
-          {release.platforms.map((item) => (
-            <button
-              className={item.name === platform ? "platform-button active" : "platform-button"}
-              key={item.name}
-              type="button"
-              onClick={() => setPlatform(item.name)}
-            >
-              {item.name}
-            </button>
-          ))}
+        <div className="platform-select registry-platform-select">
+          <span>Export platform</span>
+          <div>
+            {release.platforms.map((item) => (
+              <Button
+                className={item.name === platform ? "platform-button active shadcn-action-button" : "platform-button shadcn-action-button"}
+                key={item.name}
+                size="sm"
+                type="button"
+                variant={item.name === platform ? "secondary" : "outline"}
+                onClick={() => setPlatform(item.name)}
+              >
+                {item.name}
+              </Button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {session && selectedSkill.access?.canManageSharing && (
-        <LifecyclePanel
-          client={client}
-          release={release}
-          selectedSkill={selectedSkill}
-          session={session}
-        />
-      )}
+        {session && selectedSkill.access?.canManageSharing && (
+          <LifecyclePanel
+            client={client}
+            release={release}
+            selectedSkill={selectedSkill}
+            session={session}
+          />
+        )}
 
-      <div className="command-panel">
-        <div className="command-heading">
-          <TerminalSquare size={18} aria-hidden="true" />
-          <span>CLI export</span>
+        <div className="command-panel registry-command-panel">
+          <div className="command-heading">
+            <TerminalSquare size={18} aria-hidden="true" />
+            <span>CLI export</span>
+          </div>
+          <code>{command}</code>
+          <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void navigator.clipboard?.writeText(command)}>
+            <Copy size={16} aria-hidden="true" />
+            Copy
+          </Button>
         </div>
-        <code>{command}</code>
-        <button type="button" onClick={() => void navigator.clipboard?.writeText(command)}>
-          <Copy size={16} aria-hidden="true" />
-          Copy
-        </button>
-      </div>
-      {session && selectedSkill.access?.canManageSharing && (
-        <SharingPanel client={client} selectedSkill={selectedSkill} session={session} />
-      )}
+        {session && selectedSkill.access?.canManageSharing && (
+          <SharingPanel client={client} selectedSkill={selectedSkill} session={session} />
+        )}
+      </CardContent>
     </>
   );
 }
@@ -3244,77 +3372,81 @@ function LifecyclePanel({
   }
 
   return (
-    <section className="lifecycle-panel" aria-label="Skill lifecycle controls">
-      <div className="admin-panel-heading">
-        <span className="admin-panel-icon"><Settings size={18} aria-hidden="true" /></span>
-        <div>
-          <h3>Lifecycle controls</h3>
-          <p>{state === "loading" ? "Loading release state" : `${releases.length} versions tracked`}</p>
-        </div>
-      </div>
-      {message && <div className="safe-message compact" role="status">{message}</div>}
-      <div className="metadata-edit-grid">
-        <label>
-          Title
-          <input value={title} onChange={(event) => setTitle(event.target.value)} />
-        </label>
-        <label>
-          Summary
-          <input value={summary} onChange={(event) => setSummary(event.target.value)} />
-        </label>
-        <label className="reason-field">
-          Reason
-          <input value={reason} onChange={(event) => setReason(event.target.value)} />
-        </label>
-        <button className="save-button compact-button" type="button" onClick={() => void saveMetadata()}>
-          <Save size={15} aria-hidden="true" />
-          Save metadata
-        </button>
-      </div>
-      <div className="lifecycle-actions">
-        <button type="button" onClick={() => void runSkillAction("archive")}>
-          <PackageOpen size={15} aria-hidden="true" />
-          Archive skill
-        </button>
-        <button type="button" onClick={() => void runSkillAction("restore")}>
-          <RotateCw size={15} aria-hidden="true" />
-          Restore skill
-        </button>
-        <button className="danger-button" type="button" onClick={() => void runSkillAction("delete")}>
-          <Trash2 size={15} aria-hidden="true" />
-          Delete skill
-        </button>
-      </div>
-      <div className="release-lifecycle-list">
-        {(currentRelease ? [currentRelease] : releases.slice(0, 1)).map((item) => (
-          <div className="release-lifecycle-row" key={item.id}>
-            <div className="release-lifecycle-meta">
-              <span>
-                <strong>{item.slug}@{item.version}</strong>
-                <small>{item.publishedAt ? formatDate(item.publishedAt) : "not published"}</small>
-              </span>
-              <span className="release-lifecycle-statuses">
-                <StatusToken value={item.lifecycleStatus} />
-                <StatusToken value={item.reviewStatus} />
-                <StatusToken value={item.securityStatus} />
-              </span>
-            </div>
-            <div className="release-lifecycle-actions">
-              {item.allowedActions.map((action) => (
-                <button
-                  className={action === "delete" || action === "revoke" ? "danger-button compact-button" : "compact-button"}
-                  key={action}
-                  type="button"
-                  onClick={() => void runReleaseAction(action)}
-                >
-                  {formatStatusLabel(action)}
-                </button>
-              ))}
-            </div>
+    <Frame className="lifecycle-panel reui-registry-frame" role="region" aria-label="Skill lifecycle controls" spacing="sm">
+      <FramePanel className="reui-registry-panel">
+        <FrameHeader className="admin-panel-heading reui-admin-heading reui-registry-heading">
+          <span className="admin-panel-icon"><Settings size={18} aria-hidden="true" /></span>
+          <div>
+            <FrameTitle>Lifecycle controls</FrameTitle>
+            <FrameDescription>{state === "loading" ? "Loading release state" : `${releases.length} versions tracked`}</FrameDescription>
           </div>
-        ))}
-      </div>
-    </section>
+        </FrameHeader>
+        {message && <div className="safe-message compact" role="status">{message}</div>}
+        <div className="metadata-edit-grid">
+          <label>
+            Title
+            <Input className="registry-input" value={title} onChange={(event) => setTitle(event.target.value)} />
+          </label>
+          <label>
+            Summary
+            <Input className="registry-input" value={summary} onChange={(event) => setSummary(event.target.value)} />
+          </label>
+          <label className="reason-field">
+            Reason
+            <Input className="registry-input" value={reason} onChange={(event) => setReason(event.target.value)} />
+          </label>
+          <Button className="save-button compact-button shadcn-action-button" size="sm" type="button" onClick={() => void saveMetadata()}>
+            <Save size={15} aria-hidden="true" />
+            Save metadata
+          </Button>
+        </div>
+        <div className="lifecycle-actions">
+          <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void runSkillAction("archive")}>
+            <PackageOpen size={15} aria-hidden="true" />
+            Archive skill
+          </Button>
+          <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void runSkillAction("restore")}>
+            <RotateCw size={15} aria-hidden="true" />
+            Restore skill
+          </Button>
+          <Button className="danger-button shadcn-action-button" size="sm" type="button" variant="destructive" onClick={() => void runSkillAction("delete")}>
+            <Trash2 size={15} aria-hidden="true" />
+            Delete skill
+          </Button>
+        </div>
+        <div className="release-lifecycle-list">
+          {(currentRelease ? [currentRelease] : releases.slice(0, 1)).map((item) => (
+            <div className="release-lifecycle-row" key={item.id}>
+              <div className="release-lifecycle-meta">
+                <span>
+                  <strong>{item.slug}@{item.version}</strong>
+                  <small>{item.publishedAt ? formatDate(item.publishedAt) : "not published"}</small>
+                </span>
+                <span className="release-lifecycle-statuses">
+                  <StatusToken value={item.lifecycleStatus} />
+                  <StatusToken value={item.reviewStatus} />
+                  <StatusToken value={item.securityStatus} />
+                </span>
+              </div>
+              <div className="release-lifecycle-actions">
+                {item.allowedActions.map((action) => (
+                  <Button
+                    className={action === "delete" || action === "revoke" ? "danger-button compact-button shadcn-action-button" : "compact-button shadcn-action-button"}
+                    key={action}
+                    size="sm"
+                    type="button"
+                    variant={action === "delete" || action === "revoke" ? "destructive" : "outline"}
+                    onClick={() => void runReleaseAction(action)}
+                  >
+                    {formatStatusLabel(action)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </FramePanel>
+    </Frame>
   );
 }
 
@@ -3387,57 +3519,60 @@ function SharingPanel({
   const availableTeams = details?.availableTeams ?? [];
 
   return (
-    <section className="sharing-panel">
-      <div className="sharing-panel-head">
-        <div>
-          <strong>Sharing</strong>
-          <span>Control who can discover and install this skill.</span>
+    <Frame className="sharing-panel reui-registry-frame" role="region" aria-label="Sharing controls" spacing="sm">
+      <FramePanel className="reui-registry-panel">
+        <div className="sharing-panel-head">
+          <div>
+            <strong>Sharing</strong>
+            <span>Control who can discover and install this skill.</span>
+          </div>
+          <Button className="save-button shadcn-action-button" disabled={state === "loading"} size="sm" type="button" onClick={() => void saveSharing()}>
+            <Save size={16} aria-hidden="true" />
+            Save sharing
+          </Button>
         </div>
-        <button className="save-button" disabled={state === "loading"} type="button" onClick={() => void saveSharing()}>
-          <Save size={16} aria-hidden="true" />
-          Save sharing
-        </button>
-      </div>
-      {message && <div className="inline-message" role="status">{message}</div>}
-      <div className="sharing-editor">
-        <label>
-          Visibility
-          <select value={visibility} disabled={state === "loading"} onChange={(event) => setVisibility(event.target.value as VisibilityScope)}>
-            {visibilityOptions.map((option) => (
-              <option disabled={!option.enabled} key={option.value} value={option.value}>
-                {option.label}{option.enabled ? "" : " (disabled)"}
-              </option>
+        {message && <div className="inline-message" role="status">{message}</div>}
+        <div className="sharing-editor">
+          <label>
+            Visibility
+            <select value={visibility} disabled={state === "loading"} onChange={(event) => setVisibility(event.target.value as VisibilityScope)}>
+              {visibilityOptions.map((option) => (
+                <option disabled={!option.enabled} key={option.value} value={option.value}>
+                  {option.label}{option.enabled ? "" : " (disabled)"}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className={visibility === "team" ? "grant-box active" : "grant-box"}>
+            <strong>Teams</strong>
+            {availableTeams.map((team) => (
+              <label className="role-toggle" key={team.id}>
+                <input
+                  checked={teamIds.includes(team.id)}
+                  disabled={visibility !== "team"}
+                  type="checkbox"
+                  onChange={() => setTeamIds((current) => toggleString(current, team.id))}
+                />
+                <span>{team.name}</span>
+              </label>
             ))}
-          </select>
-        </label>
+            {details && availableTeams.length === 0 && <small>No teams available.</small>}
+          </div>
 
-        <div className={visibility === "team" ? "grant-box active" : "grant-box"}>
-          <strong>Teams</strong>
-          {availableTeams.map((team) => (
-            <label className="role-toggle" key={team.id}>
-              <input
-                checked={teamIds.includes(team.id)}
-                disabled={visibility !== "team"}
-                type="checkbox"
-                onChange={() => setTeamIds((current) => toggleString(current, team.id))}
-              />
-              <span>{team.name}</span>
-            </label>
-          ))}
-          {details && availableTeams.length === 0 && <small>No teams available.</small>}
+          <label className={visibility === "explicit-users" ? "grant-box active" : "grant-box"}>
+            <strong>Individual users</strong>
+            <Input
+              className="registry-input"
+              disabled={visibility !== "explicit-users"}
+              value={userEmails}
+              onChange={(event) => setUserEmails(event.target.value)}
+              placeholder="user@example.com, teammate@example.com"
+            />
+          </label>
         </div>
-
-        <label className={visibility === "explicit-users" ? "grant-box active" : "grant-box"}>
-          <strong>Individual users</strong>
-          <input
-            disabled={visibility !== "explicit-users"}
-            value={userEmails}
-            onChange={(event) => setUserEmails(event.target.value)}
-            placeholder="user@example.com, teammate@example.com"
-          />
-        </label>
-      </div>
-    </section>
+      </FramePanel>
+    </Frame>
   );
 }
 

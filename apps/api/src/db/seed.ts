@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { and, eq } from "drizzle-orm";
 import { hashPassword } from "@myskills-app/auth";
-import { createDb, createPgPool } from "./client.js";
+import { createDb, createPgPool, type Database } from "./client.js";
 import {
   auditEvents,
   instanceSettings,
@@ -16,19 +18,26 @@ import {
   users,
 } from "./schema.js";
 
-const seedOwnerEmail = (process.env.SEED_OWNER_EMAIL ?? "owner@example.com").trim().toLowerCase();
-const seedOwnerPassword = getSeedOwnerPassword();
-const pool = createPgPool();
-const db = createDb(pool);
+const DEMO_SKILL_SLUG = "release-notes-helper";
+const DEMO_SKILL_VERSION = "0.1.0";
+const DEMO_SKILL_TITLE = "Release Notes Helper";
+const DEMO_SKILL_SUMMARY = "Turns merged changes into concise release notes with decisions, risks, and upgrade notes.";
+const DEMO_RELEASE_NOTES = "Initial synthetic seed package.";
+const DEMO_PLATFORM = { name: "codex", installTarget: "codex-skill", status: "supported" };
 
-try {
-  await seed();
-  console.log("Seed data written.");
-} finally {
-  await pool.end();
+export interface SeedDatabaseOptions {
+  ownerEmail?: string;
+  ownerPassword?: string;
 }
 
-async function seed() {
+if (isMainModule(import.meta.url)) {
+  await main();
+}
+
+export async function seedDatabase(db: Database, options: SeedDatabaseOptions = {}) {
+  const seedOwnerEmail = (options.ownerEmail ?? process.env.SEED_OWNER_EMAIL ?? "owner@example.com").trim().toLowerCase();
+  const seedOwnerPassword = options.ownerPassword ?? getSeedOwnerPassword();
+
   for (const role of ["owner", "admin", "maintainer", "author", "user"] as const) {
     await db.insert(roles).values({ name: role, description: `${role} role` }).onConflictDoNothing();
   }
@@ -65,9 +74,9 @@ async function seed() {
   const [skill] = await db
     .insert(skills)
     .values({
-      slug: "release-notes-helper",
-      title: "Release Notes Helper",
-      summary: "Turns merged changes into concise release notes with decisions, risks, and upgrade notes.",
+      slug: DEMO_SKILL_SLUG,
+      title: DEMO_SKILL_TITLE,
+      summary: DEMO_SKILL_SUMMARY,
       lifecycleStatus: "approved",
       visibility: "public",
       ownerUserId: owner.id,
@@ -75,8 +84,8 @@ async function seed() {
     .onConflictDoUpdate({
       target: skills.slug,
       set: {
-        title: "Release Notes Helper",
-        summary: "Turns merged changes into concise release notes with decisions, risks, and upgrade notes.",
+        title: DEMO_SKILL_TITLE,
+        summary: DEMO_SKILL_SUMMARY,
         lifecycleStatus: "approved",
         visibility: "public",
         ownerUserId: owner.id,
@@ -92,8 +101,9 @@ async function seed() {
     .insert(skillVersions)
     .values({
       skillId: skill.id,
-      version: "0.1.0",
-      releaseNotes: "Initial synthetic seed package.",
+      version: DEMO_SKILL_VERSION,
+      releaseNotes: DEMO_RELEASE_NOTES,
+      lifecycleStatus: "approved",
       reviewStatus: "approved",
       securityStatus: "passed",
       publishedAt: new Date(),
@@ -101,17 +111,47 @@ async function seed() {
     .onConflictDoNothing()
     .returning();
 
-  const existingVersion = version ?? (await db.select().from(skillVersions).where(eq(skillVersions.skillId, skill.id)).limit(1))[0];
-  if (!existingVersion) {
+  const seededVersion = version ?? (await db
+    .select()
+    .from(skillVersions)
+    .where(and(
+      eq(skillVersions.skillId, skill.id),
+      eq(skillVersions.version, DEMO_SKILL_VERSION),
+    ))
+    .limit(1))[0];
+  if (!seededVersion) {
     throw new Error("Skill version seed failed.");
   }
 
+  const [visibleVersion] = await db
+    .update(skillVersions)
+    .set({
+      releaseNotes: DEMO_RELEASE_NOTES,
+      lifecycleStatus: "approved",
+      reviewStatus: "approved",
+      securityStatus: "passed",
+      publishedAt: seededVersion.publishedAt ?? new Date(),
+    })
+    .where(eq(skillVersions.id, seededVersion.id))
+    .returning();
+  if (!visibleVersion) {
+    throw new Error("Skill version seed repair failed.");
+  }
+
   await db.insert(skillPlatformVariants).values({
-    skillVersionId: existingVersion.id,
-    name: "codex",
-    installTarget: "codex-skill",
-    status: "supported",
+    skillVersionId: visibleVersion.id,
+    ...DEMO_PLATFORM,
   }).onConflictDoNothing();
+  await db
+    .update(skillPlatformVariants)
+    .set({
+      installTarget: DEMO_PLATFORM.installTarget,
+      status: DEMO_PLATFORM.status,
+    })
+    .where(and(
+      eq(skillPlatformVariants.skillVersionId, visibleVersion.id),
+      eq(skillPlatformVariants.name, DEMO_PLATFORM.name),
+    ));
 
   for (const tag of ["writing", "release"]) {
     await db.insert(skillTags).values({ skillId: skill.id, tag }).onConflictDoNothing();
@@ -121,27 +161,27 @@ async function seed() {
     files: [
       {
         path: "README.md",
-        content: "Turns merged changes into concise release notes with decisions, risks, and upgrade notes.",
+        content: DEMO_SKILL_SUMMARY,
       },
       {
         path: "skill.json",
         content: JSON.stringify({
-          name: "release-notes-helper",
-          title: "Release Notes Helper",
-          summary: "Turns merged changes into concise release notes with decisions, risks, and upgrade notes.",
-          version: "0.1.0",
+          name: DEMO_SKILL_SLUG,
+          title: DEMO_SKILL_TITLE,
+          summary: DEMO_SKILL_SUMMARY,
+          version: DEMO_SKILL_VERSION,
           license: "Apache-2.0",
           visibility: "public",
-          platforms: [{ name: "codex", install_target: "codex-skill", status: "supported" }],
+          platforms: [{ name: DEMO_PLATFORM.name, install_target: DEMO_PLATFORM.installTarget, status: DEMO_PLATFORM.status }],
           tags: ["writing", "release"],
         }),
       },
     ],
   };
   const syntheticArtifact = JSON.stringify(syntheticArtifactPayload);
-  await db.delete(skillArtifacts).where(eq(skillArtifacts.skillVersionId, existingVersion.id));
+  await db.delete(skillArtifacts).where(eq(skillArtifacts.skillVersionId, visibleVersion.id));
   await db.insert(skillArtifacts).values({
-    skillVersionId: existingVersion.id,
+    skillVersionId: visibleVersion.id,
     storageKey: `seed/${randomUUID()}.json`,
     sha256: createHash("sha256").update(syntheticArtifact).digest("hex"),
     byteSize: Buffer.byteLength(syntheticArtifact),
@@ -159,6 +199,16 @@ async function seed() {
   });
 }
 
+async function main() {
+  const pool = createPgPool();
+  try {
+    await seedDatabase(createDb(pool));
+    console.log("Seed data written.");
+  } finally {
+    await pool.end();
+  }
+}
+
 function getSeedOwnerPassword(): string {
   const password = process.env.SEED_OWNER_PASSWORD;
   if (password) {
@@ -168,4 +218,8 @@ function getSeedOwnerPassword(): string {
     throw new Error("SEED_OWNER_PASSWORD is required in production.");
   }
   return "change-me-now-please";
+}
+
+function isMainModule(metaUrl: string): boolean {
+  return process.argv[1] ? fileURLToPath(metaUrl) === resolve(process.argv[1]) : false;
 }

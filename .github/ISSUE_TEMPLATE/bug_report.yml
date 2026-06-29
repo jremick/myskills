@@ -1,0 +1,63 @@
+name: Bug report
+description: Report a reproducible MySkills bug.
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include secrets, tokens, `.env` contents, private package contents, production database URLs, or object-storage keys. Use private vulnerability reporting for suspected security issues.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: MySkills release, npm package version, or commit SHA.
+      placeholder: "0.1.0-alpha.3 or 25f0989"
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - API
+        - Web
+        - CLI
+        - MCP
+        - Package parser/scanner
+        - Deployment
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Include exact commands or UI steps with sanitized output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node, npm, Docker/Postgres/object-storage setup when relevant.
+      placeholder: |
+        OS:
+        Node:
+        npm:
+        Docker/Postgres:
+    validations:
+      required: false
