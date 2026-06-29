@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest a concrete MySkills improvement.
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow or user need does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Describe the smallest useful version of the feature.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Primary surface
+      options:
+        - API
+        - Web
+        - CLI
+        - MCP
+        - Package format
+        - Deployment
+        - Documentation
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility or migration impact
+      description: Note any expected changes to APIs, CLI commands, package manifests, database migrations, or deployment config.
+    validations:
+      required: false
