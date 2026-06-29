@@ -61,7 +61,7 @@ USER node
 EXPOSE 3002
 CMD ["node", "apps/mcp/dist/http-index.js"]
 
-FROM nginx:1.29-alpine AS web
+FROM nginx:1.31-alpine AS web
 ENV PORT=80 \
     API_PROXY_TARGET=http://127.0.0.1:3001
 COPY deploy/nginx.railway.conf.template /etc/nginx/templates/default.conf.template
