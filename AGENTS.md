@@ -7,7 +7,7 @@ Last updated: 2026-06-19
 
 - GitHub is the source of truth for code, issues, pull requests, and review state.
 - Preserve the existing npm workspace layout in `package.json`; do not introduce another package manager.
-- Keep MySkills public-alpha safe: do not add private-source carryover, secrets, personal credentials, or machine-specific state.
+- Keep MySkills public-beta safe: do not add private-source carryover, secrets, personal credentials, or machine-specific state.
 - Treat registry state, review decisions, permissions, package artifacts, and audit history as application data owned by the MySkills API, not as Git-only state.
 
 ## Repository Shape

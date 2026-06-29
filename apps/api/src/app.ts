@@ -110,7 +110,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   }));
 
   app.get("/v1/capabilities", async () => ({
-    version: process.env.MYSKILLS_API_VERSION ?? "0.1.0-beta.0",
+    version: process.env.MYSKILLS_API_VERSION ?? "0.1.0-beta.1",
     capabilities: {
       auth: Boolean(options.authService),
       search: true,

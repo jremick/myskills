@@ -16,7 +16,7 @@ MySkills is an open-source beta platform for publishing, reviewing, discovering,
 
 ## Release Status
 
-Current target: **v0.1.0-beta.0**.
+Current target: **v0.1.0-beta.1**.
 
 This beta is intended for real external trial use with documented compatibility, support, and upgrade expectations. It is still prerelease software and not yet the business-safe production release: API contracts, package formats, deployment defaults, and operational guidance may still change before `v1.0`.
 
@@ -122,7 +122,7 @@ node apps/cli/dist/index.js token create --name "Local CLI" --scope profile:read
 node apps/cli/dist/index.js logout
 ```
 
-The public alpha CLI package is available through npm:
+The currently published CLI package remains available through npm under the alpha dist-tag until beta npm publishing is configured:
 
 ```bash
 npm install -g @jarel/myskills@alpha
@@ -152,7 +152,7 @@ npm run test:postgres
 
 ## Support And Security
 
-Use [GitHub Issues](https://github.com/jremick/myskills/issues) for public alpha bugs, setup problems, and feature requests.
+Use [GitHub Issues](https://github.com/jremick/myskills/issues) for beta bugs, setup problems, and feature requests.
 
 Do not report suspected vulnerabilities, exposed secrets, access-control bypasses, or package-safety escapes in public issues. Use GitHub private vulnerability reporting as described in [SECURITY.md](SECURITY.md).
 
@@ -186,7 +186,7 @@ npm run release:artifacts
 
 See [docs/RELEASE.md](docs/RELEASE.md) for tag gates, artifact contents, and the release workflow.
 
-The immediate alpha goal is tracked in [docs/ALPHA_RELEASE_GOAL.md](docs/ALPHA_RELEASE_GOAL.md). The public beta goal is tracked in [docs/BETA_RELEASE_GOAL.md](docs/BETA_RELEASE_GOAL.md). The later business-safe production release goal is tracked in [docs/BUSINESS_SAFE_RELEASE_GOAL.md](docs/BUSINESS_SAFE_RELEASE_GOAL.md).
+The archived alpha goal is tracked in [docs/ALPHA_RELEASE_GOAL.md](docs/ALPHA_RELEASE_GOAL.md). The current public beta goal is tracked in [docs/BETA_RELEASE_GOAL.md](docs/BETA_RELEASE_GOAL.md). The later business-safe production release goal is tracked in [docs/BUSINESS_SAFE_RELEASE_GOAL.md](docs/BUSINESS_SAFE_RELEASE_GOAL.md).
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes and user-facing changes.
 
@@ -196,4 +196,4 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes and user-facing changes.
 
 ## Current Status
 
-This is the responsible public alpha foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, hash-only email verification and password-reset action tokens, SMTP/dev auth notification delivery, MFA challenge flow, browser login/logout with session-aware API calls, CLI login/logout with API-URL-scoped stored sessions, hashed scoped API tokens, MFA-verified admin provider config and claim-to-role mapping management, public skill search/detail/release/bundle endpoints, skill versioning with release metadata and artifact checksums, MCP token introspection with `skills:read` and session decision audit events, authenticated package intake with server-side archive extraction and scan evidence, maintainer approve/publish actions, a Vite/React web browser for public registry metadata, author `.zip` package submission, maintainer review, and admin workflows including safe local role editing, read-only stdio and stateless Streamable HTTP MCP servers, a starter CLI with verified export, local install/list/update/rollback, and token management, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, production container targets and preflight env validation, seed data, a public-safe example skill package, package manifest validation, local package risk scanning, deterministic alpha-release checks, and reproducible release artifacts.
+This is the public beta foundation slice. It has workspace packages, a Fastify API, first-party email/password login with bearer sessions, hash-only email verification and password-reset action tokens, SMTP/dev auth notification delivery, MFA challenge flow, browser login/logout with session-aware API calls, CLI login/logout with API-URL-scoped stored sessions, hashed scoped API tokens, MFA-verified admin provider config and claim-to-role mapping management, public skill search/detail/release/bundle endpoints, skill versioning with release metadata and artifact checksums, MCP token introspection with `skills:read` and session decision audit events, authenticated package intake with server-side archive extraction and scan evidence, maintainer approve/publish actions, a Vite/React web browser for public registry metadata, author `.zip` package submission, maintainer review, and admin workflows including safe local role editing, read-only stdio and stateless Streamable HTTP MCP servers, a starter CLI with verified export, local install/list/update/rollback, and token management, Drizzle/Postgres schema and migrations, Docker Compose for Postgres plus S3-compatible object storage, production container targets and preflight env validation, seed data, a public-safe example skill package, package manifest validation, local package risk scanning, deterministic prerelease checks, and reproducible release artifacts.

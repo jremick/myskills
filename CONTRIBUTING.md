@@ -1,6 +1,6 @@
 # Contributing
 
-MySkills is currently in public alpha and moving toward public beta. Contributions are welcome when they are small, reviewable, and aligned with the current roadmap, but this is still a maintainer-led project.
+MySkills is currently in public beta. Contributions are welcome when they are small, reviewable, and aligned with the current roadmap, but this is still a maintainer-led project.
 
 ## Before Opening A PR
 

@@ -1,6 +1,6 @@
 # Release Process
 
-Version: 0.1.0-beta.0
+Version: 0.1.0-beta.1
 Last updated: 2026-06-30
 
 This repo is prepared for a responsible public beta once the checklist in [BETA_RELEASE_GOAL.md](BETA_RELEASE_GOAL.md) passes. Beta releases are still prerelease software, but they should have a tested first-run path, documented compatibility, support boundaries, upgrade expectations, and release notes.
@@ -18,7 +18,7 @@ Before creating a release tag:
 - Run `npm run release:artifacts`.
 - Review the generated `dist/release/release-metadata.json` and `dist/release/SHA256SUMS`.
 - Confirm public docs and examples contain no private-source carryover.
-- Confirm GitHub private vulnerability reporting is enabled before announcing the public alpha or pushing the public alpha tag.
+- Confirm GitHub private vulnerability reporting is enabled before announcing a public release or pushing a public release tag.
 - For beta tags, confirm `main` branch protection, GitHub security settings, support/contribution docs, compatibility docs, upgrade policy, and changelog are current.
 
 ## Local Artifact Build

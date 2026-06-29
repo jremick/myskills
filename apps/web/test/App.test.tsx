@@ -24,14 +24,14 @@ import type {
   UserSubmissionSummary,
 } from "../src/api.js";
 
-test("landing page explains private development and opens the login page", async () => {
+test("landing page explains public beta status and opens the login page", async () => {
   setupDom("http://localhost/");
   const client = mockClient();
 
   const view = render(<RegistryApp client={client} />);
 
   await view.findByRole("heading", { name: "MySkills" });
-  assert.equal(document.body.textContent?.includes("Private development. Not open for signups."), true);
+  assert.equal(document.body.textContent?.includes("Public beta. Hosted signups are owner-gated."), true);
   assert.equal(client.searchCalls.length, 0);
 
   fireEvent.click(view.getAllByRole("button", { name: "Login" })[0]!);
