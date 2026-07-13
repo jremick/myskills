@@ -15,6 +15,6 @@
     "test": "node ../../scripts/run-node-tests.mjs --import tsx --extensions .test.ts"
   },
   "devDependencies": {
-    "tsx": "^4.20.6"
+    "tsx": "^4.23.0"
   }
 }
