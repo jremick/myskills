@@ -4,9 +4,19 @@ All notable user-facing changes will be tracked here. MySkills is still prerelea
 
 ## Unreleased
 
+### Added
+
+- Added owner-private, immutable skill architecture revisions with flat, domain-router, and multi-level router patterns; deterministic profile/environment compilation; accessible diagram and outline projections; and fixture-backed dry-run reconciliation through the API, web, CLI, and read-only MCP surfaces.
+- Added metadata-only Codex managed-install detection plus read-scoped architecture resolution. `myskills architectures configure --auto` ranks existing owner-visible revisions, reports confidence and ambiguity, and returns a dry-run plan without applying target changes.
+
+### Changed
+
+- **Breaking beta change:** `myskills skills edit --visibility` and generic skill-metadata visibility writes are removed. Use `myskills sharing set <skill-slug> --visibility <scope>` or the authenticated `/v1/skills/:slug/sharing` route. Organization visibility remains unsupported until an organization membership boundary exists.
+
 ### Security
 
 - Replaced numeric Fastify proxy-hop trust with explicit proxy IP/CIDR allowlists so direct clients cannot spoof forwarded request metadata.
+- Architecture projections are owner-private, use server-authorized exact release metadata, require scoped reads, reject organization-visible releases, bound request concurrency, and fail closed on unsafe observed-state identifiers.
 
 ## 0.1.0-beta.2 - 2026-07-13
 

@@ -84,6 +84,7 @@ test("GET /v1/capabilities describes enabled server features", async (t) => {
       tokens: false,
       teams: false,
       sharing: false,
+      architectures: false,
     },
   });
 });

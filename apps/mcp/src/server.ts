@@ -72,5 +72,58 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
     async (input) => handlers.getInstallInstructions(input),
   );
 
+  server.registerTool(
+    "list_architecture_patterns",
+    {
+      title: "List Architecture Patterns",
+      description: "List the server-defined skill architecture patterns available to the authenticated workspace.",
+      inputSchema: z.object({}),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async () => handlers.listArchitecturePatterns(),
+  );
+
+  server.registerTool(
+    "list_architectures",
+    {
+      title: "List Architectures",
+      description: "List skill architectures visible to the authenticated owner without returning package contents or local paths.",
+      inputSchema: z.object({}),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async () => handlers.listArchitectures(),
+  );
+
+  server.registerTool(
+    "get_architecture_projection",
+    {
+      title: "Get Architecture Projection",
+      description: "Inspect one authorized skill architecture and its compiled topology projection without package contents, local paths, or sync writes.",
+      inputSchema: z.object({
+        id: z.string().trim().min(1).max(120),
+        profileId: z.string().trim().min(1).max(120).optional(),
+        environmentId: z.string().trim().min(1).max(120).optional(),
+        revisionId: z.string().trim().min(1).max(120).optional(),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async (input) => handlers.getArchitectureProjection(input),
+  );
+
   return server;
 }

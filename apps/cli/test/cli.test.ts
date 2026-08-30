@@ -902,6 +902,565 @@ test("admin sharing set merges supplied toggles with current settings", async ()
   ]);
 });
 
+test("architecture patterns are read through the API with a bearer token", async () => {
+  const output = createOutput();
+  let url = "";
+  let authorization = "";
+  const code = await runCli([
+    "architectures",
+    "patterns",
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, async (input, init) => {
+    url = String(input);
+    authorization = init?.headers?.authorization ?? "";
+    return response(200, {
+      patterns: [{
+        id: "multi-level-router",
+        name: "Multi-level routers",
+        description: "Nested routers and skill leaves.",
+        status: "available",
+      }],
+    });
+  }, { MYSKILLS_TOKEN: "architecture-token" }));
+
+  assert.equal(code, 0);
+  assert.equal(url, "http://api.test/v1/architecture-patterns");
+  assert.equal(authorization, "Bearer architecture-token");
+  assert.deepEqual(output.stdout, [
+    "multi-level-router\tMulti-level routers\tNested routers and skill leaves.\tavailable",
+  ]);
+});
+
+test("architecture list, show, and preview use read-only API surfaces", async () => {
+  const output = createOutput();
+  const calls: Array<{ url: string; method: string; authorization: string; body: Record<string, unknown> }> = [];
+  const codeList = await runCli([
+    "architectures",
+    "list",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(output, async (input, init) => {
+    calls.push({
+      url: String(input),
+      method: init?.method ?? "GET",
+      authorization: init?.headers?.authorization ?? "",
+      body: JSON.parse(init?.body ?? "{}"),
+    });
+    return response(200, {
+      architectures: [{
+        id: "arch-1",
+        name: "Personal skills",
+        patternId: "multi-level-router",
+        currentRevisionId: "revision-2",
+        updatedAt: "2026-08-30T00:00:00.000Z",
+      }],
+    });
+  }));
+  const codeShow = await runCli([
+    "architectures",
+    "show",
+    "arch-1",
+    "--revision",
+    "revision-2",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(output, async (input, init) => {
+    calls.push({
+      url: String(input),
+      method: init?.method ?? "GET",
+      authorization: init?.headers?.authorization ?? "",
+      body: JSON.parse(init?.body ?? "{}"),
+    });
+    return response(200, {
+      revision: { id: "revision-2", message: "Add nested router", createdAt: "2026-08-30T00:00:00.000Z" },
+    });
+  }));
+  const codePreview = await runCli([
+    "architectures",
+    "compile",
+    "arch-1",
+    "--revision",
+    "revision-2",
+    "--profile",
+    "personal",
+    "--environment",
+    "local",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(output, async (input, init) => {
+    calls.push({
+      url: String(input),
+      method: init?.method ?? "GET",
+      authorization: init?.headers?.authorization ?? "",
+      body: JSON.parse(init?.body ?? "{}"),
+    });
+    return response(200, {
+      revision: { id: "revision-2" },
+      compiled: { architectureId: "arch-1", nodes: [{ id: "root", kind: "router", label: "Root" }] },
+      graph: {
+        nodes: [{ id: "root", kind: "router", label: "Root" }],
+        edges: [],
+        mermaid: "flowchart TD\n  root[Root]",
+      },
+      outline: { tree: [{ id: "root", kind: "router", label: "Root", children: [] }] },
+    });
+  }));
+
+  assert.equal(codeList, 0);
+  assert.equal(codeShow, 0);
+  assert.equal(codePreview, 0);
+  assert.deepEqual(calls, [
+    {
+      url: "http://api.test/v1/architectures",
+      method: "GET",
+      authorization: "Bearer architecture-token",
+      body: {},
+    },
+    {
+      url: "http://api.test/v1/architectures/arch-1/revisions/revision-2",
+      method: "GET",
+      authorization: "Bearer architecture-token",
+      body: {},
+    },
+    {
+      url: "http://api.test/v1/architectures/arch-1/preview",
+      method: "POST",
+      authorization: "Bearer architecture-token",
+      body: { profileId: "personal", environmentId: "local", revisionId: "revision-2" },
+    },
+  ]);
+  assert.deepEqual(output.stdout, [
+    "arch-1\tPersonal skills\tmulti-level-router\trevision-2\t2026-08-30T00:00:00.000Z",
+    "revision\trevision-2\tAdd nested router\t2026-08-30T00:00:00.000Z",
+    "preview\tarch-1\trevision-2\tnodes=1\tplan=not-generated",
+    "flowchart TD\n  root[Root]",
+  ]);
+});
+
+test("architecture dry-run validates and sends a bounded observed-state fixture without writing", async (t) => {
+  const fixtureDir = await mkdtemp(path.join(os.tmpdir(), "myskills-observed-state-"));
+  t.after(() => rm(fixtureDir, { recursive: true, force: true }));
+  const fixturePath = path.join(fixtureDir, "observed.json");
+  const fixture = {
+    schemaVersion: "myskills.observed-state.v1",
+    environment: {
+      environmentKey: "personal-local",
+      toolKind: "codex",
+      adapterVersion: "fixture-1",
+      capabilities: { canInstall: true, canUpdate: true },
+    },
+    inventory: [{ kind: "skill", ref: "skill.release-notes", slug: "release-notes-helper", version: "0.1.0", source: "myskills" }],
+  };
+  await writeFile(fixturePath, JSON.stringify(fixture));
+  const before = await readFile(fixturePath, "utf8");
+  const output = createOutput();
+  let request: { url: string; method: string; authorization: string; body: Record<string, unknown> } | null = null;
+  const code = await runCli([
+    "architectures",
+    "plan",
+    "arch-1",
+    "--revision",
+    "revision-2",
+    "--profile",
+    "personal",
+    "--environment",
+    "personal-local",
+    "--observed",
+    fixturePath,
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(output, async (input, init) => {
+    request = {
+      url: String(input),
+      method: init?.method ?? "GET",
+      authorization: init?.headers?.authorization ?? "",
+      body: JSON.parse(init?.body ?? "{}"),
+    };
+    return response(200, {
+      plan: {
+        dryRun: true,
+        items: [{ action: "update", nodeId: "release-notes-helper", reason: "0.1.0 -> 0.2.0" }],
+      },
+    });
+  }));
+
+  assert.equal(code, 0);
+  assert.deepEqual(request, {
+    url: "http://api.test/v1/architectures/arch-1/preview",
+    method: "POST",
+    authorization: "Bearer architecture-token",
+    body: {
+      revisionId: "revision-2",
+      profileId: "personal",
+      environmentId: "personal-local",
+      fixture: {
+        targetId: "personal-local",
+        environmentId: "personal-local",
+        nodes: [{
+          nodeId: "skill.release-notes",
+          skillRefId: "skill.release-notes",
+          kind: "leaf",
+          slug: "release-notes-helper",
+          version: "0.1.0",
+        }],
+      },
+    },
+  });
+  assert.deepEqual(output.stdout, [
+    "dry-run\tchanges\tchanges=1",
+    "change\tupdate\trelease-notes-helper\t0.1.0 -> 0.2.0",
+  ]);
+  assert.equal(await readFile(fixturePath, "utf8"), before);
+});
+
+test("architecture dry-run rejects invalid or oversized fixtures before fetch", async (t) => {
+  const fixtureDir = await mkdtemp(path.join(os.tmpdir(), "myskills-observed-state-invalid-"));
+  t.after(() => rm(fixtureDir, { recursive: true, force: true }));
+  const invalidPath = path.join(fixtureDir, "invalid.json");
+  await writeFile(invalidPath, JSON.stringify({ schemaVersion: "wrong", environment: {}, inventory: [] }));
+  const oversizedPath = path.join(fixtureDir, "oversized.json");
+  await writeFile(oversizedPath, JSON.stringify({
+    schemaVersion: "myskills.observed-state.v1",
+    environment: {},
+    inventory: [],
+    padding: "x".repeat(256 * 1024),
+  }));
+  let calls = 0;
+  const fetch: FetchLike = async () => {
+    calls += 1;
+    return response(500, {});
+  };
+  const invalidOutput = createOutput();
+  const invalidCode = await runCli([
+    "architectures",
+    "plan",
+    "arch-1",
+    "--observed",
+    invalidPath,
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(invalidOutput, fetch));
+  const oversizedOutput = createOutput();
+  const oversizedCode = await runCli([
+    "architectures",
+    "plan",
+    "arch-1",
+    "--observed",
+    oversizedPath,
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(oversizedOutput, fetch));
+
+  assert.equal(invalidCode, 2);
+  assert.match(invalidOutput.stderr.join("\n"), /schemaVersion/);
+  assert.equal(oversizedCode, 2);
+  assert.match(oversizedOutput.stderr.join("\n"), /256 KiB/);
+  assert.equal(calls, 0);
+});
+
+test("architecture dry-run rejects unsafe fixture identifiers, slugs, paths, and control characters before fetch", async (t) => {
+  const fixtureDir = await mkdtemp(path.join(os.tmpdir(), "myskills-observed-state-safety-"));
+  t.after(() => rm(fixtureDir, { recursive: true, force: true }));
+  const baseFixture = {
+    schemaVersion: "myskills.observed-state.v1",
+    environment: {
+      environmentKey: "personal-local",
+      toolKind: "codex",
+      adapterVersion: "fixture-1",
+      capabilities: { canInstall: true },
+    },
+    inventory: [{ kind: "skill", ref: "skill.release-notes", slug: "release-notes-helper", source: "local" }],
+  };
+  const cases: Array<{ name: string; fixture: Record<string, unknown>; expected: RegExp }> = [
+    {
+      name: "identifier",
+      fixture: {
+        ...baseFixture,
+        inventory: [{ ...baseFixture.inventory[0], ref: "../private" }],
+      },
+      expected: /inventory\.ref is invalid/,
+    },
+    {
+      name: "slug",
+      fixture: {
+        ...baseFixture,
+        inventory: [{ ...baseFixture.inventory[0], slug: "Release Notes" }],
+      },
+      expected: /inventory\.slug is invalid/,
+    },
+    {
+      name: "path",
+      fixture: {
+        ...baseFixture,
+        inventory: [{ ...baseFixture.inventory[0], path: "/private/skill" }],
+      },
+      expected: /field is not accepted: path/,
+    },
+    {
+      name: "control-character",
+      fixture: {
+        ...baseFixture,
+        environment: { ...baseFixture.environment, adapterVersion: "fixture-\u001b[31m1" },
+      },
+      expected: /environment\.adapterVersion is invalid/,
+    },
+  ];
+  let calls = 0;
+  const fetch: FetchLike = async () => {
+    calls += 1;
+    return response(500, {});
+  };
+
+  for (const item of cases) {
+    const fixturePath = path.join(fixtureDir, `${item.name}.json`);
+    await writeFile(fixturePath, JSON.stringify(item.fixture));
+    const output = createOutput();
+    const code = await runCli([
+      "architectures",
+      "plan",
+      "arch-1",
+      "--observed",
+      fixturePath,
+      "--api-url",
+      "http://api.test",
+      "--token",
+      "architecture-token",
+    ], testRuntime(output, fetch));
+
+    assert.equal(code, 2, item.name);
+    assert.match(output.stderr.join("\n"), item.expected, item.name);
+  }
+  assert.equal(calls, 0);
+});
+
+test("architecture dry-run human output neutralizes terminal control characters", async (t) => {
+  const fixtureDir = await mkdtemp(path.join(os.tmpdir(), "myskills-observed-state-terminal-"));
+  t.after(() => rm(fixtureDir, { recursive: true, force: true }));
+  const fixturePath = path.join(fixtureDir, "observed.json");
+  await writeFile(fixturePath, JSON.stringify({
+    schemaVersion: "myskills.observed-state.v1",
+    environment: {
+      environmentKey: "personal-local",
+      toolKind: "codex",
+      adapterVersion: "fixture-1",
+      capabilities: { canInstall: true },
+    },
+    inventory: [{ kind: "skill", ref: "skill.release-notes", slug: "release-notes-helper", source: "local" }],
+  }));
+  const output = createOutput();
+  const code = await runCli([
+    "architectures",
+    "plan",
+    "arch-1",
+    "--observed",
+    fixturePath,
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(output, async () => response(200, {
+    plan: {
+      status: "changes\u001b[31m",
+      changes: [{
+        type: "update",
+        subject: "release-notes-helper\u001b[2J\nforged-row",
+        detail: "safe\tcolumn\u0007",
+      }],
+    },
+  })));
+
+  assert.equal(code, 0);
+  const rendered = output.stdout.join("\n");
+  assert.equal(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/u.test(rendered), false);
+  assert.equal(output.stdout.length, 2);
+  assert.match(output.stdout[0] ?? "", /^dry-run\tchanges \[31m\tchanges=1$/);
+  assert.match(output.stdout[1] ?? "", /^change\tupdate\trelease-notes-helper \[2J forged-row\tsafe column $/);
+});
+
+test("architecture detect reads only the managed install registry and emits no local paths", async (t) => {
+  const installRoot = await mkdtemp(path.join(os.tmpdir(), "myskills-architecture-detect-"));
+  t.after(() => rm(installRoot, { recursive: true, force: true }));
+  await mkdir(path.join(installRoot, ".myskills-app"), { recursive: true });
+  await writeFile(path.join(installRoot, ".myskills-app", "installed.json"), JSON.stringify({
+    version: 1,
+    installations: {
+      "release-notes-helper": {
+        version: "1.0.0",
+        platform: "codex",
+        path: "/must-not-be-trusted-or-returned",
+        installedAt: "2026-08-30T00:00:00.000Z",
+        artifact: { sha256: "a".repeat(64), byteSize: 123 },
+        history: [],
+      },
+      "other-platform": {
+        version: "1.0.0",
+        platform: "claude",
+        artifact: { sha256: "b".repeat(64), byteSize: 456 },
+        history: [],
+      },
+    },
+  }));
+  const output = createOutput();
+  const code = await runCli([
+    "architectures",
+    "detect",
+    "--target",
+    "codex",
+    "--target-id",
+    "personal-codex",
+    "--dir",
+    installRoot,
+    "--json",
+  ], testRuntime(output));
+
+  assert.equal(code, 0);
+  const observation = JSON.parse(output.stdout.join("\n"));
+  assert.equal(observation.schemaVersion, "myskills.target-observation.v1");
+  assert.equal(observation.target.id, "personal-codex");
+  assert.deepEqual(observation.observedState.nodes.map((node: { slug: string }) => node.slug), ["release-notes-helper"]);
+  assert.equal(observation.observedState.nodes[0].digest, "a".repeat(64));
+  assert.equal(JSON.stringify(observation).includes(installRoot), false);
+  assert.equal(JSON.stringify(observation).includes("must-not-be-trusted"), false);
+});
+
+test("architecture configure auto sends a metadata-only observation and prints the selected dry run", async (t) => {
+  const installRoot = await mkdtemp(path.join(os.tmpdir(), "myskills-architecture-configure-"));
+  t.after(() => rm(installRoot, { recursive: true, force: true }));
+  await mkdir(path.join(installRoot, ".myskills-app"), { recursive: true });
+  await writeFile(path.join(installRoot, ".myskills-app", "installed.json"), JSON.stringify({
+    version: 1,
+    installations: {
+      "release-notes-helper": {
+        version: "1.0.0",
+        platform: "codex",
+        installedAt: "2026-08-30T00:00:00.000Z",
+        artifact: { sha256: "a".repeat(64), byteSize: 123 },
+        history: [],
+      },
+    },
+  }));
+  const output = createOutput();
+  let request: { url: string; method: string; body: Record<string, unknown> } | null = null;
+  const code = await runCli([
+    "architectures",
+    "configure",
+    "--auto",
+    "--target",
+    "codex",
+    "--target-id",
+    "personal-codex",
+    "--context",
+    "personal",
+    "--dir",
+    installRoot,
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(output, async (input, init) => {
+    request = {
+      url: String(input),
+      method: init?.method ?? "GET",
+      body: JSON.parse(init?.body ?? "{}"),
+    };
+    return response(200, {
+      resolution: {
+        status: "resolved",
+        confidence: "high",
+        candidateCount: 1,
+        selected: {
+          architectureId: "arch-1",
+          revisionId: "revision-2",
+          profileId: "personal",
+          environmentId: "personal-mac",
+          score: 100,
+          canConfigure: false,
+          plan: {
+            dryRun: true,
+            canApply: false,
+            requiresApproval: true,
+            items: [{ action: "configure-router", nodeId: "root", reason: "Router configuration is absent." }],
+          },
+        },
+        candidates: [],
+      },
+      excluded: [],
+    });
+  }));
+
+  assert.equal(code, 0);
+  assert.ok(request);
+  assert.equal(request.url, "http://api.test/v1/architecture-resolutions");
+  assert.equal(request.method, "POST");
+  assert.equal(request.body.environmentKind, "personal");
+  assert.equal((request.body.observation as { target: { id: string } }).target.id, "personal-codex");
+  assert.equal(JSON.stringify(request.body).includes(installRoot), false);
+  assert.deepEqual(output.stdout, [
+    "auto-configure\tdry-run\tresolved\tconfidence=high\tcandidates=1",
+    "selected\tarch-1\trevision-2\tpersonal\tpersonal-mac\tscore=100\tconfigurable=no",
+    "dry-run\tchanges\tchanges=1",
+    "change\tconfigure-router\troot\tRouter configuration is absent.",
+  ]);
+});
+
+test("architecture configure refuses apply before reading credentials or calling the API", async () => {
+  const output = createOutput();
+  let calls = 0;
+  const code = await runCli([
+    "architectures",
+    "configure",
+    "--auto",
+    "--apply",
+  ], testRuntime(output, async () => {
+    calls += 1;
+    return response(500, {});
+  }));
+
+  assert.equal(code, 2);
+  assert.equal(calls, 0);
+  assert.match(output.stderr.join("\n"), /apply is not available/i);
+});
+
+test("skills edit visibility fails locally with sharing migration guidance", async () => {
+  const output = createOutput();
+  let calls = 0;
+  const code = await runCli([
+    "skills",
+    "edit",
+    "release-notes-helper",
+    "--title",
+    "Release Notes Assistant",
+    "--visibility",
+    "public",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "maintainer-token",
+  ], testRuntime(output, async () => {
+    calls += 1;
+    return response(500, {});
+  }));
+
+  assert.equal(code, 2);
+  assert.equal(calls, 0);
+  assert.deepEqual(output.stdout, []);
+  assert.match(output.stderr.join("\n"), /skills edit --visibility/);
+  assert.match(output.stderr.join("\n"), /myskills sharing set <skill-slug> --visibility <scope>/);
+});
+
 test("export writes verified bundle files under output directory", async (t) => {
   const outputDir = await mkdtemp(path.join(os.tmpdir(), "myskills-export-"));
   t.after(() => rm(outputDir, { recursive: true, force: true }));

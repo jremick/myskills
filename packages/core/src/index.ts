@@ -116,3 +116,5 @@ export class AppError extends Error {
 export function assertNever(value: never): never {
   throw new AppError(`Unhandled value: ${String(value)}`, "UNHANDLED_VALUE", 500);
 }
+
+export * from "./architecture.js";

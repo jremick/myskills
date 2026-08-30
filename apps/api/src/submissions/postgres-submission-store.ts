@@ -42,6 +42,7 @@ import type {
   UserSubmissionBundle,
   UserSubmissionSummary,
 } from "./types.js";
+import { assertNoVisibilityMetadataUpdate } from "./types.js";
 import { artifactPayloadSha256 } from "./artifact-hash.js";
 
 const DEFAULT_SHARING_SETTINGS: SharingSettings = {
@@ -807,6 +808,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
   }
 
   async updateSkillMetadata(input: { slug: string; actor: SubmissionActor; update: SkillMetadataUpdate; reason?: string }): Promise<SkillManagementSummary> {
+    assertNoVisibilityMetadataUpdate(input.update);
     return this.db.transaction(async (tx) => {
       const skill = await findSkillForManagement(tx, input.slug);
       if (!skill) {
@@ -819,9 +821,6 @@ export class PostgresSubmissionStore implements SubmissionStore {
       }
       if (input.update.summary !== undefined) {
         update.summary = input.update.summary;
-      }
-      if (input.update.visibility !== undefined) {
-        update.visibility = input.update.visibility;
       }
       await tx.update(skills).set(update).where(eq(skills.id, skill.id));
       if (input.update.tags) {
@@ -1969,7 +1968,7 @@ function visibleToActorPredicate(actorId: string | null | undefined, sharing: Sh
   if (actorId) {
     predicates.push(eq(skills.ownerUserId, actorId));
     if (sharing.authenticatedVisibilityEnabled) {
-      predicates.push(inArray(skills.visibility, ["authenticated", "organization"]));
+      predicates.push(eq(skills.visibility, "authenticated"));
     }
     if (sharing.teamsEnabled && sharing.teamVisibilityEnabled) {
       predicates.push(and(

@@ -10,6 +10,7 @@ import {
   type SkillManifest,
 } from "@myskills-app/skill-package";
 import type { Role } from "@myskills-app/auth";
+import { assertNoVisibilityMetadataUpdate } from "./types.js";
 import type {
   ArtifactPayload,
   CreateSubmissionInput,
@@ -208,6 +209,7 @@ export class SubmissionService {
     update: SkillMetadataUpdate;
     reason?: string;
   }): Promise<SkillManagementSummary> {
+    assertNoVisibilityMetadataUpdate(input.update);
     return this.store.updateSkillMetadata(input);
   }
 
@@ -261,6 +263,16 @@ function canReview(roles: Role[]): boolean {
   return roles.some((role) => role === "owner" || role === "admin" || role === "maintainer");
 }
 
+function assertSupportedSubmissionVisibility(visibility: SkillManifest["visibility"]): void {
+  if (visibility === "organization") {
+    throw new AppError(
+      "Organization-visible submissions are not supported until organization membership enforcement is available.",
+      "ORGANIZATION_VISIBILITY_UNSUPPORTED",
+      422,
+    );
+  }
+}
+
 function validatePackageManifest(submittedManifest: SkillManifest, files: PackageInputFile[]): SkillManifest {
   let packageManifest: SkillManifest;
   try {
@@ -271,6 +283,8 @@ function validatePackageManifest(submittedManifest: SkillManifest, files: Packag
     }
     throw new AppError(error instanceof Error ? error.message : "Invalid package payload.", "INVALID_PACKAGE_PAYLOAD", 400);
   }
+  assertSupportedSubmissionVisibility(submittedManifest.visibility);
+  assertSupportedSubmissionVisibility(packageManifest.visibility);
   if (canonicalManifest(submittedManifest) !== canonicalManifest(packageManifest)) {
     throw new AppError("Submitted manifest must match the package manifest file.", "PACKAGE_MANIFEST_MISMATCH", 400);
   }

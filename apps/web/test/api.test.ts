@@ -539,6 +539,150 @@ test("registry client manages skill and release lifecycle controls", async () =>
   assert.equal(calls[2].body, JSON.stringify({ action: "unpublish", reason: "bad metadata" }));
 });
 
+test("registry client keeps architecture previews API-backed and bearer-authenticated", async () => {
+  const calls: Array<{ body?: string; method?: string; url: string; authorization?: string }> = [];
+  const client = createRegistryClient("http://api.test", async (input, init) => {
+    const url = String(input);
+    const headers = init?.headers instanceof Headers ? init.headers : new Headers(init?.headers);
+    calls.push({
+      body: typeof init?.body === "string" ? init.body : undefined,
+      method: init?.method,
+      url,
+      authorization: headers.get("authorization") ?? undefined,
+    });
+    if (url.endsWith("/v1/architecture-patterns")) {
+      return jsonResponse(200, { patterns: [{ id: "multi-level-router", name: "Multi-level router", description: "Nested routers" }] });
+    }
+    if (url.endsWith("/v1/architectures") && init?.method === "POST") {
+      return jsonResponse(201, { architecture: { id: "architecture-1", name: "Review assistant", patternId: "multi-level-router" } });
+    }
+    if (url.endsWith("/v1/architectures")) {
+      return jsonResponse(200, { architectures: [{ id: "architecture-1", name: "Review assistant", patternId: "multi-level-router" }] });
+    }
+    if (url.endsWith("/v1/architectures/architecture-1")) {
+      return jsonResponse(200, {
+        architecture: { id: "architecture-1", name: "Review assistant", patternId: "multi-level-router", revisionCount: 2 },
+        latestRevision: {
+          id: "revision-current",
+          architectureId: "architecture-1",
+          revisionNumber: 2,
+          message: "Current revision",
+          createdByUserId: "user-1",
+          createdAt: "2026-06-14T00:00:00.000Z",
+          patternId: "multi-level-router",
+          spec: {
+            schemaVersion: 1,
+            id: "architecture-1",
+            name: "Review assistant",
+            pattern: { id: "multi-level-router", version: 1 },
+            skills: [{ id: "release", slug: "release-notes-helper", version: "0.1.0", digest: "a".repeat(64), packageVisibility: "private" }],
+            nodes: [
+              { id: "root", kind: "router", label: "Review router" },
+              { id: "branch", kind: "router", label: "Quality branch" },
+              { id: "release", kind: "leaf", label: "Release Notes Helper", skillRefId: "release" },
+            ],
+            edges: [
+              { from: "root", to: "branch", kind: "contains" },
+              { from: "branch", to: "release", kind: "routes" },
+            ],
+            entryNodeIds: ["root"],
+            profiles: [{ id: "work", name: "Work", subject: { type: "user", id: "user-1" }, defaultExposure: "disabled", bindings: [{ nodeId: "root", enabled: true, runtimeExposure: "router" }, { nodeId: "branch", enabled: true, runtimeExposure: "router" }, { nodeId: "release", enabled: true, runtimeExposure: "leaf" }] }],
+            environments: [{ id: "codex-work", name: "Codex work", kind: "work", profileId: "work" }],
+          },
+        },
+        revisions: [{ id: "revision-summary", architectureId: "architecture-1", revisionNumber: 1, message: "Previous revision", patternId: "multi-level-router", createdAt: "2026-06-13T00:00:00.000Z", nodeCount: 3, skillCount: 1 }],
+      });
+    }
+    if (url.endsWith("/preview")) {
+      const requestBody = typeof init?.body === "string" ? JSON.parse(init.body) as Record<string, unknown> : {};
+      const plan = requestBody.fixture !== undefined ? {
+        dryRun: true,
+        canApply: false,
+        requiresApproval: true,
+        targetId: "fixture-target",
+        environmentId: "codex-work",
+        architectureId: "architecture-1",
+        revisionDigest: "a".repeat(64),
+        items: [{
+          action: "noop",
+          nodeId: "root",
+          kind: "router",
+          reason: "Target already matches the desired router state.",
+        }],
+      } : undefined;
+      return jsonResponse(200, {
+        revision: {
+          id: "revision-current",
+          architectureId: "architecture-1",
+          revisionNumber: 2,
+          message: "Current revision",
+          spec: {
+            schemaVersion: 1,
+            id: "architecture-1",
+            name: "Review assistant",
+            pattern: { id: "multi-level-router", version: 1 },
+            skills: [],
+            nodes: [],
+            edges: [],
+            entryNodeIds: [],
+            profiles: [],
+            environments: [],
+          },
+          createdByUserId: "user-1",
+          createdAt: "2026-06-14T00:00:00.000Z",
+        },
+        compiled: {
+          schemaVersion: 1,
+          architectureId: "architecture-1",
+          revisionDigest: "a".repeat(64),
+          pattern: { id: "multi-level-router", version: 1 },
+          profileId: "work",
+          environmentId: "codex-work",
+          nodes: [],
+          allNodes: [],
+          disabledNodeIds: [],
+          edges: [],
+          skills: [],
+          routers: [],
+        },
+        graph: { digest: "a".repeat(64), nodes: [], edges: [], mermaid: "flowchart TD" },
+        outline: { title: "Architecture architecture-1", text: "Architecture architecture-1", tree: [] },
+        ...(plan ? { plan } : {}),
+      });
+    }
+    return jsonResponse(200, { architecture: { id: "architecture-1", name: "Review assistant", patternId: "multi-level-router" } });
+  });
+
+  await client.listArchitecturePatterns("architecture-session");
+  await client.listArchitectures("architecture-session");
+  const detail = await client.getArchitecture("architecture-1", "architecture-session");
+  await client.createArchitecture({ name: "Review assistant", patternId: "multi-level-router" }, "architecture-session");
+  const preview = await client.previewArchitecture("architecture-1", { profileId: "work", environmentId: "codex-work" }, "architecture-session");
+  const fixturePreview = await client.previewArchitecture("architecture-1", {
+    profileId: "work",
+    environmentId: "codex-work",
+    fixture: { targetId: "fixture-target", nodes: [] },
+  }, "architecture-session");
+
+  assert.deepEqual(calls.map((call) => `${call.method ?? "GET"} ${call.url}`), [
+    "GET http://api.test/v1/architecture-patterns",
+    "GET http://api.test/v1/architectures",
+    "GET http://api.test/v1/architectures/architecture-1",
+    "POST http://api.test/v1/architectures",
+    "POST http://api.test/v1/architectures/architecture-1/preview",
+    "POST http://api.test/v1/architectures/architecture-1/preview",
+  ]);
+  assert.equal(calls.every((call) => call.authorization === "Bearer architecture-session"), true);
+  assert.equal(detail.latestRevision?.id, "revision-current");
+  assert.equal(preview.revision.id, "revision-current");
+  assert.equal(preview.plan, undefined);
+  assert.equal(fixturePreview.plan?.targetId, "fixture-target");
+  assert.equal(calls[3]?.body, JSON.stringify({ name: "Review assistant", patternId: "multi-level-router" }));
+  assert.equal(calls[4]?.body, JSON.stringify({ profileId: "work", environmentId: "codex-work" }));
+  assert.equal(calls[5]?.body, JSON.stringify({ profileId: "work", environmentId: "codex-work", fixture: { targetId: "fixture-target", nodes: [] } }));
+  assert.equal(calls.some((call) => call.body?.includes("visibility")), false);
+});
+
 test("safe error messages do not render raw server internals", () => {
   const error = new Error("stack trace /Users/example token storageKey") as SafeApiError;
   error.status = 500;

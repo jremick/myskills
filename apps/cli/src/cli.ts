@@ -14,6 +14,15 @@ const DEFAULT_API_URL = "http://localhost:3001";
 const CLI_VERSION = process.env.MYSKILLS_CLI_VERSION ?? "0.0.0-dev";
 const CLI_VISIBILITY_SCOPES = ["public", "authenticated", "organization", "team", "private", "explicit-users"] as const;
 const LOGIN_AUTH_METHODS = ["password", "api-key"] as const;
+const OBSERVED_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const OBSERVED_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+const OBSERVED_VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const OBSERVED_DIGEST_PATTERN = /^[a-f0-9]{64}$/;
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001F\u007F-\u009F]/u;
+const CONTROL_CHARACTER_GLOBAL_PATTERN = /[\u0000-\u001F\u007F-\u009F]/gu;
+const OBSERVED_FIXTURE_KEY_PATTERN = /path|secret|token|password|credential|private[-_ ]?key|package|connection|endpoint|url/i;
+const TARGET_OBSERVATION_SCHEMA_VERSION = "myskills.target-observation.v1" as const;
+const MANAGED_REGISTRY_ADAPTER_VERSION = "myskills-cli-managed-registry.v1";
 
 export interface CliIo {
   stdout: (line: string) => void;
@@ -127,6 +136,9 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
         return await teamsCommand(parsed, runtime);
       case "sharing":
         return await sharingCommand(parsed, runtime);
+      case "architecture":
+      case "architectures":
+        return await architecturesCommand(parsed, runtime);
       case "admin":
         return await adminCommand(parsed, runtime);
       case "export":
@@ -688,31 +700,27 @@ async function submissionsCommand(parsed: ParsedArgs, runtime: CliRuntime): Prom
 }
 
 async function skillsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
-  const token = await requireToken(parsed, runtime);
   const subcommand = parsed.args[0];
   const slug = parsed.args[1];
   if (subcommand === "edit") {
+    if (Object.prototype.hasOwnProperty.call(parsed.options, "visibility")) {
+      throw new CliError("`skills edit --visibility` was removed; use `myskills sharing set <skill-slug> --visibility <scope>`.", 2, "SKILLS_EDIT_VISIBILITY_REMOVED");
+    }
+    const token = await requireToken(parsed, runtime);
     if (!slug) {
-      throw new CliError("Usage: myskills skills edit <skill-slug> [--title <text>] [--summary <text>] [--visibility <scope>] [--tag <tag>] [--reason <text>] [--api-url <url>] [--token <token>]", 2);
+      throw new CliError("Usage: myskills skills edit <skill-slug> [--title <text>] [--summary <text>] [--tag <tag>] [--reason <text>] [--api-url <url>] [--token <token>]", 2);
     }
     const payload: Record<string, unknown> = {
       ...reasonPayload(parsed),
     };
     const title = optionalStringOption(parsed, "title");
     const summary = optionalStringOption(parsed, "summary");
-    const visibility = optionalStringOption(parsed, "visibility");
     const tags = stringListOption(parsed, "tag");
     if (title !== undefined) {
       payload.title = title;
     }
     if (summary !== undefined) {
       payload.summary = summary;
-    }
-    if (visibility !== undefined) {
-      if (!CLI_VISIBILITY_SCOPES.includes(visibility as CliVisibilityScope)) {
-        throw new CliError(`--visibility must be one of: ${CLI_VISIBILITY_SCOPES.join(", ")}.`, 2);
-      }
-      payload.visibility = visibility;
     }
     if (tags.length > 0) {
       payload.tags = tags;
@@ -724,6 +732,7 @@ async function skillsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     printNamedRecord(response, "skill", runtime.io, ["slug", "title", "lifecycleStatus", "visibility"]);
     return 0;
   }
+  const token = await requireToken(parsed, runtime);
   if (subcommand === "archive" || subcommand === "restore" || subcommand === "delete") {
     if (!slug) {
       throw new CliError("Usage: myskills skills archive|restore|delete <skill-slug> [--reason <text>] [--api-url <url>] [--token <token>]", 2);
@@ -887,6 +896,147 @@ async function sharingCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<
     return 0;
   }
   throw new CliError("Usage: myskills sharing get|set <skill-slug>", 2);
+}
+
+async function architecturesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const subcommand = parsed.args[0] ?? "list";
+  if (subcommand === "patterns") {
+    const response = await apiGet(
+      "/v1/architecture-patterns",
+      parsed,
+      runtime,
+      await tokenOption(parsed, runtime) ?? undefined,
+    );
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      printArchitecturePatterns(response, runtime.io);
+    }
+    return 0;
+  }
+
+  if (subcommand === "detect") {
+    const observation = await detectManagedArchitectureTarget(parsed, runtime);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(observation, null, 2));
+    } else {
+      printTargetObservation(observation, runtime.io);
+    }
+    return 0;
+  }
+
+  if (subcommand === "configure") {
+    if (parsed.options.apply === true) {
+      throw new CliError("Architecture apply is not available. Auto-configure currently produces a dry-run plan only.", 2, "ARCHITECTURE_APPLY_UNAVAILABLE");
+    }
+    if (parsed.options.auto !== true) {
+      throw new CliError("Usage: myskills architectures configure --auto [--architecture <id>] [--target codex] [--target-id <id>] [--context <personal|work|team>] [--dir <install-root>]", 2);
+    }
+    const environmentKind = optionalStringOption(parsed, "context");
+    if (environmentKind !== undefined && !["personal", "work", "team"].includes(environmentKind)) {
+      throw new CliError("--context must be personal, work, or team.", 2, "INVALID_ARCHITECTURE_CONTEXT");
+    }
+    const architectureId = optionalStringOption(parsed, "architecture");
+    const token = await requireToken(parsed, runtime);
+    const observation = await detectManagedArchitectureTarget(parsed, runtime);
+    const response = await apiPost(
+      "/v1/architecture-resolutions",
+      {
+        observation,
+        ...(environmentKind ? { environmentKind } : {}),
+        ...(architectureId ? { architectureId: parseArchitectureId(architectureId) } : {}),
+      },
+      parsed,
+      runtime,
+      token,
+    );
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      printArchitectureResolution(response, runtime.io);
+    }
+    const resolution = recordField(response.resolution, "architecture resolution");
+    return resolution.status === "resolved" ? 0 : 1;
+  }
+
+  const token = await requireToken(parsed, runtime);
+  if (subcommand === "list") {
+    const response = await apiGet("/v1/architectures", parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      printArchitectures(response, runtime.io);
+    }
+    return 0;
+  }
+
+  if (subcommand === "show") {
+    const architectureId = parseArchitectureId(parsed.args[1]);
+    const revisionId = architectureRevisionOption(parsed);
+    const response = await apiGet(
+      revisionId
+        ? `/v1/architectures/${encodeURIComponent(architectureId)}/revisions/${encodeURIComponent(parseArchitectureRevisionId(revisionId))}`
+        : `/v1/architectures/${encodeURIComponent(architectureId)}`,
+      parsed,
+      runtime,
+      token,
+    );
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else if (revisionId) {
+      printArchitectureRevision(response, runtime.io);
+    } else {
+      printArchitectureDetails(response, runtime.io);
+    }
+    return 0;
+  }
+
+  if (subcommand === "preview" || subcommand === "compile") {
+    const architectureId = parseArchitectureId(parsed.args[1]);
+    const revisionId = architectureRevisionOption(parsed);
+    const body = architecturePreviewOptions(parsed, revisionId);
+    const response = await apiPost(
+      `/v1/architectures/${encodeURIComponent(architectureId)}/preview`,
+      body,
+      parsed,
+      runtime,
+      token,
+    );
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      printArchitecturePreview(response, runtime.io, architectureId);
+    }
+    return 0;
+  }
+
+  if (subcommand === "plan" || subcommand === "dry-run") {
+    const architectureId = parseArchitectureId(parsed.args[1]);
+    const revisionId = architectureRevisionOption(parsed);
+    const observedPath = optionalStringOption(parsed, "observed") ?? optionalStringOption(parsed, "observed-state");
+    if (!observedPath) {
+      throw new CliError("Usage: myskills architectures plan <architecture-id> --observed <fixture.json> [--revision <revision-id>] [--profile <profile-id>] [--environment <environment-id>]", 2);
+    }
+    const observedState = await readObservedStateFixture(observedPath);
+    const response = await apiPost(
+      `/v1/architectures/${encodeURIComponent(architectureId)}/preview`,
+      {
+        ...architecturePreviewOptions(parsed, revisionId),
+        fixture: apiSyncFixtureFromObservedState(observedState),
+      },
+      parsed,
+      runtime,
+      token,
+    );
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(response, null, 2));
+    } else {
+      printArchitecturePlan(response, runtime.io);
+    }
+    return 0;
+  }
+
+  throw new CliError("Usage: myskills architectures patterns | detect | configure --auto | list | show <architecture-id> | preview|compile <architecture-id> [--revision <revision-id>] | plan|dry-run <architecture-id> --observed <fixture.json>", 2);
 }
 
 async function adminCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
@@ -1271,6 +1421,30 @@ interface InstalledSkillSnapshot {
   snapshotPath: string;
 }
 
+interface CliTargetObservation {
+  schemaVersion: typeof TARGET_OBSERVATION_SCHEMA_VERSION;
+  target: {
+    id: string;
+    toolKind: "codex";
+    adapterVersion: string;
+    capabilities: Record<string, boolean>;
+  };
+  observedState: {
+    targetId: string;
+    nodes: Array<{
+      nodeId: string;
+      kind: "leaf";
+      slug: string;
+      version?: string;
+      digest?: string;
+      enabled: true;
+      runtimeExposure: "leaf";
+      managed: true;
+      supported: true;
+    }>;
+  };
+}
+
 type CliVisibilityScope = (typeof CLI_VISIBILITY_SCOPES)[number];
 
 interface CliSharingSettings {
@@ -1533,6 +1707,444 @@ function printSharingSettings(response: Record<string, unknown>, io: CliIo): voi
   ].join("\t"));
 }
 
+function printTargetObservation(observation: CliTargetObservation, io: CliIo): void {
+  io.stdout([
+    "target",
+    terminalSafeText(observation.target.id),
+    terminalSafeText(observation.target.toolKind),
+    `managed-skills=${observation.observedState.nodes.length}`,
+    `adapter=${terminalSafeText(observation.target.adapterVersion)}`,
+  ].join("\t"));
+  for (const node of observation.observedState.nodes) {
+    io.stdout([
+      "skill",
+      terminalSafeText(node.slug),
+      terminalSafeText(node.version ?? "unknown"),
+      node.digest ? `sha256=${node.digest.slice(0, 12)}` : "sha256=unknown",
+    ].join("\t"));
+  }
+}
+
+function printArchitectureResolution(response: Record<string, unknown>, io: CliIo): void {
+  const resolution = recordField(response.resolution, "architecture resolution");
+  const candidates = arrayField(resolution, "candidates");
+  io.stdout([
+    "auto-configure",
+    "dry-run",
+    terminalSafeText(optionalRecordString(resolution, "status") ?? "unknown"),
+    `confidence=${terminalSafeText(optionalRecordString(resolution, "confidence") ?? "none")}`,
+    `candidates=${typeof resolution.candidateCount === "number" ? resolution.candidateCount : candidates.length}`,
+  ].join("\t"));
+  const selected = resolution.selected && typeof resolution.selected === "object" && !Array.isArray(resolution.selected)
+    ? resolution.selected as Record<string, unknown>
+    : undefined;
+  if (!selected) {
+    for (const value of candidates.slice(0, 3)) {
+      const candidate = recordField(value, "architecture resolution candidate");
+      io.stdout([
+        "candidate",
+        terminalSafeText(optionalRecordString(candidate, "architectureId") ?? "-"),
+        terminalSafeText(optionalRecordString(candidate, "environmentId") ?? "-"),
+        `score=${typeof candidate.score === "number" ? candidate.score : 0}`,
+      ].join("\t"));
+    }
+    return;
+  }
+  io.stdout([
+    "selected",
+    terminalSafeText(optionalRecordString(selected, "architectureId") ?? "-"),
+    terminalSafeText(optionalRecordString(selected, "revisionId") ?? "-"),
+    terminalSafeText(optionalRecordString(selected, "profileId") ?? "-"),
+    terminalSafeText(optionalRecordString(selected, "environmentId") ?? "-"),
+    `score=${typeof selected.score === "number" ? selected.score : 0}`,
+    `configurable=${selected.canConfigure === true ? "yes" : "no"}`,
+  ].join("\t"));
+  printArchitecturePlan({ plan: selected.plan }, io);
+}
+
+function printArchitecturePatterns(response: Record<string, unknown>, io: CliIo): void {
+  const patterns = arrayField(response, "patterns");
+  if (patterns.length === 0) {
+    io.stdout("No architecture patterns.");
+    return;
+  }
+  for (const value of patterns) {
+    const pattern = recordField(value, "architecture pattern");
+    io.stdout([
+      terminalSafeText(optionalRecordString(pattern, "id") ?? optionalRecordString(pattern, "key") ?? "-"),
+      terminalSafeText(optionalRecordString(pattern, "name") ?? optionalRecordString(pattern, "title") ?? "-"),
+      terminalSafeText(optionalRecordString(pattern, "description") ?? "-"),
+      terminalSafeText(optionalRecordString(pattern, "status") ?? "available"),
+    ].join("\t"));
+  }
+}
+
+function printArchitectures(response: Record<string, unknown>, io: CliIo): void {
+  const architectures = arrayField(response, "architectures");
+  if (architectures.length === 0) {
+    io.stdout("No architectures.");
+    return;
+  }
+  for (const value of architectures) {
+    const architecture = recordField(value, "architecture");
+    const revision = architecture.latestRevision;
+    const latestRevision = revision && typeof revision === "object" && !Array.isArray(revision)
+      ? revision as Record<string, unknown>
+      : undefined;
+    io.stdout([
+      terminalSafeText(optionalRecordString(architecture, "id") ?? "-"),
+      terminalSafeText(optionalRecordString(architecture, "name") ?? optionalRecordString(architecture, "title") ?? "-"),
+      terminalSafeText(optionalRecordString(architecture, "patternId") ?? optionalRecordString(architecture, "pattern") ?? "-"),
+      terminalSafeText(optionalRecordString(latestRevision ?? {}, "id") ?? optionalRecordString(architecture, "currentRevisionId") ?? "-"),
+      terminalSafeText(optionalRecordString(architecture, "updatedAt") ?? "-"),
+    ].join("\t"));
+  }
+}
+
+function printArchitectureDetails(response: Record<string, unknown>, io: CliIo): void {
+  const architecture = recordField(response.architecture ?? response, "architecture");
+  io.stdout([
+    terminalSafeText(optionalRecordString(architecture, "id") ?? "-"),
+    terminalSafeText(optionalRecordString(architecture, "name") ?? optionalRecordString(architecture, "title") ?? "-"),
+    terminalSafeText(optionalRecordString(architecture, "patternId") ?? optionalRecordString(architecture, "pattern") ?? "-"),
+    terminalSafeText(optionalRecordString(architecture, "currentRevisionId") ?? "-"),
+    terminalSafeText(optionalRecordString(architecture, "updatedAt") ?? "-"),
+  ].join("\t"));
+  const revisions = arrayField(architecture, "revisions").length > 0
+    ? arrayField(architecture, "revisions")
+    : arrayField(response, "revisions");
+  for (const value of revisions) {
+    const revision = recordField(value, "architecture revision");
+    io.stdout([
+      "revision",
+      terminalSafeText(optionalRecordString(revision, "id") ?? "-"),
+      terminalSafeText(optionalRecordString(revision, "message") ?? "-"),
+      terminalSafeText(optionalRecordString(revision, "createdAt") ?? "-"),
+    ].join("\t"));
+  }
+}
+
+function printArchitectureRevision(response: Record<string, unknown>, io: CliIo): void {
+  const revision = recordField(response.revision ?? response, "architecture revision");
+  io.stdout([
+    "revision",
+    terminalSafeText(optionalRecordString(revision, "id") ?? "-"),
+    terminalSafeText(optionalRecordString(revision, "message") ?? "-"),
+    terminalSafeText(optionalRecordString(revision, "createdAt") ?? "-"),
+  ].join("\t"));
+}
+
+function printArchitecturePreview(response: Record<string, unknown>, io: CliIo, architectureId?: string): void {
+  const preview = recordField(response.preview ?? response, "architecture preview");
+  const compiled = preview.compiled && typeof preview.compiled === "object" && !Array.isArray(preview.compiled)
+    ? preview.compiled as Record<string, unknown>
+    : {};
+  const graph = preview.graph && typeof preview.graph === "object" && !Array.isArray(preview.graph)
+    ? preview.graph as Record<string, unknown>
+    : {};
+  const topology = preview.topology && typeof preview.topology === "object" && !Array.isArray(preview.topology)
+    ? preview.topology as Record<string, unknown>
+    : Object.keys(graph).length > 0 ? graph : { nodes: arrayField(compiled, "nodes") };
+  const nodes = arrayField(topology, "nodes");
+  const rawPlan = preview.plan ?? preview.syncPlan;
+  const syncPlan = rawPlan && typeof rawPlan === "object" && !Array.isArray(rawPlan)
+    ? rawPlan as Record<string, unknown>
+    : undefined;
+  const revision = preview.revision && typeof preview.revision === "object" && !Array.isArray(preview.revision)
+    ? preview.revision as Record<string, unknown>
+    : {};
+  io.stdout([
+    "preview",
+    terminalSafeText(optionalRecordString(preview, "architectureId") ?? architectureId ?? "-"),
+    terminalSafeText(optionalRecordString(preview, "revisionId") ?? optionalRecordString(revision, "id") ?? optionalRecordString(preview, "revision") ?? "-"),
+    `nodes=${nodes.length}`,
+    `plan=${terminalSafeText(optionalRecordString(syncPlan ?? {}, "status") ?? "not-generated")}`,
+  ].join("\t"));
+  const mermaid = optionalRecordString(preview, "mermaid") ?? optionalRecordString(graph, "mermaid");
+  if (mermaid) {
+    io.stdout(terminalSafeText(mermaid, true));
+  }
+}
+
+function printArchitecturePlan(response: Record<string, unknown>, io: CliIo): void {
+  const plan = recordField(response.plan ?? response.syncPlan ?? response, "sync plan");
+  const changes = Array.isArray(plan.items) ? arrayField(plan, "items") : arrayField(plan, "changes");
+  const actions = changes.map((value) => optionalRecordString(recordField(value, "sync change"), "action") ?? optionalRecordString(recordField(value, "sync change"), "type") ?? "unknown");
+  const status = optionalRecordString(plan, "status")
+    ?? (actions.includes("conflict") ? "conflict" : actions.includes("unsupported") ? "unsupported" : actions.some((action) => action !== "noop") ? "changes" : "noop");
+  io.stdout([
+    "dry-run",
+    terminalSafeText(status),
+    `changes=${changes.length}`,
+  ].join("\t"));
+  for (const value of changes) {
+    const change = recordField(value, "sync change");
+    io.stdout([
+      "change",
+      terminalSafeText(optionalRecordString(change, "type") ?? optionalRecordString(change, "action") ?? "unknown"),
+      terminalSafeText(optionalRecordString(change, "subject") ?? optionalRecordString(change, "resourceRef") ?? optionalRecordString(change, "nodeId") ?? "-"),
+      terminalSafeText(optionalRecordString(change, "detail") ?? optionalRecordString(change, "reason") ?? "-"),
+    ].join("\t"));
+  }
+}
+
+function architecturePreviewOptions(parsed: ParsedArgs, revisionId: string | undefined): Record<string, string> {
+  const profileId = optionalStringOption(parsed, "profile") ?? optionalStringOption(parsed, "profile-id");
+  const environmentId = optionalStringOption(parsed, "environment") ?? optionalStringOption(parsed, "environment-id");
+  return {
+    ...(profileId ? { profileId: parseArchitectureReference(profileId, "profile") } : {}),
+    ...(environmentId ? { environmentId: parseArchitectureReference(environmentId, "environment") } : {}),
+    ...(revisionId ? { revisionId: parseArchitectureRevisionId(revisionId) } : {}),
+  };
+}
+
+function architectureRevisionOption(parsed: ParsedArgs): string | undefined {
+  return optionalStringOption(parsed, "revision")
+    ?? optionalStringOption(parsed, "revision-id")
+    ?? optionalStringOption(parsed, "version");
+}
+
+async function detectManagedArchitectureTarget(parsed: ParsedArgs, runtime: CliRuntime): Promise<CliTargetObservation> {
+  const target = optionalStringOption(parsed, "target") ?? "codex";
+  if (target !== "codex") {
+    throw new CliError("Only the codex managed-registry detector is currently supported.", 2, "TARGET_ADAPTER_UNSUPPORTED");
+  }
+  const targetId = validateObservedIdentifier(optionalStringOption(parsed, "target-id") ?? "codex-local", "target-id");
+  const registry = await readInstallRegistry(installRoot(parsed, runtime));
+  const nodes = Object.values(registry.installations)
+    .filter((installation) => installation.platform === target)
+    .sort((left, right) => left.slug.localeCompare(right.slug))
+    .map((installation) => ({
+      nodeId: installation.slug,
+      kind: "leaf" as const,
+      slug: installation.slug,
+      ...(OBSERVED_VERSION_PATTERN.test(installation.version) ? { version: installation.version } : {}),
+      ...(OBSERVED_DIGEST_PATTERN.test(installation.artifact.sha256) ? { digest: installation.artifact.sha256 } : {}),
+      enabled: true as const,
+      runtimeExposure: "leaf" as const,
+      managed: true as const,
+      supported: true as const,
+    }));
+  return {
+    schemaVersion: TARGET_OBSERVATION_SCHEMA_VERSION,
+    target: {
+      id: targetId,
+      toolKind: target,
+      adapterVersion: MANAGED_REGISTRY_ADAPTER_VERSION,
+      capabilities: {
+        canInspectManagedSkills: true,
+        canInspectRouters: false,
+        canInstall: true,
+        canUpdate: true,
+        canRemove: false,
+        canEnable: false,
+        canConfigureRouters: false,
+        canRollback: true,
+      },
+    },
+    observedState: { targetId, nodes },
+  };
+}
+
+async function readObservedStateFixture(inputPath: string): Promise<Record<string, unknown>> {
+  if (hasControlCharacter(inputPath)) {
+    throw new CliError("Observed-state fixture path contains control characters.", 2, "OBSERVED_STATE_INVALID");
+  }
+  const resolvedPath = path.resolve(inputPath);
+  let text: string;
+  try {
+    text = await readFile(resolvedPath, "utf8");
+  } catch {
+    throw new CliError("Observed-state fixture could not be read.", 2, "OBSERVED_STATE_INVALID");
+  }
+  if (Buffer.byteLength(text, "utf8") > 256 * 1024) {
+    throw new CliError("Observed-state fixture exceeds the 256 KiB limit.", 2, "OBSERVED_STATE_TOO_LARGE");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new CliError("Observed-state fixture must contain valid JSON.", 2, "OBSERVED_STATE_INVALID");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new CliError("Observed-state fixture must be a JSON object.", 2, "OBSERVED_STATE_INVALID");
+  }
+  const record = parsed as Record<string, unknown>;
+  rejectObservedFixtureKeys(record, ["schemaVersion", "environment", "inventory"], "fixture");
+  if (record.schemaVersion !== "myskills.observed-state.v1") {
+    throw new CliError("Observed-state fixture schemaVersion must be myskills.observed-state.v1.", 2, "OBSERVED_STATE_INVALID");
+  }
+  if (!record.environment || typeof record.environment !== "object" || Array.isArray(record.environment)) {
+    throw new CliError("Observed-state fixture must include an environment object.", 2, "OBSERVED_STATE_INVALID");
+  }
+  const environment = record.environment as Record<string, unknown>;
+  rejectObservedFixtureKeys(environment, ["environmentKey", "toolKind", "adapterVersion", "capabilities"], "environment");
+  validateObservedIdentifier(environment.environmentKey, "environment.environmentKey", 256);
+  validateObservedText(environment.toolKind, "environment.toolKind", 128);
+  validateObservedText(environment.adapterVersion, "environment.adapterVersion", 128);
+  if (!environment.capabilities || typeof environment.capabilities !== "object" || Array.isArray(environment.capabilities)) {
+    throw new CliError("Observed-state fixture environment must include capabilities.", 2, "OBSERVED_STATE_INVALID");
+  }
+  validateObservedCapabilities(environment.capabilities as Record<string, unknown>);
+  const inventory = record.inventory;
+  if (!Array.isArray(inventory) || inventory.length > 500 || inventory.some((item) => !item || typeof item !== "object" || Array.isArray(item))) {
+    throw new CliError("Observed-state fixture inventory must be an array of at most 500 objects.", 2, "OBSERVED_STATE_INVALID");
+  }
+  for (const item of inventory) {
+    const entry = item as Record<string, unknown>;
+    rejectObservedFixtureKeys(entry, [
+      "kind",
+      "source",
+      "ref",
+      "id",
+      "slug",
+      "version",
+      "artifactSha256",
+      "enabled",
+      "exposureMode",
+      "managed",
+      "supported",
+      "configurationDigest",
+      "configured",
+    ], "inventory entry");
+    if (!["skill", "router", "profile", "unknown"].includes(String(entry.kind))) {
+      throw new CliError("Observed-state fixture inventory entries have an invalid kind.", 2, "OBSERVED_STATE_INVALID");
+    }
+    if (typeof entry.source !== "string" || !["myskills", "local", "unknown"].includes(entry.source)) {
+      throw new CliError("Observed-state fixture inventory entries have an invalid source.", 2, "OBSERVED_STATE_INVALID");
+    }
+    validateObservedOptionalIdentifier(entry.ref, "inventory.ref");
+    validateObservedOptionalIdentifier(entry.id, "inventory.id");
+    validateObservedOptionalSlug(entry.slug, "inventory.slug");
+    validateObservedOptionalVersion(entry.version, "inventory.version");
+    validateObservedOptionalDigest(entry.artifactSha256, "inventory.artifactSha256");
+    validateObservedOptionalDigest(entry.configurationDigest, "inventory.configurationDigest");
+    validateObservedOptionalBoolean(entry.enabled, "inventory.enabled");
+    validateObservedOptionalBoolean(entry.managed, "inventory.managed");
+    validateObservedOptionalBoolean(entry.supported, "inventory.supported");
+    validateObservedOptionalBoolean(entry.configured, "inventory.configured");
+    validateObservedOptionalExposure(entry.exposureMode, "inventory.exposureMode");
+    if (entry.ref === undefined && entry.slug === undefined && entry.id === undefined) {
+      throw new CliError("Observed-state fixture inventory entries require ref, slug, or id.", 2, "OBSERVED_STATE_INVALID");
+    }
+  }
+  return record;
+}
+
+function rejectObservedFixtureKeys(record: Record<string, unknown>, allowed: string[], label: string): void {
+  for (const key of Object.keys(record)) {
+    if (hasControlCharacter(key)) {
+      throw new CliError(`Observed-state fixture ${label} contains a control-character field.`, 2, "OBSERVED_STATE_INVALID");
+    }
+    if (OBSERVED_FIXTURE_KEY_PATTERN.test(key) || !allowed.includes(key)) {
+      throw new CliError(`Observed-state fixture field is not accepted: ${key}.`, 2, "OBSERVED_STATE_INVALID");
+    }
+  }
+}
+
+function validateObservedCapabilities(input: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(input)) {
+    if (hasControlCharacter(key) || !OBSERVED_IDENTIFIER_PATTERN.test(key) || typeof value !== "boolean") {
+      throw new CliError("Observed-state fixture capabilities must contain identifier keys and boolean values.", 2, "OBSERVED_STATE_INVALID");
+    }
+  }
+}
+
+function validateObservedIdentifier(value: unknown, label: string, maxLength = 128): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > maxLength || hasControlCharacter(value) || !OBSERVED_IDENTIFIER_PATTERN.test(value)) {
+    throw new CliError(`Observed-state fixture ${label} is invalid.`, 2, "OBSERVED_STATE_INVALID");
+  }
+  return value;
+}
+
+function validateObservedText(value: unknown, label: string, maxLength: number): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > maxLength || hasControlCharacter(value)) {
+    throw new CliError(`Observed-state fixture ${label} is invalid.`, 2, "OBSERVED_STATE_INVALID");
+  }
+  return value;
+}
+
+function validateObservedOptionalIdentifier(value: unknown, label: string): void {
+  if (value !== undefined) {
+    validateObservedIdentifier(value, label);
+  }
+}
+
+function validateObservedOptionalSlug(value: unknown, label: string): void {
+  if (value === undefined) return;
+  if (typeof value !== "string" || value.length === 0 || value.length > 120 || hasControlCharacter(value) || !OBSERVED_SLUG_PATTERN.test(value)) {
+    throw new CliError(`Observed-state fixture ${label} is invalid.`, 2, "OBSERVED_STATE_INVALID");
+  }
+}
+
+function validateObservedOptionalVersion(value: unknown, label: string): void {
+  if (value === undefined) return;
+  if (typeof value !== "string" || value.length === 0 || value.length > 128 || hasControlCharacter(value) || !OBSERVED_VERSION_PATTERN.test(value)) {
+    throw new CliError(`Observed-state fixture ${label} is invalid.`, 2, "OBSERVED_STATE_INVALID");
+  }
+}
+
+function validateObservedOptionalDigest(value: unknown, label: string): void {
+  if (value === undefined) return;
+  if (typeof value !== "string" || !OBSERVED_DIGEST_PATTERN.test(value) || hasControlCharacter(value)) {
+    throw new CliError(`Observed-state fixture ${label} is invalid.`, 2, "OBSERVED_STATE_INVALID");
+  }
+}
+
+function validateObservedOptionalBoolean(value: unknown, label: string): void {
+  if (value !== undefined && typeof value !== "boolean") {
+    throw new CliError(`Observed-state fixture ${label} is invalid.`, 2, "OBSERVED_STATE_INVALID");
+  }
+}
+
+function validateObservedOptionalExposure(value: unknown, label: string): void {
+  if (value !== undefined && value !== "disabled" && value !== "router" && value !== "leaf") {
+    throw new CliError(`Observed-state fixture ${label} is invalid.`, 2, "OBSERVED_STATE_INVALID");
+  }
+}
+
+function hasControlCharacter(value: string): boolean {
+  return CONTROL_CHARACTER_PATTERN.test(value);
+}
+
+function terminalSafeText(value: string, multiline = false): string {
+  return value.replace(CONTROL_CHARACTER_GLOBAL_PATTERN, (character) => multiline && character === "\n" ? "\n" : " ");
+}
+
+function apiSyncFixtureFromObservedState(observedState: Record<string, unknown>): Record<string, unknown> {
+  const inventory = Array.isArray(observedState.inventory) ? observedState.inventory : [];
+  const environment = observedState.environment as Record<string, unknown>;
+  const environmentKey = String(environment.environmentKey);
+  const nodes = inventory.map((item) => {
+    const entry = item as Record<string, unknown>;
+    const id = typeof entry.ref === "string" && entry.ref
+      ? entry.ref
+      : typeof entry.slug === "string" && entry.slug
+        ? entry.slug
+        : typeof entry.id === "string" && entry.id
+          ? entry.id
+          : undefined;
+    if (!id) {
+      throw new CliError("Observed-state fixture inventory entries require ref, slug, or id.", 2, "OBSERVED_STATE_INVALID");
+    }
+    return {
+      nodeId: id,
+      ...(entry.kind === "skill" && typeof entry.ref === "string" ? { skillRefId: entry.ref, kind: "leaf" } : {}),
+      ...(entry.kind === "router" ? { kind: "router" } : {}),
+      ...(typeof entry.slug === "string" && entry.slug ? { slug: entry.slug } : {}),
+      ...(typeof entry.version === "string" && entry.version ? { version: entry.version } : {}),
+      ...(typeof entry.artifactSha256 === "string" && entry.artifactSha256 ? { digest: entry.artifactSha256 } : {}),
+      ...(typeof entry.enabled === "boolean" ? { enabled: entry.enabled } : {}),
+      ...(typeof entry.exposureMode === "string" ? { runtimeExposure: entry.exposureMode } : {}),
+      ...(typeof entry.managed === "boolean" ? { managed: entry.managed } : {}),
+      ...(typeof entry.supported === "boolean" ? { supported: entry.supported } : {}),
+      ...(typeof entry.configurationDigest === "string" ? { configurationDigest: entry.configurationDigest } : {}),
+      ...(typeof entry.configured === "boolean" ? { configured: entry.configured } : {}),
+    };
+  });
+  return { targetId: environmentKey, environmentId: environmentKey, nodes };
+}
+
 function teamFromResponse(response: Record<string, unknown>): CliTeamRecord {
   return teamFromRecord(response.team);
 }
@@ -1749,6 +2361,27 @@ function parseInstallSlug(slug: string): string {
   return slug;
 }
 
+function parseArchitectureId(value: string | undefined): string {
+  if (!value || value.length > 120 || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value)) {
+    throw new CliError("Architecture id is invalid.", 2);
+  }
+  return value;
+}
+
+function parseArchitectureReference(value: string, label: string): string {
+  if (value.length > 120 || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value)) {
+    throw new CliError(`${label} id is invalid.`, 2);
+  }
+  return value;
+}
+
+function parseArchitectureRevisionId(value: string): string {
+  if (value.length > 120 || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value)) {
+    throw new CliError("Architecture revision id is invalid.", 2);
+  }
+  return value;
+}
+
 async function pathExists(filePath: string): Promise<boolean> {
   try {
     await stat(filePath);
@@ -1959,6 +2592,9 @@ function isUnsupportedEndpointBody(body: Record<string, unknown>, text: string):
 function unsupportedCommandForPath(pathname: string): string | null {
   if (pathname.startsWith("/v1/teams")) {
     return "teams";
+  }
+  if (pathname.startsWith("/v1/architecture") || pathname.startsWith("/v1/architectures") || pathname.startsWith("/v1/sync-runs")) {
+    return "architectures";
   }
   if (pathname.includes("/sharing") || pathname.startsWith("/v1/admin/sharing")) {
     return "sharing";
@@ -2428,7 +3064,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
     const key = value.slice(2);
-    if (key === "json" || key === "api-key") {
+    if (key === "json" || key === "api-key" || key === "auto" || key === "apply" || key === "dry-run") {
       options[key] = true;
       continue;
     }
@@ -2476,7 +3112,7 @@ function helpText(): string {
     "  review action <submission-id> --action <approve|request-changes|reject|publish> [--artifact-sha256 <hash>] [--reason <text>] [--api-url <url>] [--token <token>]",
     "  submissions list [--api-url <url>] [--token <token>]",
     "  submissions withdraw <submission-id> [--reason <text>] [--api-url <url>] [--token <token>]",
-    "  skills edit <skill-slug> [--title <text>] [--summary <text>] [--visibility <scope>] [--tag <tag>] [--reason <text>] [--api-url <url>] [--token <token>]",
+    "  skills edit <skill-slug> [--title <text>] [--summary <text>] [--tag <tag>] [--reason <text>] [--api-url <url>] [--token <token>]",
     "  skills archive|restore|delete <skill-slug> [--reason <text>] [--api-url <url>] [--token <token>]",
     "  releases list <skill-slug> [--api-url <url>] [--token <token>]",
     "  releases deprecate|unpublish|revoke|restore|delete <skill-slug>@<version> [--reason <text>] [--replacement <version>] [--api-url <url>] [--token <token>]",
@@ -2486,6 +3122,13 @@ function helpText(): string {
     "  teams accept <invitation-id> [--api-url <url>] [--token <token>]",
     "  sharing get <skill-slug> [--api-url <url>] [--token <token>]",
     "  sharing set <skill-slug> --visibility <scope> [--team <team-id>] [--user <email>]",
+    "  architectures patterns [--api-url <url>] [--token <token>]",
+    "  architectures detect [--target codex] [--target-id <id>] [--dir <install-root>] [--json]",
+    "  architectures configure --auto [--architecture <id>] [--target codex] [--target-id <id>] [--context <personal|work|team>] [--dir <install-root>] [--api-url <url>] [--token <token>] [--json]",
+    "  architectures list [--api-url <url>] [--token <token>]",
+    "  architectures show <architecture-id> [--revision <revision-id>] [--api-url <url>] [--token <token>]",
+    "  architectures preview|compile <architecture-id> [--revision <revision-id>] [--profile <profile-id>] [--environment <environment-id>] [--api-url <url>] [--token <token>]",
+    "  architectures plan|dry-run <architecture-id> --observed <fixture.json> [--revision <revision-id>] [--profile <profile-id>] [--environment <environment-id>] [--api-url <url>] [--token <token>]",
     "  admin sharing get [--api-url <url>] [--token <token>]",
     "  admin sharing set [--public <true|false>] [--authenticated <true|false>] [--teams <true|false>] [--team-visibility <true|false>] [--user-visibility <true|false>]",
     "  export <skill-slug> --version <version> --platform <platform> --output <dir>",

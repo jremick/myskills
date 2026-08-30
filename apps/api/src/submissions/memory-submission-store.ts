@@ -24,6 +24,7 @@ import type {
   UserSubmissionBundle,
   UserSubmissionSummary,
 } from "./types.js";
+import { assertNoVisibilityMetadataUpdate } from "./types.js";
 import { artifactPayloadSha256 } from "./artifact-hash.js";
 
 interface AuditRecord {
@@ -380,6 +381,7 @@ export class MemorySubmissionStore implements SubmissionStore {
   }
 
   async updateSkillMetadata(input: { slug: string; actor: SubmissionActor; update: SkillMetadataUpdate; reason?: string }): Promise<SkillManagementSummary> {
+    assertNoVisibilityMetadataUpdate(input.update);
     const submissions = this.findSubmissionsBySlug(input.slug);
     const first = submissions[0];
     if (!first) {
@@ -392,9 +394,6 @@ export class MemorySubmissionStore implements SubmissionStore {
       }
       if (input.update.summary !== undefined) {
         submission.summary = input.update.summary;
-      }
-      if (input.update.visibility !== undefined) {
-        submission.visibility = input.update.visibility;
       }
     }
     this.recordAudit("skill.metadata.update", "allow", input.actor.id, {

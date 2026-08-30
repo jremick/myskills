@@ -10,6 +10,7 @@ Responsibilities:
 - package submission, review, publication, and delivery
 - object storage access
 - audit events
+- owner-private architecture revisions, projections, and target resolution
 - admin operations
 - MCP gateway support where appropriate
 
@@ -50,6 +51,11 @@ Implemented:
 - `GET /v1/admin/audit?limit=...` MFA-verified admin audit event list
 - `GET /v1/me` bearer-session or scoped API-token current user response
 - `GET /v1/mcp/session` API-token-only MCP auth check requiring `skills:read` with sanitized allow/deny audit events
+- `GET /v1/architecture-patterns` public architecture pattern descriptors
+- `GET /v1/architectures` and owner-private architecture detail/revision reads
+- `POST /v1/architectures` and `POST /v1/architectures/:id/revisions` session-only architecture creation and immutable revision append
+- `POST /v1/architectures/:id/preview` read-scoped compilation and optional metadata-only dry-run planning
+- `POST /v1/architecture-resolutions` read-scoped ranking of existing revisions against a metadata-only target observation; no target write
 - `GET /v1/submissions/mine` session-only submitted skill version list for the current user
 - `GET /v1/submissions/:id/bundle` session-only package export for user-owned submitted versions
 - `POST /v1/submissions/:id/actions` session-only author `withdraw`
@@ -77,7 +83,7 @@ Provider configs store only non-secret metadata and explicit claim-to-role mappi
 
 Admin registration, provider config changes, user-status mutations, role mutations, and MCP session authorization decisions write sanitized audit events. Audit listing is newest-first, bounded to a maximum of 100 events per request, and returns only the event id, actor id, action, decision, resource reference, sanitized details, and timestamp.
 
-API tokens are hashed at rest and returned in plaintext only on creation. Token management routes require an interactive session, not another API token. Current token scopes are `profile:read`, `skills:read`, `skills:submit`, `review:read`, and `review:write`; route checks require both the user role and the token scope. Owner, admin, and maintainer accounts must create review-scoped API tokens from an MFA-verified session. MFA-verified admins can list safe API token metadata across users and revoke tokens without seeing token hashes or plaintext.
+API tokens are hashed at rest and returned in plaintext only on creation. Token management routes require an interactive session, not another API token. Current token scopes are `profile:read`, `skills:read`, `architectures:read`, `skills:submit`, `review:read`, and `review:write`; route checks require both the user role and the token scope. Owner, admin, and maintainer accounts must create review-scoped API tokens from an MFA-verified session. MFA-verified admins can list safe API token metadata across users and revoke tokens without seeing token hashes or plaintext.
 
 TOTP secrets are encrypted before storage with `AUTH_SECRET`. Production startup fails if `AUTH_SECRET` is missing or shorter than 32 bytes.
 

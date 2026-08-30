@@ -1,3 +1,4 @@
+import { AppError } from "@myskills-app/core";
 import type { Role } from "@myskills-app/auth";
 import type { SkillManifest, PackageInputFile, ScanFinding } from "@myskills-app/skill-package";
 import type {
@@ -59,8 +60,22 @@ export type SkillLifecycleAction = "archive" | "restore" | "delete";
 export interface SkillMetadataUpdate {
   title?: string;
   summary?: string;
-  visibility?: VisibilityScope;
   tags?: string[];
+}
+
+/**
+ * Visibility is an access-control mutation, not generic metadata. Keep this
+ * runtime guard because callers can still reach the store through JavaScript
+ * or an older client that includes the removed field.
+ */
+export function assertNoVisibilityMetadataUpdate(update: SkillMetadataUpdate): void {
+  if (Object.prototype.hasOwnProperty.call(update as object, "visibility")) {
+    throw new AppError(
+      "Visibility updates must use the skill sharing controls.",
+      "VISIBILITY_UPDATE_REQUIRES_SHARING_ROUTE",
+      400,
+    );
+  }
 }
 
 export interface ReviewSubmissionSummary {

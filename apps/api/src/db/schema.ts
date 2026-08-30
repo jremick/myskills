@@ -343,3 +343,28 @@ export const auditEvents = pgTable("audit_events", {
   details: jsonb("details").notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const skillArchitectures = pgTable("skill_architectures", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ownerUserId: uuid("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  patternId: text("pattern_id").notNull(),
+  currentRevisionId: uuid("current_revision_id"),
+  ...timestamps,
+}, (table) => [
+  index("skill_architectures_owner_idx").on(table.ownerUserId, table.updatedAt),
+]);
+
+export const skillArchitectureRevisions = pgTable("skill_architecture_revisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  architectureId: uuid("architecture_id").notNull().references(() => skillArchitectures.id, { onDelete: "cascade" }),
+  revisionNumber: integer("revision_number").notNull(),
+  message: text("message").notNull().default(""),
+  spec: jsonb("spec").notNull(),
+  createdByUserId: uuid("created_by_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("skill_architecture_revisions_architecture_idx").on(table.architectureId, table.revisionNumber),
+  unique("skill_architecture_revisions_number_unique").on(table.architectureId, table.revisionNumber),
+]);

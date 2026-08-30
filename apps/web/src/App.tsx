@@ -38,6 +38,7 @@ import {
   UserCog,
   UserRound,
   UsersRound,
+  Workflow,
   X,
 } from "lucide-react";
 import type { PublicSkill, SkillSharingDetails, TeamSharedSkillGroup, VisibilityScope } from "@myskills-app/core";
@@ -47,6 +48,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Frame, FrameDescription, FrameHeader, FramePanel, FrameTitle } from "@/components/reui/frame";
+import { ArchitecturesDashboard } from "@/components/architecture/ArchitecturesDashboard";
 import {
   createRegistryClient,
   exportCommand,
@@ -90,7 +92,7 @@ interface RegistryAppProps {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type AuthState = "idle" | "loading" | "mfa";
-type AppView = "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "admin" | "review" | "submit" | "teams" | "settings" | "not-found";
+type AppView = "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "admin" | "review" | "submit" | "teams" | "settings" | "not-found";
 
 interface WebSession {
   expiresAt: string;
@@ -126,6 +128,7 @@ interface ConfirmationRequest {
 const API_TOKEN_SCOPE_OPTIONS: Array<{ scope: ApiTokenScope; label: string }> = [
   { scope: "profile:read", label: "Profile" },
   { scope: "skills:read", label: "Read skills" },
+  { scope: "architectures:read", label: "Read architectures" },
   { scope: "skills:submit", label: "Submit skills" },
   { scope: "review:read", label: "Review read" },
   { scope: "review:write", label: "Review write" },
@@ -162,17 +165,19 @@ export function RegistryApp({ client }: RegistryAppProps) {
     ? view
     : !session
       ? "login"
-      : view === "admin" && canUseAdmin
-        ? "admin"
+        : view === "admin" && canUseAdmin
+          ? "admin"
         : view === "review" && canUseReview
           ? "review"
-          : view === "submit" && canUseSubmit
-            ? "submit"
-            : view === "teams" && canUseTeams
-              ? "teams"
-            : view === "settings"
-              ? "settings"
-              : "browse";
+        : view === "submit" && canUseSubmit
+          ? "submit"
+        : view === "architectures" && session
+          ? "architectures"
+        : view === "teams" && canUseTeams
+          ? "teams"
+        : view === "settings"
+          ? "settings"
+          : "browse";
 
   useEffect(() => {
     function syncFromBrowserHistory() {
@@ -584,6 +589,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
 
   const navItems = [
     { view: "browse" as const, label: "Registry", icon: <Boxes size={18} aria-hidden="true" />, enabled: true },
+    { view: "architectures" as const, label: "Architectures", icon: <Workflow size={18} aria-hidden="true" />, enabled: Boolean(session) },
     { view: "submit" as const, label: "Submit", icon: <Upload size={18} aria-hidden="true" />, enabled: canUseSubmit },
     { view: "review" as const, label: "Review", icon: <ClipboardList size={18} aria-hidden="true" />, enabled: canUseReview },
     { view: "teams" as const, label: "Teams", icon: <UsersRound size={18} aria-hidden="true" />, enabled: canUseTeams },
@@ -673,6 +679,8 @@ export function RegistryApp({ client }: RegistryAppProps) {
             <SubmitDashboard client={registryClient} session={session} />
           ) : activeView === "teams" && session ? (
             <TeamsDashboard client={registryClient} session={session} />
+          ) : activeView === "architectures" && session ? (
+            <ArchitecturesDashboard client={registryClient} session={session} />
           ) : activeView === "admin" && session ? (
             <AdminConsole client={registryClient} session={session} />
           ) : activeView === "settings" && session ? (
@@ -4585,6 +4593,9 @@ function initialViewFromPath(pathname: string): AppView {
   }
   if (pathname === "/submit") {
     return "submit";
+  }
+  if (pathname === "/architectures") {
+    return "architectures";
   }
   if (pathname === "/teams") {
     return "teams";

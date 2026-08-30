@@ -11,6 +11,7 @@ import { SubmissionService } from "./submissions/service.js";
 import { PostgresSubmissionStore } from "./submissions/postgres-submission-store.js";
 import { TeamService } from "./teams/service.js";
 import { PostgresTeamStore } from "./teams/postgres-team-store.js";
+import { PostgresArchitectureStore } from "./architectures/postgres-store.js";
 
 const port = Number.parseInt(process.env.PORT ?? "3001", 10);
 const host = process.env.HOST ?? "0.0.0.0";
@@ -34,9 +35,11 @@ const app = buildApp({
   }),
   submissionService: new SubmissionService(submissionStore),
   teamService: new TeamService(new PostgresTeamStore(db)),
+  architectureStore: new PostgresArchitectureStore(db),
   allowedOrigins: allowedOrigins(),
   trustProxy: trustProxy(),
   requestLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 600, windowMs: 60_000 }),
+  architectureProjectionLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 30, windowMs: 60_000 }),
   readinessProbes: {
     postgres: async () => {
       await pool.query("SELECT 1");

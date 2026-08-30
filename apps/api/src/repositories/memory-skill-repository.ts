@@ -135,7 +135,7 @@ export class MemorySkillRepository implements SkillRepository {
     if (!actorId) {
       return false;
     }
-    if ((skill.visibility === "authenticated" || skill.visibility === "organization") && this.sharingSettings.authenticatedVisibilityEnabled) {
+    if (skill.visibility === "authenticated" && this.sharingSettings.authenticatedVisibilityEnabled) {
       return true;
     }
     if (skill.visibility === "team" && this.sharingSettings.teamsEnabled && this.sharingSettings.teamVisibilityEnabled) {
@@ -157,7 +157,7 @@ export class MemorySkillRepository implements SkillRepository {
           reasons: [
             ...(skill.ownerUserId === actorId ? ["owner" as const] : []),
             ...(skill.visibility === "public" ? ["public" as const] : []),
-            ...(skill.visibility === "authenticated" || skill.visibility === "organization" ? ["authenticated" as const] : []),
+            ...(skill.visibility === "authenticated" ? ["authenticated" as const] : []),
             ...(skill.visibility === "team" ? ["team" as const] : []),
             ...(skill.visibility === "explicit-users" ? ["explicit-user" as const] : []),
           ],
@@ -192,10 +192,17 @@ export class MemorySkillRepository implements SkillRepository {
 }
 
 function validateVisibilityEnabled(visibility: PublicSkill["visibility"], settings: SharingSettings): void {
+  if (visibility === "organization") {
+    throw new AppError(
+      "Organization visibility is not supported for skill sharing.",
+      "ORGANIZATION_VISIBILITY_UNSUPPORTED",
+      400,
+    );
+  }
   if (visibility === "public" && !settings.publicVisibilityEnabled) {
     throw new AppError("Public sharing is disabled for this instance.", "PUBLIC_SHARING_DISABLED", 403);
   }
-  if ((visibility === "authenticated" || visibility === "organization") && !settings.authenticatedVisibilityEnabled) {
+  if (visibility === "authenticated" && !settings.authenticatedVisibilityEnabled) {
     throw new AppError("Signed-in-user sharing is disabled for this instance.", "AUTHENTICATED_SHARING_DISABLED", 403);
   }
   if (visibility === "team" && (!settings.teamsEnabled || !settings.teamVisibilityEnabled)) {

@@ -1,5 +1,8 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
+const browserExecutable = process.env.MYSKILLS_E2E_BROWSER_EXECUTABLE?.trim();
+test.use({ launchOptions: browserExecutable ? { executablePath: browserExecutable } : {} });
+
 const ownerEmail = requiredEnvironment("MYSKILLS_E2E_OWNER_EMAIL");
 const ownerPassword = requiredEnvironment("MYSKILLS_E2E_OWNER_PASSWORD");
 const ownerRecoveryCodes = requiredStringArrayEnvironment("MYSKILLS_E2E_OWNER_RECOVERY_CODES");

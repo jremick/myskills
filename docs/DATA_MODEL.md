@@ -1,7 +1,7 @@
 # Data Model
 
 Version: 0.1.0-beta.2
-Last updated: 2026-07-13
+Last updated: 2026-08-30
 
 Postgres is the canonical application store. The sections below distinguish tables present in the beta migrations from product concepts that remain planned.
 
@@ -33,6 +33,44 @@ Postgres is the canonical application store. The sections below distinguish tabl
 - `team_invitations`: invitation state for team membership.
 - `skill_team_grants`, `skill_user_grants`: explicit visibility grants layered on the skill's public/authenticated/team/user visibility policy.
 - `instance_settings`: registration and instance-level sharing controls.
+
+## Skill Architecture Control Plane (MVE)
+
+The architecture MVE adds a separate desired-state model. It does not replace
+the registry tables above or turn package visibility into runtime placement.
+An architecture starts as an owner-private draft shell; saving a graph appends
+an immutable revision.
+
+- `skill_architectures`: stable architecture identity, owner user, display
+  metadata, selected pattern, active-revision pointer, and timestamps. A shell
+  may have no revision yet.
+- `skill_architecture_revisions`: immutable revision number, bounded canonical
+  `ArchitectureSpecV1` JSONB, revision message, creator, and timestamp. The
+  compiler returns a deterministic derived digest; the current migration does
+  not persist a separate digest column.
+- A revision contains explicit router/leaf nodes, exact skill release
+  references by slug, semantic version, and SHA-256 digest, logical profiles,
+  and logical environments. Profiles and environments are embedded in the
+  canonical spec for the MVE; normalized indexes are derived/read-only
+  projections if needed.
+- The API binds each reference to one server-authorized stable release before
+  returning an effective preview. It does not trust client-supplied visibility,
+  copy package bytes, change package visibility, or silently select another
+  version when a release is unavailable. Organization-scoped visibility is
+  unsupported until organization tenancy exists.
+- Fixture observed snapshots and dry-run sync plans are request-scoped evidence
+  in the MVE. They are not canonical target state and do not require target
+  credential or connection tables.
+- The consolidated preview's SVG/Mermaid diagram, accessible outline,
+  profile-filtered compiled graph, and operation lists are derived outputs.
+  They may be cached later, but a cached projection must never become an
+  independent writable source of truth.
+
+Architecture revisions are append-only. A user edit creates a new revision; it
+does not mutate an earlier spec or derived digest. Team-owned architecture records,
+organization tenancy, live target registrations, apply/rollback runs, and
+conditional exposure state remain deferred until their authorization and
+retention semantics are defined.
 
 ## Implemented Operations Tables
 
@@ -66,5 +104,11 @@ These are not current tables or live capabilities:
 - queued notification delivery and delivery attempts;
 - backup snapshots and restore/recovery metadata;
 - storage configuration records beyond deployment environment variables.
+- durable connected-target registrations, observed snapshots, sync runs, and
+  rollback evidence for live adapters;
+- team-owned architecture records and organization tenancy for architecture
+  permissions;
+- standalone normalized profile/environment tables or conditional-exposure
+  evaluation records beyond the MVE's embedded profile rules.
 
 New tables should be added only when their semantics and retention/authorization policies are defined. Existing migration files are append-only after release; schema changes use a new ordered migration.

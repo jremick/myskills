@@ -1,7 +1,7 @@
 # Roadmap
 
 Version: 0.1.0-beta.2
-Last updated: 2026-07-13
+Last updated: 2026-08-30
 
 ## Release Tracks
 
@@ -16,6 +16,9 @@ Last updated: 2026-07-13
 - Monitor beta.2 user testing, prioritize broken first-run/install paths, and convert repeated confusion into documentation or product fixes.
 - Keep production-hardening items tracked without blocking beta unless they close accepted beta risk.
 - Complete the remaining web-app MVP gaps that affect first-user clarity: private draft management, version-history polish, instance settings administration, and the broader identity-system refresh.
+- Add an explicit Skill Architecture Control Plane so the product can represent,
+  explain, and safely reconcile nested router/leaf skill arrangements across
+  logical personal and work environments.
 - Preserve the API as the canonical registry and trust boundary for sync-related work; local and connected-tool state should reconcile through reviewable changes, not silent overwrites.
 
 ## Roadmap Shape
@@ -247,6 +250,85 @@ Remaining:
 - Authoritative per-tool audit events.
 - Broader client compatibility notes and tests.
 
+## Milestone 7A: Skill Architecture Control Plane MVE
+
+Goal: make skill architecture a versioned, reviewable desired-state object that
+supports nested router-to-router-to-leaf patterns, logical profile/environment
+selection, deterministic diagrams, and safe dry-run reconciliation.
+
+Depends on: Milestones 1, 2, 3, 5, and 7.
+
+Deliverables:
+
+- Owner-private architecture draft shells plus `ArchitectureSpecV1` immutable
+  revisions with explicit typed router/leaf nodes, exact slug/version/SHA-256
+  skill-release references, and built-in flat, domain-router, and
+  multi-level-router pattern descriptors.
+- API-owned Postgres persistence. A new graph edit appends a revision; it never
+  rewrites a prior spec or package release.
+- Fail-closed personal/work profile and environment selection. Runtime
+  exposure is distinct from package discovery visibility and ownership.
+- Deterministic schema, graph, profile-rule, release-reference, and digest
+  validation plus compilation into a desired graph.
+- One consolidated preview whose raw response is exactly
+  `{ revision, compiled, graph, outline, plan? }`; `graph` includes the
+  escaped Mermaid projection. The browser derives the escaped SVG from that
+  graph and renders the accessible outline/tree. All projections come from the
+  same profile-filtered compilation; the visual diagram is not the source of
+  truth.
+- Strict metadata-only fixture-backed sync planning that reports no-op,
+  install, update, downgrade, enable, disable, remove, conflict, unsupported,
+  and configure-router operations without writing to a target. No fixture
+  target is inferred; the web explicitly submits a strict desired-vs-observed
+  fixture, and unknown fixture fields are rejected.
+- Intentional visibility migration: generic skill metadata `visibility` and
+  `myskills skills edit --visibility` are rejected/removed. Clients use the
+  authenticated sharing route or `myskills sharing set`; organization
+  visibility remains unsupported.
+- API and web surfaces, and capability-gated read-only CLI/MCP projections if
+  shipped, with explicit `architectures:read` for read projections and
+  session-only create/revision writes plus cross-surface authorization and
+  privacy tests.
+
+Acceptance:
+
+- A user can save and inspect a nested router/leaf graph with deterministic
+  validation and a stable revision digest.
+- Personal and work environments can select different profiles. Team labels
+  are also supported as profile context only. A default deny or explicit deny
+  prevents runtime exposure even when the actor may discover the underlying
+  package; labels do not grant tenant access.
+- Preview generation binds exact authorized release references and fails closed
+  for an unavailable, revoked, unpublished, or digest-mismatched release
+  without mutating the revision or selecting `latest`.
+- `POST /v1/architectures/:id/preview` returns the raw
+  `{ revision, compiled, graph, outline, plan? }` object. Its graph includes
+  Mermaid, the browser derives SVG from that graph, and the outline contains
+  the same authorized nodes from the same profile-filtered compilation;
+  labels are escaped, private metadata is excluded, and the outline works
+  without a canvas.
+- A fixture dry-run is deterministic and clearly separates no-op, install,
+  update, downgrade, enable, disable, remove, conflict, unsupported, and
+  configure-router states. The web sends the fixture only after explicit user
+  input; no target is inferred, unknown fixture fields fail validation, and no
+  target write is possible.
+- Generic metadata visibility and `myskills skills edit --visibility` are
+  rejected/removed. Authenticated sharing and `myskills sharing set` are the
+  supported path, and organization visibility is rejected as unsupported.
+- API/Postgres, browser, CLI/MCP (where exposed), privacy, structure, and
+  secret checks pass on a supported runtime; the disposable Postgres gate is
+  run when schema changes are present.
+
+Deferred from this milestone:
+
+- Live Codex, ChatGPT, Claude, filesystem, and other target adapters.
+- Applying plans, target rollback, target credentials, and connected-target
+  registrations.
+- Team-owned architecture records, organization tenancy, organization-scoped
+  visibility, provider-derived architecture roles, and conditional exposure
+  evaluation.
+- A required React Flow canvas or any diagram editor as a source of truth.
+
 ## Milestone 8: Public Release Hardening
 
 Goal: make the repo public-ready.
@@ -349,13 +431,27 @@ These items are intentionally downstream from the public beta and production-har
 
 Goal: let users connect their AI tools and systems to MySkills for clean, user-controlled, bi-directional skills management across apps, machines, and projects.
 
-Depends on: Milestones 4, 5, 7, and the platform-install-adapter work in Milestone 9.
+Depends on: Milestones 4, 5, 7, 7A, and the platform-install-adapter work in Milestone 9.
+
+Implemented read-only foundation:
+
+- The CLI can inspect the existing MySkills-managed Codex install registry and
+  produce a path-free `myskills.target-observation.v1` report.
+- The `architectures:read` API can rank existing owner-visible architecture
+  revisions and environments against that report, return confidence and
+  ambiguity evidence, and provide the selected deterministic dry-run plan.
+- `myskills architectures configure --auto` orchestrates detection and
+  resolution but rejects apply. Connected-target registration, credentials,
+  target mutation, and target rollback remain deferred.
 
 Deliverables:
 
 - Connected-tool model for AI systems such as Codex, ChatGPT, Claude Code, local agents, and future MCP-compatible clients.
 - Tool and instance registration flow with explicit user authorization, scopes, revocation, health checks, and last-sync status.
 - Bi-directional sync design that keeps MySkills as the canonical registry while reconciling local tool state through staged, reviewable changes.
+- Extend the architecture MVE's fixture planner into explicit connected-target
+  registrations, observed snapshots, consent, capability negotiation, and
+  auditable apply/rollback workflows.
 - Placement rules for where skills should be available, including per-tool, per-instance, per-machine, and project-level designation.
 - Configuration-management groundwork for tool-specific skill enablement, disabled-on-load state, and future app configuration updates where supported by each tool.
 - Conflict handling for local edits, remote updates, missing tools, unsupported capabilities, deleted skills, renamed projects, and immutable published versions.

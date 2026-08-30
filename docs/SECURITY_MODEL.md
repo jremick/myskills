@@ -1,7 +1,7 @@
 # Security Model
 
 Version: 0.1.0-beta.2
-Last updated: 2026-06-30
+Last updated: 2026-08-30
 
 This security model describes the current public beta controls. The companion threat model in [THREAT_MODEL.md](THREAT_MODEL.md) records attacker goals, trust boundaries, residual prerelease risks, and business-safe release gates.
 
@@ -13,6 +13,12 @@ This security model describes the current public beta controls. The companion th
 - Provider claims granting roles too broadly.
 - Object storage exposing artifacts directly.
 - Audit logs leaking tokens, package contents, or private data.
+- Architecture graphs leaking restricted release metadata or exposing an
+  unauthorized runtime placement.
+- A malformed or very large nested graph consuming excessive validator,
+  compiler, or renderer resources.
+- A target snapshot or diagram being mistaken for canonical desired state and
+  causing an unsafe overwrite.
 
 ## Required Controls
 
@@ -48,6 +54,62 @@ This security model describes the current public beta controls. The companion th
 - Role checks for submission review, package publication, lifecycle changes, audit, and user management.
 - Generic denial responses where existence should not be revealed.
 - Tests for allow and deny paths across API, web, CLI, and MCP.
+
+### Visibility migration (intentional breaking change)
+
+- Generic skill metadata updates reject the `visibility` field. Clients must
+  use the authenticated `/v1/skills/:slug/sharing` route for visibility and
+  grants.
+- `myskills skills edit --visibility` is rejected/removed. The supported CLI
+  path is `myskills sharing set`, which uses the authenticated sharing route.
+- Organization visibility is unsupported and fails closed. `personal`, `work`,
+  and `team` labels are profile contexts, not tenant or authorization claims.
+
+### Skill Architecture Control Plane
+
+- Architecture ownership is checked by the API for every read, revision,
+  consolidated preview, and dry-run plan request. Read projections require the
+  explicit `architectures:read` scope. Create and revision append are
+  session-only. A profile name such as `work` is not an authorization claim.
+- The server validates the complete bounded graph before persistence or
+  rendering. Duplicate IDs, missing nodes, illegal edges, cycles, orphans, and
+  excessive depth/size fail closed.
+- Architecture revisions carry a skill slug, semantic version, and SHA-256
+  digest. Before an effective desired state is returned, the API binds each
+  reference to one exact server-authorized release and re-runs the existing
+  server-side visibility, lifecycle, review, security, publication, and
+  artifact-integrity predicates for the requesting actor. It never trusts
+  client-provided visibility or falls back to `latest`. Organization-scoped
+  visibility is unsupported until organization tenancy exists.
+- Package discovery visibility, architecture ownership, and runtime exposure
+  remain separate. A profile defaults to deny and an explicit deny overrides an
+  allow at any router or leaf level.
+- The consolidated preview derives the profile-filtered graph, diagram, and
+  outline from one compilation. Projections include only nodes the actor may
+  see and only the exact metadata needed for the view. The raw response is
+  `{ revision, compiled, graph, outline, plan? }`, and `graph` includes
+  Mermaid. The API does not return SVG; the browser derives SVG from `graph`.
+  SVG labels/attributes and Mermaid labels are escaped; package payloads,
+  credentials, local paths, and private inventories are excluded.
+- Fixture sync planning is dry-run only in the MVE. It accepts a strict,
+  allowlisted metadata-only desired-vs-observed fixture, compares it with
+  compiled desired state, and returns reviewable operations; unknown fields,
+  package content, credentials, and local paths are rejected. No fixture target
+  is inferred; the web submits a fixture only when the user explicitly
+  provides it. It has no target write, credential, adapter, apply, or rollback
+  path.
+- Managed-target detection is read-only and limited to the CLI's own install
+  registry. The observation omits install roots and skill paths. Automatic
+  resolution uses `architectures:read`, ranks only owner-visible revisions,
+  records bounded audit counts, fails closed on tied or weak matches, and
+  returns a plan with `canApply: false`. The CLI rejects `--apply`.
+- Architecture and sync audit details contain actor, revision, digest, target
+  fixture identity, decision, and bounded counts. They do not contain package
+  contents, prompt text, tokens, credentials, or raw private target state.
+- Team-owned architecture records, organization tenancy, provider-derived
+  architecture roles, conditional rules, and live target adapters remain
+  disabled until their authorization, consent, retention, and rollback rules
+  are implemented and tested.
 
 ### Package Safety
 
@@ -99,3 +161,22 @@ This security model describes the current public beta controls. The companion th
 - Audit sanitizer redacts sensitive fields.
 - A newer unreviewed or unsafe version cannot displace a previously approved public release.
 - Unpublish, revoke, archive, and delete actions remove releases from every public metadata and bundle path; restore re-enters public paths only when the rest of the safe-release predicate still passes.
+- Generic metadata visibility updates and `myskills skills edit --visibility`
+  are rejected/removed; authenticated sharing and `myskills sharing set` are
+  the only supported visibility-management path, and organization visibility
+  remains unsupported.
+- Architecture ownership and the explicit `architectures:read` scope deny
+  reads, previews, diagrams, and sync plans for unrelated users; create and
+  revision append remain session-only.
+- Nested-graph validation rejects cycles, orphans, invalid router/leaf edges,
+  duplicate IDs, excessive depth/size, and malformed exact release digests.
+- A package that becomes unavailable or unauthorized after a revision is saved
+  fails preview generation without changing the stored revision or substituting
+  a different release.
+- Profile denials override router or leaf allows, and package visibility never
+  acts as a runtime exposure grant.
+- SVG/Mermaid renderers escape attacker-controlled labels and do not include
+  unauthorized nodes, local paths, package payloads, or credentials.
+- Fixture sync planning is deterministic, rejects unknown fixture fields and
+  unsupported/conflicting states for automatic action, emits no target write,
+  and does not log raw snapshots.

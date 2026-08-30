@@ -12,6 +12,11 @@ import type {
   AdminProviderConfig,
   AdminRegistrationMode,
   AdminUser,
+  ArchitecturePattern,
+  ArchitectureObservedFixture,
+  ArchitecturePreview,
+  ArchitectureRevisionSummary,
+  ArchitectureSummary,
   MfaStatus,
   ProviderRoleMappingInput,
   RegistryClient,
@@ -507,6 +512,233 @@ test("signed-in users can open the teams workspace", async () => {
   assert.equal(window.location.pathname, "/teams");
 });
 
+test("signed-in users can create and inspect a multi-level skill architecture", async () => {
+  setupAuthenticatedDom("http://localhost/architectures");
+  const client = mockClient({
+    architectures: [],
+    architecturePatterns: defaultArchitecturePatterns(),
+    architecturePreview: defaultArchitecturePreview(),
+  });
+
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByRole("heading", { name: "Skill architectures", level: 1 });
+  await view.findByRole("heading", { name: "Multi-level router", level: 3 });
+  await view.findByText("No architectures yet.");
+
+  fireEvent.input(view.getByLabelText("Architecture name"), { target: { value: "Work assistant" } });
+  fireEvent.click(view.getByRole("button", { name: "Create architecture" }));
+
+  await view.findByRole("heading", { name: "Work assistant" });
+  await view.findByText(/This draft has no revision yet/);
+  assert.equal(client.architectureCreates.length, 1);
+  assert.equal(client.architecturePreviewCalls.length, 0);
+  assert.equal(client.searchCalls.length, 0);
+  assert.equal(document.body.textContent?.includes("No target is changed by this preview."), false);
+});
+
+test("architecture context selectors request a new API preview without compiling grants in the browser", async () => {
+  setupAuthenticatedDom("http://localhost/architectures");
+  const client = mockClient({
+    architecturePatterns: defaultArchitecturePatterns(),
+    architectures: [defaultArchitectureSummary()],
+    architecturePreview: defaultArchitecturePreview(),
+  });
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("Skills available in this context");
+  const initialCount = client.architecturePreviewCalls.length;
+  fireEvent.change(view.getByLabelText("Preview profile"), { target: { value: "work" } });
+  fireEvent.change(view.getByLabelText("Preview environment"), { target: { value: "codex-work" } });
+
+  await waitFor(() => assert.equal(client.architecturePreviewCalls.length > initialCount, true));
+  const lastPreview = client.architecturePreviewCalls.at(-1);
+  assert.deepEqual(lastPreview, {
+    architectureId: "architecture-1",
+    profileId: "work",
+    environmentId: "codex-work",
+    revisionId: "revision-1",
+  });
+  assert.equal(document.body.textContent?.includes("Authorization is resolved server-side."), true);
+  assert.equal(document.body.textContent?.includes("No sync plan generated. Provide an observed-state fixture to preview a target dry run."), true);
+});
+
+test("observed fixture submission rejects unsupported fields before the API", async () => {
+  setupAuthenticatedDom("http://localhost/architectures");
+  const client = mockClient({
+    architecturePatterns: defaultArchitecturePatterns(),
+    architectures: [defaultArchitectureSummary()],
+  });
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("Skills available in this context");
+  const before = client.architecturePreviewCalls.length;
+  fireEvent.click(view.getByText("Compare observed-state fixture"));
+  fireEvent.input(view.getByLabelText("Observed-state fixture JSON"), { target: { value: '{"targetId":"codex-personal","secret":"not-allowed"}' } });
+  fireEvent.click(view.getByRole("button", { name: "Generate dry-run plan" }));
+
+  await view.findByText("The observed-state fixture must use targetId and only allowlisted metadata fields.");
+  assert.equal(client.architecturePreviewCalls.length, before);
+});
+
+test("observed fixture submission requests and renders the returned dry-run plan", async () => {
+  setupAuthenticatedDom("http://localhost/architectures");
+  const client = mockClient({
+    architecturePatterns: defaultArchitecturePatterns(),
+    architectures: [defaultArchitectureSummary()],
+  });
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("Skills available in this context");
+  fireEvent.click(view.getByText("Compare observed-state fixture"));
+  fireEvent.input(view.getByLabelText("Observed-state fixture JSON"), { target: { value: '{"targetId":"codex-personal","nodes":[]}' } });
+  fireEvent.click(view.getByRole("button", { name: "Generate dry-run plan" }));
+
+  await view.findByText("Dry-run plan generated from the supplied observed state. No target was changed.");
+  const lastPreview = client.architecturePreviewCalls.at(-1);
+  assert.equal(lastPreview?.revisionId, "revision-1");
+  assert.deepEqual(lastPreview?.fixture, { targetId: "codex-personal", nodes: [] });
+  await view.findByText("Target already matches the selected desired state.");
+  assert.equal(document.body.textContent?.includes("noop"), false);
+});
+
+test("stale observed fixture responses cannot replace a newer preview context", async () => {
+  setupAuthenticatedDom("http://localhost/architectures");
+  let resolveFixturePreview: ((preview: ArchitecturePreview) => void) | undefined;
+  const delayedFixturePreview = new Promise<ArchitecturePreview>((resolve) => {
+    resolveFixturePreview = resolve;
+  });
+  const stalePreview = defaultArchitecturePreview({
+    graph: {
+      ...defaultArchitecturePreview().graph,
+      nodes: [{ id: "stale", kind: "router", label: "Stale fixture result", depth: 0, x: 40, y: 22 }],
+      edges: [],
+      mermaid: "flowchart TD\n  stale[Stale fixture result]",
+    },
+    outline: {
+      ...defaultArchitecturePreview().outline,
+      text: "Stale fixture result",
+      tree: [{ id: "stale", label: "Stale fixture result", kind: "router", children: [] }],
+    },
+  });
+  const client = mockClient({
+    architecturePatterns: defaultArchitecturePatterns(),
+    architectures: [defaultArchitectureSummary()],
+    architecturePreview: defaultArchitecturePreview(),
+    architectureFixturePreview: delayedFixturePreview,
+  });
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("Skills available in this context");
+  fireEvent.click(view.getByText("Compare observed-state fixture"));
+  fireEvent.input(view.getByLabelText("Observed-state fixture JSON"), { target: { value: '{"targetId":"codex-personal","nodes":[]}' } });
+  fireEvent.click(view.getByRole("button", { name: "Generate dry-run plan" }));
+  await waitFor(() => assert.equal(client.architecturePreviewCalls.some((call) => call.fixture !== undefined), true));
+
+  fireEvent.change(view.getByLabelText("Preview profile"), { target: { value: "work" } });
+  await waitFor(() => assert.equal(client.architecturePreviewCalls.at(-1)?.profileId, "work"));
+  resolveFixturePreview?.(stalePreview);
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(document.body.textContent?.includes("Stale fixture result"), false);
+});
+
+test("architecture revisions parse JSON before the API and refresh after a valid immutable save", async () => {
+  setupAuthenticatedDom("http://localhost/architectures");
+  const client = mockClient({
+    architecturePatterns: defaultArchitecturePatterns(),
+    architectures: [defaultArchitectureSummary()],
+    architecturePreview: defaultArchitecturePreview(),
+  });
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("Skills available in this context");
+  fireEvent.click(view.getByText("Add immutable revision"));
+  fireEvent.input(view.getByLabelText("Revision message"), { target: { value: "Bind the work context" } });
+  const validSpec = defaultArchitecturePreview().revision.spec;
+  fireEvent.input(view.getByLabelText("Architecture spec JSON"), { target: { value: JSON.stringify(validSpec) } });
+  fireEvent.click(view.getByRole("button", { name: "Save immutable revision" }));
+
+  await waitFor(() => assert.equal(client.architectureRevisionCreates.length, 1));
+  assert.deepEqual(client.architectureRevisionCreates[0], {
+    architectureId: "architecture-1",
+    spec: validSpec,
+    message: "Bind the work context",
+  });
+  await view.findByText("Revision 2");
+});
+
+test("architecture revision form rejects invalid JSON without calling the API", async () => {
+  setupAuthenticatedDom("http://localhost/architectures");
+  const client = mockClient({
+    architecturePatterns: defaultArchitecturePatterns(),
+    architectures: [defaultArchitectureSummary()],
+    architecturePreview: defaultArchitecturePreview(),
+  });
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("Skills available in this context");
+  fireEvent.click(view.getByText("Add immutable revision"));
+  fireEvent.input(view.getByLabelText("Architecture spec JSON"), { target: { value: "{not-json" } });
+  fireEvent.click(view.getByRole("button", { name: "Save immutable revision" }));
+
+  await view.findByText("Enter valid JSON before saving the revision.");
+  assert.equal(client.architectureRevisionCreates.length, 0);
+});
+
+test("architecture selection clears stale detail before previewing a new draft", async () => {
+  setupAuthenticatedDom("http://localhost/architectures");
+  const client = mockClient({
+    architecturePatterns: defaultArchitecturePatterns(),
+    architectures: [
+      defaultArchitectureSummary(),
+      defaultArchitectureSummary({ id: "architecture-2", name: "Draft assistant", latestRevision: null, currentRevisionId: null, revisionCount: 0, status: "draft" }),
+    ],
+    architecturePreview: defaultArchitecturePreview(),
+  });
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("Skills available in this context");
+  fireEvent.click(view.getByRole("button", { name: /Draft assistant/ }));
+
+  await view.findByRole("heading", { name: "Draft assistant", level: 2 });
+  await view.findByText(/This draft has no revision yet/);
+  assert.equal(client.architecturePreviewCalls.some((call) => call.architectureId === "architecture-2"), false);
+});
+
+test("architecture conflicts and unsupported target changes remain visible as safe read-only states", async () => {
+  setupAuthenticatedDom("http://localhost/architectures");
+  const conflictPreview = defaultArchitecturePreview({
+    plan: {
+      dryRun: true,
+      canApply: false,
+      requiresApproval: true,
+      targetId: "codex-personal",
+      environmentId: "codex-personal",
+      architectureId: "architecture-1",
+      revisionDigest: "a".repeat(64),
+      items: [{
+        action: "conflict",
+        nodeId: "quality",
+        kind: "router",
+        reason: "Observed target revision differs.",
+      }],
+    },
+  });
+  const client = mockClient({
+    architecturePatterns: defaultArchitecturePatterns(),
+    architectures: [defaultArchitectureSummary()],
+    architecturePreview: conflictPreview,
+  });
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("Conflict needs review");
+  await view.findByText("Observed target revision differs.");
+  assert.equal(view.queryByRole("button", { name: /apply/i }), null);
+  assert.equal(document.body.textContent?.includes("Observed target revision differs."), true);
+});
+
 test("admin sessions can manage registration, users, and provider metadata", async () => {
   setupDom();
   const client = mockClient({ user: authUser({ email: "owner@example.com", roles: ["owner"] }) });
@@ -853,6 +1085,11 @@ function mockClient(input: {
   sharingDetails?: SkillSharingDetails;
   submitError?: SafeApiError;
   submitResult?: SubmitSkillResult;
+  architecturePatterns?: ArchitecturePattern[];
+  architectures?: ArchitectureSummary[];
+  architecturePreview?: ArchitecturePreview;
+  architectureFixturePreview?: Promise<ArchitecturePreview>;
+  architectureError?: SafeApiError;
   teamDashboard?: TeamDashboard;
   teamSharedGroups?: TeamSharedSkillGroup[];
   userSubmissions?: UserSubmissionSummary[];
@@ -872,10 +1109,14 @@ function mockClient(input: {
   let teamDashboard = input.teamDashboard ?? defaultTeamDashboard();
   let teamSharedGroups = input.teamSharedGroups ?? defaultTeamSharedGroups();
   let sharingDetails = input.sharingDetails ?? defaultSharingDetails();
+  let architectureSummaries = input.architectures ?? [defaultArchitectureSummary()];
   const client: RegistryClient & {
     adminTokenRevokes: string[];
     apiTokenCreates: Array<{ name: string; scopes: ApiTokenScope[] }>;
     apiTokenRevokes: string[];
+    architectureCreates: Array<{ name: string; patternId: string; scope?: string; profileId?: string; environmentId?: string }>;
+    architecturePreviewCalls: Array<{ architectureId: string; profileId?: string; environmentId?: string; revisionId?: string; fixture?: ArchitectureObservedFixture }>;
+    architectureRevisionCreates: Array<{ architectureId: string; spec: unknown; message?: string }>;
     bundleCalls: number;
     emailChangeRequests: string[];
     mfaConfirmations: string[];
@@ -908,6 +1149,9 @@ function mockClient(input: {
     adminTokenRevokes: [],
     apiTokenCreates: [],
     apiTokenRevokes: [],
+    architectureCreates: [],
+    architecturePreviewCalls: [],
+    architectureRevisionCreates: [],
     bundleCalls: 0,
     emailChangeRequests: [],
     mfaConfirmations: [],
@@ -1223,6 +1467,99 @@ function mockClient(input: {
     async performReleaseAction() {
       throw new Error("Release lifecycle is not used by this web mock.");
     },
+    async listArchitecturePatterns() {
+      if (input.architectureError) {
+        throw input.architectureError;
+      }
+      return input.architecturePatterns ?? defaultArchitecturePatterns();
+    },
+    async listArchitectures() {
+      if (input.architectureError) {
+        throw input.architectureError;
+      }
+      return architectureSummaries;
+    },
+    async getArchitecture(architectureId) {
+      if (input.architectureError) {
+        throw input.architectureError;
+      }
+      const summary = architectureSummaries.find((item) => item.id === architectureId) ?? defaultArchitectureSummary({ id: architectureId });
+      const latestRevision = summary.latestRevision
+        ? {
+          ...summary.latestRevision,
+          message: summary.latestRevision.message ?? "Current revision",
+          spec: summary.latestRevision.spec ?? defaultArchitectureSummary({ id: architectureId }).latestRevision!.spec!,
+          createdByUserId: summary.latestRevision.createdByUserId ?? "user-1",
+        }
+        : null;
+      return { ...summary, latestRevision, revisions: latestRevision ? [latestRevision] : [] };
+    },
+    async createArchitecture(createInput) {
+      if (input.architectureError) {
+        throw input.architectureError;
+      }
+      client.architectureCreates.push(createInput);
+      const created = defaultArchitectureSummary({ name: createInput.name, patternId: createInput.patternId, latestRevision: null, currentRevisionId: null, revisionCount: 0, status: "draft" });
+      architectureSummaries = [created, ...architectureSummaries];
+      return { ...created, latestRevision: null, revisions: [] };
+    },
+    async createArchitectureRevision(architectureId, revisionInput) {
+      if (input.architectureError) {
+        throw input.architectureError;
+      }
+      client.architectureRevisionCreates.push({ architectureId, ...revisionInput });
+      const previous = architectureSummaries.find((item) => item.id === architectureId);
+      const revisionNumber = (previous?.revisionCount ?? 0) + 1;
+      const revision = {
+        id: `revision-${revisionNumber}`,
+        architectureId,
+        revision: revisionNumber,
+        revisionNumber,
+        patternId: previous?.patternId ?? "multi-level-router",
+        createdAt: "2026-06-14T00:00:00.000Z",
+        status: "published" as const,
+        spec: revisionInput.spec as NonNullable<ArchitectureRevisionSummary["spec"]>,
+        message: revisionInput.message ?? "",
+        createdByUserId: "user-1",
+      };
+      architectureSummaries = architectureSummaries.map((item) => item.id === architectureId ? {
+        ...item,
+        latestRevision: revision,
+        currentRevisionId: revision.id,
+        revisionCount: revisionNumber,
+        status: "active" as const,
+      } : item);
+      return revision;
+    },
+    async previewArchitecture(architectureId, previewInput) {
+      if (input.architectureError) {
+        throw input.architectureError;
+      }
+      client.architecturePreviewCalls.push({ architectureId, ...previewInput });
+      if (previewInput.fixture && input.architectureFixturePreview) {
+        return input.architectureFixturePreview;
+      }
+      if (previewInput.fixture) {
+        return defaultArchitecturePreview({
+          plan: {
+            dryRun: true,
+            canApply: false,
+            requiresApproval: true,
+            targetId: previewInput.fixture.targetId,
+            environmentId: previewInput.environmentId ?? "codex-personal",
+            architectureId,
+            revisionDigest: "a".repeat(64),
+            items: [{
+              action: "noop",
+              nodeId: "root",
+              kind: "router",
+              reason: "Target already matches the desired router state.",
+            }],
+          },
+        });
+      }
+      return input.architecturePreview ?? defaultArchitecturePreview();
+    },
     async listTeams() {
       client.listTeamCalls += 1;
       return teamDashboard;
@@ -1273,6 +1610,182 @@ function mockClient(input: {
     },
   };
   return client;
+}
+
+function defaultArchitecturePatterns(): ArchitecturePattern[] {
+  return [
+    { id: "flat", name: "Flat library", description: "A predictable entry point.", supportsNestedRouters: false, status: "available" },
+    { id: "domain-router", name: "Domain router", description: "Route through one domain branch.", supportsNestedRouters: false, status: "available" },
+    { id: "multi-level-router", name: "Multi-level router", description: "Compose nested routers and leaf skills.", supportsNestedRouters: true, status: "available" },
+  ];
+}
+
+function defaultArchitectureSummary(input: Partial<ArchitectureSummary> = {}): ArchitectureSummary {
+  const hasLatestRevision = Object.prototype.hasOwnProperty.call(input, "latestRevision");
+  const architectureId = input.id ?? "architecture-1";
+  const patternId = input.patternId ?? "multi-level-router";
+  return {
+    id: architectureId,
+    name: input.name ?? "Review assistant",
+    description: input.description ?? "Routes review work to the right leaf skills.",
+    patternId,
+    scope: input.scope ?? "personal",
+    latestRevision: hasLatestRevision ? input.latestRevision : {
+      id: "revision-1",
+      architectureId,
+      revision: 3,
+      revisionNumber: 3,
+      patternId,
+      createdAt: "2026-06-14T00:00:00.000Z",
+      nodeCount: 4,
+      skillCount: 2,
+      status: "published",
+      spec: {
+        schemaVersion: 1,
+        id: architectureId,
+        name: input.name ?? "Review assistant",
+        pattern: { id: patternId as "flat" | "domain-router" | "multi-level-router", version: 1 },
+        skills: [],
+        nodes: [],
+        edges: [],
+        entryNodeIds: [],
+        profiles: [
+          { id: "personal", name: "Personal", subject: { type: "user", id: "user-1" }, defaultExposure: "disabled", bindings: [] },
+          { id: "work", name: "Work", subject: { type: "user", id: "user-1" }, defaultExposure: "disabled", bindings: [] },
+        ],
+        environments: [
+          { id: "codex-personal", name: "Codex personal", kind: "personal", profileId: "personal" },
+          { id: "codex-work", name: "Codex work", kind: "work", profileId: "work" },
+        ],
+      },
+    },
+    currentRevisionId: input.currentRevisionId ?? (hasLatestRevision && !input.latestRevision ? null : "revision-1"),
+    revisionCount: input.revisionCount ?? (hasLatestRevision && !input.latestRevision ? 0 : 1),
+    updatedAt: input.updatedAt ?? "2026-06-14T00:00:00.000Z",
+    status: input.status ?? "active",
+  };
+}
+
+function defaultArchitecturePreview(input: Partial<ArchitecturePreview> = {}): ArchitecturePreview {
+  const revision: ArchitecturePreview["revision"] = input.revision ?? {
+    id: "revision-1",
+    architectureId: "architecture-1",
+    revisionNumber: 3,
+    message: "Initial review architecture",
+    createdByUserId: "user-1",
+    createdAt: "2026-06-14T00:00:00.000Z",
+    spec: {
+      schemaVersion: 1,
+      id: "architecture-1",
+      name: "Review assistant",
+      pattern: { id: "multi-level-router", version: 1 },
+      skills: [
+        { id: "release-skill", slug: "release-notes-helper", version: "0.1.0", digest: "a".repeat(64), packageVisibility: "private" },
+        { id: "risk-skill", slug: "risk-reviewer", version: "0.1.0", digest: "b".repeat(64), packageVisibility: "private" },
+      ],
+      nodes: [
+        { id: "root", kind: "router", label: "Review router" },
+        { id: "quality", kind: "router", label: "Quality branch" },
+        { id: "release", kind: "leaf", label: "Release Notes Helper", skillRefId: "release-skill" },
+        { id: "risk", kind: "leaf", label: "Risk Reviewer", skillRefId: "risk-skill" },
+      ],
+      edges: [
+        { from: "root", to: "quality", kind: "contains" },
+        { from: "quality", to: "release", kind: "routes" },
+        { from: "quality", to: "risk", kind: "routes" },
+      ],
+      entryNodeIds: ["root"],
+      profiles: [
+        {
+          id: "personal",
+          name: "Personal",
+          subject: { type: "user", id: "user-1" },
+          defaultExposure: "disabled",
+          bindings: [
+            { nodeId: "root", enabled: true, runtimeExposure: "router" },
+            { nodeId: "quality", enabled: true, runtimeExposure: "router" },
+            { nodeId: "release", enabled: true, runtimeExposure: "leaf" },
+          ],
+        },
+        {
+          id: "work",
+          name: "Work",
+          subject: { type: "user", id: "user-1" },
+          defaultExposure: "disabled",
+          bindings: [
+            { nodeId: "root", enabled: true, runtimeExposure: "router" },
+            { nodeId: "quality", enabled: true, runtimeExposure: "router" },
+            { nodeId: "risk", enabled: true, runtimeExposure: "leaf" },
+          ],
+        },
+      ],
+      environments: [
+        { id: "codex-personal", name: "Codex personal", kind: "personal", profileId: "personal" },
+        { id: "codex-work", name: "Codex work", kind: "work", profileId: "work" },
+      ],
+    },
+  };
+  const compiled: ArchitecturePreview["compiled"] = input.compiled ?? {
+    schemaVersion: 1,
+    architectureId: "architecture-1",
+    revisionDigest: "a".repeat(64),
+    pattern: { id: "multi-level-router", version: 1 },
+    profileId: "personal",
+    environmentId: "codex-personal",
+    nodes: [
+      { id: "root", kind: "router", label: "Review router", runtimeExposure: "router", childNodeIds: ["quality"] },
+      { id: "quality", kind: "router", label: "Quality branch", runtimeExposure: "router", childNodeIds: ["release"] },
+      { id: "release", kind: "leaf", label: "Release Notes Helper", skillRefId: "release-skill", runtimeExposure: "leaf", childNodeIds: [] },
+    ],
+    allNodes: [
+      { id: "root", kind: "router", label: "Review router" },
+      { id: "quality", kind: "router", label: "Quality branch" },
+      { id: "release", kind: "leaf", label: "Release Notes Helper", skillRefId: "release-skill" },
+      { id: "risk", kind: "leaf", label: "Risk Reviewer", skillRefId: "risk-skill" },
+    ],
+    disabledNodeIds: ["risk"],
+    edges: [
+      { from: "root", to: "quality", kind: "contains" },
+      { from: "quality", to: "release", kind: "routes" },
+    ],
+    skills: [{ skillRefId: "release-skill", slug: "release-notes-helper", title: "Release Notes Helper", version: "0.1.0", digest: "a".repeat(64), packageVisibility: "private" }],
+    routers: [
+      { nodeId: "root", childNodeIds: ["quality"], routes: [{ from: "root", to: "quality", kind: "contains" }], digest: "a".repeat(64) },
+      { nodeId: "quality", childNodeIds: ["release"], routes: [{ from: "quality", to: "release", kind: "routes" }], digest: "a".repeat(64) },
+    ],
+  };
+  const graph: ArchitecturePreview["graph"] = input.graph ?? {
+    digest: compiled.revisionDigest,
+    nodes: [
+      { id: "root", kind: "router", label: "Review router", depth: 0, x: 40, y: 22 },
+      { id: "quality", kind: "router", label: "Quality branch", depth: 1, x: 286, y: 124 },
+      { id: "release", kind: "leaf", label: "Release Notes Helper", depth: 2, x: 532, y: 226, skillRefId: "release-skill" },
+    ],
+    edges: compiled.edges,
+    mermaid: "flowchart TD\n  root[Review router] --> quality[Quality branch]\n  quality --> release[Release Notes Helper]",
+  };
+  const outline: ArchitecturePreview["outline"] = input.outline ?? {
+    title: "Architecture architecture-1",
+    text: "Architecture architecture-1\n- Review router (router)\n  - Quality branch (router)\n    - Release Notes Helper (leaf)",
+    tree: [{
+      id: "root",
+      label: "Review router",
+      kind: "router",
+      children: [{
+        id: "quality",
+        label: "Quality branch",
+        kind: "router",
+        children: [{ id: "release", label: "Release Notes Helper", kind: "leaf", children: [] }],
+      }],
+    }],
+  };
+  return {
+    revision,
+    compiled,
+    graph,
+    outline,
+    ...(input.plan !== undefined ? { plan: input.plan } : {}),
+  };
 }
 
 function defaultTeamDashboard(): TeamDashboard {

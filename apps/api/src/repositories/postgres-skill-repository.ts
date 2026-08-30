@@ -419,7 +419,7 @@ export class PostgresSkillRepository implements SkillRepository {
     if (row.visibility === "public" && sharing.publicVisibilityEnabled) {
       reasons.push("public");
     }
-    if ((row.visibility === "authenticated" || row.visibility === "organization") && sharing.authenticatedVisibilityEnabled) {
+    if (row.visibility === "authenticated" && sharing.authenticatedVisibilityEnabled) {
       reasons.push("authenticated");
     }
     if (row.visibility === "team" && sharing.teamsEnabled && sharing.teamVisibilityEnabled && row.hasTeamAccess) {
@@ -450,7 +450,7 @@ function visibleToActorPredicate(actorId: string | null, sharing: SharingSetting
   if (actorId) {
     predicates.push(eq(skills.ownerUserId, actorId));
     if (sharing.authenticatedVisibilityEnabled) {
-      predicates.push(inArray(skills.visibility, ["authenticated", "organization"]));
+      predicates.push(eq(skills.visibility, "authenticated"));
     }
     if (sharing.teamsEnabled && sharing.teamVisibilityEnabled) {
       predicates.push(and(
@@ -528,10 +528,17 @@ function assertCanManageSkillSharing(
 }
 
 function validateVisibilityEnabled(visibility: VisibilityScope, settings: SharingSettings): void {
+  if (visibility === "organization") {
+    throw new AppError(
+      "Organization visibility is not supported for skill sharing.",
+      "ORGANIZATION_VISIBILITY_UNSUPPORTED",
+      400,
+    );
+  }
   if (visibility === "public" && !settings.publicVisibilityEnabled) {
     throw new AppError("Public sharing is disabled for this instance.", "PUBLIC_SHARING_DISABLED", 403);
   }
-  if ((visibility === "authenticated" || visibility === "organization") && !settings.authenticatedVisibilityEnabled) {
+  if (visibility === "authenticated" && !settings.authenticatedVisibilityEnabled) {
     throw new AppError("Signed-in-user sharing is disabled for this instance.", "AUTHENTICATED_SHARING_DISABLED", 403);
   }
   if (visibility === "team" && (!settings.teamsEnabled || !settings.teamVisibilityEnabled)) {

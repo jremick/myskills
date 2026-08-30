@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyServerOptions } from "fastify";
-import { AppError, type SharingSettings, type SkillRepository, type VisibilityScope } from "@myskills-app/core";
+import { AppError, type ArchitectureSpecV1, type ObservedArchitectureState, type SharingSettings, type SkillRepository, type VisibilityScope } from "@myskills-app/core";
 import {
   MAX_PACKAGE_ARCHIVE_BYTES,
   MAX_PACKAGE_FILES,
@@ -46,6 +46,20 @@ import type {
 } from "./submissions/types.js";
 import type { SubmissionService } from "./submissions/service.js";
 import type { TeamService } from "./teams/service.js";
+import type { ArchitectureStore } from "./architectures/types.js";
+import {
+  ARCHITECTURE_PATTERNS,
+  MAX_ARCHITECTURE_RESOLUTION_CANDIDATES,
+  MAX_ARCHITECTURE_RESOLUTION_SKILL_REFERENCES,
+  compileArchitecture,
+  graphForCompiledArchitecture,
+  outlineForArchitecture,
+  parseArchitectureTargetObservation,
+  planSync,
+  resolveArchitectureCandidates,
+  validateArchitecturePattern,
+  validateArchitectureSpec,
+} from "./architectures/service.js";
 import { API_VERSION } from "./version.js";
 
 const SESSION_COOKIE_NAME = "myskills_session";
@@ -66,6 +80,9 @@ export interface BuildAppOptions {
   authService?: AuthService;
   submissionService?: SubmissionService;
   teamService?: TeamService;
+  architectureStore?: ArchitectureStore;
+  architectureProjectionLimiter?: AuthRateLimiter;
+  architectureProjectionMaxInFlight?: number;
   allowedOrigins?: string[];
   trustProxy?: TrustProxyOption;
   requestLimiter?: AuthRateLimiter;
@@ -82,6 +99,10 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   });
   const allowedOrigins = options.allowedOrigins ?? ["http://localhost:3000", "http://127.0.0.1:3000"];
   const requestLimiter = options.requestLimiter ?? new MemoryAuthRateLimiter({ maxAttempts: 600, windowMs: 60_000 });
+  const architectureProjectionLimiter = options.architectureProjectionLimiter
+    ?? new MemoryAuthRateLimiter({ maxAttempts: 30, windowMs: 60_000 });
+  const architectureProjectionInFlight = new Map<string, number>();
+  const architectureProjectionMaxInFlight = options.architectureProjectionMaxInFlight ?? 2;
   const probeLimiter = new MemoryAuthRateLimiter({ maxAttempts: 1_200, windowMs: 60_000 });
 
   app.addHook("onRequest", async (request, reply) => {
@@ -200,8 +221,265 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       tokens: Boolean(options.authService),
       teams: Boolean(options.authService && options.teamService),
       sharing: Boolean(options.authService),
+      architectures: Boolean(options.authService && options.architectureStore && options.submissionService),
     },
   }));
+
+  app.get("/v1/architecture-patterns", async () => ({
+    patterns: ARCHITECTURE_PATTERNS,
+  }));
+
+  app.post("/v1/architecture-resolutions", async (request, reply) => {
+    const user = await authenticateArchitectureReader(options, request, reply);
+    if (!user) return;
+    if (!await enforceArchitectureProjectionRateLimit(architectureProjectionLimiter, user.id, reply)) return;
+    if (!acquireArchitectureProjectionSlot(architectureProjectionInFlight, architectureProjectionMaxInFlight, user.id, reply)) return;
+    try {
+      const store = requireArchitectureStore(options);
+      const input = parseArchitectureResolutionInput(request.body);
+      const architectures = (await store.listArchitectures(user.id))
+        .filter((architecture) => input.architectureId === undefined || architecture.id === input.architectureId);
+      const revisionEntries = (await mapWithConcurrency(architectures, 4, async (architecture) => ({
+        architecture,
+        revision: await store.getRevision(user.id, architecture.id, architecture.currentRevisionId ?? undefined),
+      }))).filter((entry) => entry.revision !== null && architectureObservationOverlaps(entry.revision.spec, input.observation.observedState));
+      const skillReferenceCount = revisionEntries.reduce((total, entry) => total + entry.revision!.spec.skills.length, 0);
+      if (skillReferenceCount > MAX_ARCHITECTURE_RESOLUTION_SKILL_REFERENCES) {
+        throw new AppError(
+          "Architecture resolution has too many skill references. Supply architectureId to narrow the request.",
+          "ARCHITECTURE_RESOLUTION_TOO_BROAD",
+          422,
+          { maximum: MAX_ARCHITECTURE_RESOLUTION_SKILL_REFERENCES },
+        );
+      }
+      const selections = revisionEntries.flatMap(({ architecture, revision }) => revision!.spec.environments
+        .filter((environment) => input.environmentKind === undefined || environment.kind === input.environmentKind)
+        .map((environment) => ({ architecture, revision: revision!, environment })));
+      if (selections.length > MAX_ARCHITECTURE_RESOLUTION_CANDIDATES) {
+        throw new AppError(
+          "Architecture resolution has too many candidate environments. Supply environmentKind to narrow the request.",
+          "ARCHITECTURE_RESOLUTION_TOO_BROAD",
+          422,
+          { maximum: MAX_ARCHITECTURE_RESOLUTION_CANDIDATES },
+        );
+      }
+
+      const byRevision = new Map<string, typeof selections>();
+      for (const selection of selections) {
+        byRevision.set(selection.revision.id, [...(byRevision.get(selection.revision.id) ?? []), selection]);
+      }
+      const groups = await mapWithConcurrency([...byRevision.values()], 4, async (group) => {
+        const first = group[0];
+        if (!first) return { candidates: [], excluded: [] };
+        try {
+          const registry = await authorizedRegistryForArchitecture(options, user.id, first.revision.spec);
+          const candidates = group.map(({ architecture, revision, environment }) => {
+            const compiled = compileArchitecture(revision.spec, registry, {
+              profileId: environment.profileId,
+              environmentId: environment.id,
+            });
+            return {
+              architectureId: architecture.id,
+              architectureName: architecture.name,
+              revisionId: revision.id,
+              revisionNumber: revision.revisionNumber,
+              patternId: revision.spec.pattern.id,
+              profileId: environment.profileId,
+              environmentId: environment.id,
+              environmentKind: environment.kind,
+              compiled,
+              plan: planSync(compiled, input.observation.observedState),
+            };
+          });
+          return { candidates, excluded: [] };
+        } catch (error) {
+          if (!(error instanceof AppError) || error.statusCode >= 500) throw error;
+          return {
+            candidates: [],
+            excluded: [{
+              architectureId: first.architecture.id,
+              revisionId: first.revision.id,
+              code: error.code,
+            }],
+          };
+        }
+      });
+      const resolution = resolveArchitectureCandidates(
+        input.observation,
+        groups.flatMap((group) => group.candidates),
+      );
+      const excluded = groups.flatMap((group) => group.excluded)
+        .sort((left, right) => left.architectureId.localeCompare(right.architectureId));
+      await store.recordAuditEvent({
+        actorUserId: user.id,
+        action: "architecture.resolve",
+        resourceType: "skill_architecture",
+        resourceId: resolution.selected?.architectureId ?? null,
+        details: {
+          targetId: input.observation.target.id,
+          toolKind: input.observation.target.toolKind,
+          status: resolution.status,
+          confidence: resolution.confidence,
+          candidateCount: resolution.candidateCount,
+          excludedCount: excluded.length,
+          selectedRevisionId: resolution.selected?.revisionId,
+        },
+      });
+      return { resolution, excluded };
+    } finally {
+      releaseArchitectureProjectionSlot(architectureProjectionInFlight, user.id);
+    }
+  });
+
+  app.get("/v1/architectures", async (request, reply) => {
+    const user = await authenticateArchitectureReader(options, request, reply);
+    if (!user) return;
+    return {
+      architectures: await requireArchitectureStore(options).listArchitectures(user.id),
+    };
+  });
+
+  app.post("/v1/architectures", async (request, reply) => {
+    const user = await authenticateArchitectureSession(options, request, reply, { mfaRequired: true });
+    if (!user) return;
+    const store = requireArchitectureStore(options);
+    const input = parseCreateArchitectureInput(request.body);
+    const architecture = await store.createArchitecture({
+      ownerUserId: user.id,
+      ...input,
+    });
+    await store.recordAuditEvent({
+      actorUserId: user.id,
+      action: "architecture.create",
+      resourceType: "skill_architecture",
+      resourceId: architecture.id,
+      details: {
+        patternId: architecture.patternId,
+      },
+    });
+    return reply.code(201).send({ architecture });
+  });
+
+  app.get("/v1/architectures/:id", async (request, reply) => {
+    const user = await authenticateArchitectureReader(options, request, reply);
+    if (!user) return;
+    const store = requireArchitectureStore(options);
+    const architectureId = parseArchitectureIdParam(request.params);
+    const architecture = await store.getArchitecture(user.id, architectureId);
+    if (!architecture) return architectureNotFound(reply);
+    const revisions = await store.listRevisions(user.id, architectureId);
+    if (!revisions) return architectureNotFound(reply);
+    const latestRevision = await store.getRevision(
+      user.id,
+      architectureId,
+      architecture.currentRevisionId ?? undefined,
+    );
+    return {
+      architecture,
+      revisions: revisions.map(toArchitectureRevisionSummary),
+      latestRevision,
+    };
+  });
+
+  app.get("/v1/architectures/:id/revisions", async (request, reply) => {
+    const user = await authenticateArchitectureReader(options, request, reply);
+    if (!user) return;
+    const store = requireArchitectureStore(options);
+    const architectureId = parseArchitectureIdParam(request.params);
+    const revisions = await store.listRevisions(user.id, architectureId);
+    if (!revisions) return architectureNotFound(reply);
+    return { revisions: revisions.map(toArchitectureRevisionSummary) };
+  });
+
+  app.post("/v1/architectures/:id/revisions", async (request, reply) => {
+    const user = await authenticateArchitectureSession(options, request, reply, { mfaRequired: true });
+    if (!user) return;
+    const store = requireArchitectureStore(options);
+    const architectureId = parseArchitectureIdParam(request.params);
+    const architecture = await store.getArchitecture(user.id, architectureId);
+    if (!architecture) return architectureNotFound(reply);
+    const input = parseCreateArchitectureRevisionInput(request.body, architecture.patternId, architectureId);
+    const revision = await store.createRevision({
+      ownerUserId: user.id,
+      architectureId,
+      ...input,
+    });
+    if (!revision) return architectureNotFound(reply);
+    await store.recordAuditEvent({
+      actorUserId: user.id,
+      action: "architecture.revision.create",
+      resourceType: "skill_architecture",
+      resourceId: architectureId,
+      details: {
+        revisionId: revision.id,
+        revisionNumber: revision.revisionNumber,
+        patternId: revision.spec.pattern.id,
+        nodeCount: revision.spec.nodes.length,
+        profileCount: revision.spec.profiles.length,
+        environmentCount: revision.spec.environments.length,
+      },
+    });
+    return reply.code(201).send({ revision });
+  });
+
+  app.get("/v1/architectures/:id/revisions/:revisionId", async (request, reply) => {
+    const user = await authenticateArchitectureReader(options, request, reply);
+    if (!user) return;
+    const store = requireArchitectureStore(options);
+    const params = parseArchitectureRevisionParams(request.params);
+    const revision = await store.getRevision(user.id, params.architectureId, params.revisionId);
+    if (!revision) return architectureNotFound(reply);
+    return { revision };
+  });
+
+  app.post("/v1/architectures/:id/preview", async (request, reply) => {
+    const user = await authenticateArchitectureReader(options, request, reply);
+    if (!user) return;
+    if (!await enforceArchitectureProjectionRateLimit(architectureProjectionLimiter, user.id, reply)) return;
+    if (!acquireArchitectureProjectionSlot(architectureProjectionInFlight, architectureProjectionMaxInFlight, user.id, reply)) return;
+    try {
+      const store = requireArchitectureStore(options);
+      const architectureId = parseArchitectureIdParam(request.params);
+      const architecture = await store.getArchitecture(user.id, architectureId);
+      if (!architecture) return architectureNotFound(reply);
+      const preview = parseArchitectureProjectionInput(request.body);
+      const revision = await store.getRevision(user.id, architectureId, preview.revisionId);
+      if (!revision) return architectureNotFound(reply);
+      // Compile exactly once. Graph, outline, and the optional dry-run plan must
+      // all describe this same authorized registry projection.
+      const compiled = await compileAuthorizedArchitecture(options, user.id, revision.spec, preview);
+      const response: {
+        revision: typeof revision;
+        compiled: typeof compiled;
+        graph: ReturnType<typeof graphForCompiledArchitecture>;
+        outline: ReturnType<typeof outlineForArchitecture>;
+        plan?: ReturnType<typeof planSync>;
+      } = {
+        revision,
+        compiled,
+        graph: graphForCompiledArchitecture(compiled),
+        outline: outlineForArchitecture(compiled),
+      };
+      if (preview.fixtureProvided) {
+        response.plan = planSync(compiled, preview.fixture);
+        await store.recordAuditEvent({
+          actorUserId: user.id,
+          action: "architecture.preview.dry_run",
+          resourceType: "skill_architecture",
+          resourceId: architectureId,
+          details: {
+            revisionId: revision.id,
+            profileId: compiled.profileId,
+            environmentId: compiled.environmentId,
+            changeCount: response.plan.items.length,
+          },
+        });
+      }
+      return response;
+    } finally {
+      releaseArchitectureProjectionSlot(architectureProjectionInFlight, user.id);
+    }
+  });
 
   app.get("/v1/skills", async (request) => {
     const query = parseQuery(request.query);
@@ -304,12 +582,16 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         },
       });
     }
+    const slug = parseSlugParam(request.params);
+    const input = parseSkillMetadataUpdateInput(request.body);
+    const skill = await options.submissionService.updateSkillMetadata({
+      actor,
+      slug,
+      update: input.update,
+      ...(input.reason ? { reason: input.reason } : {}),
+    });
     return {
-      skill: await options.submissionService.updateSkillMetadata({
-        actor,
-        slug: parseSlugParam(request.params),
-        ...parseSkillMetadataUpdateInput(request.body),
-      }),
+      skill,
     };
   });
 
@@ -1160,6 +1442,201 @@ async function authenticateActor(
   };
 }
 
+async function authenticateArchitectureSession(
+  options: BuildAppOptions,
+  request: { headers: { authorization?: string | string[]; cookie?: string | string[] } },
+  reply: FastifyReply,
+  authOptions: { mfaRequired?: boolean } = {},
+) {
+  if (!options.authService) {
+    throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+  }
+  if (!options.architectureStore) {
+    throw new AppError("Architecture service is not configured.", "ARCHITECTURE_SERVICE_UNAVAILABLE", 503);
+  }
+  const user = await authenticateSessionUser(options.authService, requestAuthorization(request));
+  if (!user) {
+    await authFailureReply(options.authService, requestAuthorization(request), reply);
+    return null;
+  }
+  if (authOptions.mfaRequired) {
+    requireMfaForPrivilegedSession(user);
+  }
+  return user;
+}
+
+function requireArchitectureStore(options: BuildAppOptions): ArchitectureStore {
+  if (!options.architectureStore) {
+    throw new AppError("Architecture service is not configured.", "ARCHITECTURE_SERVICE_UNAVAILABLE", 503);
+  }
+  return options.architectureStore;
+}
+
+async function authenticateArchitectureReader(
+  options: BuildAppOptions,
+  request: { headers: { authorization?: string | string[]; cookie?: string | string[] } },
+  reply: FastifyReply,
+) {
+  if (!options.authService) {
+    throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+  }
+  if (!options.architectureStore) {
+    throw new AppError("Architecture service is not configured.", "ARCHITECTURE_SERVICE_UNAVAILABLE", 503);
+  }
+  const authorization = requestAuthorization(request);
+  const context = await options.authService.authenticateRequest(authorization);
+  if (!context) {
+    await authFailureReply(options.authService, authorization, reply);
+    return null;
+  }
+  requireScope(context, "architectures:read");
+  return context.user;
+}
+
+async function enforceArchitectureProjectionRateLimit(
+  limiter: AuthRateLimiter,
+  userId: string,
+  reply: FastifyReply,
+): Promise<boolean> {
+  const result = await limiter.consume(`architecture:projection:${userId}`);
+  if (result.allowed) return true;
+  reply
+    .header("retry-after", String(result.retryAfterSeconds))
+    .code(429)
+    .send({
+      error: {
+        code: "ARCHITECTURE_RATE_LIMITED",
+        message: "Architecture projection rate limit exceeded.",
+        details: { retryAfterSeconds: result.retryAfterSeconds },
+      },
+    });
+  return false;
+}
+
+function acquireArchitectureProjectionSlot(
+  inFlight: Map<string, number>,
+  maximum: number,
+  userId: string,
+  reply: FastifyReply,
+): boolean {
+  const current = inFlight.get(userId) ?? 0;
+  if (current >= maximum) {
+    reply.code(429).send({
+      error: {
+        code: "ARCHITECTURE_CONCURRENCY_LIMITED",
+        message: "Too many architecture projections are already running.",
+      },
+    });
+    return false;
+  }
+  inFlight.set(userId, current + 1);
+  return true;
+}
+
+function releaseArchitectureProjectionSlot(inFlight: Map<string, number>, userId: string): void {
+  const remaining = (inFlight.get(userId) ?? 1) - 1;
+  if (remaining <= 0) inFlight.delete(userId);
+  else inFlight.set(userId, remaining);
+}
+
+async function compileAuthorizedArchitecture(
+  options: BuildAppOptions,
+  actorId: string,
+  spec: ArchitectureSpecV1,
+  selection: { profileId?: string; environmentId?: string },
+) {
+  return compileArchitecture(spec, await authorizedRegistryForArchitecture(options, actorId, spec), selection);
+}
+
+async function authorizedRegistryForArchitecture(
+  options: BuildAppOptions,
+  actorId: string,
+  spec: ArchitectureSpecV1,
+) {
+  if (!options.submissionService) {
+    throw new AppError("Architecture release resolution is not configured.", "ARCHITECTURE_REGISTRY_RESOLVER_UNAVAILABLE", 503);
+  }
+  return mapWithConcurrency(spec.skills, 8, async (reference) => {
+    const [skill, release] = await Promise.all([
+      options.skillRepository.getVisibleSkillBySlug(reference.slug, actorId),
+      options.submissionService!.getPublicRelease({ slug: reference.slug, version: reference.version, actorId }),
+    ]);
+    if (
+      !skill
+      || !release
+      || skill.visibility === "organization"
+      || release.slug !== reference.slug
+      || release.version !== reference.version
+      || release.artifact.sha256 !== reference.digest
+    ) {
+      throw new AppError(
+        "An exact authorized skill release is unavailable for this architecture.",
+        "ARCHITECTURE_SKILL_RELEASE_UNAVAILABLE",
+        422,
+      );
+    }
+    return {
+      id: reference.id,
+      slug: release.slug,
+      title: release.title,
+      summary: release.summary,
+      version: release.version,
+      digest: release.artifact.sha256,
+      packageVisibility: skill.visibility,
+      tags: skill.tags,
+    };
+  });
+}
+
+async function mapWithConcurrency<T, U>(
+  values: readonly T[],
+  concurrency: number,
+  mapper: (value: T, index: number) => Promise<U>,
+): Promise<U[]> {
+  const results = new Array<U>(values.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(1, concurrency), values.length);
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= values.length) return;
+      results[index] = await mapper(values[index], index);
+    }
+  };
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
+function toArchitectureRevisionSummary(revision: {
+  id: string;
+  architectureId: string;
+  revisionNumber: number;
+  message: string;
+  spec: ArchitectureSpecV1;
+  createdAt: string;
+}) {
+  return {
+    id: revision.id,
+    architectureId: revision.architectureId,
+    revisionNumber: revision.revisionNumber,
+    message: revision.message,
+    patternId: revision.spec.pattern.id,
+    nodeCount: revision.spec.nodes.length,
+    skillCount: revision.spec.skills.length,
+    createdAt: revision.createdAt,
+  };
+}
+
+function architectureNotFound(reply: FastifyReply) {
+  return reply.code(404).send({
+    error: {
+      code: "ARCHITECTURE_NOT_FOUND",
+      message: "Architecture not found.",
+    },
+  });
+}
+
 async function authenticateOptionalActor(
   authService: AuthService | undefined,
   authorization: string | undefined,
@@ -1479,6 +1956,13 @@ function parseUpdateSkillSharingInput(input: unknown): {
   userEmails: string[];
 } {
   const body = parseJsonObject(input);
+  if (body.visibility === "organization") {
+    throw new AppError(
+      "Organization visibility is not supported for skill sharing.",
+      "ORGANIZATION_VISIBILITY_UNSUPPORTED",
+      400,
+    );
+  }
   return {
     visibility: parseVisibilityScope(body.visibility),
     teamIds: parseStringArray(body.teamIds, "teamIds"),
@@ -1488,15 +1972,19 @@ function parseUpdateSkillSharingInput(input: unknown): {
 
 function parseSkillMetadataUpdateInput(input: unknown): { update: SkillMetadataUpdate; reason?: string } {
   const body = parseJsonObject(input);
+  if ("visibility" in body) {
+    throw new AppError(
+      "Skill visibility must be changed through the sharing route.",
+      "VISIBILITY_UPDATE_REQUIRES_SHARING_ROUTE",
+      400,
+    );
+  }
   const update: SkillMetadataUpdate = {};
   if ("title" in body) {
     update.title = requiredString(body.title, "title").trim();
   }
   if ("summary" in body) {
     update.summary = requiredString(body.summary, "summary").trim();
-  }
-  if ("visibility" in body) {
-    update.visibility = parseVisibilityScope(body.visibility);
   }
   if ("tags" in body) {
     update.tags = parseStringArray(body.tags, "tags").map((tag) => tag.trim()).filter(Boolean);
@@ -1544,6 +2032,128 @@ function parseReleaseLifecycleActionInput(input: unknown): { action: ReleaseLife
     action,
     reason: optionalString(body.reason, "reason"),
     replacement: optionalString(body.replacement, "replacement"),
+  };
+}
+
+function parseCreateArchitectureInput(input: unknown): {
+  name: string;
+  description: string;
+  patternId: ReturnType<typeof validateArchitecturePattern>;
+} {
+  const body = parseJsonObject(input);
+  rejectArchitectureFields(body, ["name", "description", "patternId"]);
+  const name = requiredString(body.name, "name").trim();
+  const description = optionalString(body.description, "description")?.trim() ?? "";
+  if (name.length > 120 || description.length > 500) {
+    throw new AppError("Architecture name or description is too long.", "INVALID_ARCHITECTURE_METADATA", 400);
+  }
+  return {
+    name,
+    description,
+    patternId: validateArchitecturePattern(body.patternId),
+  };
+}
+
+function parseCreateArchitectureRevisionInput(
+  input: unknown,
+  expectedPatternId: ReturnType<typeof validateArchitecturePattern>,
+  architectureId: string,
+): { message: string; spec: ReturnType<typeof validateArchitectureSpec> } {
+  const body = parseJsonObject(input);
+  rejectArchitectureFields(body, ["message", "spec"]);
+  const message = optionalString(body.message, "message")?.trim() ?? "";
+  if (message.length > 500) {
+    throw new AppError("Revision message is too long.", "INVALID_ARCHITECTURE_METADATA", 400);
+  }
+  return {
+    message,
+    spec: validateArchitectureSpec(
+      body.spec && typeof body.spec === "object" && !Array.isArray(body.spec)
+        ? { ...(body.spec as Record<string, unknown>), id: architectureId }
+        : body.spec,
+      expectedPatternId,
+    ),
+  };
+}
+
+function parseArchitectureProjectionInput(input: unknown): {
+  revisionId?: string;
+  profileId?: string;
+  environmentId?: string;
+  fixture?: unknown;
+  fixtureProvided: boolean;
+} {
+  if (input === undefined) return { fixtureProvided: false };
+  const body = parseJsonObject(input);
+  rejectArchitectureFields(body, ["revisionId", "profileId", "environmentId", "fixture"]);
+  return {
+    revisionId: optionalArchitectureIdentifier(body.revisionId, "revisionId"),
+    profileId: optionalArchitectureIdentifier(body.profileId, "profileId"),
+    environmentId: optionalArchitectureIdentifier(body.environmentId, "environmentId"),
+    fixture: body.fixture,
+    fixtureProvided: Object.prototype.hasOwnProperty.call(body, "fixture"),
+  };
+}
+
+function parseArchitectureResolutionInput(input: unknown): {
+  observation: ReturnType<typeof parseArchitectureTargetObservation>;
+  environmentKind?: "personal" | "work" | "team";
+  architectureId?: string;
+} {
+  const body = parseJsonObject(input);
+  rejectArchitectureFields(body, ["observation", "environmentKind", "architectureId"]);
+  const environmentKind = optionalString(body.environmentKind, "environmentKind");
+  if (environmentKind !== undefined && environmentKind !== "personal" && environmentKind !== "work" && environmentKind !== "team") {
+    throw new AppError("environmentKind is invalid.", "INVALID_ARCHITECTURE_ENVIRONMENT_KIND", 400);
+  }
+  const architectureId = optionalArchitectureIdentifier(body.architectureId, "architectureId");
+  return {
+    observation: parseArchitectureTargetObservation(body.observation),
+    ...(environmentKind ? { environmentKind } : {}),
+    ...(architectureId ? { architectureId } : {}),
+  };
+}
+
+function architectureObservationOverlaps(spec: ArchitectureSpecV1, observed: ObservedArchitectureState): boolean {
+  const observedNodeIds = new Set<string>();
+  const observedSkillRefIds = new Set<string>();
+  const observedSlugs = new Set<string>();
+  for (const item of [...(observed.skills ?? []), ...(observed.routers ?? []), ...(observed.nodes ?? [])]) {
+    if (item.nodeId) observedNodeIds.add(item.nodeId);
+    if (item.skillRefId) observedSkillRefIds.add(item.skillRefId);
+    if (item.slug) observedSlugs.add(item.slug);
+  }
+  return spec.nodes.some((node) => observedNodeIds.has(node.id) || (node.skillRefId ? observedSkillRefIds.has(node.skillRefId) : false))
+    || spec.skills.some((skill) => observedSkillRefIds.has(skill.id) || observedSlugs.has(skill.slug));
+}
+
+function rejectArchitectureFields(body: Record<string, unknown>, allowed: string[]): void {
+  const allowedSet = new Set(allowed);
+  const unsupported = Object.keys(body).find((key) => !allowedSet.has(key));
+  if (unsupported) {
+    throw new AppError(`Architecture field is not accepted: ${unsupported}.`, "UNSUPPORTED_ARCHITECTURE_FIELD", 400);
+  }
+}
+
+function optionalArchitectureIdentifier(value: unknown, field: string): string | undefined {
+  if (value === undefined) return undefined;
+  const id = requiredString(value, field).trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(id)) {
+    throw new AppError(`${field} is invalid.`, "INVALID_ARCHITECTURE_IDENTIFIER", 400);
+  }
+  return id;
+}
+
+function parseArchitectureIdParam(input: unknown): string {
+  const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  return optionalArchitectureIdentifier(params.id, "id") ?? "";
+}
+
+function parseArchitectureRevisionParams(input: unknown): { architectureId: string; revisionId: string } {
+  const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  return {
+    architectureId: optionalArchitectureIdentifier(params.id, "id") ?? "",
+    revisionId: optionalArchitectureIdentifier(params.revisionId, "revisionId") ?? "",
   };
 }
 

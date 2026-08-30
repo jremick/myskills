@@ -56,7 +56,7 @@ test("MCP server registers read-only registry tools and executes search", async 
     const tools = await client.listTools();
     assert.deepEqual(
       tools.tools.map((tool) => tool.name).sort(),
-      ["get_install_instructions", "get_skill_info", "search_skills"],
+      ["get_architecture_projection", "get_install_instructions", "get_skill_info", "list_architecture_patterns", "list_architectures", "search_skills"],
     );
     assert.equal(tools.tools.every((tool) => tool.annotations?.readOnlyHint === true), true);
 

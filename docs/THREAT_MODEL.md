@@ -1,13 +1,13 @@
 # Threat Model
 
 Version: 0.1.0-beta.2
-Last updated: 2026-06-30
+Last updated: 2026-08-30
 
 ## Scope
 
-This model covers the public beta repository: Fastify API, Postgres schema, object-storage artifact boundary, React web app, CLI, stdio MCP server, HTTP MCP adapter, package parser/scanner, Docker packaging, and release workflow.
+This model covers the public beta repository: Fastify API, Postgres schema, object-storage artifact boundary, React web app, CLI, stdio MCP server, HTTP MCP adapter, package parser/scanner, Docker packaging, release workflow, and the MVE Skill Architecture Control Plane (versioned graph, consolidated preview projections, and fixture-only sync planner).
 
-Out of scope for beta: hosted-service guarantees, multi-instance federation, paid support, container image publishing, and external provider login flows that are not implemented yet.
+Out of scope for beta and this MVE: hosted-service guarantees, multi-instance federation, paid support, container image publishing, live target adapters or apply/rollback, team-owned architecture records, organization tenancy, and external provider login flows that are not implemented yet.
 
 ## Assumptions
 
@@ -21,6 +21,8 @@ Out of scope for beta: hosted-service guarantees, multi-instance federation, pai
 
 - User accounts, roles, sessions, MFA state, API tokens, auth action tokens, and provider mapping configuration.
 - Skill metadata, lifecycle/review state, scan findings, package artifacts, object hashes, and bundle payloads.
+- Architecture specs and immutable revisions, exact release references, profile
+  exposure rules, derived diagrams, and fixture sync-plan results.
 - Audit events for auth, admin, package review, artifact delivery, and MCP authorization.
 - Deployment secrets for database, object storage, email delivery, token encryption, and provider integrations.
 - Release artifacts, checksums, and GitHub tag state.
@@ -33,6 +35,10 @@ Out of scope for beta: hosted-service guarantees, multi-instance federation, pai
 - MCP stdio process to API, using explicit `MYSKILLS_TOKEN`.
 - API to Postgres for canonical product state.
 - API to object storage for package artifacts.
+- API architecture compiler/renderer to the bounded, potentially
+  user-authored architecture spec and observed fixture boundary.
+- Local managed-registry detector to the bounded target-observation boundary;
+  install roots and skill paths remain local and are not reported to the API.
 - Package upload boundary from untrusted author input into validation, scanning, object storage, review, and publication.
 - Release boundary from clean git `HEAD` to source archive, metadata, checksums, and tag-triggered CI.
 
@@ -45,12 +51,23 @@ Out of scope for beta: hosted-service guarantees, multi-instance federation, pai
 - Package directory and `.zip` parsing.
 - Docker and production environment configuration.
 - GitHub release workflow and local release artifact script.
+- Architecture list/detail/revision/preview routes and their web or
+  read-only client projections when exposed by capability discovery. A
+  fixture-backed dry run is submitted through the consolidated preview route;
+  there is no separate target or dry-run API route in this MVE.
 
 ## Abuse Paths And Current Mitigations
 
 | Threat | Impact | Beta likelihood | Current mitigations | Remaining work |
 | --- | --- | --- | --- | --- |
 | Unauthorized discovery of private or unsafe skills | Metadata or package-content exposure | Medium | Server-side public/review/security/publish predicates, generic denial paths, API/CLI/MCP tests | Broader cross-surface regression matrix for future role-gated MCP/admin tools |
+| Architecture references a restricted, revoked, organization-scoped, or changed release | Private metadata exposure or unsafe desired state | Medium | Consolidated preview binds slug/version/digest through API-owned release predicates; organization visibility is unsupported; no `latest` fallback; generic denial and fail-closed errors | Cross-surface architecture authorization matrix and signed release-reference policy |
+| Nested graph cycle, orphan, or oversized payload | Compiler/render denial of service or incorrect routing | Medium | Bounded JSON, deterministic schema/pattern validation, cycle/orphan/edge checks, depth and node limits before persistence | Stress fixtures and production request/resource limits |
+| Profile rule confusion exposes a skill in the wrong environment | Sensitive prompt/runtime placement | Medium | Profiles default to deny, explicit denials win, package visibility is separate from runtime exposure, and personal/work/team labels have no implicit tenant permission | Conditional rule semantics and connected-target capability enforcement |
+| Diagram injection or unauthorized projection | Misleading UI, script/directive injection, metadata leakage | Medium | Escaped Mermaid and graph labels, browser-derived SVG, authorized-node filtering, accessible outline parity, no package payloads or credentials in projections | Browser security review for any interactive canvas and CSP/readback |
+| Fixture state is treated as canonical or applied silently | Destructive target change or loss of local edits | Medium | Strict metadata-only desired-vs-observed fixture, consolidated profile-filtered preview, dry-run planner, no inferred target, and no MVE target write or credential path; unknown fixture fields are rejected | Consent, target identity, staged apply, audit, and rollback design |
+| Automatic resolution selects the wrong architecture or leaks local target state | Incorrect configuration recommendation or private path/inventory disclosure | Medium | Detector reads only the MySkills-managed registry, omits paths, uses a strict versioned observation schema, scores only inspectable topology, returns confidence/reasons, fails closed on weak or tied matches, and has no apply path | Independent live-adapter capability tests, consent, signed observations, staged apply, and rollback |
+| Legacy metadata visibility or CLI flag bypasses sharing authorization | Unauthorized discovery or grant of a restricted skill | Medium | Generic metadata `visibility` updates and `myskills skills edit --visibility` are rejected/removed; authenticated sharing route and `myskills sharing set` remain the only supported path; organization visibility fails closed | Cross-surface migration tests and future organization tenancy policy |
 | Token theft or replay | Account/API misuse | Medium | Opaque hashed sessions and API tokens, scoped tokens, token-free browser login/MFA responses, revocation on disable/delete/password reset, MFA-gated privileged actions, CLI platform keyring storage with user-only file fallback | Browser/device login for CLI |
 | Auth brute force across restarts or replicas | Account takeover pressure and noisy abuse | Medium | Shared database-backed auth throttling before expensive auth work | Ingress throttles, alerts, and higher-volume abuse controls |
 | Malicious package archive | Path traversal, unsafe install content, secret leakage | Medium | Root manifest validation, archive traversal/symlink/encryption/compression/size/file-count defenses, blocking scans, maintainer review | Background scan jobs, richer policy fixtures, deprecate/revoke workflows |
@@ -76,5 +93,15 @@ The beta can be public if the repo passes release checks, beta support/compatibi
 - Signed or direct artifact delivery design with authorization and audit.
 - Release provenance with pinned actions/images, SBOMs, signatures, and protected tags.
 - Private/org/team sharing authorization model before marketing non-public package sharing.
+- Architecture ownership and explicit runtime-exposure authorization across
+  personal, work, and future team contexts; read projections require
+  `architectures:read`, writes require a session, and profile labels must not
+  substitute for organization tenancy.
+- Visibility migration tests must prove generic metadata and
+  `skills edit --visibility` denial, authenticated sharing success, and
+  organization-scope rejection.
+- Live target connector consent, scoped credentials, capability negotiation,
+  conflict handling, apply idempotency, audit, and rollback before any target
+  mutation is marketed.
 - Production logging, monitoring, backup, restore, upgrade, and incident-response runbooks.
 - Final security review after production hardening work.
