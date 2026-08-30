@@ -70,6 +70,12 @@ test("full-stack E2E accepts MinIO credentials that begin with a hyphen", () => 
   );
 });
 
+test("full-stack E2E uses address-aware proxy trust", () => {
+  const compose = readFileSync(resolve("docker-compose.e2e.yml"), "utf8");
+  assert.match(compose, /TRUST_PROXY: "10\.0\.0\.0\/8,172\.16\.0\.0\/12,192\.168\.0\.0\/16,fc00::\/7"/);
+  assert.doesNotMatch(compose, /TRUST_PROXY:\s*["']?[1-9]\d*["']?\s*$/m);
+});
+
 test("release artifact generation supports repeat verification with unique outputs", () => {
   const outputRoot = resolve("dist", `release-tooling-test-${randomUUID()}`);
   try {
