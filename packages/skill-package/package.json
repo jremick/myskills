@@ -20,6 +20,6 @@
   },
   "devDependencies": {
     "@types/yauzl": "^2.10.3",
-    "tsx": "^4.20.6"
+    "tsx": "^4.23.12"
   }
 }
