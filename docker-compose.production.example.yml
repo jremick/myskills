@@ -92,7 +92,7 @@ services:
       TOTP_ISSUER: ${TOTP_ISSUER:-MySkills}
       APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
       ALLOWED_WEB_ORIGINS: ${ALLOWED_WEB_ORIGINS:?set ALLOWED_WEB_ORIGINS}
-      TRUST_PROXY: ${TRUST_PROXY:-1}
+      TRUST_PROXY: ${TRUST_PROXY:?set TRUST_PROXY}
       AUTH_NOTIFICATION_MODE: ${AUTH_NOTIFICATION_MODE:-smtp}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       RESEND_FROM: ${RESEND_FROM:-}
@@ -113,8 +113,9 @@ services:
       S3_FORCE_PATH_STYLE: "true"
       S3_ALLOW_INSECURE_ENDPOINT: "true" # Only for the private Docker network MinIO endpoint above.
     # Keep the API private to the Compose network. Browser and authenticated
-    # traffic enters through web's same-origin /api proxy so TRUST_PROXY has one
-    # consistent nginx hop and cannot be bypassed through a direct host port.
+    # traffic enters through web's same-origin /api proxy. TRUST_PROXY must trust
+    # the private-network nginx source range and cannot be bypassed through a
+    # direct host port.
     expose:
       - "3001"
     healthcheck:

@@ -1,7 +1,7 @@
 # Railway Deployment
 
 Version: 0.1.0-beta.2
-Last updated: 2026-07-13
+Last updated: 2026-08-30
 
 This is the maintained deployment runbook for the owner-controlled public beta at `myskills.sh`. Live Railway readback on 2026-07-13 showed beta.2 commit `b69dd5e`: API deployment `ef995431-ae75-461b-b05c-b1a486cc03c9` and web deployment `97ae81a3-dcf9-42b1-b120-9b62d2cd9b79`. Re-check deployment IDs and commit IDs before making a current-state claim.
 
@@ -30,7 +30,7 @@ The optional HTTP MCP service is not part of the maintained live beta service se
 As of the 2026-07-13 readback:
 
 - The API service uses `/ready` with a 300-second deployment timeout; the web service uses `/health` with the same timeout.
-- The API uses bounded `TRUST_PROXY=1`, matching the documented single Railway/nginx proxy hop; the production environment preflight passes.
+- The API used `TRUST_PROXY=1` at this readback. Fastify 5.12.1 later disabled numeric hop-count trust; migrate this value to the address-aware setting below before deploying that upgrade.
 - API and web run the same approved beta.2 release commit and report successful deployment status.
 - A locked manual Postgres volume backup named `pre-v0.1.0-beta.2-2026-07-13` is the database rollback point for this promotion.
 
@@ -44,7 +44,7 @@ The previous beta.1 API deployment `accf248a-6a1d-432d-b3cd-710430fb9c75` and we
 
 The web build must receive `VITE_API_BASE_URL=/api` so browser auth and registry requests stay same-origin on `myskills.sh`.
 The web runtime must receive `API_PROXY_TARGET=https://api.myskills.sh` so nginx forwards `/api/*` to the API service without requiring the user's browser DNS cache to resolve `api.myskills.sh`.
-The API must receive `APP_BASE_URL=https://myskills.sh`, `ALLOWED_WEB_ORIGINS=https://myskills.sh,https://www.myskills.sh`, and a bounded `TRUST_PROXY` value so auth rate limits use the forwarded client IP from Railway/nginx.
+The API must receive `APP_BASE_URL=https://myskills.sh`, `ALLOWED_WEB_ORIGINS=https://myskills.sh,https://www.myskills.sh`, and an address-aware `TRUST_PROXY` value so auth rate limits use the forwarded client IP from Railway/nginx. Railway's current proxy guidance uses private ranges plus `100.0.0.0/8`; re-check that guidance when the platform topology changes.
 The Railway nginx template sets `client_max_body_size 14m` so valid bounded package uploads reach the API; do not remove it or fall back to nginx's 1 MiB default.
 
 ## Required Web Variables
@@ -71,7 +71,7 @@ Set these in Railway secret/config variables, not in repo files:
 - `TOTP_ISSUER=MySkills`
 - `APP_BASE_URL=https://myskills.sh`
 - `ALLOWED_WEB_ORIGINS=https://myskills.sh,https://www.myskills.sh`
-- `TRUST_PROXY=1`
+- `TRUST_PROXY=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7,100.0.0.0/8`
 - `AUTH_NOTIFICATION_MODE=resend`
 - `RESEND_API_KEY`
 - `RESEND_FROM=MySkills <noreply@jarel.app>`

@@ -97,16 +97,16 @@ function trustProxy(): Parameters<typeof buildApp>[0]["trustProxy"] {
   }
   if (configured === "true") {
     if (process.env.NODE_ENV === "production") {
-      throw new Error("TRUST_PROXY=true is too broad for production. Use a hop count or proxy address list.");
+      throw new Error("TRUST_PROXY=true is too broad for production. Use a proxy address list.");
     }
     return true;
   }
   if (/^[1-9]\d*$/.test(configured)) {
-    return Number.parseInt(configured, 10);
+    throw new Error("TRUST_PROXY numeric hop counts are unsafe. Use a comma-separated IP/CIDR proxy address list.");
   }
   const entries = configured.split(",").map((entry) => entry.trim()).filter(Boolean);
   if (entries.length === 0 || entries.some((entry) => !isValidProxyAddress(entry))) {
-    throw new Error("TRUST_PROXY must be false, a positive hop count, or a comma-separated IP/CIDR proxy address list.");
+    throw new Error("TRUST_PROXY must be false or a comma-separated IP/CIDR proxy address list.");
   }
   return entries;
 }

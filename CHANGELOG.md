@@ -4,7 +4,9 @@ All notable user-facing changes will be tracked here. MySkills is still prerelea
 
 ## Unreleased
 
-No unreleased changes.
+### Security
+
+- Replaced numeric Fastify proxy-hop trust with explicit proxy IP/CIDR allowlists so direct clients cannot spoof forwarded request metadata.
 
 ## 0.1.0-beta.2 - 2026-07-13
 

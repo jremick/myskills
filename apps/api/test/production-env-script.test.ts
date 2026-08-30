@@ -7,10 +7,14 @@ import path from "node:path";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 test("production preflight validates TRUST_PROXY shapes", () => {
-  for (const value of ["1", "127.0.0.1", "10.0.0.0/8", "2001:db8::/32"]) {
+  for (const value of ["127.0.0.1", "10.0.0.0/8", "2001:db8::/32", "10.0.0.0/8,100.0.0.0/8"]) {
     const result = runPreflight(value);
     assert.equal(result.status, 0, `${value}: ${result.stderr}`);
   }
+
+  const numeric = runPreflight("1");
+  assert.notEqual(numeric.status, 0);
+  assert.match(numeric.stderr, /numeric hop counts are unsafe/);
 
   const broad = runPreflight("true");
   assert.notEqual(broad.status, 0);

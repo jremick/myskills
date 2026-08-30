@@ -53,7 +53,7 @@ The MCP HTTP service requires explicit `MYSKILLS_MCP_ALLOWED_HOSTS` when bound t
 
 ## Reverse Proxy And TLS
 
-Terminate TLS in front of the `web` and optional `mcp-http` services. The production Compose example deliberately does not publish the API to a host port: browser and authenticated API traffic enters through the web service's same-origin `/api` proxy, and nginx reaches `api:3001` over the private Docker network. Point the public reverse proxy at `WEB_PORT`; do not create a second public route to the API while using a numeric `TRUST_PROXY` hop count.
+Terminate TLS in front of the `web` and optional `mcp-http` services. The production Compose example deliberately does not publish the API to a host port: browser and authenticated API traffic enters through the web service's same-origin `/api` proxy, and nginx reaches `api:3001` over the private Docker network. Point the public reverse proxy at `WEB_PORT`; do not create a second public route to the API.
 
 Required public values and routes:
 
@@ -61,7 +61,7 @@ Required public values and routes:
 - `VITE_API_BASE_URL`: browser API base baked into the web image at build time. The Compose example uses `/api` so browser requests stay same-origin.
 - `API_PROXY_TARGET`: internal API target used by nginx for `/api/*`; the Compose example uses `http://api:3001`.
 - `ALLOWED_WEB_ORIGINS`: comma-separated browser origins allowed to call the API.
-- `TRUST_PROXY`: trusted proxy hop count or proxy address list for forwarded client IP handling. Use `1` for the included single nginx-to-API path only because the API has no direct host ingress; do not use broad `true` in production. If the topology changes, re-evaluate both the hop count and every reachable API path before deployment.
+- `TRUST_PROXY`: trusted proxy IP/CIDR list for forwarded client IP handling. The example trusts the private IPv4 and IPv6 source ranges used by its nginx-to-API path. Numeric hop counts and broad `true` are rejected because they do not validate the connecting proxy address. If the topology changes, re-evaluate the trusted ranges and every reachable API path before deployment.
 
 If `VITE_API_BASE_URL` changes, rebuild the `web` image because Vite embeds that value during the build.
 

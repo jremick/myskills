@@ -34,18 +34,18 @@ export function validateProductionComposePolicy(composeText, envTemplateText) {
   }
 
   const apiPublishesHostPorts = /^[ ]{4}ports:\s*$/m.test(api);
-  const numericTrustProxy = /^[1-9]\d*$/.test(trustProxy ?? "");
-  if (apiPublishesHostPorts && numericTrustProxy) {
-    errors.push("Production Compose must not publish an API host port while TRUST_PROXY is a numeric hop count; route API traffic through the web proxy.");
-  } else if (apiPublishesHostPorts) {
+  if (apiPublishesHostPorts) {
     errors.push("Production Compose keeps the API private; route API traffic through the web proxy instead of publishing an API host port.");
   }
 
   if (!/^[ ]{4}expose:\s*$[\s\S]*?^[ ]{6}- ["']?3001["']?\s*$/m.test(api)) {
     errors.push("Production Compose must expose API port 3001 only to the private Compose network.");
   }
-  if (!api.includes("TRUST_PROXY: ${TRUST_PROXY:-1}")) {
-    errors.push("Production Compose must retain the explicit bounded TRUST_PROXY setting.");
+  if (!api.includes("TRUST_PROXY: ${TRUST_PROXY:?set TRUST_PROXY}")) {
+    errors.push("Production Compose must require the explicit address-aware TRUST_PROXY setting.");
+  }
+  if (!trustProxy || /^[1-9]\d*$/.test(trustProxy)) {
+    errors.push("Production Compose must use an address-aware TRUST_PROXY value.");
   }
   if (!web.includes("API_PROXY_TARGET: ${API_PROXY_TARGET:-http://api:3001}")) {
     errors.push("Production Compose web must proxy /api to the private api service.");
