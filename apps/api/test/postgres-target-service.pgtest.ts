@@ -306,6 +306,19 @@ test("Postgres target team access follows effective parent organization state ac
     parentedTarget.id,
     standaloneTarget.id,
   ].sort());
+  await pool.query(
+    "UPDATE organization_memberships SET removed_at = now() WHERE organization_id = $1 AND user_id = $2",
+    [organizationId, ownerId],
+  );
+  assert.equal((await service.updateHealth({
+    actor: ownerId,
+    targetId: parentedTarget.id,
+    health: { status: "healthy", checkedAt: "2026-08-30T00:02:30.000Z" },
+  })).health?.status, "healthy");
+  await pool.query(
+    "UPDATE organization_memberships SET removed_at = null WHERE organization_id = $1 AND user_id = $2",
+    [organizationId, ownerId],
+  );
 
   await pool.query(
     "UPDATE organizations SET current_policy_revision_id = $1 WHERE id = $2",

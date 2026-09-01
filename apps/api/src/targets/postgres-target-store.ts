@@ -691,18 +691,7 @@ async function lockTargetMutationAuthority(
   if (!team || team.organizationId !== teamHint.organizationId) return false;
 
   if (team.organizationId !== null) {
-    if (!await lockOrganizationMutationContext(db, team.organizationId)) return false;
-    const [organizationMembership] = await db
-      .select({ id: organizationMemberships.id })
-      .from(organizationMemberships)
-      .where(and(
-        eq(organizationMemberships.organizationId, team.organizationId),
-        eq(organizationMemberships.userId, actorUserId),
-        isNull(organizationMemberships.removedAt),
-      ))
-      .for("update")
-      .limit(1);
-    if (!organizationMembership) return false;
+    if (!await lockEffectiveTeamOrganizationContext(db, team.organizationId, actorUserId)) return false;
   }
 
   if (!await lockActiveUser(db, actorUserId)) return false;
@@ -773,6 +762,16 @@ async function lockTeamMembership(db: DbLike, teamId: string, userId: string): P
 }
 
 async function lockOrganizationContext(db: DbLike, organizationId: string, userId: string): Promise<void> {
+  if (!await lockEffectiveTeamOrganizationContext(db, organizationId, userId)) {
+    throw registrationBindingForbidden();
+  }
+}
+
+async function lockEffectiveTeamOrganizationContext(
+  db: DbLike,
+  organizationId: string,
+  userId: string,
+): Promise<boolean> {
   const [organization] = await db
     .select({
       id: organizations.id,
@@ -784,7 +783,7 @@ async function lockOrganizationContext(db: DbLike, organizationId: string, userI
     .for("update")
     .limit(1);
   if (!organization || organization.status !== "active" || organization.currentPolicyRevisionId === null) {
-    throw registrationBindingForbidden();
+    return false;
   }
   const [policy] = await db
     .select({ id: organizationPolicyRevisions.id, policy: organizationPolicyRevisions.policy })
@@ -795,7 +794,9 @@ async function lockOrganizationContext(db: DbLike, organizationId: string, userI
     ))
     .for("update")
     .limit(1);
-  if (!policy || !validateOrganizationPolicyV1(policy.policy).valid) throw registrationBindingForbidden();
+  if (!policy) return false;
+  const policyValidation = validateOrganizationPolicyV1(policy.policy);
+  if (!policyValidation.valid) return false;
   const [membership] = await db
     .select({ id: organizationMemberships.id })
     .from(organizationMemberships)
@@ -804,9 +805,16 @@ async function lockOrganizationContext(db: DbLike, organizationId: string, userI
       eq(organizationMemberships.userId, userId),
       isNull(organizationMemberships.removedAt),
     ))
-    .for("update")
-    .limit(1);
-  if (!membership) throw registrationBindingForbidden();
+      .for("update")
+      .limit(1);
+  return isEffectiveTeamMembership({
+    organizationId,
+    organizationStatus: organization.status,
+    currentPolicyRevisionId: organization.currentPolicyRevisionId,
+    hasCurrentPolicy: policy.id === organization.currentPolicyRevisionId,
+    hasActiveOrganizationMembership: Boolean(membership),
+    requireOrganizationMembershipForTeamMembers: policyValidation.value.teams.requireOrganizationMembershipForTeamMembers,
+  });
 }
 
 async function lockOrganizationTargetContext(

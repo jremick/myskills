@@ -1275,8 +1275,9 @@ async function assertCurrentRevisionActorAuthority(
       .for("update")
       .limit(1);
     if (!policy) return false;
+    let parsedPolicy: OrganizationPolicyV1;
     try {
-      assertValidOrganizationPolicyV1(policy.policy);
+      parsedPolicy = assertValidOrganizationPolicyV1(policy.policy);
     } catch {
       return false;
     }
@@ -1290,7 +1291,14 @@ async function assertCurrentRevisionActorAuthority(
       ))
       .for("update")
       .limit(1);
-    if (!organizationMembership) return false;
+    if (!isEffectiveTeamMembership({
+      organizationId: organization.id,
+      organizationStatus: organization.status as OrganizationStatus,
+      currentPolicyRevisionId,
+      hasCurrentPolicy: true,
+      hasActiveOrganizationMembership: Boolean(organizationMembership),
+      requireOrganizationMembershipForTeamMembers: parsedPolicy.teams.requireOrganizationMembershipForTeamMembers,
+    })) return false;
   }
 
   // Match team mutation order: team -> organization -> organization
@@ -1542,8 +1550,9 @@ async function revisionActorHasTeamReleaseAccess(
       .for("update")
       .limit(1);
     if (!policy) continue;
+    let parsedPolicy: OrganizationPolicyV1;
     try {
-      assertValidOrganizationPolicyV1(policy.policy);
+      parsedPolicy = assertValidOrganizationPolicyV1(policy.policy);
     } catch {
       continue;
     }
@@ -1557,7 +1566,14 @@ async function revisionActorHasTeamReleaseAccess(
       ))
       .for("update")
       .limit(1);
-    if (membership) return true;
+    if (isEffectiveTeamMembership({
+      organizationId: organization.id,
+      organizationStatus: organization.status as OrganizationStatus,
+      currentPolicyRevisionId: organization.currentPolicyRevisionId,
+      hasCurrentPolicy: true,
+      hasActiveOrganizationMembership: Boolean(membership),
+      requireOrganizationMembershipForTeamMembers: parsedPolicy.teams.requireOrganizationMembershipForTeamMembers,
+    })) return true;
   }
   return false;
 }
