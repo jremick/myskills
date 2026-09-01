@@ -516,6 +516,7 @@ export class MemorySkillRepository implements SkillRepository {
       ...(context.currentPolicyRevisionId === undefined ? {} : { currentPolicyRevisionId: context.currentPolicyRevisionId }),
       hasCurrentPolicy: context.hasCurrentPolicy,
       hasActiveOrganizationMembership: context.hasActiveOrganizationMembership,
+      requireOrganizationMembershipForTeamMembers: context.requireOrganizationMembershipForTeamMembers,
     });
   }
 
@@ -548,6 +549,7 @@ export class MemorySkillRepository implements SkillRepository {
       currentPolicyRevisionId: organization?.currentPolicyRevisionId,
       hasCurrentPolicy: Boolean(organization && this.hasCurrentOrganizationPolicy(organization)),
       hasActiveOrganizationMembership: Boolean(membership),
+      requireOrganizationMembershipForTeamMembers: organization?.policy.teams.requireOrganizationMembershipForTeamMembers,
     };
   }
 

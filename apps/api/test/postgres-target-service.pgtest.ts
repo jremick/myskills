@@ -31,6 +31,7 @@ const architectureId = "77777777-7777-4777-8777-777777777777";
 const standaloneTeamId = "88888888-8888-4888-8888-888888888888";
 const teamArchitectureId = "99999999-9999-4999-8999-999999999999";
 const standaloneArchitectureId = "abababab-abab-4bab-8bab-abababababab";
+const externalTeamPolicyId = "cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd";
 
 const adapter = { kind: "codex", version: "1.0.0", contractVersion: 1 as const };
 const capabilities = {
@@ -281,6 +282,36 @@ test("Postgres target team access follows effective parent organization state ac
   );
   await assertParentedTargetHidden(service, teamMemberId, parentedTarget.id);
   assert.deepEqual((await service.listTargets(teamMemberId)).map((target) => target.id), [standaloneTarget.id]);
+
+  const externalTeamPolicy = {
+    ...defaultOrganizationPolicyV1,
+    teams: {
+      ...defaultOrganizationPolicyV1.teams,
+      requireOrganizationMembershipForTeamMembers: false,
+    },
+  };
+  await pool.query(
+    `INSERT INTO organization_policy_revisions
+       (id, organization_id, revision_number, schema_version, policy, policy_sha256, created_by_user_id)
+     VALUES ($1, $2, 2, 1, $3::jsonb, $4, $5)`,
+    [externalTeamPolicyId, organizationId, JSON.stringify(externalTeamPolicy), organizationPolicyDigest(externalTeamPolicy), ownerId],
+  );
+  await pool.query(
+    "UPDATE organizations SET current_policy_revision_id = $1 WHERE id = $2",
+    [externalTeamPolicyId, organizationId],
+  );
+  assert.equal((await service.getTarget(teamMemberId, parentedTarget.id))?.id, parentedTarget.id);
+  assert.equal((await service.listObservations(teamMemberId, parentedTarget.id)).length, 1);
+  assert.deepEqual((await service.listTargets(teamMemberId)).map((target) => target.id).sort(), [
+    parentedTarget.id,
+    standaloneTarget.id,
+  ].sort());
+
+  await pool.query(
+    "UPDATE organizations SET current_policy_revision_id = $1 WHERE id = $2",
+    [organizationAdminId, organizationId],
+  );
+  await assertParentedTargetHidden(service, teamMemberId, parentedTarget.id);
 
   // Restoring membership is not enough when the parent organization is
   // suspended. The current organization state remains the authority.

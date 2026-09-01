@@ -583,6 +583,7 @@ export class PostgresArchitectureTargetStore implements ArchitectureTargetStore 
           organizationStatus: organizations.status,
           organizationCurrentPolicyRevisionId: organizations.currentPolicyRevisionId,
           organizationCurrentPolicyId: organizationPolicyRevisions.id,
+          organizationPolicy: organizationPolicyRevisions.policy,
           organizationMemberId: organizationMemberships.userId,
         })
         .from(teamMemberships)
@@ -615,14 +616,20 @@ export class PostgresArchitectureTargetStore implements ArchitectureTargetStore 
     return {
       userId,
       teamMemberships: teamRows
-        .filter((membership) => isEffectiveTeamMembership({
-          organizationId: membership.organizationId,
-          organizationStatus: membership.organizationStatus ?? undefined,
-          currentPolicyRevisionId: membership.organizationCurrentPolicyRevisionId,
-          hasCurrentPolicy: membership.organizationCurrentPolicyId !== null
-            && membership.organizationCurrentPolicyId === membership.organizationCurrentPolicyRevisionId,
-          hasActiveOrganizationMembership: membership.organizationMemberId === userId,
-        }))
+        .filter((membership) => {
+          const policy = validateOrganizationPolicyV1(membership.organizationPolicy);
+          return isEffectiveTeamMembership({
+            organizationId: membership.organizationId,
+            organizationStatus: membership.organizationStatus ?? undefined,
+            currentPolicyRevisionId: membership.organizationCurrentPolicyRevisionId,
+            hasCurrentPolicy: policy.valid
+              && membership.organizationCurrentPolicyId === membership.organizationCurrentPolicyRevisionId,
+            hasActiveOrganizationMembership: membership.organizationMemberId === userId,
+            requireOrganizationMembershipForTeamMembers: policy.valid
+              ? policy.value.teams.requireOrganizationMembershipForTeamMembers
+              : undefined,
+          });
+        })
         .map((membership) => ({
           teamId: membership.teamId,
           role: membership.role === "owner" ? "owner" as const : "member" as const,

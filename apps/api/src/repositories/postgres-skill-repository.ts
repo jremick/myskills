@@ -846,13 +846,17 @@ async function assertCurrentTeamGrantAuthority(
       || organization.status !== "active"
       || !organization.currentPolicyRevisionId
       || !policyRow
-      || policyRow.id !== organization.currentPolicyRevisionId
-      || organizationMembership?.removedAt !== null) {
+      || policyRow.id !== organization.currentPolicyRevisionId) {
       throw teamGrantUnavailable();
     }
+    let policy: OrganizationPolicyV1;
     try {
-      assertValidOrganizationPolicyV1(policyRow.policy);
+      policy = assertValidOrganizationPolicyV1(policyRow.policy);
     } catch {
+      throw teamGrantUnavailable();
+    }
+    if (policy.teams.requireOrganizationMembershipForTeamMembers
+      && organizationMembership?.removedAt !== null) {
       throw teamGrantUnavailable();
     }
   }
@@ -885,8 +889,8 @@ function visibleReleasedSkillPredicate(): SQL | undefined {
 
 /**
  * Organization-owned team access is derived from the current relational
- * context on every read. A team membership row never implies organization
- * membership. Standalone teams retain the pre-tenancy behavior.
+ * context and current policy on every read. Standalone teams retain the
+ * pre-tenancy behavior.
  */
 function effectiveTeamMembershipPredicate(actorId: string): SQL<boolean> {
   return sql<boolean>`(
@@ -896,9 +900,14 @@ function effectiveTeamMembershipPredicate(actorId: string): SQL<boolean> {
       and ${organizations.status} = 'active'
       and ${organizations.currentPolicyRevisionId} is not null
       and ${organizationPolicyRevisions.id} is not null
-      and ${organizationMemberships.id} is not null
-      and ${organizationMemberships.userId} = ${actorId}
-      and ${organizationMemberships.removedAt} is null
+      and (
+        coalesce(${organizationPolicyRevisions.policy}->'teams'->>'requireOrganizationMembershipForTeamMembers', 'true') = 'false'
+        or (
+          ${organizationMemberships.id} is not null
+          and ${organizationMemberships.userId} = ${actorId}
+          and ${organizationMemberships.removedAt} is null
+        )
+      )
     )
   )`;
 }
@@ -925,7 +934,10 @@ function effectiveTeamAccessPredicate(actorId: string): SQL<boolean> {
           org.status = 'active'
           and org.current_policy_revision_id is not null
           and opr.id is not null
-          and om.id is not null
+          and (
+            coalesce(opr.policy->'teams'->>'requireOrganizationMembershipForTeamMembers', 'true') = 'false'
+            or om.id is not null
+          )
         )
       )
   )`;

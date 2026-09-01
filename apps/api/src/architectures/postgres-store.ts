@@ -58,6 +58,7 @@ import {
   validateArchitecturePattern,
   validateArchitectureSpec,
 } from "./service.js";
+import { isEffectiveTeamMembership } from "../teams/effective-membership.js";
 
 /*
  * These optional fields keep the store usable for legacy/fixture callers that
@@ -761,6 +762,7 @@ export class PostgresArchitectureStore implements ArchitectureStore {
       organizationMemberId: string | null;
       organizationCurrentPolicyRevisionId: string | null;
       organizationCurrentPolicyId: string | null;
+      organizationPolicy: unknown;
     };
     let rows: ResolvedTeamMembership[];
     if (organizationSupport.fullTenancy) {
@@ -773,6 +775,7 @@ export class PostgresArchitectureStore implements ArchitectureStore {
           organizationMemberId: organizationMembershipsTable.userId,
           organizationCurrentPolicyRevisionId: organizations.currentPolicyRevisionId,
           organizationCurrentPolicyId: architectureCurrentOrganizationPolicy.id,
+          organizationPolicy: architectureCurrentOrganizationPolicy.policy,
         })
         .from(teamMemberships)
         .innerJoin(teams, eq(teams.id, teamMemberships.teamId))
@@ -804,6 +807,7 @@ export class PostgresArchitectureStore implements ArchitectureStore {
           organizationMemberId: null,
           organizationCurrentPolicyRevisionId: null,
           organizationCurrentPolicyId: null,
+          organizationPolicy: null,
         }));
     } else {
       // The pre-tenancy schema has no parent column, so all rows are
@@ -820,15 +824,28 @@ export class PostgresArchitectureStore implements ArchitectureStore {
           organizationMemberId: null,
           organizationCurrentPolicyRevisionId: null,
           organizationCurrentPolicyId: null,
+          organizationPolicy: null,
         }));
     }
     const byTeam = new Map<string, ArchitectureTeamMemberRole>();
     for (const row of rows) {
-      if (row.organizationId !== null
-        && (row.organizationStatus !== "active"
-          || row.organizationMemberId !== actor.id
-          || row.organizationCurrentPolicyRevisionId === null
-          || row.organizationCurrentPolicyId !== row.organizationCurrentPolicyRevisionId)) {
+      let policy: OrganizationPolicyV1 | null = null;
+      if (row.organizationId !== null) {
+        try {
+          policy = assertValidOrganizationPolicyV1(row.organizationPolicy);
+        } catch {
+          policy = null;
+        }
+      }
+      if (!isEffectiveTeamMembership({
+        organizationId: row.organizationId,
+        organizationStatus: row.organizationStatus ?? undefined,
+        currentPolicyRevisionId: row.organizationCurrentPolicyRevisionId,
+        hasCurrentPolicy: policy !== null
+          && row.organizationCurrentPolicyId === row.organizationCurrentPolicyRevisionId,
+        hasActiveOrganizationMembership: row.organizationMemberId === actor.id,
+        requireOrganizationMembershipForTeamMembers: policy?.teams.requireOrganizationMembershipForTeamMembers,
+      })) {
         continue;
       }
       byTeam.set(row.teamId, strongerRole(byTeam.get(row.teamId), row.role));

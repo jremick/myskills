@@ -2011,8 +2011,9 @@ function visibleToActorPredicate(actorId: string | null | undefined, sharing: Sh
 /**
  * Team-derived release access must resolve the parent organization at read
  * time. Standalone teams retain the legacy membership behavior, while an
- * organization-owned team requires an active organization, its current
- * policy row, and the same actor's active organization membership.
+ * organization-owned team requires an active organization and its current
+ * policy row. The policy decides whether the same actor must also have an
+ * active organization membership.
  */
 function effectiveTeamAccessPredicate(actorId: string): SQL<boolean> {
   return sql<boolean>`exists (
@@ -2036,7 +2037,10 @@ function effectiveTeamAccessPredicate(actorId: string): SQL<boolean> {
           org.status = 'active'
           and org.current_policy_revision_id is not null
           and opr.id is not null
-          and om.id is not null
+          and (
+            coalesce(opr.policy->'teams'->>'requireOrganizationMembershipForTeamMembers', 'true') = 'false'
+            or om.id is not null
+          )
         )
       )
   )`;

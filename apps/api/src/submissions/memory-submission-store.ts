@@ -898,6 +898,7 @@ export class MemorySubmissionStore implements SubmissionStore {
       currentPolicyRevisionId: organization?.currentPolicyRevisionId,
       hasCurrentPolicy: Boolean(organization && organization.currentPolicyRevisionId && organization.policy),
       hasActiveOrganizationMembership: Boolean(membership && membership.removedAt === null),
+      requireOrganizationMembershipForTeamMembers: organization?.policy.teams.requireOrganizationMembershipForTeamMembers,
     });
   }
 

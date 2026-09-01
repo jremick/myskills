@@ -9,6 +9,7 @@ import {
   organizationPolicyRevisions,
   organizations,
   skillArtifacts,
+  skillArchitectures,
   skillTeamGrants,
   skillVersions,
   skills,
@@ -16,6 +17,7 @@ import {
   teams,
   users,
 } from "../src/db/schema.js";
+import { PostgresArchitectureStore } from "../src/architectures/postgres-store.js";
 import { PostgresSkillRepository } from "../src/repositories/postgres-skill-repository.js";
 import { PostgresSubmissionStore } from "../src/submissions/postgres-submission-store.js";
 import { PostgresTeamStore } from "../src/teams/postgres-team-store.js";
@@ -30,6 +32,8 @@ const standaloneTeamId = "66666666-6666-4666-8666-666666666666";
 const parentedSkillId = "77777777-7777-4777-8777-777777777777";
 const standaloneSkillId = "88888888-8888-4888-8888-888888888888";
 const parentedVersionId = "99999999-9999-4999-8999-999999999999";
+const parentedArchitectureId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const externalMemberPolicyId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
 test("Postgres team access is revoked by parent organization state while standalone teams remain", {
   timeout: 60_000,
@@ -41,6 +45,7 @@ test("Postgres team access is revoked by parent organization state while standal
   const teamStore = new PostgresTeamStore(db);
   const skillRepository = new PostgresSkillRepository(db);
   const submissionStore = new PostgresSubmissionStore(db);
+  const architectureStore = new PostgresArchitectureStore(db);
 
   await insertUser(db, ownerId, "effective-owner@example.com");
   await insertUser(db, memberId, "effective-member@example.com");
@@ -103,6 +108,13 @@ test("Postgres team access is revoked by parent organization state while standal
     { skillId: parentedSkillId, teamId: parentedTeamId },
     { skillId: standaloneSkillId, teamId: standaloneTeamId },
   ]);
+  await db.insert(skillArchitectures).values({
+    id: parentedArchitectureId,
+    ownerTeamId: parentedTeamId,
+    name: "Effective parented architecture",
+    description: "External team policy regression fixture.",
+    patternId: "flat",
+  });
 
   assert.equal((await teamStore.findMembership({ teamId: parentedTeamId, userId: memberId }))?.role, "member");
   assert.deepEqual(
@@ -113,6 +125,7 @@ test("Postgres team access is revoked by parent organization state while standal
   assert.equal((await skillRepository.getVisibleSkillBySlug("effective-standalone-skill", memberId))?.slug, "effective-standalone-skill");
   assert.equal((await skillRepository.getSkillVisibleToTeamBySlug("effective-parented-skill", parentedTeamId))?.slug, "effective-parented-skill");
   assert.ok(await submissionStore.getPublicRelease({ slug: "effective-parented-skill", version: "1.0.0", actorId: memberId }));
+  assert.equal((await architectureStore.getArchitecture(memberId, parentedArchitectureId))?.id, parentedArchitectureId);
 
   await db.update(organizations).set({ status: "suspended" }).where(eq(organizations.id, organizationId));
   assert.equal(await teamStore.findMembership({ teamId: parentedTeamId, userId: memberId }), null);
@@ -128,6 +141,30 @@ test("Postgres team access is revoked by parent organization state while standal
   assert.deepEqual((await teamStore.listTeamsForUser(memberId)).map((team) => team.id), [standaloneTeamId]);
   assert.equal(await skillRepository.getVisibleSkillBySlug("effective-parented-skill", memberId), null);
   assert.equal(await submissionStore.getPublicRelease({ slug: "effective-parented-skill", version: "1.0.0", actorId: memberId }), null);
+  assert.equal(await architectureStore.getArchitecture(memberId, parentedArchitectureId), null);
+
+  const externalMemberPolicy = {
+    ...defaultOrganizationPolicyV1,
+    teams: {
+      ...defaultOrganizationPolicyV1.teams,
+      requireOrganizationMembershipForTeamMembers: false,
+    },
+  };
+  await db.insert(organizationPolicyRevisions).values({
+    id: externalMemberPolicyId,
+    organizationId,
+    revisionNumber: 2,
+    schemaVersion: 1,
+    policy: externalMemberPolicy,
+    policySha256: organizationPolicyDigest(externalMemberPolicy),
+    createdByUserId: ownerId,
+  });
+  await db.update(organizations).set({ currentPolicyRevisionId: externalMemberPolicyId }).where(eq(organizations.id, organizationId));
+
+  assert.equal((await teamStore.findMembership({ teamId: parentedTeamId, userId: memberId }))?.role, "member");
+  assert.equal((await skillRepository.getVisibleSkillBySlug("effective-parented-skill", memberId))?.slug, "effective-parented-skill");
+  assert.ok(await submissionStore.getPublicRelease({ slug: "effective-parented-skill", version: "1.0.0", actorId: memberId }));
+  assert.equal((await architectureStore.getArchitecture(memberId, parentedArchitectureId))?.id, parentedArchitectureId);
 });
 
 test("Postgres skill team grants recheck the complete effective membership set inside the replacement transaction", {
