@@ -181,7 +181,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [authState, setAuthState] = useState<AuthState>("idle");
   const [mfaPending, setMfaPending] = useState<MfaPending | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const mobileMoreButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMoreMenuRef = useRef<HTMLDivElement>(null);
@@ -692,20 +692,28 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }
 
   const navItems = [
-    { view: "browse" as const, label: "Registry", icon: <Boxes size={18} aria-hidden="true" />, enabled: true },
-    { view: "architectures" as const, label: "Architectures", icon: <Workflow size={18} aria-hidden="true" />, enabled: Boolean(session) },
-    { view: "organizations" as const, label: "Organizations", icon: <UsersRound size={18} aria-hidden="true" />, enabled: canUseOrganizations },
-    { view: "targets" as const, label: "Connected targets", icon: <Link2 size={18} aria-hidden="true" />, enabled: canUseTargets },
-    { view: "updates" as const, label: "Updates", icon: <RotateCw size={18} aria-hidden="true" />, enabled: canUseTargets },
-    { view: "submit" as const, label: "Submit", icon: <Upload size={18} aria-hidden="true" />, enabled: canUseSubmit },
-    { view: "review" as const, label: "Review", icon: <ClipboardList size={18} aria-hidden="true" />, enabled: canUseReview },
-    { view: "teams" as const, label: "Teams", icon: <UsersRound size={18} aria-hidden="true" />, enabled: canUseTeams },
-    { view: "admin" as const, label: "Admin", icon: <Settings size={18} aria-hidden="true" />, enabled: canUseAdmin },
-    { view: "settings" as const, label: "Settings", icon: <UserCog size={18} aria-hidden="true" />, enabled: Boolean(session) },
-    { view: "login" as const, label: "Login", icon: <LogIn size={18} aria-hidden="true" />, enabled: !session },
+    { view: "browse" as const, label: "Registry", group: "Library" as const, icon: <Boxes size={18} aria-hidden="true" />, enabled: true },
+    { view: "architectures" as const, label: "Architectures", group: "Build" as const, icon: <Workflow size={18} aria-hidden="true" />, enabled: Boolean(session) },
+    { view: "submit" as const, label: "Submit", group: "Build" as const, icon: <Upload size={18} aria-hidden="true" />, enabled: canUseSubmit },
+    { view: "review" as const, label: "Review", group: "Govern" as const, icon: <ClipboardList size={18} aria-hidden="true" />, enabled: canUseReview },
+    { view: "teams" as const, label: "Teams", group: "Govern" as const, icon: <UsersRound size={18} aria-hidden="true" />, enabled: canUseTeams },
+    { view: "organizations" as const, label: "Organizations", group: "Govern" as const, icon: <UsersRound size={18} aria-hidden="true" />, enabled: canUseOrganizations },
+    { view: "targets" as const, label: "Connected targets", group: "Observe" as const, icon: <Link2 size={18} aria-hidden="true" />, enabled: canUseTargets },
+    { view: "updates" as const, label: "Updates", group: "Observe" as const, icon: <RotateCw size={18} aria-hidden="true" />, enabled: canUseTargets },
+    { view: "admin" as const, label: "Admin", group: "Account" as const, icon: <Settings size={18} aria-hidden="true" />, enabled: canUseAdmin },
+    { view: "settings" as const, label: "Settings", group: "Account" as const, icon: <UserCog size={18} aria-hidden="true" />, enabled: Boolean(session) },
+    { view: "login" as const, label: "Login", group: "Account" as const, icon: <LogIn size={18} aria-hidden="true" />, enabled: !session },
   ].filter((item) => item.enabled);
-  const mobilePrimaryItems = navItems.length > 5 ? navItems.slice(0, 4) : navItems;
-  const mobileOverflowItems = navItems.length > 5 ? navItems.slice(4) : [];
+  const navGroups = (["Library", "Build", "Govern", "Observe", "Account"] as const)
+    .map((label) => ({ label, items: navItems.filter((item) => item.group === label) }))
+    .filter((group) => group.items.length > 0);
+  const mobilePriority = ["browse", "architectures", "review", "targets", "submit"] as const;
+  const mobilePrimaryItems = mobilePriority
+    .map((view) => navItems.find((item) => item.view === view))
+    .filter((item): item is (typeof navItems)[number] => Boolean(item))
+    .slice(0, 4);
+  const mobilePrimaryViews = new Set(mobilePrimaryItems.map((item) => item.view));
+  const mobileOverflowItems = navItems.filter((item) => !mobilePrimaryViews.has(item.view));
 
   return (
     <div className={sidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
@@ -728,19 +736,26 @@ export function RegistryApp({ client }: RegistryAppProps) {
           </IconButton>
         </div>
         <nav className="side-nav">
-          {navItems.map((item) => (
-            <a
-              aria-current={activeView === item.view ? "page" : undefined}
-              className={activeView === item.view ? "side-nav-item active" : "side-nav-item"}
-              href={pathForView(item.view)}
-              key={item.view}
-              onClick={(event) => handleAppLink(event, item.view)}
-              aria-label={sidebarCollapsed ? item.label : undefined}
-              title={sidebarCollapsed ? item.label : undefined}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </a>
+          {navGroups.map((group) => (
+            <div className="side-nav-group" key={group.label}>
+              <span className="side-nav-label">{group.label}</span>
+              <div className="side-nav-links">
+                {group.items.map((item) => (
+                  <a
+                    aria-current={activeView === item.view ? "page" : undefined}
+                    className={activeView === item.view ? "side-nav-item active" : "side-nav-item"}
+                    href={pathForView(item.view)}
+                    key={item.view}
+                    onClick={(event) => handleAppLink(event, item.view)}
+                    aria-label={sidebarCollapsed ? item.label : undefined}
+                    title={sidebarCollapsed ? item.label : undefined}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
         {session && (
@@ -804,14 +819,25 @@ export function RegistryApp({ client }: RegistryAppProps) {
             />
           ) : (
             <main className="workspace shadcn-registry-workspace shadcn-registry-layout">
-              <h1 className="sr-only">Skill registry</h1>
+              <header className="registry-page-header">
+                <div>
+                  <span className="registry-page-eyebrow">Library / approved catalogue</span>
+                  <div className="registry-page-title-row">
+                    <h1>Skill registry</h1>
+                    <Badge className="registry-count-badge" variant="outline" aria-live="polite">
+                      {listState === "ready" ? `${skills.length} approved` : resultCountText(listState, skills.length)}
+                    </Badge>
+                  </div>
+                  <p>Find an exact release, inspect its trust evidence, and carry the approved reference into your workflow.</p>
+                </div>
+              </header>
               <Card className="results-panel registry-results-panel shadcn-console-card" aria-label="Skill search results">
                 <CardHeader className="panel-heading review-registry-heading shadcn-card-header">
                   <div>
-                    <CardTitle>Approved registry</CardTitle>
+                    <CardTitle>Approved skills</CardTitle>
                     <CardDescription aria-live="polite">{resultCountText(listState, skills.length)}</CardDescription>
                   </div>
-                  <Badge className="shadcn-review-eyebrow" variant="outline">Registry</Badge>
+                  <span className="registry-panel-note">Exact references</span>
                 </CardHeader>
                 <CardContent className="review-card-content registry-card-content">
                   <div className="result-list shadcn-review-list registry-result-list">
@@ -841,8 +867,11 @@ export function RegistryApp({ client }: RegistryAppProps) {
                           <span>{skill.slug}</span>
                           <span className="tag-row review-registry-tags">{skill.tags.slice(0, 3).map((tag) => <Tag key={tag}>{tag}</Tag>)}</span>
                         </span>
-                        <Badge className="registry-version-badge" variant="secondary">{skill.latestVersion ?? "-"}</Badge>
-                        <span className="platform-icons">{skill.platforms.slice(0, 2).map((item) => item.name).join(", ")}</span>
+                        <span className="registry-result-meta">
+                          <Badge className="registry-version-badge" variant="secondary">{skill.latestVersion ?? "-"}</Badge>
+                          <span className="registry-visibility">{formatStatusLabel(skill.visibility)}</span>
+                          <span className="platform-icons">{skill.platforms.slice(0, 2).map((item) => item.name).join(", ")}</span>
+                        </span>
                       </a>
                     ))}
                     {listState === "ready" && skills.length === 0 && (
@@ -904,6 +933,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
         <nav className="mobile-nav" aria-label="Mobile navigation">
           {mobilePrimaryItems.map((item) => (
             <a
+              aria-label={item.label}
               aria-current={activeView === item.view ? "page" : undefined}
               className={activeView === item.view ? "mobile-nav-item active" : "mobile-nav-item"}
               href={pathForView(item.view)}
@@ -911,7 +941,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
               onClick={(event) => handleAppLink(event, item.view)}
             >
               {item.icon}
-              <span>{item.label}</span>
+              <span>{item.view === "architectures" ? "Build" : item.view === "targets" ? "Targets" : item.label}</span>
             </a>
           ))}
           {mobileOverflowItems.length > 0 && (
@@ -4152,23 +4182,27 @@ function SkillDetail({
         <div className="detail-heading shadcn-detail-title-row">
           <SkillIcon slug={selectedSkill.slug} large />
           <div className="detail-title shadcn-detail-title">
+            <span className="registry-detail-eyebrow">Approved skill release</span>
             <CardTitle>{selectedSkill.title}</CardTitle>
             <CardDescription>{selectedSkill.slug}</CardDescription>
           </div>
-          <div className="detail-status registry-detail-status" aria-label="Release status">
-            <Badge className={`review-status-badge review-status-badge-${release.reviewStatus}`} variant="outline">
-              Review {formatStatusLabel(release.reviewStatus)}
-            </Badge>
-            <Badge className={`review-status-badge review-status-badge-${release.securityStatus}`} variant="outline">
-              Security {formatStatusLabel(release.securityStatus)}
-            </Badge>
+          <div className="registry-detail-reference">
+            <span>Exact release</span>
+            <strong>{release.version}</strong>
+            <div className="detail-status registry-detail-status" aria-label="Release status">
+              <Badge className={`review-status-badge review-status-badge-${release.reviewStatus}`} variant="outline">
+                Review {formatStatusLabel(release.reviewStatus)}
+              </Badge>
+              <Badge className={`review-status-badge review-status-badge-${release.securityStatus}`} variant="outline">
+                Security {formatStatusLabel(release.securityStatus)}
+              </Badge>
+            </div>
           </div>
         </div>
       </CardHeader>
       <CardContent className="shadcn-detail-content registry-detail-content">
         <p className="summary">{selectedSkill.summary}</p>
         <dl className="metadata-grid shadcn-metadata-grid registry-metadata-grid">
-          <Metadata label="Latest version" value={release.version} />
           <Metadata label="Platforms" value={release.platforms.map((item) => item.name).join(", ")} />
           <Metadata label="Tags" value={selectedSkill.tags.join(", ") || "-"} />
           <Metadata label="Released" value={release.publishedAt ? formatDate(release.publishedAt) : "Not published"} />

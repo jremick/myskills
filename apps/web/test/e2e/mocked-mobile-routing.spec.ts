@@ -23,6 +23,8 @@ test("route-mocked owner registry fits 320, 375, and 390 px with safe mobile ove
     await page.setViewportSize({ width, height: 760 });
     await page.goto("/skills/release-notes-helper");
     await expect(page.getByRole("heading", { name: "Release Notes Helper" })).toBeVisible();
+    await expect(page.locator(".mobile-nav").getByRole("link", { name: "Architectures" })).toContainText("Build");
+    await expect(page.locator(".mobile-nav").getByRole("link", { name: "Connected targets" })).toContainText("Targets");
 
     const measurements = await page.evaluate(() => {
       const nav = document.querySelector<HTMLElement>(".mobile-nav")!.getBoundingClientRect();
@@ -60,7 +62,7 @@ test("route-mocked owner registry fits 320, 375, and 390 px with safe mobile ove
 
     await more.click();
     await expect(adminMenuItem).toBeVisible();
-    await page.locator(".registry-detail-panel").click({ position: { x: 8, y: 8 } });
+    await page.getByLabel("Search skills").click();
     await expect(adminMenuItem).toBeHidden();
   }
 });
@@ -71,6 +73,7 @@ test("route-mocked registry uses push navigation and restores URL-backed state w
 
   await expect(page.getByLabel("Search skills")).toHaveValue("release");
   await expect(page.getByText(/--platform 'generic'/)).toBeVisible();
+  await expect(page.locator(".side-nav-label")).toHaveText(["Library", "Build", "Govern", "Observe", "Account"]);
   await expect(page.locator(".side-nav").getByRole("link", { name: "Registry" })).toHaveAttribute("aria-current", "page");
 
   await page.getByLabel("Search skills").fill("smoke");
