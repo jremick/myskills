@@ -68,6 +68,8 @@ jobs:
       - run: npm install -g "$(node -p 'require("./package.json").packageManager')"
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - name: Build web workspace dependencies
+        run: npm run build -w @myskills-app/core
       - run: npm run test:e2e -w @myskills-app/web
       - name: Run production-like API and web journey
         run: npm run test:e2e:fullstack
