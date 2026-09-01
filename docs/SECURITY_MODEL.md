@@ -8,9 +8,9 @@ partially implemented Phase 2 architecture controls. The companion threat
 model in [THREAT_MODEL.md](THREAT_MODEL.md) records attacker goals, trust
 boundaries, residual prerelease risks, audit findings, and business-safe
 release gates.
-Phase 2 controls are local, unreleased evidence; they do not establish a
-hosted deployment or a live provider credential path. Source and focused-test
-presence in this branch is not a passing release-gate result.
+Phase 2 controls are source-release evidence; they do not establish a hosted
+deployment or a live provider credential path. Source presence is not a
+passing production-deployment gate result.
 
 ## Main Risks
 

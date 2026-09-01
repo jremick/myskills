@@ -49,7 +49,7 @@ jobs:
           test "$WEB_E2E_RESULT" = "success"
           test "$POSTGRES_RESULT" = "success"
 
-  web-e2e:
+  web-e2e-supported-node:
     name: Web E2E / Node ${{ matrix.node-version }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -72,6 +72,18 @@ jobs:
       - name: Run production-like API and web journey
         run: npm run test:e2e:fullstack
 
+  # Preserve the protected-branch context while testing both supported Node lines.
+  web-e2e:
+    name: web-e2e
+    if: always()
+    needs: [web-e2e-supported-node]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every supported browser job
+        env:
+          WEB_E2E_RESULT: ${{ needs.web-e2e-supported-node.result }}
+        run: test "$WEB_E2E_RESULT" = "success"
+
   railway-images:
     name: Railway images
     runs-on: ubuntu-latest
@@ -82,7 +94,7 @@ jobs:
       - name: Build Railway web image
         run: docker build --file Dockerfile.web --build-arg VITE_API_BASE_URL=/api --tag myskills-app-web:ci .
 
-  postgres-integration:
+  postgres-supported-node:
     name: Postgres / Node ${{ matrix.node-version }}
     runs-on: ubuntu-latest
     strategy:
@@ -116,3 +128,15 @@ jobs:
       - run: npm run test:postgres
         env:
           TEST_DATABASE_URL: postgres://myskills_test:myskills_test@localhost:5432/myskills_test
+
+  # Preserve the protected-branch context while testing both supported Node lines.
+  postgres-integration:
+    name: postgres-integration
+    if: always()
+    needs: [postgres-supported-node]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every supported PostgreSQL job
+        env:
+          POSTGRES_RESULT: ${{ needs.postgres-supported-node.result }}
+        run: test "$POSTGRES_RESULT" = "success"

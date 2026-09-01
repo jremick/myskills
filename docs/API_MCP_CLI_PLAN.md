@@ -43,12 +43,11 @@ Browser auth uses token-free login/MFA responses followed by credentialed `myski
   service, idempotency, fencing, recovery, authorization, and readback
   contracts are complete.
 
-## Unreleased beta.3 breaking security and MCP changes
+## Beta.3 breaking security and MCP changes
 
-The current branch contains security and MCP contract changes that are not part
-of the published `0.1.0-beta.2` surface. They are beta.3-bound and remain
-unreleased; do not infer a beta.3 package or hosted deployment from this
-document.
+Beta.3 contains security and MCP contract changes that are not part of the
+published `0.1.0-beta.2` surface. The source and package release does not prove
+that the hosted Railway deployment has been promoted to beta.3.
 
 Team creation, team-owner invitation/member lifecycle mutations, and
 organization creation/invitation/member/policy/lifecycle mutations require an
@@ -59,7 +58,7 @@ sharing reads/writes require MFA. The deprecated beta.2
 remain valid for their documented scoped reads, but cannot be used to widen
 sharing or perform these mutations.
 
-Migration before a future beta.3: enroll TOTP through
+Migration from beta.2 to beta.3: enroll TOTP through
 `POST /v1/auth/mfa/totp/enroll` (with password reauthentication), confirm it
 with `POST /v1/auth/mfa/totp/confirm`, retain the one-time recovery codes, and
 complete subsequent login challenges through `POST /v1/auth/mfa/verify` or
@@ -79,8 +78,8 @@ the API URL or bearer token: configure the CLI with `myskills config set
 api-url ...` or `MYSKILLS_API_URL`, then authenticate it separately. Bearer
 credentials remain in request headers.
 
-The repository version remains `0.1.0-beta.2` until an approved beta.3
-release changes it and publishes migration guidance.
+The repository version is `0.1.0-beta.3`. Hosted deployment state must be read
+back separately and must not be inferred from the repository version.
 
 ## Skill Architecture Control Plane (Phase 2 draft)
 
@@ -90,7 +89,7 @@ router/leaf topology, exact slug/version/digest release references, logical
 profiles, and logical environments. Profiles default to deny and explicit
 denials override allows. Package visibility, architecture ownership, runtime
 exposure, organization sharing, and target consent remain separate decisions.
-This section describes the local unreleased Phase 2 branch; it is not a live
+This section describes the Phase 2 source release; it is not proof of a live
 Railway deployment and does not configure provider credentials.
 
 Topology pattern and delivery/governance mode are also separate. The built-in
@@ -209,11 +208,10 @@ server policy. The organization scope is policy-gated by active organization
 membership, current organization sharing controls, and explicit grants; a
 `personal`, `work`, or `team` label is not a tenant or authorization claim.
 
-The beta.2 compatibility shims are planned for removal at a separately
-published prerelease boundary (for example, a future beta.3) with migration
-guidance and release verification. Until that publication boundary is
-approved, Phase 2 remains a local, unreleased branch and does not imply a
-hosted deployment.
+The beta.2 compatibility shims remain in beta.3. Their removal requires a
+later, separately published prerelease boundary with migration guidance and
+release verification. The Phase 2 source release does not imply a hosted
+deployment.
 
 The read-only CLI commands `architectures preview`, `architectures compile`,
 `architectures plan`, and `architectures dry-run` already accept the explicit

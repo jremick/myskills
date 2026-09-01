@@ -61,9 +61,9 @@ Add a Skill Architecture Control Plane with these rules:
    credential store, or silent target write in this slice.
 6. Keep live adapters, target apply/rollback, target writes, package
    installation, and conditional exposure evaluation as later decisions. The
-   current local Phase 2 extension includes team-owned architectures,
-   organization tenancy, and a React Flow editor, but these remain local and
-   unreleased.
+   Phase 2 source release includes team-owned architectures, organization
+   tenancy, and a React Flow editor, but this does not imply a hosted
+   deployment.
 
 ## Current Phase 2 scope
 

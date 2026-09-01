@@ -64,8 +64,8 @@ operation with its own backup, migration, readiness, and rollback gate.
   credentials, query strings, or fragments; bearer credentials stay in
   headers. The API-owned `/v1/mcp/session` check accepts either `skills:read`
   or `architectures:read`; registry tools require the former and architecture
-  projection tools require the latter. Update clients before adopting a future
-  beta.3.
+  projection tools require the latter. Update clients when moving from beta.2
+  to beta.3.
 - Added complete-set organization grant handling to canonical `myskills
   sharing set`. Omitting organization IDs preserves the beta.2 compatibility
   merge; `--clear-organizations` sends `organizationIds: []` and is mutually

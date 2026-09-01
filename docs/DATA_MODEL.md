@@ -7,8 +7,8 @@ Last updated: 2026-09-01
 Postgres is the canonical application store. This document describes the
 current branch schema and separates database foundations from routes, services,
 client surfaces, and live capabilities that are still deferred.
-The Phase 2 tables and services described here are local, unreleased branch
-evidence; they are not a deployed Railway schema or live provider integration.
+The Phase 2 tables and services described here are source-release evidence;
+they are not a deployed Railway schema or live provider integration.
 
 ## Implemented identity and access tables
 
