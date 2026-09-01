@@ -1,4 +1,5 @@
-import { open, lstat, readFile, readdir } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { open, lstat, readdir } from "node:fs/promises";
 import path from "node:path";
 import {
   architectureTargetAdapterDigest,
@@ -392,10 +393,14 @@ export class CodexReadOnlyArchitectureTargetAdapter implements ReadOnlyArchitect
 
   async #readMetadataFile(relativeName: string): Promise<MetadataFileResult> {
     const filePath = path.join(this.#root, relativeName);
+    let handle: Awaited<ReturnType<typeof open>> | undefined;
     try {
-      const entry = await lstat(filePath);
-      if (entry.isSymbolicLink() || !entry.isFile() || entry.size > MAX_METADATA_BYTES) return { status: "invalid" };
-      const text = await readFile(filePath, "utf8");
+      handle = await open(filePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK);
+      const entry = await handle.stat();
+      if (!entry.isFile()) return { status: "invalid" };
+      const { buffer, bytesRead } = await readBounded(handle, MAX_METADATA_BYTES);
+      if (bytesRead > MAX_METADATA_BYTES) return { status: "invalid" };
+      const text = buffer.toString("utf8", 0, bytesRead);
       let value: unknown;
       try {
         value = JSON.parse(text);
@@ -406,6 +411,8 @@ export class CodexReadOnlyArchitectureTargetAdapter implements ReadOnlyArchitect
     } catch (error) {
       if (isMissingFileError(error)) return { status: "missing" };
       return { status: "invalid" };
+    } finally {
+      await handle?.close().catch(() => undefined);
     }
   }
 
@@ -658,9 +665,9 @@ function parseRouterPolicyEntry(value: unknown, findings: FindingCollector): Rou
 async function readFrontmatter(filePath: string): Promise<FrontmatterReadResult> {
   let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
-    const entry = await lstat(filePath);
-    if (entry.isSymbolicLink() || !entry.isFile()) return { status: "invalid" };
-    handle = await open(filePath, "r");
+    handle = await open(filePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK);
+    const entry = await handle.stat();
+    if (!entry.isFile()) return { status: "invalid" };
     const openingDelimiter = await readOpeningDelimiter(handle);
     if (!openingDelimiter.valid) return { status: "missing" };
     const lines: string[] = [];
@@ -679,6 +686,20 @@ async function readFrontmatter(filePath: string): Promise<FrontmatterReadResult>
   } finally {
     await handle?.close().catch(() => undefined);
   }
+}
+
+async function readBounded(
+  handle: Awaited<ReturnType<typeof open>>,
+  maximumBytes: number,
+): Promise<{ buffer: Buffer; bytesRead: number }> {
+  const buffer = Buffer.alloc(maximumBytes + 1);
+  let bytesRead = 0;
+  while (bytesRead < buffer.length) {
+    const result = await handle.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead);
+    if (result.bytesRead === 0) break;
+    bytesRead += result.bytesRead;
+  }
+  return { buffer, bytesRead };
 }
 
 /** Read only the delimiter before accepting any frontmatter bytes. */

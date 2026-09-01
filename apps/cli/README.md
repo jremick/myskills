@@ -174,7 +174,7 @@ Update the CLI with:
 npm install -g @jarel/myskills@alpha
 ```
 
-The `0.1.0-beta.3` source manifest is configured for the `beta` dist-tag. The release-verification workflow packs and installs the candidate without publishing it.
+The `0.1.0-beta.4` source manifest is configured for the `beta` dist-tag. The release-verification workflow packs and installs the candidate without publishing it.
 
 `validate`, `scan`, and `submit` accept a manifest file, package directory, or local `.zip` package. `login` prompts for the API URL when one is not supplied; the default is the local API at `http://localhost:3001`, and custom hosted URLs can be entered manually. Successful login stores the selected API URL in local CLI config so later commands can omit `--api-url`. API URL resolution is `--api-url`, then `MYSKILLS_API_URL`, then saved config, then `http://localhost:3001`.
 

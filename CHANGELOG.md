@@ -2,6 +2,29 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
+## 0.1.0-beta.4 - 2026-09-02
+
+Target release: `v0.1.0-beta.4`.
+
+This security fix-forward release supersedes beta.3 without changing the Phase 2
+API, CLI, or MCP contracts.
+
+### Security
+
+- Removed two file-system time-of-check/time-of-use races in the read-only Codex
+  target adapter. Metadata and skill frontmatter are now opened once without
+  following the final symlink, validated through the same file descriptor, and
+  read through bounded descriptor operations.
+- Updated the transitive `browserslist` development dependency to the patched
+  line after new high-severity availability and malformed-stats advisories were
+  published.
+
+### Release
+
+- Verified the exact published CLI version before checking the mutable npm
+  `beta` channel, and used an isolated cache for the channel install check so
+  registry propagation cannot be misclassified as incorrect package bytes.
+
 ## 0.1.0-beta.3 - 2026-09-01
 
 Target release: `v0.1.0-beta.3`.

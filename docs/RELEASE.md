@@ -1,7 +1,7 @@
 # Release Process
 
-Version: 0.1.0-beta.3
-Last updated: 2026-07-13
+Version: 0.1.0-beta.4
+Last updated: 2026-09-02
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
 
@@ -78,7 +78,7 @@ Draft public release text in a file and use `--notes-file` or the GitHub UI if a
 
 ## CLI Package Candidate
 
-The source version `0.1.0-beta.3` and `publishConfig.tag=beta` are coherent. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle.
+The source version `0.1.0-beta.4` and `publishConfig.tag=beta` are coherent. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle.
 
 The canonical gate proves:
 
@@ -95,6 +95,32 @@ npm publish -w @jarel/myskills --access public --tag beta --dry-run
 ```
 
 Until trusted publishing is configured, the approved maintainer may use npm's browser/passkey flow from a TTY with `--provenance=false`. Verify the beta dist-tag and install in a clean directory after publication. Never move `latest` to a prerelease unintentionally.
+
+Registry selectors and local npm metadata caches can lag immediately after a
+publish. Verify immutable package bytes before the mutable channel selector:
+
+```bash
+VERSION=$(node -p "require('./apps/cli/package.json').version")
+npm view "@jarel/myskills@${VERSION}" version dist.shasum dist.integrity
+
+EXACT_ROOT=$(mktemp -d)
+EXACT_CACHE=$(mktemp -d)
+npm install --prefix "$EXACT_ROOT" --cache "$EXACT_CACHE" --prefer-online \
+  "@jarel/myskills@${VERSION}"
+"$EXACT_ROOT/node_modules/.bin/myskills" --version
+
+npm view @jarel/myskills dist-tags
+CHANNEL_ROOT=$(mktemp -d)
+CHANNEL_CACHE=$(mktemp -d)
+npm install --prefix "$CHANNEL_ROOT" --cache "$CHANNEL_CACHE" --prefer-online \
+  @jarel/myskills@beta
+"$CHANNEL_ROOT/node_modules/.bin/myskills" --version
+```
+
+Both installed versions must equal `VERSION`, `beta` must resolve to `VERSION`,
+and `latest` must remain unchanged. Retry the read-back within a bounded window
+when the exact version is correct but the channel is still stale; do not
+misclassify a stale selector as incorrect package bytes.
 
 ## Production Promotion
 

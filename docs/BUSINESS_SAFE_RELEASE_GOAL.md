@@ -1,6 +1,6 @@
 # Business-Safe Production Release Goal
 
-Version: 0.1.0-beta.3
+Version: 0.1.0-beta.4
 Last updated: 2026-06-30
 
 ## Goal
