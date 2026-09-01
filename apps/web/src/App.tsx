@@ -21,6 +21,7 @@ import {
   FileCode2,
   Fingerprint,
   KeyRound,
+  Link2,
   LockKeyhole,
   LogIn,
   LogOut,
@@ -38,6 +39,7 @@ import {
   UserCog,
   UserRound,
   UsersRound,
+  Workflow,
   X,
 } from "lucide-react";
 import type { PublicSkill, SkillSharingDetails, TeamSharedSkillGroup, VisibilityScope } from "@myskills-app/core";
@@ -47,6 +49,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Frame, FrameDescription, FrameHeader, FramePanel, FrameTitle } from "@/components/reui/frame";
+import { ArchitecturesDashboard } from "@/components/architecture/ArchitecturesDashboard";
+import { OrganizationsDashboard } from "@/components/organization/OrganizationsDashboard";
+import { ArchitectureTargetsDashboard } from "@/components/target/ArchitectureTargetsDashboard";
 import {
   createRegistryClient,
   exportCommand,
@@ -90,7 +95,18 @@ interface RegistryAppProps {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type AuthState = "idle" | "loading" | "mfa";
-type AppView = "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "admin" | "review" | "submit" | "teams" | "settings" | "not-found";
+type AppView = "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "organizations" | "targets" | "admin" | "review" | "submit" | "teams" | "settings" | "not-found";
+
+interface AppLocation {
+  view: AppView;
+  slug: string | null;
+  query: string;
+  platform: string;
+}
+
+type ArchitectureNavigationGuard = (action: string) => boolean;
+
+const APP_HISTORY_INDEX_KEY = "__myskillsAppHistoryIndex";
 
 interface WebSession {
   expiresAt: string;
@@ -126,6 +142,7 @@ interface ConfirmationRequest {
 const API_TOKEN_SCOPE_OPTIONS: Array<{ scope: ApiTokenScope; label: string }> = [
   { scope: "profile:read", label: "Profile" },
   { scope: "skills:read", label: "Read skills" },
+  { scope: "architectures:read", label: "Read architectures" },
   { scope: "skills:submit", label: "Submit skills" },
   { scope: "review:read", label: "Review read" },
   { scope: "review:write", label: "Review write" },
@@ -133,6 +150,11 @@ const API_TOKEN_SCOPE_OPTIONS: Array<{ scope: ApiTokenScope; label: string }> = 
 
 export function RegistryApp({ client }: RegistryAppProps) {
   const initialLocation = appLocationFromWindow();
+  const historyIndexRef = useRef(readAppHistoryIndex(window.history.state) ?? 0);
+  const currentLocationRef = useRef(initialLocation);
+  const currentUrlRef = useRef(currentBrowserUrl());
+  const architectureNavigationGuardRef = useRef<ArchitectureNavigationGuard | null>(null);
+  const restoringPopstateRef = useRef(false);
   const [view, setView] = useState<AppView>(initialLocation.view);
   const [session, setSession] = useState<WebSession | null>(() => readStoredSession());
   const registryClient = useMemo(() => client ?? createRegistryClient(), [client]);
@@ -158,25 +180,102 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const canUseReview = Boolean(session && isReviewerUser(session.user));
   const canUseSubmit = Boolean(session && isSubmitterUser(session.user));
   const canUseTeams = Boolean(session);
+  const canUseOrganizations = Boolean(session && registryClient.listOrganizations);
+  const canUseTargets = Boolean(session && registryClient.listArchitectureTargets);
   const activeView: AppView = isPublicView(view)
     ? view
     : !session
       ? "login"
-      : view === "admin" && canUseAdmin
-        ? "admin"
+        : view === "admin" && canUseAdmin
+          ? "admin"
         : view === "review" && canUseReview
           ? "review"
-          : view === "submit" && canUseSubmit
-            ? "submit"
-            : view === "teams" && canUseTeams
-              ? "teams"
-            : view === "settings"
-              ? "settings"
-              : "browse";
+        : view === "submit" && canUseSubmit
+          ? "submit"
+        : view === "architectures" && session
+          ? "architectures"
+        : view === "organizations" && canUseOrganizations
+          ? "organizations"
+        : view === "targets" && canUseTargets
+          ? "targets"
+        : view === "teams" && canUseTeams
+          ? "teams"
+        : view === "settings"
+          ? "settings"
+          : "browse";
+
+  const replaceAppHistory = (nextUrl: string) => {
+    window.history.replaceState(appHistoryState(historyIndexRef.current), "", nextUrl);
+    currentLocationRef.current = appLocationFromWindow();
+    currentUrlRef.current = currentBrowserUrl();
+  };
+
+  const pushAppHistory = (nextUrl: string) => {
+    historyIndexRef.current += 1;
+    window.history.pushState(appHistoryState(historyIndexRef.current), "", nextUrl);
+    currentLocationRef.current = appLocationFromWindow();
+    currentUrlRef.current = currentBrowserUrl();
+  };
+
+  const registerArchitectureNavigationGuard = useCallback((guard: ArchitectureNavigationGuard | null) => {
+    architectureNavigationGuardRef.current = guard;
+  }, []);
 
   useEffect(() => {
-    function syncFromBrowserHistory() {
+    const url = currentBrowserUrl();
+    window.history.replaceState(appHistoryState(historyIndexRef.current), "", url);
+    currentUrlRef.current = url;
+  }, []);
+
+  useEffect(() => {
+    function syncFromBrowserHistory(event: PopStateEvent) {
       const next = appLocationFromWindow();
+      const previous = currentLocationRef.current;
+      const nextHistoryIndex = readAppHistoryIndex(event.state);
+
+      if (restoringPopstateRef.current) {
+        restoringPopstateRef.current = false;
+        if (nextHistoryIndex !== null) {
+          historyIndexRef.current = nextHistoryIndex;
+        }
+        currentLocationRef.current = next;
+        currentUrlRef.current = currentBrowserUrl();
+        return;
+      }
+
+      if (previous.view === "architectures" && next.view !== "architectures") {
+        const guard = architectureNavigationGuardRef.current;
+        if (guard) {
+          const action = nextHistoryIndex !== null && nextHistoryIndex < historyIndexRef.current
+            ? "go back"
+            : nextHistoryIndex !== null && nextHistoryIndex > historyIndexRef.current
+              ? "go forward"
+              : "navigate away";
+          if (!guard(action)) {
+            const restoreDelta = nextHistoryIndex === null
+              ? null
+              : historyIndexRef.current - nextHistoryIndex;
+            if (restoreDelta && Number.isFinite(restoreDelta)) {
+              restoringPopstateRef.current = true;
+              try {
+                window.history.go(restoreDelta);
+              } catch {
+                restoringPopstateRef.current = false;
+                replaceAppHistory(currentUrlRef.current);
+              }
+            } else {
+              replaceAppHistory(currentUrlRef.current);
+            }
+            return;
+          }
+        }
+      }
+
+      if (nextHistoryIndex !== null) {
+        historyIndexRef.current = nextHistoryIndex;
+      }
+      currentLocationRef.current = next;
+      currentUrlRef.current = currentBrowserUrl();
       setView(next.view);
       setSelectedSlug(next.slug);
       setQuery(next.query);
@@ -220,21 +319,17 @@ export function RegistryApp({ client }: RegistryAppProps) {
   useEffect(() => {
     if (!session && !isPublicView(view)) {
       setView("login");
-      window.history.replaceState({}, "", "/login");
+      replaceAppHistory("/login");
       return;
     }
     if (session && view !== activeView) {
       setView(activeView);
-      window.history.replaceState(
-        {},
-        "",
-        activeView === "browse" ? browseUrl(selectedSlug, query, platform) : pathForView(activeView),
-      );
+      replaceAppHistory(activeView === "browse" ? browseUrl(selectedSlug, query, platform) : pathForView(activeView));
       return;
     }
     if (session && view === "login") {
       setView("browse");
-      window.history.replaceState({}, "", "/registry");
+      replaceAppHistory("/registry");
     }
   }, [activeView, platform, query, selectedSlug, session, view]);
 
@@ -319,6 +414,9 @@ export function RegistryApp({ client }: RegistryAppProps) {
     if (activeView !== "browse" || listState !== "ready") {
       return;
     }
+    if (currentLocationRef.current.view !== "browse") {
+      return;
+    }
     const nextSlug = selectedSlug && skills.some((skill) => skill.slug === selectedSlug)
       ? selectedSlug
       : skills[0]?.slug ?? null;
@@ -327,7 +425,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
     }
     const nextUrl = browseUrl(nextSlug, query, platform);
     if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
-      window.history.replaceState({}, "", nextUrl);
+      replaceAppHistory(nextUrl);
     }
   }, [activeView, listState, platform, query, selectedSlug, skills]);
 
@@ -384,24 +482,24 @@ export function RegistryApp({ client }: RegistryAppProps) {
   function selectSkill(slug: string) {
     setView("browse");
     setSelectedSlug(slug);
-    window.history.pushState({}, "", browseUrl(slug, query, platform));
+    pushAppHistory(browseUrl(slug, query, platform));
   }
 
   function openLanding() {
     setView("landing");
-    window.history.pushState({}, "", "/");
+    pushAppHistory("/");
   }
 
   function openLogin() {
     setView("login");
-    window.history.pushState({}, "", "/login");
+    pushAppHistory("/login");
   }
 
   function openRegistry() {
     setView("browse");
     const nextSlug = selectedSlug ?? skills[0]?.slug ?? null;
     setSelectedSlug(nextSlug);
-    window.history.pushState({}, "", browseUrl(nextSlug, query, platform));
+    pushAppHistory(browseUrl(nextSlug, query, platform));
   }
 
   function retryRegistry() {
@@ -480,7 +578,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
     clearStoredSession();
     setMfaPending(null);
     setView("login");
-    window.history.replaceState({}, "", "/login");
+    replaceAppHistory("/login");
     try {
       await registryClient.logout();
     } catch {
@@ -495,7 +593,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
     setAuthState("idle");
     setAuthMessage(message);
     setView("login");
-    window.history.replaceState({}, "", "/login");
+    replaceAppHistory("/login");
   }
 
   function navigateTo(nextView: AppView) {
@@ -503,9 +601,9 @@ export function RegistryApp({ client }: RegistryAppProps) {
     if (nextView === "browse") {
       const nextSlug = selectedSlug ?? skills[0]?.slug ?? null;
       setSelectedSlug(nextSlug);
-      window.history.pushState({}, "", browseUrl(nextSlug, query, platform));
+      pushAppHistory(browseUrl(nextSlug, query, platform));
     } else {
-      window.history.pushState({}, "", pathForView(nextView));
+      pushAppHistory(pathForView(nextView));
     }
     setMobileMoreOpen(false);
   }
@@ -520,12 +618,12 @@ export function RegistryApp({ client }: RegistryAppProps) {
 
   function updateSearch(nextQuery: string) {
     setQuery(nextQuery);
-    window.history.replaceState({}, "", browseUrl(selectedSlug, nextQuery, platform));
+    replaceAppHistory(browseUrl(selectedSlug, nextQuery, platform));
   }
 
   function updatePlatform(nextPlatform: string) {
     setPlatform(nextPlatform);
-    window.history.replaceState({}, "", browseUrl(selectedSlug, query, nextPlatform));
+    replaceAppHistory(browseUrl(selectedSlug, query, nextPlatform));
   }
 
   if (activeView === "landing") {
@@ -584,6 +682,9 @@ export function RegistryApp({ client }: RegistryAppProps) {
 
   const navItems = [
     { view: "browse" as const, label: "Registry", icon: <Boxes size={18} aria-hidden="true" />, enabled: true },
+    { view: "architectures" as const, label: "Architectures", icon: <Workflow size={18} aria-hidden="true" />, enabled: Boolean(session) },
+    { view: "organizations" as const, label: "Organizations", icon: <UsersRound size={18} aria-hidden="true" />, enabled: canUseOrganizations },
+    { view: "targets" as const, label: "Connected targets", icon: <Link2 size={18} aria-hidden="true" />, enabled: canUseTargets },
     { view: "submit" as const, label: "Submit", icon: <Upload size={18} aria-hidden="true" />, enabled: canUseSubmit },
     { view: "review" as const, label: "Review", icon: <ClipboardList size={18} aria-hidden="true" />, enabled: canUseReview },
     { view: "teams" as const, label: "Teams", icon: <UsersRound size={18} aria-hidden="true" />, enabled: canUseTeams },
@@ -673,6 +774,12 @@ export function RegistryApp({ client }: RegistryAppProps) {
             <SubmitDashboard client={registryClient} session={session} />
           ) : activeView === "teams" && session ? (
             <TeamsDashboard client={registryClient} session={session} />
+          ) : activeView === "architectures" && session ? (
+            <ArchitecturesDashboard client={registryClient} onNavigationGuardChange={registerArchitectureNavigationGuard} session={session} />
+          ) : activeView === "organizations" && session ? (
+            <OrganizationsDashboard client={registryClient} session={session} />
+          ) : activeView === "targets" && session ? (
+            <ArchitectureTargetsDashboard client={registryClient} session={session} />
           ) : activeView === "admin" && session ? (
             <AdminConsole client={registryClient} session={session} />
           ) : activeView === "settings" && session ? (
@@ -4313,7 +4420,7 @@ function LifecyclePanel({
   );
 }
 
-function SharingPanel({
+export function SharingPanel({
   client,
   selectedSkill,
   session,
@@ -4328,6 +4435,8 @@ function SharingPanel({
   const [visibility, setVisibility] = useState<VisibilityScope>(selectedSkill.visibility);
   const [teamIds, setTeamIds] = useState<string[]>([]);
   const [userEmails, setUserEmails] = useState("");
+  const [availableOrganizations, setAvailableOrganizations] = useState<NonNullable<SkillSharingDetails["availableOrganizations"]>>([]);
+  const [organizationIds, setOrganizationIds] = useState<string[]>([]);
   const [confirmation, setConfirmation] = useState<ConfirmationRequest | null>(null);
 
   const loadSharing = useCallback(async () => {
@@ -4339,6 +4448,16 @@ function SharingPanel({
       setVisibility(next.visibility);
       setTeamIds(next.teamGrants.map((team) => team.id));
       setUserEmails(next.userGrants.map((user) => user.email).join(", "));
+      const listedOrganizations = [...(next.availableOrganizations ?? [])];
+      if (client.listOrganizations) {
+        try {
+          listedOrganizations.push(...await client.listOrganizations());
+        } catch {
+          // The sharing response still contains the server's safe fallback list.
+        }
+      }
+      setAvailableOrganizations(uniqueOrganizations(listedOrganizations));
+      setOrganizationIds(uniqueStrings(next.organizationGrants?.map((organization) => organization.id) ?? []));
       setState("ready");
     } catch (error) {
       setMessage(safeTeamErrorMessage(error));
@@ -4383,11 +4502,16 @@ function SharingPanel({
         visibility,
         teamIds: visibility === "team" ? teamIds : [],
         userEmails: visibility === "explicit-users" ? splitEmails(userEmails) : [],
+        organizationIds: uniqueStrings(organizationIds),
       });
       setDetails(next);
       setVisibility(next.visibility);
       setTeamIds(next.teamGrants.map((team) => team.id));
       setUserEmails(next.userGrants.map((user) => user.email).join(", "));
+      setOrganizationIds(uniqueStrings(next.organizationGrants?.map((organization) => organization.id) ?? organizationIds));
+      if (next.availableOrganizations) {
+        setAvailableOrganizations(uniqueOrganizations(next.availableOrganizations));
+      }
       setMessage("Sharing saved.");
       setState("ready");
     } catch (error) {
@@ -4402,11 +4526,21 @@ function SharingPanel({
   const visibilityOptions: Array<{ value: VisibilityScope; label: string; enabled: boolean }> = [
     { value: "public", label: "Public", enabled: settings.publicVisibilityEnabled },
     { value: "authenticated", label: "Signed-in users", enabled: settings.authenticatedVisibilityEnabled },
+    { value: "organization", label: "Organizations", enabled: settings.organizationVisibilityEnabled === true },
     { value: "private", label: "Private", enabled: true },
     { value: "team", label: "Teams", enabled: settings.teamsEnabled && settings.teamVisibilityEnabled },
     { value: "explicit-users", label: "Individual users", enabled: settings.userVisibilityEnabled },
   ];
   const availableTeams = details?.availableTeams ?? [];
+  const currentOrganizationGrants = details?.organizationGrants ?? [];
+  const organizationOptions = uniqueOrganizations([
+    ...availableOrganizations,
+    ...currentOrganizationGrants,
+  ]);
+  const organizationNames = currentOrganizationGrants.map((organization) => organization.name);
+  const hiddenOrganizationGrantCount = organizationIds.filter(
+    (organizationId) => !organizationOptions.some((organization) => organization.id === organizationId),
+  ).length;
 
   return (
     <Frame className="sharing-panel reui-registry-frame" role="region" aria-label="Sharing controls" spacing="sm">
@@ -4416,7 +4550,7 @@ function SharingPanel({
             <strong>Sharing</strong>
             <span>Control who can discover and install this skill.</span>
           </div>
-          <Button className="save-button shadcn-action-button" disabled={state === "loading"} size="sm" type="button" onClick={() => void saveSharing()}>
+          <Button className="save-button shadcn-action-button" disabled={state === "loading" || (visibility === "organization" && organizationIds.length === 0)} size="sm" type="button" onClick={() => void saveSharing()}>
             <Save size={16} aria-hidden="true" />
             Save sharing
           </Button>
@@ -4448,6 +4582,26 @@ function SharingPanel({
               </label>
             ))}
             {details && availableTeams.length === 0 && <small>No teams available.</small>}
+          </div>
+
+          <div className={visibility === "organization" ? "grant-box active" : "grant-box"}>
+            <strong>Organizations</strong>
+            <small>Select from organizations returned by the server. Existing grants stay selected when another visibility setting changes.</small>
+            {organizationNames.length > 0 && <small>Current grants: {organizationNames.join(", ")}</small>}
+            {organizationOptions.map((organization) => (
+              <label className="role-toggle" key={organization.id}>
+                <input
+                  aria-label={`Share with ${organization.name}`}
+                  checked={organizationIds.includes(organization.id)}
+                  disabled={visibility !== "organization" || state === "loading"}
+                  type="checkbox"
+                  onChange={() => setOrganizationIds((current) => toggleString(current, organization.id))}
+                />
+                <span>{organization.name}</span>
+              </label>
+            ))}
+            {hiddenOrganizationGrantCount > 0 && <small>{hiddenOrganizationGrantCount} existing organization grant{hiddenOrganizationGrantCount === 1 ? "" : "s"} are not in the current organization list and will be preserved.</small>}
+            {organizationOptions.length === 0 && <small>No organizations available.</small>}
           </div>
 
           <label className={visibility === "explicit-users" ? "grant-box active" : "grant-box"}>
@@ -4586,6 +4740,15 @@ function initialViewFromPath(pathname: string): AppView {
   if (pathname === "/submit") {
     return "submit";
   }
+  if (pathname === "/architectures") {
+    return "architectures";
+  }
+  if (pathname === "/organizations") {
+    return "organizations";
+  }
+  if (pathname === "/targets") {
+    return "targets";
+  }
   if (pathname === "/teams") {
     return "teams";
   }
@@ -4623,7 +4786,7 @@ function pathForView(view: AppView): string {
   return view === "browse" ? "/registry" : `/${view}`;
 }
 
-function appLocationFromWindow(): { view: AppView; slug: string | null; query: string; platform: string } {
+function appLocationFromWindow(): AppLocation {
   const params = new URLSearchParams(window.location.search);
   return {
     view: initialViewFromPath(window.location.pathname),
@@ -4631,6 +4794,26 @@ function appLocationFromWindow(): { view: AppView; slug: string | null; query: s
     query: params.get("q") ?? "",
     platform: params.get("platform") ?? "codex",
   };
+}
+
+function currentBrowserUrl(): string {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+function readAppHistoryIndex(state: unknown): number | null {
+  if (!state || typeof state !== "object" || Array.isArray(state)) {
+    return null;
+  }
+  const value = (state as Record<string, unknown>)[APP_HISTORY_INDEX_KEY];
+  return typeof value === "number" && Number.isSafeInteger(value) ? value : null;
+}
+
+function appHistoryState(index: number): Record<string, unknown> {
+  const state = window.history.state;
+  const base = state && typeof state === "object" && !Array.isArray(state)
+    ? state as Record<string, unknown>
+    : {};
+  return { ...base, [APP_HISTORY_INDEX_KEY]: index };
 }
 
 function browseUrl(slug: string | null, query: string, platform: string): string {
@@ -4752,6 +4935,17 @@ function toggleString(values: string[], value: string): string[] {
   return values.includes(value)
     ? values.filter((item) => item !== value)
     : [...values, value];
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
+type SkillSharingOrganization = NonNullable<SkillSharingDetails["availableOrganizations"]>[number];
+
+function uniqueOrganizations(values: SkillSharingOrganization[]): SkillSharingOrganization[] {
+  const byId = new Map(values.map((organization) => [organization.id, organization]));
+  return [...byId.values()].sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
 }
 
 function splitEmails(value: string): string[] {

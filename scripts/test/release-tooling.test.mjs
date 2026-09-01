@@ -11,7 +11,7 @@ const validEnv = {
   APP_BASE_URL: "https://skills.notexample.com",
   VITE_API_BASE_URL: "/api",
   ALLOWED_WEB_ORIGINS: "https://skills.notexample.com",
-  TRUST_PROXY: "1",
+  TRUST_PROXY: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7",
   DATABASE_URL: "postgres://myskills:strong-password@db.internal:5432/myskills",
   AUTH_SECRET: "production-auth-secret-at-least-32-bytes-long",
   AUTH_NOTIFICATION_MODE: "resend",
@@ -47,7 +47,7 @@ test("production preflight does not echo untrusted URL or proxy values", () => {
   assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, new RegExp(marker));
 });
 
-test("production Compose keeps numeric proxy trust behind the private web ingress", () => {
+test("production Compose keeps address-aware proxy trust behind the private web ingress", () => {
   const compose = readFileSync(resolve("docker-compose.production.example.yml"), "utf8");
   const envTemplate = readFileSync(resolve(".env.production.example"), "utf8");
   assert.deepEqual(validateProductionComposePolicy(compose, envTemplate), []);
@@ -58,7 +58,7 @@ test("production Compose keeps numeric proxy trust behind the private web ingres
   );
   assert.match(
     validateProductionComposePolicy(directlyPublished, envTemplate).join("\n"),
-    /must not publish an API host port while TRUST_PROXY is a numeric hop count/,
+    /keeps the API private/,
   );
 });
 
@@ -68,6 +68,12 @@ test("full-stack E2E accepts MinIO credentials that begin with a hyphen", () => 
     compose,
     /mc alias set -- e2e http:\/\/minio:9000 "\$\$MINIO_ROOT_USER" "\$\$MINIO_ROOT_PASSWORD"/,
   );
+});
+
+test("full-stack E2E uses address-aware proxy trust", () => {
+  const compose = readFileSync(resolve("docker-compose.e2e.yml"), "utf8");
+  assert.match(compose, /TRUST_PROXY: "10\.0\.0\.0\/8,172\.16\.0\.0\/12,192\.168\.0\.0\/16,fc00::\/7"/);
+  assert.doesNotMatch(compose, /TRUST_PROXY:\s*["']?[1-9]\d*["']?\s*$/m);
 });
 
 test("release artifact generation supports repeat verification with unique outputs", () => {

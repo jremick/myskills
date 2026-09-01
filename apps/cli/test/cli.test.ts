@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { runCli, type FetchLike } from "../src/cli.js";
 import { writeStoredZip } from "../../../test-support/zip-fixture.js";
+import { assertValidArchitectureTargetObservation } from "@myskills-app/core";
 
 test("validate reads a skill manifest from disk", async (t) => {
   const dir = await makeTempPackage();
@@ -780,7 +781,7 @@ test("teams list and skills print stable team sharing rows", async () => {
   ]);
 });
 
-test("sharing set posts visibility, team grants, and user grants", async () => {
+test("sharing set omits organizationIds for beta.2 compatibility when no organization IDs are supplied", async () => {
   const output = createOutput();
   let url = "";
   let method = "";
@@ -830,6 +831,127 @@ test("sharing set posts visibility, team grants, and user grants", async () => {
     userEmails: ["user@example.com"],
   });
   assert.deepEqual(output.stdout, ["release-notes-helper\tvisibility=team\tteams=Platform(team-1)\tusers=user@example.com"]);
+});
+
+test("sharing set forwards explicit organization grants without changing the API-owned visibility gate", async () => {
+  const output = createOutput();
+  let body: Record<string, unknown> = {};
+  const code = await runCli([
+    "sharing",
+    "set",
+    "release-notes-helper",
+    "--visibility",
+    "organization",
+    "--organization",
+    "org-one",
+    "--organization-id",
+    "org-two",
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, async (_input, init) => {
+    body = JSON.parse(init?.body ?? "{}");
+    return response(200, {
+      sharing: {
+        slug: "release-notes-helper",
+        title: "Release Notes Helper",
+        visibility: "organization",
+        settings: sharingSettingsBody(),
+        availableTeams: [],
+        teamGrants: [],
+        userGrants: [],
+        availableOrganizations: [
+          { id: "org-one", name: "One", slug: "one", status: "active", role: "owner" },
+          { id: "org-two", name: "Two", slug: "two", status: "active", role: "member" },
+        ],
+        organizationGrants: [
+          { id: "org-one", name: "One", slug: "one", status: "active", role: "owner" },
+          { id: "org-two", name: "Two", slug: "two", status: "active", role: "member" },
+        ],
+      },
+    });
+  }, { MYSKILLS_TOKEN: "sharing-token" }));
+
+  assert.equal(code, 0);
+  assert.deepEqual(body, {
+    visibility: "organization",
+    teamIds: [],
+    userEmails: [],
+    organizationIds: ["org-one", "org-two"],
+  });
+  assert.deepEqual(output.stdout, ["release-notes-helper\tvisibility=organization\tteams=-\tusers=-\torganizations=One(org-one),Two(org-two)"]);
+});
+
+test("sharing set sends an explicit empty organization grant set when requested", async () => {
+  const output = createOutput();
+  let body: Record<string, unknown> = {};
+  const code = await runCli([
+    "sharing",
+    "set",
+    "release-notes-helper",
+    "--visibility",
+    "organization",
+    "--clear-organizations",
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, async (_input, init) => {
+    body = JSON.parse(init?.body ?? "{}");
+    return response(200, {
+      sharing: {
+        slug: "release-notes-helper",
+        title: "Release Notes Helper",
+        visibility: "organization",
+        settings: sharingSettingsBody(),
+        availableTeams: [],
+        teamGrants: [],
+        userGrants: [],
+        availableOrganizations: [],
+        organizationGrants: [],
+      },
+    });
+  }, { MYSKILLS_TOKEN: "sharing-token" }));
+
+  assert.equal(code, 0);
+  assert.deepEqual(body, {
+    visibility: "organization",
+    teamIds: [],
+    userEmails: [],
+    organizationIds: [],
+  });
+  assert.deepEqual(output.stdout, ["release-notes-helper\tvisibility=organization\tteams=-\tusers=-"]);
+});
+
+test("sharing set rejects clear-organizations together with organization IDs before fetch", async () => {
+  const output = createOutput();
+  let calls = 0;
+  const code = await runCli([
+    "sharing",
+    "set",
+    "release-notes-helper",
+    "--visibility",
+    "organization",
+    "--organization-id",
+    "org-one",
+    "--clear-organizations",
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, async () => {
+    calls += 1;
+    return response(500, {});
+  }, { MYSKILLS_TOKEN: "sharing-token" }));
+
+  assert.equal(code, 2);
+  assert.equal(calls, 0);
+  assert.match(output.stderr.join("\n"), /--clear-organizations cannot be combined/);
+});
+
+test("help documents canonical organization grant clearing and architecture organization context", async () => {
+  const output = createOutput();
+  const code = await runCli(["help"], testRuntime(output));
+
+  assert.equal(code, 0);
+  assert.match(output.stdout[0] ?? "", /sharing set .*--organization-id <organization-id>.*--clear-organizations/);
+  assert.match(output.stdout[0] ?? "", /architectures preview\|compile .*--organization-id <organization-id>/);
+  assert.match(output.stdout[0] ?? "", /architectures plan\|dry-run .*--organization-id <organization-id>/);
 });
 
 test("sharing get requires a token before fetch", async () => {
@@ -894,12 +1016,879 @@ test("admin sharing set merges supplied toggles with current settings", async ()
         teamsEnabled: true,
         teamVisibilityEnabled: true,
         userVisibilityEnabled: false,
+        organizationVisibilityEnabled: true,
       },
     },
   ]);
   assert.deepEqual(output.stdout, [
-    "public=disabled\tauthenticated=enabled\tteams=enabled\tteam-visibility=enabled\tuser-visibility=disabled",
+    "public=disabled\tauthenticated=enabled\tteams=enabled\tteam-visibility=enabled\tuser-visibility=disabled\torganization-visibility=enabled",
   ]);
+});
+
+test("admin sharing set preserves an omitted organization switch from a legacy response", async () => {
+  const output = createOutput();
+  const calls: Array<{ method: string; body: Record<string, unknown> }> = [];
+  const code = await runCli([
+    "admin",
+    "sharing",
+    "set",
+    "--public",
+    "false",
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, async (_input, init) => {
+    const method = init?.method ?? "GET";
+    const requestBody = JSON.parse(init?.body ?? "{}") as Record<string, unknown>;
+    calls.push({ method, body: requestBody });
+    return response(200, method === "PUT"
+      ? { sharing: { ...requestBody, organizationVisibilityEnabled: true } }
+      : { sharing: {
+        publicVisibilityEnabled: true,
+        authenticatedVisibilityEnabled: true,
+        teamsEnabled: true,
+        teamVisibilityEnabled: true,
+        userVisibilityEnabled: true,
+      } });
+  }, { MYSKILLS_TOKEN: "owner-token" }));
+
+  assert.equal(code, 0);
+  assert.deepEqual(calls, [
+    { method: "GET", body: {} },
+    {
+      method: "PUT",
+      body: {
+        publicVisibilityEnabled: false,
+        authenticatedVisibilityEnabled: true,
+        teamsEnabled: true,
+        teamVisibilityEnabled: true,
+        userVisibilityEnabled: true,
+      },
+    },
+  ]);
+  assert.match(output.stdout[0] ?? "", /organization-visibility=enabled/);
+});
+
+test("architecture patterns are read through the API with a bearer token", async () => {
+  const output = createOutput();
+  let url = "";
+  let authorization = "";
+  const code = await runCli([
+    "architectures",
+    "patterns",
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, async (input, init) => {
+    url = String(input);
+    authorization = init?.headers?.authorization ?? "";
+    return response(200, {
+      patterns: [{
+        id: "multi-level-router",
+        name: "Multi-level routers",
+        description: "Nested routers and skill leaves.",
+        status: "available",
+      }],
+    });
+  }, { MYSKILLS_TOKEN: "architecture-token" }));
+
+  assert.equal(code, 0);
+  assert.equal(url, "http://api.test/v1/architecture-patterns");
+  assert.equal(authorization, "Bearer architecture-token");
+  assert.deepEqual(output.stdout, [
+    "multi-level-router\tMulti-level routers\tNested routers and skill leaves.\tavailable",
+  ]);
+});
+
+test("architecture list, show, and preview use read-only API surfaces", async () => {
+  const output = createOutput();
+  const calls: Array<{ url: string; method: string; authorization: string; body: Record<string, unknown> }> = [];
+  const codeList = await runCli([
+    "architectures",
+    "list",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(output, async (input, init) => {
+    calls.push({
+      url: String(input),
+      method: init?.method ?? "GET",
+      authorization: init?.headers?.authorization ?? "",
+      body: JSON.parse(init?.body ?? "{}"),
+    });
+    return response(200, {
+      architectures: [{
+        id: "arch-1",
+        name: "Personal skills",
+        patternId: "multi-level-router",
+        currentRevisionId: "revision-2",
+        updatedAt: "2026-08-30T00:00:00.000Z",
+      }],
+    });
+  }));
+  const codeShow = await runCli([
+    "architectures",
+    "show",
+    "arch-1",
+    "--revision",
+    "revision-2",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(output, async (input, init) => {
+    calls.push({
+      url: String(input),
+      method: init?.method ?? "GET",
+      authorization: init?.headers?.authorization ?? "",
+      body: JSON.parse(init?.body ?? "{}"),
+    });
+    return response(200, {
+      revision: { id: "revision-2", message: "Add nested router", createdAt: "2026-08-30T00:00:00.000Z" },
+    });
+  }));
+  const codePreview = await runCli([
+    "architectures",
+    "compile",
+    "arch-1",
+    "--revision",
+    "revision-2",
+    "--profile",
+    "personal",
+    "--environment",
+    "local",
+    "--organization-id",
+    "org-1",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(output, async (input, init) => {
+    calls.push({
+      url: String(input),
+      method: init?.method ?? "GET",
+      authorization: init?.headers?.authorization ?? "",
+      body: JSON.parse(init?.body ?? "{}"),
+    });
+    return response(200, {
+      revision: { id: "revision-2" },
+      compiled: { architectureId: "arch-1", nodes: [{ id: "root", kind: "router", label: "Root" }] },
+      graph: {
+        nodes: [{ id: "root", kind: "router", label: "Root" }],
+        edges: [],
+        mermaid: "flowchart TD\n  root[Root]",
+      },
+      outline: { tree: [{ id: "root", kind: "router", label: "Root", children: [] }] },
+    });
+  }));
+
+  assert.equal(codeList, 0);
+  assert.equal(codeShow, 0);
+  assert.equal(codePreview, 0);
+  assert.deepEqual(calls, [
+    {
+      url: "http://api.test/v1/architectures",
+      method: "GET",
+      authorization: "Bearer architecture-token",
+      body: {},
+    },
+    {
+      url: "http://api.test/v1/architectures/arch-1/revisions/revision-2",
+      method: "GET",
+      authorization: "Bearer architecture-token",
+      body: {},
+    },
+    {
+      url: "http://api.test/v1/architectures/arch-1/preview",
+      method: "POST",
+      authorization: "Bearer architecture-token",
+      body: { profileId: "personal", environmentId: "local", organizationId: "org-1", revisionId: "revision-2" },
+    },
+  ]);
+  assert.deepEqual(output.stdout, [
+    "arch-1\tPersonal skills\tmulti-level-router\trevision-2\t2026-08-30T00:00:00.000Z",
+    "revision\trevision-2\tAdd nested router\t2026-08-30T00:00:00.000Z",
+    "preview\tarch-1\trevision-2\tnodes=1\tplan=not-generated",
+    "flowchart TD\n  root[Root]",
+  ]);
+});
+
+test("architecture preview accepts the beta organization flag alias and rejects conflicting aliases", async () => {
+  const output = createOutput();
+  let body: Record<string, unknown> = {};
+  const code = await runCli([
+    "architectures",
+    "preview",
+    "arch-1",
+    "--organization",
+    "org-1",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+    "--json",
+  ], testRuntime(output, async (_input, init) => {
+    body = JSON.parse(init?.body ?? "{}");
+    return response(200, {
+      compiled: { architectureId: "arch-1", nodes: [], edges: [] },
+      graph: { nodes: [], edges: [], mermaid: "flowchart TD" },
+    });
+  }));
+
+  assert.equal(code, 0);
+  assert.deepEqual(body, { organizationId: "org-1" });
+  assert.deepEqual(JSON.parse(output.stdout[0] ?? "{}"), {
+    architectureId: "arch-1",
+    topology: { nodes: [], edges: [] },
+    graph: { nodes: [], edges: [], mermaid: "flowchart TD" },
+    compiled: { architectureId: "arch-1" },
+  });
+
+  const conflictOutput = createOutput();
+  const conflictCode = await runCli([
+    "architectures",
+    "preview",
+    "arch-1",
+    "--organization",
+    "org-1",
+    "--organization-id",
+    "org-2",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(conflictOutput, async () => response(500, {})));
+  assert.equal(conflictCode, 2);
+  assert.match(conflictOutput.stderr.join("\n"), /must match/);
+});
+
+test("architecture revision aliases reject conflicts and repeated flags before fetch", async () => {
+  let calls = 0;
+  const conflictOutput = createOutput();
+  const conflictCode = await runCli([
+    "architectures",
+    "preview",
+    "arch-1",
+    "--revision",
+    "revision-a",
+    "--version",
+    "revision-b",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(conflictOutput, async () => {
+    calls += 1;
+    return response(500, {});
+  }));
+
+  assert.equal(conflictCode, 2);
+  assert.match(conflictOutput.stderr.join("\n"), /revision.*version.*must match/);
+
+  const repeatedOutput = createOutput();
+  const repeatedCode = await runCli([
+    "architectures",
+    "show",
+    "arch-1",
+    "--revision-id",
+    "revision-a",
+    "--revision-id",
+    "revision-a",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(repeatedOutput, async () => {
+    calls += 1;
+    return response(500, {});
+  }));
+
+  assert.equal(repeatedCode, 2);
+  assert.match(repeatedOutput.stderr.join("\n"), /--revision-id accepts one value/);
+  assert.equal(calls, 0);
+});
+
+test("architecture preview human Mermaid output redacts URLs and local paths", async () => {
+  const output = createOutput();
+  const code = await runCli([
+    "architectures",
+    "preview",
+    "arch-1",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(output, async () => response(200, {
+    architectureId: "arch-1",
+    mermaid: "flowchart TD\n  root[Local C:\\Users\\jarel\\private\\node]\n  unc[\\\\server\\share\\node]\n  docs[See /architecture/overview]\n  remote[https://example.test/docs]",
+  })));
+
+  assert.equal(code, 0);
+  assert.equal(output.stdout[0], "preview\tarch-1\t-\tnodes=0\tplan=not-generated");
+  const rendered = output.stdout[1] ?? "";
+  assert.match(rendered, /\[redacted path\]/);
+  assert.match(rendered, /\[redacted URL\]/);
+  assert.match(rendered, /\/architecture\/overview/);
+  assert.equal(rendered.includes("jarel"), false);
+  assert.equal(rendered.includes("example.test"), false);
+  assert.equal(rendered.includes("server\\share"), false);
+});
+
+test("architecture JSON projections redact package, path, and credential fields", async () => {
+  const output = createOutput();
+  const code = await runCli([
+    "architectures",
+    "list",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+    "--json",
+  ], testRuntime(output, async () => response(200, {
+    architectures: [{
+      id: "arch-1",
+      name: "Personal skills",
+      patternId: "flat",
+      access: { allowedOrganizationIds: ["org-z", "org-a", "org-a"], ownerUserId: "user-secret" },
+      spec: { path: "/private/spec.json", content: "secret package text" },
+      credentials: { token: "aiss_test_secret" },
+    }],
+  })));
+
+  assert.equal(code, 0);
+  const projection = JSON.parse(output.stdout[0] ?? "{}");
+  assert.deepEqual(projection.architectures, [{
+    id: "arch-1",
+    name: "Personal skills",
+    patternId: "flat",
+    allowedOrganizationIds: ["org-a", "org-z"],
+  }]);
+  const text = JSON.stringify(projection);
+  assert.equal(text.includes("/private/spec.json"), false);
+  assert.equal(text.includes("secret package text"), false);
+  assert.equal(text.includes("aiss_test_secret"), false);
+  assert.equal(text.includes("ownerUserId"), false);
+});
+
+test("architecture API errors redact sensitive upstream details", async () => {
+  const output = createOutput();
+  const code = await runCli([
+    "architectures",
+    "preview",
+    "arch-1",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(output, async () => response(403, {
+    error: {
+      code: "ARCHITECTURE_DENIED",
+      message: "scope missing for Bearer aiss_test_secret /private/path storageKey secret package text",
+    },
+  })));
+
+  assert.equal(code, 1);
+  const text = output.stderr.join("\n");
+  assert.match(text, /architecture request could not be completed/i);
+  assert.equal(text.includes("aiss_test_secret"), false);
+  assert.equal(text.includes("/private/path"), false);
+  assert.equal(text.includes("storageKey"), false);
+  assert.equal(text.includes("secret package text"), false);
+});
+
+test("architecture commands reject API URLs with embedded credentials or query tokens", async () => {
+  const output = createOutput();
+  const code = await runCli([
+    "architectures",
+    "list",
+    "--api-url",
+    "https://user:secret@example.test/api?token=secret",
+    "--token",
+    "architecture-token",
+  ], testRuntime(output, async () => response(500, {})));
+
+  assert.equal(code, 2);
+  assert.match(output.stderr.join("\n"), /valid http:\/\/ or https:\/\/ URL/);
+  assert.equal(output.stderr.join("\n").includes("secret"), false);
+});
+
+test("architecture dry-run validates and sends a bounded observed-state fixture without writing", async (t) => {
+  const fixtureDir = await mkdtemp(path.join(os.tmpdir(), "myskills-observed-state-"));
+  t.after(() => rm(fixtureDir, { recursive: true, force: true }));
+  const fixturePath = path.join(fixtureDir, "observed.json");
+  const fixture = {
+    schemaVersion: "myskills.observed-state.v1",
+    environment: {
+      environmentKey: "personal-local",
+      toolKind: "codex",
+      adapterVersion: "fixture-1",
+      capabilities: { canInstall: true, canUpdate: true },
+    },
+    inventory: [{ kind: "skill", ref: "skill.release-notes", slug: "release-notes-helper", version: "0.1.0", source: "myskills" }],
+  };
+  await writeFile(fixturePath, JSON.stringify(fixture));
+  const before = await readFile(fixturePath, "utf8");
+  const output = createOutput();
+  let request: { url: string; method: string; authorization: string; body: Record<string, unknown> } | null = null;
+  const code = await runCli([
+    "architectures",
+    "plan",
+    "arch-1",
+    "--revision",
+    "revision-2",
+    "--profile",
+    "personal",
+    "--environment",
+    "personal-local",
+    "--organization-id",
+    "org-1",
+    "--observed",
+    fixturePath,
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(output, async (input, init) => {
+    request = {
+      url: String(input),
+      method: init?.method ?? "GET",
+      authorization: init?.headers?.authorization ?? "",
+      body: JSON.parse(init?.body ?? "{}"),
+    };
+    return response(200, {
+      plan: {
+        dryRun: true,
+        items: [{ action: "update", nodeId: "release-notes-helper", reason: "0.1.0 -> 0.2.0" }],
+      },
+    });
+  }));
+
+  assert.equal(code, 0);
+  assert.deepEqual(request, {
+    url: "http://api.test/v1/architectures/arch-1/preview",
+    method: "POST",
+    authorization: "Bearer architecture-token",
+    body: {
+      revisionId: "revision-2",
+      profileId: "personal",
+      environmentId: "personal-local",
+      organizationId: "org-1",
+      fixture: {
+        targetId: "personal-local",
+        environmentId: "personal-local",
+        nodes: [{
+          nodeId: "skill.release-notes",
+          skillRefId: "skill.release-notes",
+          kind: "leaf",
+          slug: "release-notes-helper",
+          version: "0.1.0",
+        }],
+      },
+    },
+  });
+  assert.deepEqual(output.stdout, [
+    "dry-run\tchanges\tchanges=1",
+    "change\tupdate\trelease-notes-helper\t0.1.0 -> 0.2.0",
+  ]);
+  assert.equal(await readFile(fixturePath, "utf8"), before);
+});
+
+test("architecture dry-run rejects invalid or oversized fixtures before fetch", async (t) => {
+  const fixtureDir = await mkdtemp(path.join(os.tmpdir(), "myskills-observed-state-invalid-"));
+  t.after(() => rm(fixtureDir, { recursive: true, force: true }));
+  const invalidPath = path.join(fixtureDir, "invalid.json");
+  await writeFile(invalidPath, JSON.stringify({ schemaVersion: "wrong", environment: {}, inventory: [] }));
+  const oversizedPath = path.join(fixtureDir, "oversized.json");
+  await writeFile(oversizedPath, JSON.stringify({
+    schemaVersion: "myskills.observed-state.v1",
+    environment: {},
+    inventory: [],
+    padding: "x".repeat(256 * 1024),
+  }));
+  let calls = 0;
+  const fetch: FetchLike = async () => {
+    calls += 1;
+    return response(500, {});
+  };
+  const invalidOutput = createOutput();
+  const invalidCode = await runCli([
+    "architectures",
+    "plan",
+    "arch-1",
+    "--observed",
+    invalidPath,
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(invalidOutput, fetch));
+  const oversizedOutput = createOutput();
+  const oversizedCode = await runCli([
+    "architectures",
+    "plan",
+    "arch-1",
+    "--observed",
+    oversizedPath,
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(oversizedOutput, fetch));
+
+  assert.equal(invalidCode, 2);
+  assert.match(invalidOutput.stderr.join("\n"), /schemaVersion/);
+  assert.equal(oversizedCode, 2);
+  assert.match(oversizedOutput.stderr.join("\n"), /256 KiB/);
+  assert.equal(calls, 0);
+});
+
+test("architecture dry-run rejects unsafe fixture identifiers, slugs, paths, and control characters before fetch", async (t) => {
+  const fixtureDir = await mkdtemp(path.join(os.tmpdir(), "myskills-observed-state-safety-"));
+  t.after(() => rm(fixtureDir, { recursive: true, force: true }));
+  const baseFixture = {
+    schemaVersion: "myskills.observed-state.v1",
+    environment: {
+      environmentKey: "personal-local",
+      toolKind: "codex",
+      adapterVersion: "fixture-1",
+      capabilities: { canInstall: true },
+    },
+    inventory: [{ kind: "skill", ref: "skill.release-notes", slug: "release-notes-helper", source: "local" }],
+  };
+  const cases: Array<{ name: string; fixture: Record<string, unknown>; expected: RegExp }> = [
+    {
+      name: "identifier",
+      fixture: {
+        ...baseFixture,
+        inventory: [{ ...baseFixture.inventory[0], ref: "../private" }],
+      },
+      expected: /inventory\.ref is invalid/,
+    },
+    {
+      name: "slug",
+      fixture: {
+        ...baseFixture,
+        inventory: [{ ...baseFixture.inventory[0], slug: "Release Notes" }],
+      },
+      expected: /inventory\.slug is invalid/,
+    },
+    {
+      name: "path",
+      fixture: {
+        ...baseFixture,
+        inventory: [{ ...baseFixture.inventory[0], path: "/private/skill" }],
+      },
+      expected: /field is not accepted: path/,
+    },
+    {
+      name: "control-character",
+      fixture: {
+        ...baseFixture,
+        environment: { ...baseFixture.environment, adapterVersion: "fixture-\u001b[31m1" },
+      },
+      expected: /environment\.adapterVersion is invalid/,
+    },
+  ];
+  let calls = 0;
+  const fetch: FetchLike = async () => {
+    calls += 1;
+    return response(500, {});
+  };
+
+  for (const item of cases) {
+    const fixturePath = path.join(fixtureDir, `${item.name}.json`);
+    await writeFile(fixturePath, JSON.stringify(item.fixture));
+    const output = createOutput();
+    const code = await runCli([
+      "architectures",
+      "plan",
+      "arch-1",
+      "--observed",
+      fixturePath,
+      "--api-url",
+      "http://api.test",
+      "--token",
+      "architecture-token",
+    ], testRuntime(output, fetch));
+
+    assert.equal(code, 2, item.name);
+    assert.match(output.stderr.join("\n"), item.expected, item.name);
+  }
+  assert.equal(calls, 0);
+});
+
+test("codex observe emits a core-valid metadata-only report from an explicit context without network or path leakage", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "myskills-codex-cli-personal-"));
+  const contextRoot = await mkdtemp(path.join(os.tmpdir(), "myskills-codex-cli-context-"));
+  t.after(() => Promise.all([
+    rm(root, { recursive: true, force: true }),
+    rm(contextRoot, { recursive: true, force: true }),
+  ]));
+  await writeCodexFixture(root, "personal", ["personal-only", "shared-tool"]);
+  const contextPath = path.join(contextRoot, "target-context.json");
+  await writeFile(contextPath, JSON.stringify(codexContext("target-personal", "personal")));
+  const output = createOutput();
+  let fetchCalls = 0;
+
+  const code = await runCli([
+    "architectures",
+    "observe",
+    "--root",
+    root,
+    "--profile",
+    "personal",
+    "--context",
+    contextPath,
+    "--json",
+  ], testRuntime(output, async () => {
+    fetchCalls += 1;
+    return response(500, {});
+  }, {}, fixedCodexClock));
+
+  assert.equal(code, 0);
+  assert.equal(fetchCalls, 0);
+  const observation = JSON.parse(output.stdout.join("\n"));
+  assert.deepEqual(assertValidArchitectureTargetObservation(observation), observation);
+  assert.equal(observation.targetId, "target-personal");
+  assert.equal(observation.metadata.profile, "personal");
+  assert.deepEqual(observation.skills.map((skill: { slug: string }) => skill.slug), ["shared-tool", "personal-only"]);
+  const serialized = output.stdout.join("\n");
+  assert.equal(serialized.includes(root), false);
+  assert.equal(serialized.includes(contextPath), false);
+  assert.equal(serialized.includes("PERSONAL_BODY_MUST_NOT_BE_EMITTED"), false);
+});
+
+test("codex health accepts all explicit context flags and returns unavailable without implicit discovery", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "myskills-codex-cli-health-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const missingRoot = path.join(root, "missing-profile");
+  const output = createOutput();
+  let fetchCalls = 0;
+
+  const code = await runCli([
+    "architectures",
+    "health",
+    "--root",
+    missingRoot,
+    "--profile",
+    "work",
+    "--target-id",
+    "target-work",
+    "--generation",
+    "2",
+    "--architecture-id",
+    "architecture-work",
+    "--environment-id",
+    "environment-work",
+    "--profile-id",
+    "profile-work",
+    "--adapter-digest",
+    "a".repeat(64),
+    "--capabilities-digest",
+    "b".repeat(64),
+    "--json",
+  ], testRuntime(output, async () => {
+    fetchCalls += 1;
+    return response(500, {});
+  }, {}, fixedCodexClock));
+
+  assert.equal(code, 0);
+  assert.equal(fetchCalls, 0);
+  assert.deepEqual(JSON.parse(output.stdout.join("\n")), {
+    status: "unavailable",
+    checkedAt: "2026-08-30T00:00:00.000Z",
+    metadata: {
+      architectureId: "architecture-work",
+      profile: "work",
+      skillCount: 0,
+      findingCount: 1,
+    },
+  });
+  assert.equal(output.stdout.join("\n").includes(missingRoot), false);
+});
+
+test("codex observe preserves profile isolation and deterministic JSON output", async (t) => {
+  const personalRoot = await mkdtemp(path.join(os.tmpdir(), "myskills-codex-cli-personal-isolation-"));
+  const workRoot = await mkdtemp(path.join(os.tmpdir(), "myskills-codex-cli-work-isolation-"));
+  t.after(() => Promise.all([
+    rm(personalRoot, { recursive: true, force: true }),
+    rm(workRoot, { recursive: true, force: true }),
+  ]));
+  await writeCodexFixture(personalRoot, "personal", ["personal-only"]);
+  await writeCodexFixture(workRoot, "work", ["work-only"]);
+  const personalArgs = codexFlagArgs(personalRoot, "personal", "target-personal");
+  const workArgs = codexFlagArgs(workRoot, "work", "target-work");
+  const firstOutput = createOutput();
+  const secondOutput = createOutput();
+
+  assert.equal(await runCli(["architectures", "observe", ...personalArgs, "--json"], testRuntime(firstOutput, undefined, {}, fixedCodexClock)), 0);
+  assert.equal(await runCli(["architectures", "observe", ...personalArgs, "--json"], testRuntime(secondOutput, undefined, {}, fixedCodexClock)), 0);
+  assert.deepEqual(firstOutput.stdout, secondOutput.stdout);
+  assert.equal(await runCli(["architectures", "observe", ...workArgs, "--json"], testRuntime(firstOutput, undefined, {}, fixedCodexClock)), 0);
+
+  const personalObservation = JSON.parse(firstOutput.stdout[0] ?? "{}");
+  const workObservation = JSON.parse(firstOutput.stdout[1] ?? "{}");
+  assert.deepEqual(personalObservation.skills.map((skill: { slug: string }) => skill.slug), ["personal-only"]);
+  assert.deepEqual(workObservation.skills.map((skill: { slug: string }) => skill.slug), ["work-only"]);
+  assert.equal(JSON.stringify(personalObservation).includes("work-only"), false);
+  assert.equal(JSON.stringify(workObservation).includes("personal-only"), false);
+});
+
+test("codex observation rejects relative roots, invalid context files, and network/output options without echoing input", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "myskills-codex-cli-invalid-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const contextPath = path.join(root, "invalid-context.json");
+  await writeFile(contextPath, JSON.stringify({
+    targetId: "target-invalid",
+    targetGeneration: 1,
+    architectureId: "architecture-invalid",
+    environmentId: "environment-invalid",
+    profileId: "profile-invalid",
+    adapterDigest: "a".repeat(64),
+    capabilitiesDigest: "b".repeat(64),
+    privatePath: "PRIVATE_CONTEXT_VALUE_MUST_NOT_BE_ECHOED",
+  }));
+  let fetchCalls = 0;
+  const fetch: FetchLike = async () => {
+    fetchCalls += 1;
+    return response(500, {});
+  };
+
+  const relativeOutput = createOutput();
+  const relativeCode = await runCli([
+    "architectures",
+    "observe",
+    "--root",
+    "relative-codex-root",
+    "--profile",
+    "personal",
+    "--context",
+    contextPath,
+  ], testRuntime(relativeOutput, fetch));
+  assert.equal(relativeCode, 2);
+  assert.match(relativeOutput.stderr.join("\n"), /absolute --root/);
+  assert.equal(relativeOutput.stderr.join("\n").includes("relative-codex-root"), false);
+
+  const contextOutput = createOutput();
+  const contextCode = await runCli([
+    "architectures",
+    "observe",
+    "--root",
+    `${root}/safe-root`,
+    "--profile",
+    "personal",
+    "--context",
+    contextPath,
+    "--api-url",
+    "https://must-not-be-used.example",
+  ], testRuntime(contextOutput, fetch));
+  assert.equal(contextCode, 2);
+  assert.match(contextOutput.stderr.join("\n"), /metadata context options/);
+  assert.equal(contextOutput.stderr.join("\n").includes("PRIVATE_CONTEXT_VALUE_MUST_NOT_BE_ECHOED"), false);
+  assert.equal(contextOutput.stderr.join("\n").includes("must-not-be-used.example"), false);
+  assert.equal(fetchCalls, 0);
+});
+
+test("architecture dry-run human output neutralizes terminal control characters", async (t) => {
+  const fixtureDir = await mkdtemp(path.join(os.tmpdir(), "myskills-observed-state-terminal-"));
+  t.after(() => rm(fixtureDir, { recursive: true, force: true }));
+  const fixturePath = path.join(fixtureDir, "observed.json");
+  await writeFile(fixturePath, JSON.stringify({
+    schemaVersion: "myskills.observed-state.v1",
+    environment: {
+      environmentKey: "personal-local",
+      toolKind: "codex",
+      adapterVersion: "fixture-1",
+      capabilities: { canInstall: true },
+    },
+    inventory: [{ kind: "skill", ref: "skill.release-notes", slug: "release-notes-helper", source: "local" }],
+  }));
+  const output = createOutput();
+  const code = await runCli([
+    "architectures",
+    "plan",
+    "arch-1",
+    "--observed",
+    fixturePath,
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "architecture-token",
+  ], testRuntime(output, async () => response(200, {
+    plan: {
+      status: "changes\u001b[31m",
+      changes: [{
+        type: "update",
+        subject: "release-notes-helper\u001b[2J\nforged-row",
+        detail: "safe\tcolumn\u0007",
+      }],
+    },
+  })));
+
+  assert.equal(code, 0);
+  const rendered = output.stdout.join("\n");
+  assert.equal(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/u.test(rendered), false);
+  assert.equal(output.stdout.length, 2);
+  assert.match(output.stdout[0] ?? "", /^dry-run\tchanges \[31m\tchanges=1$/);
+  assert.match(output.stdout[1] ?? "", /^change\tupdate\trelease-notes-helper \[2J forged-row\tsafe column $/);
+});
+
+test("skills edit visibility remains a deprecated compatibility alias", async () => {
+  const output = createOutput();
+  let url = "";
+  let body: Record<string, unknown> = {};
+  const code = await runCli([
+    "skills",
+    "edit",
+    "release-notes-helper",
+    "--visibility",
+    "organization",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "maintainer-token",
+  ], testRuntime(output, async (input, init) => {
+    url = String(input);
+    body = JSON.parse(init?.body ?? "{}");
+    return response(200, {
+      skill: {
+        slug: "release-notes-helper",
+        title: "Release Notes Assistant",
+        lifecycleStatus: "approved",
+        visibility: "organization",
+      },
+    });
+  }));
+
+  assert.equal(code, 0);
+  assert.equal(url, "http://api.test/v1/skills/release-notes-helper");
+  assert.deepEqual(body, { visibility: "organization" });
+  assert.deepEqual(output.stdout, ["release-notes-helper\tRelease Notes Assistant\tapproved\torganization"]);
+  assert.match(output.stderr.join("\n"), /skills edit --visibility/);
+  assert.match(output.stderr.join("\n"), /myskills sharing set <skill-slug> --visibility <scope>/);
+});
+
+test("deprecated skills edit rejects organization grant controls", async () => {
+  const output = createOutput();
+  let calls = 0;
+  const code = await runCli([
+    "skills",
+    "edit",
+    "release-notes-helper",
+    "--visibility",
+    "organization",
+    "--clear-organizations",
+    "--api-url",
+    "http://api.test",
+    "--token",
+    "maintainer-token",
+  ], testRuntime(output, async () => {
+    calls += 1;
+    return response(500, {});
+  }));
+
+  assert.equal(code, 2);
+  assert.equal(calls, 0);
+  assert.match(output.stderr.join("\n"), /Organization grant options are only supported by myskills sharing set/);
 });
 
 test("export writes verified bundle files under output directory", async (t) => {
@@ -1236,6 +2225,67 @@ test("token create usage errors exit without fetch", async () => {
   assert.match(output.stderr.join("\n"), /--scope is required/);
 });
 
+const fixedCodexClock = () => new Date("2026-08-30T00:00:00.000Z");
+
+function codexContext(targetId: string, profileId: string): Record<string, unknown> {
+  return {
+    targetId,
+    targetGeneration: 1,
+    architectureId: "architecture-1",
+    environmentId: `${profileId}-environment`,
+    profileId,
+    adapterDigest: "a".repeat(64),
+    capabilitiesDigest: "b".repeat(64),
+  };
+}
+
+function codexFlagArgs(root: string, profile: "personal" | "work" | "shared", targetId: string): string[] {
+  const context = codexContext(targetId, profile);
+  return [
+    "--root",
+    root,
+    "--profile",
+    profile,
+    "--target-id",
+    String(context.targetId),
+    "--generation",
+    String(context.targetGeneration),
+    "--architecture-id",
+    String(context.architectureId),
+    "--environment-id",
+    String(context.environmentId),
+    "--profile-id",
+    String(context.profileId),
+    "--adapter-digest",
+    String(context.adapterDigest),
+    "--capabilities-digest",
+    String(context.capabilitiesDigest),
+  ];
+}
+
+async function writeCodexFixture(root: string, profile: "personal" | "work" | "shared", slugs: string[]): Promise<void> {
+  await mkdir(path.join(root, "skills"), { recursive: true });
+  await writeFile(path.join(root, "profile.json"), JSON.stringify({
+    schemaVersion: 1,
+    profile,
+    skills: slugs.map((slug) => ({ slug, enabled: true, runtimeExposure: "leaf" })),
+  }));
+  await writeFile(path.join(root, "router-policy.json"), JSON.stringify({ schemaVersion: 1, routers: [] }));
+  for (const slug of slugs) {
+    await mkdir(path.join(root, "skills", slug), { recursive: true });
+    await writeFile(path.join(root, "skills", slug, "SKILL.md"), [
+      "---",
+      `slug: ${slug}`,
+      "version: 1.0.0",
+      `digest: ${createHash("sha256").update(slug).digest("hex")}`,
+      "kind: leaf",
+      "---",
+      `${profile.toUpperCase()}_BODY_MUST_NOT_BE_EMITTED`,
+      "",
+    ].join("\n"));
+  }
+}
+
 async function writeManifest(dir: string): Promise<void> {
   await writeFile(path.join(dir, "skill.json"), manifestJson());
 }
@@ -1284,6 +2334,7 @@ function sharingSettingsBody() {
     teamsEnabled: true,
     teamVisibilityEnabled: true,
     userVisibilityEnabled: true,
+    organizationVisibilityEnabled: true,
   };
 }
 
@@ -1306,10 +2357,12 @@ function testRuntime(
   output: { stdout: string[]; stderr: string[] },
   fetch: FetchLike = async () => response(500, {}),
   env: Record<string, string | undefined> = {},
+  codexAdapterClock?: () => Date,
 ) {
   return {
     env,
     fetch,
+    ...(codexAdapterClock ? { codexAdapterClock } : {}),
     io: {
       stdout: (line: string) => output.stdout.push(line),
       stderr: (line: string) => output.stderr.push(line),

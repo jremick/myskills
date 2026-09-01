@@ -77,7 +77,7 @@ services:
       TOTP_ISSUER: MySkills E2E
       APP_BASE_URL: https://e2e.example.test
       ALLOWED_WEB_ORIGINS: http://127.0.0.1:${MYSKILLS_E2E_WEB_PORT:-43100}
-      TRUST_PROXY: "1"
+      TRUST_PROXY: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7"
       AUTH_NOTIFICATION_MODE: smtp
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"

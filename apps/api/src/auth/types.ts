@@ -1,6 +1,6 @@
 import type { AuthenticatedUser, RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 
-export const apiTokenScopes = ["profile:read", "skills:read", "skills:submit", "review:read", "review:write"] as const;
+export const apiTokenScopes = ["profile:read", "skills:read", "architectures:read", "skills:submit", "review:read", "review:write"] as const;
 export const authActionTokenPurposes = ["email_verification", "password_reset", "registration_invitation", "email_change"] as const;
 export const providerTypes = ["oidc", "saml", "cloudflare_access", "github", "google"] as const;
 

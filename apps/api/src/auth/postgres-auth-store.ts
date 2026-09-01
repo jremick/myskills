@@ -60,6 +60,11 @@ import type {
   ListAuditEventsInput,
 } from "./types.js";
 
+const INSTANCE_ROLE_SCOPE = {
+  scopeType: "instance",
+  scopeId: "00000000-0000-0000-0000-000000000000",
+} as const;
+
 export class PostgresAuthStore implements AuthStore {
   constructor(private readonly db: Database) {}
 
@@ -115,6 +120,8 @@ export class PostgresAuthStore implements AuthStore {
     await this.db.insert(roleAssignments).values({
       userId: user.id,
       role: "user",
+      scopeType: INSTANCE_ROLE_SCOPE.scopeType,
+      scopeId: INSTANCE_ROLE_SCOPE.scopeId,
     }).onConflictDoNothing();
 
     return { created: true, user: { ...toRecord(user), roles: ["user"] } };
@@ -136,6 +143,8 @@ export class PostgresAuthStore implements AuthStore {
       await this.db.insert(roleAssignments).values({
         userId: created.id,
         role: "user",
+        scopeType: INSTANCE_ROLE_SCOPE.scopeType,
+        scopeId: INSTANCE_ROLE_SCOPE.scopeId,
       }).onConflictDoNothing();
       return { user: { ...toRecord(created), roles: ["user"] }, created: true };
     }
@@ -147,6 +156,8 @@ export class PostgresAuthStore implements AuthStore {
     await this.db.insert(roleAssignments).values({
       userId: existing.id,
       role: "user",
+      scopeType: INSTANCE_ROLE_SCOPE.scopeType,
+      scopeId: INSTANCE_ROLE_SCOPE.scopeId,
     }).onConflictDoNothing();
     return {
       user: {
@@ -320,7 +331,11 @@ export class PostgresAuthStore implements AuthStore {
           .select({ id: users.id })
           .from(users)
           .innerJoin(roleAssignments, eq(roleAssignments.userId, users.id))
-          .where(and(eq(roleAssignments.role, "owner"), eq(users.status, "active")));
+          .where(and(
+            eq(roleAssignments.role, "owner"),
+            instanceRoleScopePredicate(),
+            eq(users.status, "active"),
+          ));
         if (activeOwners.length <= 1) {
           return { outcome: "last_owner" };
         }
@@ -369,6 +384,8 @@ export class PostgresAuthStore implements AuthStore {
           from ${users}
           inner join ${roleAssignments} on ${roleAssignments.userId} = ${users.id}
           where ${roleAssignments.role} = 'owner'
+            and ${roleAssignments.scopeType} = ${INSTANCE_ROLE_SCOPE.scopeType}
+            and ${roleAssignments.scopeId} = ${INSTANCE_ROLE_SCOPE.scopeId}
             and ${users.status} = 'active'
           order by ${users.id}
           for update
@@ -382,11 +399,16 @@ export class PostgresAuthStore implements AuthStore {
       if (!user) {
         return null;
       }
-      await tx.delete(roleAssignments).where(eq(roleAssignments.userId, input.userId));
+      await tx.delete(roleAssignments).where(and(
+        eq(roleAssignments.userId, input.userId),
+        instanceRoleScopePredicate(),
+      ));
       if (input.roles.length > 0) {
         await tx.insert(roleAssignments).values(input.roles.map((role) => ({
           userId: input.userId,
           role,
+          scopeType: INSTANCE_ROLE_SCOPE.scopeType,
+          scopeId: INSTANCE_ROLE_SCOPE.scopeId,
         }))).onConflictDoNothing();
       }
       if (!input.roles.includes("owner")) {
@@ -394,7 +416,11 @@ export class PostgresAuthStore implements AuthStore {
           .select({ id: users.id })
           .from(users)
           .innerJoin(roleAssignments, eq(roleAssignments.userId, users.id))
-          .where(and(eq(roleAssignments.role, "owner"), eq(users.status, "active")));
+          .where(and(
+            eq(roleAssignments.role, "owner"),
+            instanceRoleScopePredicate(),
+            eq(users.status, "active"),
+          ));
         if (activeOwners.length === 0) {
           throw new AppError("At least one active owner is required.", "LAST_OWNER_REQUIRED", 409);
         }
@@ -589,7 +615,11 @@ export class PostgresAuthStore implements AuthStore {
       .select({ id: users.id })
       .from(users)
       .innerJoin(roleAssignments, eq(roleAssignments.userId, users.id))
-      .where(and(eq(roleAssignments.role, "owner"), eq(users.status, "active")));
+      .where(and(
+        eq(roleAssignments.role, "owner"),
+        instanceRoleScopePredicate(),
+        eq(users.status, "active"),
+      ));
     return rows.filter((row) => row.id !== userId).length;
   }
 
@@ -1074,9 +1104,19 @@ async function rolesForUser(db: DbLike, userId: string): Promise<Role[]> {
   const rows = await db
     .select({ role: roleAssignments.role })
     .from(roleAssignments)
-    .where(eq(roleAssignments.userId, userId));
+    .where(and(
+      eq(roleAssignments.userId, userId),
+      instanceRoleScopePredicate(),
+    ));
   const assignedRoles = new Set(rows.map((row) => row.role));
   return authRoles.filter((role) => assignedRoles.has(role));
+}
+
+function instanceRoleScopePredicate() {
+  return and(
+    eq(roleAssignments.scopeType, INSTANCE_ROLE_SCOPE.scopeType),
+    eq(roleAssignments.scopeId, INSTANCE_ROLE_SCOPE.scopeId),
+  );
 }
 
 function toMfaTotpFactorRecord(factor: typeof mfaFactors.$inferSelect): MfaTotpFactorRecord {
@@ -1201,6 +1241,7 @@ function parseApiTokenScopes(input: unknown): ApiTokenScope[] {
   return input.filter((scope): scope is ApiTokenScope => (
     scope === "profile:read" ||
     scope === "skills:read" ||
+    scope === "architectures:read" ||
     scope === "skills:submit" ||
     scope === "review:read" ||
     scope === "review:write"

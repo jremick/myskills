@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "profile": "personal",
+  "skills": [
+    {
+      "slug": "personal-only",
+      "enabled": true,
+      "runtimeExposure": "leaf",
+      "configured": true,
+      "managed": true,
+      "supported": true,
+      "configurationDigest": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "slug": "personal-router",
+      "enabled": true,
+      "runtimeExposure": "router",
+      "configured": true,
+      "managed": true,
+      "supported": true,
+      "configurationDigest": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "slug": "shared-tool",
+      "enabled": false,
+      "runtimeExposure": "disabled",
+      "configured": false,
+      "managed": true,
+      "supported": true
+    }
+  ]
+}

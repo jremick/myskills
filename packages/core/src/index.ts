@@ -2,7 +2,7 @@ export const skillLifecycleStatuses = ["draft", "private", "submitted", "review"
 export const reviewStatuses = ["unreviewed", "changes-requested", "approved", "rejected"] as const;
 export const securityStatuses = ["not-run", "passed", "warning", "failed"] as const;
 export const visibilityScopes = ["public", "authenticated", "organization", "team", "private", "explicit-users"] as const;
-export const skillAccessReasons = ["public", "authenticated", "owner", "team", "explicit-user"] as const;
+export const skillAccessReasons = ["public", "authenticated", "owner", "team", "explicit-user", "organization"] as const;
 
 export type SkillLifecycleStatus = (typeof skillLifecycleStatuses)[number];
 export type ReviewStatus = (typeof reviewStatuses)[number];
@@ -50,6 +50,8 @@ export interface SharingSettings {
   teamsEnabled: boolean;
   teamVisibilityEnabled: boolean;
   userVisibilityEnabled: boolean;
+  /** Optional on input for backwards compatibility; repositories always return a boolean. */
+  organizationVisibilityEnabled?: boolean;
 }
 
 export interface SkillSharingTeamSummary {
@@ -64,6 +66,14 @@ export interface SkillSharingUserSummary {
   name: string;
 }
 
+export interface SkillSharingOrganizationSummary {
+  id: string;
+  name: string;
+  slug: string;
+  status: "provisioning" | "active" | "suspended" | "archived";
+  role: "owner" | "admin" | "member";
+}
+
 export interface SkillSharingDetails {
   slug: string;
   title: string;
@@ -72,14 +82,18 @@ export interface SkillSharingDetails {
   availableTeams: SkillSharingTeamSummary[];
   teamGrants: SkillSharingTeamSummary[];
   userGrants: SkillSharingUserSummary[];
+  availableOrganizations?: SkillSharingOrganizationSummary[];
+  organizationGrants?: SkillSharingOrganizationSummary[];
 }
 
 export interface UpdateSkillSharingInput {
   actor: SkillSharingActor;
   slug: string;
   visibility: VisibilityScope;
-  teamIds: string[];
-  userEmails: string[];
+  /** Omitted grant fields preserve the complete current set; [] clears it. */
+  teamIds?: string[];
+  userEmails?: string[];
+  organizationIds?: string[];
 }
 
 export interface TeamSharedSkillGroup {
@@ -95,6 +109,8 @@ export interface TeamSharedSkillGroup {
 export interface SkillRepository {
   searchVisibleSkills(filters: SkillSearchFilters): Promise<PublicSkill[]>;
   getVisibleSkillBySlug(slug: string, actorId?: string | null): Promise<PublicSkill | null>;
+  getSkillVisibleToTeamBySlug(slug: string, teamId: string): Promise<PublicSkill | null>;
+  getSkillVisibleToOrganizationBySlug(slug: string, organizationId: string): Promise<PublicSkill | null>;
   getSharingSettings(): Promise<SharingSettings>;
   updateSharingSettings(actor: SkillSharingActor, settings: SharingSettings): Promise<SharingSettings>;
   getSkillSharing(slug: string, actor: SkillSharingActor): Promise<SkillSharingDetails>;
@@ -116,3 +132,10 @@ export class AppError extends Error {
 export function assertNever(value: never): never {
   throw new AppError(`Unhandled value: ${String(value)}`, "UNHANDLED_VALUE", 500);
 }
+
+export * from "./architecture.js";
+export * from "./architecture-tenancy.js";
+export * from "./organization-tenancy.js";
+export * from "./architecture-target.js";
+export * from "./architecture-sync-control.js";
+export * from "./architecture-pattern-migration.js";

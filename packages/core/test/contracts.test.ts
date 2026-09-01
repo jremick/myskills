@@ -26,7 +26,7 @@ test("exports stable skill contract value sets", () => {
   assert.deepEqual(reviewStatuses, ["unreviewed", "changes-requested", "approved", "rejected"]);
   assert.deepEqual(securityStatuses, ["not-run", "passed", "warning", "failed"]);
   assert.deepEqual(visibilityScopes, ["public", "authenticated", "organization", "team", "private", "explicit-users"]);
-  assert.deepEqual(skillAccessReasons, ["public", "authenticated", "owner", "team", "explicit-user"]);
+  assert.deepEqual(skillAccessReasons, ["public", "authenticated", "owner", "team", "explicit-user", "organization"]);
 });
 
 test("public skill contract carries release and sharing metadata", () => {

@@ -1,6 +1,6 @@
 # Upgrade And Migration Policy
 
-Version: 0.1.0-beta.2
+Version: 0.1.0-beta.3
 Last updated: 2026-06-30
 
 MySkills is prerelease software. This policy sets expectations for alpha and beta users without implying stable `v1.0` compatibility.

@@ -1,22 +1,35 @@
 # Roadmap
 
-Version: 0.1.0-beta.2
-Last updated: 2026-07-13
+Version: 0.1.0-beta.3
+Document revision: 0.2.0-draft
+Last updated: 2026-09-01
 
 ## Release Tracks
 
 - **Responsible public alpha (`v0.1.0-alpha.0`)**: archived release track for the first public repository and reproducible source artifact gate.
 - **Public beta (`v0.1.0-beta.1`)**: superseded external trial release that established owner-controlled hosted access and documented self-hosting boundaries.
 - **Beta follow-up (`v0.1.0-beta.2`)**: released 2026-07-13 with local onboarding, artifact/review safety, public CLI packaging, static quality gates, release discipline, and reconciled docs. See [BETA_RELEASE_GOAL.md](BETA_RELEASE_GOAL.md).
-- **Hosted beta**: `myskills.sh` runs the beta.2 web/API release; live Railway state must still be read back before making a current deployment claim.
+- **Hosted beta baseline**: The beta.2 Railway deployment is the documented hosted baseline; confirm the current commit and health by live read-back before describing `myskills.sh` as running it.
 - **Business-safe production release**: harden the beta into an operator-ready release with stronger audit, background scanning, skill evals, provider lifecycle, artifact delivery, trusted publishing, deploy/ops guidance, and upgrade policy. See [BUSINESS_SAFE_RELEASE_GOAL.md](BUSINESS_SAFE_RELEASE_GOAL.md).
 
 ## Current Focus
 
-- Monitor beta.2 user testing, prioritize broken first-run/install paths, and convert repeated confusion into documentation or product fixes.
-- Keep production-hardening items tracked without blocking beta unless they close accepted beta risk.
-- Complete the remaining web-app MVP gaps that affect first-user clarity: private draft management, version-history polish, instance settings administration, and the broader identity-system refresh.
-- Preserve the API as the canonical registry and trust boundary for sync-related work; local and connected-tool state should reconcile through reviewable changes, not silent overwrites.
+- Keep the documented Phase 1 beta.2 Railway baseline separate from this local
+  Phase 2 branch. Any current hosted claim requires a live read-back; a local
+  migration or test is not hosted evidence.
+- Complete the supported-runtime, disposable-Postgres, browser/UAT, security,
+  and review gates for the local Phase 2 branch before considering a hosted
+  trial.
+- Verify and review the current Skill Architecture Control Plane slices that let
+  users choose topology patterns, manage immutable revisions, understand
+  diagrams, manage organization sharing, and inspect connected-target metadata
+  without leaking private skill content.
+- Preserve the API/Postgres registry as the canonical trust boundary. Connected
+  state must enter as consented, reviewable, metadata-only evidence before any
+  future write path is considered.
+- Keep live adapters, target mutation, public sync routes, package install,
+  and live apply/rollback clearly blocked until their authorization and
+  verification gates are complete.
 
 ## Roadmap Shape
 
@@ -239,13 +252,170 @@ Current status:
 Done:
 
 - First stdio and stateless Streamable HTTP MCP servers exist with `search_skills`, `get_skill_info`, and `get_install_instructions`.
-- Calls require an API token with `skills:read`, reject session tokens through the API, write sanitized API-owned `mcp.session` audit events for allow/deny authorization decisions, and avoid bundle payload retrieval.
+- The API-owned MCP session check accepts an API token with either `skills:read` or `architectures:read`; registry tools require `skills:read`, architecture projection tools require `architectures:read`, session tokens are rejected, sanitized API-owned `mcp.session` audit events record allow/deny decisions, and bundle payload retrieval is avoided.
 
 Remaining:
 
 - Role-gated maintainer/admin read tools.
 - Authoritative per-tool audit events.
 - Broader client compatibility notes and tests.
+
+## Milestone 7A: Skill Architecture Control Plane MVE
+
+Goal: make skill architecture a versioned, reviewable desired-state object that
+supports nested router-to-router-to-leaf patterns, logical profile/environment
+selection, deterministic diagrams, and safe dry-run reconciliation.
+
+Depends on: Milestones 1, 2, 3, 5, and 7.
+
+Branch implementation present (not release acceptance):
+
+- `ArchitectureSpecV1` shells and immutable revisions with explicit typed
+  router/leaf nodes, exact slug/version/SHA-256 release references, and
+  `flat`, `domain-router`, and `multi-level-router` descriptors.
+- API-owned persistence and optimistic revision conflict checks. A graph edit
+  appends a revision; it never rewrites an earlier spec or package release.
+- Fail-closed profile/environment selection with default-deny and explicit
+  denial precedence. Runtime exposure remains distinct from package visibility,
+  architecture ownership, and target delivery mode.
+- Deterministic schema, graph, profile-rule, release-reference, and digest
+  validation plus one consolidated preview:
+  `{ revision?, compiled, graph, outline, diagram, plan? }`; organization-only
+  projections omit the raw revision and require explicit organization context.
+- API graph/diagram artifact, browser SVG, downloadable JSON/Mermaid, and
+  accessible outline/table projections come from one filtered compilation.
+  Diagram output is derived and not canonical.
+- Explicit fixture-backed planning for noop/install/update/downgrade/enable/
+  disable/remove/conflict/unsupported/configure-router. Unknown fields,
+  paths, credentials, package content, and implicit targets are rejected; plans
+  are always dry-run/no-apply.
+- Architecture list/detail/revision/preview API routes, web workbench, and
+  read-only CLI/MCP projections with the `architectures:read` scope boundary.
+
+The current branch includes focused core/API, Postgres, browser, CLI, MCP,
+privacy, and structure test suites for these contracts. This is a source/test
+inventory, not a passing-gate claim. A fresh supported-runtime release gate,
+disposable-Postgres run, browser/UAT review, security review, and live Railway
+read-back remain separate requirements.
+
+## Milestone 7B: Tenancy and organization policy
+
+Goal: allow user and team architecture ownership, organization sharing, and
+effective child-team membership without treating labels or stale membership
+rows as authority.
+
+Branch foundations present (fresh verification pending):
+
+- 0016 user/team owner references and policy-v1 architecture access decisions.
+- 0017 organizations, immutable canonical policy revisions and SHA-256
+  digests, active memberships/invitations, nullable team parentage, and
+  policy-bound skill/architecture grants.
+- Organization/team API routes, organization-safe architecture read/preview
+  evaluation, current-policy/status checks, and organization selection in the
+  architecture workbench.
+- Atomic policy-bound architecture grant replacement with current-revision
+  concurrency checks, audited GET/PUT routes, and manager-only web save/revoke
+  controls. Organization members receive read/preview access only.
+
+Deferred:
+
+- Complete CLI/MCP architecture organization-grant write parity. CLI skill
+  visibility grants can target organizations; architecture grant replacement
+  remains an API/web manager control.
+- Provider-derived roles, public architecture publishing, and conditional
+  runtime exposure.
+
+## Milestone 7C: Connected environment targets
+
+Goal: represent physical target bindings and consented observations separately
+from logical environments, with a strict privacy boundary.
+
+Branch foundations present (fresh verification pending):
+
+- 0018 target and append-only observation schema, owner/binding/status/consent,
+  capability and identity digests, generation fencing, health, and safe
+  metadata.
+- API registration, read, consent, observation, health, and revoke routes.
+- Organization and target web workbenches for membership/policy, exact target
+  bindings, consent, health, safe observations, and revoke controls.
+- Read-only core adapter contract (`observe`/`health`) with mutation
+  capability names disabled. A fixture-tested Codex adapter reads only an
+  explicit root/profile and safe metadata/frontmatter; it does not read or
+  emit prompts, bodies, paths, URLs, credentials, or package bytes.
+
+Deferred:
+
+- Live adapter invocation, automatic home/profile discovery, provider/API
+  connectors, target writes, package installation, and credential handling.
+- CLI/MCP target management parity and live provider readback.
+
+## Milestone 7D: Sync control, recovery, and fencing
+
+Goal: make reconciliation reviewable and recoverable before any target write
+is considered.
+
+Branch foundations present (fresh verification pending):
+
+- 0019 tenant-scoped sync runs, steps, baselines, receipts, recovery evidence,
+  leases, fencing, generations, digests, and safe metadata constraints.
+- Core/API fixture service, in-memory executor, and persisted Postgres store
+  for approval, synthetic apply/verify/rollback transitions, recovery
+  decisions, idempotency, and lease-loss tests.
+
+The bounded sync contract allows at most 500 steps and 2,004 append-only
+receipts per run. That capacity covers a 1,002-receipt max-step lifecycle, one
+full apply/verify retry, and two recovery/terminal receipts; further retries
+require a new bounded run. These are fixture/control-plane limits and do not
+enable live target writes.
+
+Deferred:
+
+- Public sync-run routes, live adapter executors, package installers,
+  filesystem writers, and any live apply or rollback.
+
+## Milestone 7E: Pattern migration and editor history
+
+Goal: let users change topology safely while preserving release identity,
+exposure intent, and revision history.
+
+Branch foundations present (fresh verification pending):
+
+- Pure `derive-shell` pattern migration for every built-in pattern pair,
+  bounded mappings/fallbacks, deterministic diff/digests, and fail-closed
+  exposure preservation.
+- 0020 append-only migration lineage with source/target revision bindings,
+  mapping/diff safety checks, digests, and idempotency constraints.
+- API preview/create service and atomic Postgres shell/revision/lineage
+  persistence with idempotent replay. Source identity, grants, and targets
+  are never copied.
+- Semantic web editor controls, registry release lookup, deterministic layout,
+  SVG plus JSON/Mermaid downloads and a plain-outline projection, immutable
+  save, revision history/diff, use-as-draft, conflict-preserving draft
+  preview, and pattern migration preview/create controls.
+
+Deferred:
+
+- CLI/MCP pattern-migration write commands and durable server-side diagram
+  artifacts/versioned layout data. No target or grant rebinding is allowed by
+  the migration contract.
+
+### Phase 2 migration order
+
+The current branch adds the architecture migrations in lexical order: 0015 base
+architectures, 0016 user/team ownership, 0017 organizations and sharing, 0018
+targets and observations, 0019 sync control, and 0020 pattern-migration
+lineage. The current branch wires the relevant local services, API routes, and
+web controls on top of these tables. Migration presence alone does not enable
+public sync routes or live operations. Existing standalone teams are not
+backfilled into an organization. A fresh disposable-Postgres/runtime run is
+required before treating this sequence as release or hosted-migration evidence.
+Before production applies migration 0019, the operator must verify a restorable
+database backup and the backup-restore procedure, record the accepted data-loss
+boundary, and assess and approve the expected Postgres lock window for its
+`ALTER TABLE`, constraint, type, function, and table operations. A local pass or
+backup artifact alone does not establish either gate; if either is unapproved,
+stop before 0019 and use the deployment runbook's repair-forward or
+pre-migration restore path.
 
 ## Milestone 8: Public Release Hardening
 
@@ -323,7 +493,8 @@ Depends on: Milestone 8 for public-release positioning. The site can start befor
 Current foundation:
 
 - The repository is public as `jremick/myskills`.
-- `myskills.sh` serves the owner-controlled beta application.
+- The beta application is documented at `myskills.sh`; its current serving
+  commit and health require live read-back.
 - The repository remains the canonical documentation and self-hosting surface until a separate docs/product site is delivered.
 
 Deliverables:
@@ -349,13 +520,19 @@ These items are intentionally downstream from the public beta and production-har
 
 Goal: let users connect their AI tools and systems to MySkills for clean, user-controlled, bi-directional skills management across apps, machines, and projects.
 
-Depends on: Milestones 4, 5, 7, and the platform-install-adapter work in Milestone 9.
+Depends on: Milestones 4, 5, 7, 7A-7E, and the platform-install-adapter work
+in Milestone 9. Phase 2 currently provides target metadata, consent,
+read-only observation, and fixture sync-control foundations; it does not make
+this connected-management goal available.
 
 Deliverables:
 
 - Connected-tool model for AI systems such as Codex, ChatGPT, Claude Code, local agents, and future MCP-compatible clients.
 - Tool and instance registration flow with explicit user authorization, scopes, revocation, health checks, and last-sync status.
 - Bi-directional sync design that keeps MySkills as the canonical registry while reconciling local tool state through staged, reviewable changes.
+- Extend the Phase 2 target and fixture foundations into capability negotiation,
+  auditable apply/rollback workflows, and provider-specific adapters only after
+  live pilots and independent security review.
 - Placement rules for where skills should be available, including per-tool, per-instance, per-machine, and project-level designation.
 - Configuration-management groundwork for tool-specific skill enablement, disabled-on-load state, and future app configuration updates where supported by each tool.
 - Conflict handling for local edits, remote updates, missing tools, unsupported capabilities, deleted skills, renamed projects, and immutable published versions.

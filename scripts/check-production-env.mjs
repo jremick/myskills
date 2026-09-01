@@ -177,11 +177,11 @@ function validateAllowedOrigins() {
 function validateTrustProxy() {
   const value = stringValue("TRUST_PROXY");
   if (!value) {
-    errors.push("TRUST_PROXY must be set explicitly to false, a positive hop count, or a trusted proxy address list.");
+    errors.push("TRUST_PROXY must be set explicitly to false or a trusted proxy address list.");
     return;
   }
   if (value === "true") {
-    errors.push("TRUST_PROXY=true is too broad for production. Use a hop count or trusted proxy address list.");
+    errors.push("TRUST_PROXY=true is too broad for production. Use a trusted proxy address list.");
     return;
   }
   if (value === "false") {
@@ -189,11 +189,12 @@ function validateTrustProxy() {
     return;
   }
   if (/^[1-9]\d*$/.test(value)) {
+    errors.push("TRUST_PROXY numeric hop counts are unsafe. Use a trusted proxy address list.");
     return;
   }
   const entries = value.split(",").map((entry) => entry.trim()).filter(Boolean);
   if (entries.length === 0) {
-    errors.push("TRUST_PROXY must be false, a positive hop count, or a comma-separated trusted proxy address list.");
+    errors.push("TRUST_PROXY must be false or a comma-separated trusted proxy address list.");
     return;
   }
   for (const entry of entries) {

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "routers": [
+    {
+      "slug": "work-router",
+      "configured": true,
+      "managed": true,
+      "supported": true
+    }
+  ]
+}

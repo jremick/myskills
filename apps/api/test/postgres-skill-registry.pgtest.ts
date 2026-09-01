@@ -45,6 +45,7 @@ test("Postgres registry publishes searchable releases and enforces bundle sharin
   const explicitUser = await insertUser(db, "explicit-user@example.com", "Explicit User");
   const outsider = await insertUser(db, "outsider@example.com", "Outsider");
   const team = await insertTeam(db, author.id, "Platform");
+  const unrelatedTeamId = "00000000-0000-4000-8000-000000000000";
   await db.insert(teamMemberships).values([
     { teamId: team.id, userId: author.id, role: "owner" },
     { teamId: team.id, userId: teamMember.id, role: "member" },
@@ -95,6 +96,10 @@ test("Postgres registry publishes searchable releases and enforces bundle sharin
   const publicSearch = await skillRepository.searchVisibleSkills({ query: "workflow" });
   assert.deepEqual(publicSearch.map((skill) => skill.slug), ["workflow-helper"]);
   assert.deepEqual(publicSearch[0].tags, ["automation", "workflow"]);
+  assert.equal(
+    (await skillRepository.getSkillVisibleToTeamBySlug("workflow-helper", unrelatedTeamId))?.slug,
+    "workflow-helper",
+  );
 
   const publicBundle = await submissionService.getPublicBundle({
     slug: "workflow-helper",
@@ -120,6 +125,11 @@ test("Postgres registry publishes searchable releases and enforces bundle sharin
   });
   assert.equal(teamSharing.visibility, "team");
   assert.deepEqual(teamSharing.teamGrants.map((grant) => grant.name), ["Platform"]);
+  assert.equal(
+    (await skillRepository.getSkillVisibleToTeamBySlug("workflow-helper", team.id))?.slug,
+    "workflow-helper",
+  );
+  assert.equal(await skillRepository.getSkillVisibleToTeamBySlug("workflow-helper", unrelatedTeamId), null);
 
   const anonymousAfterTeamSharing = await skillRepository.searchVisibleSkills({ query: "workflow" });
   assert.deepEqual(anonymousAfterTeamSharing, []);
@@ -162,6 +172,7 @@ test("Postgres registry publishes searchable releases and enforces bundle sharin
   });
   assert.equal(explicitSharing.visibility, "explicit-users");
   assert.deepEqual(explicitSharing.userGrants.map((grant) => grant.email), ["explicit-user@example.com"]);
+  assert.equal(await skillRepository.getSkillVisibleToTeamBySlug("workflow-helper", team.id), null);
 
   const explicitSearch = await skillRepository.searchVisibleSkills({
     query: "workflow",

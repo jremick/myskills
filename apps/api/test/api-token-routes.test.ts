@@ -402,7 +402,7 @@ test("review API tokens require MFA-verified maintainer sessions at creation", a
   assert.equal(response.json().error.code, "MFA_VERIFICATION_REQUIRED");
 });
 
-test("MCP session requires an API token with skills read scope", async (t) => {
+test("MCP session accepts a registry or architecture read API token", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const app = buildTokenApp(authStore);
   t.after(() => app.close());
@@ -462,6 +462,49 @@ test("MCP session requires an API token with skills read scope", async (t) => {
     headers: { authorization: `Bearer ${readToken.token}` },
   });
   assert.equal(disabled.statusCode, 401);
+});
+
+test("architecture-only MCP sessions do not grant registry reads and audit safe scope metadata", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildTokenApp(authStore);
+  t.after(() => app.close());
+  const session = await addAndLogin(app, authStore, {
+    id: "architecture-reader-1",
+    email: "architecture-reader@example.com",
+    roles: ["user"],
+  });
+  const architectureToken = await createApiToken(app, session, ["architectures:read"]);
+
+  const allowed = await app.inject({
+    method: "GET",
+    url: "/v1/mcp/session",
+    headers: { authorization: `Bearer ${architectureToken.token}` },
+  });
+  assert.equal(allowed.statusCode, 200);
+  assert.equal(allowed.json().credential.tokenId, architectureToken.id);
+  assert.deepEqual(allowed.json().credential.scopes, ["architectures:read"]);
+  assert.equal(JSON.stringify(allowed.json()).includes(architectureToken.token), false);
+  assert.equal(JSON.stringify(allowed.json()).includes(hashApiToken(architectureToken.token)), false);
+
+  const registryDenied = await app.inject({
+    method: "GET",
+    url: "/v1/skills",
+    headers: { authorization: `Bearer ${architectureToken.token}` },
+  });
+  assert.equal(registryDenied.statusCode, 403);
+  assert.equal(registryDenied.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
+  assert.equal(registryDenied.json().error.details.scope, "skills:read");
+
+  const event = (await authStore.listAuditEvents({ limit: 20 }))
+    .find((candidate) => candidate.action === "mcp.session" && candidate.resourceId === architectureToken.id);
+  assert.ok(event);
+  assert.equal(event.decision, "allow");
+  assert.equal(event.details.requiredScope, "skills:read");
+  assert.deepEqual(event.details.requiredScopes, ["skills:read", "architectures:read"]);
+  const serialized = JSON.stringify(event);
+  assert.equal(serialized.includes(architectureToken.token), false);
+  assert.equal(serialized.includes(hashApiToken(architectureToken.token)), false);
+  assert.equal(serialized.includes("Bearer"), false);
 });
 
 test("MCP session writes sanitized audit events for allow and deny decisions", async (t) => {
@@ -552,6 +595,7 @@ test("MCP session writes sanitized audit events for allow and deny decisions", a
   assert.equal(events.some((event) => event.decision === "deny" && event.details.credentialKind === "none"), true);
   assert.equal(events.every((event) => event.details.endpoint === "/v1/mcp/session"), true);
   assert.equal(events.every((event) => event.details.requiredScope === "skills:read"), true);
+  assert.equal(events.every((event) => event.details.requiredScopes?.join(",") === "skills:read,architectures:read"), true);
 
   const serialized = JSON.stringify(events);
   for (const forbidden of [

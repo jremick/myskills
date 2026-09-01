@@ -48,6 +48,7 @@ const DEFAULT_REGISTRATION_INVITATION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const DEFAULT_API_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 90;
 const MAX_API_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 365;
 const API_TOKEN_PREFIX_LENGTH = 12;
+const MCP_SESSION_REQUIRED_SCOPES: readonly ApiTokenScope[] = ["skills:read", "architectures:read"];
 const DEFAULT_TOTP_ISSUER = "MySkills";
 const DEV_AUTH_SECRET = "dev-only-myskills-app-auth-secret-change-before-production";
 
@@ -1081,7 +1082,10 @@ export class AuthService {
       resourceId: input.context?.credential.kind === "api_token" ? input.context.credential.tokenId ?? null : null,
       details: {
         endpoint: "/v1/mcp/session",
+        // Keep requiredScope for beta.2 audit consumers. requiredScopes
+        // records the current OR gate without exposing bearer material.
         requiredScope: "skills:read",
+        requiredScopes: [...MCP_SESSION_REQUIRED_SCOPES],
         credentialKind: input.credentialKind,
         reason: input.reason,
       },

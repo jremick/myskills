@@ -239,13 +239,13 @@ test("pending accounts cannot login", async (t) => {
   assert.equal(response.json().error.code, "ACCOUNT_NOT_ACTIVE");
 });
 
-test("trusted proxy configuration isolates auth rate limits by forwarded client IP", async (t) => {
+test("trusted proxy configuration isolates auth rate limits only for trusted source addresses", async (t) => {
   const passwordHash = await hashPassword("correct horse battery staple");
-  async function attempt(app: ReturnType<typeof buildApp>, forwardedFor: string) {
+  async function attempt(app: ReturnType<typeof buildApp>, forwardedFor: string, remoteAddress = "127.0.0.1") {
     return app.inject({
       method: "POST",
       url: "/v1/auth/login",
-      remoteAddress: "127.0.0.1",
+      remoteAddress,
       headers: { "x-forwarded-for": forwardedFor },
       payload: {
         email: "active@example.com",
@@ -282,11 +282,22 @@ test("trusted proxy configuration isolates auth rate limits by forwarded client 
     authService: new AuthService(authStore(), {
       loginLimiter: new MemoryAuthRateLimiter({ maxAttempts: 1, windowMs: 60_000 }),
     }),
-    trustProxy: "127.0.0.1",
+    trustProxy: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7", "100.0.0.0/8"],
   });
   t.after(() => trustedProxyApp.close());
-  assert.equal((await attempt(trustedProxyApp, "203.0.113.10")).statusCode, 401);
-  assert.equal((await attempt(trustedProxyApp, "203.0.113.11")).statusCode, 401);
+  assert.equal((await attempt(trustedProxyApp, "203.0.113.10", "100.64.0.10")).statusCode, 401);
+  assert.equal((await attempt(trustedProxyApp, "203.0.113.11", "100.64.0.10")).statusCode, 401);
+
+  const untrustedProxyApp = buildApp({
+    skillRepository: emptySkillRepository(),
+    authService: new AuthService(authStore(), {
+      loginLimiter: new MemoryAuthRateLimiter({ maxAttempts: 1, windowMs: 60_000 }),
+    }),
+    trustProxy: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7", "100.0.0.0/8"],
+  });
+  t.after(() => untrustedProxyApp.close());
+  assert.equal((await attempt(untrustedProxyApp, "203.0.113.10", "198.51.100.20")).statusCode, 401);
+  assert.equal((await attempt(untrustedProxyApp, "203.0.113.11", "198.51.100.20")).statusCode, 429);
 });
 
 test("active verified accounts can login, call me, and logout", async (t) => {

@@ -25,10 +25,42 @@ Responsibilities:
 - install/export/update/rollback packages
 - submit drafts
 - support maintainer/admin workflows through role-gated API calls
+- inspect an explicitly selected local Codex profile with a read-only metadata observation or health report
 
 CLI tokens should be stored in the platform secret store where possible.
 
 ## Current Slice
+
+The command list below describes the beta.3 Phase 2 source and CLI surface. It
+does not claim that the hosted Phase 1 Railway baseline includes these Phase 2
+architecture capabilities; hosted deployment requires a separate production
+promotion and live verification. The beta.2 visibility compatibility shims
+remain available for existing clients.
+
+### Beta.3 breaking security changes
+
+Beta.3 tightens the API boundary for team and sharing mutations. Team
+creation, team-owner invitation/member lifecycle changes, and
+sharing expansions to team or organization scope require an interactive
+MFA-verified session. Privileged sharing reads/writes and the deprecated
+`skills edit --visibility` alias use the same session/MFA boundary. API tokens
+remain useful for scoped reads, but they cannot perform these mutations.
+
+Migration before upgrading to beta.3: enroll TOTP through the API's
+`POST /v1/auth/mfa/totp/enroll` and `POST /v1/auth/mfa/totp/confirm` routes
+with password reauthentication, save the one-time recovery codes, then run
+`myskills login` and complete the `POST /v1/auth/mfa/verify` challenge. Move
+mutation automation to an explicitly managed session; keep API-token
+automation read-only. Invitation acceptance remains session-only where the API
+route permits it.
+
+For install guidance, use the generated `myskills install ...` or
+`myskills export ... --output ...` command. The corresponding MCP tool no longer
+returns `apiBundleEndpoint` or a bundle URL, so clients must not construct one;
+the CLI's authenticated export/install path remains the replacement flow.
+Generated commands do not embed an API URL or bearer token; configure the CLI
+with `myskills config set api-url ...` or `MYSKILLS_API_URL`, then authenticate
+separately.
 
 Implemented commands:
 
@@ -55,7 +87,7 @@ myskills review bundle <submission-id> [--platform <name>] [--output <file>] [--
 myskills review action <submission-id> --action <approve|request-changes|reject|publish> [--artifact-sha256 <hash>] [--reason <text>] [--api-url <url>] [--token <token>]
 myskills submissions list [--api-url <url>] [--token <token>]
 myskills submissions withdraw <submission-id> [--reason <text>] [--api-url <url>] [--token <token>]
-myskills skills edit <skill-slug> [--title <text>] [--summary <text>] [--visibility <scope>] [--tag <tag>] [--reason <text>] [--api-url <url>] [--token <token>]
+myskills skills edit <skill-slug> [--title <text>] [--summary <text>] [--tag <tag>] [--visibility <scope>] [--reason <text>] [--api-url <url>] [--token <token>] (deprecated visibility compatibility alias; use sharing set)
 myskills skills archive|restore|delete <skill-slug> [--reason <text>] [--api-url <url>] [--token <token>]
 myskills releases list <skill-slug> [--api-url <url>] [--token <token>]
 myskills releases deprecate|unpublish|revoke|restore|delete <skill-slug>@<version> [--reason <text>] [--replacement <version>] [--api-url <url>] [--token <token>]
@@ -64,9 +96,16 @@ myskills teams create <team-name> [--name <team-name>] [--api-url <url>] [--toke
 myskills teams invite <team-id> --email <email> [--api-url <url>] [--token <token>]
 myskills teams accept <invitation-id> [--api-url <url>] [--token <token>]
 myskills sharing get <skill-slug> [--api-url <url>] [--token <token>]
-myskills sharing set <skill-slug> --visibility <scope> [--team <team-id>] [--user <email>]
+myskills sharing set <skill-slug> --visibility <scope> [--team <team-id>] [--user <email>] [--organization <organization-id>] [--organization-id <organization-id>] [--clear-organizations]
+myskills architectures patterns [--api-url <url>] [--token <token>]
+myskills architectures list [--api-url <url>] [--token <token>]
+myskills architectures show <architecture-id> [--revision <revision-id>] [--api-url <url>] [--token <token>]
+myskills architectures preview|compile <architecture-id> [--revision <revision-id>] [--profile <profile-id>] [--environment <environment-id>] [--organization-id <organization-id>|--organization <organization-id>] [--api-url <url>] [--token <token>]
+myskills architectures plan|dry-run <architecture-id> --observed <fixture.json> [--revision <revision-id>] [--profile <profile-id>] [--environment <environment-id>] [--organization-id <organization-id>|--organization <organization-id>] [--api-url <url>] [--token <token>]
+myskills architectures observe --root <absolute-dir> --profile <personal|work|shared> (--context <file> | --target-id <id> --generation <number> --architecture-id <id> --environment-id <id> --profile-id <id> --adapter-digest <sha256> --capabilities-digest <sha256>) [--json]
+myskills architectures health --root <absolute-dir> --profile <personal|work|shared> (--context <file> | --target-id <id> --generation <number> --architecture-id <id> --environment-id <id> --profile-id <id> --adapter-digest <sha256> --capabilities-digest <sha256>) [--json]
 myskills admin sharing get [--api-url <url>] [--token <token>]
-myskills admin sharing set [--public <true|false>] [--authenticated <true|false>] [--teams <true|false>] [--team-visibility <true|false>] [--user-visibility <true|false>]
+myskills admin sharing set [--public <true|false>] [--authenticated <true|false>] [--teams <true|false>] [--team-visibility <true|false>] [--user-visibility <true|false>] [--organization-visibility <true|false>]
 myskills export <skill-slug> --version <version> --platform <platform> --output <dir>
 myskills install <skill-slug> [--version <version>] [--platform <platform>] [--dir <install-root>]
 myskills list [--dir <install-root>]
@@ -76,6 +115,48 @@ myskills token create --name <name> --scope <scope> [--scope <scope>]
 myskills token list
 myskills token revoke <token-id>
 ```
+
+The API-backed architecture preview includes the compiled graph, escaped
+Mermaid, and a versioned diagram artifact with a plain-text accessible outline.
+Use `--json` when a caller needs the complete JSON/Mermaid/outline projection;
+the human-readable preview prints the bounded topology summary and Mermaid.
+The browser workbench additionally offers derived JSON and Mermaid downloads.
+
+### Local Codex observation
+
+`architectures observe` and `architectures health` run the Codex adapter locally
+against an explicitly supplied absolute root. The profile must be selected
+explicitly as `personal`, `work`, or `shared`. Supply either `--context` with a
+JSON object containing exactly `targetId`, `targetGeneration`,
+`architectureId`, `environmentId`, `profileId`, `adapterDigest`, and
+`capabilitiesDigest`, or pass those seven values through their corresponding
+flags.
+
+The command reads only bounded, allowlisted metadata and safe skill
+frontmatter. It does not search home directories, follow profile pointers,
+read prompt or skill bodies, emit local paths, retain credentials, call the
+network, upload observations, or modify a target. Review the JSON output before
+any separately authorized/manual upload to an API observation route. No live
+apply, rollback, installation, or other target mutation is available through
+this command.
+
+### Fixture-only sync and recovery
+
+`architectures plan` and `architectures dry-run` accept a bounded observed
+fixture and return a dry-run plan. The fixture is not an implicit target and
+the command does not apply changes. Local Phase 2 sync/recovery control is
+fixture-only, even though its API persistence and recovery/rollback evidence
+can be stored in Postgres. No public sync-run route, live adapter, target
+apply, rollback, package installation, or target filesystem writer is
+available. Each bounded run allows at most 500 steps and 2,004 append-only
+receipts: a 1,002-receipt max-step lifecycle, one full apply/verify retry, and
+two recovery/terminal receipts. Further retries require a new bounded run.
+
+The API/web control plane also supports manager-only organization architecture
+grant save/revoke and owner/team-owner derive-shell migration preview/create.
+Those operations require the server's current-revision, organization-policy,
+membership, exact-release, limit, idempotency, and MFA checks. This CLI does
+not expose a second policy implementation or write command for them.
 
 ## Published And Candidate Channels
 
@@ -93,7 +174,7 @@ Update the CLI with:
 npm install -g @jarel/myskills@alpha
 ```
 
-The `0.1.0-beta.2` source manifest is configured for the `beta` dist-tag, but package publication is a separate maintainer approval step. The release-verification workflow packs and installs the candidate without publishing it.
+The `0.1.0-beta.3` source manifest is configured for the `beta` dist-tag. The release-verification workflow packs and installs the candidate without publishing it.
 
 `validate`, `scan`, and `submit` accept a manifest file, package directory, or local `.zip` package. `login` prompts for the API URL when one is not supplied; the default is the local API at `http://localhost:3001`, and custom hosted URLs can be entered manually. Successful login stores the selected API URL in local CLI config so later commands can omit `--api-url`. API URL resolution is `--api-url`, then `MYSKILLS_API_URL`, then saved config, then `http://localhost:3001`.
 
@@ -105,9 +186,43 @@ The `0.1.0-beta.2` source manifest is configured for the `beta` dist-tag, but pa
 
 Published artifacts remain immutable. `skills edit` changes mutable skill metadata only, while `releases deprecate`, `releases unpublish`, `releases revoke`, `releases restore`, and `releases delete` update server-owned lifecycle state for a specific version. Deprecated releases remain visible and installable; unpublished, revoked, archived, and deleted releases are hidden from install/export queries. `export` downloads server-authorized bundle content, verifies byte size and SHA-256 against release metadata, and writes normalized package paths under the requested output directory. `install` uses the same verified bundle path, writes into `--dir`, `MYSKILLS_INSTALL_DIR`, or the user data directory, and records local state in `.myskills-app/installed.json`; `update` preserves a rollback snapshot before replacing files, and `rollback` restores the most recent snapshot. `token create` prints the plaintext API token only once and does not overwrite the stored login session. Browser/device login, platform-specific install adapters, and archive creation are still planned.
 
+To change skill visibility, use the canonical `myskills sharing set
+<skill-slug> --visibility <scope>` command. It accepts either
+`--organization <organization-id>` or `--organization-id <organization-id>` for
+the complete organization grant set. Omitting both organization options keeps
+the beta.2 compatibility behavior and preserves already-issued organization
+grants. Pass `--clear-organizations` to send `organizationIds: []` and revoke
+the complete organization grant set; this flag is mutually exclusive with both
+organization ID options.
+
+`myskills skills edit --visibility <scope>` remains a deprecated beta.2
+compatibility alias. It preserves omitted organization grants and does not
+provide complete-set organization controls; use the canonical sharing command
+to grant or clear organization access. Canonical sharing remains subject to
+the API's session and MFA security rules; the beta.2 metadata alias is also
+session-only and requires an MFA-verified session before it reads or replaces
+grants. API tokens cannot widen a skill through the alias. Neither path
+bypasses server policy. Organization policy and membership remain API-owned.
+Do not treat a successful CLI command for another scope as evidence of
+organization sharing.
+
+The CLI does not provide the separate architecture organization-grant
+replacement workflow; architecture grants remain an API/web manager control.
+The read-only `architectures preview`, `compile`, `plan`, and `dry-run`
+commands already accept `--organization-id <organization-id>` (with
+`--organization <organization-id>` retained as an input alias). The server
+authorizes that exact organization projection; it is a scope filter, not an
+ownership shortcut.
+
+The beta.2 compatibility shims remain in beta.3 and are planned for removal only
+at a later, separately published prerelease boundary that includes migration
+guidance and release verification. The source release does not imply a hosted
+deployment.
+
 Common scopes:
 
 - `skills:read` for MCP registry discovery.
 - `profile:read` for `whoami`.
 - `skills:submit` for author submissions.
 - `review:read` and `review:write` for maintainer review workflows.
+- `architectures:read` for architecture list, detail, preview, and fixture-plan reads.

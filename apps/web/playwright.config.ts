@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const browserExecutable = process.env.MYSKILLS_E2E_BROWSER_EXECUTABLE?.trim();
+
 export default defineConfig({
   testDir: "./test/e2e",
   testIgnore: "full-stack.spec.ts",
@@ -8,6 +10,7 @@ export default defineConfig({
   workers: 1,
   use: {
     baseURL: "http://127.0.0.1:4174",
+    launchOptions: browserExecutable ? { executablePath: browserExecutable } : {},
     trace: "retain-on-failure",
   },
   webServer: {
