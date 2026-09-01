@@ -392,11 +392,6 @@ export function RegistryApp({ client }: RegistryAppProps) {
     window.history.pushState({}, "", browseUrl(slug, query, platform));
   }
 
-  function openLanding() {
-    setView("landing");
-    window.history.pushState({}, "", "/");
-  }
-
   function openLogin() {
     setView("login");
     window.history.pushState({}, "", "/login");
@@ -542,7 +537,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
       <AuthTokenPage
         client={registryClient}
         kind="reset-password"
-        onHome={openLanding}
+        onHome={openLogin}
         onLogin={openLogin}
       />
     );
@@ -552,7 +547,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
     return (
       <InvitationRegistrationPage
         client={registryClient}
-        onHome={openLanding}
+        onHome={openLogin}
         onLogin={openLogin}
       />
     );
@@ -563,7 +558,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
       <AuthTokenPage
         client={registryClient}
         kind={activeView}
-        onHome={openLanding}
+        onHome={openLogin}
         onLogin={openLogin}
       />
     );
@@ -575,7 +570,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
         authMessage={authMessage}
         authState={authState}
         mfaPending={mfaPending}
-        onHome={openLanding}
+        onHome={openLogin}
         onLogin={handleLogin}
         onPasswordReset={handlePasswordResetRequest}
         onVerifyMfa={handleVerifyMfa}
@@ -584,7 +579,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }
 
   if (activeView === "not-found") {
-    return <NotFoundPage onHome={openLanding} />;
+    return <NotFoundPage onHome={openLogin} />;
   }
 
   const navItems = [
@@ -995,12 +990,9 @@ function LoginPage({
     <a className="skip-link" href="#main-content">Skip to main content</a>
     <main className="login-page" id="main-content">
       <nav className="login-nav" aria-label="Login navigation">
-        <a className="landing-brand" href="/" onClick={(event) => handleCallbackLink(event, onHome)}>
+        <a className="landing-brand" href="/login" onClick={(event) => handleCallbackLink(event, onHome)}>
           <img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" width={360} height={110} />
         </a>
-        <Button asChild className="login-back shadcn-action-button" size="sm" variant="outline">
-          <a href="/" onClick={(event) => handleCallbackLink(event, onHome)}>Public site</a>
-        </Button>
       </nav>
       <section className="login-panel" aria-labelledby="login-heading">
         <p className="landing-status">Public beta. Hosted signups are closed.</p>
@@ -4568,7 +4560,7 @@ function isPublicView(view: AppView): boolean {
 
 function initialViewFromPath(pathname: string): AppView {
   if (pathname === "/") {
-    return "landing";
+    return "login";
   }
   if (pathname === "/login") {
     return "login";
