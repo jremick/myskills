@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "profile": "personal",
+  "skills": [
+    {
+      "slug": "safe-skill",
+      "enabled": true,
+      "runtimeExposure": "leaf",
+      "configured": false,
+      "managed": true,
+      "supported": true
+    }
+  ]
+}

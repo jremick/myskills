@@ -1,5 +1,8 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
+const browserExecutable = process.env.MYSKILLS_E2E_BROWSER_EXECUTABLE?.trim();
+test.use({ launchOptions: browserExecutable ? { executablePath: browserExecutable } : {} });
+
 const ownerEmail = requiredEnvironment("MYSKILLS_E2E_OWNER_EMAIL");
 const ownerPassword = requiredEnvironment("MYSKILLS_E2E_OWNER_PASSWORD");
 const ownerRecoveryCodes = requiredStringArrayEnvironment("MYSKILLS_E2E_OWNER_RECOVERY_CODES");
@@ -38,7 +41,7 @@ test("anonymous visitor browses the seeded registry through the production proxy
     return {
       body: await response.json() as {
         ok: boolean;
-        checks: { postgres: string; artifactStorage: string };
+        checks: { postgres: string; artifactStorage: string; phase2Architecture: string };
       },
       status: response.status,
     };
@@ -47,7 +50,7 @@ test("anonymous visitor browses the seeded registry through the production proxy
     body: {
       ok: true,
       service: "myskills-app-api",
-      checks: { postgres: "ready", artifactStorage: "ready" },
+      checks: { postgres: "ready", artifactStorage: "ready", phase2Architecture: "ready" },
     },
     status: 200,
   });
@@ -100,6 +103,106 @@ test("owner uses a real HttpOnly cookie session and exports a real seeded bundle
   await page.getByLabel("Sign out").click();
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   await expect.poll(async () => (await context.cookies()).some((cookie) => cookie.name === "myskills_session")).toBe(false);
+});
+
+test("owner creates and reads a real architecture revision from a seeded release", async ({ page }, testInfo) => {
+  const browserErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") browserErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => browserErrors.push(error.message));
+
+  await signInOwner(page, recoveryCode(4, testInfo));
+  await page.locator(".side-nav").getByRole("link", { name: "Architectures" }).click();
+  await expect(page.getByRole("heading", { name: "Skill architectures" })).toBeVisible();
+
+  const architectureName = `Full-stack architecture ${testInfo.retry}`;
+  const createCard = page.locator('[aria-label="Create architecture"]');
+  await createCard.getByLabel("Architecture name").fill(architectureName);
+  await createCard.getByLabel("Architecture pattern").selectOption("flat");
+
+  const createResponsePromise = page.waitForResponse((response) => (
+    response.url().endsWith("/api/v1/architectures") && response.request().method() === "POST"
+  ));
+  await createCard.getByRole("button", { name: "Create architecture", exact: true }).click();
+  const createResponse = await createResponsePromise;
+  expect(createResponse.status()).toBe(201);
+  const createBody = await createResponse.json() as { architecture?: { id?: string; name?: string } };
+  const architectureId = createBody.architecture?.id;
+  expect(architectureId).toBeTruthy();
+  expect(createBody.architecture?.name).toBe(architectureName);
+
+  await expect(page.getByRole("heading", { name: architectureName, exact: true })).toBeVisible();
+  const editor = page.getByTestId("architecture-editor");
+  await expect(editor).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Build the first revision" })).toBeVisible();
+
+  await editor.getByLabel("Search registry skills").fill("release-notes-helper");
+  await editor.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(editor.getByLabel("Registry skill", { exact: true })).toBeVisible();
+  await editor.getByLabel("Registry skill", { exact: true }).selectOption("release-notes-helper");
+  const releaseSelect = editor.getByLabel("Exact release", { exact: true });
+  await expect(releaseSelect).toBeVisible();
+  await expect(releaseSelect.locator("option").nth(1)).toBeAttached();
+  await releaseSelect.selectOption({ index: 1 });
+  await editor.getByRole("button", { name: "Add selected exact release", exact: true }).click();
+  await expect(editor.getByText(/added as an exact release draft/)).toBeVisible();
+
+  const saveResponsePromise = page.waitForResponse((response) => (
+    response.url().includes(`/api/v1/architectures/${architectureId}/revisions`)
+      && response.request().method() === "POST"
+  ));
+  await expect(editor.getByRole("button", { name: "Save revision", exact: true })).toBeEnabled();
+  await editor.getByRole("button", { name: "Save revision", exact: true }).click();
+  const saveResponse = await saveResponsePromise;
+  expect(saveResponse.status()).toBe(201);
+  const saveBody = await saveResponse.json() as { revision?: { id?: string; revisionNumber?: number } };
+  const revisionId = saveBody.revision?.id;
+  expect(revisionId).toBeTruthy();
+  expect(saveBody.revision?.revisionNumber).toBe(1);
+
+  await expect(page.getByRole("heading", { name: "Revision history" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Current · Revision 1/ })).toBeVisible();
+  await expect(page.getByText("Current revision selected")).toBeVisible();
+
+  const readback = await page.evaluate(async (id) => {
+    const response = await fetch(`/api/v1/architectures/${encodeURIComponent(id)}`);
+    const body = await response.json() as {
+      architecture?: { id?: string; name?: string; currentRevisionId?: string | null };
+      latestRevision?: { id?: string; revisionNumber?: number; spec?: { skills?: Array<{ slug?: string; version?: string; digest?: string }> } } | null;
+    };
+    return {
+      status: response.status,
+      architecture: {
+        id: body.architecture?.id,
+        name: body.architecture?.name,
+        currentRevisionId: body.architecture?.currentRevisionId ?? null,
+      },
+      latestRevision: {
+        id: body.latestRevision?.id,
+        revisionNumber: body.latestRevision?.revisionNumber,
+        skills: body.latestRevision?.spec?.skills?.map((skill) => ({
+          slug: skill.slug,
+          version: skill.version,
+          digestLength: skill.digest?.length ?? 0,
+        })) ?? [],
+      },
+    };
+  }, architectureId!);
+  expect(readback).toEqual({
+    status: 200,
+    architecture: {
+      id: architectureId,
+      name: architectureName,
+      currentRevisionId: revisionId,
+    },
+    latestRevision: {
+      id: revisionId,
+      revisionNumber: 1,
+      skills: [{ slug: "release-notes-helper", version: "0.1.0", digestLength: 64 }],
+    },
+  });
+  expect(browserErrors).toEqual([]);
 });
 
 test("owner invites a user through captured email and the invitee registers and logs in", async ({ page }, testInfo) => {

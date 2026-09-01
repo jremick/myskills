@@ -2,6 +2,9 @@
 
 Backend API service and trust boundary for MySkills.
 
+Document revision: 0.2.0-draft
+Last updated: 2026-09-01
+
 Responsibilities:
 
 - authentication and sessions
@@ -17,9 +20,10 @@ The API must use the database as system of record. It must not treat Git as cano
 
 ## Current Slice
 
-Implemented:
+Implemented in the current branch (release and hosted verification pending):
 
 - `GET /health`
+- `GET /v1/capabilities` versioned capability flags and Phase 2 readiness status when configured
 - `POST /v1/auth/register` admin-policy-gated self registration
 - `POST /v1/auth/login` email/password login for active verified users, returning an MFA challenge when TOTP is enabled
 - `POST /v1/auth/email-verification/request` generic email verification token request
@@ -49,7 +53,7 @@ Implemented:
 - `PUT /v1/admin/users/:id/roles` MFA-verified admin user role update with owner-only privileged-role safeguards
 - `GET /v1/admin/audit?limit=...` MFA-verified admin audit event list
 - `GET /v1/me` bearer-session or scoped API-token current user response
-- `GET /v1/mcp/session` API-token-only MCP auth check requiring `skills:read` with sanitized allow/deny audit events
+- `GET /v1/mcp/session` API-token-only MCP auth check accepting either `skills:read` or `architectures:read`; registry tools require `skills:read`, architecture projection tools require `architectures:read`, and allow/deny decisions are audited
 - `GET /v1/submissions/mine` session-only submitted skill version list for the current user
 - `GET /v1/submissions/:id/bundle` session-only package export for user-owned submitted versions
 - `POST /v1/submissions/:id/actions` session-only author `withdraw`
@@ -64,8 +68,72 @@ Implemented:
 - `GET /v1/skills/:slug/releases/:version` public approved release metadata
 - `POST /v1/skills/:slug/releases/:version/actions` owner/admin/maintainer release `deprecate`, `unpublish`, `revoke`, `restore`, and `delete`
 - `GET /v1/skills/:slug/releases/:version/bundle?platform=...` public approved package payload delivery
+- `GET/POST /v1/organizations`, pending-invitation list/accept routes, and organization detail, member, invitation, policy-revision/action, lifecycle-action, and nested-team routes under `/v1/organizations/:id`
+- `GET/POST /v1/teams`, organization adoption, invitation/member lifecycle, invitation acceptance, and shared-skill routes
+- `GET /v1/architecture-patterns` built-in architecture pattern metadata
+- `GET /v1/architectures` and `GET /v1/architectures/:id` authorized architecture summaries
+- `POST /v1/architectures` session-only architecture shell creation
+- `GET /v1/architectures/:id/revisions` and `GET /v1/architectures/:id/revisions/:revisionId` immutable revision reads
+- `POST /v1/architectures/:id/revisions` session-only exact-release revision append with optimistic concurrency
+- `POST /v1/architectures/:id/draft-preview` and `POST /v1/architectures/:id/preview` consolidated profile/environment projections and optional fixture dry-run plans
+- `GET/PUT /v1/architectures/:id/organization-grants` manager-only organization grant read/complete-set replacement; PUT is MFA-protected and current-revision guarded
+- `POST /v1/architectures/:id/pattern-migrations/preview` and `POST /v1/architectures/:id/pattern-migrations` owner/team-owner derive-shell preview/create; create is MFA-protected and idempotent
+- `GET/POST /v1/architecture-targets`, `GET /v1/architecture-targets/:id`, consent, observation, health, and revoke routes for session-only metadata/consent lifecycle
 - Drizzle Postgres schema and migrations
 - synthetic seed data for one owner and one approved public skill
+
+Phase 2 architecture reads accept a session or an API token with the explicit
+`architectures:read` scope. Architecture writes are session-only; target
+registration, consent, and revoke require MFA, while observation and health
+routes accept bounded metadata and never invoke an adapter. Organization-only
+readers receive safe summaries and must supply an authorized organization
+context for preview; raw revision payloads are withheld. The browser, CLI, and
+MCP are clients of these API decisions and cannot grant access.
+
+The Phase 2 routes and tables are local branch implementation evidence. They do
+not prove a hosted migration, a current Railway deployment, or a live provider
+integration. Sync control is persisted fixture/recovery evidence only: there
+is no public sync-run route, live adapter executor, package installer,
+filesystem writer, target apply, or target rollback path. Each bounded sync run
+allows at most 500 steps and 2,004 append-only receipts. That capacity covers a
+1,002-receipt max-step lifecycle, one full apply/verify retry, and two
+recovery/terminal receipts; further retries require a new bounded run. Before a
+production deployment applies migration 0019, the operator must verify a
+restorable database backup and the backup-restore procedure, record the accepted
+data-loss boundary, and assess and approve the expected Postgres lock window
+for its DDL work. A local migration pass or backup artifact alone does not
+establish either gate.
+
+## Beta.3 breaking security and MCP changes
+
+Beta.3 contains security and MCP contract changes that were not part of the
+published `0.1.0-beta.2` API. Do not infer a hosted beta.3 deployment from this
+README; production promotion requires separate live verification.
+
+Team creation, team-owner invitation/member lifecycle mutations, and
+organization creation/invitation/member/policy/lifecycle mutations require an
+interactive MFA-verified session. Canonical `PUT /v1/skills/:slug/sharing` is
+session-only; expanding sharing to team or organization scope requires MFA,
+and privileged sharing reads/writes require MFA. The deprecated metadata
+`visibility` alias uses the same session/MFA boundary. API tokens remain valid
+for documented scoped reads, but cannot widen sharing or perform these
+mutations.
+
+Before upgrading to beta.3, enroll TOTP with
+`POST /v1/auth/mfa/totp/enroll` (password reauthentication), confirm with
+`POST /v1/auth/mfa/totp/confirm`, retain the one-time recovery codes, and
+complete subsequent login challenges with `POST /v1/auth/mfa/verify` or
+`myskills login`. Move mutation automation to an explicitly managed session;
+API-token automation must remain read-only. Invitation acceptance remains
+session-only where its route permits it.
+
+The MCP install-instructions contract is also breaking: the result no longer
+returns `apiBundleEndpoint`, any bundle URL, or package contents. It returns
+authorized release metadata plus generated `myskills install ...` and
+`myskills export ... --output ...` commands. MCP clients must use those
+commands or the separately authenticated API/CLI delivery path. MCP API base
+URLs accept only absolute `http://` or `https://` URLs without credentials,
+query strings, or fragments; bearer credentials stay in request headers.
 
 Public search, detail, release metadata, and bundle delivery all require the same safe release state: public skill, skill lifecycle `approved` or `deprecated`, version lifecycle `approved` or `deprecated`, approved review, passed security status, non-null `publishedAt`, non-deleted version row, and artifact metadata. Deprecated releases remain visible and installable; unpublished, revoked, archived, and deleted releases are hidden from public install/export paths. Submission is open to `author` and above; `owner`, `admin`, and `maintainer` submitters require an MFA-verified session or MFA-bound API token. Review, publish, and lifecycle actions require `owner`, `admin`, or `maintainer` and an MFA-verified session or MFA-bound API token. The review queue returns only safe metadata and excludes package file contents.
 
@@ -77,7 +145,7 @@ Provider configs store only non-secret metadata and explicit claim-to-role mappi
 
 Admin registration, provider config changes, user-status mutations, role mutations, and MCP session authorization decisions write sanitized audit events. Audit listing is newest-first, bounded to a maximum of 100 events per request, and returns only the event id, actor id, action, decision, resource reference, sanitized details, and timestamp.
 
-API tokens are hashed at rest and returned in plaintext only on creation. Token management routes require an interactive session, not another API token. Current token scopes are `profile:read`, `skills:read`, `skills:submit`, `review:read`, and `review:write`; route checks require both the user role and the token scope. Owner, admin, and maintainer accounts must create review-scoped API tokens from an MFA-verified session. MFA-verified admins can list safe API token metadata across users and revoke tokens without seeing token hashes or plaintext.
+API tokens are hashed at rest and returned in plaintext only on creation. Token management routes require an interactive session, not another API token. Current token scopes are `profile:read`, `skills:read`, `architectures:read`, `skills:submit`, `review:read`, and `review:write`; route checks require both the user role and the token scope. Owner, admin, and maintainer accounts must create review-scoped API tokens from an MFA-verified session. MFA-verified admins can list safe API token metadata across users and revoke tokens without seeing token hashes or plaintext.
 
 TOTP secrets are encrypted before storage with `AUTH_SECRET`. Production startup fails if `AUTH_SECRET` is missing or shorter than 32 bytes.
 

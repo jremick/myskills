@@ -3,6 +3,17 @@ import assert from "node:assert/strict";
 import { createRegistryApiClient, type FetchLike } from "../src/api-client.js";
 import { createAiSkillsMcpHandlers } from "../src/tools.js";
 
+test("MCP API URLs reject embedded credentials and query parameters", () => {
+  assert.throws(
+    () => createRegistryApiClient({ apiBaseUrl: "https://user:secret@example.test/api" }),
+    /without credentials or query parameters/,
+  );
+  assert.throws(
+    () => createRegistryApiClient({ apiBaseUrl: "https://example.test/api?token=secret" }),
+    /without credentials or query parameters/,
+  );
+});
+
 test("missing MCP token fails before registry requests", async () => {
   const calls: Array<{ url: string; authorization?: string }> = [];
   const client = createRegistryApiClient({
@@ -85,6 +96,8 @@ test("install instructions never fetch or expose bundle package contents", async
   assert.match(text, /myskills install 'release-notes-helper' --version '0\.1\.0' --platform 'codex'/);
   assert.match(text, /myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'codex'/);
   assert.match(text, /packageContentsReturned/);
+  assert.equal(text.includes("apiBundleEndpoint"), false);
+  assert.equal(text.includes("/v1/skills/release-notes-helper/releases/0.1.0/bundle"), false);
   assert.equal(text.includes("storageKey"), false);
   assert.equal(text.includes("payload"), false);
   assert.equal(text.includes("files"), false);
@@ -178,6 +191,337 @@ test("missing, private, and unsafe skill responses remain indistinguishable", as
   assert.equal(text.includes("private-helper"), false);
 });
 
+test("architecture tools forward auth and expose only safe owner projections", async () => {
+  const calls: Array<{ url: string; method?: string; authorization?: string; body?: string }> = [];
+  const client = createRegistryApiClient({
+    token: "aiss_test_secret",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, method: init?.method, authorization: init?.headers?.authorization, body: init?.body });
+      assert.equal(init?.headers?.authorization, "Bearer aiss_test_secret");
+      if (url.endsWith("/v1/mcp/session")) {
+        return jsonResponse(200, mcpSession(["skills:read", "architectures:read"]));
+      }
+      if (url.endsWith("/v1/architecture-patterns")) {
+        return jsonResponse(200, {
+          patterns: [{
+            id: "multi-level-router",
+            name: "Multi-level routers",
+            description: "Nested routers and skill leaves. Public docs: /architecture/overview; local C:\\Users\\jarel\\private\\architecture.json and \\\\server\\share\\architecture.json.",
+            storageKey: "private-pattern-key",
+            path: "/private/pattern.json",
+          }],
+        });
+      }
+      if (url.endsWith("/v1/architectures")) {
+        return jsonResponse(200, {
+          architectures: [{
+            id: "arch-1",
+            name: "Personal skills",
+            patternId: "multi-level-router",
+            access: {
+              allowedOrganizationIds: ["org-z", "org-a", "org-a"],
+              ownerUserId: "user-secret",
+            },
+            ownerUserId: "user-1",
+            spec: { path: "/private/spec.json", content: "secret spec" },
+          }],
+        });
+      }
+      if (url.endsWith("/v1/architectures/arch-1")) {
+        return jsonResponse(200, {
+          architecture: {
+            id: "arch-1",
+            name: "Personal skills",
+            patternId: "multi-level-router",
+            access: {
+              allowedOrganizationIds: ["org-z", "org-a", "org-a"],
+              ownerUserId: "user-secret",
+            },
+            ownerUserId: "user-1",
+            spec: { path: "/private/spec.json", content: "secret spec" },
+          },
+        });
+      }
+      if (url.endsWith("/v1/architectures/arch-1/preview")) {
+        return jsonResponse(200, {
+          revision: {
+            id: "revision-1",
+            architectureId: "arch-1",
+            revisionNumber: 3,
+            message: "Nested router revision",
+            createdAt: "2026-08-30T00:00:00.000Z",
+            createdByUserId: "user-1",
+            spec: { path: "/private/spec.json", content: "secret spec" },
+          },
+          graph: {
+            digest: "graph-digest",
+            nodes: [{ id: "root", kind: "router", label: "Root", x: 0, y: 0, path: "/private/root" }],
+            edges: [{ from: "root", to: "leaf", kind: "contains", content: "not allowed" }],
+            mermaid: "flowchart TD\n  root[Root]",
+            path: "/private/graph.json",
+          },
+          outline: {
+            title: "Architecture arch-1",
+            text: "Root",
+            tree: [{ id: "root", kind: "router", label: "Root", path: "/private/root", children: [{ id: "leaf", content: "not allowed" }] }],
+            path: "/private/outline.json",
+          },
+          compiled: {
+            schemaVersion: 1,
+            pattern: { id: "multi-level-router" },
+            skills: [{ slug: "release-notes-helper", version: "0.1.0", content: "secret package text" }],
+            runtimeBundle: { files: [{ path: "SKILL.md", content: "secret package text" }] },
+          },
+          plan: {
+            dryRun: true,
+            canApply: false,
+            requiresApproval: true,
+            targetId: "fixture-target",
+            revisionDigest: "revision-digest",
+            items: [{
+              action: "install",
+              nodeId: "leaf",
+              kind: "leaf",
+              reason: "Desired skill is absent from the target.",
+              desired: { version: "0.1.0", digest: "skill-digest", enabled: true, path: "/private/desired" },
+              observed: { metadata: { content: "not allowed" } },
+              path: "/private/plan-item",
+            }],
+            files: [{ path: "SKILL.md", content: "secret package text" }],
+          },
+        });
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    },
+  });
+  const handlers = createAiSkillsMcpHandlers(client);
+
+  const patterns = await handlers.listArchitecturePatterns();
+  const architectures = await handlers.listArchitectures();
+  const projection = await handlers.getArchitectureProjection({
+    id: "arch-1",
+    profileId: "personal",
+    environmentId: "local",
+    revisionId: "revision-1",
+    organizationId: "org-1",
+  });
+
+  assert.equal(patterns.isError, undefined);
+  assert.equal(architectures.isError, undefined);
+  assert.equal(projection.isError, undefined);
+  const combined = JSON.stringify({ patterns, architectures, projection });
+  assert.match(combined, /multi-level-router/);
+  assert.match(combined, /release-notes-helper/);
+  assert.equal(combined.includes("private-pattern-key"), false);
+  assert.equal(combined.includes("ownerUserId"), false);
+  assert.equal(combined.includes("user-secret"), false);
+  assert.match(combined, /allowedOrganizationIds/);
+  assert.equal(combined.includes("/private/"), false);
+  assert.equal(combined.includes("secret spec"), false);
+  assert.equal(combined.includes("secret package text"), false);
+  assert.equal(combined.includes("runtimeBundle"), false);
+  assert.equal(combined.includes("/private/graph.json"), false);
+  assert.equal(combined.includes("/private/outline.json"), false);
+  assert.equal(combined.includes("/private/plan-item"), false);
+  assert.equal(combined.includes("/architecture/overview"), true);
+  assert.equal(combined.includes("C:\\Users\\jarel"), false);
+  assert.equal(combined.includes("\\\\server\\share"), false);
+  assert.equal(combined.includes("jarel"), false);
+  assert.equal(combined.includes("files"), false);
+  const safePreview = projection.structuredContent?.preview as Record<string, unknown>;
+  const safeArchitectureList = architectures.structuredContent?.architectures as Array<Record<string, unknown>>;
+  assert.deepEqual(safeArchitectureList[0]?.allowedOrganizationIds, ["org-a", "org-z"]);
+  assert.equal(safePreview.architectureId, "arch-1");
+  assert.equal(safePreview.revisionId, "revision-1");
+  assert.equal(safePreview.revisionNumber, 3);
+  assert.equal("revision" in safePreview, false);
+  assert.deepEqual(safePreview.graph, {
+    digest: "graph-digest",
+    nodes: [{ id: "root", kind: "router", label: "Root", x: 0, y: 0 }],
+    edges: [{ from: "root", to: "leaf", kind: "contains" }],
+    mermaid: "flowchart TD\n  root[Root]",
+  });
+  assert.deepEqual(safePreview.outline, [{ id: "root", kind: "router", label: "Root", children: [{ id: "leaf" }] }]);
+  assert.deepEqual(safePreview.plan, {
+    dryRun: true,
+    canApply: false,
+    requiresApproval: true,
+    targetId: "fixture-target",
+    revisionDigest: "revision-digest",
+    items: [{
+      action: "install",
+      nodeId: "leaf",
+      kind: "leaf",
+      reason: "Desired skill is absent from the target.",
+      desired: { version: "0.1.0", digest: "skill-digest", enabled: true },
+      observed: {},
+    }],
+  });
+  assert.deepEqual(calls.map((call) => call.url), [
+    "http://localhost:3001/v1/mcp/session",
+    "http://localhost:3001/v1/architecture-patterns",
+    "http://localhost:3001/v1/mcp/session",
+    "http://localhost:3001/v1/architectures",
+    "http://localhost:3001/v1/mcp/session",
+    "http://localhost:3001/v1/architectures/arch-1",
+    "http://localhost:3001/v1/architectures/arch-1/preview",
+  ]);
+  const previewCall = calls.at(-1);
+  assert.equal(previewCall?.method, "POST");
+  assert.deepEqual(JSON.parse(previewCall?.body ?? "{}"), {
+    profileId: "personal",
+    environmentId: "local",
+    revisionId: "revision-1",
+    organizationId: "org-1",
+  });
+});
+
+test("architecture projection rejects an unsafe organization context before preview", async () => {
+  const calls: string[] = [];
+  const client = createRegistryApiClient({
+    token: "aiss_test_secret",
+    fetchImpl: async (url) => {
+      calls.push(url);
+      if (url.endsWith("/v1/mcp/session")) {
+        return jsonResponse(200, mcpSession(["skills:read", "architectures:read"]));
+      }
+      if (url.endsWith("/v1/architectures/arch-1")) {
+        return jsonResponse(200, { architecture: { id: "arch-1" } });
+      }
+      return jsonResponse(500, {});
+    },
+  });
+
+  const result = await createAiSkillsMcpHandlers(client).getArchitectureProjection({
+    id: "arch-1",
+    organizationId: "../private",
+  });
+
+  assert.equal(result.isError, true);
+  assert.match(result.content[0]?.text ?? "", /Architecture id is invalid/);
+  assert.deepEqual(calls, [
+    "http://localhost:3001/v1/mcp/session",
+    "http://localhost:3001/v1/architectures/arch-1",
+  ]);
+});
+
+test("architecture tools deny tokens without architectures:read after MCP authentication", async () => {
+  const calls: string[] = [];
+  const client = createRegistryApiClient({
+    token: "aiss_test_secret",
+    fetchImpl: async (url) => {
+      calls.push(url);
+      assert.equal(url, "http://localhost:3001/v1/mcp/session");
+      return jsonResponse(200, mcpSession());
+    },
+  });
+  const handlers = createAiSkillsMcpHandlers(client);
+
+  const patterns = await handlers.listArchitecturePatterns();
+  const architectures = await handlers.listArchitectures();
+  const projection = await handlers.getArchitectureProjection({ id: "arch-1" });
+
+  for (const result of [patterns, architectures, projection]) {
+    assert.equal(result.isError, true);
+    assert.deepEqual(result.content, [{ type: "text", text: "MCP architecture tools require an API token with architectures:read scope." }]);
+  }
+  assert.deepEqual(calls, [
+    "http://localhost:3001/v1/mcp/session",
+    "http://localhost:3001/v1/mcp/session",
+    "http://localhost:3001/v1/mcp/session",
+  ]);
+});
+
+test("architecture tools accept architectures:read without skills:read", async () => {
+  const calls: string[] = [];
+  const client = createRegistryApiClient({
+    token: "aiss_test_secret",
+    fetchImpl: async (url) => {
+      calls.push(url);
+      if (url.endsWith("/v1/mcp/session")) {
+        return jsonResponse(200, mcpSession(["architectures:read"]));
+      }
+      assert.equal(url, "http://localhost:3001/v1/architectures");
+      return jsonResponse(200, { architectures: [{ id: "arch-1", name: "Personal skills" }] });
+    },
+  });
+
+  const result = await createAiSkillsMcpHandlers(client).listArchitectures();
+
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(result.structuredContent, {
+    architectures: [{ id: "arch-1", name: "Personal skills" }],
+    count: 1,
+  });
+  assert.deepEqual(calls, [
+    "http://localhost:3001/v1/mcp/session",
+    "http://localhost:3001/v1/architectures",
+  ]);
+});
+
+test("MCP tools fail closed for malformed or interactive session credentials", async () => {
+  const client = createRegistryApiClient({
+    token: "aiss_test_secret",
+    fetchImpl: async () => jsonResponse(200, {
+      credential: {
+        kind: "session",
+        tokenId: "session-1",
+        scopes: ["skills:read", "architectures:read"],
+      },
+    }),
+  });
+
+  const result = await createAiSkillsMcpHandlers(client).listArchitectures();
+
+  assert.equal(result.isError, true);
+  assert.deepEqual(result.content, [{ type: "text", text: "MCP architecture tools require an API token with architectures:read scope." }]);
+});
+
+test("architecture not-found errors stay architecture-specific and sanitized", async () => {
+  const client = createRegistryApiClient({
+    token: "aiss_test_secret",
+    fetchImpl: async (url) => {
+      if (url.endsWith("/v1/mcp/session")) {
+        return jsonResponse(200, mcpSession(["skills:read", "architectures:read"]));
+      }
+      return jsonResponse(404, {
+        error: {
+          code: "ARCHITECTURE_NOT_FOUND",
+          message: "private architecture /Users/jarel/secret/spec.json",
+        },
+      });
+    },
+  });
+
+  const result = await createAiSkillsMcpHandlers(client).getArchitectureProjection({ id: "arch-1" });
+  const text = JSON.stringify(result);
+
+  assert.equal(result.isError, true);
+  assert.match(text, /Architecture not found/);
+  assert.equal(text.includes("/Users/jarel"), false);
+  assert.equal(text.includes("private architecture"), false);
+});
+
+test("architecture projection rejects unsafe identifiers before the architecture request", async () => {
+  const calls: string[] = [];
+  const client = createRegistryApiClient({
+    token: "aiss_test_secret",
+    fetchImpl: async (url) => {
+      calls.push(url);
+      if (url.endsWith("/v1/mcp/session")) {
+        return jsonResponse(200, mcpSession(["skills:read", "architectures:read"]));
+      }
+      return jsonResponse(500, {});
+    },
+  });
+
+  const result = await createAiSkillsMcpHandlers(client).getArchitectureProjection({ id: "../private" });
+
+  assert.equal(result.isError, true);
+  assert.match(result.content[0]?.text ?? "", /Architecture id is invalid/);
+  assert.deepEqual(calls, ["http://localhost:3001/v1/mcp/session"]);
+});
+
 function jsonResponse(status: number, body: Record<string, unknown>): Awaited<ReturnType<FetchLike>> {
   return {
     ok: status >= 200 && status < 300,
@@ -188,7 +532,7 @@ function jsonResponse(status: number, body: Record<string, unknown>): Awaited<Re
   };
 }
 
-function mcpSession() {
+function mcpSession(scopes = ["skills:read"]) {
   return {
     user: {
       id: "user-1",
@@ -201,7 +545,7 @@ function mcpSession() {
     credential: {
       kind: "api_token",
       tokenId: "token-1",
-      scopes: ["skills:read"],
+      scopes,
     },
   };
 }

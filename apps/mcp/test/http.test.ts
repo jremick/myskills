@@ -307,7 +307,7 @@ test("HTTP MCP transport executes tools with the request bearer token", async (t
     const tools = await client.listTools();
     assert.deepEqual(
       tools.tools.map((tool) => tool.name).sort(),
-      ["get_install_instructions", "get_skill_info", "search_skills"],
+      ["get_architecture_projection", "get_install_instructions", "get_skill_info", "list_architecture_patterns", "list_architectures", "search_skills"],
     );
 
     const result = await client.callTool({
@@ -324,6 +324,54 @@ test("HTTP MCP transport executes tools with the request bearer token", async (t
     assert.equal(calls.some((call) => call.url.includes("aiss_test_secret")), false);
     assert.equal(calls.filter((call) => call.url.endsWith("/v1/mcp/session")).length >= 3, true);
     assert.equal(calls.filter((call) => call.url === "http://localhost:3001/v1/skills?q=release").length, 1);
+  } finally {
+    await client.close();
+  }
+});
+
+test("HTTP MCP transport forwards architecture organization context end to end", async (t) => {
+  const calls: Array<{ authorization?: string; url: string; method?: string; body?: string }> = [];
+  const server = createAiSkillsMcpHttpServer({
+    fetchImpl: async (url, init) => {
+      calls.push({ url, method: init?.method, body: init?.body, authorization: init?.headers?.authorization });
+      assert.equal(init?.headers?.authorization, "Bearer aiss_test_secret");
+      if (url.endsWith("/v1/mcp/session")) {
+        return jsonResponse(200, mcpSession(["architectures:read"]));
+      }
+      if (url.endsWith("/v1/architectures/arch-1")) {
+        return jsonResponse(200, {
+          architecture: { id: "arch-1", name: "Personal", patternId: "flat" },
+        });
+      }
+      assert.equal(url, "http://localhost:3001/v1/architectures/arch-1/preview");
+      assert.equal(init?.method, "POST");
+      assert.deepEqual(JSON.parse(init?.body ?? "{}"), { organizationId: "org-1" });
+      return jsonResponse(200, {
+        preview: {
+          revision: { architectureId: "arch-1", id: "revision-1", revisionNumber: 1 },
+          topology: { nodes: [], edges: [] },
+        },
+      });
+    },
+  });
+  const url = await listen(t, server);
+  const client = new Client({ name: "mcp-http-architecture-test-client", version: "0.1.0" });
+  const transport = new StreamableHTTPClientTransport(new URL(url), {
+    requestInit: {
+      headers: { authorization: "Bearer aiss_test_secret" },
+    },
+  });
+
+  await client.connect(transport);
+  try {
+    const result = await client.callTool({
+      name: "get_architecture_projection",
+      arguments: { id: "arch-1", organizationId: "org-1" },
+    });
+    assert.equal(result.isError, undefined);
+    const previewCalls = calls.filter((call) => call.url.endsWith("/v1/architectures/arch-1/preview"));
+    assert.equal(previewCalls.length, 1);
+    assert.deepEqual(JSON.parse(previewCalls[0]?.body ?? "{}"), { organizationId: "org-1" });
   } finally {
     await client.close();
   }
@@ -505,7 +553,7 @@ function jsonResponse(status: number, body: Record<string, unknown>): Awaited<Re
   };
 }
 
-function mcpSession() {
+function mcpSession(scopes: string[] = ["skills:read"]) {
   return {
     user: {
       id: "user-1",
@@ -518,7 +566,7 @@ function mcpSession() {
     credential: {
       kind: "api_token",
       tokenId: "token-1",
-      scopes: ["skills:read"],
+      scopes,
     },
   };
 }

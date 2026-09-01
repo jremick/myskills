@@ -1,4 +1,22 @@
 import type {
+  AccessibleArchitectureOutline,
+  ArchitectureTarget,
+  ArchitectureTargetAdapterDescriptor,
+  ArchitectureTargetCapabilities,
+  ArchitectureTargetHealth,
+  ArchitectureTargetObservation,
+  ArchitectureTargetMetadata,
+  ArchitectureTargetOwnerReference,
+  ArchitectureDiagramArtifactV1,
+  ArchitecturePatternMigrationMapping as CoreArchitecturePatternMigrationMapping,
+  ArchitecturePatternMigrationResult as CoreArchitecturePatternMigrationResult,
+  OrganizationMembershipRole,
+  OrganizationPolicyRevision,
+  OrganizationPolicyV1,
+  ArchitectureSpecV1,
+  ArchitectureSyncPlan as CoreArchitectureSyncPlan,
+  CompiledArchitecture,
+  ObservedArchitectureState,
   PublicSkill,
   SharingSettings,
   SkillSharingDetails,
@@ -56,7 +74,7 @@ export interface AdminUser {
   mfaEnabled: boolean;
 }
 
-export type ApiTokenScope = "profile:read" | "skills:read" | "skills:submit" | "review:read" | "review:write";
+export type ApiTokenScope = "profile:read" | "skills:read" | "architectures:read" | "skills:submit" | "review:read" | "review:write";
 
 export interface ApiToken {
   id: string;
@@ -166,6 +184,7 @@ export interface TeamRecord {
   id: string;
   name: string;
   slug: string;
+  organizationId?: string | null;
   role: "owner" | "member";
   members: TeamMember[];
   invitations: TeamInvitation[];
@@ -176,6 +195,386 @@ export interface TeamRecord {
 export interface TeamDashboard {
   teams: TeamRecord[];
   invitations: TeamInvitation[];
+}
+
+/** Organization and target management projections are server-owned. */
+export type OrganizationStatus = "provisioning" | "active" | "suspended" | "archived";
+export type OrganizationRole = OrganizationMembershipRole;
+
+export interface OrganizationRecord {
+  id: string;
+  name: string;
+  slug: string;
+  status: OrganizationStatus;
+  currentPolicyRevisionId: string | null;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrganizationListItem extends OrganizationRecord {
+  role: OrganizationRole;
+}
+
+export type OrganizationPolicyRevisionRecord = OrganizationPolicyRevision;
+
+export interface OrganizationDetail extends OrganizationListItem {
+  currentPolicy: OrganizationPolicyRevisionRecord | null;
+}
+
+export interface OrganizationMembershipRecord {
+  id: string;
+  organizationId: string;
+  userId: string;
+  email: string;
+  name: string;
+  role: OrganizationRole;
+  invitedByUserId: string | null;
+  removedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type OrganizationInvitationStatus = "pending" | "accepted" | "revoked" | "expired";
+
+export interface OrganizationInvitationRecord {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  email: string;
+  normalizedEmail: string;
+  role: OrganizationRole;
+  status: OrganizationInvitationStatus;
+  invitedByUserId: string | null;
+  acceptedByUserId: string | null;
+  acceptedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrganizationDetailBundle {
+  organization: OrganizationDetail;
+  members: OrganizationMembershipRecord[];
+  invitations: OrganizationInvitationRecord[];
+  policies: OrganizationPolicyRevisionRecord[];
+  teams: TeamRecord[];
+}
+
+export interface ArchitectureTargetRecord extends Omit<ArchitectureTarget, "createdAt" | "updatedAt"> {
+  createdAt: string;
+  updatedAt: string;
+  health: ArchitectureTargetHealth | null;
+}
+
+export type ArchitectureTargetObservationRecord = ArchitectureTargetObservation;
+
+/**
+ * Architecture contracts intentionally live at the API boundary.  The web
+ * client can render the server's compiled projection, but it must not infer
+ * grants or compile an architecture locally.
+ */
+export type ArchitectureScope = "personal" | "work" | "team";
+export type ArchitecturePatternId = "flat" | "domain-router" | "multi-level-router" | string;
+export type ArchitectureOwnerType = "user" | "team";
+
+export interface ArchitectureOwnerReference {
+  type: ArchitectureOwnerType;
+  id: string;
+}
+
+/**
+ * Access is an API decision, not a browser-side policy calculation.  The web
+ * app uses canAppend only to decide whether to offer editor write controls.
+ */
+export interface ArchitectureAccessMetadata {
+  owner: ArchitectureOwnerReference;
+  ownerType: ArchitectureOwnerType;
+  ownerId: string;
+  policyVersion: number;
+  accessPolicyVersion: number;
+  role: "owner" | "member" | "none";
+  canList: boolean;
+  canRead: boolean;
+  canPreview: boolean;
+  canCreate: boolean;
+  canAppend: boolean;
+  canManage: boolean;
+  reasons: string[];
+  allowedOrganizationIds?: string[];
+}
+
+export interface ArchitecturePattern {
+  id: ArchitecturePatternId;
+  version?: number;
+  name: string;
+  description: string;
+  level?: string;
+  supportsNestedRouters?: boolean;
+  status?: "available" | "planned" | "unsupported" | string;
+}
+
+export interface ArchitectureProfile {
+  id: string;
+  name: string;
+  scope?: ArchitectureScope | string;
+  description?: string;
+  teamId?: string | null;
+  environmentIds?: string[];
+}
+
+export interface ArchitectureEnvironment {
+  id: string;
+  name: string;
+  key?: string;
+  description?: string;
+  profileIds?: string[];
+  kind?: ArchitectureScope | string;
+  profileId?: string;
+}
+
+export interface ArchitectureRevisionSummary {
+  id: string;
+  architectureId: string;
+  revisionNumber: number;
+  revision?: number;
+  version?: string;
+  message?: string;
+  patternId?: ArchitecturePatternId;
+  createdAt: string;
+  nodeCount?: number;
+  skillCount?: number;
+  status?: "draft" | "published" | "archived" | "conflict" | string;
+  spec?: ArchitectureSpecV1;
+  createdByUserId?: string;
+}
+
+export interface ArchitectureRevisionRecord extends ArchitectureRevisionSummary {
+  message: string;
+  spec: ArchitectureSpecV1;
+  createdByUserId: string;
+}
+
+export interface ArchitectureSummary {
+  id: string;
+  name: string;
+  description?: string;
+  patternId: ArchitecturePatternId;
+  scope?: ArchitectureScope | string;
+  ownerName?: string;
+  ownerUserId?: string | null;
+  ownerTeamId?: string | null;
+  owner?: ArchitectureOwnerReference;
+  ownerType?: ArchitectureOwnerType;
+  ownerId?: string;
+  accessPolicyVersion?: number;
+  access?: ArchitectureAccessMetadata;
+  currentRevisionId?: string | null;
+  revisionCount?: number;
+  latestRevision?: ArchitectureRevisionSummary | null;
+  updatedAt?: string;
+  status?: "draft" | "active" | "archived" | "conflict" | string;
+}
+
+export interface ArchitectureDetail extends Omit<ArchitectureSummary, "latestRevision"> {
+  revisions?: ArchitectureRevisionSummary[];
+  latestRevision?: ArchitectureRevisionRecord | null;
+}
+
+/** Server-owned architecture grants. The browser only submits a complete set of organization IDs. */
+export interface ArchitectureOrganizationGrantRecord {
+  architectureId: string;
+  organizationId: string;
+  accessLevel: "read";
+  createdByUserId: string | null;
+  createdUnderPolicyRevisionId: string;
+  createdAt: string;
+}
+
+export interface ArchitectureOrganizationGrantsResult {
+  architectureId: string;
+  currentRevisionId: string | null;
+  grants: ArchitectureOrganizationGrantRecord[];
+  organizationIds: string[];
+  addedOrganizationIds?: string[];
+  removedOrganizationIds?: string[];
+  changed?: boolean;
+}
+
+export type ArchitecturePatternMigrationMapping = CoreArchitecturePatternMigrationMapping;
+export type ArchitecturePatternMigrationResult = CoreArchitecturePatternMigrationResult;
+
+export interface ArchitecturePatternMigrationPreviewResult {
+  sourceArchitectureId: string;
+  sourceRevisionId: string;
+  expectedCurrentRevisionId: string;
+  migration: ArchitecturePatternMigrationResult;
+}
+
+export interface ArchitecturePatternMigrationPersisted {
+  targetArchitecture?: ArchitectureSummary;
+  /**
+   * The create route returns the redacted revision summary projection. Full
+   * specs remain available only through the authorized revision route.
+   */
+  targetRevision?: ArchitectureRevisionSummary;
+  lineage?: {
+    targetArchitectureId?: string;
+    targetRevisionId?: string;
+    targetPatternId?: ArchitecturePatternId;
+    sourceArchitectureId?: string;
+    sourceRevisionId?: string;
+  };
+}
+
+export interface ArchitecturePatternMigrationCreateResult extends ArchitecturePatternMigrationPreviewResult {
+  created: boolean;
+  replayed: boolean;
+  persisted?: ArchitecturePatternMigrationPersisted;
+}
+
+export interface ArchitectureTopologyNode {
+  id: string;
+  kind: "router" | "skill" | "group" | string;
+  label: string;
+  slug?: string;
+  title?: string;
+  description?: string;
+  position?: { x: number; y: number };
+  depth?: number;
+}
+
+export interface ArchitectureTopologyEdge {
+  id?: string;
+  from: string;
+  to: string;
+  relationship?: "contains" | "routes-to" | "selects" | string;
+  label?: string;
+}
+
+export interface ArchitectureOutlineNode {
+  id: string;
+  kind: "router" | "skill" | "group" | string;
+  label: string;
+  depth?: number;
+  children?: ArchitectureOutlineNode[];
+}
+
+export interface ArchitectureCompiledSkill {
+  id?: string;
+  slug: string;
+  title?: string;
+  version?: string;
+  digest?: string;
+  exposure?: "included" | "excluded" | "conditional" | string;
+  reason?: string;
+}
+
+export type ArchitectureSyncChangeType =
+  | "noop"
+  | "install"
+  | "update"
+  | "register"
+  | "change-exposure"
+  | "disable"
+  | "remove"
+  | "move"
+  | "conflict"
+  | "unsupported"
+  | "unknown"
+  | string;
+
+export interface ArchitectureSyncChange {
+  id?: string;
+  type: ArchitectureSyncChangeType;
+  subject: string;
+  detail?: string;
+  severity?: "info" | "warning" | "error" | string;
+}
+
+export interface ArchitectureSyncPlan {
+  status: "noop" | "changes" | "conflict" | "unsupported" | "unknown" | string;
+  target?: string;
+  generatedAt?: string;
+  changes: ArchitectureSyncChange[];
+  warnings?: string[];
+  errors?: string[];
+  dryRun?: boolean;
+  canApply?: boolean;
+  requiresApproval?: boolean;
+  targetId?: string;
+  environmentId?: string;
+  architectureId?: string;
+  revisionDigest?: string;
+  items?: Array<{
+    action: ArchitectureSyncChangeType;
+    nodeId: string;
+    kind?: string;
+    skillRefId?: string;
+    reason?: string;
+    desired?: unknown;
+    observed?: unknown;
+  }>;
+  summary?: Record<string, number>;
+}
+
+/**
+ * Raw response returned by POST /v1/architectures/:id/preview.
+ *
+ * This is deliberately an exact API projection. The browser renders the
+ * server's compiled result and does not normalize alternate wrappers or
+ * compile an architecture locally.
+ */
+export type ArchitecturePreviewRevision = ArchitectureRevisionRecord;
+
+export type ArchitecturePreviewCompiled = CompiledArchitecture;
+
+export interface ArchitecturePreviewGraph {
+  digest: string;
+  nodes: Array<{
+    id: string;
+    kind: "router" | "leaf";
+    label: string;
+    depth: number;
+    x: number;
+    y: number;
+    skillRefId?: string;
+  }>;
+  edges: CompiledArchitecture["edges"];
+  mermaid: string;
+}
+
+export type ArchitecturePreviewOutline = Omit<AccessibleArchitectureOutline, "html">;
+export type ArchitecturePreviewPlan = CoreArchitectureSyncPlan;
+export type ArchitectureObservedFixture = ObservedArchitectureState;
+
+export interface ArchitecturePreview {
+  /** Omitted when an organization-only reader receives a safe projection. */
+  revision?: ArchitecturePreviewRevision;
+  compiled: ArchitecturePreviewCompiled;
+  graph: ArchitecturePreviewGraph;
+  outline: ArchitecturePreviewOutline;
+  diagram: ArchitectureDiagramArtifactV1;
+  plan?: ArchitecturePreviewPlan;
+}
+
+/** Raw response returned by POST /v1/architectures/:id/draft-preview. */
+export interface ArchitectureDraftPreview {
+  draft: {
+    expectedCurrentRevisionId: string | null;
+    spec: ArchitectureSpecV1;
+  };
+  compiled: ArchitecturePreviewCompiled;
+  graph: ArchitecturePreviewGraph;
+  outline: ArchitecturePreviewOutline;
+  diagram: ArchitectureDiagramArtifactV1;
+  plan?: ArchitecturePreviewPlan;
+}
+
+export interface ArchitectureWorkspace {
+  patterns: ArchitecturePattern[];
+  architectures: ArchitectureSummary[];
+  profiles: ArchitectureProfile[];
+  environments: ArchitectureEnvironment[];
 }
 
 export interface ReviewSubmissionSummary {
@@ -344,7 +743,7 @@ export interface RegistryClient {
   getReviewSubmissionBundle(submissionId: string, platform?: string, token?: string): Promise<ReviewSubmissionBundle>;
   performReviewAction(input: { submissionId: string; action: ReviewActionName; reason?: string; artifactSha256?: string }, token?: string): Promise<ReviewActionResult>;
   listSkillReleases(slug: string, token?: string): Promise<SkillReleaseSummary[]>;
-  updateSkillMetadata(input: { slug: string; title?: string; summary?: string; visibility?: VisibilityScope; tags?: string[]; reason?: string }, token?: string): Promise<SkillManagementSummary>;
+  updateSkillMetadata(input: { slug: string; title?: string; summary?: string; tags?: string[]; reason?: string }, token?: string): Promise<SkillManagementSummary>;
   performSkillAction(slug: string, action: SkillLifecycleActionName, reason?: string, token?: string): Promise<SkillManagementSummary>;
   performReleaseAction(slug: string, version: string, action: ReleaseLifecycleActionName, reason?: string, replacement?: string, token?: string): Promise<SkillReleaseSummary>;
   listTeams(token?: string): Promise<TeamDashboard>;
@@ -358,12 +757,111 @@ export interface RegistryClient {
     visibility: VisibilityScope;
     teamIds: string[];
     userEmails: string[];
+    /** Complete replacement set; preserve existing grants when unrelated fields change. */
+    organizationIds: string[];
   }, token?: string): Promise<SkillSharingDetails>;
+  listOrganizations?(token?: string): Promise<OrganizationListItem[]>;
+  createOrganization?(input: {
+    name: string;
+    slug?: string;
+    policy?: OrganizationPolicyV1;
+    reason?: string;
+  }, token?: string): Promise<OrganizationDetail>;
+  getOrganization?(organizationId: string, token?: string): Promise<OrganizationDetail>;
+  listOrganizationMembers?(organizationId: string, token?: string): Promise<OrganizationMembershipRecord[]>;
+  listOrganizationInvitations?(organizationId: string, token?: string): Promise<OrganizationInvitationRecord[]>;
+  listOrganizationPendingInvitations?(token?: string): Promise<OrganizationInvitationRecord[]>;
+  inviteOrganizationMember?(input: {
+    organizationId: string;
+    email: string;
+    role?: OrganizationRole;
+  }, token?: string): Promise<OrganizationInvitationRecord>;
+  acceptOrganizationInvitation?(invitationId: string, token?: string): Promise<OrganizationInvitationRecord>;
+  updateOrganizationMemberRole?(input: {
+    organizationId: string;
+    memberId: string;
+    role: OrganizationRole;
+  }, token?: string): Promise<OrganizationMembershipRecord>;
+  removeOrganizationMember?(organizationId: string, memberId: string, token?: string): Promise<OrganizationMembershipRecord>;
+  listOrganizationPolicies?(organizationId: string, token?: string): Promise<OrganizationPolicyRevisionRecord[]>;
+  appendOrganizationPolicy?(input: {
+    organizationId: string;
+    policy: OrganizationPolicyV1;
+    reason?: string;
+  }, token?: string): Promise<{ revision: OrganizationPolicyRevisionRecord; created: boolean; activated: boolean }>;
+  activateOrganizationPolicy?(organizationId: string, revisionId: string, token?: string): Promise<{
+    revision: OrganizationPolicyRevisionRecord;
+    activated: true;
+    changed: boolean;
+  }>;
+  archiveOrganization?(organizationId: string, token?: string): Promise<OrganizationRecord>;
+  listOrganizationTeams?(organizationId: string, token?: string): Promise<TeamRecord[]>;
+  createOrganizationTeam?(input: { organizationId: string; name: string; slug?: string }, token?: string): Promise<TeamRecord>;
+  adoptTeamToOrganization?(teamId: string, organizationId: string, token?: string): Promise<TeamRecord>;
+  listArchitectureTargets?(token?: string): Promise<ArchitectureTargetRecord[]>;
+  getArchitectureTarget?(targetId: string, token?: string): Promise<ArchitectureTargetRecord>;
+  registerArchitectureTarget?(input: {
+    name: string;
+    owner: ArchitectureTargetOwnerReference;
+    architectureId: string;
+    environmentId: string;
+    profileId: string;
+    adapter: ArchitectureTargetAdapterDescriptor;
+    capabilities: ArchitectureTargetCapabilities;
+    identityDigest?: string;
+    credentialReference?: string | null;
+    metadata?: ArchitectureTargetMetadata;
+  }, token?: string): Promise<ArchitectureTargetRecord>;
+  setArchitectureTargetConsent?(targetId: string, decision: "grant" | "deny", token?: string): Promise<ArchitectureTargetRecord>;
+  listArchitectureTargetObservations?(targetId: string, limit?: number, token?: string): Promise<ArchitectureTargetObservationRecord[]>;
+  updateArchitectureTargetHealth?(targetId: string, health: ArchitectureTargetHealth, token?: string): Promise<ArchitectureTargetRecord>;
+  revokeArchitectureTarget?(targetId: string, token?: string): Promise<ArchitectureTargetRecord>;
+  listArchitecturePatterns(token?: string): Promise<ArchitecturePattern[]>;
+  listArchitectures(token?: string): Promise<ArchitectureSummary[]>;
+  getArchitecture(architectureId: string, token?: string): Promise<ArchitectureDetail>;
+  getArchitectureRevision(architectureId: string, revisionId: string, token?: string): Promise<ArchitectureRevisionRecord>;
+  createArchitecture(input: {
+    name: string;
+    description?: string;
+    patternId: ArchitecturePatternId;
+    owner?: { type: "user" } | { type: "team"; id: string };
+  }, token?: string): Promise<ArchitectureSummary>;
+  createArchitectureRevision(architectureId: string, input: { spec: unknown; message?: string; expectedCurrentRevisionId: string | null }, token?: string): Promise<ArchitectureRevisionRecord>;
+  previewArchitecture(architectureId: string, input: { profileId?: string; environmentId?: string; revisionId?: string; organizationId?: string; fixture?: ArchitectureObservedFixture }, token?: string): Promise<ArchitecturePreview>;
+  previewArchitectureDraft(architectureId: string, input: { spec: ArchitectureSpecV1; expectedCurrentRevisionId: string | null; profileId?: string; environmentId?: string; fixture?: ArchitectureObservedFixture }, token?: string): Promise<ArchitectureDraftPreview>;
+  listArchitectureOrganizationGrants?(architectureId: string, token?: string): Promise<ArchitectureOrganizationGrantsResult>;
+  replaceArchitectureOrganizationGrants?(architectureId: string, input: {
+    expectedCurrentRevisionId: string | null;
+    organizationIds: string[];
+  }, token?: string): Promise<ArchitectureOrganizationGrantsResult>;
+  previewArchitecturePatternMigration?(architectureId: string, input: {
+    expectedCurrentRevisionId: string;
+    targetPatternId: ArchitecturePatternId;
+    mapping?: ArchitecturePatternMigrationMapping;
+  }, token?: string): Promise<ArchitecturePatternMigrationPreviewResult>;
+  createArchitecturePatternMigration?(architectureId: string, input: {
+    expectedCurrentRevisionId: string;
+    targetPatternId: ArchitecturePatternId;
+    mapping?: ArchitecturePatternMigrationMapping;
+    idempotencyKey: string;
+    name: string;
+    description?: string;
+    message?: string;
+  }, token?: string): Promise<ArchitecturePatternMigrationCreateResult>;
 }
 
 export interface SafeApiError extends Error {
   status: number;
   code: string;
+}
+
+function isArchitectureRevisionRecord(value: ArchitectureRevisionSummary | ArchitectureRevisionRecord | undefined): value is ArchitectureRevisionRecord {
+  return Boolean(
+    value
+    && value.message !== undefined
+    && value.createdByUserId !== undefined
+    && value.spec !== undefined,
+  );
 }
 
 export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: typeof fetch = fetch, token?: string): RegistryClient {
@@ -729,7 +1227,6 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
           body: {
             ...(input.title !== undefined ? { title: input.title } : {}),
             ...(input.summary !== undefined ? { summary: input.summary } : {}),
-            ...(input.visibility !== undefined ? { visibility: input.visibility } : {}),
             ...(input.tags !== undefined ? { tags: input.tags } : {}),
             ...(input.reason?.trim() ? { reason: input.reason.trim() } : {}),
           },
@@ -824,11 +1321,392 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
             visibility: input.visibility,
             teamIds: input.teamIds,
             userEmails: input.userEmails,
+            organizationIds: input.organizationIds,
           },
           token: overrideToken ?? token,
         },
       );
       return body.sharing;
+    },
+    async listOrganizations(overrideToken) {
+      const body = await requestJson<{ organizations: OrganizationListItem[] }>(fetchImpl, `${root}/v1/organizations`, {
+        token: overrideToken ?? token,
+      });
+      return body.organizations;
+    },
+    async createOrganization(input, overrideToken) {
+      const body = await requestJson<{ organization: OrganizationDetail }>(fetchImpl, `${root}/v1/organizations`, {
+        method: "POST",
+        body: {
+          name: input.name,
+          ...(input.slug?.trim() ? { slug: input.slug.trim() } : {}),
+          ...(input.policy ? { policy: input.policy } : {}),
+          ...(input.reason?.trim() ? { reason: input.reason.trim() } : {}),
+        },
+        token: overrideToken ?? token,
+      });
+      return body.organization;
+    },
+    async getOrganization(organizationId, overrideToken) {
+      const body = await requestJson<{ organization: OrganizationDetail }>(
+        fetchImpl,
+        `${root}/v1/organizations/${encodeURIComponent(organizationId)}`,
+        { token: overrideToken ?? token },
+      );
+      return body.organization;
+    },
+    async listOrganizationMembers(organizationId, overrideToken) {
+      const body = await requestJson<{ members: OrganizationMembershipRecord[] }>(
+        fetchImpl,
+        `${root}/v1/organizations/${encodeURIComponent(organizationId)}/members`,
+        { token: overrideToken ?? token },
+      );
+      return body.members;
+    },
+    async listOrganizationInvitations(organizationId, overrideToken) {
+      const body = await requestJson<{ invitations: OrganizationInvitationRecord[] }>(
+        fetchImpl,
+        `${root}/v1/organizations/${encodeURIComponent(organizationId)}/invitations`,
+        { token: overrideToken ?? token },
+      );
+      return body.invitations;
+    },
+    async listOrganizationPendingInvitations(overrideToken) {
+      const body = await requestJson<{ invitations: OrganizationInvitationRecord[] }>(
+        fetchImpl,
+        `${root}/v1/organizations/invitations`,
+        { token: overrideToken ?? token },
+      );
+      return body.invitations;
+    },
+    async inviteOrganizationMember(input, overrideToken) {
+      const body = await requestJson<{ invitation: OrganizationInvitationRecord }>(
+        fetchImpl,
+        `${root}/v1/organizations/${encodeURIComponent(input.organizationId)}/invitations`,
+        {
+          method: "POST",
+          body: { email: input.email, ...(input.role ? { role: input.role } : {}) },
+          token: overrideToken ?? token,
+        },
+      );
+      return body.invitation;
+    },
+    async acceptOrganizationInvitation(invitationId, overrideToken) {
+      const body = await requestJson<{ invitation: OrganizationInvitationRecord }>(
+        fetchImpl,
+        `${root}/v1/organizations/invitations/${encodeURIComponent(invitationId)}/accept`,
+        { method: "POST", body: {}, token: overrideToken ?? token },
+      );
+      return body.invitation;
+    },
+    async updateOrganizationMemberRole(input, overrideToken) {
+      const body = await requestJson<{ member: OrganizationMembershipRecord }>(
+        fetchImpl,
+        `${root}/v1/organizations/${encodeURIComponent(input.organizationId)}/members/${encodeURIComponent(input.memberId)}`,
+        { method: "PUT", body: { role: input.role }, token: overrideToken ?? token },
+      );
+      return body.member;
+    },
+    async removeOrganizationMember(organizationId, memberId, overrideToken) {
+      const body = await requestJson<{ member: OrganizationMembershipRecord }>(
+        fetchImpl,
+        `${root}/v1/organizations/${encodeURIComponent(organizationId)}/members/${encodeURIComponent(memberId)}`,
+        { method: "DELETE", token: overrideToken ?? token },
+      );
+      return body.member;
+    },
+    async listOrganizationPolicies(organizationId, overrideToken) {
+      const body = await requestJson<{ revisions: OrganizationPolicyRevisionRecord[] }>(
+        fetchImpl,
+        `${root}/v1/organizations/${encodeURIComponent(organizationId)}/policy-revisions`,
+        { token: overrideToken ?? token },
+      );
+      return body.revisions;
+    },
+    async appendOrganizationPolicy(input, overrideToken) {
+      return requestJson<{ revision: OrganizationPolicyRevisionRecord; created: boolean; activated: boolean }>(
+        fetchImpl,
+        `${root}/v1/organizations/${encodeURIComponent(input.organizationId)}/policy-revisions`,
+        {
+          method: "POST",
+          body: { policy: input.policy, ...(input.reason?.trim() ? { reason: input.reason.trim() } : {}) },
+          token: overrideToken ?? token,
+        },
+      );
+    },
+    async activateOrganizationPolicy(organizationId, revisionId, overrideToken) {
+      const body = await requestJson<{ revision: OrganizationPolicyRevisionRecord; activated: true; changed: boolean }>(
+        fetchImpl,
+        `${root}/v1/organizations/${encodeURIComponent(organizationId)}/policy-revisions/${encodeURIComponent(revisionId)}/actions`,
+        { method: "POST", body: { action: "activate" }, token: overrideToken ?? token },
+      );
+      return body;
+    },
+    async archiveOrganization(organizationId, overrideToken) {
+      const body = await requestJson<{ organization: OrganizationRecord }>(
+        fetchImpl,
+        `${root}/v1/organizations/${encodeURIComponent(organizationId)}/actions`,
+        { method: "POST", body: { action: "archive" }, token: overrideToken ?? token },
+      );
+      return body.organization;
+    },
+    async listOrganizationTeams(organizationId, overrideToken) {
+      const body = await requestJson<{ teams: TeamRecord[] }>(
+        fetchImpl,
+        `${root}/v1/organizations/${encodeURIComponent(organizationId)}/teams`,
+        { token: overrideToken ?? token },
+      );
+      return body.teams;
+    },
+    async createOrganizationTeam(input, overrideToken) {
+      const body = await requestJson<{ team: TeamRecord }>(
+        fetchImpl,
+        `${root}/v1/organizations/${encodeURIComponent(input.organizationId)}/teams`,
+        {
+          method: "POST",
+          body: { name: input.name, ...(input.slug?.trim() ? { slug: input.slug.trim() } : {}) },
+          token: overrideToken ?? token,
+        },
+      );
+      return body.team;
+    },
+    async adoptTeamToOrganization(teamId, organizationId, overrideToken) {
+      const body = await requestJson<{ team: TeamRecord }>(
+        fetchImpl,
+        `${root}/v1/teams/${encodeURIComponent(teamId)}/organization`,
+        { method: "PUT", body: { organizationId }, token: overrideToken ?? token },
+      );
+      return body.team;
+    },
+    async listArchitectureTargets(overrideToken) {
+      const body = await requestJson<{ targets: ArchitectureTargetRecord[] }>(fetchImpl, `${root}/v1/architecture-targets`, {
+        token: overrideToken ?? token,
+      });
+      return body.targets;
+    },
+    async getArchitectureTarget(targetId, overrideToken) {
+      const body = await requestJson<{ target: ArchitectureTargetRecord }>(
+        fetchImpl,
+        `${root}/v1/architecture-targets/${encodeURIComponent(targetId)}`,
+        { token: overrideToken ?? token },
+      );
+      return body.target;
+    },
+    async registerArchitectureTarget(input, overrideToken) {
+      const body = await requestJson<{ target: ArchitectureTargetRecord }>(fetchImpl, `${root}/v1/architecture-targets`, {
+        method: "POST",
+        body: {
+          name: input.name,
+          owner: input.owner,
+          architectureId: input.architectureId,
+          environmentId: input.environmentId,
+          profileId: input.profileId,
+          adapter: input.adapter,
+          capabilities: input.capabilities,
+          ...(input.identityDigest?.trim() ? { identityDigest: input.identityDigest.trim() } : {}),
+          ...(input.credentialReference?.trim() ? { credentialReference: input.credentialReference.trim() } : {}),
+          ...(input.metadata ? { metadata: input.metadata } : {}),
+        },
+        token: overrideToken ?? token,
+      });
+      return body.target;
+    },
+    async setArchitectureTargetConsent(targetId, decision, overrideToken) {
+      const body = await requestJson<{ target: ArchitectureTargetRecord }>(
+        fetchImpl,
+        `${root}/v1/architecture-targets/${encodeURIComponent(targetId)}/consent`,
+        { method: "POST", body: { decision }, token: overrideToken ?? token },
+      );
+      return body.target;
+    },
+    async listArchitectureTargetObservations(targetId, limit, overrideToken) {
+      const query = limit === undefined ? "" : `?limit=${encodeURIComponent(String(limit))}`;
+      const body = await requestJson<{ observations: ArchitectureTargetObservationRecord[] }>(
+        fetchImpl,
+        `${root}/v1/architecture-targets/${encodeURIComponent(targetId)}/observations${query}`,
+        { token: overrideToken ?? token },
+      );
+      return body.observations;
+    },
+    async updateArchitectureTargetHealth(targetId, health, overrideToken) {
+      const body = await requestJson<{ target: ArchitectureTargetRecord }>(
+        fetchImpl,
+        `${root}/v1/architecture-targets/${encodeURIComponent(targetId)}/health`,
+        { method: "POST", body: health, token: overrideToken ?? token },
+      );
+      return body.target;
+    },
+    async revokeArchitectureTarget(targetId, overrideToken) {
+      const body = await requestJson<{ target: ArchitectureTargetRecord }>(
+        fetchImpl,
+        `${root}/v1/architecture-targets/${encodeURIComponent(targetId)}`,
+        { method: "DELETE", token: overrideToken ?? token },
+      );
+      return body.target;
+    },
+    async listArchitecturePatterns(overrideToken) {
+      const body = await requestJson<{ patterns: ArchitecturePattern[] }>(
+        fetchImpl,
+        `${root}/v1/architecture-patterns`,
+        { token: overrideToken ?? token },
+      );
+      return body.patterns;
+    },
+    async listArchitectures(overrideToken) {
+      const body = await requestJson<{ architectures: ArchitectureSummary[] }>(
+        fetchImpl,
+        `${root}/v1/architectures`,
+        { token: overrideToken ?? token },
+      );
+      return body.architectures;
+    },
+    async getArchitecture(architectureId, overrideToken) {
+      const body = await requestJson<{ architecture: ArchitectureSummary; revisions?: ArchitectureRevisionSummary[]; latestRevision?: ArchitectureRevisionRecord | null }>(
+        fetchImpl,
+        `${root}/v1/architectures/${encodeURIComponent(architectureId)}`,
+        { token: overrideToken ?? token },
+      );
+      const revisions = body.revisions ?? [];
+      const latestRevision = body.latestRevision
+        ?? (isArchitectureRevisionRecord(revisions[0]) ? revisions[0] : null);
+      return {
+        ...body.architecture,
+        revisions,
+        latestRevision,
+        revisionCount: body.architecture.revisionCount ?? revisions.length,
+      };
+    },
+    async getArchitectureRevision(architectureId, revisionId, overrideToken) {
+      const body = await requestJson<{ revision: ArchitectureRevisionRecord }>(
+        fetchImpl,
+        `${root}/v1/architectures/${encodeURIComponent(architectureId)}/revisions/${encodeURIComponent(revisionId)}`,
+        { token: overrideToken ?? token },
+      );
+      return body.revision;
+    },
+    async createArchitecture(input, overrideToken) {
+      const body = await requestJson<{ architecture: ArchitectureSummary }>(
+        fetchImpl,
+        `${root}/v1/architectures`,
+        {
+          method: "POST",
+          body: {
+            name: input.name,
+            ...(input.description?.trim() ? { description: input.description.trim() } : {}),
+            patternId: input.patternId,
+            ...(input.owner === undefined ? {} : { owner: input.owner }),
+          },
+          token: overrideToken ?? token,
+        },
+      );
+      return body.architecture;
+    },
+    async createArchitectureRevision(architectureId, input, overrideToken) {
+      const body = await requestJson<{ revision: ArchitectureRevisionRecord }>(
+        fetchImpl,
+        `${root}/v1/architectures/${encodeURIComponent(architectureId)}/revisions`,
+        {
+          method: "POST",
+          body: {
+            spec: input.spec,
+            ...(input.message?.trim() ? { message: input.message.trim() } : {}),
+            expectedCurrentRevisionId: input.expectedCurrentRevisionId,
+          },
+          token: overrideToken ?? token,
+        },
+      );
+      return body.revision;
+    },
+    async previewArchitecture(architectureId, input, overrideToken) {
+      const body = await requestJson<ArchitecturePreview>(
+        fetchImpl,
+        `${root}/v1/architectures/${encodeURIComponent(architectureId)}/preview`,
+        {
+          method: "POST",
+          body: {
+            ...(input.profileId ? { profileId: input.profileId } : {}),
+            ...(input.environmentId ? { environmentId: input.environmentId } : {}),
+            ...(input.revisionId ? { revisionId: input.revisionId } : {}),
+            ...(input.organizationId ? { organizationId: input.organizationId } : {}),
+            ...(input.fixture !== undefined ? { fixture: input.fixture } : {}),
+          },
+          token: overrideToken ?? token,
+        },
+      );
+      return body;
+    },
+    async previewArchitectureDraft(architectureId, input, overrideToken) {
+      const body = await requestJson<ArchitectureDraftPreview>(
+        fetchImpl,
+        `${root}/v1/architectures/${encodeURIComponent(architectureId)}/draft-preview`,
+        {
+          method: "POST",
+          body: {
+            spec: input.spec,
+            expectedCurrentRevisionId: input.expectedCurrentRevisionId,
+            ...(input.profileId ? { profileId: input.profileId } : {}),
+            ...(input.environmentId ? { environmentId: input.environmentId } : {}),
+            ...(input.fixture !== undefined ? { fixture: input.fixture } : {}),
+          },
+          token: overrideToken ?? token,
+        },
+      );
+      return body;
+    },
+    async listArchitectureOrganizationGrants(architectureId, overrideToken) {
+      return requestJson<ArchitectureOrganizationGrantsResult>(
+        fetchImpl,
+        `${root}/v1/architectures/${encodeURIComponent(architectureId)}/organization-grants`,
+        { token: overrideToken ?? token },
+      );
+    },
+    async replaceArchitectureOrganizationGrants(architectureId, input, overrideToken) {
+      return requestJson<ArchitectureOrganizationGrantsResult>(
+        fetchImpl,
+        `${root}/v1/architectures/${encodeURIComponent(architectureId)}/organization-grants`,
+        {
+          method: "PUT",
+          body: {
+            expectedCurrentRevisionId: input.expectedCurrentRevisionId,
+            organizationIds: input.organizationIds,
+          },
+          token: overrideToken ?? token,
+        },
+      );
+    },
+    async previewArchitecturePatternMigration(architectureId, input, overrideToken) {
+      return requestJson<ArchitecturePatternMigrationPreviewResult>(
+        fetchImpl,
+        `${root}/v1/architectures/${encodeURIComponent(architectureId)}/pattern-migrations/preview`,
+        {
+          method: "POST",
+          body: {
+            expectedCurrentRevisionId: input.expectedCurrentRevisionId,
+            targetPatternId: input.targetPatternId,
+            ...(input.mapping !== undefined ? { mapping: input.mapping } : {}),
+          },
+          token: overrideToken ?? token,
+        },
+      );
+    },
+    async createArchitecturePatternMigration(architectureId, input, overrideToken) {
+      return requestJson<ArchitecturePatternMigrationCreateResult>(
+        fetchImpl,
+        `${root}/v1/architectures/${encodeURIComponent(architectureId)}/pattern-migrations`,
+        {
+          method: "POST",
+          body: {
+            expectedCurrentRevisionId: input.expectedCurrentRevisionId,
+            targetPatternId: input.targetPatternId,
+            idempotencyKey: input.idempotencyKey,
+            name: input.name,
+            ...(input.description?.trim() ? { description: input.description.trim() } : {}),
+            ...(input.message?.trim() ? { message: input.message.trim() } : {}),
+            ...(input.mapping !== undefined ? { mapping: input.mapping } : {}),
+          },
+          token: overrideToken ?? token,
+        },
+      );
     },
   };
 }
@@ -943,6 +1821,54 @@ export function safeTeamErrorMessage(error: unknown): string {
     return "Team change could not be saved.";
   }
   return "Team data is not available.";
+}
+
+export function safeArchitectureErrorMessage(error: unknown): string {
+  if (isSafeApiError(error) && (error.status === 401 || error.status === 403)) {
+    return "Architecture access requires a signed-in session with the right workspace access.";
+  }
+  if (isSafeApiError(error) && (error.status === 409 || error.code === "ARCHITECTURE_CONFLICT")) {
+    return "This architecture changed elsewhere. Refresh before saving another revision.";
+  }
+  if (isSafeApiError(error) && (error.status === 422 || error.code === "ARCHITECTURE_VALIDATION_FAILED")) {
+    return "The architecture is not valid yet. Fix the highlighted structure and try again.";
+  }
+  if (isSafeApiError(error) && (error.status === 501 || error.code === "ARCHITECTURE_NOT_SUPPORTED")) {
+    return "Architecture management is not enabled for this workspace yet.";
+  }
+  if (isSafeApiError(error) && error.status >= 400 && error.status < 500) {
+    return "The architecture request could not be completed.";
+  }
+  return "Architecture data is not available.";
+}
+
+export function safeOrganizationErrorMessage(error: unknown): string {
+  if (isSafeApiError(error) && (error.status === 401 || error.status === 403)) {
+    return "Organization access requires a signed-in session with the right membership or MFA verification.";
+  }
+  if (isSafeApiError(error) && error.status === 409) {
+    return "The organization changed elsewhere. Refresh before trying again.";
+  }
+  if (isSafeApiError(error) && error.status >= 400 && error.status < 500) {
+    return "The organization request could not be completed.";
+  }
+  return "Organization data is not available.";
+}
+
+export function safeArchitectureTargetErrorMessage(error: unknown): string {
+  if (isSafeApiError(error) && (error.status === 401 || error.status === 403)) {
+    return "Target access requires an authorized session for the exact architecture context.";
+  }
+  if (isSafeApiError(error) && error.status === 410) {
+    return "This target has been revoked and cannot accept further updates.";
+  }
+  if (isSafeApiError(error) && error.status === 409) {
+    return "The target changed elsewhere or its binding is stale. Refresh before trying again.";
+  }
+  if (isSafeApiError(error) && error.status >= 400 && error.status < 500) {
+    return "The connected-environment request could not be completed.";
+  }
+  return "Connected-environment data is not available.";
 }
 
 async function requestJson<T>(fetchImpl: typeof fetch, url: string, options: {

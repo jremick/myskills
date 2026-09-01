@@ -23,6 +23,15 @@ export interface RegistryApiClient {
   searchSkills(input: { query?: string; limit?: number }): Promise<PublicSkill[]>;
   getSkill(slug: string): Promise<PublicSkill>;
   getRelease(slug: string, version: string): Promise<ReleaseMetadata>;
+  listArchitecturePatterns(): Promise<Record<string, unknown>>;
+  listArchitectures(): Promise<Record<string, unknown>>;
+  getArchitecture(architectureId: string): Promise<Record<string, unknown>>;
+  previewArchitecture(architectureId: string, input: {
+    profileId?: string;
+    environmentId?: string;
+    revisionId?: string;
+    organizationId?: string;
+  }): Promise<Record<string, unknown>>;
 }
 
 export interface McpSession {
@@ -43,7 +52,7 @@ export interface McpSession {
 
 export type FetchLike = (
   input: string,
-  init?: { method?: string; headers?: Record<string, string>; signal?: AbortSignal },
+  init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal },
 ) => Promise<{
   ok: boolean;
   status: number;
@@ -107,21 +116,82 @@ export function createRegistryApiClient(options: RegistryApiClientOptions = {}):
       );
       return body.release;
     },
+    async listArchitecturePatterns() {
+      return await requestJson<Record<string, unknown>>(
+        fetchImpl,
+        token,
+        `${baseUrl}/v1/architecture-patterns`,
+      );
+    },
+    async listArchitectures() {
+      return await requestJson<Record<string, unknown>>(
+        fetchImpl,
+        token,
+        `${baseUrl}/v1/architectures`,
+      );
+    },
+    async getArchitecture(architectureId) {
+      return await requestJson<Record<string, unknown>>(
+        fetchImpl,
+        token,
+        `${baseUrl}/v1/architectures/${encodeURIComponent(architectureId)}`,
+      );
+    },
+    async previewArchitecture(architectureId, input) {
+      return await requestJson<Record<string, unknown>>(
+        fetchImpl,
+        token,
+        `${baseUrl}/v1/architectures/${encodeURIComponent(architectureId)}/preview`,
+        { method: "POST", body: input },
+      );
+    },
   };
 }
 
 function normalizeBaseUrl(value: string): string {
-  return value.replace(/\/+$/, "");
+  const trimmed = value.trim().replace(/\/+$/, "");
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("unsupported protocol");
+    }
+    // Credentials and query strings must never become part of a shared MCP
+    // endpoint or an install/export projection. Tokens belong in headers.
+    if (url.username || url.password || url.search || url.hash) {
+      throw new Error("credentials and query parameters are not supported");
+    }
+    return trimmed;
+  } catch {
+    throw new Error("MCP API URL must be a valid http:// or https:// URL without credentials or query parameters.");
+  }
 }
 
-async function requestJson<T>(fetchImpl: FetchLike, token: string | undefined, url: string): Promise<T> {
+async function requestJson<T>(fetchImpl: FetchLike, token: string | undefined, url: string, options: {
+  body?: unknown;
+  method?: "GET" | "POST";
+} = {}): Promise<T> {
   const headers: Record<string, string> = { accept: "application/json" };
   if (token) {
     headers.authorization = `Bearer ${token}`;
   }
-  const response = await fetchImpl(url, { headers });
+  if (options.body !== undefined) {
+    headers["content-type"] = "application/json";
+  }
+  const response = await fetchImpl(url, {
+    ...(options.method === undefined ? {} : { method: options.method }),
+    headers,
+    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+  });
   const text = await response.text();
-  const body = text ? JSON.parse(text) as Record<string, unknown> : {};
+  let body: Record<string, unknown>;
+  try {
+    const parsed = text ? JSON.parse(text) as unknown : {};
+    body = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    throw new RegistryApiError(response.status, "API_INVALID_JSON");
+  }
   if (!response.ok) {
     throw new RegistryApiError(response.status, safeResponseCode(body));
   }

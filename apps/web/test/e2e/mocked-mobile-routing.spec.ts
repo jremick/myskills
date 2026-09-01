@@ -48,9 +48,11 @@ test("route-mocked owner registry fits 320, 375, and 390 px with safe mobile ove
     await expect(more).toBeVisible();
     await more.click();
     const mobileMoreNavigation = page.locator(".mobile-more-menu");
+    const firstOverflowItem = mobileMoreNavigation.getByRole("link").first();
     const adminMenuItem = mobileMoreNavigation.getByRole("link", { name: "Admin" });
+    await expect(firstOverflowItem).toBeVisible();
+    await expect(firstOverflowItem).toBeFocused();
     await expect(adminMenuItem).toBeVisible();
-    await expect(adminMenuItem).toBeFocused();
     await expect(mobileMoreNavigation.getByRole("link", { name: "Settings" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(adminMenuItem).toBeHidden();

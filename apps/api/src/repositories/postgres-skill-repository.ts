@@ -1,11 +1,33 @@
 import { and, eq, ilike, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
-import { AppError, type PublicSkill, type SharingSettings, type SkillAccessReason, type SkillRepository, type SkillSearchFilters, type SkillPlatformVariant, type SkillSharingActor, type SkillSharingDetails, type SkillSharingTeamSummary, type SkillSharingUserSummary, type TeamSharedSkillGroup, type UpdateSkillSharingInput, type VisibilityScope } from "@myskills-app/core";
+import {
+  AppError,
+  assertValidOrganizationPolicyV1,
+  evaluateOrganizationShare,
+  type OrganizationMembershipRole,
+  type OrganizationPolicyV1,
+  type OrganizationStatus,
+  type PublicSkill,
+  type SharingSettings,
+  type SkillAccessReason,
+  type SkillRepository,
+  type SkillSearchFilters,
+  type SkillPlatformVariant,
+  type SkillSharingActor,
+  type SkillSharingDetails,
+  type SkillSharingOrganizationSummary,
+  type SkillSharingTeamSummary,
+  type SkillSharingUserSummary,
+  type TeamSharedSkillGroup,
+  type UpdateSkillSharingInput,
+  type VisibilityScope,
+} from "@myskills-app/core";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type { Database } from "../db/client.js";
 import {
   auditEvents,
   instanceSettings,
   skillArtifacts,
+  skillOrganizationGrants,
   skillPlatformVariants,
   skillTags,
   skillTeamGrants,
@@ -14,6 +36,9 @@ import {
   skills,
   teamMemberships,
   teams,
+  organizationMemberships,
+  organizationPolicyRevisions,
+  organizations,
   users,
 } from "../db/schema.js";
 
@@ -23,6 +48,7 @@ const DEFAULT_SHARING_SETTINGS: SharingSettings = {
   teamsEnabled: true,
   teamVisibilityEnabled: true,
   userVisibilityEnabled: true,
+  organizationVisibilityEnabled: false,
 };
 
 export class PostgresSkillRepository implements SkillRepository {
@@ -54,6 +80,26 @@ export class PostgresSkillRepository implements SkillRepository {
       visibleReleasedSkillPredicate(),
       visibleToActorPredicate(actorId ?? null, sharing),
     ), 1, actorId ?? null, sharing);
+    return rows[0] ?? null;
+  }
+
+  async getSkillVisibleToTeamBySlug(slug: string, teamId: string): Promise<PublicSkill | null> {
+    const sharing = await this.getSharingSettings();
+    const rows = await this.visibleSkillRows(and(
+      eq(skills.slug, slug),
+      visibleReleasedSkillPredicate(),
+      visibleToTeamPredicate(teamId, sharing),
+    ), 1, null, sharing);
+    return rows[0] ?? null;
+  }
+
+  async getSkillVisibleToOrganizationBySlug(slug: string, organizationId: string): Promise<PublicSkill | null> {
+    const sharing = await this.getSharingSettings();
+    const rows = await this.visibleSkillRows(and(
+      eq(skills.slug, slug),
+      visibleReleasedSkillPredicate(),
+      visibleToOrganizationPredicate(organizationId, sharing),
+    ), 1, null, sharing);
     return rows[0] ?? null;
   }
 
@@ -103,52 +149,117 @@ export class PostgresSkillRepository implements SkillRepository {
   async updateSkillSharing(input: UpdateSkillSharingInput): Promise<SkillSharingDetails> {
     const skill = await this.findSkillForSharing(input.slug);
     assertCanManageSkillSharing(skill, input.actor);
-    const settings = await this.getSharingSettings();
-    validateVisibilityEnabled(input.visibility, settings);
+    const requestedTeamIds = input.teamIds === undefined ? undefined : uniqueStrings(input.teamIds);
+    const requestedUserEmails = input.userEmails === undefined
+      ? undefined
+      : uniqueStrings(input.userEmails.map(normalizeEmail));
+    const requestedOrganizationIds = input.organizationIds === undefined
+      ? undefined
+      : uniqueStrings(input.organizationIds);
 
-    const teamIds = uniqueStrings(input.teamIds);
-    const userEmails = uniqueStrings(input.userEmails.map(normalizeEmail));
-    if (teamIds.length > 0 && (!settings.teamsEnabled || !settings.teamVisibilityEnabled)) {
-      throw new AppError("Team sharing is disabled for this instance.", "TEAM_SHARING_DISABLED", 403);
-    }
-    if (userEmails.length > 0 && !settings.userVisibilityEnabled) {
-      throw new AppError("User sharing is disabled for this instance.", "USER_SHARING_DISABLED", 403);
-    }
-    if (input.visibility === "team" && teamIds.length === 0) {
-      throw new AppError("At least one team grant is required.", "TEAM_GRANT_REQUIRED", 400);
-    }
-    if (input.visibility === "explicit-users" && userEmails.length === 0) {
-      throw new AppError("At least one user grant is required.", "USER_GRANT_REQUIRED", 400);
-    }
-
-    const availableTeams = await this.teamsForUser(input.actor.id);
-    const availableTeamIds = new Set(availableTeams.map((team) => team.id));
-    const unavailableTeam = teamIds.find((teamId) => !availableTeamIds.has(teamId));
-    if (unavailableTeam) {
-      throw new AppError("Team grant is not available to this user.", "TEAM_GRANT_NOT_AVAILABLE", 403);
-    }
-
-    const userGrantIds = userEmails.length > 0 ? await this.resolveUserGrantIds(userEmails) : [];
     await this.db.transaction(async (tx) => {
+      // Serialize sharing updates with instance setting changes. This lock is
+      // also required for organization-only updates; otherwise a concurrent
+      // admin disable can race a grant replacement after the preflight read.
+      const lockedSettings = await lockSharingSettings(tx);
+      const [lockedSkill] = await tx
+        .select({ id: skills.id })
+        .from(skills)
+        .where(eq(skills.id, skill.id))
+        .for("update")
+        .limit(1);
+      if (!lockedSkill) {
+        throw new AppError("Skill not found.", "SKILL_NOT_FOUND", 404);
+      }
+
+      const currentTeamRows = await tx
+        .select({ teamId: skillTeamGrants.teamId })
+        .from(skillTeamGrants)
+        .where(eq(skillTeamGrants.skillId, skill.id))
+        .orderBy(skillTeamGrants.teamId)
+        .for("update");
+      const currentUserRows = await tx
+        .select({ userId: skillUserGrants.userId })
+        .from(skillUserGrants)
+        .where(eq(skillUserGrants.skillId, skill.id))
+        .orderBy(skillUserGrants.userId)
+        .for("update");
+      const currentOrganizationRows = await tx
+        .select({ organizationId: skillOrganizationGrants.organizationId })
+        .from(skillOrganizationGrants)
+        .where(eq(skillOrganizationGrants.skillId, skill.id))
+        .orderBy(skillOrganizationGrants.organizationId)
+        .for("update");
+
+      const teamIds = requestedTeamIds ?? currentTeamRows.map((row) => row.teamId);
+      const organizationIds = requestedOrganizationIds ?? currentOrganizationRows.map((row) => row.organizationId);
+      validateVisibilityEnabled(input.visibility, lockedSettings);
+      if (requestedOrganizationIds !== undefined && organizationIds.length > 0 && !lockedSettings.organizationVisibilityEnabled) {
+        throw new AppError("Organization sharing is disabled for this instance.", "ORGANIZATION_SHARING_DISABLED", 403);
+      }
+      if (input.visibility === "organization" && organizationIds.length === 0) {
+        throw new AppError("At least one organization grant is required.", "ORGANIZATION_GRANT_REQUIRED", 400);
+      }
+      if (requestedTeamIds !== undefined && teamIds.length > 0 && (!lockedSettings.teamsEnabled || !lockedSettings.teamVisibilityEnabled)) {
+        throw new AppError("Team sharing is disabled for this instance.", "TEAM_SHARING_DISABLED", 403);
+      }
+      if (requestedUserEmails !== undefined && requestedUserEmails.length > 0 && !lockedSettings.userVisibilityEnabled) {
+        throw new AppError("User sharing is disabled for this instance.", "USER_SHARING_DISABLED", 403);
+      }
+      if (input.visibility === "team" && teamIds.length === 0) {
+        throw new AppError("At least one team grant is required.", "TEAM_GRANT_REQUIRED", 400);
+      }
+      const userGrantIds = requestedUserEmails === undefined
+        ? currentUserRows.map((row) => row.userId)
+        : requestedUserEmails.length > 0
+          ? await this.resolveUserGrantIds(requestedUserEmails, tx)
+          : [];
+      if (input.visibility === "explicit-users" && userGrantIds.length === 0) {
+        throw new AppError("At least one user grant is required.", "USER_GRANT_REQUIRED", 400);
+      }
+
+      if (requestedTeamIds !== undefined && teamIds.length > 0) {
+        await assertCurrentTeamGrantAuthority(tx, input.actor.id, teamIds);
+      }
+      const organizationGrantContexts = requestedOrganizationIds !== undefined && organizationIds.length > 0
+        ? await this.organizationGrantContexts(input.actor.id, organizationIds, tx)
+        : [];
+
       await tx.update(skills).set({
         visibility: input.visibility,
         updatedAt: new Date(),
       }).where(eq(skills.id, skill.id));
 
-      await tx.delete(skillTeamGrants).where(eq(skillTeamGrants.skillId, skill.id));
-      if (teamIds.length > 0) {
-        await tx.insert(skillTeamGrants).values(teamIds.map((teamId) => ({
-          skillId: skill.id,
-          teamId,
-        }))).onConflictDoNothing();
+      if (requestedTeamIds !== undefined) {
+        await tx.delete(skillTeamGrants).where(eq(skillTeamGrants.skillId, skill.id));
+        if (teamIds.length > 0) {
+          await tx.insert(skillTeamGrants).values(teamIds.map((teamId) => ({
+            skillId: skill.id,
+            teamId,
+          }))).onConflictDoNothing();
+        }
       }
 
-      await tx.delete(skillUserGrants).where(eq(skillUserGrants.skillId, skill.id));
-      if (userGrantIds.length > 0) {
-        await tx.insert(skillUserGrants).values(userGrantIds.map((userId) => ({
-          skillId: skill.id,
-          userId,
-        }))).onConflictDoNothing();
+      if (requestedUserEmails !== undefined) {
+        await tx.delete(skillUserGrants).where(eq(skillUserGrants.skillId, skill.id));
+        if (userGrantIds.length > 0) {
+          await tx.insert(skillUserGrants).values(userGrantIds.map((userId) => ({
+            skillId: skill.id,
+            userId,
+          }))).onConflictDoNothing();
+        }
+      }
+
+      if (requestedOrganizationIds !== undefined) {
+        await tx.delete(skillOrganizationGrants).where(eq(skillOrganizationGrants.skillId, skill.id));
+        if (organizationGrantContexts.length > 0) {
+          await tx.insert(skillOrganizationGrants).values(organizationGrantContexts.map((organization) => ({
+            skillId: skill.id,
+            organizationId: organization.id,
+            createdByUserId: input.actor.id,
+            createdUnderPolicyRevisionId: organization.currentPolicyRevisionId,
+          }))).onConflictDoNothing();
+        }
       }
 
       await tx.insert(auditEvents).values({
@@ -162,6 +273,7 @@ export class PostgresSkillRepository implements SkillRepository {
           visibility: input.visibility,
           teamGrantCount: teamIds.length,
           userGrantCount: userGrantIds.length,
+          organizationGrantCount: organizationIds.length,
         }),
       });
     });
@@ -239,13 +351,7 @@ export class PostgresSkillRepository implements SkillRepository {
           )
         `,
         hasTeamAccess: actorId && sharing.teamsEnabled && sharing.teamVisibilityEnabled
-          ? sql<boolean>`exists (
-              select 1
-              from ${skillTeamGrants}
-              inner join ${teamMemberships} on ${teamMemberships.teamId} = ${skillTeamGrants.teamId}
-              where ${skillTeamGrants.skillId} = ${skills.id}
-                and ${teamMemberships.userId} = ${actorId}
-            )`
+          ? effectiveTeamAccessPredicate(actorId)
           : sql<boolean>`false`,
         hasUserGrant: actorId && sharing.userVisibilityEnabled
           ? sql<boolean>`exists (
@@ -254,6 +360,9 @@ export class PostgresSkillRepository implements SkillRepository {
               where ${skillUserGrants.skillId} = ${skills.id}
                 and ${skillUserGrants.userId} = ${actorId}
             )`
+          : sql<boolean>`false`,
+        hasOrganizationAccess: actorId && sharing.organizationVisibilityEnabled
+          ? organizationVisibilityPredicateForActor(actorId)
           : sql<boolean>`false`,
       })
       .from(skills)
@@ -320,11 +429,13 @@ export class PostgresSkillRepository implements SkillRepository {
     skill: { id: string; slug: string; title: string; visibility: VisibilityScope },
     actor: SkillSharingActor,
   ): Promise<SkillSharingDetails> {
-    const [settings, availableTeams, teamGrants, userGrants] = await Promise.all([
+    const [settings, availableTeams, teamGrants, userGrants, availableOrganizations, organizationGrants] = await Promise.all([
       this.getSharingSettings(),
       this.teamsForUser(actor.id),
       this.teamGrantsForSkill(skill.id, actor.id),
       this.userGrantsForSkill(skill.id),
+      this.organizationsForUser(actor.id),
+      this.organizationGrantsForSkill(skill.id, actor.id),
     ]);
     return {
       slug: skill.slug,
@@ -334,6 +445,8 @@ export class PostgresSkillRepository implements SkillRepository {
       availableTeams,
       teamGrants,
       userGrants,
+      availableOrganizations,
+      organizationGrants,
     };
   }
 
@@ -346,7 +459,20 @@ export class PostgresSkillRepository implements SkillRepository {
       })
       .from(teamMemberships)
       .innerJoin(teams, eq(teams.id, teamMemberships.teamId))
-      .where(eq(teamMemberships.userId, userId))
+      .leftJoin(organizations, eq(organizations.id, teams.organizationId))
+      .leftJoin(organizationPolicyRevisions, and(
+        eq(organizationPolicyRevisions.organizationId, teams.organizationId),
+        eq(organizationPolicyRevisions.id, organizations.currentPolicyRevisionId),
+      ))
+      .leftJoin(organizationMemberships, and(
+        eq(organizationMemberships.organizationId, teams.organizationId),
+        eq(organizationMemberships.userId, userId),
+        isNull(organizationMemberships.removedAt),
+      ))
+      .where(and(
+        eq(teamMemberships.userId, userId),
+        effectiveTeamMembershipPredicate(userId),
+      ))
       .orderBy(teams.name);
     return rows;
   }
@@ -360,16 +486,81 @@ export class PostgresSkillRepository implements SkillRepository {
       })
       .from(skillTeamGrants)
       .innerJoin(teams, eq(teams.id, skillTeamGrants.teamId))
-      .leftJoin(teamMemberships, and(
+      .innerJoin(teamMemberships, and(
         eq(teamMemberships.teamId, teams.id),
         eq(teamMemberships.userId, actorId),
       ))
-      .where(eq(skillTeamGrants.skillId, skillId))
+      .leftJoin(organizations, eq(organizations.id, teams.organizationId))
+      .leftJoin(organizationPolicyRevisions, and(
+        eq(organizationPolicyRevisions.organizationId, teams.organizationId),
+        eq(organizationPolicyRevisions.id, organizations.currentPolicyRevisionId),
+      ))
+      .leftJoin(organizationMemberships, and(
+        eq(organizationMemberships.organizationId, teams.organizationId),
+        eq(organizationMemberships.userId, actorId),
+        isNull(organizationMemberships.removedAt),
+      ))
+      .where(and(
+        eq(skillTeamGrants.skillId, skillId),
+        effectiveTeamMembershipPredicate(actorId),
+      ))
       .orderBy(teams.name);
     return rows.map((row) => ({
       id: row.id,
       name: row.name,
       role: row.role ?? "member",
+    }));
+  }
+
+  private async organizationsForUser(userId: string): Promise<SkillSharingOrganizationSummary[]> {
+    const rows = await this.db
+      .select({
+        id: organizations.id,
+        name: organizations.name,
+        slug: organizations.slug,
+        status: organizations.status,
+        role: organizationMemberships.role,
+      })
+      .from(organizationMemberships)
+      .innerJoin(organizations, eq(organizations.id, organizationMemberships.organizationId))
+      .where(and(
+        eq(organizationMemberships.userId, userId),
+        isNull(organizationMemberships.removedAt),
+      ))
+      .orderBy(organizations.name);
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      status: row.status as OrganizationStatus,
+      role: row.role as OrganizationMembershipRole,
+    }));
+  }
+
+  private async organizationGrantsForSkill(skillId: string, actorId: string): Promise<SkillSharingOrganizationSummary[]> {
+    const rows = await this.db
+      .select({
+        id: organizations.id,
+        name: organizations.name,
+        slug: organizations.slug,
+        status: organizations.status,
+        role: organizationMemberships.role,
+      })
+      .from(skillOrganizationGrants)
+      .innerJoin(organizations, eq(organizations.id, skillOrganizationGrants.organizationId))
+      .innerJoin(organizationMemberships, and(
+        eq(organizationMemberships.organizationId, organizations.id),
+        eq(organizationMemberships.userId, actorId),
+        isNull(organizationMemberships.removedAt),
+      ))
+      .where(eq(skillOrganizationGrants.skillId, skillId))
+      .orderBy(organizations.name);
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      status: row.status as OrganizationStatus,
+      role: row.role as OrganizationMembershipRole,
     }));
   }
 
@@ -386,8 +577,11 @@ export class PostgresSkillRepository implements SkillRepository {
       .orderBy(users.normalizedEmail);
   }
 
-  private async resolveUserGrantIds(userEmails: string[]): Promise<string[]> {
-    const rows = await this.db
+  private async resolveUserGrantIds(
+    userEmails: string[],
+    db: SkillSharingDb = this.db,
+  ): Promise<string[]> {
+    const rows = await db
       .select({
         id: users.id,
         normalizedEmail: users.normalizedEmail,
@@ -402,12 +596,99 @@ export class PostgresSkillRepository implements SkillRepository {
     return rows.map((row) => row.id);
   }
 
+  private async organizationGrantContexts(
+    actorId: string,
+    organizationIds: string[],
+    db: Pick<Database, "select"> = this.db,
+  ): Promise<Array<{ id: string; currentPolicyRevisionId: string }>> {
+    const rows = await db
+      .select({
+        id: organizations.id,
+        status: organizations.status,
+        currentPolicyRevisionId: organizations.currentPolicyRevisionId,
+        policyRevisionId: organizationPolicyRevisions.id,
+        policy: organizationPolicyRevisions.policy,
+        membershipRole: organizationMemberships.role,
+      })
+      .from(organizations)
+      .leftJoin(organizationPolicyRevisions, and(
+        eq(organizationPolicyRevisions.organizationId, organizations.id),
+        eq(organizationPolicyRevisions.id, organizations.currentPolicyRevisionId),
+      ))
+      .leftJoin(organizationMemberships, and(
+        eq(organizationMemberships.organizationId, organizations.id),
+        eq(organizationMemberships.userId, actorId),
+        isNull(organizationMemberships.removedAt),
+      ))
+      .where(inArray(organizations.id, organizationIds))
+      .for("update", { of: organizations });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const contexts: Array<{ id: string; currentPolicyRevisionId: string }> = [];
+    let targetLimit = Number.MAX_SAFE_INTEGER;
+    for (const organizationId of organizationIds) {
+      const row = byId.get(organizationId);
+      const activeAuthorizedMember = Boolean(
+        row &&
+        row.status === "active" &&
+        row.membershipRole &&
+        ["owner", "admin", "member"].includes(row.membershipRole),
+      );
+      if (!row || !activeAuthorizedMember) {
+        throw organizationGrantUnavailable();
+      }
+      if (!row.currentPolicyRevisionId || !row.policyRevisionId || !row.policy) {
+        throw new AppError("Organization current policy is required for a skill grant.", "ORGANIZATION_POLICY_REQUIRED", 403);
+      }
+      let policy: OrganizationPolicyV1;
+      try {
+        policy = assertValidOrganizationPolicyV1(row.policy);
+      } catch (error) {
+        throw new AppError("Organization policy is invalid.", "ORGANIZATION_POLICY_INVALID", 500, error);
+      }
+      targetLimit = Math.min(targetLimit, policy.limits.organizationGrantsPerSkill);
+      const decision = evaluateOrganizationShare({
+        organizationId,
+        organizationStatus: row.status as OrganizationStatus,
+        policy,
+        actor: {
+          userId: actorId,
+          memberships: row.membershipRole
+            ? [{ organizationId, userId: actorId, role: row.membershipRole as OrganizationMembershipRole }]
+            : [],
+        },
+        resource: "skill",
+      });
+      if (!decision.allowed) {
+        const code = decision.reason === "not-member"
+          ? "ORGANIZATION_MEMBERSHIP_REQUIRED"
+          : decision.reason === "organization-inactive"
+            ? "ORGANIZATION_INACTIVE"
+            : "ORGANIZATION_SHARING_NOT_ALLOWED";
+        throw new AppError("Organization policy does not allow this skill grant.", code, 403, {
+          organizationId,
+          reason: decision.reason,
+        });
+      }
+      contexts.push({ id: organizationId, currentPolicyRevisionId: row.currentPolicyRevisionId });
+    }
+    if (organizationIds.length > targetLimit) {
+      throw new AppError(
+        "The organization skill grant limit has been reached.",
+        "ORGANIZATION_SKILL_GRANT_LIMIT_EXCEEDED",
+        409,
+        { limit: targetLimit },
+      );
+    }
+    return contexts;
+  }
+
   private accessReasonsForSkill(
     row: {
       visibility: VisibilityScope;
       ownerUserId: string | null;
       hasTeamAccess: boolean;
       hasUserGrant: boolean;
+      hasOrganizationAccess: boolean;
     },
     actorId: string,
     sharing: SharingSettings,
@@ -419,17 +700,176 @@ export class PostgresSkillRepository implements SkillRepository {
     if (row.visibility === "public" && sharing.publicVisibilityEnabled) {
       reasons.push("public");
     }
-    if ((row.visibility === "authenticated" || row.visibility === "organization") && sharing.authenticatedVisibilityEnabled) {
+    if (row.visibility === "authenticated" && sharing.authenticatedVisibilityEnabled) {
       reasons.push("authenticated");
     }
     if (row.visibility === "team" && sharing.teamsEnabled && sharing.teamVisibilityEnabled && row.hasTeamAccess) {
       reasons.push("team");
+    }
+    if (row.visibility === "organization" && sharing.organizationVisibilityEnabled && row.hasOrganizationAccess) {
+      reasons.push("organization");
     }
     if (row.visibility === "explicit-users" && sharing.userVisibilityEnabled && row.hasUserGrant) {
       reasons.push("explicit-user");
     }
     return reasons;
   }
+}
+
+function organizationGrantUnavailable(): AppError {
+  return new AppError("Organization grant is not available.", "ORGANIZATION_GRANT_NOT_AVAILABLE", 403);
+}
+
+type SkillSharingDb = Pick<Database, "select">;
+
+/**
+ * Recheck the complete requested team grant set while the replacement
+ * transaction owns the relevant aggregate locks. The preflight
+ * `teamsForUser` query is intentionally not authoritative: a membership can
+ * be removed after that query returns. Team rows are locked before their
+ * parent organizations, matching team mutation lock order, and the team scope
+ * is compared with the pre-lock snapshot so a concurrent adoption cannot turn
+ * a standalone grant into an organization grant under this request.
+ */
+async function assertCurrentTeamGrantAuthority(
+  db: SkillSharingDb,
+  actorId: string,
+  teamIds: string[],
+): Promise<void> {
+  const sortedTeamIds = [...teamIds].sort();
+  const hints = await db
+    .select({ id: teams.id, organizationId: teams.organizationId })
+    .from(teams)
+    .where(inArray(teams.id, sortedTeamIds))
+    .orderBy(teams.id);
+  if (hints.length !== sortedTeamIds.length) {
+    throw teamGrantUnavailable();
+  }
+
+  const lockedTeams = await db
+    .select({ id: teams.id, organizationId: teams.organizationId })
+    .from(teams)
+    .where(inArray(teams.id, sortedTeamIds))
+    .orderBy(teams.id)
+    .for("update");
+  if (lockedTeams.length !== sortedTeamIds.length) {
+    throw teamGrantUnavailable();
+  }
+  const hintById = new Map(hints.map((team) => [team.id, team]));
+  const teamById = new Map(lockedTeams.map((team) => [team.id, team]));
+  for (const teamId of sortedTeamIds) {
+    if (teamById.get(teamId)?.organizationId !== hintById.get(teamId)?.organizationId) {
+      throw teamGrantUnavailable();
+    }
+  }
+
+  const hintedOrganizationIds = [...new Set(
+    lockedTeams
+      .map((team) => team.organizationId)
+      .filter((organizationId): organizationId is string => organizationId !== null),
+  )].sort();
+  const lockedOrganizations = hintedOrganizationIds.length > 0
+    ? await db
+      .select({
+        id: organizations.id,
+        status: organizations.status,
+        currentPolicyRevisionId: organizations.currentPolicyRevisionId,
+      })
+      .from(organizations)
+      .where(inArray(organizations.id, hintedOrganizationIds))
+      .orderBy(organizations.id)
+      .for("update")
+    : [];
+  const organizationById = new Map(lockedOrganizations.map((organization) => [organization.id, organization]));
+
+  const currentOrganizationIds = [...new Set(
+    lockedTeams
+      .map((team) => team.organizationId)
+      .filter((organizationId): organizationId is string => organizationId !== null),
+  )].sort();
+  const currentPolicyRevisionIds = lockedTeams
+    .map((team) => team.organizationId ? organizationById.get(team.organizationId)?.currentPolicyRevisionId : null)
+    .filter((revisionId): revisionId is string => revisionId !== null);
+  const policyRows = currentPolicyRevisionIds.length > 0
+    ? await db
+      .select({ id: organizationPolicyRevisions.id, organizationId: organizationPolicyRevisions.organizationId, policy: organizationPolicyRevisions.policy })
+      .from(organizationPolicyRevisions)
+      .where(inArray(organizationPolicyRevisions.id, currentPolicyRevisionIds))
+      .orderBy(organizationPolicyRevisions.id)
+      .for("update")
+    : [];
+  const policyByOrganizationId = new Map(
+    policyRows.map((row) => [row.organizationId, row]),
+  );
+
+  const organizationMembershipRows = currentOrganizationIds.length > 0
+    ? await db
+      .select({
+        id: organizationMemberships.id,
+        organizationId: organizationMemberships.organizationId,
+        removedAt: organizationMemberships.removedAt,
+      })
+      .from(organizationMemberships)
+      .where(and(
+        inArray(organizationMemberships.organizationId, currentOrganizationIds),
+        eq(organizationMemberships.userId, actorId),
+      ))
+      .orderBy(organizationMemberships.organizationId)
+      .for("update")
+    : [];
+  const organizationMembershipById = new Map(
+    organizationMembershipRows.map((membership) => [membership.organizationId, membership]),
+  );
+
+  const teamMembershipRows = await db
+    .select({ id: teamMemberships.id, teamId: teamMemberships.teamId })
+    .from(teamMemberships)
+    .where(and(
+      inArray(teamMemberships.teamId, sortedTeamIds),
+      eq(teamMemberships.userId, actorId),
+    ))
+    .orderBy(teamMemberships.teamId)
+    .for("update");
+  const teamMembershipById = new Map(teamMembershipRows.map((membership) => [membership.teamId, membership]));
+
+  for (const teamId of sortedTeamIds) {
+    const team = teamById.get(teamId);
+    if (!team || !teamMembershipById.has(teamId)) {
+      throw teamGrantUnavailable();
+    }
+    if (team.organizationId === null) continue;
+
+    const organization = organizationById.get(team.organizationId);
+    const policyRow = policyByOrganizationId.get(team.organizationId);
+    const organizationMembership = organizationMembershipById.get(team.organizationId);
+    if (!organization
+      || organization.status !== "active"
+      || !organization.currentPolicyRevisionId
+      || !policyRow
+      || policyRow.id !== organization.currentPolicyRevisionId
+      || organizationMembership?.removedAt !== null) {
+      throw teamGrantUnavailable();
+    }
+    try {
+      assertValidOrganizationPolicyV1(policyRow.policy);
+    } catch {
+      throw teamGrantUnavailable();
+    }
+  }
+}
+
+async function lockSharingSettings(db: SkillSharingDb): Promise<SharingSettings> {
+  const [setting] = await db
+    .select({ value: instanceSettings.value })
+    .from(instanceSettings)
+    .where(eq(instanceSettings.key, "sharing"))
+    .for("update")
+    .limit(1);
+  return parseSharingSettings(setting?.value);
+}
+
+function teamGrantUnavailable(): AppError {
+  return new AppError("Team grant is not available to this user.", "TEAM_GRANT_NOT_AVAILABLE", 403);
 }
 
 function visibleReleasedSkillPredicate(): SQL | undefined {
@@ -443,6 +883,54 @@ function visibleReleasedSkillPredicate(): SQL | undefined {
   );
 }
 
+/**
+ * Organization-owned team access is derived from the current relational
+ * context on every read. A team membership row never implies organization
+ * membership. Standalone teams retain the pre-tenancy behavior.
+ */
+function effectiveTeamMembershipPredicate(actorId: string): SQL<boolean> {
+  return sql<boolean>`(
+    ${teams.organizationId} is null
+    or (
+      ${teams.organizationId} is not null
+      and ${organizations.status} = 'active'
+      and ${organizations.currentPolicyRevisionId} is not null
+      and ${organizationPolicyRevisions.id} is not null
+      and ${organizationMemberships.id} is not null
+      and ${organizationMemberships.userId} = ${actorId}
+      and ${organizationMemberships.removedAt} is null
+    )
+  )`;
+}
+
+function effectiveTeamAccessPredicate(actorId: string): SQL<boolean> {
+  return sql<boolean>`exists (
+    select 1
+    from ${skillTeamGrants} as stg
+    inner join ${teamMemberships} as tm on tm.team_id = stg.team_id
+    inner join ${teams} as team on team.id = stg.team_id
+    left join ${organizations} as org on org.id = team.organization_id
+    left join ${organizationPolicyRevisions} as opr
+      on opr.organization_id = team.organization_id
+      and opr.id = org.current_policy_revision_id
+    left join ${organizationMemberships} as om
+      on om.organization_id = team.organization_id
+      and om.user_id = ${actorId}
+      and om.removed_at is null
+    where stg.skill_id = ${skills.id}
+      and tm.user_id = ${actorId}
+      and (
+        team.organization_id is null
+        or (
+          org.status = 'active'
+          and org.current_policy_revision_id is not null
+          and opr.id is not null
+          and om.id is not null
+        )
+      )
+  )`;
+}
+
 function visibleToActorPredicate(actorId: string | null, sharing: SharingSettings): SQL | undefined {
   const predicates: Array<SQL | undefined> = [
     sharing.publicVisibilityEnabled ? eq(skills.visibility, "public") : undefined,
@@ -450,18 +938,12 @@ function visibleToActorPredicate(actorId: string | null, sharing: SharingSetting
   if (actorId) {
     predicates.push(eq(skills.ownerUserId, actorId));
     if (sharing.authenticatedVisibilityEnabled) {
-      predicates.push(inArray(skills.visibility, ["authenticated", "organization"]));
+      predicates.push(eq(skills.visibility, "authenticated"));
     }
     if (sharing.teamsEnabled && sharing.teamVisibilityEnabled) {
       predicates.push(and(
         eq(skills.visibility, "team"),
-        sql`exists (
-          select 1
-          from ${skillTeamGrants}
-          inner join ${teamMemberships} on ${teamMemberships.teamId} = ${skillTeamGrants.teamId}
-          where ${skillTeamGrants.skillId} = ${skills.id}
-            and ${teamMemberships.userId} = ${actorId}
-        )`,
+        effectiveTeamAccessPredicate(actorId),
       ));
     }
     if (sharing.userVisibilityEnabled) {
@@ -475,9 +957,99 @@ function visibleToActorPredicate(actorId: string | null, sharing: SharingSetting
         )`,
       ));
     }
+    if (sharing.organizationVisibilityEnabled) {
+      predicates.push(and(
+        eq(skills.visibility, "organization"),
+        organizationVisibilityPredicateForActor(actorId),
+      ));
+    }
   }
   const active = predicates.filter((predicate): predicate is SQL => Boolean(predicate));
   return active.length > 0 ? or(...active) : sql`false`;
+}
+
+function visibleToTeamPredicate(teamId: string, sharing: SharingSettings): SQL | undefined {
+  const predicates: Array<SQL | undefined> = [
+    sharing.publicVisibilityEnabled ? eq(skills.visibility, "public") : undefined,
+    sharing.authenticatedVisibilityEnabled ? eq(skills.visibility, "authenticated") : undefined,
+    sharing.teamsEnabled && sharing.teamVisibilityEnabled
+      ? and(
+          eq(skills.visibility, "team"),
+          sql`exists (
+            select 1
+            from ${skillTeamGrants} as stg
+            inner join ${teams} as team on team.id = stg.team_id
+            left join ${organizations} as org on org.id = team.organization_id
+            left join ${organizationPolicyRevisions} as opr
+              on opr.organization_id = team.organization_id
+              and opr.id = org.current_policy_revision_id
+            where stg.skill_id = ${skills.id}
+              and stg.team_id = ${teamId}
+              and (
+                team.organization_id is null
+                or (
+                  org.status = 'active'
+                  and org.current_policy_revision_id is not null
+                  and opr.id is not null
+                )
+              )
+          )`,
+        )
+      : undefined,
+  ];
+  const active = predicates.filter((predicate): predicate is SQL => Boolean(predicate));
+  return active.length > 0 ? or(...active) : sql`false`;
+}
+
+function visibleToOrganizationPredicate(organizationId: string, sharing: SharingSettings): SQL | undefined {
+  const predicates: Array<SQL | undefined> = [
+    sharing.publicVisibilityEnabled ? eq(skills.visibility, "public") : undefined,
+    sharing.authenticatedVisibilityEnabled ? eq(skills.visibility, "authenticated") : undefined,
+    sharing.organizationVisibilityEnabled
+      ? and(
+          eq(skills.visibility, "organization"),
+          organizationVisibilityPredicateForOrganization(organizationId),
+        )
+      : undefined,
+  ];
+  const active = predicates.filter((predicate): predicate is SQL => Boolean(predicate));
+  return active.length > 0 ? or(...active) : sql`false`;
+}
+
+function organizationVisibilityPredicateForActor(actorId: string): SQL<boolean> {
+  return sql<boolean>`exists (
+    select 1
+    from ${skillOrganizationGrants} as sog
+    inner join ${organizations} as org on org.id = sog.organization_id
+    inner join ${organizationPolicyRevisions} as opr
+      on opr.organization_id = org.id
+      and opr.id = org.current_policy_revision_id
+    inner join ${organizationMemberships} as om
+      on om.organization_id = org.id
+      and om.user_id = ${actorId}
+      and om.removed_at is null
+    where sog.skill_id = ${skills.id}
+      and sog.created_under_policy_revision_id = org.current_policy_revision_id
+      and org.status = 'active'
+      and opr.policy->'sharing'->>'organizationSkillSharingEnabled' = 'true'
+  )`;
+}
+
+function organizationVisibilityPredicateForOrganization(organizationId: string): SQL<boolean> {
+  return sql<boolean>`exists (
+    select 1
+    from ${skillOrganizationGrants} as sog
+    inner join ${organizations} as org on org.id = sog.organization_id
+    inner join ${organizationPolicyRevisions} as opr
+      on opr.organization_id = org.id
+      and opr.id = org.current_policy_revision_id
+    where sog.skill_id = ${skills.id}
+      and sog.organization_id = ${organizationId}
+      and org.id = ${organizationId}
+      and sog.created_under_policy_revision_id = org.current_policy_revision_id
+      and org.status = 'active'
+      and opr.policy->'sharing'->>'organizationSkillSharingEnabled' = 'true'
+  )`;
 }
 
 function uniqueBySlug(skills: PublicSkill[]): PublicSkill[] {
@@ -514,6 +1086,9 @@ function parseSharingSettings(input: unknown): SharingSettings {
     teamsEnabled: typeof record.teamsEnabled === "boolean" ? record.teamsEnabled : true,
     teamVisibilityEnabled: typeof record.teamVisibilityEnabled === "boolean" ? record.teamVisibilityEnabled : true,
     userVisibilityEnabled: typeof record.userVisibilityEnabled === "boolean" ? record.userVisibilityEnabled : true,
+    organizationVisibilityEnabled: typeof record.organizationVisibilityEnabled === "boolean"
+      ? record.organizationVisibilityEnabled
+      : false,
   };
 }
 
@@ -528,10 +1103,15 @@ function assertCanManageSkillSharing(
 }
 
 function validateVisibilityEnabled(visibility: VisibilityScope, settings: SharingSettings): void {
+  if (visibility === "organization") {
+    if (!settings.organizationVisibilityEnabled) {
+      throw new AppError("Organization sharing is disabled for this instance.", "ORGANIZATION_SHARING_DISABLED", 403);
+    }
+  }
   if (visibility === "public" && !settings.publicVisibilityEnabled) {
     throw new AppError("Public sharing is disabled for this instance.", "PUBLIC_SHARING_DISABLED", 403);
   }
-  if ((visibility === "authenticated" || visibility === "organization") && !settings.authenticatedVisibilityEnabled) {
+  if (visibility === "authenticated" && !settings.authenticatedVisibilityEnabled) {
     throw new AppError("Signed-in-user sharing is disabled for this instance.", "AUTHENTICATED_SHARING_DISABLED", 403);
   }
   if (visibility === "team" && (!settings.teamsEnabled || !settings.teamVisibilityEnabled)) {

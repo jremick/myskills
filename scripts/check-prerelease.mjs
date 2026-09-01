@@ -268,8 +268,11 @@ function checkPolicyLanguageAndLinks() {
 
 function checkWorkflowContracts() {
   const ci = readText(".github/workflows/ci.yml") ?? "";
-  for (const expected of ["22.x", "24.x", "npm run check", "npm run test:e2e:fullstack", "needs: [check-supported-node, railway-images]"]) {
+  for (const expected of ["22.x", "24.x", "npm run check", "npm run test:e2e:fullstack", "needs: [check-supported-node, railway-images, web-e2e, postgres-integration]"]) {
     if (!ci.includes(expected)) failures.push(`.github/workflows/ci.yml must include ${JSON.stringify(expected)}.`);
+  }
+  for (const expected of ["needs.check-supported-node.result", "needs.railway-images.result", "needs.web-e2e.result", "needs.postgres-integration.result"]) {
+    if (!ci.includes(expected)) failures.push(`.github/workflows/ci.yml aggregate check must inspect ${JSON.stringify(expected)}.`);
   }
 
   const release = readText(".github/workflows/release.yml") ?? "";

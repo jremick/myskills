@@ -19,7 +19,12 @@ test("signed-in users can create teams, invite members, and accept invitations",
   });
   t.after(() => app.close());
 
-  const ownerToken = await addUserAndLogin(app, authStore, {
+  const ownerTokenWithoutMfa = await addUserAndLogin(app, authStore, {
+    id: "owner-user",
+    email: "owner@example.com",
+    roles: ["author"],
+  });
+  const ownerToken = await addUserAndLoginWithMfa(app, authStore, {
     id: "owner-user",
     email: "owner@example.com",
     roles: ["author"],
@@ -31,6 +36,15 @@ test("signed-in users can create teams, invite members, and accept invitations",
   });
   teamStore.addKnownUser({ id: "owner-user", email: "owner@example.com", name: "Owner" });
   teamStore.addKnownUser({ id: "member-user", email: "member@example.com", name: "Member" });
+
+  const ownerMfaRequired = await app.inject({
+    method: "POST",
+    url: "/v1/teams",
+    headers: { authorization: `Bearer ${ownerTokenWithoutMfa}` },
+    payload: { name: "MFA required" },
+  });
+  assert.equal(ownerMfaRequired.statusCode, 403);
+  assert.equal(ownerMfaRequired.json().error.code, "MFA_VERIFICATION_REQUIRED");
 
   const created = await app.inject({
     method: "POST",
@@ -213,6 +227,57 @@ test("skill owners can set signed-in visibility and instance owners can disable 
     headers: { authorization: `Bearer ${readerToken}` },
   });
   assert.equal(deniedReaderDetail.statusCode, 404);
+});
+
+test("resource skill owners need verified MFA before expanding team visibility", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const skillRepository = new MemorySkillRepository([{
+    slug: "resource-owner-skill",
+    title: "Resource owner skill",
+    summary: "Resource owner MFA fixture.",
+    lifecycleStatus: "approved",
+    visibility: "private",
+    latestVersion: "1.0.0",
+    reviewStatus: "approved",
+    securityStatus: "passed",
+    platforms: [],
+    tags: [],
+    ownerUserId: "resource-owner",
+  }]);
+  const app = buildApp({
+    skillRepository,
+    authService: new AuthService(authStore),
+  });
+  t.after(() => app.close());
+
+  const ownerWithoutMfa = await addUserAndLogin(app, authStore, {
+    id: "resource-owner",
+    email: "resource-owner@example.com",
+    roles: ["author"],
+  });
+  const ownerWithMfa = await addUserAndLoginWithMfa(app, authStore, {
+    id: "resource-owner",
+    email: "resource-owner@example.com",
+    roles: ["author"],
+  });
+
+  const denied = await app.inject({
+    method: "PUT",
+    url: "/v1/skills/resource-owner-skill/sharing",
+    headers: { authorization: `Bearer ${ownerWithoutMfa}` },
+    payload: { visibility: "team", teamIds: ["team-one"], userEmails: [] },
+  });
+  assert.equal(denied.statusCode, 403);
+  assert.equal(denied.json().error.code, "MFA_VERIFICATION_REQUIRED");
+
+  const updated = await app.inject({
+    method: "PUT",
+    url: "/v1/skills/resource-owner-skill/sharing",
+    headers: { authorization: `Bearer ${ownerWithMfa}` },
+    payload: { visibility: "team", teamIds: ["team-one"], userEmails: [] },
+  });
+  assert.equal(updated.statusCode, 200);
+  assert.equal(updated.json().sharing.visibility, "team");
 });
 
 async function addUserAndLogin(

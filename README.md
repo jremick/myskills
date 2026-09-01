@@ -16,9 +16,12 @@ MySkills is an open-source beta platform for publishing, reviewing, discovering,
 
 ## Release Status
 
-Current target: **v0.1.0-beta.2**.
+Current target: **v0.1.0-beta.3**.
 
-Released on 2026-07-13: [GitHub prerelease](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.2), [`@jarel/myskills@beta`](https://www.npmjs.com/package/@jarel/myskills/v/0.1.0-beta.2), and the hosted beta at [myskills.sh](https://myskills.sh).
+The beta.3 source and CLI release adds the Phase 2 architecture control plane.
+The hosted beta at [myskills.sh](https://myskills.sh) remains a separately
+verified deployment surface and must not be assumed to run beta.3 until its
+production promotion is read back.
 
 This beta is intended for real external trial use with documented compatibility, support, and upgrade expectations. It is still prerelease software and not yet the business-safe production release: API contracts, package formats, deployment defaults, and operational guidance may still change before `v1.0`.
 
@@ -98,9 +101,9 @@ Open `http://localhost:3000` to browse approved skills, inspect release export g
 
 Local auth verification and password-reset notifications default to `AUTH_NOTIFICATION_MODE=console`; development action links appear in the API process output. Production deployments use `AUTH_NOTIFICATION_MODE=resend` or `AUTH_NOTIFICATION_MODE=smtp` and must set `APP_BASE_URL` to an HTTPS web origin plus provider settings in the environment or secret store.
 
-After creating a `skills:read` token, place it in the untracked root `.env` as `MYSKILLS_TOKEN` and run `npm run dev:mcp`. The stdio MCP dev script reads the same local env file automatically.
+After creating an API token with `skills:read` for registry tools or `architectures:read` for architecture projection tools, place it in the untracked root `.env` as `MYSKILLS_TOKEN` and run `npm run dev:mcp`. A token with both scopes can use both tool groups. The stdio MCP dev script reads the same local env file automatically.
 
-To run the stateless Streamable HTTP MCP server, start the HTTP adapter and configure MCP clients to send `Authorization: Bearer <api-token-with-skills-read>` to `POST /mcp`:
+To run the stateless Streamable HTTP MCP server, start the HTTP adapter and configure MCP clients to send `Authorization: Bearer <scoped-api-token>` to `POST /mcp`. The API-owned `/v1/mcp/session` check accepts either `skills:read` or `architectures:read`; registry tools require `skills:read`, and architecture projection tools require `architectures:read`:
 
 ```bash
 npm run dev:mcp:http
@@ -124,7 +127,7 @@ node apps/cli/dist/index.js token create --name "Local CLI" --scope profile:read
 node apps/cli/dist/index.js logout
 ```
 
-The `0.1.0-beta.2` CLI is published under npm's `beta` dist-tag. The `latest` and `alpha` tags remain on `0.1.0-alpha.3`, so prerelease users must select the beta channel explicitly:
+The `0.1.0-beta.3` CLI uses npm's `beta` dist-tag. The `latest` and `alpha` tags remain on `0.1.0-alpha.3`, so prerelease users must select the beta channel explicitly:
 
 ```bash
 npm install -g @jarel/myskills@beta

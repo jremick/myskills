@@ -4,6 +4,11 @@ import { MAX_PACKAGE_ARCHIVE_BYTES } from "@myskills-app/skill-package";
 import { buildApp } from "../src/app.js";
 import { SUBMISSION_BODY_LIMIT_BYTES } from "../src/app.js";
 import { MemoryAuthRateLimiter } from "../src/auth/rate-limit.js";
+import { AuthService } from "../src/auth/service.js";
+import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
+import { MemoryArchitectureStore } from "../src/architectures/memory-store.js";
+import { MemorySubmissionStore } from "../src/submissions/memory-submission-store.js";
+import { SubmissionService } from "../src/submissions/service.js";
 import { MemorySkillRepository } from "../src/repositories/memory-skill-repository.js";
 import { API_VERSION } from "../src/version.js";
 
@@ -83,7 +88,12 @@ test("GET /v1/capabilities describes enabled server features", async (t) => {
       lifecycle: false,
       tokens: false,
       teams: false,
+      organizations: false,
       sharing: false,
+      architectures: false,
+      architectureTargets: false,
+      architectureOrganizationGrants: false,
+      architecturePatternMigrations: false,
     },
   });
 });
@@ -154,6 +164,34 @@ test("GET /ready bounds dependency probes with a timeout", async (t) => {
   assert.equal(response.statusCode, 503);
   assert.equal(response.json().checks.postgres, "unready");
   assert.ok(Date.now() - startedAt < 1_000);
+});
+
+test("configured Phase 2 architecture server fails readiness and hides capabilities when migrations are incomplete", async (t) => {
+  const app = buildApp({
+    skillRepository: repository,
+    authService: new AuthService(new MemoryAuthStore("closed")),
+    submissionService: new SubmissionService(new MemorySubmissionStore()),
+    architectureStore: new MemoryArchitectureStore(),
+    readinessProbes: {
+      postgres: async () => {},
+      phase2Architecture: async () => {
+        throw new Error("Phase 2 migrations are incomplete.");
+      },
+    },
+  });
+  t.after(() => app.close());
+
+  const ready = await app.inject({ method: "GET", url: "/ready" });
+  const capabilities = await app.inject({ method: "GET", url: "/v1/capabilities" });
+
+  assert.equal(ready.statusCode, 503);
+  assert.deepEqual(ready.json().checks, {
+    postgres: "ready",
+    artifactStorage: "not-required",
+    phase2Architecture: "unready",
+  });
+  assert.equal(capabilities.statusCode, 200);
+  assert.equal(capabilities.json().capabilities.architectures, false);
 });
 
 test("API request limiting is shared across routes while health probes remain independent", async (t) => {

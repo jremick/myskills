@@ -2,11 +2,105 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
-## Unreleased
+## 0.1.0-beta.3 - 2026-09-01
+
+Target release: `v0.1.0-beta.3`.
+
+This release adds the Phase 2 architecture control plane. It does not claim a
+hosted Phase 2 deployment; Railway promotion remains a separate production
+operation with its own backup, migration, readiness, and rollback gate.
+
+### Added
+
+- Added immutable skill architecture shells and revisions with `flat`,
+  `domain-router`, and `multi-level-router` patterns; exact release digests;
+  deterministic profile/environment compilation; and accessible
+  JSON/Mermaid/plain-outline diagram projections through the API, web, CLI,
+  and read-only MCP surfaces. API/web/CLI also expose explicit
+  fixture-backed dry-run planning.
+- Added user/team architecture tenancy, effective organization-parented team
+  membership checks, organization policy revisions, and policy-bound
+  architecture sharing. Manager-only GET/PUT organization-grant routes use
+  atomic replacement, current-revision concurrency checks, and audited
+  revoke/save behavior; the web workbench exposes the same controls.
+- Added connected architecture-target metadata, consent, health, generation,
+  capability, and append-only observation foundations, plus organization and
+  target web workbenches. The read-only Codex adapter is explicit-root and
+  metadata-only; it is not a live connector.
+- Added fixture-only sync-control state, leases, fencing, baselines, receipts,
+  recovery evidence, and persisted Postgres plus synthetic service/executor
+  test coverage for recovery and rollback. Each bounded run allows at most 500
+  steps and 2,004 append-only receipts: a 1,002-receipt max-step lifecycle,
+  one full apply/verify retry, and two recovery/terminal receipts. Further
+  retries require a new bounded run. No target write, package installer, or
+  live apply/rollback path is enabled.
+- Added derive-shell pattern migration contracts, migration 0020 lineage,
+  atomic Postgres shell/revision/lineage creation, preview/create routes, and
+  web controls. The source architecture, grants, and target bindings are not
+  copied.
+
+### Changed
+
+- **Breaking security change:** team
+  creation, team-owner invitation/member lifecycle mutations, organization
+  creation/invitation/member/policy/lifecycle mutations, and sharing changes
+  that expand team or organization access now require an interactive
+  MFA-verified session. The canonical sharing route and the deprecated beta.2
+  `skills edit --visibility` compatibility alias are session-only; API tokens
+  remain suitable for scoped reads but cannot widen sharing or perform these
+  mutations. Before moving from beta.2, enroll TOTP
+  MFA with `POST /v1/auth/mfa/totp/enroll` and
+  `POST /v1/auth/mfa/totp/confirm`, retain the recovery codes, then use
+  `myskills login` to complete the MFA challenge. Migrate mutation automation
+  to an explicitly managed session or keep it read-only; do not bypass this
+  boundary with a bearer token. Invitation acceptance remains session-only
+  where its route permits it.
+- **Breaking MCP contract change:**
+  `get_install_instructions` no longer returns `apiBundleEndpoint`, a bundle
+  URL, or package bytes. Consumers must use its authorized release metadata and
+  generated `myskills install ...` or `myskills export ... --output ...`
+  command, or use the separately authenticated API/CLI delivery path. MCP API
+  base URLs now accept only absolute `http://` or `https://` URLs without
+  credentials, query strings, or fragments; bearer credentials stay in
+  headers. The API-owned `/v1/mcp/session` check accepts either `skills:read`
+  or `architectures:read`; registry tools require the former and architecture
+  projection tools require the latter. Update clients before adopting a future
+  beta.3.
+- Added complete-set organization grant handling to canonical `myskills
+  sharing set`. Omitting organization IDs preserves the beta.2 compatibility
+  merge; `--clear-organizations` sends `organizationIds: []` and is mutually
+  exclusive with organization IDs.
+- **Deprecated beta compatibility:** generic metadata `visibility` and
+  `myskills skills edit --visibility` remain supported as compatibility shims
+  for beta.2 clients. They preserve omitted team, user, and organization
+  grants and remain subject to the API's sharing security boundary: both
+  paths require a session, and the metadata alias requires an MFA-verified
+  session before it reads or replaces grants. API tokens cannot widen a skill
+  through the alias. Use canonical `myskills sharing set` for new clients;
+  the deprecated alias does not provide complete-set organization controls.
+- The beta.2 compatibility shims remain in beta.3 and are planned for removal
+  only at a later, separately published prerelease boundary with migration
+  guidance and release verification. The Phase 1 Railway baseline must still
+  be read back separately; source release evidence does not establish that
+  Phase 2 is deployed.
 
 ### Security
 
 - Replaced numeric Fastify proxy-hop trust with explicit proxy IP/CIDR allowlists so direct clients cannot spoof forwarded request metadata.
+- Architecture projections use server-authorized exact release metadata,
+  scoped reads, bounded concurrency, and fail-closed exposure and digest
+  checks. Organization projections require current policy/membership/grant
+  context and exclude private, team-scoped, and explicit-user release
+  references.
+- Organization-grant replacement locks the architecture/current revision in
+  the Postgres adapter, rechecks organization policy and exact release rows,
+  and records only sanitized bounded audit details. Pattern migration locks
+  the source architecture and persists the new shell, first revision, and
+  lineage atomically; an external release-authorizer preflight remains a
+  documented residual race.
+- Target observations and Codex adapter output are bounded metadata only;
+  credentials, prompts, package content, paths, URLs, and raw configuration
+  are excluded. Mutation capabilities remain false or absent.
 
 ## 0.1.0-beta.2 - 2026-07-13
 

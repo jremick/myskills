@@ -9,11 +9,58 @@ import {
   scanPackagePath,
   type PackageScanResult,
 } from "@myskills-app/skill-package";
+import {
+  assertValidArchitectureTargetAdapterContext,
+  assertValidArchitectureTargetObservation,
+  architectureTargetLimits,
+  validateArchitectureTargetHealth,
+  type ArchitectureTargetAdapterContext,
+  type ArchitectureTargetHealth,
+  type ArchitectureTargetObservation,
+} from "@myskills-app/core";
+import {
+  CodexReadOnlyArchitectureTargetAdapter,
+  codexAdapterProfiles,
+  type CodexAdapterProfile,
+} from "./codex-readonly-adapter.js";
 
 const DEFAULT_API_URL = "http://localhost:3001";
 const CLI_VERSION = process.env.MYSKILLS_CLI_VERSION ?? "0.0.0-dev";
 const CLI_VISIBILITY_SCOPES = ["public", "authenticated", "organization", "team", "private", "explicit-users"] as const;
 const LOGIN_AUTH_METHODS = ["password", "api-key"] as const;
+const OBSERVED_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const OBSERVED_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+const OBSERVED_VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const OBSERVED_DIGEST_PATTERN = /^[a-f0-9]{64}$/;
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001F\u007F-\u009F]/u;
+const CONTROL_CHARACTER_GLOBAL_PATTERN = /[\u0000-\u001F\u007F-\u009F]/gu;
+const LOCAL_PATH_PATTERN = /(?:[A-Za-z]:[\\/]|\\\\|\/(?:Users|home|private|tmp|var|etc|opt|Volumes|mnt|srv|root)\/)[^\s"'`<>\]\}\),;]+/giu;
+const OBSERVED_FIXTURE_KEY_PATTERN = /path|secret|token|password|credential|private[-_ ]?key|package|connection|endpoint|url/i;
+const CODEX_CONTEXT_MAX_BYTES = 16 * 1024;
+const CODEX_CONTEXT_FIELDS = [
+  "targetId",
+  "targetGeneration",
+  "architectureId",
+  "environmentId",
+  "profileId",
+  "adapterDigest",
+  "capabilitiesDigest",
+] as const;
+const CODEX_OBSERVATION_OPTIONS = new Set([
+  "root",
+  "profile",
+  "context",
+  "context-file",
+  "target-id",
+  "generation",
+  "architecture-id",
+  "environment-id",
+  "profile-id",
+  "adapter-digest",
+  "capabilities-digest",
+  "health",
+  "json",
+]);
 
 export interface CliIo {
   stdout: (line: string) => void;
@@ -70,6 +117,8 @@ export interface CliRuntime {
   configStore?: CliConfigStore;
   prompt?: CliPrompt;
   tokenStore?: CliTokenStore;
+  /** Test-only clock seam for deterministic local target observations. */
+  codexAdapterClock?: () => Date;
 }
 
 interface ParsedArgs {
@@ -127,6 +176,9 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
         return await teamsCommand(parsed, runtime);
       case "sharing":
         return await sharingCommand(parsed, runtime);
+      case "architecture":
+      case "architectures":
+        return await architecturesCommand(parsed, runtime);
       case "admin":
         return await adminCommand(parsed, runtime);
       case "export":
@@ -688,19 +740,32 @@ async function submissionsCommand(parsed: ParsedArgs, runtime: CliRuntime): Prom
 }
 
 async function skillsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
-  const token = await requireToken(parsed, runtime);
   const subcommand = parsed.args[0];
   const slug = parsed.args[1];
   if (subcommand === "edit") {
+    const token = await requireToken(parsed, runtime);
     if (!slug) {
-      throw new CliError("Usage: myskills skills edit <skill-slug> [--title <text>] [--summary <text>] [--visibility <scope>] [--tag <tag>] [--reason <text>] [--api-url <url>] [--token <token>]", 2);
+      throw new CliError("Usage: myskills skills edit <skill-slug> [--title <text>] [--summary <text>] [--tag <tag>] [--visibility <scope>] [--reason <text>] [--api-url <url>] [--token <token>]", 2);
     }
+    const organizationOptionProvided = parsed.options.organization !== undefined
+      || parsed.options["organization-id"] !== undefined;
+    if (parsed.options["clear-organizations"] === true || organizationOptionProvided) {
+      throw new CliError("Organization grant options are only supported by myskills sharing set; the deprecated skills edit --visibility alias preserves omitted grants.", 2);
+    }
+    const visibility = Object.prototype.hasOwnProperty.call(parsed.options, "visibility")
+      ? visibilityOption(parsed)
+      : undefined;
+    if (visibility !== undefined) {
+      runtime.io.stderr("Warning: `skills edit --visibility` is deprecated; use `myskills sharing set <skill-slug> --visibility <scope>`.");
+    }
+    // Keep the beta.2 endpoint for API-token clients. The API compatibility
+    // shim delegates this field to canonical complete-set sharing updates.
     const payload: Record<string, unknown> = {
       ...reasonPayload(parsed),
+      ...(visibility === undefined ? {} : { visibility }),
     };
     const title = optionalStringOption(parsed, "title");
     const summary = optionalStringOption(parsed, "summary");
-    const visibility = optionalStringOption(parsed, "visibility");
     const tags = stringListOption(parsed, "tag");
     if (title !== undefined) {
       payload.title = title;
@@ -708,22 +773,17 @@ async function skillsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     if (summary !== undefined) {
       payload.summary = summary;
     }
-    if (visibility !== undefined) {
-      if (!CLI_VISIBILITY_SCOPES.includes(visibility as CliVisibilityScope)) {
-        throw new CliError(`--visibility must be one of: ${CLI_VISIBILITY_SCOPES.join(", ")}.`, 2);
-      }
-      payload.visibility = visibility;
-    }
     if (tags.length > 0) {
       payload.tags = tags;
     }
-    if (Object.keys(payload).every((key) => key === "reason")) {
+    if (title === undefined && summary === undefined && tags.length === 0 && visibility === undefined) {
       throw new CliError("At least one metadata option is required.", 2);
     }
     const response = await apiPut(`/v1/skills/${encodeURIComponent(parseInstallSlug(slug))}`, payload, parsed, runtime, token);
     printNamedRecord(response, "skill", runtime.io, ["slug", "title", "lifecycleStatus", "visibility"]);
     return 0;
   }
+  const token = await requireToken(parsed, runtime);
   if (subcommand === "archive" || subcommand === "restore" || subcommand === "delete") {
     if (!slug) {
       throw new CliError("Usage: myskills skills archive|restore|delete <skill-slug> [--reason <text>] [--api-url <url>] [--token <token>]", 2);
@@ -871,13 +931,24 @@ async function sharingCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<
   }
   if (subcommand === "set") {
     if (!slug) {
-      throw new CliError("Usage: myskills sharing set <skill-slug> --visibility <scope> [--team <team-id>] [--user <email>]", 2);
+      throw new CliError("Usage: myskills sharing set <skill-slug> --visibility <scope> [--team <team-id>] [--user <email>] [--organization <organization-id>] [--organization-id <organization-id>] [--clear-organizations]", 2);
     }
     const visibility = visibilityOption(parsed);
+    const organizationIds = [
+      ...stringListOption(parsed, "organization"),
+      ...stringListOption(parsed, "organization-id"),
+    ];
+    const organizationOptionProvided = parsed.options.organization !== undefined
+      || parsed.options["organization-id"] !== undefined;
+    const clearOrganizations = parsed.options["clear-organizations"] === true;
+    if (clearOrganizations && organizationOptionProvided) {
+      throw new CliError("--clear-organizations cannot be combined with --organization or --organization-id.", 2);
+    }
     const response = await apiPut(`/v1/skills/${encodeURIComponent(parseInstallSlug(slug))}/sharing`, {
       visibility,
       teamIds: stringListOption(parsed, "team"),
       userEmails: stringListOption(parsed, "user"),
+      ...(clearOrganizations || organizationOptionProvided ? { organizationIds: clearOrganizations ? [] : organizationIds } : {}),
     }, parsed, runtime, token);
     if (parsed.options.json) {
       runtime.io.stdout(JSON.stringify(response, null, 2));
@@ -887,6 +958,329 @@ async function sharingCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<
     return 0;
   }
   throw new CliError("Usage: myskills sharing get|set <skill-slug>", 2);
+}
+
+async function architecturesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const subcommand = parsed.args[0] ?? "list";
+  if (subcommand === "patterns") {
+    const response = await apiGet(
+      "/v1/architecture-patterns",
+      parsed,
+      runtime,
+      await tokenOption(parsed, runtime) ?? undefined,
+    );
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(safeArchitecturePatternsResponse(response), null, 2));
+    } else {
+      printArchitecturePatterns(response, runtime.io);
+    }
+    return 0;
+  }
+
+  if (subcommand === "observe" || subcommand === "health") {
+    return await codexTargetObservationCommand(parsed, runtime, subcommand === "health");
+  }
+
+  const token = await requireToken(parsed, runtime);
+  if (subcommand === "list") {
+    const response = await apiGet("/v1/architectures", parsed, runtime, token);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(safeArchitecturesResponse(response), null, 2));
+    } else {
+      printArchitectures(response, runtime.io);
+    }
+    return 0;
+  }
+
+  if (subcommand === "show") {
+    const architectureId = parseArchitectureId(parsed.args[1]);
+    const revisionId = architectureRevisionOption(parsed);
+    const response = await apiGet(
+      revisionId
+        ? `/v1/architectures/${encodeURIComponent(architectureId)}/revisions/${encodeURIComponent(parseArchitectureRevisionId(revisionId))}`
+        : `/v1/architectures/${encodeURIComponent(architectureId)}`,
+      parsed,
+      runtime,
+      token,
+    );
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(revisionId
+        ? safeArchitectureRevisionResponse(response)
+        : safeArchitectureDetailsResponse(response), null, 2));
+    } else if (revisionId) {
+      printArchitectureRevision(response, runtime.io);
+    } else {
+      printArchitectureDetails(response, runtime.io);
+    }
+    return 0;
+  }
+
+  if (subcommand === "preview" || subcommand === "compile") {
+    const architectureId = parseArchitectureId(parsed.args[1]);
+    const revisionId = architectureRevisionOption(parsed);
+    const body = architecturePreviewOptions(parsed, revisionId);
+    const response = await apiPost(
+      `/v1/architectures/${encodeURIComponent(architectureId)}/preview`,
+      body,
+      parsed,
+      runtime,
+      token,
+    );
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(safeArchitecturePreviewResponse(response), null, 2));
+    } else {
+      printArchitecturePreview(response, runtime.io, architectureId);
+    }
+    return 0;
+  }
+
+  if (subcommand === "plan" || subcommand === "dry-run") {
+    const architectureId = parseArchitectureId(parsed.args[1]);
+    const revisionId = architectureRevisionOption(parsed);
+    const observedPath = optionalStringOption(parsed, "observed") ?? optionalStringOption(parsed, "observed-state");
+    if (!observedPath) {
+      throw new CliError("Usage: myskills architectures plan <architecture-id> --observed <fixture.json> [--revision <revision-id>] [--profile <profile-id>] [--environment <environment-id>] [--organization-id <organization-id>]", 2);
+    }
+    const observedState = await readObservedStateFixture(observedPath);
+    const response = await apiPost(
+      `/v1/architectures/${encodeURIComponent(architectureId)}/preview`,
+      {
+        ...architecturePreviewOptions(parsed, revisionId),
+        fixture: apiSyncFixtureFromObservedState(observedState),
+      },
+      parsed,
+      runtime,
+      token,
+    );
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(safeArchitecturePreviewResponse(response), null, 2));
+    } else {
+      printArchitecturePlan(response, runtime.io);
+    }
+    return 0;
+  }
+
+  throw new CliError("Usage: myskills architectures patterns | list | show <architecture-id> | preview|compile <architecture-id> [--revision <revision-id>] [--profile <profile-id>] [--environment <environment-id>] [--organization-id <organization-id>|--organization <organization-id>] | plan|dry-run <architecture-id> --observed <fixture.json> [--revision <revision-id>] [--profile <profile-id>] [--environment <environment-id>] [--organization-id <organization-id>|--organization <organization-id>] | observe|health", 2);
+}
+
+/**
+ * Run the explicitly scoped local Codex adapter. This branch deliberately
+ * stays before token resolution: it is a local read-only observation and does
+ * not contact or upload to the API.
+ */
+async function codexTargetObservationCommand(
+  parsed: ParsedArgs,
+  runtime: CliRuntime,
+  healthOnly: boolean,
+): Promise<number> {
+  assertCodexObservationOptions(parsed, healthOnly);
+  const root = requiredCodexRoot(parsed);
+  const profile = requiredCodexProfile(parsed);
+  const context = await readCodexAdapterContext(parsed);
+  const adapter = new CodexReadOnlyArchitectureTargetAdapter({
+    root,
+    profile,
+    ...(runtime.codexAdapterClock ? { clock: runtime.codexAdapterClock } : {}),
+  });
+
+  if (healthOnly || parsed.options.health === true) {
+    let health: ArchitectureTargetHealth;
+    try {
+      const result = validateArchitectureTargetHealth(await adapter.health(context));
+      if (!result.valid) throw new Error("invalid health report");
+      health = result.value;
+    } catch {
+      throw new CliError("Codex adapter returned an invalid metadata-only health report.", 1, "CODEX_TARGET_REPORT_INVALID");
+    }
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(health, null, 2));
+    } else {
+      printCodexTargetHealth(health, runtime.io);
+    }
+    return 0;
+  }
+
+  let observation: ArchitectureTargetObservation;
+  try {
+    observation = assertValidArchitectureTargetObservation(await adapter.observe(context));
+  } catch {
+    throw new CliError("Codex adapter returned an invalid metadata-only observation.", 1, "CODEX_TARGET_REPORT_INVALID");
+  }
+  if (parsed.options.json) {
+    runtime.io.stdout(JSON.stringify(observation, null, 2));
+  } else {
+    printCodexTargetObservation(observation, runtime.io);
+  }
+  return 0;
+}
+
+function assertCodexObservationOptions(parsed: ParsedArgs, healthOnly: boolean): void {
+  if (parsed.args.length !== 1) {
+    throw new CliError(
+      `Usage: myskills architectures ${healthOnly ? "health" : "observe"} --root <absolute-dir> --profile <personal|work|shared> (--context <file> | --target-id <id> --generation <number> --architecture-id <id> --environment-id <id> --profile-id <id> --adapter-digest <sha256> --capabilities-digest <sha256>) [--json]`,
+      2,
+      "CODEX_TARGET_USAGE",
+    );
+  }
+  for (const key of Object.keys(parsed.options)) {
+    if (!CODEX_OBSERVATION_OPTIONS.has(key)) {
+      throw new CliError("Codex target observation accepts only explicit root, profile, context, and metadata context options.", 2, "CODEX_TARGET_OPTION_INVALID");
+    }
+  }
+  if (parsed.options.health !== undefined && parsed.options.health !== true) {
+    throw new CliError("Codex target health mode must be a flag.", 2, "CODEX_TARGET_OPTION_INVALID");
+  }
+}
+
+function requiredCodexRoot(parsed: ParsedArgs): string {
+  const root = parsed.options.root;
+  if (typeof root !== "string" || !root || hasControlCharacter(root) || !path.isAbsolute(root)) {
+    throw new CliError("An explicit absolute --root is required; the CLI does not discover a Codex home or profile.", 2, "CODEX_TARGET_ROOT_INVALID");
+  }
+  return root;
+}
+
+function requiredCodexProfile(parsed: ParsedArgs): CodexAdapterProfile {
+  const profile = parsed.options.profile;
+  if (typeof profile !== "string" || !(codexAdapterProfiles as readonly string[]).includes(profile)) {
+    throw new CliError("An explicit --profile of personal, work, or shared is required.", 2, "CODEX_TARGET_PROFILE_INVALID");
+  }
+  return profile as CodexAdapterProfile;
+}
+
+async function readCodexAdapterContext(parsed: ParsedArgs): Promise<ArchitectureTargetAdapterContext> {
+  const contextOptions = ["context", "context-file"] as const;
+  const suppliedContextPaths = contextOptions.filter((key) => parsed.options[key] !== undefined);
+  if (suppliedContextPaths.length > 1) {
+    throw new CliError("Pass one context JSON file, not multiple context options.", 2, "CODEX_TARGET_CONTEXT_INVALID");
+  }
+
+  const contextFlagNames = [
+    "target-id",
+    "generation",
+    "architecture-id",
+    "environment-id",
+    "profile-id",
+    "adapter-digest",
+    "capabilities-digest",
+  ] as const;
+  const suppliedContextFlags = contextFlagNames.filter((key) => parsed.options[key] !== undefined);
+  if (suppliedContextPaths.length > 0 && suppliedContextFlags.length > 0) {
+    throw new CliError("Use either --context or all explicit context flags, not both.", 2, "CODEX_TARGET_CONTEXT_INVALID");
+  }
+  if (suppliedContextPaths.length === 0) {
+    if (suppliedContextFlags.length !== contextFlagNames.length) {
+      throw new CliError("Pass --context or all seven explicit context flags: --target-id, --generation, --architecture-id, --environment-id, --profile-id, --adapter-digest, and --capabilities-digest.", 2, "CODEX_TARGET_CONTEXT_INVALID");
+    }
+    const raw = {
+      targetId: requiredCodexContextOption(parsed, "target-id"),
+      targetGeneration: requiredCodexGeneration(parsed),
+      architectureId: requiredCodexContextOption(parsed, "architecture-id"),
+      environmentId: requiredCodexContextOption(parsed, "environment-id"),
+      profileId: requiredCodexContextOption(parsed, "profile-id"),
+      adapterDigest: requiredCodexContextOption(parsed, "adapter-digest"),
+      capabilitiesDigest: requiredCodexContextOption(parsed, "capabilities-digest"),
+    };
+    return assertSafeCodexContext(raw);
+  }
+
+  const contextPath = parsed.options[suppliedContextPaths[0] as (typeof contextOptions)[number]];
+  if (typeof contextPath !== "string" || !contextPath || hasControlCharacter(contextPath)) {
+    throw new CliError("The context JSON file option is invalid.", 2, "CODEX_TARGET_CONTEXT_INVALID");
+  }
+  let text: string;
+  try {
+    text = await readFile(path.resolve(contextPath), "utf8");
+  } catch {
+    throw new CliError("The context JSON file could not be read.", 2, "CODEX_TARGET_CONTEXT_INVALID");
+  }
+  if (Buffer.byteLength(text, "utf8") > CODEX_CONTEXT_MAX_BYTES) {
+    throw new CliError("The context JSON file exceeds the 16 KiB limit.", 2, "CODEX_TARGET_CONTEXT_INVALID");
+  }
+  let parsedContext: unknown;
+  try {
+    parsedContext = JSON.parse(text);
+  } catch {
+    throw new CliError("The context JSON file must contain valid JSON.", 2, "CODEX_TARGET_CONTEXT_INVALID");
+  }
+  if (!isPlainRecord(parsedContext)) {
+    throw new CliError("The context JSON file must contain one metadata-only object.", 2, "CODEX_TARGET_CONTEXT_INVALID");
+  }
+  const keys = Object.keys(parsedContext);
+  if (keys.length !== CODEX_CONTEXT_FIELDS.length || keys.some((key) => !(CODEX_CONTEXT_FIELDS as readonly string[]).includes(key))) {
+    throw new CliError("The context JSON file must contain exactly the seven metadata context fields.", 2, "CODEX_TARGET_CONTEXT_INVALID");
+  }
+  return assertSafeCodexContext(parsedContext);
+}
+
+function requiredCodexContextOption(parsed: ParsedArgs, key: string): string {
+  const value = parsed.options[key];
+  if (typeof value !== "string" || !value || hasControlCharacter(value)) {
+    throw new CliError(`--${key} is required and must be a safe metadata value.`, 2, "CODEX_TARGET_CONTEXT_INVALID");
+  }
+  return value;
+}
+
+function requiredCodexGeneration(parsed: ParsedArgs): number {
+  const value = requiredCodexContextOption(parsed, "generation");
+  if (!/^\d+$/.test(value)) {
+    throw new CliError("--generation must be a positive integer.", 2, "CODEX_TARGET_CONTEXT_INVALID");
+  }
+  const generation = Number(value);
+  if (!Number.isSafeInteger(generation) || generation < 1 || generation > architectureTargetLimits.generationMaximum) {
+    throw new CliError("--generation must be a positive bounded integer.", 2, "CODEX_TARGET_CONTEXT_INVALID");
+  }
+  return generation;
+}
+
+function assertSafeCodexContext(input: unknown): ArchitectureTargetAdapterContext {
+  try {
+    return assertValidArchitectureTargetAdapterContext(input);
+  } catch {
+    throw new CliError("Codex target context is invalid or contains unsupported metadata.", 2, "CODEX_TARGET_CONTEXT_INVALID");
+  }
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function printCodexTargetObservation(observation: ArchitectureTargetObservation, io: CliIo): void {
+  io.stdout([
+    "observation",
+    terminalSafeText(observation.targetId),
+    `generation=${observation.targetGeneration}`,
+    `skills=${observation.skills.length}`,
+    `findings=${observation.configFindings.length}`,
+    `digest=${observation.observedDigest}`,
+  ].join("\t"));
+  for (const skill of observation.skills) {
+    io.stdout([
+      "skill",
+      terminalSafeText(skill.slug),
+      terminalSafeText(skill.version ?? "-"),
+      terminalSafeText(skill.digest ?? "-"),
+      terminalSafeText(skill.kind ?? "-"),
+      `enabled=${skill.enabled === undefined ? "-" : skill.enabled}`,
+      `exposure=${terminalSafeText(skill.runtimeExposure ?? "-")}`,
+    ].join("\t"));
+  }
+  for (const finding of observation.configFindings) {
+    io.stdout(`finding\t${terminalSafeText(finding.code)}\t${terminalSafeText(finding.severity)}\tcount=${finding.count}`);
+  }
+}
+
+function printCodexTargetHealth(health: ArchitectureTargetHealth, io: CliIo): void {
+  const metadata = health.metadata ?? {};
+  io.stdout([
+    "health",
+    terminalSafeText(health.status),
+    `profile=${terminalSafeText(typeof metadata.profile === "string" ? metadata.profile : "-")}`,
+    `skills=${typeof metadata.skillCount === "number" ? metadata.skillCount : 0}`,
+    `findings=${typeof metadata.findingCount === "number" ? metadata.findingCount : 0}`,
+  ].join("\t"));
 }
 
 async function adminCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
@@ -1279,6 +1673,7 @@ interface CliSharingSettings {
   teamsEnabled: boolean;
   teamVisibilityEnabled: boolean;
   userVisibilityEnabled: boolean;
+  organizationVisibilityEnabled?: boolean;
 }
 
 interface CliTeamSummary {
@@ -1293,6 +1688,14 @@ interface CliUserSummary {
   name: string;
 }
 
+interface CliOrganizationSummary {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  role: string;
+}
+
 interface CliSkillSharingDetails {
   slug: string;
   title: string;
@@ -1301,6 +1704,8 @@ interface CliSkillSharingDetails {
   availableTeams: CliTeamSummary[];
   teamGrants: CliTeamSummary[];
   userGrants: CliUserSummary[];
+  availableOrganizations: CliOrganizationSummary[];
+  organizationGrants: CliOrganizationSummary[];
 }
 
 interface CliTeamRecord {
@@ -1519,7 +1924,459 @@ function printSkillSharing(response: Record<string, unknown>, io: CliIo): void {
   const sharing = skillSharingFromResponse(response);
   const teams = sharing.teamGrants.map((team) => `${team.name}(${team.id})`).join(",") || "-";
   const users = sharing.userGrants.map((user) => user.email).join(",") || "-";
-  io.stdout(`${sharing.slug}\tvisibility=${sharing.visibility}\tteams=${teams}\tusers=${users}`);
+  const organizations = sharing.organizationGrants.map((organization) => `${organization.name}(${organization.id})`).join(",") || "-";
+  const organizationField = sharing.organizationGrants.length > 0 || sharing.availableOrganizations.length > 0
+    ? `\torganizations=${organizations}`
+    : "";
+  io.stdout(`${sharing.slug}\tvisibility=${sharing.visibility}\tteams=${teams}\tusers=${users}${organizationField}`);
+}
+
+/**
+ * Architecture JSON is a public projection, not a pass-through of the API
+ * response. Keep this allowlist in the CLI boundary so an API error, storage
+ * implementation, or future response field cannot accidentally expose a
+ * package body, local path, credential, or provider endpoint to stdout.
+ */
+function safeArchitecturePatternsResponse(response: Record<string, unknown>): Record<string, unknown> {
+  const patterns = arrayField(response, "patterns").map(safeArchitecturePatternJson);
+  return {
+    patterns,
+    count: patterns.length,
+  };
+}
+
+function safeArchitecturePatternJson(input: unknown): Record<string, unknown> {
+  const pattern = jsonRecord(input);
+  if (!pattern) return {};
+  return {
+    ...(jsonString(pattern, "id") ? { id: jsonString(pattern, "id") } : {}),
+    ...(jsonString(pattern, "key") ? { key: jsonString(pattern, "key") } : {}),
+    ...(jsonString(pattern, "name") ? { name: jsonString(pattern, "name") } : {}),
+    ...(jsonString(pattern, "title") ? { title: jsonString(pattern, "title") } : {}),
+    ...(jsonString(pattern, "description") ? { description: jsonString(pattern, "description") } : {}),
+    ...(jsonString(pattern, "status") ? { status: jsonString(pattern, "status") } : {}),
+    ...(jsonNumber(pattern, "maxRouterDepth") !== undefined ? { maxRouterDepth: jsonNumber(pattern, "maxRouterDepth") } : {}),
+    ...(jsonBoolean(pattern, "supportsNestedRouters") !== undefined ? { supportsNestedRouters: jsonBoolean(pattern, "supportsNestedRouters") } : {}),
+  };
+}
+
+function safeArchitecturesResponse(response: Record<string, unknown>): Record<string, unknown> {
+  const architectures = arrayField(response, "architectures").map((value) => safeArchitectureRecordJson(value));
+  return {
+    architectures,
+    count: architectures.length,
+  };
+}
+
+function safeArchitectureDetailsResponse(response: Record<string, unknown>): Record<string, unknown> {
+  if (!Object.prototype.hasOwnProperty.call(response, "architecture")) {
+    return safeArchitectureRecordJson(response);
+  }
+  const architectureSource = jsonRecord(response.architecture);
+  const result: Record<string, unknown> = {
+    architecture: safeArchitectureRecordJson(architectureSource),
+  };
+  const revisions = arrayField(architectureSource ?? {}, "revisions").length > 0
+    ? arrayField(architectureSource ?? {}, "revisions")
+    : arrayField(response, "revisions");
+  if (revisions.length > 0) {
+    result.revisions = revisions.map(safeArchitectureRevisionJson);
+  }
+  if (Object.prototype.hasOwnProperty.call(response, "latestRevision")) {
+    result.latestRevision = response.latestRevision === null
+      ? null
+      : safeArchitectureRevisionJson(response.latestRevision);
+  }
+  return result;
+}
+
+function safeArchitectureRevisionResponse(response: Record<string, unknown>): Record<string, unknown> {
+  if (!Object.prototype.hasOwnProperty.call(response, "revision")) {
+    return safeArchitectureRevisionJson(response);
+  }
+  return { revision: safeArchitectureRevisionJson(response.revision) };
+}
+
+function safeArchitectureRecordJson(input: unknown): Record<string, unknown> {
+  const wrapper = jsonRecord(input) ?? {};
+  const source = jsonRecord(Object.prototype.hasOwnProperty.call(wrapper, "architecture") ? wrapper.architecture : input) ?? {};
+  const access = jsonRecord(source.access);
+  const nestedRevisions = arrayField(source, "revisions");
+  const wrapperRevisions = arrayField(wrapper, "revisions");
+  const revisions = nestedRevisions.length > 0 ? nestedRevisions : wrapperRevisions;
+  const organizationIds = safeArchitectureOrganizationIdsJson(
+    Object.prototype.hasOwnProperty.call(source, "allowedOrganizationIds")
+      ? source.allowedOrganizationIds
+      : access?.allowedOrganizationIds,
+  );
+  const hasLatestRevision = Object.prototype.hasOwnProperty.call(wrapper, "latestRevision")
+    || Object.prototype.hasOwnProperty.call(source, "latestRevision");
+  const latestRevision = Object.prototype.hasOwnProperty.call(wrapper, "latestRevision")
+    ? wrapper.latestRevision
+    : source.latestRevision;
+  return {
+    ...(jsonString(source, "id") ? { id: jsonString(source, "id") } : {}),
+    ...(jsonString(source, "name") ? { name: jsonString(source, "name") } : {}),
+    ...(jsonString(source, "title") ? { title: jsonString(source, "title") } : {}),
+    ...(jsonString(source, "description") ? { description: jsonString(source, "description") } : {}),
+    ...(jsonString(source, "patternId") ? { patternId: jsonString(source, "patternId") } : {}),
+    ...(jsonString(source, "scope") ? { scope: jsonString(source, "scope") } : {}),
+    ...(jsonString(source, "status") ? { status: jsonString(source, "status") } : {}),
+    ...(jsonString(source, "currentRevisionId") ? { currentRevisionId: jsonString(source, "currentRevisionId") } : {}),
+    ...(jsonNumber(source, "revisionCount") !== undefined ? { revisionCount: jsonNumber(source, "revisionCount") } : {}),
+    ...(jsonString(source, "createdAt") ? { createdAt: jsonString(source, "createdAt") } : {}),
+    ...(jsonString(source, "updatedAt") ? { updatedAt: jsonString(source, "updatedAt") } : {}),
+    ...(organizationIds ? { allowedOrganizationIds: organizationIds } : {}),
+    ...(revisions.length > 0 ? { revisions: revisions.map(safeArchitectureRevisionJson) } : {}),
+    ...(hasLatestRevision
+      ? { latestRevision: latestRevision === null ? null : safeArchitectureRevisionJson(latestRevision) }
+      : {}),
+  };
+}
+
+function safeArchitectureRevisionJson(input: unknown): Record<string, unknown> {
+  const revision = jsonRecord(input) ?? {};
+  return {
+    ...(jsonString(revision, "id") ? { id: jsonString(revision, "id") } : {}),
+    ...(jsonString(revision, "architectureId") ? { architectureId: jsonString(revision, "architectureId") } : {}),
+    ...(jsonNumber(revision, "revision") !== undefined ? { revision: jsonNumber(revision, "revision") } : {}),
+    ...(jsonNumber(revision, "revisionNumber") !== undefined ? { revisionNumber: jsonNumber(revision, "revisionNumber") } : {}),
+    ...(jsonString(revision, "version") ? { version: jsonString(revision, "version") } : {}),
+    ...(jsonString(revision, "message") ? { message: jsonString(revision, "message") } : {}),
+    ...(jsonString(revision, "patternId") ? { patternId: jsonString(revision, "patternId") } : {}),
+    ...(jsonNumber(revision, "nodeCount") !== undefined ? { nodeCount: jsonNumber(revision, "nodeCount") } : {}),
+    ...(jsonNumber(revision, "skillCount") !== undefined ? { skillCount: jsonNumber(revision, "skillCount") } : {}),
+    ...(jsonString(revision, "createdAt") ? { createdAt: jsonString(revision, "createdAt") } : {}),
+  };
+}
+
+function safeArchitecturePreviewResponse(response: Record<string, unknown>): Record<string, unknown> {
+  if (Object.prototype.hasOwnProperty.call(response, "preview")) {
+    return { preview: safeArchitecturePreviewRecordJson(response.preview) };
+  }
+  return safeArchitecturePreviewRecordJson(response);
+}
+
+function safeArchitecturePreviewRecordJson(input: unknown): Record<string, unknown> {
+  const preview = jsonRecord(input) ?? {};
+  const revision = jsonRecord(preview.revision);
+  const compiled = jsonRecord(preview.compiled);
+  const graph = jsonRecord(preview.graph);
+  const topology = jsonRecord(preview.topology);
+  const plan = jsonRecord(preview.plan ?? preview.syncPlan);
+  const effective = jsonRecord(preview.effective);
+  const exposure = jsonRecord(preview.exposure);
+  const outline = safeArchitectureOutlineJson(preview.outline);
+  const diagram = safeArchitectureDiagramJson(preview.diagram);
+  const architectureId = jsonString(revision ?? {}, "architectureId")
+    ?? jsonString(preview, "architectureId")
+    ?? jsonString(compiled ?? {}, "architectureId");
+  const revisionId = jsonString(revision ?? {}, "id") ?? jsonString(preview, "revisionId");
+  const revisionNumber = jsonNumber(revision ?? {}, "revisionNumber");
+  const topologySource = topology && Object.keys(topology).length > 0 ? topology : graph ?? {};
+  const nodes = arrayField(topologySource, "nodes");
+  const edges = arrayField(topologySource, "edges");
+  const compiledNodes = arrayField(compiled ?? {}, "nodes");
+  return {
+    ...(architectureId ? { architectureId } : {}),
+    ...(revisionId ? { revisionId } : {}),
+    ...(revisionNumber !== undefined ? { revisionNumber } : {}),
+    ...(jsonNumber(preview, "revision") !== undefined ? { revision: jsonNumber(preview, "revision") } : {}),
+    ...(revision ? { revision: safeArchitectureRevisionJson(revision) } : {}),
+    ...(jsonString(preview, "mermaid", true) ? { mermaid: jsonString(preview, "mermaid", true) } : {}),
+    ...(graph && Object.keys(graph).length > 0 ? { graph: safeArchitectureGraphJson(graph) } : {}),
+    topology: {
+      nodes: (nodes.length > 0 ? nodes : compiledNodes).map(safeArchitectureTopologyNodeJson),
+      edges: (edges.length > 0 ? edges : arrayField(compiled ?? {}, "edges")).map(safeArchitectureTopologyEdgeJson),
+    },
+    ...(outline ? { outline } : {}),
+    ...(compiled && Object.keys(compiled).length > 0 ? { compiled: safeArchitectureCompiledJson(compiled) } : {}),
+    ...(effective && Object.keys(effective).length > 0 ? { effective: safeArchitectureEffectiveJson(effective) } : {}),
+    ...(exposure && Object.keys(exposure).length > 0 ? { exposure: safeArchitectureExposureJson(exposure) } : {}),
+    ...(plan && Object.keys(plan).length > 0 ? { plan: safeArchitecturePlanJson(plan) } : {}),
+    ...(Object.keys(diagram).length > 0 ? { diagram } : {}),
+  };
+}
+
+function safeArchitectureGraphJson(input: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...(jsonString(input, "digest") ? { digest: jsonString(input, "digest") } : {}),
+    nodes: arrayField(input, "nodes").map(safeArchitectureTopologyNodeJson),
+    edges: arrayField(input, "edges").map(safeArchitectureTopologyEdgeJson),
+    ...(jsonString(input, "mermaid", true) ? { mermaid: jsonString(input, "mermaid", true) } : {}),
+  };
+}
+
+function safeArchitectureOutlineJson(input: unknown): Record<string, unknown> | Array<Record<string, unknown>> | undefined {
+  if (Array.isArray(input)) {
+    return input.length > 0 ? input.map(safeArchitectureOutlineNodeJson) : undefined;
+  }
+  const outline = jsonRecord(input);
+  if (!outline) return undefined;
+  const tree = arrayField(outline, "tree");
+  return {
+    ...(jsonString(outline, "title") ? { title: jsonString(outline, "title") } : {}),
+    ...(jsonString(outline, "text", true) ? { text: jsonString(outline, "text", true) } : {}),
+    ...(tree.length > 0 ? { tree: tree.map(safeArchitectureOutlineNodeJson) } : {}),
+  };
+}
+
+function safeArchitectureTopologyNodeJson(input: unknown): Record<string, unknown> {
+  const node = jsonRecord(input) ?? {};
+  return {
+    ...(jsonString(node, "id") ? { id: jsonString(node, "id") } : {}),
+    ...(jsonString(node, "kind") ? { kind: jsonString(node, "kind") } : {}),
+    ...(jsonString(node, "label") ? { label: jsonString(node, "label") } : {}),
+    ...(jsonString(node, "slug") ? { slug: jsonString(node, "slug") } : {}),
+    ...(jsonString(node, "skillRefId") ? { skillRefId: jsonString(node, "skillRefId") } : {}),
+    ...(jsonString(node, "title") ? { title: jsonString(node, "title") } : {}),
+    ...(jsonString(node, "description") ? { description: jsonString(node, "description") } : {}),
+    ...(jsonNumber(node, "depth") !== undefined ? { depth: jsonNumber(node, "depth") } : {}),
+    ...(jsonNumber(node, "x") !== undefined ? { x: jsonNumber(node, "x") } : {}),
+    ...(jsonNumber(node, "y") !== undefined ? { y: jsonNumber(node, "y") } : {}),
+  };
+}
+
+function safeArchitectureTopologyEdgeJson(input: unknown): Record<string, unknown> {
+  const edge = jsonRecord(input) ?? {};
+  return {
+    ...(jsonString(edge, "id") ? { id: jsonString(edge, "id") } : {}),
+    ...(jsonString(edge, "from") ? { from: jsonString(edge, "from") } : {}),
+    ...(jsonString(edge, "to") ? { to: jsonString(edge, "to") } : {}),
+    ...(jsonString(edge, "relationship") ? { relationship: jsonString(edge, "relationship") } : {}),
+    ...(jsonString(edge, "kind") ? { kind: jsonString(edge, "kind") } : {}),
+    ...(jsonString(edge, "label") ? { label: jsonString(edge, "label") } : {}),
+  };
+}
+
+function safeArchitectureOutlineNodeJson(input: unknown): Record<string, unknown> {
+  const node = jsonRecord(input) ?? {};
+  const children = arrayField(node, "children");
+  return {
+    ...(jsonString(node, "id") ? { id: jsonString(node, "id") } : {}),
+    ...(jsonString(node, "kind") ? { kind: jsonString(node, "kind") } : {}),
+    ...(jsonString(node, "label") ? { label: jsonString(node, "label") } : {}),
+    ...(jsonString(node, "skillRefId") ? { skillRefId: jsonString(node, "skillRefId") } : {}),
+    ...(jsonNumber(node, "depth") !== undefined ? { depth: jsonNumber(node, "depth") } : {}),
+    ...(children.length > 0 ? { children: children.map(safeArchitectureOutlineNodeJson) } : {}),
+  };
+}
+
+function safeArchitecturePlanJson(input: Record<string, unknown>): Record<string, unknown> {
+  const items = arrayField(input, "items");
+  const changes = arrayField(input, "changes");
+  const summary = jsonRecord(input.summary);
+  const safeSummary = summary
+    ? Object.fromEntries(["changeCount", "installCount", "updateCount", "removeCount", "unsupportedCount", "conflictCount"]
+      .flatMap((key) => {
+        const value = jsonNumber(summary, key);
+        return value === undefined ? [] : [[key, value]];
+      }))
+    : undefined;
+  return {
+    ...(jsonString(input, "status") ? { status: jsonString(input, "status") } : {}),
+    ...(jsonString(input, "target") ? { target: jsonString(input, "target") } : {}),
+    ...(jsonBoolean(input, "dryRun") !== undefined ? { dryRun: jsonBoolean(input, "dryRun") } : {}),
+    ...(jsonBoolean(input, "canApply") !== undefined ? { canApply: jsonBoolean(input, "canApply") } : {}),
+    ...(jsonBoolean(input, "requiresApproval") !== undefined ? { requiresApproval: jsonBoolean(input, "requiresApproval") } : {}),
+    ...(jsonString(input, "targetId") ? { targetId: jsonString(input, "targetId") } : {}),
+    ...(jsonString(input, "environmentId") ? { environmentId: jsonString(input, "environmentId") } : {}),
+    ...(jsonString(input, "architectureId") ? { architectureId: jsonString(input, "architectureId") } : {}),
+    ...(jsonString(input, "revisionDigest") ? { revisionDigest: jsonString(input, "revisionDigest") } : {}),
+    ...(safeSummary && Object.keys(safeSummary).length > 0 ? { summary: safeSummary } : {}),
+    ...(items.length > 0 ? { items: items.map(safeArchitecturePlanItemJson) } : {}),
+    ...(changes.length > 0 ? { changes: changes.map(safeArchitecturePlanChangeJson) } : {}),
+  };
+}
+
+function safeArchitecturePlanItemJson(input: unknown): Record<string, unknown> {
+  const item = jsonRecord(input) ?? {};
+  const desired = safeArchitecturePlanStateJson(item.desired);
+  const observed = safeArchitecturePlanStateJson(item.observed);
+  return {
+    ...(jsonString(item, "action") ? { action: jsonString(item, "action") } : {}),
+    ...(jsonString(item, "type") ? { type: jsonString(item, "type") } : {}),
+    ...(jsonString(item, "nodeId") ? { nodeId: jsonString(item, "nodeId") } : {}),
+    ...(jsonString(item, "kind") ? { kind: jsonString(item, "kind") } : {}),
+    ...(jsonString(item, "skillRefId") ? { skillRefId: jsonString(item, "skillRefId") } : {}),
+    ...(jsonString(item, "reason") ? { reason: jsonString(item, "reason") } : {}),
+    ...(desired ? { desired } : {}),
+    ...(observed ? { observed } : {}),
+  };
+}
+
+function safeArchitecturePlanStateJson(input: unknown): Record<string, unknown> | undefined {
+  const state = jsonRecord(input);
+  if (!state) return undefined;
+  const result = {
+    ...(jsonString(state, "version") ? { version: jsonString(state, "version") } : {}),
+    ...(jsonString(state, "digest") ? { digest: jsonString(state, "digest") } : {}),
+    ...(jsonBoolean(state, "enabled") !== undefined ? { enabled: jsonBoolean(state, "enabled") } : {}),
+    ...(jsonString(state, "runtimeExposure") ? { runtimeExposure: jsonString(state, "runtimeExposure") } : {}),
+  };
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function safeArchitecturePlanChangeJson(input: unknown): Record<string, unknown> {
+  const change = jsonRecord(input) ?? {};
+  return {
+    ...(jsonString(change, "id") ? { id: jsonString(change, "id") } : {}),
+    ...(jsonString(change, "type") ? { type: jsonString(change, "type") } : {}),
+    ...(jsonString(change, "action") ? { action: jsonString(change, "action") } : {}),
+    ...(jsonString(change, "subject") ? { subject: jsonString(change, "subject") } : {}),
+    ...(jsonString(change, "detail") ? { detail: jsonString(change, "detail") } : {}),
+    ...(jsonString(change, "severity") ? { severity: jsonString(change, "severity") } : {}),
+  };
+}
+
+function safeArchitectureCompiledJson(input: Record<string, unknown>): Record<string, unknown> {
+  const pattern = jsonRecord(input.pattern);
+  const disabledNodeIds = jsonStringArray(input, "disabledNodeIds");
+  const nodes = arrayField(input, "nodes");
+  const allNodes = arrayField(input, "allNodes");
+  const edges = arrayField(input, "edges");
+  const skills = arrayField(input, "skills");
+  const routers = arrayField(input, "routers");
+  return {
+    ...(jsonNumber(input, "schemaVersion") !== undefined ? { schemaVersion: jsonNumber(input, "schemaVersion") } : {}),
+    ...(jsonString(input, "architectureId") ? { architectureId: jsonString(input, "architectureId") } : {}),
+    ...(jsonString(pattern ?? {}, "id") ? { patternId: jsonString(pattern ?? {}, "id") } : {}),
+    ...(jsonString(input, "rootNodeId") ? { rootNodeId: jsonString(input, "rootNodeId") } : {}),
+    ...(jsonString(input, "profileId") ? { profileId: jsonString(input, "profileId") } : {}),
+    ...(jsonString(input, "environmentId") ? { environmentId: jsonString(input, "environmentId") } : {}),
+    ...(disabledNodeIds ? { disabledNodeIds } : {}),
+    ...(nodes.length > 0 ? { nodes: nodes.map(safeArchitectureCompiledNodeJson) } : {}),
+    ...(allNodes.length > 0 ? { allNodes: allNodes.map(safeArchitectureCompiledNodeJson) } : {}),
+    ...(edges.length > 0 ? { edges: edges.map(safeArchitectureTopologyEdgeJson) } : {}),
+    ...(skills.length > 0 ? { skills: skills.map(safeArchitectureCompiledSkillJson) } : {}),
+    ...(routers.length > 0 ? { routers: routers.map(safeArchitectureCompiledRouterJson) } : {}),
+    ...(jsonString(input, "entrypoint") ? { entrypoint: jsonString(input, "entrypoint") } : {}),
+    ...(jsonString(input, "bundleName") ? { bundleName: jsonString(input, "bundleName") } : {}),
+    ...(jsonString(input, "revisionDigest") ? { digest: jsonString(input, "revisionDigest"), revisionDigest: jsonString(input, "revisionDigest") } : {}),
+  };
+}
+
+function safeArchitectureCompiledNodeJson(input: unknown): Record<string, unknown> {
+  const node = jsonRecord(input) ?? {};
+  const childNodeIds = jsonStringArray(node, "childNodeIds");
+  return {
+    ...(jsonString(node, "id") ? { id: jsonString(node, "id") } : {}),
+    ...(jsonString(node, "kind") ? { kind: jsonString(node, "kind") } : {}),
+    ...(jsonString(node, "label") ? { label: jsonString(node, "label") } : {}),
+    ...(jsonString(node, "skillRefId") ? { skillRefId: jsonString(node, "skillRefId") } : {}),
+    ...(jsonString(node, "slug") ? { slug: jsonString(node, "slug") } : {}),
+    ...(jsonString(node, "runtimeExposure") ? { runtimeExposure: jsonString(node, "runtimeExposure") } : {}),
+    ...(childNodeIds ? { childNodeIds } : {}),
+  };
+}
+
+function safeArchitectureCompiledRouterJson(input: unknown): Record<string, unknown> {
+  const router = jsonRecord(input) ?? {};
+  const childNodeIds = jsonStringArray(router, "childNodeIds");
+  const routes = arrayField(router, "routes");
+  return {
+    ...(jsonString(router, "nodeId") ? { nodeId: jsonString(router, "nodeId") } : {}),
+    ...(childNodeIds ? { childNodeIds } : {}),
+    ...(routes.length > 0 ? { routes: routes.map(safeArchitectureTopologyEdgeJson) } : {}),
+    ...(jsonString(router, "digest") ? { digest: jsonString(router, "digest") } : {}),
+  };
+}
+
+function safeArchitectureCompiledSkillJson(input: unknown): Record<string, unknown> {
+  const skill = jsonRecord(input) ?? {};
+  const tags = jsonStringArray(skill, "tags");
+  return {
+    ...(jsonString(skill, "id") ? { id: jsonString(skill, "id") } : {}),
+    ...(jsonString(skill, "skillRefId") ? { skillRefId: jsonString(skill, "skillRefId") } : {}),
+    ...(jsonString(skill, "slug") ? { slug: jsonString(skill, "slug") } : {}),
+    ...(jsonString(skill, "title") ? { title: jsonString(skill, "title") } : {}),
+    ...(jsonString(skill, "summary") ? { summary: jsonString(skill, "summary") } : {}),
+    ...(jsonString(skill, "version") ? { version: jsonString(skill, "version") } : {}),
+    ...(jsonString(skill, "digest") ? { digest: jsonString(skill, "digest") } : {}),
+    ...(jsonString(skill, "packageVisibility") ? { packageVisibility: jsonString(skill, "packageVisibility") } : {}),
+    ...(tags ? { tags } : {}),
+    ...(jsonString(skill, "runtimeExposure") ? { runtimeExposure: jsonString(skill, "runtimeExposure") } : {}),
+  };
+}
+
+function safeArchitectureEffectiveJson(input: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...(arrayField(input, "skills").length > 0 ? { skills: arrayField(input, "skills").map(safeArchitectureCompiledSkillJson) } : {}),
+    ...(arrayField(input, "includedSkills").length > 0 ? { includedSkills: arrayField(input, "includedSkills").map(safeArchitectureCompiledSkillJson) } : {}),
+    ...(arrayField(input, "excludedSkills").length > 0 ? { excludedSkills: arrayField(input, "excludedSkills").map(safeArchitectureCompiledSkillJson) } : {}),
+    ...(jsonString(input, "summary") ? { summary: jsonString(input, "summary") } : {}),
+  };
+}
+
+function safeArchitectureExposureJson(input: Record<string, unknown>): Record<string, unknown> {
+  const included = jsonStringArray(input, "included");
+  const excluded = jsonStringArray(input, "excluded");
+  return {
+    ...(jsonString(input, "summary") ? { summary: jsonString(input, "summary") } : {}),
+    ...(included ? { included } : {}),
+    ...(excluded ? { excluded } : {}),
+  };
+}
+
+function safeArchitectureDiagramJson(input: unknown): Record<string, unknown> {
+  const diagram = jsonRecord(input) ?? {};
+  return {
+    ...(jsonNumber(diagram, "schemaVersion") !== undefined ? { schemaVersion: jsonNumber(diagram, "schemaVersion") } : {}),
+    ...(jsonString(diagram, "architectureId") ? { architectureId: jsonString(diagram, "architectureId") } : {}),
+    ...(jsonString(diagram, "revisionDigest") ? { revisionDigest: jsonString(diagram, "revisionDigest") } : {}),
+    ...(jsonString(diagram, "profileId") ? { profileId: jsonString(diagram, "profileId") } : {}),
+    ...(jsonString(diagram, "environmentId") ? { environmentId: jsonString(diagram, "environmentId") } : {}),
+    ...(jsonString(diagram, "accessibleTitle") ? { accessibleTitle: jsonString(diagram, "accessibleTitle") } : {}),
+    ...(jsonString(diagram, "accessibleDescription") ? { accessibleDescription: jsonString(diagram, "accessibleDescription") } : {}),
+    ...(jsonString(diagram, "mermaid", true) ? { mermaid: jsonString(diagram, "mermaid", true) } : {}),
+    ...(jsonString(diagram, "mermaidSha256") ? { mermaidSha256: jsonString(diagram, "mermaidSha256") } : {}),
+    ...(jsonString(diagram, "accessibleOutline", true) ? { accessibleOutline: jsonString(diagram, "accessibleOutline", true) } : {}),
+    ...(jsonString(diagram, "artifactDigest") ? { artifactDigest: jsonString(diagram, "artifactDigest") } : {}),
+  };
+}
+
+function safeArchitectureOrganizationIdsJson(input: unknown): string[] | undefined {
+  if (!Array.isArray(input)) return undefined;
+  const ids = input.filter((value): value is string => (
+    typeof value === "string"
+      && value.length > 0
+      && value.length <= 120
+      && /^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value)
+  ));
+  return [...new Set(ids)].sort((left, right) => left.localeCompare(right));
+}
+
+function jsonRecord(input: unknown): Record<string, unknown> | undefined {
+  return input && typeof input === "object" && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : undefined;
+}
+
+function jsonString(record: Record<string, unknown>, key: string, multiline = false): string | undefined {
+  const value = record[key];
+  return typeof value === "string" && value.length > 0 ? redactProjectionText(terminalSafeText(value, multiline)) : undefined;
+}
+
+function jsonNumber(record: Record<string, unknown>, key: string): number | undefined {
+  const value = record[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function jsonBoolean(record: Record<string, unknown>, key: string): boolean | undefined {
+  const value = record[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function jsonStringArray(record: Record<string, unknown>, key: string): string[] | undefined {
+  const value = record[key];
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) return undefined;
+  return (value as string[]).map((item) => redactProjectionText(terminalSafeText(item)));
+}
+
+function redactProjectionText(value: string): string {
+  return value
+    .replace(/https?:\/\/[^\s"'<>\]\}\),;]+/giu, "[redacted URL]")
+    .replace(LOCAL_PATH_PATTERN, "[redacted path]");
 }
 
 function printSharingSettings(response: Record<string, unknown>, io: CliIo): void {
@@ -1530,7 +2387,386 @@ function printSharingSettings(response: Record<string, unknown>, io: CliIo): voi
     `teams=${enabledLabel(sharing.teamsEnabled)}`,
     `team-visibility=${enabledLabel(sharing.teamVisibilityEnabled)}`,
     `user-visibility=${enabledLabel(sharing.userVisibilityEnabled)}`,
+    `organization-visibility=${sharing.organizationVisibilityEnabled === undefined
+      ? "unknown"
+      : enabledLabel(sharing.organizationVisibilityEnabled)}`,
   ].join("\t"));
+}
+
+function printArchitecturePatterns(response: Record<string, unknown>, io: CliIo): void {
+  const patterns = arrayField(response, "patterns");
+  if (patterns.length === 0) {
+    io.stdout("No architecture patterns.");
+    return;
+  }
+  for (const value of patterns) {
+    const pattern = recordField(value, "architecture pattern");
+    io.stdout([
+      terminalSafeText(optionalRecordString(pattern, "id") ?? optionalRecordString(pattern, "key") ?? "-"),
+      terminalSafeText(optionalRecordString(pattern, "name") ?? optionalRecordString(pattern, "title") ?? "-"),
+      terminalSafeText(optionalRecordString(pattern, "description") ?? "-"),
+      terminalSafeText(optionalRecordString(pattern, "status") ?? "available"),
+    ].join("\t"));
+  }
+}
+
+function printArchitectures(response: Record<string, unknown>, io: CliIo): void {
+  const architectures = arrayField(response, "architectures");
+  if (architectures.length === 0) {
+    io.stdout("No architectures.");
+    return;
+  }
+  for (const value of architectures) {
+    const architecture = recordField(value, "architecture");
+    const revision = architecture.latestRevision;
+    const latestRevision = revision && typeof revision === "object" && !Array.isArray(revision)
+      ? revision as Record<string, unknown>
+      : undefined;
+    io.stdout([
+      terminalSafeText(optionalRecordString(architecture, "id") ?? "-"),
+      terminalSafeText(optionalRecordString(architecture, "name") ?? optionalRecordString(architecture, "title") ?? "-"),
+      terminalSafeText(optionalRecordString(architecture, "patternId") ?? optionalRecordString(architecture, "pattern") ?? "-"),
+      terminalSafeText(optionalRecordString(latestRevision ?? {}, "id") ?? optionalRecordString(architecture, "currentRevisionId") ?? "-"),
+      terminalSafeText(optionalRecordString(architecture, "updatedAt") ?? "-"),
+    ].join("\t"));
+  }
+}
+
+function printArchitectureDetails(response: Record<string, unknown>, io: CliIo): void {
+  const architecture = recordField(response.architecture ?? response, "architecture");
+  io.stdout([
+    terminalSafeText(optionalRecordString(architecture, "id") ?? "-"),
+    terminalSafeText(optionalRecordString(architecture, "name") ?? optionalRecordString(architecture, "title") ?? "-"),
+    terminalSafeText(optionalRecordString(architecture, "patternId") ?? optionalRecordString(architecture, "pattern") ?? "-"),
+    terminalSafeText(optionalRecordString(architecture, "currentRevisionId") ?? "-"),
+    terminalSafeText(optionalRecordString(architecture, "updatedAt") ?? "-"),
+  ].join("\t"));
+  const revisions = arrayField(architecture, "revisions").length > 0
+    ? arrayField(architecture, "revisions")
+    : arrayField(response, "revisions");
+  for (const value of revisions) {
+    const revision = recordField(value, "architecture revision");
+    io.stdout([
+      "revision",
+      terminalSafeText(optionalRecordString(revision, "id") ?? "-"),
+      terminalSafeText(optionalRecordString(revision, "message") ?? "-"),
+      terminalSafeText(optionalRecordString(revision, "createdAt") ?? "-"),
+    ].join("\t"));
+  }
+}
+
+function printArchitectureRevision(response: Record<string, unknown>, io: CliIo): void {
+  const revision = recordField(response.revision ?? response, "architecture revision");
+  io.stdout([
+    "revision",
+    terminalSafeText(optionalRecordString(revision, "id") ?? "-"),
+    terminalSafeText(optionalRecordString(revision, "message") ?? "-"),
+    terminalSafeText(optionalRecordString(revision, "createdAt") ?? "-"),
+  ].join("\t"));
+}
+
+function printArchitecturePreview(response: Record<string, unknown>, io: CliIo, architectureId?: string): void {
+  const preview = recordField(response.preview ?? response, "architecture preview");
+  const compiled = preview.compiled && typeof preview.compiled === "object" && !Array.isArray(preview.compiled)
+    ? preview.compiled as Record<string, unknown>
+    : {};
+  const graph = preview.graph && typeof preview.graph === "object" && !Array.isArray(preview.graph)
+    ? preview.graph as Record<string, unknown>
+    : {};
+  const topology = preview.topology && typeof preview.topology === "object" && !Array.isArray(preview.topology)
+    ? preview.topology as Record<string, unknown>
+    : Object.keys(graph).length > 0 ? graph : { nodes: arrayField(compiled, "nodes") };
+  const nodes = arrayField(topology, "nodes");
+  const rawPlan = preview.plan ?? preview.syncPlan;
+  const syncPlan = rawPlan && typeof rawPlan === "object" && !Array.isArray(rawPlan)
+    ? rawPlan as Record<string, unknown>
+    : undefined;
+  const revision = preview.revision && typeof preview.revision === "object" && !Array.isArray(preview.revision)
+    ? preview.revision as Record<string, unknown>
+    : {};
+  io.stdout([
+    "preview",
+    terminalSafeText(optionalRecordString(preview, "architectureId") ?? architectureId ?? "-"),
+    terminalSafeText(optionalRecordString(preview, "revisionId") ?? optionalRecordString(revision, "id") ?? optionalRecordString(preview, "revision") ?? "-"),
+    `nodes=${nodes.length}`,
+    `plan=${terminalSafeText(optionalRecordString(syncPlan ?? {}, "status") ?? "not-generated")}`,
+  ].join("\t"));
+  const mermaid = optionalRecordString(preview, "mermaid") ?? optionalRecordString(graph, "mermaid");
+  if (mermaid) {
+    io.stdout(redactProjectionText(terminalSafeText(mermaid, true)));
+  }
+}
+
+function printArchitecturePlan(response: Record<string, unknown>, io: CliIo): void {
+  const plan = recordField(response.plan ?? response.syncPlan ?? response, "sync plan");
+  const changes = Array.isArray(plan.items) ? arrayField(plan, "items") : arrayField(plan, "changes");
+  const actions = changes.map((value) => optionalRecordString(recordField(value, "sync change"), "action") ?? optionalRecordString(recordField(value, "sync change"), "type") ?? "unknown");
+  const status = optionalRecordString(plan, "status")
+    ?? (actions.includes("conflict") ? "conflict" : actions.includes("unsupported") ? "unsupported" : actions.some((action) => action !== "noop") ? "changes" : "noop");
+  io.stdout([
+    "dry-run",
+    terminalSafeText(status),
+    `changes=${changes.length}`,
+  ].join("\t"));
+  for (const value of changes) {
+    const change = recordField(value, "sync change");
+    io.stdout([
+      "change",
+      terminalSafeText(optionalRecordString(change, "type") ?? optionalRecordString(change, "action") ?? "unknown"),
+      terminalSafeText(optionalRecordString(change, "subject") ?? optionalRecordString(change, "resourceRef") ?? optionalRecordString(change, "nodeId") ?? "-"),
+      terminalSafeText(optionalRecordString(change, "detail") ?? optionalRecordString(change, "reason") ?? "-"),
+    ].join("\t"));
+  }
+}
+
+function architecturePreviewOptions(parsed: ParsedArgs, revisionId: string | undefined): Record<string, string> {
+  const profileId = architectureOptionAlias(parsed, "profile", "profile-id");
+  const environmentId = architectureOptionAlias(parsed, "environment", "environment-id");
+  const organizationId = architectureOptionAlias(parsed, "organization-id", "organization");
+  return {
+    ...(profileId ? { profileId: parseArchitectureReference(profileId, "profile") } : {}),
+    ...(environmentId ? { environmentId: parseArchitectureReference(environmentId, "environment") } : {}),
+    ...(organizationId ? { organizationId: parseArchitectureReference(organizationId, "organization") } : {}),
+    ...(revisionId ? { revisionId: parseArchitectureRevisionId(revisionId) } : {}),
+  };
+}
+
+/** Resolve canonical/legacy architecture flags without silently choosing one. */
+function architectureOptionAlias(
+  parsed: ParsedArgs,
+  canonicalKey: string,
+  aliasKey: string,
+): string | undefined {
+  const canonical = oneStringOption(parsed, canonicalKey);
+  const alias = oneStringOption(parsed, aliasKey);
+  if (canonical !== undefined && alias !== undefined && canonical !== alias) {
+    throw new CliError(`--${canonicalKey} and --${aliasKey} must match when both are provided.`, 2);
+  }
+  return canonical ?? alias;
+}
+
+function oneStringOption(parsed: ParsedArgs, key: string): string | undefined {
+  const value = parsed.options[key];
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    if (value.length !== 1 || !value[0]) {
+      throw new CliError(`--${key} accepts one value.`, 2);
+    }
+    return value[0];
+  }
+  return undefined;
+}
+
+function architectureRevisionOption(parsed: ParsedArgs): string | undefined {
+  const aliases = [
+    ["revision", oneStringOption(parsed, "revision")],
+    ["revision-id", oneStringOption(parsed, "revision-id")],
+    ["version", oneStringOption(parsed, "version")],
+  ] as const;
+  const values = aliases.flatMap(([, value]) => value === undefined ? [] : [value]);
+  if (new Set(values).size > 1) {
+    throw new CliError("--revision, --revision-id, and --version must match when multiple are provided.", 2);
+  }
+  return values[0];
+}
+
+async function readObservedStateFixture(inputPath: string): Promise<Record<string, unknown>> {
+  if (hasControlCharacter(inputPath)) {
+    throw new CliError("Observed-state fixture path contains control characters.", 2, "OBSERVED_STATE_INVALID");
+  }
+  const resolvedPath = path.resolve(inputPath);
+  let text: string;
+  try {
+    text = await readFile(resolvedPath, "utf8");
+  } catch {
+    throw new CliError("Observed-state fixture could not be read.", 2, "OBSERVED_STATE_INVALID");
+  }
+  if (Buffer.byteLength(text, "utf8") > 256 * 1024) {
+    throw new CliError("Observed-state fixture exceeds the 256 KiB limit.", 2, "OBSERVED_STATE_TOO_LARGE");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new CliError("Observed-state fixture must contain valid JSON.", 2, "OBSERVED_STATE_INVALID");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new CliError("Observed-state fixture must be a JSON object.", 2, "OBSERVED_STATE_INVALID");
+  }
+  const record = parsed as Record<string, unknown>;
+  rejectObservedFixtureKeys(record, ["schemaVersion", "environment", "inventory"], "fixture");
+  if (record.schemaVersion !== "myskills.observed-state.v1") {
+    throw new CliError("Observed-state fixture schemaVersion must be myskills.observed-state.v1.", 2, "OBSERVED_STATE_INVALID");
+  }
+  if (!record.environment || typeof record.environment !== "object" || Array.isArray(record.environment)) {
+    throw new CliError("Observed-state fixture must include an environment object.", 2, "OBSERVED_STATE_INVALID");
+  }
+  const environment = record.environment as Record<string, unknown>;
+  rejectObservedFixtureKeys(environment, ["environmentKey", "toolKind", "adapterVersion", "capabilities"], "environment");
+  validateObservedIdentifier(environment.environmentKey, "environment.environmentKey", 256);
+  validateObservedText(environment.toolKind, "environment.toolKind", 128);
+  validateObservedText(environment.adapterVersion, "environment.adapterVersion", 128);
+  if (!environment.capabilities || typeof environment.capabilities !== "object" || Array.isArray(environment.capabilities)) {
+    throw new CliError("Observed-state fixture environment must include capabilities.", 2, "OBSERVED_STATE_INVALID");
+  }
+  validateObservedCapabilities(environment.capabilities as Record<string, unknown>);
+  const inventory = record.inventory;
+  if (!Array.isArray(inventory) || inventory.length > 500 || inventory.some((item) => !item || typeof item !== "object" || Array.isArray(item))) {
+    throw new CliError("Observed-state fixture inventory must be an array of at most 500 objects.", 2, "OBSERVED_STATE_INVALID");
+  }
+  for (const item of inventory) {
+    const entry = item as Record<string, unknown>;
+    rejectObservedFixtureKeys(entry, [
+      "kind",
+      "source",
+      "ref",
+      "id",
+      "slug",
+      "version",
+      "artifactSha256",
+      "enabled",
+      "exposureMode",
+      "managed",
+      "supported",
+      "configurationDigest",
+      "configured",
+    ], "inventory entry");
+    if (!["skill", "router", "profile", "unknown"].includes(String(entry.kind))) {
+      throw new CliError("Observed-state fixture inventory entries have an invalid kind.", 2, "OBSERVED_STATE_INVALID");
+    }
+    if (typeof entry.source !== "string" || !["myskills", "local", "unknown"].includes(entry.source)) {
+      throw new CliError("Observed-state fixture inventory entries have an invalid source.", 2, "OBSERVED_STATE_INVALID");
+    }
+    validateObservedOptionalIdentifier(entry.ref, "inventory.ref");
+    validateObservedOptionalIdentifier(entry.id, "inventory.id");
+    validateObservedOptionalSlug(entry.slug, "inventory.slug");
+    validateObservedOptionalVersion(entry.version, "inventory.version");
+    validateObservedOptionalDigest(entry.artifactSha256, "inventory.artifactSha256");
+    validateObservedOptionalDigest(entry.configurationDigest, "inventory.configurationDigest");
+    validateObservedOptionalBoolean(entry.enabled, "inventory.enabled");
+    validateObservedOptionalBoolean(entry.managed, "inventory.managed");
+    validateObservedOptionalBoolean(entry.supported, "inventory.supported");
+    validateObservedOptionalBoolean(entry.configured, "inventory.configured");
+    validateObservedOptionalExposure(entry.exposureMode, "inventory.exposureMode");
+    if (entry.ref === undefined && entry.slug === undefined && entry.id === undefined) {
+      throw new CliError("Observed-state fixture inventory entries require ref, slug, or id.", 2, "OBSERVED_STATE_INVALID");
+    }
+  }
+  return record;
+}
+
+function rejectObservedFixtureKeys(record: Record<string, unknown>, allowed: string[], label: string): void {
+  for (const key of Object.keys(record)) {
+    if (hasControlCharacter(key)) {
+      throw new CliError(`Observed-state fixture ${label} contains a control-character field.`, 2, "OBSERVED_STATE_INVALID");
+    }
+    if (OBSERVED_FIXTURE_KEY_PATTERN.test(key) || !allowed.includes(key)) {
+      throw new CliError(`Observed-state fixture field is not accepted: ${key}.`, 2, "OBSERVED_STATE_INVALID");
+    }
+  }
+}
+
+function validateObservedCapabilities(input: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(input)) {
+    if (hasControlCharacter(key) || !OBSERVED_IDENTIFIER_PATTERN.test(key) || typeof value !== "boolean") {
+      throw new CliError("Observed-state fixture capabilities must contain identifier keys and boolean values.", 2, "OBSERVED_STATE_INVALID");
+    }
+  }
+}
+
+function validateObservedIdentifier(value: unknown, label: string, maxLength = 128): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > maxLength || hasControlCharacter(value) || !OBSERVED_IDENTIFIER_PATTERN.test(value)) {
+    throw new CliError(`Observed-state fixture ${label} is invalid.`, 2, "OBSERVED_STATE_INVALID");
+  }
+  return value;
+}
+
+function validateObservedText(value: unknown, label: string, maxLength: number): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > maxLength || hasControlCharacter(value)) {
+    throw new CliError(`Observed-state fixture ${label} is invalid.`, 2, "OBSERVED_STATE_INVALID");
+  }
+  return value;
+}
+
+function validateObservedOptionalIdentifier(value: unknown, label: string): void {
+  if (value !== undefined) {
+    validateObservedIdentifier(value, label);
+  }
+}
+
+function validateObservedOptionalSlug(value: unknown, label: string): void {
+  if (value === undefined) return;
+  if (typeof value !== "string" || value.length === 0 || value.length > 120 || hasControlCharacter(value) || !OBSERVED_SLUG_PATTERN.test(value)) {
+    throw new CliError(`Observed-state fixture ${label} is invalid.`, 2, "OBSERVED_STATE_INVALID");
+  }
+}
+
+function validateObservedOptionalVersion(value: unknown, label: string): void {
+  if (value === undefined) return;
+  if (typeof value !== "string" || value.length === 0 || value.length > 128 || hasControlCharacter(value) || !OBSERVED_VERSION_PATTERN.test(value)) {
+    throw new CliError(`Observed-state fixture ${label} is invalid.`, 2, "OBSERVED_STATE_INVALID");
+  }
+}
+
+function validateObservedOptionalDigest(value: unknown, label: string): void {
+  if (value === undefined) return;
+  if (typeof value !== "string" || !OBSERVED_DIGEST_PATTERN.test(value) || hasControlCharacter(value)) {
+    throw new CliError(`Observed-state fixture ${label} is invalid.`, 2, "OBSERVED_STATE_INVALID");
+  }
+}
+
+function validateObservedOptionalBoolean(value: unknown, label: string): void {
+  if (value !== undefined && typeof value !== "boolean") {
+    throw new CliError(`Observed-state fixture ${label} is invalid.`, 2, "OBSERVED_STATE_INVALID");
+  }
+}
+
+function validateObservedOptionalExposure(value: unknown, label: string): void {
+  if (value !== undefined && value !== "disabled" && value !== "router" && value !== "leaf") {
+    throw new CliError(`Observed-state fixture ${label} is invalid.`, 2, "OBSERVED_STATE_INVALID");
+  }
+}
+
+function hasControlCharacter(value: string): boolean {
+  return CONTROL_CHARACTER_PATTERN.test(value);
+}
+
+function terminalSafeText(value: string, multiline = false): string {
+  return value.replace(CONTROL_CHARACTER_GLOBAL_PATTERN, (character) => multiline && character === "\n" ? "\n" : " ");
+}
+
+function apiSyncFixtureFromObservedState(observedState: Record<string, unknown>): Record<string, unknown> {
+  const inventory = Array.isArray(observedState.inventory) ? observedState.inventory : [];
+  const environment = observedState.environment as Record<string, unknown>;
+  const environmentKey = String(environment.environmentKey);
+  const nodes = inventory.map((item) => {
+    const entry = item as Record<string, unknown>;
+    const id = typeof entry.ref === "string" && entry.ref
+      ? entry.ref
+      : typeof entry.slug === "string" && entry.slug
+        ? entry.slug
+        : typeof entry.id === "string" && entry.id
+          ? entry.id
+          : undefined;
+    if (!id) {
+      throw new CliError("Observed-state fixture inventory entries require ref, slug, or id.", 2, "OBSERVED_STATE_INVALID");
+    }
+    return {
+      nodeId: id,
+      ...(entry.kind === "skill" && typeof entry.ref === "string" ? { skillRefId: entry.ref, kind: "leaf" } : {}),
+      ...(entry.kind === "router" ? { kind: "router" } : {}),
+      ...(typeof entry.slug === "string" && entry.slug ? { slug: entry.slug } : {}),
+      ...(typeof entry.version === "string" && entry.version ? { version: entry.version } : {}),
+      ...(typeof entry.artifactSha256 === "string" && entry.artifactSha256 ? { digest: entry.artifactSha256 } : {}),
+      ...(typeof entry.enabled === "boolean" ? { enabled: entry.enabled } : {}),
+      ...(typeof entry.exposureMode === "string" ? { runtimeExposure: entry.exposureMode } : {}),
+      ...(typeof entry.managed === "boolean" ? { managed: entry.managed } : {}),
+      ...(typeof entry.supported === "boolean" ? { supported: entry.supported } : {}),
+      ...(typeof entry.configurationDigest === "string" ? { configurationDigest: entry.configurationDigest } : {}),
+      ...(typeof entry.configured === "boolean" ? { configured: entry.configured } : {}),
+    };
+  });
+  return { targetId: environmentKey, environmentId: environmentKey, nodes };
 }
 
 function teamFromResponse(response: Record<string, unknown>): CliTeamRecord {
@@ -1553,6 +2789,8 @@ function skillSharingFromResponse(response: Record<string, unknown>): CliSkillSh
     availableTeams: arrayField(record, "availableTeams").map(teamSummaryFromRecord),
     teamGrants: arrayField(record, "teamGrants").map(teamSummaryFromRecord),
     userGrants: arrayField(record, "userGrants").map(userSummaryFromRecord),
+    availableOrganizations: arrayField(record, "availableOrganizations").map(organizationSummaryFromRecord),
+    organizationGrants: arrayField(record, "organizationGrants").map(organizationSummaryFromRecord),
   };
 }
 
@@ -1568,6 +2806,9 @@ function sharingSettingsFromRecord(input: unknown): CliSharingSettings {
     teamsEnabled: requiredRecordBoolean(record, "teamsEnabled"),
     teamVisibilityEnabled: requiredRecordBoolean(record, "teamVisibilityEnabled"),
     userVisibilityEnabled: requiredRecordBoolean(record, "userVisibilityEnabled"),
+    ...(optionalRecordBoolean(record, "organizationVisibilityEnabled") === undefined
+      ? {}
+      : { organizationVisibilityEnabled: optionalRecordBoolean(record, "organizationVisibilityEnabled") }),
   };
 }
 
@@ -1611,6 +2852,17 @@ function userSummaryFromRecord(input: unknown): CliUserSummary {
   };
 }
 
+function organizationSummaryFromRecord(input: unknown): CliOrganizationSummary {
+  const record = recordField(input, "organization summary");
+  return {
+    id: requiredRecordString(record, "id", "Organization summary response is missing id."),
+    name: optionalRecordString(record, "name") ?? "",
+    slug: optionalRecordString(record, "slug") ?? "",
+    status: optionalRecordString(record, "status") ?? "",
+    role: optionalRecordString(record, "role") ?? "",
+  };
+}
+
 function skillRowFromRecord(input: unknown): CliSkillRow {
   const record = recordField(input, "skill");
   const latestVersion = record.latestVersion;
@@ -1628,6 +2880,7 @@ function sharingSettingsOptionUpdates(parsed: ParsedArgs): Partial<CliSharingSet
   const teamsEnabled = optionalBooleanOption(parsed, "teams");
   const teamVisibilityEnabled = optionalBooleanOption(parsed, "team-visibility");
   const userVisibilityEnabled = optionalBooleanOption(parsed, "user-visibility");
+  const organizationVisibilityEnabled = optionalBooleanOption(parsed, "organization-visibility");
   if (publicVisibilityEnabled !== undefined) {
     updates.publicVisibilityEnabled = publicVisibilityEnabled;
   }
@@ -1642,6 +2895,9 @@ function sharingSettingsOptionUpdates(parsed: ParsedArgs): Partial<CliSharingSet
   }
   if (userVisibilityEnabled !== undefined) {
     updates.userVisibilityEnabled = userVisibilityEnabled;
+  }
+  if (organizationVisibilityEnabled !== undefined) {
+    updates.organizationVisibilityEnabled = organizationVisibilityEnabled;
   }
   return updates;
 }
@@ -1729,6 +2985,11 @@ function requiredRecordBoolean(record: Record<string, unknown>, key: string): bo
   return value;
 }
 
+function optionalRecordBoolean(record: Record<string, unknown>, key: string): boolean | undefined {
+  const value = record[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
 function installRegistryPath(root: string): string {
   return path.join(root, ".myskills-app", "installed.json");
 }
@@ -1747,6 +3008,27 @@ function parseInstallSlug(slug: string): string {
     throw new CliError("Skill slug is invalid.", 2);
   }
   return slug;
+}
+
+function parseArchitectureId(value: string | undefined): string {
+  if (!value || value.length > 120 || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value)) {
+    throw new CliError("Architecture id is invalid.", 2);
+  }
+  return value;
+}
+
+function parseArchitectureReference(value: string, label: string): string {
+  if (value.length > 120 || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value)) {
+    throw new CliError(`${label} id is invalid.`, 2);
+  }
+  return value;
+}
+
+function parseArchitectureRevisionId(value: string): string {
+  if (value.length > 120 || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value)) {
+    throw new CliError("Architecture revision id is invalid.", 2);
+  }
+  return value;
 }
 
 async function pathExists(filePath: string): Promise<boolean> {
@@ -1870,7 +3152,7 @@ async function apiFetch(
     throw new CliError([
       "Could not reach the MySkills API.",
       "",
-      `API URL: ${baseUrl}`,
+      `API URL: ${safeApiUrlForDisplay(baseUrl)}`,
       "Check that the API is running, or use:",
       "  myskills <command> --api-url https://myskills.sh/api",
     ].join("\n"), 1, "API_UNREACHABLE");
@@ -1919,13 +3201,17 @@ function apiErrorFromBody(pathname: string, baseUrl: string, status: number, bod
         `This MySkills server does not support the \`${command}\` command yet.`,
         "",
         `CLI version: ${CLI_VERSION}`,
-        `API URL: ${baseUrl}`,
+        `API URL: ${safeApiUrlForDisplay(baseUrl)}`,
         "Run `myskills doctor` to inspect server capabilities.",
       ].join("\n"), 1, "API_UNSUPPORTED_ENDPOINT", status);
     }
   }
-  const error = body.error as { code?: string; message?: string } | undefined;
-  return new CliError(error?.message ?? `API request failed with ${status}.`, 1, error?.code ?? "API_REQUEST_FAILED", status);
+  const error = jsonRecord(body.error);
+  const message = typeof error?.message === "string" ? error.message : undefined;
+  const code = typeof error?.code === "string" && /^[A-Za-z0-9_.:-]{1,80}$/.test(error.code)
+    ? error.code
+    : "API_REQUEST_FAILED";
+  return new CliError(safeApiErrorMessage(pathname, message, status), 1, code, status);
 }
 
 function apiErrorFromResponse(pathname: string, baseUrl: string, status: number, text: string): CliError {
@@ -1945,9 +3231,38 @@ function htmlApiError(baseUrl: string): CliError {
     "The API URL returned HTML instead of JSON.",
     "You may be pointing the CLI at the web app.",
     "",
-    `Current API URL: ${baseUrl}`,
+    `Current API URL: ${safeApiUrlForDisplay(baseUrl)}`,
     "Try: myskills <command> --api-url https://myskills.sh/api",
   ].join("\n"), 1, "API_RETURNED_HTML");
+}
+
+function safeApiErrorMessage(pathname: string, message: string | undefined, status: number): string {
+  const fallback = `API request failed with ${status}.`;
+  if (!message || !message.trim()) return fallback;
+  const sanitized = terminalSafeText(message.trim());
+  if (isArchitectureApiPath(pathname) && API_ERROR_SENSITIVE_PATTERN.test(sanitized)) {
+    return "The architecture request could not be completed.";
+  }
+  return sanitized;
+}
+
+function safeApiUrlForDisplay(value: string): string {
+  try {
+    const url = new URL(value);
+    url.username = "";
+    url.password = "";
+    url.search = "";
+    url.hash = "";
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return "[redacted API URL]";
+  }
+}
+
+const API_ERROR_SENSITIVE_PATTERN = /\b(?:bearer|secret|token|password|credential|private(?:[-_ ]?key|[-_ ]?path)?|storage(?:key)?|package|content|prompt|endpoint|url)\b|https?:\/\/|(?:^|[\s"'`])(?:\/(?:Users|private|tmp|var|etc)\b|[A-Za-z]:[\\/])/i;
+
+function isArchitectureApiPath(pathname: string): boolean {
+  return pathname.startsWith("/v1/architecture") || pathname.startsWith("/v1/architectures");
 }
 
 function isUnsupportedEndpointBody(body: Record<string, unknown>, text: string): boolean {
@@ -1959,6 +3274,9 @@ function isUnsupportedEndpointBody(body: Record<string, unknown>, text: string):
 function unsupportedCommandForPath(pathname: string): string | null {
   if (pathname.startsWith("/v1/teams")) {
     return "teams";
+  }
+  if (pathname.startsWith("/v1/architecture") || pathname.startsWith("/v1/architectures") || pathname.startsWith("/v1/sync-runs")) {
+    return "architectures";
   }
   if (pathname.includes("/sharing") || pathname.startsWith("/v1/admin/sharing")) {
     return "sharing";
@@ -2294,6 +3612,9 @@ function normalizeApiUrlOption(input: string): string {
     if (url.protocol !== "http:" && url.protocol !== "https:") {
       throw new Error("unsupported protocol");
     }
+    if (url.username || url.password || url.search || url.hash) {
+      throw new Error("embedded credentials and query parameters are not supported");
+    }
     return trimmed;
   } catch {
     throw new CliError("API URL must be a valid http:// or https:// URL.", 2);
@@ -2428,7 +3749,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
     const key = value.slice(2);
-    if (key === "json" || key === "api-key") {
+    if (key === "json" || key === "api-key" || key === "health" || key === "clear-organizations") {
       options[key] = true;
       continue;
     }
@@ -2476,7 +3797,7 @@ function helpText(): string {
     "  review action <submission-id> --action <approve|request-changes|reject|publish> [--artifact-sha256 <hash>] [--reason <text>] [--api-url <url>] [--token <token>]",
     "  submissions list [--api-url <url>] [--token <token>]",
     "  submissions withdraw <submission-id> [--reason <text>] [--api-url <url>] [--token <token>]",
-    "  skills edit <skill-slug> [--title <text>] [--summary <text>] [--visibility <scope>] [--tag <tag>] [--reason <text>] [--api-url <url>] [--token <token>]",
+    "  skills edit <skill-slug> [--title <text>] [--summary <text>] [--tag <tag>] [--visibility <scope>] [--reason <text>] [--api-url <url>] [--token <token>] (deprecated visibility alias; use sharing set)",
     "  skills archive|restore|delete <skill-slug> [--reason <text>] [--api-url <url>] [--token <token>]",
     "  releases list <skill-slug> [--api-url <url>] [--token <token>]",
     "  releases deprecate|unpublish|revoke|restore|delete <skill-slug>@<version> [--reason <text>] [--replacement <version>] [--api-url <url>] [--token <token>]",
@@ -2485,9 +3806,16 @@ function helpText(): string {
     "  teams invite <team-id> --email <email> [--api-url <url>] [--token <token>]",
     "  teams accept <invitation-id> [--api-url <url>] [--token <token>]",
     "  sharing get <skill-slug> [--api-url <url>] [--token <token>]",
-    "  sharing set <skill-slug> --visibility <scope> [--team <team-id>] [--user <email>]",
+    "  sharing set <skill-slug> --visibility <scope> [--team <team-id>] [--user <email>] [--organization <organization-id>] [--organization-id <organization-id>] [--clear-organizations]",
+    "  architectures patterns [--api-url <url>] [--token <token>]",
+    "  architectures list [--api-url <url>] [--token <token>]",
+    "  architectures show <architecture-id> [--revision <revision-id>] [--api-url <url>] [--token <token>]",
+    "  architectures preview|compile <architecture-id> [--revision <revision-id>] [--profile <profile-id>] [--environment <environment-id>] [--organization-id <organization-id>|--organization <organization-id>] [--api-url <url>] [--token <token>]",
+    "  architectures plan|dry-run <architecture-id> --observed <fixture.json> [--revision <revision-id>] [--profile <profile-id>] [--environment <environment-id>] [--organization-id <organization-id>|--organization <organization-id>] [--api-url <url>] [--token <token>]",
+    "  architectures observe --root <absolute-dir> --profile <personal|work|shared> (--context <file> | --target-id <id> --generation <number> --architecture-id <id> --environment-id <id> --profile-id <id> --adapter-digest <sha256> --capabilities-digest <sha256>) [--json]",
+    "  architectures health --root <absolute-dir> --profile <personal|work|shared> (--context <file> | --target-id <id> --generation <number> --architecture-id <id> --environment-id <id> --profile-id <id> --adapter-digest <sha256> --capabilities-digest <sha256>) [--json]",
     "  admin sharing get [--api-url <url>] [--token <token>]",
-    "  admin sharing set [--public <true|false>] [--authenticated <true|false>] [--teams <true|false>] [--team-visibility <true|false>] [--user-visibility <true|false>]",
+    "  admin sharing set [--public <true|false>] [--authenticated <true|false>] [--teams <true|false>] [--team-visibility <true|false>] [--user-visibility <true|false>] [--organization-visibility <true|false>]",
     "  export <skill-slug> --version <version> --platform <platform> --output <dir>",
     "  install <skill-slug> [--version <version>] [--platform <platform>] [--dir <install-root>]",
     "  list [--dir <install-root>]",

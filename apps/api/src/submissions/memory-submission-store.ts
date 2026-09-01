@@ -1,10 +1,21 @@
-import { AppError, type SkillLifecycleStatus } from "@myskills-app/core";
+import {
+  AppError,
+  assertValidOrganizationPolicyV1,
+  defaultOrganizationPolicyV1,
+  evaluateOrganizationRead,
+  type OrganizationMembershipRole,
+  type OrganizationPolicyV1,
+  type OrganizationStatus,
+  type SharingSettings,
+  type SkillLifecycleStatus,
+} from "@myskills-app/core";
 import {
   loadSkillManifestFromPackageFiles,
   PackageManifestFileError,
   type SkillManifest,
 } from "@myskills-app/skill-package";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
+import { isEffectiveTeamMembership } from "../teams/effective-membership.js";
 import type {
   CreateSubmissionInput,
   PublicBundle,
@@ -24,6 +35,7 @@ import type {
   UserSubmissionBundle,
   UserSubmissionSummary,
 } from "./types.js";
+import { assertNoVisibilityMetadataUpdate } from "./types.js";
 import { artifactPayloadSha256 } from "./artifact-hash.js";
 
 interface AuditRecord {
@@ -33,11 +45,229 @@ interface AuditRecord {
   details: Record<string, unknown>;
 }
 
+interface MemoryOrganization {
+  id: string;
+  status: OrganizationStatus;
+  currentPolicyRevisionId: string | null;
+  policy: OrganizationPolicyV1;
+}
+
+interface MemoryOrganizationMembership {
+  userId: string;
+  organizationId: string;
+  role: OrganizationMembershipRole;
+  removedAt: string | null;
+}
+
+interface MemoryOrganizationGrant {
+  organizationId: string;
+  policyRevisionId: string;
+}
+
+export interface MemorySubmissionStoreOptions {
+  /** Instance sharing flags used by direct release metadata and bundle reads. */
+  sharingSettings?: Partial<SharingSettings>;
+  /** Organization snapshots used by the actor-aware visibility evaluator. */
+  organizations?: Array<{
+    id: string;
+    name?: string;
+    slug?: string;
+    status?: OrganizationStatus;
+    currentPolicyRevisionId?: string | null;
+    policy?: OrganizationPolicyV1;
+  }>;
+  organizationMemberships?: Array<{
+    userId: string;
+    organizationId: string;
+    role?: OrganizationMembershipRole;
+    removedAt?: string | null;
+  }>;
+  organizationGrants?: Array<{
+    slug: string;
+    organizationId: string;
+    policyRevisionId?: string | null;
+  }>;
+  /** Existing non-organization visibility fixtures for parity tests. */
+  teams?: Array<{ id: string; organizationId?: string | null }>;
+  teamMemberships?: Array<{ userId: string; teamId: string; organizationId?: string | null }>;
+  teamGrants?: Array<{ slug: string; teamId: string }>;
+  userGrants?: Array<{ slug: string; userId: string }>;
+}
+
+type RequiredSharingSettings = Required<SharingSettings>;
+
+const DEFAULT_SHARING_SETTINGS: RequiredSharingSettings = {
+  publicVisibilityEnabled: true,
+  authenticatedVisibilityEnabled: true,
+  teamsEnabled: true,
+  teamVisibilityEnabled: true,
+  userVisibilityEnabled: true,
+  organizationVisibilityEnabled: false,
+};
+
 export class MemorySubmissionStore implements SubmissionStore {
   private submissions = new Map<string, StoredSubmission>();
   private skillLifecycle = new Map<string, SkillLifecycleStatus>();
+  private sharingSettings: RequiredSharingSettings = { ...DEFAULT_SHARING_SETTINGS };
+  private organizations = new Map<string, MemoryOrganization>();
+  private organizationMemberships = new Map<string, MemoryOrganizationMembership>();
+  private organizationGrants = new Map<string, Map<string, MemoryOrganizationGrant>>();
+  private teamMemberships = new Set<string>();
+  private teamOrganizations = new Map<string, string | null>();
+  private teamGrants = new Set<string>();
+  private userGrants = new Set<string>();
   private denied = 0;
   private audit: AuditRecord[] = [];
+
+  constructor(options: MemorySubmissionStoreOptions = {}) {
+    this.sharingSettings = normalizeSharingSettings(options.sharingSettings);
+    for (const team of options.teams ?? []) {
+      this.addTeam(team);
+    }
+    for (const organization of options.organizations ?? []) {
+      this.addOrganization(organization);
+    }
+    for (const membership of options.organizationMemberships ?? []) {
+      this.addOrganizationMembership(membership.userId, membership.organizationId, {
+        role: membership.role,
+        removedAt: membership.removedAt,
+      });
+    }
+    for (const grant of options.organizationGrants ?? []) {
+      this.addOrganizationGrant(grant.slug, grant.organizationId, grant.policyRevisionId);
+    }
+    for (const membership of options.teamMemberships ?? []) {
+      if (membership.organizationId !== undefined) {
+        this.setTeamOrganization(membership.teamId, membership.organizationId);
+      }
+      this.addTeamMembership(membership.userId, membership.teamId);
+    }
+    for (const grant of options.teamGrants ?? []) {
+      this.addTeamGrant(grant.slug, grant.teamId);
+    }
+    for (const grant of options.userGrants ?? []) {
+      this.addUserGrant(grant.slug, grant.userId);
+    }
+  }
+
+  addOrganization(input: {
+    id: string;
+    name?: string;
+    slug?: string;
+    status?: OrganizationStatus;
+    currentPolicyRevisionId?: string | null;
+    policy?: OrganizationPolicyV1;
+  }): void {
+    this.organizations.set(input.id, {
+      id: input.id,
+      status: input.status ?? "active",
+      currentPolicyRevisionId: input.currentPolicyRevisionId === undefined
+        ? `${input.id}:policy:1`
+        : input.currentPolicyRevisionId,
+      policy: assertValidOrganizationPolicyV1(input.policy ?? defaultOrganizationPolicyV1),
+    });
+  }
+
+  addOrganizationMembership(
+    userId: string,
+    organization: string | {
+      id: string;
+      name?: string;
+      slug?: string;
+      status?: OrganizationStatus;
+      role: OrganizationMembershipRole;
+    },
+    options: { role?: OrganizationMembershipRole; removedAt?: string | null } | OrganizationMembershipRole = {},
+  ): void {
+    const organizationId = typeof organization === "string" ? organization : organization.id;
+    const role = typeof organization === "string"
+      ? (typeof options === "string" ? options : options.role)
+      : organization.role;
+    if (typeof organization !== "string" && !this.organizations.has(organizationId)) {
+      this.addOrganization(organization);
+    }
+    this.organizationMemberships.set(`${userId}\u0000${organizationId}`, {
+      userId,
+      organizationId,
+      role: role ?? "member",
+      removedAt: typeof options === "string" ? null : options.removedAt ?? null,
+    });
+  }
+
+  removeOrganizationMembership(userId: string, organizationId: string): void {
+    this.organizationMemberships.delete(`${userId}\u0000${organizationId}`);
+  }
+
+  setOrganizationStatus(organizationId: string, status: OrganizationStatus): void {
+    const organization = this.organizations.get(organizationId);
+    if (!organization) {
+      throw new AppError("Organization not found.", "ORGANIZATION_NOT_FOUND", 404);
+    }
+    organization.status = status;
+  }
+
+  setOrganizationPolicy(
+    organizationId: string,
+    policy: OrganizationPolicyV1,
+    currentPolicyRevisionId = `${organizationId}:policy:${Date.now()}`,
+  ): void {
+    const organization = this.organizations.get(organizationId);
+    if (!organization) {
+      throw new AppError("Organization not found.", "ORGANIZATION_NOT_FOUND", 404);
+    }
+    organization.policy = assertValidOrganizationPolicyV1(policy);
+    organization.currentPolicyRevisionId = currentPolicyRevisionId;
+  }
+
+  addOrganizationGrant(slug: string, organizationId: string, policyRevisionId?: string | null): void {
+    const organization = this.organizations.get(organizationId);
+    if (!organization) {
+      throw new AppError("Organization not found.", "ORGANIZATION_NOT_FOUND", 404);
+    }
+    const revisionId = policyRevisionId ?? organization.currentPolicyRevisionId;
+    if (!revisionId) {
+      throw new AppError("Organization current policy is required.", "ORGANIZATION_POLICY_REQUIRED", 403);
+    }
+    const grants = this.organizationGrants.get(slug) ?? new Map<string, MemoryOrganizationGrant>();
+    grants.set(organizationId, { organizationId, policyRevisionId: revisionId });
+    this.organizationGrants.set(slug, grants);
+  }
+
+  setSharingSettings(settings: Partial<SharingSettings>): void {
+    this.sharingSettings = normalizeSharingSettings({ ...this.sharingSettings, ...settings });
+  }
+
+  async updateSharingSettings(settings: Partial<SharingSettings>): Promise<RequiredSharingSettings> {
+    this.setSharingSettings(settings);
+    return { ...this.sharingSettings };
+  }
+
+  addTeamMembership(userId: string, teamId: string, options: { organizationId?: string | null } = {}): void {
+    if (options.organizationId !== undefined) {
+      this.setTeamOrganization(teamId, options.organizationId);
+    }
+    this.teamMemberships.add(`${userId}\u0000${teamId}`);
+  }
+
+  addTeam(input: { id: string; organizationId?: string | null }): void {
+    this.teamOrganizations.set(input.id, input.organizationId ?? null);
+  }
+
+  removeTeamMembership(userId: string, teamId: string): void {
+    this.teamMemberships.delete(`${userId}\u0000${teamId}`);
+  }
+
+  setTeamOrganization(teamId: string, organizationId: string | null): void {
+    this.teamOrganizations.set(teamId, organizationId);
+  }
+
+  addTeamGrant(slug: string, teamId: string): void {
+    this.teamGrants.add(`${slug}\u0000${teamId}`);
+  }
+
+  addUserGrant(slug: string, userId: string): void {
+    this.userGrants.add(`${slug}\u0000${userId}`);
+  }
 
   async createSubmission(input: CreateSubmissionInput & {
     artifact: StoredSubmission["artifact"];
@@ -47,6 +277,9 @@ export class MemorySubmissionStore implements SubmissionStore {
     const key = `${input.manifest.name}@${input.manifest.version}`;
     if (this.submissions.has(key)) {
       throw new AppError("Package version already exists.", "PACKAGE_VERSION_EXISTS", 409);
+    }
+    if (input.manifest.visibility === "organization" && !this.sharingSettings.organizationVisibilityEnabled) {
+      throw new AppError("Organization sharing is disabled for this instance.", "ORGANIZATION_SHARING_DISABLED", 403);
     }
     const submission: StoredSubmission = {
       id: `submission-${this.submissions.size + 1}`,
@@ -380,6 +613,7 @@ export class MemorySubmissionStore implements SubmissionStore {
   }
 
   async updateSkillMetadata(input: { slug: string; actor: SubmissionActor; update: SkillMetadataUpdate; reason?: string }): Promise<SkillManagementSummary> {
+    assertNoVisibilityMetadataUpdate(input.update);
     const submissions = this.findSubmissionsBySlug(input.slug);
     const first = submissions[0];
     if (!first) {
@@ -392,9 +626,6 @@ export class MemorySubmissionStore implements SubmissionStore {
       }
       if (input.update.summary !== undefined) {
         submission.summary = input.update.summary;
-      }
-      if (input.update.visibility !== undefined) {
-        submission.visibility = input.update.visibility;
       }
     }
     this.recordAudit("skill.metadata.update", "allow", input.actor.id, {
@@ -435,7 +666,7 @@ export class MemorySubmissionStore implements SubmissionStore {
     const canManage = Boolean(input.actor && canManageSkill(submissions[0]!, input.actor));
     const skillLifecycle = this.skillLifecycle.get(input.slug) ?? restoredSkillLifecycle(submissions);
     return submissions
-      .filter((submission) => canManage || isPubliclyVisibleRelease(submission, skillLifecycle))
+      .filter((submission) => canManage || this.isVisibleReleaseForActor(submission, input.actor?.id ?? null, skillLifecycle))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map((submission) => releaseSummary(submission, input.actor ?? null));
   }
@@ -496,12 +727,12 @@ export class MemorySubmissionStore implements SubmissionStore {
   }
 
   async getPublicRelease(input: { slug: string; version: string; actorId?: string | null }): Promise<PublicReleaseMetadata | null> {
-    const submission = this.findPublicSubmission(input.slug, input.version);
+    const submission = this.findVisibleSubmission(input.slug, input.version, input.actorId ?? null);
     return submission ? publicRelease(submission) : null;
   }
 
   async getPublicBundle(input: { slug: string; version: string; platform?: string; actorId?: string | null }): Promise<PublicBundle | null> {
-    const submission = this.findPublicSubmission(input.slug, input.version);
+    const submission = this.findVisibleSubmission(input.slug, input.version, input.actorId ?? null);
     if (!submission) {
       return null;
     }
@@ -564,13 +795,110 @@ export class MemorySubmissionStore implements SubmissionStore {
     return [...this.submissions.values()].filter((submission) => submission.skillSlug === slug);
   }
 
-  private findPublicSubmission(slug: string, version: string): StoredSubmission | null {
+  private findVisibleSubmission(slug: string, version: string, actorId: string | null): StoredSubmission | null {
     const skillLifecycle = this.skillLifecycle.get(slug) ?? restoredSkillLifecycle(this.findSubmissionsBySlug(slug));
     return [...this.submissions.values()].find((submission) => (
       submission.skillSlug === slug &&
       submission.version === version &&
-      isPubliclyVisibleRelease(submission, skillLifecycle)
+      this.isVisibleReleaseForActor(submission, actorId, skillLifecycle)
     )) ?? null;
+  }
+
+  private isVisibleReleaseForActor(
+    submission: StoredSubmission,
+    actorId: string | null,
+    skillLifecycle: SkillLifecycleStatus,
+  ): boolean {
+    if (!isReleasedSubmission(submission, skillLifecycle)) {
+      return false;
+    }
+    if (actorId && submission.ownerUserId === actorId) {
+      return true;
+    }
+    if (submission.visibility === "public") {
+      return this.sharingSettings.publicVisibilityEnabled;
+    }
+    if (!actorId) {
+      return false;
+    }
+    if (submission.visibility === "authenticated") {
+      return this.sharingSettings.authenticatedVisibilityEnabled;
+    }
+    if (submission.visibility === "team" && this.sharingSettings.teamsEnabled && this.sharingSettings.teamVisibilityEnabled) {
+      return [...this.teamMemberships].some((membership) => (
+        membership.startsWith(`${actorId}\u0000`) &&
+        this.isEffectiveTeamMembership(
+          actorId,
+          membership.slice(actorId.length + 1),
+        ) &&
+        this.teamGrants.has(`${submission.skillSlug}\u0000${membership.slice(actorId.length + 1)}`)
+      ));
+    }
+    if (submission.visibility === "explicit-users" && this.sharingSettings.userVisibilityEnabled) {
+      return this.userGrants.has(`${submission.skillSlug}\u0000${actorId}`);
+    }
+    if (submission.visibility === "organization") {
+      return this.isVisibleOrganizationRelease(submission.skillSlug, actorId);
+    }
+    return false;
+  }
+
+  private isVisibleOrganizationRelease(slug: string, actorId: string): boolean {
+    if (!this.sharingSettings.organizationVisibilityEnabled) {
+      return false;
+    }
+    const grants = this.organizationGrants.get(slug);
+    if (!grants) {
+      return false;
+    }
+    for (const membership of this.organizationMemberships.values()) {
+      if (membership.userId !== actorId || membership.removedAt !== null) {
+        continue;
+      }
+      const organization = this.organizations.get(membership.organizationId);
+      const grant = grants.get(membership.organizationId);
+      if (!organization || !grant || !organization.currentPolicyRevisionId) {
+        continue;
+      }
+      if (grant.policyRevisionId !== organization.currentPolicyRevisionId) {
+        continue;
+      }
+      if (organization.status !== "active") {
+        continue;
+      }
+      const decision = evaluateOrganizationRead({
+        organizationId: organization.id,
+        organizationStatus: organization.status,
+        policy: organization.policy,
+        actor: {
+          userId: actorId,
+          memberships: [{
+            organizationId: organization.id,
+            userId: actorId,
+            role: membership.role,
+          }],
+        },
+        resource: "skill",
+      });
+      if (decision.allowed) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private isEffectiveTeamMembership(actorId: string, teamId: string): boolean {
+    const organizationId = this.teamOrganizations.get(teamId) ?? null;
+    if (organizationId === null) return true;
+    const organization = this.organizations.get(organizationId);
+    const membership = this.organizationMemberships.get(`${actorId}\u0000${organizationId}`);
+    return isEffectiveTeamMembership({
+      organizationId,
+      organizationStatus: organization?.status,
+      currentPolicyRevisionId: organization?.currentPolicyRevisionId,
+      hasCurrentPolicy: Boolean(organization && organization.currentPolicyRevisionId && organization.policy),
+      hasActiveOrganizationMembership: Boolean(membership && membership.removedAt === null),
+    });
   }
 
   private recordAudit(action: string, decision: "allow" | "deny", actorId: string | null | undefined, details: Record<string, unknown>): void {
@@ -737,8 +1065,12 @@ function lifecycleForReleaseAction(action: ReleaseLifecycleAction): SkillLifecyc
 }
 
 function isPubliclyVisibleRelease(submission: StoredSubmission, skillLifecycle: SkillLifecycleStatus): boolean {
+  return isReleasedSubmission(submission, skillLifecycle) &&
+    submission.visibility === "public";
+}
+
+function isReleasedSubmission(submission: StoredSubmission, skillLifecycle: SkillLifecycleStatus): boolean {
   return (skillLifecycle === "approved" || skillLifecycle === "deprecated") &&
-    submission.visibility === "public" &&
     submission.reviewStatus === "approved" &&
     submission.securityStatus === "passed" &&
     (submission.lifecycleStatus === "approved" || submission.lifecycleStatus === "deprecated") &&
@@ -821,4 +1153,16 @@ function manifestFromArtifactPayload(input: StoredSubmission["artifact"]["payloa
     }
     throw new AppError(error instanceof Error ? error.message : "Invalid artifact payload.", "INVALID_PACKAGE_PAYLOAD", 422);
   }
+}
+
+function normalizeSharingSettings(input: Partial<SharingSettings> | undefined): RequiredSharingSettings {
+  const record = input ?? {};
+  return {
+    publicVisibilityEnabled: record.publicVisibilityEnabled ?? DEFAULT_SHARING_SETTINGS.publicVisibilityEnabled,
+    authenticatedVisibilityEnabled: record.authenticatedVisibilityEnabled ?? DEFAULT_SHARING_SETTINGS.authenticatedVisibilityEnabled,
+    teamsEnabled: record.teamsEnabled ?? DEFAULT_SHARING_SETTINGS.teamsEnabled,
+    teamVisibilityEnabled: record.teamVisibilityEnabled ?? DEFAULT_SHARING_SETTINGS.teamVisibilityEnabled,
+    userVisibilityEnabled: record.userVisibilityEnabled ?? DEFAULT_SHARING_SETTINGS.userVisibilityEnabled,
+    organizationVisibilityEnabled: record.organizationVisibilityEnabled ?? DEFAULT_SHARING_SETTINGS.organizationVisibilityEnabled,
+  };
 }

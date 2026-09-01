@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "routers": [
+    {
+      "slug": "personal-router",
+      "configurationDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+      "configured": true,
+      "managed": true,
+      "supported": true
+    }
+  ]
+}

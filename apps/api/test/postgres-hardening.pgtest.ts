@@ -4,6 +4,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import pg from "pg";
+import { eq } from "drizzle-orm";
 import { AppError } from "@myskills-app/core";
 import { hashApiToken, hashPassword, hashSessionToken, verifyPassword } from "@myskills-app/auth";
 import { parseSkillManifest, type PackageInputFile } from "@myskills-app/skill-package";
@@ -11,11 +12,146 @@ import type { ArtifactObject, ArtifactObjectStorage } from "../src/artifacts/sto
 import { PostgresAuthStore } from "../src/auth/postgres-auth-store.js";
 import { createDb, createPgPool } from "../src/db/client.js";
 import { runMigrations } from "../src/db/migrate.js";
-import { artifactWriteIntents, authActionTokens, authSessions, skillArtifacts, skillVersions } from "../src/db/schema.js";
+import { artifactWriteIntents, authActionTokens, authSessions, roleAssignments, skillArtifacts, skillVersions, skills } from "../src/db/schema.js";
+import { PostgresSkillRepository } from "../src/repositories/postgres-skill-repository.js";
 import { PostgresSubmissionStore } from "../src/submissions/postgres-submission-store.js";
 import { SubmissionService } from "../src/submissions/service.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
+
+test("scoped role assignments do not grant global roles or get erased by instance updates", { timeout: 60_000 }, async (t) => {
+  const pool = await freshPool(t);
+  const db = createDb(pool);
+  const store = new PostgresAuthStore(db);
+  const passwordHash = await hashPassword("correct horse battery staple");
+  const globalOwner = await createActiveUser(store, "scoped-role-owner@example.com", passwordHash, ["owner"]);
+  const scopedUser = await createActiveUser(store, "scoped-role-user@example.com", passwordHash);
+  const scopeId = "11111111-1111-4111-8111-111111111111";
+  const malformedInstanceScopeId = "22222222-2222-4222-8222-222222222222";
+
+  await db.insert(roleAssignments).values([
+    { userId: scopedUser.id, role: "owner", scopeType: "instance", scopeId: malformedInstanceScopeId },
+    { userId: scopedUser.id, role: "maintainer", scopeType: "project", scopeId },
+  ]);
+
+  assert.deepEqual((await store.findUserById(scopedUser.id))?.roles, ["user"]);
+  assert.equal(await store.countActiveOwnersExcluding(globalOwner.id), 0);
+  assert.deepEqual(
+    (await store.applyAdminUserStatusChange({
+      userId: globalOwner.id,
+      status: "disabled",
+      protectLastActiveOwner: true,
+      revokeCredentials: false,
+    })).outcome,
+    "last_owner",
+  );
+
+  assert.deepEqual((await store.updateUserRoles({ userId: scopedUser.id, roles: ["author"] }))?.roles, ["author"]);
+  const preserved = await db
+    .select({ role: roleAssignments.role, scopeType: roleAssignments.scopeType, scopeId: roleAssignments.scopeId })
+    .from(roleAssignments)
+    .where(eq(roleAssignments.userId, scopedUser.id));
+  assert.deepEqual(
+    preserved.sort((a, b) => `${a.scopeType}:${a.role}`.localeCompare(`${b.scopeType}:${b.role}`)),
+    [
+      { role: "author", scopeType: "instance", scopeId: "00000000-0000-0000-0000-000000000000" },
+      { role: "owner", scopeType: "instance", scopeId: malformedInstanceScopeId },
+      { role: "maintainer", scopeType: "project", scopeId },
+    ],
+  );
+  assert.deepEqual((await store.findUserById(scopedUser.id))?.roles, ["author"]);
+});
+
+test("organization visibility is excluded from non-owner discovery and public release access", { timeout: 60_000 }, async (t) => {
+  const pool = await freshPool(t);
+  const db = createDb(pool);
+  const authStore = new PostgresAuthStore(db);
+  const submissionStore = new PostgresSubmissionStore(db);
+  const service = new SubmissionService(submissionStore);
+  const skillRepository = new PostgresSkillRepository(db);
+  const passwordHash = await hashPassword("correct horse battery staple");
+  await createActiveUser(authStore, "organization-instance-owner@example.com", passwordHash, ["owner"]);
+  const owner = await createActiveUser(authStore, "organization-owner@example.com", passwordHash, ["author"]);
+  const maintainer = await createActiveUser(authStore, "organization-maintainer@example.com", passwordHash, ["maintainer"]);
+  const outsider = await createActiveUser(authStore, "organization-outsider@example.com", passwordHash);
+  const packageInput = cleanPackageInput();
+  const submitted = await service.createSubmission({ actor: { id: owner.id, roles: ["author"] }, ...packageInput });
+  const reviewBundle = await service.getReviewSubmissionBundle({
+    actor: { id: maintainer.id, roles: ["maintainer"] },
+    submissionId: submitted.id,
+  });
+  assert.ok(reviewBundle);
+  await service.performReviewAction({
+    actor: { id: maintainer.id, roles: ["maintainer"] },
+    submissionId: submitted.id,
+    action: "approve",
+    artifactSha256: reviewBundle.artifact.sha256,
+  });
+  await service.performReviewAction({
+    actor: { id: maintainer.id, roles: ["maintainer"] },
+    submissionId: submitted.id,
+    action: "publish",
+  });
+
+  await db.update(skills).set({ visibility: "organization" }).where(eq(skills.slug, packageInput.manifest.name));
+
+  await assert.rejects(
+    skillRepository.updateSkillSharing({
+      actor: { id: owner.id, roles: ["author"] },
+      slug: packageInput.manifest.name,
+      visibility: "organization",
+      teamIds: [],
+      userEmails: [],
+    }),
+    (error) => error instanceof AppError && error.code === "ORGANIZATION_SHARING_DISABLED",
+  );
+
+  const legacyUpdate = { visibility: "public" } as never;
+  await assert.rejects(
+    service.updateSkillMetadata({
+      actor: { id: owner.id, roles: ["author"] },
+      slug: packageInput.manifest.name,
+      update: legacyUpdate,
+    }),
+    (error) => error instanceof AppError && error.code === "VISIBILITY_UPDATE_REQUIRES_SHARING_ROUTE",
+  );
+  await assert.rejects(
+    submissionStore.updateSkillMetadata({
+      actor: { id: owner.id, roles: ["author"] },
+      slug: packageInput.manifest.name,
+      update: legacyUpdate,
+    }),
+    (error) => error instanceof AppError && error.code === "VISIBILITY_UPDATE_REQUIRES_SHARING_ROUTE",
+  );
+  assert.equal((await service.getSkillManagement({ actor: { id: owner.id, roles: ["author"] }, slug: packageInput.manifest.name }))?.visibility, "organization");
+
+  assert.deepEqual(await skillRepository.searchVisibleSkills({ actorId: outsider.id }), []);
+  assert.equal(await skillRepository.getVisibleSkillBySlug(packageInput.manifest.name, outsider.id), null);
+  const ownerSearch = await skillRepository.searchVisibleSkills({ actorId: owner.id });
+  assert.equal(ownerSearch.length, 1);
+  assert.deepEqual(ownerSearch[0]?.access?.reasons, ["owner"]);
+
+  assert.equal(await service.getPublicRelease({
+    slug: packageInput.manifest.name,
+    version: packageInput.manifest.version,
+    actorId: outsider.id,
+  }), null);
+  assert.ok(await service.getPublicRelease({
+    slug: packageInput.manifest.name,
+    version: packageInput.manifest.version,
+    actorId: owner.id,
+  }));
+  assert.equal(await service.getPublicBundle({
+    slug: packageInput.manifest.name,
+    version: packageInput.manifest.version,
+    actorId: outsider.id,
+  }), null);
+  assert.ok(await service.getPublicBundle({
+    slug: packageInput.manifest.name,
+    version: packageInput.manifest.version,
+    actorId: owner.id,
+  }));
+});
 
 test("password reset atomically invalidates sibling links and rolls back injected failures", { timeout: 60_000 }, async (t) => {
   const pool = await freshPool(t);

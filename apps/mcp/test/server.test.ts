@@ -56,7 +56,7 @@ test("MCP server registers read-only registry tools and executes search", async 
     const tools = await client.listTools();
     assert.deepEqual(
       tools.tools.map((tool) => tool.name).sort(),
-      ["get_install_instructions", "get_skill_info", "search_skills"],
+      ["get_architecture_projection", "get_install_instructions", "get_skill_info", "list_architecture_patterns", "list_architectures", "search_skills"],
     );
     assert.equal(tools.tools.every((tool) => tool.annotations?.readOnlyHint === true), true);
 
@@ -70,6 +70,65 @@ test("MCP server registers read-only registry tools and executes search", async 
       "http://localhost:3001/v1/mcp/session",
       "http://localhost:3001/v1/skills?q=release",
     ]);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
+
+test("MCP server forwards architecture organization context through the public tool schema", async () => {
+  const calls: Array<{ url: string; method?: string; body?: string }> = [];
+  const { clientTransport, serverTransport } = linkedTransports();
+  const server = createAiSkillsMcpServer({
+    token: "aiss_test_secret",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, method: init?.method, body: init?.body });
+      assert.equal(init?.headers?.authorization, "Bearer aiss_test_secret");
+      if (url.endsWith("/v1/mcp/session")) {
+        return jsonResponse(200, {
+          user: {
+            id: "user-1",
+            email: "reader@example.com",
+            name: "Reader",
+            roles: ["user"],
+            emailVerified: true,
+            mfaVerified: false,
+          },
+          credential: {
+            kind: "api_token",
+            tokenId: "token-1",
+            scopes: ["architectures:read"],
+          },
+        });
+      }
+      if (url.endsWith("/v1/architectures/arch-1")) {
+        return jsonResponse(200, {
+          architecture: { id: "arch-1", name: "Personal", patternId: "flat" },
+        });
+      }
+      assert.equal(url, "http://localhost:3001/v1/architectures/arch-1/preview");
+      assert.equal(init?.method, "POST");
+      assert.deepEqual(JSON.parse(init?.body ?? "{}"), { organizationId: "org-1" });
+      return jsonResponse(200, {
+        preview: {
+          revision: { architectureId: "arch-1", id: "revision-1", revisionNumber: 1 },
+          topology: { nodes: [], edges: [] },
+        },
+      });
+    },
+  });
+  const client = new Client({ name: "mcp-test-client", version: "0.1.0" });
+
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  try {
+    const result = await client.callTool({
+      name: "get_architecture_projection",
+      arguments: { id: "arch-1", organizationId: "org-1" },
+    });
+    assert.equal(result.isError, undefined);
+    const previewCall = calls.find((call) => call.url.endsWith("/v1/architectures/arch-1/preview"));
+    assert.deepEqual(JSON.parse(previewCall?.body ?? "{}"), { organizationId: "org-1" });
   } finally {
     await client.close();
     await server.close();

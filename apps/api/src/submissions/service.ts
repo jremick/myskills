@@ -10,6 +10,7 @@ import {
   type SkillManifest,
 } from "@myskills-app/skill-package";
 import type { Role } from "@myskills-app/auth";
+import { assertNoVisibilityMetadataUpdate } from "./types.js";
 import type {
   ArtifactPayload,
   CreateSubmissionInput,
@@ -208,6 +209,7 @@ export class SubmissionService {
     update: SkillMetadataUpdate;
     reason?: string;
   }): Promise<SkillManagementSummary> {
+    assertNoVisibilityMetadataUpdate(input.update);
     return this.store.updateSkillMetadata(input);
   }
 

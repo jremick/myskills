@@ -12,9 +12,13 @@ import {
   auditEvents,
   artifactWriteIntents,
   instanceSettings,
+  organizationMemberships,
+  organizationPolicyRevisions,
+  organizations,
   scanFindings,
   scanRuns,
   skillArtifacts,
+  skillOrganizationGrants,
   skillPlatformVariants,
   skills,
   skillTags,
@@ -22,6 +26,7 @@ import {
   skillUserGrants,
   skillVersions,
   teamMemberships,
+  teams,
 } from "../db/schema.js";
 import type {
   CreateSubmissionInput,
@@ -42,6 +47,7 @@ import type {
   UserSubmissionBundle,
   UserSubmissionSummary,
 } from "./types.js";
+import { assertNoVisibilityMetadataUpdate } from "./types.js";
 import { artifactPayloadSha256 } from "./artifact-hash.js";
 
 const DEFAULT_SHARING_SETTINGS: SharingSettings = {
@@ -50,6 +56,7 @@ const DEFAULT_SHARING_SETTINGS: SharingSettings = {
   teamsEnabled: true,
   teamVisibilityEnabled: true,
   userVisibilityEnabled: true,
+  organizationVisibilityEnabled: false,
 };
 
 export class PostgresSubmissionStore implements SubmissionStore {
@@ -66,6 +73,10 @@ export class PostgresSubmissionStore implements SubmissionStore {
     const recoveryTracked = await this.prepareArtifactWrite(input.artifact);
     try {
       const submission: StoredSubmission = await this.db.transaction(async (tx) => {
+      const sharing = await getSharingSettings(tx);
+      if (input.manifest.visibility === "organization" && !sharing.organizationVisibilityEnabled) {
+        throw new AppError("Organization sharing is disabled for this instance.", "ORGANIZATION_SHARING_DISABLED", 403);
+      }
       const [existingSkill] = await tx
         .select()
         .from(skills)
@@ -807,6 +818,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
   }
 
   async updateSkillMetadata(input: { slug: string; actor: SubmissionActor; update: SkillMetadataUpdate; reason?: string }): Promise<SkillManagementSummary> {
+    assertNoVisibilityMetadataUpdate(input.update);
     return this.db.transaction(async (tx) => {
       const skill = await findSkillForManagement(tx, input.slug);
       if (!skill) {
@@ -819,9 +831,6 @@ export class PostgresSubmissionStore implements SubmissionStore {
       }
       if (input.update.summary !== undefined) {
         update.summary = input.update.summary;
-      }
-      if (input.update.visibility !== undefined) {
-        update.visibility = input.update.visibility;
       }
       await tx.update(skills).set(update).where(eq(skills.id, skill.id));
       if (input.update.tags) {
@@ -1969,18 +1978,12 @@ function visibleToActorPredicate(actorId: string | null | undefined, sharing: Sh
   if (actorId) {
     predicates.push(eq(skills.ownerUserId, actorId));
     if (sharing.authenticatedVisibilityEnabled) {
-      predicates.push(inArray(skills.visibility, ["authenticated", "organization"]));
+      predicates.push(eq(skills.visibility, "authenticated"));
     }
     if (sharing.teamsEnabled && sharing.teamVisibilityEnabled) {
       predicates.push(and(
         eq(skills.visibility, "team"),
-        sql`exists (
-          select 1
-          from ${skillTeamGrants}
-          inner join ${teamMemberships} on ${teamMemberships.teamId} = ${skillTeamGrants.teamId}
-          where ${skillTeamGrants.skillId} = ${skills.id}
-            and ${teamMemberships.userId} = ${actorId}
-        )`,
+        effectiveTeamAccessPredicate(actorId),
       ));
     }
     if (sharing.userVisibilityEnabled) {
@@ -1994,9 +1997,68 @@ function visibleToActorPredicate(actorId: string | null | undefined, sharing: Sh
         )`,
       ));
     }
+    if (sharing.organizationVisibilityEnabled) {
+      predicates.push(and(
+        eq(skills.visibility, "organization"),
+        organizationVisibilityPredicateForActor(actorId),
+      ));
+    }
   }
   const active = predicates.filter((predicate): predicate is SQL => Boolean(predicate));
   return active.length > 0 ? or(...active) : sql`false`;
+}
+
+/**
+ * Team-derived release access must resolve the parent organization at read
+ * time. Standalone teams retain the legacy membership behavior, while an
+ * organization-owned team requires an active organization, its current
+ * policy row, and the same actor's active organization membership.
+ */
+function effectiveTeamAccessPredicate(actorId: string): SQL<boolean> {
+  return sql<boolean>`exists (
+    select 1
+    from ${skillTeamGrants} as stg
+    inner join ${teamMemberships} as tm on tm.team_id = stg.team_id
+    inner join ${teams} as team on team.id = stg.team_id
+    left join ${organizations} as org on org.id = team.organization_id
+    left join ${organizationPolicyRevisions} as opr
+      on opr.organization_id = team.organization_id
+      and opr.id = org.current_policy_revision_id
+    left join ${organizationMemberships} as om
+      on om.organization_id = team.organization_id
+      and om.user_id = ${actorId}
+      and om.removed_at is null
+    where stg.skill_id = ${skills.id}
+      and tm.user_id = ${actorId}
+      and (
+        team.organization_id is null
+        or (
+          org.status = 'active'
+          and org.current_policy_revision_id is not null
+          and opr.id is not null
+          and om.id is not null
+        )
+      )
+  )`;
+}
+
+function organizationVisibilityPredicateForActor(actorId: string): SQL<boolean> {
+  return sql<boolean>`exists (
+    select 1
+    from ${skillOrganizationGrants} as sog
+    inner join ${organizations} as org on org.id = sog.organization_id
+    inner join ${organizationPolicyRevisions} as opr
+      on opr.organization_id = org.id
+      and opr.id = org.current_policy_revision_id
+    inner join ${organizationMemberships} as om
+      on om.organization_id = org.id
+      and om.user_id = ${actorId}
+      and om.removed_at is null
+    where sog.skill_id = ${skills.id}
+      and sog.created_under_policy_revision_id = org.current_policy_revision_id
+      and org.status = 'active'
+      and opr.policy->'sharing'->>'organizationSkillSharingEnabled' = 'true'
+  )`;
 }
 
 async function selectVisibleRelease(
@@ -2117,6 +2179,9 @@ function parseSharingSettings(input: unknown): SharingSettings {
     teamsEnabled: typeof record.teamsEnabled === "boolean" ? record.teamsEnabled : true,
     teamVisibilityEnabled: typeof record.teamVisibilityEnabled === "boolean" ? record.teamVisibilityEnabled : true,
     userVisibilityEnabled: typeof record.userVisibilityEnabled === "boolean" ? record.userVisibilityEnabled : true,
+    organizationVisibilityEnabled: typeof record.organizationVisibilityEnabled === "boolean"
+      ? record.organizationVisibilityEnabled
+      : false,
   };
 }
 
