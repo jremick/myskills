@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { cp, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -153,6 +154,26 @@ test("rejects oversized metadata after a bounded descriptor read", async (t) => 
     count: 1,
   });
   assert.equal(JSON.stringify(observation).includes(marker), false);
+});
+
+test("rejects named pipes without blocking metadata or frontmatter reads", async (t) => {
+  if (process.platform === "win32") {
+    t.skip("named-pipe fixture requires POSIX mkfifo");
+    return;
+  }
+  const root = await temporaryCopy(path.join(fixtureRoot, "personal"), t);
+  const profilePath = path.join(root, "profile.json");
+  const skillPath = path.join(root, "skills", "personal-only", "SKILL.md");
+  await rm(profilePath);
+  await rm(skillPath);
+  assert.equal(spawnSync("mkfifo", [profilePath]).status, 0);
+  assert.equal(spawnSync("mkfifo", [skillPath]).status, 0);
+
+  const observation = await adapter(root, "personal").observe(context("personal", "target-named-pipes"));
+  const codes = observation.configFindings.map((finding) => finding.code);
+
+  assert.equal(codes.includes("profile-metadata-invalid"), true);
+  assert.equal(codes.includes("skill-frontmatter-invalid"), true);
 });
 
 test("keeps the observed digest stable across directory order and file timestamps", async (t) => {

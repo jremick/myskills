@@ -395,7 +395,7 @@ export class CodexReadOnlyArchitectureTargetAdapter implements ReadOnlyArchitect
     const filePath = path.join(this.#root, relativeName);
     let handle: Awaited<ReturnType<typeof open>> | undefined;
     try {
-      handle = await open(filePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+      handle = await open(filePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK);
       const entry = await handle.stat();
       if (!entry.isFile()) return { status: "invalid" };
       const { buffer, bytesRead } = await readBounded(handle, MAX_METADATA_BYTES);
@@ -665,7 +665,7 @@ function parseRouterPolicyEntry(value: unknown, findings: FindingCollector): Rou
 async function readFrontmatter(filePath: string): Promise<FrontmatterReadResult> {
   let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
-    handle = await open(filePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    handle = await open(filePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK);
     const entry = await handle.stat();
     if (!entry.isFile()) return { status: "invalid" };
     const openingDelimiter = await readOpeningDelimiter(handle);
