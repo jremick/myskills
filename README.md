@@ -16,11 +16,12 @@ MySkills is an open-source beta platform for publishing, reviewing, discovering,
 
 ## Release Status
 
-Current target: **v0.1.0-beta.3**.
+Current target: **v0.1.0-beta.4**.
 
-The beta.3 source and CLI release adds the Phase 2 architecture control plane.
+The beta.4 source and CLI release includes the Phase 2 architecture control plane
+and the read-only Codex adapter file-safety fix-forward.
 The hosted beta at [myskills.sh](https://myskills.sh) remains a separately
-verified deployment surface and must not be assumed to run beta.3 until its
+verified deployment surface and must not be assumed to run beta.4 until its
 production promotion is read back.
 
 This beta is intended for real external trial use with documented compatibility, support, and upgrade expectations. It is still prerelease software and not yet the business-safe production release: API contracts, package formats, deployment defaults, and operational guidance may still change before `v1.0`.
@@ -127,7 +128,7 @@ node apps/cli/dist/index.js token create --name "Local CLI" --scope profile:read
 node apps/cli/dist/index.js logout
 ```
 
-The `0.1.0-beta.3` CLI uses npm's `beta` dist-tag. The `latest` and `alpha` tags remain on `0.1.0-alpha.3`, so prerelease users must select the beta channel explicitly:
+The `0.1.0-beta.4` CLI uses npm's `beta` dist-tag. The `latest` and `alpha` tags remain on `0.1.0-alpha.3`, so prerelease users must select the beta channel explicitly:
 
 ```bash
 npm install -g @jarel/myskills@beta

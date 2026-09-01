@@ -1,23 +1,23 @@
 # Public Beta Delivery Brief And Acceptance Ledger
 
-Version: 0.1.0-beta.3
-Last updated: 2026-09-01
+Version: 0.1.0-beta.4
+Last updated: 2026-09-02
 
 ## Goal
 
-Ship MySkills `v0.1.0-beta.3` for real external trial use with the Phase 2 architecture control plane, a self-contained public CLI package, explicit compatibility/support/upgrade boundaries, and a reproducible verification-only release workflow.
+Ship MySkills `v0.1.0-beta.4` for real external trial use with the Phase 2 architecture control plane, a self-contained public CLI package, explicit compatibility/support/upgrade boundaries, the Codex adapter file-safety fix-forward, and a reproducible verification-only release workflow.
 
 The beta remains prerelease software. It is not a business-safe production release and does not promise stable APIs, package formats, hosted signup, background processing, backup/restore, or incident-response coverage.
 
-Target release: `v0.1.0-beta.3`.
+Target release: `v0.1.0-beta.4`.
 
 ## Release Outcome
 
-Beta.3 is the current source and CLI release candidate. Publication requires a
+Beta.4 is the current source and CLI release candidate. Publication requires a
 clean canonical gate on the immutable merged commit, protected tag verification,
 and read-back of the GitHub prerelease and npm `beta` dist-tag. Railway
 production remains a separate approval and promotion boundary; the hosted
-beta.2 deployment must not be described as beta.3 until API and web are promoted
+beta.2 deployment must not be described as beta.4 until API and web are promoted
 from the same commit and verified live.
 
 ## Status Language
@@ -45,16 +45,16 @@ The command intentionally fails when the worktree is dirty during final artifact
 
 | Acceptance area | Required evidence | Release evidence |
 | --- | --- | --- |
-| Version and release contract | Root/workspace versions, API capability source, changelog target, beta goal, tag expectation, npm prerelease channel, and public dependency publishability agree | Candidate evidence required for protected tag `v0.1.0-beta.3` |
+| Version and release contract | Root/workspace versions, API capability source, changelog target, beta goal, tag expectation, npm prerelease channel, and public dependency publishability agree | Candidate evidence required for protected tag `v0.1.0-beta.4` |
 | Local onboarding | Fresh clone follows [Getting Started](GETTING_STARTED.md); root `.env` powers migrate, seed, API, web, and MCP dev scripts without shell sourcing | Passed in a clean Node 22 clone and the production-like full-stack gate |
-| Public CLI package | Tarball contains only `README.md`, `dist/index.js`, and npm-generated `package.json`; clean temporary install runs `--version`, example `validate`, and example `scan`; no private runtime workspace dependency | Beta.3 candidate pack/install smoke required before npm publication |
+| Public CLI package | Tarball contains only `README.md`, `dist/index.js`, and npm-generated `package.json`; clean temporary install runs `--version`, example `validate`, and example `scan`; no private runtime workspace dependency | Beta.4 candidate pack/install smoke required before npm publication |
 | Static quality | ESLint 10 flat config, TypeScript builds, and explicit web typecheck pass on supported Node 22 and 24 LTS CI jobs | Passed on candidate, merged `main`, and tag workflow |
 | Browser and database | Route-mocked Playwright, production-like full-stack Playwright through the nginx/API proxy, and disposable Postgres integration pass on the candidate commit | Candidate proof includes migrations 0015-0020 and the Phase 2 architecture journey |
 | Public docs | README, setup, compatibility, API/MCP/CLI, architecture, data model, deployment, Railway, release, roadmap, support, security, contribution, and upgrade docs distinguish implemented/live/planned | Link/prerelease checks passed; live release status reconciled after promotion |
 | GitHub controls | Required checks protect `main`; tag rules restrict creation/update/deletion; secret scanning, push protection, dependency security updates, and private vulnerability reporting are enabled where available | Live readback passed with administrator enforcement and high-or-higher CodeQL blocking |
 | Distribution artifacts | Verification-only tag workflow confirms tag/version/main ancestry, reruns the canonical gate, builds production Compose API/web/MCP HTTP targets plus the exact Railway API/web Dockerfiles, and uploads source/checksum metadata without publishing | Tag workflow passed; GitHub prerelease exposes verified source, metadata, and checksums |
 | Staging and user test | Same immutable commit is exercised through local production Compose or a dedicated staging environment; first-run, login/MFA, owner invitation and invitee registration, browse/detail, submit/review/publish, CLI validate/scan/search/export/install, MCP reads, and rollback notes are recorded | Passed against the immutable release commit in isolated staging; production public/browser/CLI smoke passed |
-| External release actions | Tag push, npm beta publish, GitHub Release creation, container push, and Railway production deploy are separately approved; none is implied by a green local gate | Tag, npm beta publish, and GitHub prerelease are approved for beta.3; Railway promotion and container publication remain separate |
+| External release actions | Tag push, npm beta publish, GitHub Release creation, container push, and Railway production deploy are separately approved; none is implied by a green local gate | Tag, npm beta publish, and GitHub prerelease are approved for the beta.4 security fix-forward; Railway promotion and container publication remain separate |
 
 ## Known Beta Limitations
 

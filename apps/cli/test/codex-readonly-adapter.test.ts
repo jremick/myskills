@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cp, mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -96,6 +96,63 @@ test("does not follow or recover outside the explicit root when optional metadat
   assert.equal(health.status, "degraded");
   assert.equal(health.metadata?.findingCount, 2);
   assert.equal(JSON.stringify({ observation, health }).includes(root), false);
+});
+
+test("rejects symlinked metadata and skill frontmatter without following them", async (t) => {
+  const root = await temporaryCopy(path.join(fixtureRoot, "personal"), t);
+  const outside = await mkdtemp(path.join(os.tmpdir(), "myskills-codex-target-outside-"));
+  t.after(() => rm(outside, { recursive: true, force: true }));
+  const outsideProfile = path.join(outside, "profile.json");
+  const outsideSkill = path.join(outside, "SKILL.md");
+  const marker = "SYMLINKED_CONTENT_MUST_NOT_BE_READ_OR_EMITTED";
+  await writeFile(outsideProfile, JSON.stringify({
+    schemaVersion: 1,
+    profile: "personal",
+    skills: [{ slug: "outside-skill", enabled: true }],
+    marker,
+  }));
+  await writeFile(outsideSkill, [
+    "---",
+    "slug: outside-skill",
+    "version: 1.0.0",
+    `digest: ${"a".repeat(64)}`,
+    "kind: leaf",
+    "---",
+    marker,
+    "",
+  ].join("\n"));
+  await rm(path.join(root, "profile.json"));
+  await symlink(outsideProfile, path.join(root, "profile.json"));
+  const skillPath = path.join(root, "skills", "personal-only", "SKILL.md");
+  await rm(skillPath);
+  await symlink(outsideSkill, skillPath);
+
+  const observation = await adapter(root, "personal").observe(context("personal", "target-symlinked-files"));
+  const codes = observation.configFindings.map((finding) => finding.code);
+
+  assert.equal(codes.includes("profile-metadata-invalid"), true);
+  assert.equal(codes.includes("skill-frontmatter-invalid"), true);
+  assert.equal(JSON.stringify(observation).includes(marker), false);
+});
+
+test("rejects oversized metadata after a bounded descriptor read", async (t) => {
+  const root = await temporaryCopy(path.join(fixtureRoot, "personal"), t);
+  const marker = "OVERSIZED_METADATA_MUST_NOT_BE_EMITTED";
+  await writeFile(path.join(root, "profile.json"), JSON.stringify({
+    schemaVersion: 1,
+    profile: "personal",
+    skills: [],
+    padding: marker.repeat(2_000),
+  }));
+
+  const observation = await adapter(root, "personal").observe(context("personal", "target-oversized-metadata"));
+
+  assert.deepEqual(observation.configFindings.find((finding) => finding.code === "profile-metadata-invalid"), {
+    code: "profile-metadata-invalid",
+    severity: "warning",
+    count: 1,
+  });
+  assert.equal(JSON.stringify(observation).includes(marker), false);
 });
 
 test("keeps the observed digest stable across directory order and file timestamps", async (t) => {

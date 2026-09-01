@@ -1,6 +1,6 @@
 # Railway Deployment
 
-Version: 0.1.0-beta.3
+Version: 0.1.0-beta.4
 Last updated: 2026-08-30
 
 This is the maintained deployment runbook for the owner-controlled public beta at `myskills.sh`. Live Railway readback on 2026-07-13 showed beta.2 commit `b69dd5e`: API deployment `ef995431-ae75-461b-b05c-b1a486cc03c9` and web deployment `97ae81a3-dcf9-42b1-b120-9b62d2cd9b79`. Re-check deployment IDs and commit IDs before making a current-state claim.

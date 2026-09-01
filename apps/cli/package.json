@@ -1,6 +1,6 @@
 {
   "name": "@jarel/myskills",
-  "version": "0.1.0-beta.3",
+  "version": "0.1.0-beta.4",
   "description": "Command-line client for publishing, discovering, installing, updating, and rolling back MySkills packages.",
   "license": "Apache-2.0",
   "private": false,
@@ -41,8 +41,8 @@
     "test": "node ../../scripts/run-node-tests.mjs --import tsx --extensions .test.ts"
   },
   "devDependencies": {
-    "@myskills-app/core": "0.1.0-beta.3",
-    "@myskills-app/skill-package": "0.1.0-beta.3",
+    "@myskills-app/core": "0.1.0-beta.4",
+    "@myskills-app/skill-package": "0.1.0-beta.4",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.12"
   },
