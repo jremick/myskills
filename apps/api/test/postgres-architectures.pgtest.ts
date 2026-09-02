@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { hashPassword } from "@myskills-app/auth";
 import {
   AppError,
@@ -26,7 +26,6 @@ import {
   skillArchitectureRevisions,
   skillArchitectures,
   skillArtifacts,
-  skillVersions,
   skills,
   teamMemberships,
   users,
@@ -745,16 +744,18 @@ async function insertUser(db: Database, id: string, email: string): Promise<void
     visibility: "public",
     ownerUserId: id,
   }).onConflictDoNothing({ target: skills.slug });
-  await db.insert(skillVersions).values({
-    id: fixtureSkillVersionId,
-    skillId: fixtureSkillId,
-    version: "1.0.0",
-    lifecycleStatus: "approved",
-    reviewStatus: "approved",
-    securityStatus: "passed",
-    approvedArtifactSha256: "a".repeat(64),
-    publishedAt: new Date(),
-  }).onConflictDoNothing();
+  // These tests intentionally stop at historical architecture migrations.
+  // Use the historical skill_versions shape instead of the current Drizzle
+  // projection, which also contains columns introduced by migration 0021.
+  await db.execute(sql`
+    INSERT INTO skill_versions (
+      id, skill_id, version, lifecycle_status, review_status,
+      security_status, approved_artifact_sha256, published_at
+    ) VALUES (
+      ${fixtureSkillVersionId}, ${fixtureSkillId}, '1.0.0', 'approved',
+      'approved', 'passed', ${"a".repeat(64)}, now()
+    ) ON CONFLICT DO NOTHING
+  `);
   await db.insert(skillArtifacts).values({
     id: fixtureArtifactId,
     skillVersionId: fixtureSkillVersionId,

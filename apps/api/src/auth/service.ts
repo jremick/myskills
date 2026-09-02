@@ -1746,6 +1746,7 @@ function requiresVerifiedMfaForApiToken(actor: AuthResponseUser, scopes: ApiToke
     return false;
   }
   const privilegedRole = actor.roles.some((role) => role === "owner" || role === "admin" || role === "maintainer");
+  if (scopes.includes("targets:execute")) return true;
   const privilegedScope = scopes.some((scope) => scope === "review:read" || scope === "review:write");
   return privilegedRole && privilegedScope;
 }

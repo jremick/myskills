@@ -1,8 +1,9 @@
-import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { cp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   hasBlockingFindings,
+  loadSkillManifestFromPackageFiles,
   loadSkillManifestFromPath,
   normalizePackageFilePath,
   readPackageFilesFromPath,
@@ -13,10 +14,17 @@ import {
   assertValidArchitectureTargetAdapterContext,
   assertValidArchitectureTargetObservation,
   architectureTargetLimits,
+  evaluateSkillUpdate,
+  parseSemanticVersion,
+  parseSkillReleaseMetadata,
+  targetSkillOperationPlanDigest,
   validateArchitectureTargetHealth,
   type ArchitectureTargetAdapterContext,
   type ArchitectureTargetHealth,
   type ArchitectureTargetObservation,
+  type SkillReleaseMetadata,
+  type SkillReleaseUpdateCandidate,
+  type TargetSkillOperation,
 } from "@myskills-app/core";
 import {
   CodexReadOnlyArchitectureTargetAdapter,
@@ -119,7 +127,11 @@ export interface CliRuntime {
   tokenStore?: CliTokenStore;
   /** Test-only clock seam for deterministic local target observations. */
   codexAdapterClock?: () => Date;
+  /** Test-only fault seam for deterministic install crash-recovery coverage. */
+  installFault?: (point: InstallFaultPoint) => void;
 }
+
+export type InstallFaultPoint = "prepared" | "previous-staged" | "installed" | "registry-committed";
 
 interface ParsedArgs {
   command: string;
@@ -189,8 +201,12 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
         return await listInstalledCommand(parsed, runtime);
       case "update":
         return await updateCommand(parsed, runtime);
+      case "updates":
+        return await updatesCommand(parsed, runtime);
       case "rollback":
         return await rollbackCommand(parsed, runtime);
+      case "companion":
+        return await companionCommand(parsed, runtime);
       case "token":
         return await tokenCommand(parsed, runtime);
       default:
@@ -1329,7 +1345,8 @@ async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     printScanResult(scan, runtime.io);
     throw new CliError("Package has blocking scan findings; submission was not sent.", 1);
   }
-  const response = await apiPost("/v1/submissions", await submissionPayload(packagePath, manifest), parsed, runtime, token);
+  const release = await releaseMetadataOptions(parsed);
+  const response = await apiPost("/v1/submissions", await submissionPayload(packagePath, manifest, release), parsed, runtime, token);
   if (parsed.options.json) {
     runtime.io.stdout(JSON.stringify(response, null, 2));
   } else {
@@ -1346,10 +1363,15 @@ async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   return 0;
 }
 
-async function submissionPayload(packagePath: string, manifest: unknown): Promise<Record<string, unknown>> {
+async function submissionPayload(
+  packagePath: string,
+  manifest: unknown,
+  release: SkillReleaseMetadata,
+): Promise<Record<string, unknown>> {
   if (path.extname(packagePath).toLowerCase() === ".zip") {
     return {
       manifest,
+      release,
       archive: {
         filename: path.basename(packagePath),
         contentBase64: (await readFile(packagePath)).toString("base64"),
@@ -1358,8 +1380,33 @@ async function submissionPayload(packagePath: string, manifest: unknown): Promis
   }
   return {
     manifest,
+    release,
     files: await readPackageFilesFromPath(packagePath),
   };
+}
+
+async function releaseMetadataOptions(parsed: ParsedArgs): Promise<SkillReleaseMetadata> {
+  const releaseNotesFile = optionalStringOption(parsed, "release-notes-file");
+  const adapterContractVersion = optionalStringOption(parsed, "minimum-adapter-contract-version");
+  const raw: Record<string, unknown> = {
+    ...(releaseNotesFile ? { releaseNotes: await readFile(path.resolve(releaseNotesFile), "utf8") } : {}),
+    ...(optionalStringOption(parsed, "change-kind") ? { changeKind: optionalStringOption(parsed, "change-kind") } : {}),
+    ...(parsed.options["requires-user-action"] === true ? { requiresUserAction: true } : {}),
+    compatibility: {
+      ...(optionalStringOption(parsed, "minimum-myskills-version")
+        ? { minimumMyskillsVersion: optionalStringOption(parsed, "minimum-myskills-version") }
+        : {}),
+      ...(adapterContractVersion ? { minimumAdapterContractVersion: Number(adapterContractVersion) } : {}),
+      ...(optionalStringOption(parsed, "minimum-source-version")
+        ? { minimumSourceVersion: optionalStringOption(parsed, "minimum-source-version") }
+        : {}),
+    },
+  };
+  try {
+    return parseSkillReleaseMetadata(raw);
+  } catch (error) {
+    throw new CliError(error instanceof Error ? error.message : "Invalid release metadata options.", 2);
+  }
 }
 
 async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
@@ -1397,7 +1444,6 @@ async function installCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<
     runtime,
     token,
   });
-  await writeInstallRegistry(root, registry);
   runtime.io.stdout(`${installed.slug}@${installed.version}\tinstalled\tplatform=${installed.platform}\t${installed.path}`);
   return 0;
 }
@@ -1433,21 +1479,48 @@ async function updateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   const token = await tokenOption(parsed, runtime) ?? undefined;
   const explicitVersion = optionalStringOption(parsed, "version");
   const explicitPlatform = optionalStringOption(parsed, "platform");
+  const dryRun = parsed.options["dry-run"] === true;
 
   for (const slug of targets) {
     const existing = registry.installations[slug];
     if (!existing) {
       throw new CliError(`${slug} is not installed. Run myskills install ${slug}.`, 1);
     }
-    const version = explicitVersion ?? await latestVersionForSkill(slug, parsed, runtime, token);
     const platform = explicitPlatform ?? existing.platform;
-    if (version === existing.version && platform === existing.platform) {
-      runtime.io.stdout(`${slug}@${existing.version}\tcurrent\tplatform=${existing.platform}`);
+    if (existing.contentDigest && !await directoryMatchesDigest(existing.path, existing.contentDigest)) {
+      printUpdateEvaluation(slug, platform, localDriftEvaluation(existing.version), parsed, runtime);
       continue;
+    }
+    const releases = await releaseCandidatesForSkill(slug, parsed, runtime, token);
+    const selectedReleases = explicitVersion
+      ? releases.filter((release) => release.version === explicitVersion)
+      : releases;
+    if (explicitVersion && selectedReleases.length === 0) {
+      throw new CliError(`${slug}@${explicitVersion} is not an available release.`, 1);
+    }
+    const evaluation = evaluateSkillUpdate({
+      installed: {
+        version: existing.version,
+        platform,
+        artifactSha256: existing.artifact.sha256 || undefined,
+      },
+      releases: selectedReleases,
+      policy: { includePrerelease: parsed.options["include-prerelease"] === true },
+      client: { myskillsVersion: CLI_VERSION, adapterContractVersion: 1 },
+    });
+    printUpdateEvaluation(slug, platform, evaluation, parsed, runtime);
+    if (dryRun || evaluation.status !== "update-available" || !evaluation.candidate) {
+      continue;
+    }
+    if (evaluation.candidate.requiresUserAction && parsed.options["accept-user-action"] !== true) {
+      throw new CliError(
+        `${slug}@${evaluation.candidate.version} requires user action. Review it with myskills updates ${slug}, then rerun with --accept-user-action.`,
+        1,
+      );
     }
     const updated = await installSkillVersion({
       slug,
-      version,
+      version: evaluation.candidate.version,
       platform,
       root,
       registry,
@@ -1455,10 +1528,142 @@ async function updateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
       runtime,
       token,
     });
-    runtime.io.stdout(`${updated.slug}@${updated.version}\tupdated\tplatform=${updated.platform}\tprevious=${existing.version}`);
+    runtime.io.stdout(`${updated.slug}@${updated.version}\tapplied\tplatform=${updated.platform}\tprevious=${existing.version}`);
   }
-  await writeInstallRegistry(root, registry);
   return 0;
+}
+
+async function updatesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const root = installRoot(parsed, runtime);
+  const registry = await readInstallRegistry(root);
+  const targets = parsed.args[0]
+    ? [parseInstallSlug(parsed.args[0])]
+    : Object.keys(registry.installations).sort();
+  if (targets.length === 0) {
+    runtime.io.stdout(parsed.options.json ? JSON.stringify({ updates: [] }, null, 2) : "No installed skills.");
+    return 0;
+  }
+  const token = await tokenOption(parsed, runtime) ?? undefined;
+  const results: Array<{ slug: string; platform: string; evaluation: ReturnType<typeof evaluateSkillUpdate> }> = [];
+  for (const slug of targets) {
+    const installed = registry.installations[slug];
+    if (!installed) throw new CliError(`${slug} is not installed. Run myskills install ${slug}.`, 1);
+    if (installed.contentDigest && !await directoryMatchesDigest(installed.path, installed.contentDigest)) {
+      const evaluation = localDriftEvaluation(installed.version);
+      results.push({ slug, platform: installed.platform, evaluation });
+      if (!parsed.options.json) printUpdateEvaluation(slug, installed.platform, evaluation, parsed, runtime);
+      continue;
+    }
+    const releases = await releaseCandidatesForSkill(slug, parsed, runtime, token);
+    const evaluation = evaluateSkillUpdate({
+      installed: {
+        version: installed.version,
+        platform: installed.platform,
+        artifactSha256: installed.artifact.sha256 || undefined,
+      },
+      releases,
+      policy: { includePrerelease: parsed.options["include-prerelease"] === true },
+      client: { myskillsVersion: CLI_VERSION, adapterContractVersion: 1 },
+    });
+    results.push({ slug, platform: installed.platform, evaluation });
+    if (!parsed.options.json) printUpdateEvaluation(slug, installed.platform, evaluation, parsed, runtime);
+  }
+  if (parsed.options.json) runtime.io.stdout(JSON.stringify({ updates: results }, null, 2));
+  return 0;
+}
+
+async function releaseCandidatesForSkill(
+  slug: string,
+  parsed: ParsedArgs,
+  runtime: CliRuntime,
+  token: string | undefined,
+): Promise<SkillReleaseUpdateCandidate[]> {
+  const response = await apiGet(`/v1/skills/${encodeURIComponent(parseInstallSlug(slug))}/releases`, parsed, runtime, token);
+  if (!Array.isArray(response.releases)) {
+    throw new CliError("API release list response is missing releases.", 1);
+  }
+  return response.releases.map((release, index) => parseReleaseCandidate(release, index));
+}
+
+function parseReleaseCandidate(input: unknown, index: number): SkillReleaseUpdateCandidate {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new CliError(`API release list entry ${index + 1} is invalid.`, 1);
+  }
+  const record = input as Record<string, unknown>;
+  if (typeof record.version !== "string" || !parseSemanticVersion(record.version)) {
+    throw new CliError(`API release list entry ${index + 1} has an invalid version.`, 1);
+  }
+  if (record.lifecycleStatus !== "approved" && record.lifecycleStatus !== "deprecated") {
+    throw new CliError(`API release list entry ${index + 1} is not installable.`, 1);
+  }
+  const artifact = parseReleaseArtifactValue(record.artifact, index);
+  let release: SkillReleaseMetadata;
+  try {
+    release = parseSkillReleaseMetadata({
+      releaseNotes: record.releaseNotes,
+      changeKind: record.changeKind,
+      requiresUserAction: record.requiresUserAction,
+      compatibility: record.compatibility,
+    });
+  } catch {
+    throw new CliError(`API release list entry ${index + 1} has invalid release metadata.`, 1);
+  }
+  return {
+    version: record.version,
+    lifecycleStatus: record.lifecycleStatus,
+    publishedAt: typeof record.publishedAt === "string" ? record.publishedAt : "",
+    platforms: parseReleasePlatforms(record.platforms),
+    artifact,
+    ...release,
+  };
+}
+
+function parseReleaseArtifactValue(input: unknown, index: number): SkillReleaseUpdateCandidate["artifact"] {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new CliError(`API release list entry ${index + 1} is missing artifact metadata.`, 1);
+  }
+  const record = input as Record<string, unknown>;
+  if (
+    typeof record.sha256 !== "string"
+    || !/^[a-f0-9]{64}$/.test(record.sha256)
+    || typeof record.byteSize !== "number"
+    || !Number.isSafeInteger(record.byteSize)
+    || record.byteSize < 0
+  ) {
+    throw new CliError(`API release list entry ${index + 1} has invalid artifact metadata.`, 1);
+  }
+  return {
+    sha256: record.sha256,
+    byteSize: record.byteSize,
+    contentType: typeof record.contentType === "string" ? record.contentType : "application/vnd.myskills-app.package+json",
+  };
+}
+
+function printUpdateEvaluation(
+  slug: string,
+  platform: string,
+  evaluation: ReturnType<typeof evaluateSkillUpdate>,
+  parsed: ParsedArgs,
+  runtime: CliRuntime,
+): void {
+  if (parsed.options.json) return;
+  const candidate = evaluation.candidate ? `\tcandidate=${evaluation.candidate.version}` : "";
+  const blockers = evaluation.blockers.length > 0 ? `\tblockers=${evaluation.blockers.join(",")}` : "";
+  runtime.io.stdout(`${slug}@${evaluation.installedVersion}\t${evaluation.status}\tplatform=${platform}${candidate}${blockers}`);
+  for (const release of evaluation.includedReleases) {
+    runtime.io.stdout(
+      `changes\t${release.version}\t${release.changeKind}\taction=${release.requiresUserAction ? "required" : "none"}\t${terminalSafeText(release.releaseNotes)}`,
+    );
+  }
+}
+
+function localDriftEvaluation(version: string): ReturnType<typeof evaluateSkillUpdate> {
+  return {
+    status: "drifted",
+    installedVersion: version,
+    includedReleases: [],
+    blockers: [],
+  };
 }
 
 async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
@@ -1476,11 +1681,42 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
   }
 
   const outputRoot = skillInstallPath(root, slug);
-  const snapshotPath = path.resolve(previous.snapshotPath);
-  assertChildPath(path.join(root, ".myskills-app", "history"), snapshotPath);
-  await rm(outputRoot, { recursive: true, force: true });
-  await mkdir(path.dirname(outputRoot), { recursive: true });
-  await cp(snapshotPath, outputRoot, { recursive: true });
+  const sourceSnapshotPath = path.resolve(previous.snapshotPath);
+  assertChildPath(path.join(root, ".myskills-app", "history"), sourceSnapshotPath);
+  if (!await pathExists(outputRoot) || !await pathExists(sourceSnapshotPath)) {
+    throw new CliError(`${slug} cannot roll back because its active install or snapshot is missing.`, 1);
+  }
+  const transactionId = randomUUID();
+  const stageRoot = installStagePath(root, transactionId);
+  const recoverySnapshotPath = historySnapshotPath(root, slug, existing.version, transactionId);
+  const targetContentDigest = previous.contentDigest || await directoryContentDigest(sourceSnapshotPath);
+  await mkdir(path.dirname(stageRoot), { recursive: true });
+  await cp(sourceSnapshotPath, stageRoot, { recursive: true });
+  let transaction: InstallTransaction = {
+    version: 1,
+    id: transactionId,
+    operation: "rollback",
+    state: "prepared",
+    slug,
+    targetVersion: previous.version,
+    targetPlatform: previous.platform,
+    targetArtifact: previous.artifact,
+    targetContentDigest,
+    previous: existing,
+    snapshotCreated: true,
+    sourceSnapshotPath,
+  };
+  await writeInstallTransaction(root, transaction);
+  runtime.installFault?.("prepared");
+  await mkdir(path.dirname(recoverySnapshotPath), { recursive: true });
+  await rename(outputRoot, recoverySnapshotPath);
+  transaction = { ...transaction, state: "previous-staged" };
+  await writeInstallTransaction(root, transaction);
+  runtime.installFault?.("previous-staged");
+  await rename(stageRoot, outputRoot);
+  transaction = { ...transaction, state: "installed" };
+  await writeInstallTransaction(root, transaction);
+  runtime.installFault?.("installed");
   registry.installations[slug] = {
     slug,
     version: previous.version,
@@ -1488,11 +1724,211 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
     path: outputRoot,
     installedAt: new Date().toISOString(),
     artifact: previous.artifact,
+    contentDigest: targetContentDigest,
     history: existing.history.slice(0, -1),
   };
   await writeInstallRegistry(root, registry);
+  transaction = { ...transaction, state: "registry-committed" };
+  await writeInstallTransaction(root, transaction);
+  runtime.installFault?.("registry-committed");
+  await rm(recoverySnapshotPath, { recursive: true, force: true });
+  await rm(sourceSnapshotPath, { recursive: true, force: true });
+  await rm(installTransactionPath(root, transactionId), { force: true });
   runtime.io.stdout(`${slug}@${previous.version}\trolled-back\tplatform=${previous.platform}\t${outputRoot}`);
   return 0;
+}
+
+async function companionCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const subcommand = parsed.args[0];
+  if (subcommand !== "run-once") {
+    throw new CliError("Usage: myskills companion run-once --target-id <id> --generation <number> --holder <id> [--dir <install-root>]", 2);
+  }
+  const token = await tokenOption(parsed, runtime);
+  if (!token) throw new CliError("A targets:execute API token is required for the companion.", 1);
+  const targetId = parseArchitectureReference(stringOption(parsed, "target-id"), "target");
+  const generation = positiveIntegerOption(parsed, "generation");
+  const holderId = parseArchitectureReference(stringOption(parsed, "holder"), "holder");
+  const claimResponse = await apiPost("/v1/target-operations/claim", {
+    targetId,
+    targetGeneration: generation,
+    holderId,
+    leaseSeconds: 300,
+  }, parsed, runtime, token);
+  if (claimResponse.claim === null) {
+    runtime.io.stdout("No queued target operations.");
+    return 0;
+  }
+  const claim = parseTargetOperationClaim(claimResponse.claim, targetId, generation);
+  const operation = claim.operation;
+  const statePayload = {
+    holderId,
+    claimToken: claim.claimToken,
+    fencingToken: operation.fencingToken,
+    leaseSeconds: 300,
+  };
+  await apiPost(`/v1/target-operations/${encodeURIComponent(operation.id)}/state`, {
+    ...statePayload,
+    state: "applying",
+  }, parsed, runtime, token);
+
+  try {
+    const installed = await executeTargetOperation(operation, parsed, runtime, token);
+    await apiPost(`/v1/target-operations/${encodeURIComponent(operation.id)}/state`, {
+      ...statePayload,
+      state: "verifying",
+    }, parsed, runtime, token);
+    const root = installRoot(parsed, runtime);
+    const registry = await readInstallRegistry(root);
+    const current = registry.installations[operation.skillSlug];
+    if (
+      !current
+      || current.version !== operation.toVersion
+      || current.artifact.sha256 !== operation.artifact.sha256
+      || !current.contentDigest
+      || !await directoryMatchesDigest(current.path, current.contentDigest)
+    ) {
+      throw new CliError("Target operation readback does not match the claimed plan.", 1);
+    }
+    await apiPost(`/v1/target-operations/${encodeURIComponent(operation.id)}/receipt`, {
+      holderId,
+      claimToken: claim.claimToken,
+      fencingToken: operation.fencingToken,
+      result: {
+        status: "succeeded",
+        code: "operation.succeeded",
+        installedVersion: current.version,
+        artifactSha256: current.artifact.sha256,
+        contentDigest: current.contentDigest,
+      },
+    }, parsed, runtime, token);
+    runtime.io.stdout(`${operation.id}\tsucceeded\t${installed.slug}@${installed.version}\t${operation.action}`);
+    return 0;
+  } catch (error) {
+    try {
+      await apiPost(`/v1/target-operations/${encodeURIComponent(operation.id)}/receipt`, {
+        holderId,
+        claimToken: claim.claimToken,
+        fencingToken: operation.fencingToken,
+        result: { status: "failed", code: "operation.failed" },
+      }, parsed, runtime, token);
+    } catch {
+      // The original failure remains primary; a stale lease is recoverable by a later fenced claim.
+    }
+    throw error;
+  }
+}
+
+async function executeTargetOperation(
+  operation: TargetSkillOperation,
+  parsed: ParsedArgs,
+  runtime: CliRuntime,
+  token: string,
+): Promise<InstalledSkillRecord> {
+  const root = installRoot(parsed, runtime);
+  const registry = await readInstallRegistry(root);
+  const existing = registry.installations[operation.skillSlug];
+  if (
+    existing
+    && existing.version === operation.toVersion
+    && existing.artifact.sha256 === operation.artifact.sha256
+    && existing.contentDigest
+    && await directoryMatchesDigest(existing.path, existing.contentDigest)
+  ) return existing;
+  if (operation.action === "install" && existing) {
+    throw new CliError("Target install state changed after the operation was planned.", 1);
+  }
+  if (operation.action !== "install" && (!existing || existing.version !== operation.fromVersion)) {
+    throw new CliError("Target source version changed after the operation was planned.", 1);
+  }
+  if (existing?.contentDigest && !await directoryMatchesDigest(existing.path, existing.contentDigest)) {
+    throw new CliError("Target skill has local drift and cannot be changed automatically.", 1);
+  }
+  if (operation.action === "rollback") {
+    const previous = existing?.history.at(-1);
+    if (!previous || previous.version !== operation.toVersion || previous.artifact.sha256 !== operation.artifact.sha256) {
+      throw new CliError("The required rollback snapshot is not available on this target.", 1);
+    }
+    const rollbackParsed: ParsedArgs = {
+      command: "rollback",
+      args: [operation.skillSlug],
+      options: { dir: root },
+    };
+    await rollbackCommand(rollbackParsed, runtime);
+    const after = (await readInstallRegistry(root)).installations[operation.skillSlug];
+    if (!after) throw new CliError("Rollback did not produce an installed skill.", 1);
+    return after;
+  }
+  return installSkillVersion({
+    slug: operation.skillSlug,
+    version: operation.toVersion,
+    platform: operation.platform,
+    root,
+    registry,
+    parsed,
+    runtime,
+    token,
+    expectedArtifact: operation.artifact,
+  });
+}
+
+function parseTargetOperationClaim(input: unknown, targetId: string, generation: number): {
+  operation: TargetSkillOperation;
+  claimToken: string;
+} {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new CliError("Target operation claim is invalid.", 1);
+  const record = input as Record<string, unknown>;
+  if (typeof record.claimToken !== "string" || record.claimToken.length < 32 || !record.operation || typeof record.operation !== "object" || Array.isArray(record.operation)) {
+    throw new CliError("Target operation claim is invalid.", 1);
+  }
+  const operation = record.operation as Record<string, unknown>;
+  const artifact = parseReleaseArtifactValue(operation.artifact, 0);
+  if (
+    operation.schemaVersion !== 1
+    || typeof operation.id !== "string"
+    || !OBSERVED_IDENTIFIER_PATTERN.test(operation.id)
+    || operation.targetId !== targetId
+    || operation.targetGeneration !== generation
+    || (operation.action !== "install" && operation.action !== "update" && operation.action !== "rollback")
+    || typeof operation.skillSlug !== "string"
+    || typeof operation.toVersion !== "string"
+    || !parseSemanticVersion(operation.toVersion)
+    || (operation.fromVersion !== undefined && (typeof operation.fromVersion !== "string" || !parseSemanticVersion(operation.fromVersion)))
+    || typeof operation.platform !== "string"
+    || typeof operation.planDigest !== "string"
+    || !OBSERVED_DIGEST_PATTERN.test(operation.planDigest)
+    || operation.state !== "claimed"
+    || typeof operation.fencingToken !== "number"
+    || !Number.isInteger(operation.fencingToken)
+    || operation.fencingToken < 1
+  ) throw new CliError("Target operation claim is invalid.", 1);
+  const normalized = {
+    schemaVersion: 1 as const,
+    id: operation.id,
+    targetId,
+    targetGeneration: generation,
+    action: operation.action,
+    skillSlug: parseInstallSlug(operation.skillSlug),
+    ...(typeof operation.fromVersion === "string" ? { fromVersion: operation.fromVersion } : {}),
+    toVersion: operation.toVersion,
+    platform: operation.platform,
+    artifact,
+    planDigest: operation.planDigest,
+    state: "claimed" as const,
+    fencingToken: operation.fencingToken,
+    ...(typeof operation.leaseExpiresAt === "string" ? { leaseExpiresAt: operation.leaseExpiresAt } : {}),
+    createdAt: typeof operation.createdAt === "string" ? operation.createdAt : "",
+    updatedAt: typeof operation.updatedAt === "string" ? operation.updatedAt : "",
+  } satisfies TargetSkillOperation;
+  if (targetSkillOperationPlanDigest(normalized) !== normalized.planDigest) {
+    throw new CliError("Target operation plan digest is invalid.", 1);
+  }
+  return { operation: normalized, claimToken: record.claimToken };
+}
+
+function positiveIntegerOption(parsed: ParsedArgs, key: string): number {
+  const value = Number(stringOption(parsed, key));
+  if (!Number.isInteger(value) || value < 1 || value > 1_000_000_000) throw new CliError(`--${key} must be a positive integer.`, 2);
+  return value;
 }
 
 async function latestVersionForSkill(slug: string, parsed: ParsedArgs, runtime: CliRuntime, token: string | undefined): Promise<string> {
@@ -1517,6 +1953,7 @@ async function installSkillVersion(input: {
   parsed: ParsedArgs;
   runtime: CliRuntime;
   token?: string;
+  expectedArtifact?: ReleaseArtifact;
 }): Promise<InstalledSkillRecord> {
   const slug = parseInstallSlug(input.slug);
   const outputRoot = skillInstallPath(input.root, slug);
@@ -1525,23 +1962,63 @@ async function installSkillVersion(input: {
     version: input.version,
     platform: input.platform,
   }, input.parsed, input.runtime, input.token);
+  if (
+    input.expectedArtifact
+    && (bundle.artifact.sha256 !== input.expectedArtifact.sha256 || bundle.artifact.byteSize !== input.expectedArtifact.byteSize)
+  ) {
+    throw new CliError("Downloaded bundle does not match the claimed target operation.", 1);
+  }
   const existing = input.registry.installations[slug];
   const history = existing ? [...existing.history] : [];
-  if (existing && await pathExists(outputRoot)) {
-    const snapshotPath = historySnapshotPath(input.root, slug, existing.version);
+  if (!existing && await pathExists(outputRoot)) {
+    throw new CliError(`${slug} already exists outside the MySkills install registry.`, 1);
+  }
+
+  const transactionId = randomUUID();
+  const stageRoot = installStagePath(input.root, transactionId);
+  const snapshotPath = existing && await pathExists(outputRoot)
+    ? historySnapshotPath(input.root, slug, existing.version, transactionId)
+    : null;
+  const contentDigest = contentDigestForFiles(bundle.files);
+  await mkdir(path.dirname(stageRoot), { recursive: true });
+  await writeBundleFiles(bundle.files, stageRoot, { clean: true });
+  let transaction: InstallTransaction = {
+    version: 1,
+    id: transactionId,
+    operation: existing ? "update" : "install",
+    state: "prepared",
+    slug,
+    targetVersion: bundle.version,
+    targetPlatform: bundle.platform.name,
+    targetArtifact: bundle.artifact,
+    targetContentDigest: contentDigest,
+    previous: existing ?? null,
+    snapshotCreated: snapshotPath !== null,
+  };
+  await writeInstallTransaction(input.root, transaction);
+  input.runtime.installFault?.("prepared");
+
+  if (snapshotPath) {
     await mkdir(path.dirname(snapshotPath), { recursive: true });
-    await rm(snapshotPath, { recursive: true, force: true });
-    await cp(outputRoot, snapshotPath, { recursive: true });
+    await rename(outputRoot, snapshotPath);
     history.push({
       version: existing.version,
       platform: existing.platform,
       installedAt: existing.installedAt,
       artifact: existing.artifact,
+      contentDigest: existing.contentDigest,
       snapshotPath,
     });
+    transaction = { ...transaction, state: "previous-staged" };
+    await writeInstallTransaction(input.root, transaction);
+    input.runtime.installFault?.("previous-staged");
   }
 
-  await writeBundleFiles(bundle.files, outputRoot, { clean: true });
+  await mkdir(path.dirname(outputRoot), { recursive: true });
+  await rename(stageRoot, outputRoot);
+  transaction = { ...transaction, state: "installed" };
+  await writeInstallTransaction(input.root, transaction);
+  input.runtime.installFault?.("installed");
   const installed: InstalledSkillRecord = {
     slug,
     version: bundle.version,
@@ -1549,9 +2026,15 @@ async function installSkillVersion(input: {
     path: outputRoot,
     installedAt: new Date().toISOString(),
     artifact: bundle.artifact,
+    contentDigest,
     history,
   };
   input.registry.installations[slug] = installed;
+  await writeInstallRegistry(input.root, input.registry);
+  transaction = { ...transaction, state: "registry-committed" };
+  await writeInstallTransaction(input.root, transaction);
+  input.runtime.installFault?.("registry-committed");
+  await rm(installTransactionPath(input.root, transactionId), { force: true });
   return installed;
 }
 
@@ -1583,6 +2066,18 @@ async function downloadVerifiedBundle(input: {
   }
 
   const files = parseBundlePayload(bundleText);
+  for (const file of files) {
+    safeBundlePath(file.path);
+  }
+  let manifest;
+  try {
+    manifest = loadSkillManifestFromPackageFiles(files);
+  } catch {
+    throw new CliError("Downloaded bundle has an invalid package manifest.", 1);
+  }
+  if (manifest.name !== release.slug || manifest.version !== release.version) {
+    throw new CliError("Downloaded bundle manifest does not match release metadata.", 1);
+  }
   return {
     slug: release.slug,
     version: release.version,
@@ -1627,7 +2122,7 @@ interface VerifiedBundle {
 interface ReleasePlatform {
   name: string;
   installTarget: string;
-  status: string;
+  status: "supported" | "deprecated" | "planned";
 }
 
 interface ReleaseArtifact {
@@ -1654,6 +2149,7 @@ interface InstalledSkillRecord {
   path: string;
   installedAt: string;
   artifact: ReleaseArtifact;
+  contentDigest: string;
   history: InstalledSkillSnapshot[];
 }
 
@@ -1662,7 +2158,23 @@ interface InstalledSkillSnapshot {
   platform: string;
   installedAt: string;
   artifact: ReleaseArtifact;
+  contentDigest: string;
   snapshotPath: string;
+}
+
+interface InstallTransaction {
+  version: 1;
+  id: string;
+  operation: "install" | "update" | "rollback";
+  state: InstallFaultPoint;
+  slug: string;
+  targetVersion: string;
+  targetPlatform: string;
+  targetArtifact: ReleaseArtifact;
+  targetContentDigest: string;
+  previous: InstalledSkillRecord | null;
+  snapshotCreated: boolean;
+  sourceSnapshotPath?: string;
 }
 
 type CliVisibilityScope = (typeof CLI_VISIBILITY_SCOPES)[number];
@@ -1759,7 +2271,7 @@ function parseReleasePlatforms(input: unknown): ReleasePlatform[] {
     return [{
       name: record.name,
       installTarget: record.installTarget,
-      status: typeof record.status === "string" ? record.status : "supported",
+      status: record.status === "deprecated" || record.status === "planned" ? record.status : "supported",
     }];
   });
 }
@@ -1793,6 +2305,11 @@ function installRoot(parsed: ParsedArgs, runtime: CliRuntime): string {
 }
 
 async function readInstallRegistry(root: string): Promise<InstallRegistry> {
+  await recoverInstallTransactions(root);
+  return readInstallRegistryFile(root);
+}
+
+async function readInstallRegistryFile(root: string): Promise<InstallRegistry> {
   try {
     return parseInstallRegistry(await readFile(installRegistryPath(root), "utf8"), root);
   } catch (error) {
@@ -1806,7 +2323,7 @@ async function readInstallRegistry(root: string): Promise<InstallRegistry> {
 async function writeInstallRegistry(root: string, registry: InstallRegistry): Promise<void> {
   const filePath = installRegistryPath(root);
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
+  await atomicWriteTextFile(filePath, `${JSON.stringify(registry, null, 2)}\n`);
 }
 
 function parseInstallRegistry(raw: string, root: string): InstallRegistry {
@@ -1845,6 +2362,9 @@ function parseInstalledSkillRecord(slug: string, input: unknown, root: string): 
     path: installPath,
     installedAt: typeof record.installedAt === "string" ? record.installedAt : "",
     artifact: parseStoredArtifact(record.artifact),
+    contentDigest: typeof record.contentDigest === "string" && /^[a-f0-9]{64}$/.test(record.contentDigest)
+      ? record.contentDigest
+      : "",
     history: parseInstallHistory(record.history, root),
   };
 }
@@ -1868,6 +2388,9 @@ function parseInstallHistory(input: unknown, root: string): InstalledSkillSnapsh
       platform: record.platform,
       installedAt: typeof record.installedAt === "string" ? record.installedAt : "",
       artifact: parseStoredArtifact(record.artifact),
+      contentDigest: typeof record.contentDigest === "string" && /^[a-f0-9]{64}$/.test(record.contentDigest)
+        ? record.contentDigest
+        : "",
       snapshotPath,
     }];
   });
@@ -2994,13 +3517,214 @@ function installRegistryPath(root: string): string {
   return path.join(root, ".myskills-app", "installed.json");
 }
 
+function installTransactionsRoot(root: string): string {
+  return path.join(root, ".myskills-app", "transactions");
+}
+
+function installTransactionPath(root: string, transactionId: string): string {
+  return path.join(installTransactionsRoot(root), `${transactionId}.json`);
+}
+
+function installStagePath(root: string, transactionId: string): string {
+  return path.join(root, ".myskills-app", "staging", transactionId);
+}
+
 function skillInstallPath(root: string, slug: string): string {
   return path.join(root, parseInstallSlug(slug));
 }
 
-function historySnapshotPath(root: string, slug: string, version: string): string {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return path.join(root, ".myskills-app", "history", parseInstallSlug(slug), `${timestamp}-${version}`);
+function historySnapshotPath(root: string, slug: string, version: string, transactionId: string = randomUUID()): string {
+  return path.join(root, ".myskills-app", "history", parseInstallSlug(slug), `${transactionId}-${version}`);
+}
+
+async function atomicWriteTextFile(filePath: string, content: string): Promise<void> {
+  const tempPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${randomUUID()}.tmp`);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  try {
+    await writeFile(tempPath, content, "utf8");
+    await rename(tempPath, filePath);
+  } finally {
+    await rm(tempPath, { force: true });
+  }
+}
+
+async function writeInstallTransaction(root: string, transaction: InstallTransaction): Promise<void> {
+  await atomicWriteTextFile(
+    installTransactionPath(root, transaction.id),
+    `${JSON.stringify(transaction, null, 2)}\n`,
+  );
+}
+
+async function recoverInstallTransactions(root: string): Promise<void> {
+  let entries;
+  try {
+    entries = await readdir(installTransactionsRoot(root), { withFileTypes: true });
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return;
+    throw error;
+  }
+  const files = entries
+    .filter((entry) => entry.isFile() && /^[0-9a-f-]{36}\.json$/.test(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+  if (files.length === 0) return;
+  const registry = await readInstallRegistryFile(root);
+  let registryChanged = false;
+
+  for (const filename of files) {
+    const journalPath = path.join(installTransactionsRoot(root), filename);
+    const transaction = parseInstallTransaction(await readFile(journalPath, "utf8"), filename, root);
+    const outputRoot = skillInstallPath(root, transaction.slug);
+    const stageRoot = installStagePath(root, transaction.id);
+    const snapshotPath = transaction.previous && transaction.snapshotCreated
+      ? historySnapshotPath(root, transaction.slug, transaction.previous.version, transaction.id)
+      : null;
+    const installed = registry.installations[transaction.slug];
+    const candidateCommitted = Boolean(
+      installed
+      && installed.version === transaction.targetVersion
+      && installed.platform === transaction.targetPlatform
+      && installed.artifact.sha256 === transaction.targetArtifact.sha256
+      && installed.contentDigest === transaction.targetContentDigest
+      && await pathExists(outputRoot)
+      && await directoryMatchesDigest(outputRoot, transaction.targetContentDigest),
+    );
+    if (candidateCommitted) {
+      await rm(stageRoot, { recursive: true, force: true });
+      if (transaction.operation === "rollback") {
+        if (snapshotPath) await rm(snapshotPath, { recursive: true, force: true });
+        if (transaction.sourceSnapshotPath) {
+          await rm(transaction.sourceSnapshotPath, { recursive: true, force: true });
+        }
+      }
+      await rm(journalPath, { force: true });
+      continue;
+    }
+
+    if (snapshotPath && await pathExists(snapshotPath)) {
+      await rm(outputRoot, { recursive: true, force: true });
+      await mkdir(path.dirname(outputRoot), { recursive: true });
+      await rename(snapshotPath, outputRoot);
+    } else if (transaction.snapshotCreated) {
+      if (transaction.state !== "prepared" || !await pathExists(outputRoot)) {
+        throw new CliError(`Install recovery for ${transaction.slug} requires manual intervention; its rollback snapshot is missing.`, 1);
+      }
+    } else if (!transaction.previous || transaction.state !== "prepared") {
+      await rm(outputRoot, { recursive: true, force: true });
+    }
+    await rm(stageRoot, { recursive: true, force: true });
+    if (transaction.previous) {
+      registry.installations[transaction.slug] = transaction.previous;
+    } else {
+      delete registry.installations[transaction.slug];
+    }
+    registryChanged = true;
+    await rm(journalPath, { force: true });
+  }
+  if (registryChanged) await writeInstallRegistry(root, registry);
+}
+
+function parseInstallTransaction(raw: string, filename: string, root: string): InstallTransaction {
+  let input: unknown;
+  try {
+    input = JSON.parse(raw);
+  } catch {
+    throw new CliError("Install transaction journal is invalid.", 1);
+  }
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new CliError("Install transaction journal is invalid.", 1);
+  }
+  const record = input as Record<string, unknown>;
+  const id = filename.slice(0, -5);
+  const states: InstallFaultPoint[] = ["prepared", "previous-staged", "installed", "registry-committed"];
+  if (
+    record.version !== 1
+    || record.id !== id
+    || (record.operation !== "install" && record.operation !== "update" && record.operation !== "rollback")
+    || typeof record.state !== "string"
+    || !states.includes(record.state as InstallFaultPoint)
+    || typeof record.slug !== "string"
+    || typeof record.targetVersion !== "string"
+    || !parseSemanticVersion(record.targetVersion)
+    || typeof record.targetPlatform !== "string"
+    || typeof record.targetContentDigest !== "string"
+    || !/^[a-f0-9]{64}$/.test(record.targetContentDigest)
+    || typeof record.snapshotCreated !== "boolean"
+  ) {
+    throw new CliError("Install transaction journal is invalid.", 1);
+  }
+  const slug = parseInstallSlug(record.slug);
+  const targetArtifact = parseStoredArtifact(record.targetArtifact);
+  if (!/^[a-f0-9]{64}$/.test(targetArtifact.sha256) || !Number.isSafeInteger(targetArtifact.byteSize)) {
+    throw new CliError("Install transaction journal has invalid artifact metadata.", 1);
+  }
+  const previous = record.previous === null ? null : parseInstalledSkillRecord(slug, record.previous, root);
+  if (record.previous !== null && !previous) {
+    throw new CliError("Install transaction journal has invalid previous state.", 1);
+  }
+  let sourceSnapshotPath: string | undefined;
+  if (record.operation === "rollback") {
+    if (typeof record.sourceSnapshotPath !== "string") {
+      throw new CliError("Install rollback transaction is missing its source snapshot.", 1);
+    }
+    sourceSnapshotPath = path.resolve(record.sourceSnapshotPath);
+    assertChildPath(path.join(root, ".myskills-app", "history"), sourceSnapshotPath);
+  } else if (record.sourceSnapshotPath !== undefined) {
+    throw new CliError("Install transaction journal is invalid.", 1);
+  }
+  return {
+    version: 1,
+    id,
+    operation: record.operation,
+    state: record.state as InstallFaultPoint,
+    slug,
+    targetVersion: record.targetVersion,
+    targetPlatform: record.targetPlatform,
+    targetArtifact,
+    targetContentDigest: record.targetContentDigest,
+    previous,
+    snapshotCreated: record.snapshotCreated,
+    ...(sourceSnapshotPath ? { sourceSnapshotPath } : {}),
+  };
+}
+
+function contentDigestForFiles(files: Array<{ path: string; content: string }>): string {
+  const normalized = files
+    .map((file) => ({ path: safeBundlePath(file.path), content: file.content }))
+    .sort((left, right) => left.path.localeCompare(right.path));
+  return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
+}
+
+async function directoryMatchesDigest(root: string, expected: string): Promise<boolean> {
+  try {
+    return await directoryContentDigest(root) === expected;
+  } catch {
+    return false;
+  }
+}
+
+async function directoryContentDigest(root: string): Promise<string> {
+  const files: Array<{ path: string; content: string }> = [];
+  async function visit(directory: string): Promise<void> {
+    const entries = await readdir(directory, { withFileTypes: true });
+    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+      const absolutePath = path.join(directory, entry.name);
+      if (entry.isSymbolicLink() || (!entry.isDirectory() && !entry.isFile())) {
+        throw new CliError("Installed skill contains an unsupported filesystem entry.", 1);
+      }
+      if (entry.isDirectory()) {
+        await visit(absolutePath);
+        continue;
+      }
+      if (files.length >= 5_000) throw new CliError("Installed skill contains too many files.", 1);
+      files.push({
+        path: path.relative(root, absolutePath).split(path.sep).join("/"),
+        content: await readFile(absolutePath, "utf8"),
+      });
+    }
+  }
+  await visit(root);
+  return contentDigestForFiles(files);
 }
 
 function parseInstallSlug(slug: string): string {
@@ -3749,7 +4473,16 @@ function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
     const key = value.slice(2);
-    if (key === "json" || key === "api-key" || key === "health" || key === "clear-organizations") {
+    if (
+      key === "json"
+      || key === "api-key"
+      || key === "health"
+      || key === "clear-organizations"
+      || key === "dry-run"
+      || key === "include-prerelease"
+      || key === "requires-user-action"
+      || key === "accept-user-action"
+    ) {
       options[key] = true;
       continue;
     }
@@ -3791,7 +4524,7 @@ function helpText(): string {
     "  config set api-url <url>",
     "  config reset api-url",
     "  config list",
-    "  submit --path <file-directory-or-zip> [--api-url <url>] [--token <token>]",
+    "  submit --path <file-directory-or-zip> [--release-notes-file <file>] [--change-kind <fix|feature|breaking|security|maintenance>] [--requires-user-action] [--minimum-myskills-version <version>] [--minimum-adapter-contract-version <number>] [--minimum-source-version <version>] [--api-url <url>] [--token <token>]",
     "  review submissions [--api-url <url>] [--token <token>]",
     "  review bundle <submission-id> [--platform <name>] [--output <file>] [--api-url <url>] [--token <token>]",
     "  review action <submission-id> --action <approve|request-changes|reject|publish> [--artifact-sha256 <hash>] [--reason <text>] [--api-url <url>] [--token <token>]",
@@ -3819,8 +4552,10 @@ function helpText(): string {
     "  export <skill-slug> --version <version> --platform <platform> --output <dir>",
     "  install <skill-slug> [--version <version>] [--platform <platform>] [--dir <install-root>]",
     "  list [--dir <install-root>]",
-    "  update [skill-slug] [--version <version>] [--platform <platform>] [--dir <install-root>]",
+    "  updates [skill-slug] [--include-prerelease] [--dir <install-root>] [--json]",
+    "  update [skill-slug] [--version <version>] [--platform <platform>] [--include-prerelease] [--dry-run] [--accept-user-action] [--dir <install-root>]",
     "  rollback <skill-slug> [--dir <install-root>]",
+    "  companion run-once --target-id <id> --generation <number> --holder <id> [--dir <install-root>] [--api-url <url>] [--token <targets:execute-token>]",
     "  token create --name <name> --scope <scope> [--scope <scope>]",
     "  token list",
     "  token revoke <token-id>",

@@ -6,6 +6,7 @@ import type {
   SecurityStatus,
   SkillLifecycleStatus,
   SkillPlatformVariant,
+  SkillReleaseMetadata,
   VisibilityScope,
 } from "@myskills-app/core";
 
@@ -22,6 +23,7 @@ export interface CreateSubmissionInput {
   actor: SubmissionActor;
   manifest: SkillManifest;
   files: PackageInputFile[];
+  release?: SkillReleaseMetadata;
 }
 
 export interface StoredSubmission {
@@ -39,6 +41,7 @@ export interface StoredSubmission {
   approvedArtifactSha256: string | null;
   publishedAt: string | null;
   createdAt: string;
+  release: SkillReleaseMetadata;
   artifact: {
     storageKey: string;
     sha256: string;
@@ -138,6 +141,10 @@ export interface PublicReleaseMetadata {
   securityStatus: "passed";
   publishedAt: string;
   platforms: SkillPlatformVariant[];
+  releaseNotes: string;
+  changeKind: SkillReleaseMetadata["changeKind"];
+  requiresUserAction: boolean;
+  compatibility: SkillReleaseMetadata["compatibility"];
   artifact: {
     sha256: string;
     byteSize: number;
@@ -164,6 +171,15 @@ export interface SkillReleaseSummary {
   securityStatus: SecurityStatus;
   publishedAt: string | null;
   platforms: SkillPlatformVariant[];
+  releaseNotes: string;
+  changeKind: SkillReleaseMetadata["changeKind"];
+  requiresUserAction: boolean;
+  compatibility: SkillReleaseMetadata["compatibility"];
+  artifact: {
+    sha256: string;
+    byteSize: number;
+    contentType: string;
+  };
   findingCount: number;
   allowedActions: ReleaseLifecycleAction[];
 }
@@ -187,6 +203,7 @@ export interface ReviewSubmissionBundle extends ReviewSubmissionSummary {
 
 export interface SubmissionStore {
   createSubmission(input: CreateSubmissionInput & {
+    release: StoredSubmission["release"];
     artifact: StoredSubmission["artifact"];
     findings: ScanFinding[];
     securityStatus: SecurityStatus;

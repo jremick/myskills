@@ -14,10 +14,16 @@ import { MemoryArchitectureStore } from "../src/architectures/memory-store.js";
 import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
 import { AuthService } from "../src/auth/service.js";
 import { MemorySkillRepository } from "../src/repositories/memory-skill-repository.js";
+import { MemorySubmissionStore } from "../src/submissions/memory-submission-store.js";
+import { SubmissionService } from "../src/submissions/service.js";
 import { ArchitectureTargetBindingAuthorizer } from "../src/targets/architecture-binding-authorizer.js";
 import { MemoryArchitectureTargetStore } from "../src/targets/memory-target-store.js";
 import { ArchitectureTargetService } from "../src/targets/service.js";
 import type { ArchitectureTargetRecord } from "../src/targets/types.js";
+import { MemoryTargetSkillOperationStore } from "../src/target-operations/memory-store.js";
+import { TargetSkillOperationService } from "../src/target-operations/service.js";
+import { MemorySkillUpgradePolicyStore } from "../src/upgrade-policies/memory-store.js";
+import { SkillUpgradePolicyService } from "../src/upgrade-policies/service.js";
 
 const PASSWORD = "correct horse battery staple";
 const adapter = { kind: "codex", version: "1.0.0", contractVersion: 1 as const };
@@ -211,6 +217,151 @@ test("target routes expose the capability, use sessions, enforce owner MFA, and 
   assert.equal(outsider.statusCode, 404);
   assert.equal(outsider.json().error.code, "ARCHITECTURE_TARGET_NOT_FOUND");
   assert.equal(JSON.stringify(outsider.json()).includes(target.id), false);
+});
+
+test("target operation routes enforce MFA scheduling and API-token-only fenced execution", async (t) => {
+  const fixture = await createFixture({ includeTenants: false });
+  t.after(() => fixture.app.close());
+  const architecture = await seedArchitecture(fixture.architectureStore, {
+    actorId: userOwnerId,
+    owner: { type: "user", id: userOwnerId },
+  });
+  const plainSession = await addUserAndLogin(fixture, userOwnerId, "target-route-operations@example.com");
+  const mfaSession = await verifyMfaForSession(fixture.app, plainSession, "target-route-operations@example.com");
+  await seedPublicRelease(fixture.submissionService, userOwnerId, "1.1.0");
+
+  const registered = await fixture.app.inject({
+    method: "POST",
+    url: "/v1/architecture-targets",
+    headers: { authorization: `Bearer ${mfaSession}` },
+    payload: {
+      ...targetInput(architecture, { type: "user", id: userOwnerId }),
+      adapter: { kind: "codex-companion", version: "1.0.0", contractVersion: 2 },
+      capabilities: { ...capabilities, apply: true, rollback: true, "sync.write": true },
+    },
+  });
+  assert.equal(registered.statusCode, 201, registered.body);
+  const target = registered.json().target as ArchitectureTargetRecord;
+  const consent = await fixture.app.inject({
+    method: "POST",
+    url: `/v1/architecture-targets/${target.id}/consent`,
+    headers: { authorization: `Bearer ${mfaSession}` },
+    payload: { decision: "grant" },
+  });
+  assert.equal(consent.statusCode, 200, consent.body);
+  const consentedTarget = consent.json().target as ArchitectureTargetRecord;
+  const observation = await fixture.app.inject({
+    method: "POST",
+    url: `/v1/architecture-targets/${target.id}/observations`,
+    headers: { authorization: `Bearer ${plainSession}` },
+    payload: observationInput(consentedTarget, {
+      skills: [{ slug: "release-notes-helper", version: "1.0.0", digest: "b".repeat(64), managed: true }],
+    }),
+  });
+  assert.equal(observation.statusCode, 201, observation.body);
+
+  const schedulePayload = {
+    action: "update",
+    slug: "release-notes-helper",
+    version: "1.1.0",
+    platform: "codex",
+    idempotencyKey: "route-operation-1",
+  };
+  const unauthenticated = await fixture.app.inject({
+    method: "POST",
+    url: `/v1/architecture-targets/${target.id}/operations`,
+    payload: schedulePayload,
+  });
+  assert.equal(unauthenticated.statusCode, 401);
+  const withoutMfa = await fixture.app.inject({
+    method: "POST",
+    url: `/v1/architecture-targets/${target.id}/operations`,
+    headers: { authorization: `Bearer ${plainSession}` },
+    payload: schedulePayload,
+  });
+  assert.equal(withoutMfa.statusCode, 403);
+  assert.equal(withoutMfa.json().error.code, "MFA_VERIFICATION_REQUIRED");
+  const scheduled = await fixture.app.inject({
+    method: "POST",
+    url: `/v1/architecture-targets/${target.id}/operations`,
+    headers: { authorization: `Bearer ${mfaSession}` },
+    payload: schedulePayload,
+  });
+  assert.equal(scheduled.statusCode, 202, scheduled.body);
+  const operationId = scheduled.json().operation.id as string;
+  assert.equal("idempotencyKey" in scheduled.json().operation, false);
+
+  const policy = await fixture.app.inject({
+    method: "PUT",
+    url: `/v1/architecture-targets/${target.id}/update-policy`,
+    headers: { authorization: `Bearer ${mfaSession}` },
+    payload: {
+      expectedRevisionNumber: 0,
+      reason: "Route integration coverage",
+      policy: { schemaVersion: 1, mode: "manual", includePrerelease: false, allowedChangeKinds: ["feature", "fix", "security"], pins: {} },
+    },
+  });
+  assert.equal(policy.statusCode, 201, policy.body);
+  assert.equal(policy.json().revision.revisionNumber, 1);
+
+  const tokenResponse = await fixture.app.inject({
+    method: "POST",
+    url: "/v1/auth/api-tokens",
+    headers: { authorization: `Bearer ${mfaSession}` },
+    payload: { name: "Target executor", scopes: ["targets:execute"] },
+  });
+  assert.equal(tokenResponse.statusCode, 201, tokenResponse.body);
+  const executorToken = tokenResponse.json().token.token as string;
+  const sessionClaim = await fixture.app.inject({
+    method: "POST",
+    url: "/v1/target-operations/claim",
+    headers: { authorization: `Bearer ${mfaSession}` },
+    payload: { targetId: target.id, targetGeneration: target.generation, holderId: "companion-1" },
+  });
+  assert.equal(sessionClaim.statusCode, 403);
+  assert.equal(sessionClaim.json().error.code, "API_TOKEN_REQUIRED");
+  const claimed = await fixture.app.inject({
+    method: "POST",
+    url: "/v1/target-operations/claim",
+    headers: { authorization: `Bearer ${executorToken}` },
+    payload: { targetId: target.id, targetGeneration: target.generation, holderId: "companion-1" },
+  });
+  assert.equal(claimed.statusCode, 200, claimed.body);
+  const claim = claimed.json().claim;
+  assert.equal(claim.operation.id, operationId);
+  assert.equal("claimToken" in claim.operation, false);
+
+  for (const state of ["applying", "verifying"] as const) {
+    const advanced = await fixture.app.inject({
+      method: "POST",
+      url: `/v1/target-operations/${operationId}/state`,
+      headers: { authorization: `Bearer ${executorToken}` },
+      payload: { holderId: "companion-1", claimToken: claim.claimToken, fencingToken: claim.operation.fencingToken, state },
+    });
+    assert.equal(advanced.statusCode, 200, advanced.body);
+    assert.equal(advanced.json().operation.state, state);
+  }
+  const receipt = await fixture.app.inject({
+    method: "POST",
+    url: `/v1/target-operations/${operationId}/receipt`,
+    headers: { authorization: `Bearer ${executorToken}` },
+    payload: {
+      holderId: "companion-1",
+      claimToken: claim.claimToken,
+      fencingToken: claim.operation.fencingToken,
+      result: { status: "succeeded", code: "operation.succeeded", installedVersion: "1.1.0", artifactSha256: scheduled.json().operation.artifact.sha256, contentDigest: "c".repeat(64) },
+    },
+  });
+  assert.equal(receipt.statusCode, 200, receipt.body);
+  assert.equal(receipt.json().operation.result.installedVersion, "1.1.0");
+
+  const listed = await fixture.app.inject({
+    method: "GET",
+    url: `/v1/architecture-targets/${target.id}/operations`,
+    headers: { authorization: `Bearer ${plainSession}` },
+  });
+  assert.equal(listed.statusCode, 200, listed.body);
+  assert.equal(listed.json().operations[0].state, "succeeded");
 });
 
 test("target routes enforce team and organization role matrices and current membership removal", async (t) => {
@@ -560,6 +711,7 @@ interface Fixture {
   architectureStore: MemoryArchitectureStore;
   targetStore: MemoryArchitectureTargetStore;
   targetService: ArchitectureTargetService;
+  submissionService: SubmissionService;
 }
 
 async function createFixture(options: {
@@ -621,13 +773,48 @@ async function createFixture(options: {
     now: () => new Date("2026-08-30T00:00:00.000Z"),
     idFactory: () => `target-route-${++nextId}`,
   });
+  const submissionService = new SubmissionService(new MemorySubmissionStore());
+  const upgradePolicyService = new SkillUpgradePolicyService(new MemorySkillUpgradePolicyStore());
+  const targetSkillOperationService = new TargetSkillOperationService(
+    new MemoryTargetSkillOperationStore(),
+    targetService,
+    submissionService,
+    { upgradePolicies: upgradePolicyService },
+  );
   const app = buildApp({
     skillRepository: new MemorySkillRepository([]),
     authService: new AuthService(authStore),
     architectureStore,
     architectureTargetService: targetService,
+    submissionService,
+    targetSkillOperationService,
+    skillUpgradePolicyService: upgradePolicyService,
   });
-  return { app, authStore, architectureStore, targetStore, targetService };
+  return { app, authStore, architectureStore, targetStore, targetService, submissionService };
+}
+
+async function seedPublicRelease(service: SubmissionService, actorId: string, version: string): Promise<void> {
+  const manifest = {
+    name: "release-notes-helper",
+    title: "Release Notes Helper",
+    summary: "Turns changes into concise release notes.",
+    version,
+    license: "Apache-2.0",
+    visibility: "public" as const,
+    platforms: [{ name: "codex", install_target: "codex-skill", status: "supported" as const }],
+    tags: ["release"],
+  };
+  const submitted = await service.createSubmission({
+    actor: { id: actorId, roles: ["author"] },
+    manifest,
+    release: { releaseNotes: "Adds the connected update route.", changeKind: "feature", requiresUserAction: false, compatibility: { minimumAdapterContractVersion: 2 } },
+    files: [
+      { path: "skill.json", content: JSON.stringify(manifest) },
+      { path: "README.md", content: "Connected update route." },
+    ],
+  });
+  await service.performReviewAction({ actor: { id: "route-maintainer", roles: ["maintainer"] }, submissionId: submitted.id, action: "approve", artifactSha256: submitted.artifact.sha256 });
+  await service.performReviewAction({ actor: { id: "route-maintainer", roles: ["maintainer"] }, submissionId: submitted.id, action: "publish" });
 }
 
 async function seedArchitecture(
@@ -708,7 +895,7 @@ function observationInput(
     targetId: target.id,
     targetGeneration: target.generation,
     adapterDigest: architectureTargetAdapterDigest(target.adapter),
-    capabilitiesDigest: architectureTargetCapabilitiesDigest(target.capabilities),
+    capabilitiesDigest: architectureTargetCapabilitiesDigest(target.capabilities, target.adapter.contractVersion),
     observedAt: "2026-08-30T00:01:00.000Z",
     skills: [],
     configFindings: [],

@@ -242,6 +242,10 @@ test("approval artifact hash migration backfills legacy approved unpublished row
   );
   assert.equal(backfilled.rows[0].approved_artifact_sha256, artifactSha256);
 
+  // The store uses the current schema projection. Add the later release
+  // metadata columns after proving the isolated 0012 backfill behavior.
+  await applyMigration(pool, "0021_skill_release_metadata");
+
   const db = createDb(pool);
   const maintainer = await insertUser(db, "legacy-maintainer@example.com", "Legacy Maintainer");
   const submissionService = new SubmissionService(new PostgresSubmissionStore(db));

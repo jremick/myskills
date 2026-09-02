@@ -2,6 +2,34 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
+## Unreleased
+
+### Added
+
+- Added strict SemVer release metadata, compatibility constraints, update
+  discovery, dry-run planning, and release-note review across the API, CLI,
+  and web registry.
+- Added transactional local CLI install, update, and rollback with verified
+  artifacts, atomic registry changes, retained snapshots, drift detection, and
+  deterministic recovery after an interrupted filesystem transaction.
+- Added consent-gated contract-v2 companion operations for connected targets.
+  Exact install, update, and rollback plans use idempotency keys, leases,
+  fencing tokens, generation checks, sanitized receipts, and reclaimable
+  expired claims.
+- Added the in-app system update centre with target inventory, individual and
+  batch review, queue and cancel controls, operation status, failed-operation
+  recovery evidence, rollback, and immutable architecture revision promotion.
+- Added immutable target and organization upgrade-policy revisions with stable
+  or prerelease channels, exact pins, allowed change types, and optional
+  maintenance-window execution.
+
+### Security
+
+- Target mutation requires explicit consent, the contract-v2 `apply` or
+  `rollback` capability plus `sync.write`, and an API token with the dedicated
+  `targets:execute` scope. Stale generations, claims, fences, observations,
+  policy revisions, and artifact plans fail closed.
+
 ## 0.1.0-beta.4 - 2026-09-02
 
 Target release: `v0.1.0-beta.4`.

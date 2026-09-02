@@ -66,6 +66,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
   ) {}
 
   async createSubmission(input: CreateSubmissionInput & {
+    release: StoredSubmission["release"];
     artifact: StoredSubmission["artifact"];
     findings: StoredSubmission["scan"]["findings"];
     securityStatus: StoredSubmission["securityStatus"];
@@ -127,6 +128,10 @@ export class PostgresSubmissionStore implements SubmissionStore {
       const [version] = await tx.insert(skillVersions).values({
         skillId: skill.id,
         version: input.manifest.version,
+        releaseNotes: input.release.releaseNotes,
+        changeKind: input.release.changeKind,
+        requiresUserAction: input.release.requiresUserAction,
+        compatibility: input.release.compatibility,
         lifecycleStatus: "submitted",
         reviewStatus: "unreviewed",
         securityStatus: input.securityStatus,
@@ -216,6 +221,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
         publishedAt: version.publishedAt?.toISOString() ?? null,
         ownerUserId: input.actor.id,
         createdAt: version.createdAt.toISOString(),
+        release: input.release,
         artifact: input.artifact,
         scan: {
           status: "succeeded",
@@ -1564,6 +1570,10 @@ async function selectSkillReleaseRows(
       id: skillVersions.id,
       slug: skills.slug,
       version: skillVersions.version,
+      releaseNotes: skillVersions.releaseNotes,
+      changeKind: skillVersions.changeKind,
+      requiresUserAction: skillVersions.requiresUserAction,
+      compatibility: skillVersions.compatibility,
       lifecycleStatus: skillVersions.lifecycleStatus,
       reviewStatus: skillVersions.reviewStatus,
       securityStatus: skillVersions.securityStatus,
@@ -1582,6 +1592,9 @@ async function selectSkillReleaseRows(
         )
       `,
       findingCount: sql<number>`count(distinct ${scanFindings.id})::int`,
+      sha256: skillArtifacts.sha256,
+      byteSize: skillArtifacts.byteSize,
+      contentType: skillArtifacts.contentType,
     })
     .from(skillVersions)
     .innerJoin(skills, eq(skillVersions.skillId, skills.id))
@@ -1599,6 +1612,9 @@ async function selectSkillReleaseRows(
       skillVersions.securityStatus,
       skillVersions.publishedAt,
       skillVersions.createdAt,
+      skillArtifacts.sha256,
+      skillArtifacts.byteSize,
+      skillArtifacts.contentType,
     )
     .orderBy(sql`${skillVersions.createdAt} desc`)
     .limit(input.limit ?? 100);
@@ -1645,6 +1661,15 @@ function releaseSummary(row: SkillReleaseRow, actor: SubmissionActor | null = nu
     securityStatus: row.securityStatus,
     publishedAt: row.publishedAt?.toISOString() ?? null,
     platforms: row.platforms,
+    releaseNotes: row.releaseNotes,
+    changeKind: row.changeKind,
+    requiresUserAction: row.requiresUserAction,
+    compatibility: row.compatibility,
+    artifact: {
+      sha256: row.sha256,
+      byteSize: row.byteSize,
+      contentType: row.contentType,
+    },
     findingCount: row.findingCount,
     allowedActions: row.lifecycleStatus === "revoked" && !isPrivilegedReleaseActor(actor)
       ? allowedActions.filter((action) => action !== "restore")
@@ -2076,6 +2101,10 @@ async function selectVisibleRelease(
       title: skills.title,
       summary: skills.summary,
       version: skillVersions.version,
+      releaseNotes: skillVersions.releaseNotes,
+      changeKind: skillVersions.changeKind,
+      requiresUserAction: skillVersions.requiresUserAction,
+      compatibility: skillVersions.compatibility,
       lifecycleStatus: skillVersions.lifecycleStatus,
       reviewStatus: skillVersions.reviewStatus,
       securityStatus: skillVersions.securityStatus,
@@ -2113,6 +2142,10 @@ async function selectVisibleRelease(
       skills.title,
       skills.summary,
       skillVersions.version,
+      skillVersions.releaseNotes,
+      skillVersions.changeKind,
+      skillVersions.requiresUserAction,
+      skillVersions.compatibility,
       skillVersions.lifecycleStatus,
       skillVersions.reviewStatus,
       skillVersions.securityStatus,
@@ -2143,6 +2176,10 @@ function publicRelease(row: PublicReleaseRow): PublicReleaseMetadata {
     securityStatus: "passed",
     publishedAt: row.publishedAt.toISOString(),
     platforms: row.platforms,
+    releaseNotes: row.releaseNotes,
+    changeKind: row.changeKind,
+    requiresUserAction: row.requiresUserAction,
+    compatibility: row.compatibility,
     artifact: {
       sha256: row.sha256,
       byteSize: row.byteSize,

@@ -12,6 +12,7 @@ import {
   architectureTargetMutationCapabilities,
   architectureTargetObservationDigest,
   architectureTargetOwnerReferenceTypes,
+  ArchitectureTargetValidationError,
   assertReadOnlyArchitectureTargetAdapter,
   evaluateArchitectureTargetAccess,
   evaluateArchitectureTargetAccessPolicy,
@@ -266,6 +267,19 @@ test("target owners include organizations and capability mutation is fail-closed
   assert.equal(mutationResult.valid, false);
   if (mutationResult.valid) return;
   assert.equal(mutationResult.errors.some((error) => error.code === "ARCHITECTURE_TARGET_MUTATION_CAPABILITY_ENABLED"), true);
+
+  const companion = targetInput();
+  companion.adapter = { ...adapter, contractVersion: 2 as const };
+  companion.capabilities = { "inventory.read": true, apply: true, rollback: true, "sync.write": true };
+  assert.equal(validateArchitectureTarget(companion).valid, true);
+  assert.match(architectureTargetCapabilitiesDigest(companion.capabilities, 2), /^[a-f0-9]{64}$/);
+  assert.throws(() => architectureTargetCapabilitiesDigest(companion.capabilities), ArchitectureTargetValidationError);
+
+  const incompleteCompanion = targetInput();
+  incompleteCompanion.adapter = { ...adapter, contractVersion: 2 as const };
+  incompleteCompanion.capabilities = { apply: true };
+  const incompleteResult = validateArchitectureTarget(incompleteCompanion);
+  assert.equal(incompleteResult.valid, false);
   assert.deepEqual(architectureTargetCapabilityNames, ["inventory.read", "health.read", "plan.read", "apply", "rollback", "sync.write"]);
   assert.deepEqual(architectureTargetMutationCapabilities, ["apply", "rollback", "sync.write"]);
 });

@@ -98,7 +98,7 @@ curl http://localhost:3001/v1/skills/release-notes-helper
 
 The seeded owner account uses `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` from `.env`.
 
-Open `http://localhost:3000` to browse approved skills, inspect release export guidance, and sign in with the seeded owner account. The browser UI supports MFA challenge completion when the account requires it, authenticated author `.zip` package submission and withdrawal, maintainer artifact download with hash-attested approval/request-changes/rejection/publication, owner/admin lifecycle controls for skills and releases, and owner/admin console workflows for registration mode, user status actions, role updates, provider metadata/mapping management, and audit review.
+Open `http://localhost:3000` to browse approved skills, inspect release notes and export guidance, and sign in with the seeded owner account. The browser UI supports MFA challenge completion when the account requires it, authenticated author `.zip` package submission and withdrawal, maintainer artifact download with hash-attested approval/request-changes/rejection/publication, connected-target install/update/rollback review and progress, target and organization upgrade policy, immutable architecture upgrade revisions, and owner/admin lifecycle and console workflows.
 
 Local auth verification and password-reset notifications default to `AUTH_NOTIFICATION_MODE=console`; development action links appear in the API process output. Production deployments use `AUTH_NOTIFICATION_MODE=resend` or `AUTH_NOTIFICATION_MODE=smtp` and must set `APP_BASE_URL` to an HTTPS web origin plus provider settings in the environment or secret store.
 

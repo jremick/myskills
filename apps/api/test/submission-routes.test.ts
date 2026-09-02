@@ -326,6 +326,35 @@ test("invalid manifests are rejected", async (t) => {
   assert.equal(submissionStore.count(), 0);
 });
 
+test("release metadata is strict and fails before submission persistence", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const token = await addAndLogin(app, authStore, ["author"]);
+  const payload = {
+    ...cleanSubmissionPayload(),
+    release: {
+      releaseNotes: "Breaking update",
+      changeKind: "breaking",
+      requiresUserAction: true,
+      compatibility: { minimumMyskillsVersion: "latest" },
+    },
+  };
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload,
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error.code, "INVALID_RELEASE_METADATA");
+  assert.equal(response.body.includes("latest"), false);
+  assert.equal(submissionStore.count(), 0);
+});
+
 test("archive manifest validation maps to package manifest errors", async (t) => {
   const submissionStore = new MemorySubmissionStore();
   const authStore = new MemoryAuthStore("closed");

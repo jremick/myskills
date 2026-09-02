@@ -270,6 +270,7 @@ export class MemorySubmissionStore implements SubmissionStore {
   }
 
   async createSubmission(input: CreateSubmissionInput & {
+    release: StoredSubmission["release"];
     artifact: StoredSubmission["artifact"];
     findings: StoredSubmission["scan"]["findings"];
     securityStatus: StoredSubmission["securityStatus"];
@@ -300,6 +301,7 @@ export class MemorySubmissionStore implements SubmissionStore {
       approvedArtifactSha256: null,
       publishedAt: null,
       createdAt: new Date().toISOString(),
+      release: input.release,
       artifact: input.artifact,
       scan: {
         status: "succeeded",
@@ -957,6 +959,15 @@ function releaseSummary(submission: StoredSubmission, actor: SubmissionActor | n
     securityStatus: submission.securityStatus,
     publishedAt: submission.publishedAt,
     platforms: submission.platforms,
+    releaseNotes: submission.release.releaseNotes,
+    changeKind: submission.release.changeKind,
+    requiresUserAction: submission.release.requiresUserAction,
+    compatibility: submission.release.compatibility,
+    artifact: {
+      sha256: submission.artifact.sha256,
+      byteSize: submission.artifact.byteSize,
+      contentType: submission.artifact.contentType,
+    },
     findingCount: submission.scan.findings.length,
     allowedActions: submission.lifecycleStatus === "revoked" && !isPrivilegedReleaseActor(actor)
       ? allowedActions.filter((action) => action !== "restore")
@@ -1130,6 +1141,10 @@ function publicRelease(submission: StoredSubmission): PublicReleaseMetadata {
     securityStatus: "passed",
     publishedAt: submission.publishedAt,
     platforms: submission.platforms,
+    releaseNotes: submission.release.releaseNotes,
+    changeKind: submission.release.changeKind,
+    requiresUserAction: submission.release.requiresUserAction,
+    compatibility: submission.release.compatibility,
     artifact: {
       sha256: submission.artifact.sha256,
       byteSize: submission.artifact.byteSize,

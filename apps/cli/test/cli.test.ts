@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { runCli, type FetchLike } from "../src/cli.js";
 import { writeStoredZip } from "../../../test-support/zip-fixture.js";
-import { assertValidArchitectureTargetObservation } from "@myskills-app/core";
+import { assertValidArchitectureTargetObservation, targetSkillOperationPlanDigest } from "@myskills-app/core";
 
 test("validate reads a skill manifest from disk", async (t) => {
   const dir = await makeTempPackage();
@@ -235,10 +235,22 @@ test("submit sends package entries to the API", async (t) => {
   t.after(() => rm(dir, { recursive: true, force: true }));
   await writeManifest(dir);
   await writeFile(path.join(dir, "README.md"), "Summarize release notes.");
+  const releaseNotesPath = `${dir}-release-notes.md`;
+  t.after(() => rm(releaseNotesPath, { force: true }));
+  await writeFile(releaseNotesPath, "Adds deterministic update planning.\n");
   const output = createOutput();
   let method = "";
   let authorization = "";
-  let body: { manifest?: { name?: string }; files?: Array<{ path: string; content: string }> } = {};
+  let body: {
+    manifest?: { name?: string };
+    files?: Array<{ path: string; content: string }>;
+    release?: {
+      releaseNotes?: string;
+      changeKind?: string;
+      requiresUserAction?: boolean;
+      compatibility?: Record<string, unknown>;
+    };
+  } = {};
   const fetch: FetchLike = async (_input, init) => {
     method = init?.method ?? "GET";
     authorization = init?.headers?.authorization ?? "";
@@ -255,13 +267,35 @@ test("submit sends package entries to the API", async (t) => {
     });
   };
 
-  const code = await runCli(["submit", "--path", dir], testRuntime(output, fetch, { MYSKILLS_TOKEN: "submit-token" }));
+  const code = await runCli([
+    "submit",
+    "--path",
+    dir,
+    "--release-notes-file",
+    releaseNotesPath,
+    "--change-kind",
+    "feature",
+    "--requires-user-action",
+    "--minimum-myskills-version",
+    "0.1.0-beta.4",
+    "--minimum-adapter-contract-version",
+    "1",
+  ], testRuntime(output, fetch, { MYSKILLS_TOKEN: "submit-token" }));
 
   assert.equal(code, 0);
   assert.equal(method, "POST");
   assert.equal(authorization, "Bearer submit-token");
   assert.equal(body.manifest?.name, "release-notes-helper");
   assert.deepEqual(body.files?.map((file) => file.path), ["README.md", "skill.json"]);
+  assert.deepEqual(body.release, {
+    releaseNotes: "Adds deterministic update planning.\n",
+    changeKind: "feature",
+    requiresUserAction: true,
+    compatibility: {
+      minimumMyskillsVersion: "0.1.0-beta.4",
+      minimumAdapterContractVersion: 1,
+    },
+  });
   assertPackageManifestMatchesBody(body);
   assert.deepEqual(output.stdout, ["release-notes-helper@0.1.0\tunreviewed\tpassed\tfindings=0"]);
 });
@@ -1898,7 +1932,8 @@ test("export writes verified bundle files under output directory", async (t) => 
   const bundle = JSON.stringify({
     files: [
       { path: "README.md", content: "Summarize release notes." },
-      { path: "nested/skill.json", content: "{}" },
+      { path: "skill.json", content: manifestJson("0.1.0") },
+      { path: "nested/config.json", content: "{}" },
     ],
   });
   const calls: string[] = [];
@@ -1929,8 +1964,8 @@ test("export writes verified bundle files under output directory", async (t) => 
     "http://api.test/v1/skills/release-notes-helper/releases/0.1.0/bundle?platform=codex",
   ]);
   assert.equal(await readFile(path.join(outputDir, "README.md"), "utf8"), "Summarize release notes.");
-  assert.equal(await readFile(path.join(outputDir, "nested", "skill.json"), "utf8"), "{}");
-  assert.match(output.stdout[0], /release-notes-helper@0\.1\.0\texported\tfiles=2/);
+  assert.equal(await readFile(path.join(outputDir, "nested", "config.json"), "utf8"), "{}");
+  assert.match(output.stdout[0], /release-notes-helper@0\.1\.0\texported\tfiles=3/);
 });
 
 test("export refuses unsafe bundle file paths before writing", async (t) => {
@@ -1938,7 +1973,10 @@ test("export refuses unsafe bundle file paths before writing", async (t) => {
   t.after(() => rm(outputDir, { recursive: true, force: true }));
   const output = createOutput();
   const bundle = JSON.stringify({
-    files: [{ path: "../secret.txt", content: "nope" }],
+    files: [
+      { path: "../secret.txt", content: "nope" },
+      { path: "skill.json", content: manifestJson("0.1.0") },
+    ],
   });
   const fetch: FetchLike = async (input) => {
     if (String(input).endsWith("/bundle?platform=codex")) {
@@ -2057,6 +2095,11 @@ test("update stores a rollback snapshot and rollback restores it", async (t) => 
         },
       });
     }
+    if (url.endsWith("/v1/skills/release-notes-helper/releases")) {
+      return response(200, {
+        releases: [releaseSummary("0.2.0", bundleText("0.2.0")), releaseSummary("0.1.0", bundleText("0.1.0"))],
+      });
+    }
     if (url.endsWith("/bundle?platform=codex")) {
       const version = url.includes("/0.2.0/") ? "0.2.0" : "0.1.0";
       return rawResponse(200, bundleText(version));
@@ -2078,6 +2121,27 @@ test("update stores a rollback snapshot and rollback restores it", async (t) => 
   assert.equal(install, 0);
   assert.equal(await readFile(path.join(installRoot, "release-notes-helper", "README.md"), "utf8"), "Release notes helper 0.1.0");
 
+  const inspect = await runCli(["updates", "release-notes-helper", "--dir", installRoot], testRuntime(output, fetch));
+  assert.equal(inspect, 0);
+  assert.match(output.stdout.join("\n"), /candidate=0\.2\.0/);
+  assert.match(output.stdout.join("\n"), /changes\t0\.2\.0\tfeature\taction=none\tChanges in 0\.2\.0/);
+  const dryRun = await runCli(["update", "release-notes-helper", "--dry-run", "--dir", installRoot], testRuntime(output, fetch));
+  assert.equal(dryRun, 0);
+  assert.equal(await readFile(path.join(installRoot, "release-notes-helper", "README.md"), "utf8"), "Release notes helper 0.1.0");
+
+  const crashRuntime = testRuntime(output, fetch);
+  crashRuntime.installFault = (point) => {
+    if (point === "installed") throw new Error("simulated process interruption");
+  };
+  const interrupted = await runCli(["update", "release-notes-helper", "--dir", installRoot], crashRuntime);
+  assert.equal(interrupted, 1);
+  assert.equal(await readFile(path.join(installRoot, "release-notes-helper", "README.md"), "utf8"), "Release notes helper 0.2.0");
+  const recovered = await runCli(["list", "--dir", installRoot], testRuntime(output, async () => response(500, {})));
+  assert.equal(recovered, 0);
+  assert.equal(await readFile(path.join(installRoot, "release-notes-helper", "README.md"), "utf8"), "Release notes helper 0.1.0");
+  const recoveredRegistry = JSON.parse(await readFile(path.join(installRoot, ".myskills-app", "installed.json"), "utf8"));
+  assert.equal(recoveredRegistry.installations["release-notes-helper"].version, "0.1.0");
+
   const update = await runCli(["update", "release-notes-helper", "--dir", installRoot], testRuntime(output, fetch));
   assert.equal(update, 0);
   assert.equal(await readFile(path.join(installRoot, "release-notes-helper", "README.md"), "utf8"), "Release notes helper 0.2.0");
@@ -2091,8 +2155,79 @@ test("update stores a rollback snapshot and rollback restores it", async (t) => 
   registry = JSON.parse(await readFile(path.join(installRoot, ".myskills-app", "installed.json"), "utf8"));
   assert.equal(registry.installations["release-notes-helper"].version, "0.1.0");
   assert.deepEqual(registry.installations["release-notes-helper"].history, []);
-  assert.match(output.stdout.join("\n"), /release-notes-helper@0\.2\.0\tupdated\tplatform=codex\tprevious=0\.1\.0/);
+  await writeFile(path.join(installRoot, "release-notes-helper", "README.md"), "locally edited");
+  const drift = await runCli(["updates", "release-notes-helper", "--dir", installRoot], testRuntime(output, fetch));
+  assert.equal(drift, 0);
+  assert.match(output.stdout.join("\n"), /release-notes-helper@0\.1\.0\tdrifted\tplatform=codex/);
+  assert.match(output.stdout.join("\n"), /release-notes-helper@0\.2\.0\tapplied\tplatform=codex\tprevious=0\.1\.0/);
   assert.match(output.stdout.join("\n"), /release-notes-helper@0\.1\.0\trolled-back\tplatform=codex/);
+});
+
+test("companion run-once claims, applies, verifies, and receipts an exact operation", async (t) => {
+  const installRoot = await mkdtemp(path.join(os.tmpdir(), "myskills-companion-"));
+  t.after(() => rm(installRoot, { recursive: true, force: true }));
+  const output = createOutput();
+  const bundle = bundleText("1.0.0");
+  const artifact = {
+    sha256: createHash("sha256").update(bundle).digest("hex"),
+    byteSize: Buffer.byteLength(bundle),
+    contentType: "application/vnd.myskills-app.package+json",
+  };
+  const plan = {
+    targetId: "target-1",
+    targetGeneration: 2,
+    action: "install" as const,
+    skillSlug: "release-notes-helper",
+    toVersion: "1.0.0",
+    platform: "codex",
+    artifact,
+  };
+  const operation = {
+    schemaVersion: 1,
+    id: "operation-1",
+    ...plan,
+    planDigest: targetSkillOperationPlanDigest(plan),
+    state: "claimed",
+    fencingToken: 1,
+    leaseExpiresAt: "2026-09-02T00:05:00.000Z",
+    createdAt: "2026-09-02T00:00:00.000Z",
+    updatedAt: "2026-09-02T00:00:00.000Z",
+  };
+  const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const fetch: FetchLike = async (input, init) => {
+    const url = String(input);
+    const body = init?.body ? JSON.parse(init.body) as Record<string, unknown> : {};
+    calls.push({ url, body });
+    if (url.endsWith("/v1/target-operations/claim")) {
+      return response(200, { claim: { operation, claimToken: "claim-token-that-is-long-enough-000000000000" } });
+    }
+    if (url.endsWith("/releases/1.0.0/bundle?platform=codex")) return rawResponse(200, bundle);
+    if (url.endsWith("/releases/1.0.0")) return response(200, releaseBody("1.0.0", bundle));
+    return response(200, { operation });
+  };
+
+  const code = await runCli([
+    "companion",
+    "run-once",
+    "--target-id",
+    "target-1",
+    "--generation",
+    "2",
+    "--holder",
+    "companion-1",
+    "--dir",
+    installRoot,
+    "--api-url",
+    "http://api.test",
+  ], testRuntime(output, fetch, { MYSKILLS_TOKEN: "executor-token" }));
+
+  assert.equal(code, 0);
+  assert.equal(await readFile(path.join(installRoot, "release-notes-helper", "README.md"), "utf8"), "Release notes helper 1.0.0");
+  const receipt = calls.find((call) => call.url.endsWith("/operation-1/receipt"));
+  assert.deepEqual((receipt?.body.result as Record<string, unknown>)?.status, "succeeded");
+  assert.equal((receipt?.body.result as Record<string, unknown>)?.artifactSha256, artifact.sha256);
+  assert.equal(output.stdout.some((line) => line.includes("claim-token")), false);
+  assert.match(output.stdout.at(-1) ?? "", /operation-1\tsucceeded\trelease-notes-helper@1\.0\.0\tinstall/);
 });
 
 test("token create requires an existing bearer token before fetch", async () => {
@@ -2290,12 +2425,12 @@ async function writeManifest(dir: string): Promise<void> {
   await writeFile(path.join(dir, "skill.json"), manifestJson());
 }
 
-function manifestJson(): string {
+function manifestJson(version = "0.1.0"): string {
   return JSON.stringify({
     name: "release-notes-helper",
     title: "Release Notes Helper",
     summary: "Turns merged changes into concise release notes.",
-    version: "0.1.0",
+    version,
     license: "Apache-2.0",
     platforms: [{ name: "codex", install_target: "codex-skill" }],
   });
@@ -2305,7 +2440,7 @@ function bundleText(version: string): string {
   return JSON.stringify({
     files: [
       { path: "README.md", content: `Release notes helper ${version}` },
-      { path: "skill.json", content: manifestJson() },
+      { path: "skill.json", content: manifestJson(version) },
     ],
   });
 }
@@ -2324,6 +2459,30 @@ function releaseBody(version: string, bundle: string) {
         contentType: "application/vnd.myskills-app.package+json",
       },
     },
+  };
+}
+
+function releaseSummary(version: string, bundle: string) {
+  return {
+    id: `release-${version}`,
+    slug: "release-notes-helper",
+    version,
+    lifecycleStatus: "approved",
+    reviewStatus: "approved",
+    securityStatus: "passed",
+    publishedAt: "2026-09-02T00:00:00.000Z",
+    platforms: [{ name: "codex", installTarget: "codex-skill", status: "supported" }],
+    releaseNotes: `Changes in ${version}`,
+    changeKind: "feature",
+    requiresUserAction: false,
+    compatibility: {},
+    artifact: {
+      sha256: createHash("sha256").update(bundle).digest("hex"),
+      byteSize: Buffer.byteLength(bundle),
+      contentType: "application/vnd.myskills-app.package+json",
+    },
+    findingCount: 0,
+    allowedActions: [],
   };
 }
 

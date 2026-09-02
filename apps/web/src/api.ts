@@ -19,6 +19,9 @@ import type {
   ObservedArchitectureState,
   PublicSkill,
   SharingSettings,
+  SkillUpdateEvaluation,
+  SkillUpgradePolicyV1,
+  TargetSkillOperation,
   SkillSharingDetails,
   TeamSharedSkillGroup,
   VisibilityScope,
@@ -34,6 +37,14 @@ export interface ReleaseMetadata {
   securityStatus: "passed";
   publishedAt: string;
   platforms: Array<{ name: string; installTarget: string; status: string }>;
+  releaseNotes?: string;
+  changeKind?: "fix" | "feature" | "breaking" | "security" | "maintenance";
+  requiresUserAction?: boolean;
+  compatibility?: {
+    minimumMyskillsVersion?: string;
+    minimumAdapterContractVersion?: number;
+    minimumSourceVersion?: string;
+  };
   artifact: {
     sha256: string;
     byteSize: number;
@@ -74,7 +85,7 @@ export interface AdminUser {
   mfaEnabled: boolean;
 }
 
-export type ApiTokenScope = "profile:read" | "skills:read" | "architectures:read" | "skills:submit" | "review:read" | "review:write";
+export type ApiTokenScope = "profile:read" | "skills:read" | "architectures:read" | "skills:submit" | "review:read" | "review:write" | "targets:execute";
 
 export interface ApiToken {
   id: string;
@@ -267,6 +278,31 @@ export interface ArchitectureTargetRecord extends Omit<ArchitectureTarget, "crea
 }
 
 export type ArchitectureTargetObservationRecord = ArchitectureTargetObservation;
+
+export type TargetSkillOperationRecord = TargetSkillOperation;
+
+export interface SkillUpgradePolicyRevisionRecord {
+  id: string;
+  scopeType: "target" | "organization";
+  scopeId: string;
+  revisionNumber: number;
+  policy: SkillUpgradePolicyV1;
+  policySha256: string;
+  reason: string;
+  createdByUserId: string;
+  createdAt: string;
+}
+
+export interface TargetSkillUpdates {
+  targetId: string;
+  observedAt: string | null;
+  policy: {
+    policy: SkillUpgradePolicyV1;
+    source: "target" | "organization" | "default";
+    revision: SkillUpgradePolicyRevisionRecord | null;
+  } | null;
+  items: Array<{ slug: string; platform: string; evaluation: SkillUpdateEvaluation }>;
+}
 
 /**
  * Architecture contracts intentionally live at the API boundary.  The web
@@ -678,6 +714,19 @@ export interface SkillReleaseSummary {
   securityStatus: string;
   publishedAt: string | null;
   platforms: Array<{ name: string; installTarget: string; status: string }>;
+  releaseNotes?: string;
+  changeKind?: "fix" | "feature" | "breaking" | "security" | "maintenance";
+  requiresUserAction?: boolean;
+  compatibility?: {
+    minimumMyskillsVersion?: string;
+    minimumAdapterContractVersion?: number;
+    minimumSourceVersion?: string;
+  };
+  artifact?: {
+    sha256: string;
+    byteSize: number;
+    contentType: string;
+  };
   findingCount: number;
   allowedActions: ReleaseLifecycleActionName[];
 }
@@ -816,6 +865,15 @@ export interface RegistryClient {
   listArchitectureTargetObservations?(targetId: string, limit?: number, token?: string): Promise<ArchitectureTargetObservationRecord[]>;
   updateArchitectureTargetHealth?(targetId: string, health: ArchitectureTargetHealth, token?: string): Promise<ArchitectureTargetRecord>;
   revokeArchitectureTarget?(targetId: string, token?: string): Promise<ArchitectureTargetRecord>;
+  listTargetSkillUpdates?(targetId: string, token?: string): Promise<TargetSkillUpdates>;
+  listTargetSkillOperations?(targetId: string, token?: string): Promise<TargetSkillOperationRecord[]>;
+  scheduleTargetSkillOperation?(targetId: string, input: { action: "install" | "update" | "rollback"; slug: string; version: string; platform?: string; idempotencyKey: string }, token?: string): Promise<{ operation: TargetSkillOperationRecord; replayed: boolean }>;
+  cancelTargetSkillOperation?(operationId: string, token?: string): Promise<TargetSkillOperationRecord>;
+  getTargetSkillUpgradePolicy?(targetId: string, token?: string): Promise<SkillUpgradePolicyRevisionRecord | null>;
+  updateTargetSkillUpgradePolicy?(targetId: string, input: { policy: SkillUpgradePolicyV1; expectedRevisionNumber: number; reason?: string }, token?: string): Promise<{ revision: SkillUpgradePolicyRevisionRecord; created: boolean }>;
+  scheduleTargetSkillOperationBatch?(operations: Array<{ targetId: string; action: "install" | "update" | "rollback"; slug: string; version: string; platform?: string; idempotencyKey: string }>, token?: string): Promise<Array<{ operation: TargetSkillOperationRecord; replayed: boolean }>>;
+  getOrganizationSkillUpgradePolicy?(organizationId: string, token?: string): Promise<SkillUpgradePolicyRevisionRecord | null>;
+  updateOrganizationSkillUpgradePolicy?(organizationId: string, input: { policy: SkillUpgradePolicyV1; expectedRevisionNumber: number; reason?: string }, token?: string): Promise<{ revision: SkillUpgradePolicyRevisionRecord; created: boolean }>;
   listArchitecturePatterns(token?: string): Promise<ArchitecturePattern[]>;
   listArchitectures(token?: string): Promise<ArchitectureSummary[]>;
   getArchitecture(architectureId: string, token?: string): Promise<ArchitectureDetail>;
@@ -1544,6 +1602,38 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
       );
       return body.target;
     },
+    async listTargetSkillUpdates(targetId, overrideToken) {
+      return requestJson<TargetSkillUpdates>(fetchImpl, `${root}/v1/architecture-targets/${encodeURIComponent(targetId)}/updates`, { token: overrideToken ?? token });
+    },
+    async listTargetSkillOperations(targetId, overrideToken) {
+      const body = await requestJson<{ operations: TargetSkillOperationRecord[] }>(fetchImpl, `${root}/v1/architecture-targets/${encodeURIComponent(targetId)}/operations`, { token: overrideToken ?? token });
+      return body.operations;
+    },
+    async scheduleTargetSkillOperation(targetId, input, overrideToken) {
+      return requestJson<{ operation: TargetSkillOperationRecord; replayed: boolean }>(fetchImpl, `${root}/v1/architecture-targets/${encodeURIComponent(targetId)}/operations`, { method: "POST", body: input, token: overrideToken ?? token });
+    },
+    async cancelTargetSkillOperation(operationId, overrideToken) {
+      const body = await requestJson<{ operation: TargetSkillOperationRecord }>(fetchImpl, `${root}/v1/target-operations/${encodeURIComponent(operationId)}/cancel`, { method: "POST", body: {}, token: overrideToken ?? token });
+      return body.operation;
+    },
+    async getTargetSkillUpgradePolicy(targetId, overrideToken) {
+      const body = await requestJson<{ revision: SkillUpgradePolicyRevisionRecord | null }>(fetchImpl, `${root}/v1/architecture-targets/${encodeURIComponent(targetId)}/update-policy`, { token: overrideToken ?? token });
+      return body.revision;
+    },
+    async updateTargetSkillUpgradePolicy(targetId, input, overrideToken) {
+      return requestJson<{ revision: SkillUpgradePolicyRevisionRecord; created: boolean }>(fetchImpl, `${root}/v1/architecture-targets/${encodeURIComponent(targetId)}/update-policy`, { method: "PUT", body: input, token: overrideToken ?? token });
+    },
+    async scheduleTargetSkillOperationBatch(operations, overrideToken) {
+      const body = await requestJson<{ results: Array<{ operation: TargetSkillOperationRecord; replayed: boolean }> }>(fetchImpl, `${root}/v1/target-operations/batch`, { method: "POST", body: { operations }, token: overrideToken ?? token });
+      return body.results;
+    },
+    async getOrganizationSkillUpgradePolicy(organizationId, overrideToken) {
+      const body = await requestJson<{ revision: SkillUpgradePolicyRevisionRecord | null }>(fetchImpl, `${root}/v1/organizations/${encodeURIComponent(organizationId)}/update-policy`, { token: overrideToken ?? token });
+      return body.revision;
+    },
+    async updateOrganizationSkillUpgradePolicy(organizationId, input, overrideToken) {
+      return requestJson<{ revision: SkillUpgradePolicyRevisionRecord; created: boolean }>(fetchImpl, `${root}/v1/organizations/${encodeURIComponent(organizationId)}/update-policy`, { method: "PUT", body: input, token: overrideToken ?? token });
+    },
     async listArchitecturePatterns(overrideToken) {
       const body = await requestJson<{ patterns: ArchitecturePattern[] }>(
         fetchImpl,
@@ -1861,6 +1951,24 @@ export function safeArchitectureTargetErrorMessage(error: unknown): string {
   }
   if (isSafeApiError(error) && error.status === 410) {
     return "This target has been revoked and cannot accept further updates.";
+  }
+  if (isSafeApiError(error) && error.code === "TARGET_OPERATION_POLICY_PIN_CONFLICT") {
+    return "The requested version conflicts with the active upgrade pin. Review the target or organization policy first.";
+  }
+  if (isSafeApiError(error) && error.code === "TARGET_OPERATION_POLICY_PRERELEASE_BLOCKED") {
+    return "The active upgrade policy blocks prerelease versions for this target.";
+  }
+  if (isSafeApiError(error) && error.code === "TARGET_OPERATION_POLICY_CHANGE_KIND_BLOCKED") {
+    return "The active upgrade policy blocks this release change type.";
+  }
+  if (isSafeApiError(error) && error.code === "TARGET_OPERATION_RELEASE_INCOMPATIBLE") {
+    return "This target does not meet the exact release compatibility requirements.";
+  }
+  if (isSafeApiError(error) && ["TARGET_OPERATION_ALREADY_INSTALLED", "TARGET_OPERATION_SOURCE_MISSING", "TARGET_OPERATION_VERSION_DIRECTION_INVALID"].includes(error.code)) {
+    return "The requested install, update, or rollback does not match the target's current installed version.";
+  }
+  if (isSafeApiError(error) && error.code === "SKILL_UPGRADE_POLICY_REVISION_CONFLICT") {
+    return "The upgrade policy changed elsewhere. Refresh before creating another revision.";
   }
   if (isSafeApiError(error) && error.status === 409) {
     return "The target changed elsewhere or its binding is stale. Refresh before trying again.";

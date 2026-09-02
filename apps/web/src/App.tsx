@@ -52,6 +52,7 @@ import { Frame, FrameDescription, FrameHeader, FramePanel, FrameTitle } from "@/
 import { ArchitecturesDashboard } from "@/components/architecture/ArchitecturesDashboard";
 import { OrganizationsDashboard } from "@/components/organization/OrganizationsDashboard";
 import { ArchitectureTargetsDashboard } from "@/components/target/ArchitectureTargetsDashboard";
+import { SystemUpdateCenter } from "@/components/update/SystemUpdateCenter";
 import {
   createRegistryClient,
   exportCommand,
@@ -62,6 +63,7 @@ import {
   safeReviewErrorMessage,
   safeSubmitErrorMessage,
   safeTeamErrorMessage,
+  safeArchitectureTargetErrorMessage,
   type AdminSharingSettings,
   type AdminApiToken,
   type ConfirmMfaResult,
@@ -71,6 +73,7 @@ import {
   type AdminProviderConfig,
   type AdminRegistrationMode,
   type AdminUser,
+  type ArchitectureTargetRecord,
   type MfaStatus,
   type ProviderRoleMappingInput,
   type RegistryClient,
@@ -95,7 +98,7 @@ interface RegistryAppProps {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type AuthState = "idle" | "loading" | "mfa";
-type AppView = "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "organizations" | "targets" | "admin" | "review" | "submit" | "teams" | "settings" | "not-found";
+type AppView = "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "organizations" | "targets" | "updates" | "admin" | "review" | "submit" | "teams" | "settings" | "not-found";
 
 interface AppLocation {
   view: AppView;
@@ -139,6 +142,11 @@ interface ConfirmationRequest {
   onConfirm: (reason: string) => Promise<void>;
 }
 
+function operationKey(action: "install"): string {
+  const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${action}:${random.replaceAll("-", "")}`;
+}
+
 const API_TOKEN_SCOPE_OPTIONS: Array<{ scope: ApiTokenScope; label: string }> = [
   { scope: "profile:read", label: "Profile" },
   { scope: "skills:read", label: "Read skills" },
@@ -146,6 +154,7 @@ const API_TOKEN_SCOPE_OPTIONS: Array<{ scope: ApiTokenScope; label: string }> = 
   { scope: "skills:submit", label: "Submit skills" },
   { scope: "review:read", label: "Review read" },
   { scope: "review:write", label: "Review write" },
+  { scope: "targets:execute", label: "Execute target updates" },
 ];
 
 export function RegistryApp({ client }: RegistryAppProps) {
@@ -198,6 +207,8 @@ export function RegistryApp({ client }: RegistryAppProps) {
           ? "organizations"
         : view === "targets" && canUseTargets
           ? "targets"
+        : view === "updates" && canUseTargets
+          ? "updates"
         : view === "teams" && canUseTeams
           ? "teams"
         : view === "settings"
@@ -685,6 +696,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
     { view: "architectures" as const, label: "Architectures", icon: <Workflow size={18} aria-hidden="true" />, enabled: Boolean(session) },
     { view: "organizations" as const, label: "Organizations", icon: <UsersRound size={18} aria-hidden="true" />, enabled: canUseOrganizations },
     { view: "targets" as const, label: "Connected targets", icon: <Link2 size={18} aria-hidden="true" />, enabled: canUseTargets },
+    { view: "updates" as const, label: "Updates", icon: <RotateCw size={18} aria-hidden="true" />, enabled: canUseTargets },
     { view: "submit" as const, label: "Submit", icon: <Upload size={18} aria-hidden="true" />, enabled: canUseSubmit },
     { view: "review" as const, label: "Review", icon: <ClipboardList size={18} aria-hidden="true" />, enabled: canUseReview },
     { view: "teams" as const, label: "Teams", icon: <UsersRound size={18} aria-hidden="true" />, enabled: canUseTeams },
@@ -780,6 +792,8 @@ export function RegistryApp({ client }: RegistryAppProps) {
             <OrganizationsDashboard client={registryClient} session={session} />
           ) : activeView === "targets" && session ? (
             <ArchitectureTargetsDashboard client={registryClient} session={session} />
+          ) : activeView === "updates" && session ? (
+            <SystemUpdateCenter client={registryClient} session={session} />
           ) : activeView === "admin" && session ? (
             <AdminConsole client={registryClient} session={session} />
           ) : activeView === "settings" && session ? (
@@ -4165,6 +4179,22 @@ function SkillDetail({
           <Metadata label="SHA-256" value={shortHash(release.artifact.sha256)} monospace />
         </dl>
 
+        <section className="control-plane-section release-notes-panel" aria-labelledby="release-notes-heading">
+          <div className="control-plane-section-heading"><div><p className="control-plane-kicker">What changed</p><h2 id="release-notes-heading">Release notes</h2></div><Badge variant={release.requiresUserAction ? "destructive" : "outline"}>{release.changeKind ?? "maintenance"}</Badge></div>
+          <p>{release.releaseNotes || "No release notes were supplied for this release."}</p>
+          {release.requiresUserAction && <p className="control-plane-muted"><CircleAlert size={15} aria-hidden="true" /> This release requires a user action. Review the instructions before updating.</p>}
+          {release.compatibility && Object.keys(release.compatibility).length > 0 && <dl className="metadata-grid shadcn-metadata-grid registry-metadata-grid"><Metadata label="Minimum MySkills" value={release.compatibility.minimumMyskillsVersion ?? "Any"} /><Metadata label="Minimum adapter contract" value={release.compatibility.minimumAdapterContractVersion?.toString() ?? "Any"} /><Metadata label="Minimum source version" value={release.compatibility.minimumSourceVersion ?? "Any"} /></dl>}
+        </section>
+
+        {session && (
+          <ReleaseInstallPanel
+            client={client}
+            platform={platform}
+            release={release}
+            selectedSkill={selectedSkill}
+          />
+        )}
+
         <div className="platform-select registry-platform-select">
           <span>Export platform</span>
           <div>
@@ -4207,6 +4237,85 @@ function SkillDetail({
         )}
       </CardContent>
     </>
+  );
+}
+
+function ReleaseInstallPanel({
+  client,
+  platform,
+  release,
+  selectedSkill,
+}: {
+  client: RegistryClient;
+  platform: string;
+  release: ReleaseMetadata;
+  selectedSkill: PublicSkill;
+}) {
+  const [targets, setTargets] = useState<ArchitectureTargetRecord[]>([]);
+  const [selectedTargetId, setSelectedTargetId] = useState("");
+  const [reviewing, setReviewing] = useState(false);
+  const [state, setState] = useState<"loading" | "ready" | "queueing" | "error">("loading");
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!client.listArchitectureTargets || !client.scheduleTargetSkillOperation) {
+      setState("error");
+      setMessage("Connected-target installs are not available in this workspace.");
+      return () => { active = false; };
+    }
+    void client.listArchitectureTargets().then((records) => {
+      if (!active) return;
+      const eligible = records.filter((target) => (
+        target.status !== "revoked"
+        && target.consent.status === "granted"
+        && target.adapter.contractVersion === 2
+        && target.capabilities.apply === true
+        && target.capabilities["sync.write"] === true
+      ));
+      setTargets(eligible);
+      setSelectedTargetId((current) => current || eligible[0]?.id || "");
+      setState("ready");
+    }).catch((error: unknown) => {
+      if (!active) return;
+      setState("error");
+      setMessage(safeArchitectureTargetErrorMessage(error));
+    });
+    return () => { active = false; };
+  }, [client]);
+
+  async function install() {
+    if (!selectedTargetId || !client.scheduleTargetSkillOperation) return;
+    setState("queueing");
+    setMessage(null);
+    try {
+      await client.scheduleTargetSkillOperation(selectedTargetId, {
+        action: "install",
+        slug: selectedSkill.slug,
+        version: release.version,
+        platform,
+        idempotencyKey: operationKey("install"),
+      });
+      setReviewing(false);
+      setState("ready");
+      setMessage(`Queued exact install of ${selectedSkill.slug} ${release.version}. Track execution and recovery in Updates.`);
+    } catch (error) {
+      setState("error");
+      setMessage(safeArchitectureTargetErrorMessage(error));
+    }
+  }
+
+  return (
+    <section className="control-plane-section release-install-panel" aria-labelledby="release-install-heading">
+      <div className="control-plane-section-heading">
+        <div><p className="control-plane-kicker">Connected target</p><h2 id="release-install-heading">Install this exact release</h2></div>
+        <PackageOpen size={20} aria-hidden="true" />
+      </div>
+      {state === "loading" && <p className="control-plane-muted" role="status">Loading eligible targets…</p>}
+      {state !== "loading" && targets.length === 0 && <p className="control-plane-muted">No consented contract-v2 target can accept installs. Register or update a target in Connected targets first.</p>}
+      {targets.length > 0 && <div className="release-install-controls"><label><span>Target</span><select value={selectedTargetId} onChange={(event) => { setSelectedTargetId(event.target.value); setReviewing(false); }} disabled={state === "queueing"}>{targets.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}</select></label>{reviewing ? <div className="release-install-review"><p><strong>{selectedSkill.slug} {release.version}</strong> for {targets.find((target) => target.id === selectedTargetId)?.name}</p><p>{release.releaseNotes || "No release notes were supplied."}</p><small>{platform} · SHA-256 {release.artifact.sha256.slice(0, 12)}… · {release.artifact.byteSize.toLocaleString()} bytes</small>{release.requiresUserAction && <div className="control-plane-inline-message"><CircleAlert size={16} aria-hidden="true" />This release requires a user action after installation.</div>}<div className="target-action-row"><Button type="button" disabled={state === "queueing"} onClick={() => void install()}><ShieldCheck size={15} aria-hidden="true" />{state === "queueing" ? "Queueing…" : "Confirm exact install"}</Button><Button type="button" variant="outline" disabled={state === "queueing"} onClick={() => setReviewing(false)}>Back</Button></div></div> : <Button size="sm" type="button" variant="outline" onClick={() => setReviewing(true)}>Review install</Button>}</div>}
+      {message && <div className="control-plane-inline-message" role="status">{message}</div>}
+    </section>
   );
 }
 
@@ -4748,6 +4857,9 @@ function initialViewFromPath(pathname: string): AppView {
   }
   if (pathname === "/targets") {
     return "targets";
+  }
+  if (pathname === "/updates") {
+    return "updates";
   }
   if (pathname === "/teams") {
     return "teams";

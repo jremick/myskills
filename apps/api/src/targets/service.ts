@@ -80,7 +80,7 @@ export class ArchitectureTargetService {
             generation: target.generation,
             ownerType: target.owner.type,
             adapterDigest: architectureTargetAdapterDigest(target.adapter),
-            capabilitiesDigest: architectureTargetCapabilitiesDigest(target.capabilities),
+            capabilitiesDigest: architectureTargetCapabilitiesDigest(target.capabilities, target.adapter.contractVersion),
           },
         },
       });
@@ -145,6 +145,30 @@ export class ArchitectureTargetService {
       });
       throw normalized;
     }
+  }
+
+  async authorizeCompanionOperation(
+    actorInput: ArchitectureTargetActorInput,
+    targetIdInput: string,
+    action: "install" | "update" | "rollback",
+  ): Promise<ArchitectureTargetRecord> {
+    const actor = normalizeActor(actorInput);
+    const targetId = normalizeIdentifier(targetIdInput, "targetId");
+    const target = await this.requireAction(actor.userId, targetId, "register");
+    if (target.status === "revoked") {
+      throw new AppError("A revoked target cannot accept operations.", "ARCHITECTURE_TARGET_REVOKED", 410);
+    }
+    if (target.consent.status !== "granted") {
+      throw new AppError("Target consent is required before operations can be queued.", "ARCHITECTURE_TARGET_CONSENT_REQUIRED", 409);
+    }
+    if (target.adapter.contractVersion !== 2 || target.capabilities["sync.write"] !== true) {
+      throw new AppError("Target companion operations require adapter contract version 2.", "ARCHITECTURE_TARGET_COMPANION_UNSUPPORTED", 409);
+    }
+    const capability = action === "rollback" ? "rollback" : "apply";
+    if (target.capabilities[capability] !== true) {
+      throw new AppError("Target does not advertise the required operation capability.", "ARCHITECTURE_TARGET_CAPABILITY_REQUIRED", 409);
+    }
+    return target;
   }
 
   async grantConsent(actor: ArchitectureTargetActorInput, targetId: string): Promise<ArchitectureTargetRecord> {
@@ -241,7 +265,7 @@ export class ArchitectureTargetService {
           { expectedAdapterDigest },
         );
       }
-      const expectedCapabilitiesDigest = architectureTargetCapabilitiesDigest(target.capabilities);
+      const expectedCapabilitiesDigest = architectureTargetCapabilitiesDigest(target.capabilities, target.adapter.contractVersion);
       if (observation.capabilitiesDigest !== expectedCapabilitiesDigest) {
         throw new AppError(
           "Observation capability digest does not match the current target binding.",
@@ -421,13 +445,6 @@ export class ArchitectureTargetService {
     };
     const validation = validateArchitectureTarget(target);
     if (!validation.valid) throw invalidValidationError("Architecture target is invalid.", "INVALID_ARCHITECTURE_TARGET", validation.errors);
-    // Keep the registration contract strict even if a future core validator
-    // is relaxed: mutation capabilities are never accepted by this service.
-    if (Object.entries(validation.value.capabilities).some(([key, value]) => (
-      (key === "apply" || key === "rollback" || key === "sync.write") && value === true
-    ))) {
-      throw new AppError("Target mutation capabilities are not supported.", "ARCHITECTURE_TARGET_MUTATION_UNSUPPORTED", 400);
-    }
     return validation.value;
   }
 

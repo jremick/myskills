@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { AppError } from "@myskills-app/core";
+import { AppError, parseSkillReleaseMetadata } from "@myskills-app/core";
 import {
   hasBlockingFindings,
   loadSkillManifestFromPackageFiles,
@@ -71,6 +71,7 @@ export class SubmissionService {
     return this.store.createSubmission({
       ...input,
       manifest: packageManifest,
+      release: parseSkillReleaseMetadata(input.release),
       artifact,
       findings: scan.findings,
       securityStatus: scan.findings.length > 0 ? "warning" : "passed",

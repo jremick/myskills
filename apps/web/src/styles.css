@@ -3479,6 +3479,126 @@ button:focus-visible {
   color: #647d83;
 }
 
+.update-centre-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.target-update-card > [data-slot="card-header"],
+.update-batch-card > [data-slot="card-header"] {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+}
+
+.target-update-policy-summary {
+  color: var(--muted-foreground);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.target-update-list,
+.target-operation-history,
+.release-review-list {
+  display: grid;
+  gap: 0;
+}
+
+.target-update-row,
+.target-operation-row {
+  align-items: center;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 0.75rem 0;
+}
+
+.target-operation-row {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.target-update-row label,
+.target-operation-row > span {
+  align-items: center;
+  display: flex;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.target-update-row label > span,
+.target-operation-row > span {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.target-update-row small,
+.target-operation-row small {
+  color: var(--muted-foreground);
+}
+
+.target-operation-history {
+  margin-top: 1.25rem;
+}
+
+.target-operation-history h3 {
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+}
+
+.release-review-list article {
+  border-top: 1px solid var(--border);
+  padding: 0.9rem 0;
+}
+
+.release-review-list article p {
+  margin: 0.5rem 0;
+  white-space: pre-wrap;
+}
+
+.release-notes-panel > p {
+  white-space: pre-wrap;
+}
+
+.release-install-controls,
+.release-install-review {
+  display: grid;
+  gap: 12px;
+}
+
+.release-install-controls label {
+  display: grid;
+  gap: 6px;
+  max-width: 32rem;
+  color: #435166;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.release-install-review {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--muted);
+}
+
+.release-install-review p,
+.release-install-review small {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 720px) {
+  .target-update-row,
+  .target-operation-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
 .organization-policy-form,
 .target-capability-fieldset {
   display: grid;

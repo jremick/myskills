@@ -13,6 +13,7 @@ import type {
   AdminRegistrationMode,
   AdminUser,
   ArchitectureAccessMetadata,
+  ArchitectureTargetRecord,
   ArchitectureDraftPreview,
   ArchitecturePattern,
   ArchitecturePatternId,
@@ -158,13 +159,14 @@ test("default registry client is stable between renders", async () => {
     const view = render(<RegistryApp />);
 
     await view.findByText("Turns merged changes into concise release notes.");
-    await waitFor(() => assert.equal(calls.length, 4));
+    await waitFor(() => assert.equal(calls.length, 5));
     await delay(25);
     assert.deepEqual([...calls].sort(), [
       "http://localhost:3001/v1/me",
       "http://localhost:3001/v1/skills",
       "http://localhost:3001/v1/skills/release-notes-helper",
       "http://localhost:3001/v1/skills/release-notes-helper/releases/0.1.0",
+      "http://localhost:3001/v1/architecture-targets",
     ].sort());
   } finally {
     globalThis.fetch = previousFetch;
@@ -222,6 +224,57 @@ test("skill detail displays public metadata and release artifact metadata only",
   assert.equal(document.body.textContent?.includes("storageKey"), false);
   assert.equal(document.body.textContent?.includes("Summarize release notes."), false);
   assert.equal(client.bundleCalls, 0);
+});
+
+test("signed-in users review an exact release before queueing a connected-target install", async () => {
+  setupAuthenticatedDom("http://localhost/skills/release-notes-helper");
+  const client = mockClient();
+  const operations: Array<Record<string, unknown>> = [];
+  const target: ArchitectureTargetRecord = {
+    schemaVersion: 1,
+    id: "target-install-1",
+    name: "Personal companion",
+    owner: { type: "user", id: "user-1" },
+    adapter: { kind: "codex-companion", version: "1", contractVersion: 2 },
+    architectureId: "architecture-1",
+    environmentId: "personal",
+    profileId: "default",
+    status: "connected",
+    consent: { status: "granted", requestedAt: "2026-09-01T00:00:00.000Z", grantedAt: "2026-09-01T00:01:00.000Z" },
+    generation: 1,
+    identityDigest: "a".repeat(64),
+    capabilities: { "inventory.read": true, apply: true, rollback: true, "sync.write": true },
+    createdAt: "2026-09-01T00:00:00.000Z",
+    updatedAt: "2026-09-01T00:00:00.000Z",
+    health: null,
+  };
+  client.listArchitectureTargets = async () => [target];
+  client.scheduleTargetSkillOperation = async (targetId, input) => {
+    operations.push({ targetId, ...input });
+    return { operation: {} as never, replayed: false };
+  };
+
+  const view = render(<RegistryApp client={client} />);
+  await view.findByRole("heading", { name: "Install this exact release" });
+  fireEvent.click(await view.findByRole("button", { name: "Review install" }));
+  await view.findByText("release-notes-helper 0.1.0");
+  assert.equal(operations.length, 0);
+  fireEvent.click(view.getByRole("button", { name: "Confirm exact install" }));
+  await waitFor(() => assert.equal(operations.length, 1));
+  assert.deepEqual({
+    targetId: operations[0]?.targetId,
+    action: operations[0]?.action,
+    slug: operations[0]?.slug,
+    version: operations[0]?.version,
+    platform: operations[0]?.platform,
+  }, {
+    targetId: "target-install-1",
+    action: "install",
+    slug: "release-notes-helper",
+    version: "0.1.0",
+    platform: "codex",
+  });
+  assert.match(String(operations[0]?.idempotencyKey), /^install:[a-z0-9]+$/);
 });
 
 test("privileged skill controls stay locked without an MFA-verified session and do not request management data", async () => {
