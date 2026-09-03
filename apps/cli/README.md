@@ -82,6 +82,7 @@ myskills config get api-url
 myskills config set api-url <url>
 myskills config reset api-url
 myskills config list
+myskills bootstrap codex --dry-run --profile work --context <file> [--work-source-root <dir>] [--shared-source-root <dir>] --live-root <dir> --include-slug <slug> [--include-slug <slug>] --output <report.json>
 myskills submit --path <file-directory-or-zip> [--api-url <url>] [--token <token>]
 myskills review submissions [--api-url <url>] [--token <token>]
 myskills review bundle <submission-id> [--platform <name>] [--output <file>] [--api-url <url>] [--token <token>]
@@ -213,6 +214,41 @@ requires repair or removal of that file; other stored accounts are not silently
 discarded.
 
 `config get api-url`, `config set api-url <url>`, `config reset api-url`, and `config list` manage the saved API URL. `doctor` checks the CLI version, Node version, resolved API URL, `/health`, auth status, token-store backend, install-directory writability, and `/v1/capabilities`. If the CLI is pointed at the web app instead of the API, or a newer command is sent to an older server, command errors include concrete next steps and `--json` returns structured error codes.
+
+`bootstrap codex --dry-run` is a work/team-only local planner. It requires an
+explicit `work` context, a normalized HTTPS target origin, stable target
+instance/workspace/actor identifiers, explicit source and target trust
+compartments (`work`, `shared`, or `work+shared` for sources, and `work-team`
+for the target), typed `work` and/or `shared` source roots, a target root, and
+a positive `--include-slug` allowlist. The context must approve the computed
+source-root type/digests and target-root digest. Personal, consumer, public,
+and unclassified sources are rejected, and candidates are never selected by
+implicit inventory discovery. A one-skill work-owned canary is supported.
+
+The context JSON must include `profile: "work"`, `targetOrigin`,
+`instanceId`, one `tenantId` or `workspaceId`, `actorId`, the canonical trust
+compartments, `approvedSourceRoots` entries of `{type, identityDigest}`, and
+`approvedTargetRootIdentityDigest`.
+
+The planner reads selected source and target content without network or
+registry access. It opens each selected tree through a bootstrap-owned secure
+snapshot reader, then hashes, parses, scans, and reports only those held bytes.
+It writes only the explicitly requested new private report (`0600`) under a
+user-controlled private parent. Reserved package manifests remain strict:
+invalid or multiple manifests fail closed, and no metadata is relocated. The
+full report contains the work binding, approved root digests, owning package
+contract identifiers, candidate content identities, execution identities, the
+exact target precondition (`absent` or `present-identical` with its expected
+artifact identity), and private snapshots. Terminal output is a redacted DTO
+with counts and digests; it does not contain paths, candidate names, inventory,
+or private identifiers.
+There is no apply, publishing, adoption, or target-write mode in this command.
+`ready` means that the held snapshot passed deterministic checks only. It is
+not approval to apply. Sensitive configuration and credential paths are
+excluded before content enters the report, and heuristic scan-clean never
+replaces explicit human content review. Any future executor must repeat the
+retained source/target identity check immediately before its first write
+(compare-and-swap) and require that review at that boundary.
 
 `validate`, `scan`, and `submit` read one bounded snapshot of the local package.
 `submit` sends those same validated and scanned text entries for directory and
