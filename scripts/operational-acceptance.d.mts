@@ -44,6 +44,8 @@ export function runOperationalAcceptance(options?: {
     afterUnpublish?: (context: { slug: string; actor: AcceptanceActor; version: string }) => Promise<void>;
     afterArchive?: (context: { slug: string; actor: AcceptanceActor }) => Promise<void>;
     afterWorkspaceInstall?: (context: { workspace: string; slug: string; version: string; targetId: string; actor: AcceptanceActor }) => Promise<void>;
+    afterPolicyBlocked?: (context: { slug: string; actor: AcceptanceActor; targetName: string;
+      releases: { version: string; changeKind: string; releaseNotes: string }[] }) => Promise<void>;
     afterRevocation?: (context: { slug: string; actor: AcceptanceActor }) => Promise<void>;
   };
 }): Promise<AcceptanceReport>;

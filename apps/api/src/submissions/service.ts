@@ -29,6 +29,7 @@ import type {
   SubmissionActor,
   SubmissionStore,
   SkillReleaseSummary,
+  SkillReleaseChangeHistoryEntry,
   UserSubmissionBundle,
   UserSubmissionSummary,
   UserSubmissionDetail,
@@ -258,6 +259,10 @@ export class SubmissionService {
 
   async listSkillReleases(input: { slug: string; actor?: SubmissionActor | null }): Promise<SkillReleaseSummary[]> {
     return this.store.listSkillReleases(input);
+  }
+
+  async listSkillReleaseChangeHistory(input: { slug: string; actorId: string }): Promise<SkillReleaseChangeHistoryEntry[]> {
+    return this.store.listSkillReleaseChangeHistory(input);
   }
 
   async performReleaseAction(input: {

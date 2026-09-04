@@ -41,6 +41,7 @@ import type {
   SkillManagementSummary,
   SkillMetadataUpdate,
   SkillReleaseSummary,
+  SkillReleaseChangeHistoryEntry,
   StoredSubmission,
   SubmissionActor,
   SubmissionOwnerAction,
@@ -975,6 +976,17 @@ export class PostgresSubmissionStore implements SubmissionStore {
       ...releaseSummary(row, input.actor ?? null),
       ...(canManage ? {} : { allowedActions: [] }),
     }));
+  }
+
+  async listSkillReleaseChangeHistory(input: { slug: string; actorId: string }): Promise<SkillReleaseChangeHistoryEntry[]> {
+    const sharing = await getSharingSettings(this.db);
+    const [readable] = await this.db.select({ id: skills.id }).from(skills)
+      .innerJoin(skillVersions, eq(skillVersions.skillId, skills.id))
+      .where(and(eq(skills.slug, input.slug), visibleReleasePredicate(), visibleToActorPredicate(input.actorId, sharing))).limit(1);
+    if (!readable) return [];
+    // publishedAt survives unpublish, revoke, and delete; those changes remain policy evidence.
+    return this.db.select({ version: skillVersions.version, changeKind: skillVersions.changeKind }).from(skillVersions)
+      .where(and(eq(skillVersions.skillId, readable.id), isNotNull(skillVersions.publishedAt)));
   }
 
   async performReleaseAction(input: { slug: string; version: string; actor: SubmissionActor; action: ReleaseLifecycleAction; reason?: string; replacement?: string }): Promise<SkillReleaseSummary> {

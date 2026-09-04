@@ -214,6 +214,9 @@ export interface SkillReleaseSummary {
   allowedActions: ReleaseLifecycleAction[];
 }
 
+/** Internal policy evidence; never expands the release metadata returned to a viewer. */
+export type SkillReleaseChangeHistoryEntry = Pick<SkillReleaseSummary, "version" | "changeKind">;
+
 export interface PublicBundle extends PublicReleaseMetadata {
   payload: ArtifactPayload;
 }
@@ -254,6 +257,7 @@ export interface SubmissionStore {
   updateSkillMetadata(input: { slug: string; actor: SubmissionActor; update: SkillMetadataUpdate; reason?: string }): Promise<SkillManagementSummary>;
   performSkillAction(input: { slug: string; actor: SubmissionActor; action: SkillLifecycleAction; reason?: string }): Promise<SkillManagementSummary>;
   listSkillReleases(input: { slug: string; actor?: SubmissionActor | null }): Promise<SkillReleaseSummary[]>;
+  listSkillReleaseChangeHistory(input: { slug: string; actorId: string }): Promise<SkillReleaseChangeHistoryEntry[]>;
   performReleaseAction(input: { slug: string; version: string; actor: SubmissionActor; action: ReleaseLifecycleAction; reason?: string; replacement?: string }): Promise<SkillReleaseSummary>;
   recordReviewDenied(input: {
     actorId: string;

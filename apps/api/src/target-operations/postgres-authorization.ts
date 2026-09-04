@@ -1,12 +1,12 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import {
   AppError, defaultSkillUpgradePolicyV1, isPrereleaseVersion, isWithinSkillUpgradeMaintenanceWindow,
-  parseSemanticVersion, skillReleaseUpdateBlockers, type TargetSkillOperation, type SkillUpgradePolicyV1,
+  parseSemanticVersion, skillReleaseUpdateBlockers, skillReleaseUpgradeRange, skillReleaseChangeKinds, type TargetSkillOperation, type SkillUpgradePolicyV1,
 } from "@myskills-app/core";
 import type { Database } from "../db/client.js";
 import {
   skillArchitectureTargets, skillArchitectureObservations, targetSkillOperations, skillUpgradePolicyRevisions,
-  instanceSettings, skills, users,
+  instanceSettings, skills, skillVersions, users,
 } from "../db/schema.js";
 import { PostgresArchitectureTargetStore, lockTargetMutationAuthority } from "../targets/postgres-target-store.js";
 import { PostgresSkillRepository } from "../repositories/postgres-skill-repository.js";
@@ -75,7 +75,7 @@ export async function assertOperationEligibility(db: OperationDatabase, actorId:
   if (target.status === "revoked" || target.consent.status !== "granted" || target.generation !== operation.targetGeneration
     || target.adapter.contractVersion !== 2 || target.capabilities["sync.write"] !== true
     || target.capabilities[operation.action === "rollback" ? "rollback" : "apply"] !== true) throw operationDenied();
-  const [skill] = await db.select({ visibility: skills.visibility }).from(skills).where(eq(skills.slug, operation.skillSlug)).limit(1);
+  const [skill] = await db.select({ id: skills.id, visibility: skills.visibility }).from(skills).where(eq(skills.slug, operation.skillSlug)).limit(1);
   if (!skill || (target.owner.type === "organization" && !["public", "authenticated", "organization"].includes(skill.visibility))) throw operationDenied();
   await reauthorizeInternalRegistrySnapshot(db, {
     actorId, architectureId: target.architectureId,
@@ -90,6 +90,19 @@ export async function assertOperationEligibility(db: OperationDatabase, actorId:
   if ((policy.pins[operation.skillSlug] && policy.pins[operation.skillSlug] !== operation.toVersion)
     || (!policy.includePrerelease && isPrereleaseVersion(operation.toVersion))
     || !policy.allowedChangeKinds.includes(release.changeKind)) throw operationDenied("TARGET_OPERATION_POLICY_CHANGED");
+  if (operation.action === "update" && operation.fromVersion
+    && !skillReleaseChangeKinds.every((kind) => policy.allowedChangeKinds.includes(kind))) {
+    // The exact-release authorizer holds the parent skill FOR UPDATE, which
+    // prevents new version inserts. Lock every existing version so publication
+    // or change metadata cannot alter the crossed range before this commit.
+    const versions = await db.select({ version: skillVersions.version, changeKind: skillVersions.changeKind, publishedAt: skillVersions.publishedAt,
+    }).from(skillVersions).where(eq(skillVersions.skillId, skill.id)).orderBy(asc(skillVersions.id)).for("update");
+    // Withdrawn or newly unsafe releases still contributed changes to later versions.
+    const released = versions.filter((item) => item.publishedAt);
+    if (skillReleaseUpgradeRange(released, operation.fromVersion, operation.toVersion).some((item) => !policy.allowedChangeKinds.includes(item.changeKind))) {
+      throw operationDenied("TARGET_OPERATION_POLICY_CHANGED");
+    }
+  }
   if (options.execution && policy.mode === "maintenance-window" && !isWithinSkillUpgradeMaintenanceWindow(policy, new Date(options.now))) {
     throw operationDenied("TARGET_OPERATION_OUTSIDE_MAINTENANCE_WINDOW");
   }

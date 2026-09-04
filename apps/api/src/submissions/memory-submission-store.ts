@@ -28,6 +28,7 @@ import type {
   SkillManagementSummary,
   SkillMetadataUpdate,
   SkillReleaseSummary,
+  SkillReleaseChangeHistoryEntry,
   StoredSubmission,
   SubmissionActor,
   SubmissionOwnerAction,
@@ -721,6 +722,15 @@ export class MemorySubmissionStore implements SubmissionStore {
         ...releaseSummary(submission, input.actor ?? null),
         ...(canManage ? {} : { allowedActions: [] }),
       }));
+  }
+
+  async listSkillReleaseChangeHistory(input: { slug: string; actorId: string }): Promise<SkillReleaseChangeHistoryEntry[]> {
+    const submissions = this.findSubmissionsBySlug(input.slug);
+    const lifecycle = this.skillLifecycle.get(input.slug) ?? restoredSkillLifecycle(submissions);
+    if (!submissions.some((submission) => this.isVisibleReleaseForActor(submission, input.actorId, lifecycle))) return [];
+    // Withdrawing a release does not undo changes already inherited by later versions.
+    return submissions.filter((submission) => submission.publishedAt)
+      .map((submission) => ({ version: submission.version, changeKind: submission.release.changeKind }));
   }
 
   async performReleaseAction(input: { slug: string; version: string; actor: SubmissionActor; action: ReleaseLifecycleAction; reason?: string; replacement?: string }): Promise<SkillReleaseSummary> {

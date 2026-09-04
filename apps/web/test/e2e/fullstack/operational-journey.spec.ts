@@ -10,7 +10,7 @@ type BrowserActor = {
 
 test.describe.configure({ retries: 0 });
 
-test("author feedback, immutable publication, real CLI install/update/rollback, and revocation", async ({ page }, testInfo) => {
+test("author feedback, immutable publication, upgrade policy, real CLI install/update/rollback, and revocation", async ({ page }, testInfo) => {
   test.setTimeout(process.env.MYSKILLS_ACCEPTANCE_ENVIRONMENT === "staging" ? 600_000 : 180_000);
   const browserErrors: string[] = [];
   page.on("pageerror", (error) => browserErrors.push(error.name));
@@ -60,6 +60,24 @@ test("author feedback, immutable publication, real CLI install/update/rollback, 
         await row.click();
         await expect(page.getByRole("button", { name: "Restore skill", exact: true })).toBeEnabled();
         await page.screenshot({ path: testInfo.outputPath("maintainer-archived-inventory.png"), fullPage: true });
+      },
+      async afterPolicyBlocked({ slug, actor, targetName, releases }) {
+        await useSession(page, actor, "/updates");
+        await expect(page.getByRole("heading", { name: "System update centre", exact: true })).toBeVisible();
+        const target = page.locator(".target-update-card").filter({ has: page.getByRole("heading", { name: targetName, exact: true }) });
+        const update = target.locator(".target-update-row").filter({ hasText: slug });
+        await expect(update.getByText("The upgrade crosses a release change kind that your policy does not allow.", { exact: true })).toBeVisible();
+        await expect(update.getByRole("checkbox")).toBeDisabled();
+        await update.getByRole("button", { name: "Review", exact: true }).click();
+        const review = page.locator(".update-review-card");
+        await expect(review.getByRole("heading", { name: `Review blocked update for ${slug}`, exact: true })).toBeVisible();
+        for (const release of releases) {
+          const included = review.locator("article").filter({ has: page.getByText(release.version, { exact: true }) });
+          await expect(included.getByText(release.changeKind, { exact: true })).toBeVisible();
+          await expect(included.getByText(release.releaseNotes, { exact: true })).toBeVisible();
+        }
+        await expect(review.getByRole("button", { name: "Queue exact update", exact: true })).toBeDisabled();
+        await page.screenshot({ path: testInfo.outputPath("blocked-upgrade-policy.png"), fullPage: true });
       },
       async afterRevocation({ slug, actor }: { slug: string; actor: BrowserActor }) {
         await useSession(page, actor, `/skills/${slug}`);

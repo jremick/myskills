@@ -53,6 +53,54 @@ test("update centre reviews exact release notes before queueing and exposes reco
   assert.equal(calls[0]?.platform, "codex");
 });
 
+test("a blocked upgrade keeps intermediate release notes readable without allowing a queue", async () => {
+  const updates = sampleUpdates();
+  const evaluation = updates.items[0]!.evaluation;
+  evaluation.status = "no-compatible-release";
+  delete evaluation.candidate;
+  evaluation.blockers = ["change-kind-not-allowed"];
+  evaluation.includedReleases[0]!.changeKind = "breaking";
+  evaluation.includedReleases[0]!.releaseNotes = "Breaking configuration layout.";
+  let queued = 0;
+  const client = {
+    async listArchitectureTargets() { return [sampleTarget()]; },
+    async listTargetSkillUpdates() { return updates; },
+    async listTargetSkillOperations() { return []; },
+    async scheduleTargetSkillOperation() { queued += 1; },
+    async getTargetSkillUpgradePolicy() { return null; },
+  } as unknown as RegistryClient;
+
+  const view = render(<SystemUpdateCenter client={client} session={{ user: { email: "owner@example.com" } }} />);
+  await view.findByText("The upgrade crosses a release change kind that your policy does not allow.");
+  assert.equal((view.getByRole("checkbox", { name: /release-notes-helper/ }) as HTMLInputElement).disabled, true);
+  fireEvent.click(view.getByRole("button", { name: "Review" }));
+  await view.findByRole("heading", { name: "Review blocked update for release-notes-helper" });
+  await view.findByText("Breaking configuration layout.");
+  await view.findByText("New update workflow.");
+  const queue = view.getByRole("button", { name: "Queue exact update" }) as HTMLButtonElement;
+  assert.equal(queue.disabled, true);
+  fireEvent.click(queue);
+  assert.equal(queued, 0);
+});
+
+test("an unavailable pin explains the exact version without offering another update", async () => {
+  const updates = sampleUpdates();
+  updates.policy!.policy.pins["release-notes-helper"] = "1.5.0";
+  updates.items[0]!.evaluation = { status: "no-compatible-release", installedVersion: "1.0.0", includedReleases: [], blockers: ["pinned-release-unavailable"] };
+  const client = {
+    async listArchitectureTargets() { return [sampleTarget()]; },
+    async listTargetSkillUpdates() { return updates; },
+    async listTargetSkillOperations() { return []; },
+    async getTargetSkillUpgradePolicy() { return null; },
+  } as unknown as RegistryClient;
+
+  const view = render(<SystemUpdateCenter client={client} session={{ user: { email: "owner@example.com" } }} />);
+  await view.findByText("Pinned release 1.5.0 is unavailable. Choose an available version in the upgrade policy.");
+  assert.equal((view.getByRole("checkbox", { name: /release-notes-helper/ }) as HTMLInputElement).disabled, true);
+  assert.equal(view.queryByRole("button", { name: "Review" }), null);
+  assert.equal(view.queryByRole("button", { name: "Queue exact update" }), null);
+});
+
 function sampleTarget(): ArchitectureTargetRecord {
   return {
     schemaVersion: 1,

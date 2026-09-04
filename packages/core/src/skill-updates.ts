@@ -69,6 +69,8 @@ export const skillUpdateBlockerCodes = [
   "minimum-myskills-version",
   "minimum-adapter-contract-version",
   "minimum-source-version",
+  "pinned-release-unavailable",
+  "change-kind-not-allowed",
 ] as const;
 export type SkillUpdateBlockerCode = (typeof skillUpdateBlockerCodes)[number];
 
@@ -79,9 +81,12 @@ export interface SkillUpdateEvaluationInput {
     artifactSha256?: string;
   };
   releases: readonly SkillReleaseUpdateCandidate[];
+  /** Internal history supplements visible releases for policy checks; never returned. */
+  changeHistory?: readonly Pick<SkillReleaseUpdateCandidate, "version" | "changeKind">[];
   policy?: {
     includePrerelease?: boolean;
     pinnedVersion?: string;
+    allowedChangeKinds?: readonly SkillReleaseChangeKind[];
   };
   client?: {
     myskillsVersion?: string;
@@ -120,8 +125,13 @@ export function compareSemanticVersions(left: string, right: string): number {
   if (!parsedLeft || !parsedRight) {
     throw new Error(`Cannot compare invalid semantic versions: ${JSON.stringify(left)} and ${JSON.stringify(right)}.`);
   }
-  for (const field of ["major", "minor", "patch"] as const) {
-    if (parsedLeft[field] !== parsedRight[field]) return parsedLeft[field] < parsedRight[field] ? -1 : 1;
+  // Keep the public parser's numeric fields stable, but use the original digits
+  // for precedence: SemVer numeric identifiers have no safe-integer size limit.
+  const leftCore = semanticVersionPattern.exec(left)!;
+  const rightCore = semanticVersionPattern.exec(right)!;
+  for (let index = 1; index <= 3; index += 1) {
+    const order = compareNumericIdentifiers(leftCore[index], rightCore[index]);
+    if (order !== 0) return order;
   }
   if (parsedLeft.prerelease.length === 0 && parsedRight.prerelease.length === 0) return 0;
   if (parsedLeft.prerelease.length === 0) return 1;
@@ -135,11 +145,29 @@ export function compareSemanticVersions(left: string, right: string): number {
     if (leftIdentifier === rightIdentifier) continue;
     const leftNumeric = /^\d+$/.test(leftIdentifier);
     const rightNumeric = /^\d+$/.test(rightIdentifier);
-    if (leftNumeric && rightNumeric) return Number(leftIdentifier) < Number(rightIdentifier) ? -1 : 1;
+    if (leftNumeric && rightNumeric) return compareNumericIdentifiers(leftIdentifier, rightIdentifier);
     if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
     return leftIdentifier < rightIdentifier ? -1 : 1;
   }
   return 0;
+}
+
+function compareNumericIdentifiers(left: string, right: string): number {
+  if (left.length !== right.length) return left.length < right.length ? -1 : 1;
+  return left === right ? 0 : left < right ? -1 : 1;
+}
+
+/** Preserve every supplied release in the upgrade range, including its notes. */
+export function skillReleaseUpgradeRange<T extends { version: string }>(
+  releases: readonly T[],
+  fromVersion: string,
+  toVersion: string,
+): T[] {
+  if (compareSemanticVersions(toVersion, fromVersion) <= 0) return [];
+  return releases.filter((release) => parseSemanticVersion(release.version)
+    && compareSemanticVersions(release.version, fromVersion) > 0
+    && compareSemanticVersions(release.version, toVersion) <= 0)
+    .sort((left, right) => compareSemanticVersions(left.version, right.version));
 }
 
 export function isPrereleaseVersion(input: string): boolean {
@@ -248,10 +276,25 @@ export function evaluateSkillUpdate(input: SkillUpdateEvaluationInput): SkillUpd
   }
 
   const newer = releases.filter((release) => compareSemanticVersions(release.version, input.installed.version) > 0);
+  const pinnedVersion = input.policy?.pinnedVersion;
+  const pinnedToInstalled = pinnedVersion === input.installed.version;
+  if (pinnedVersion && (!parseSemanticVersion(pinnedVersion)
+    || (!pinnedToInstalled && !newer.some((release) => release.version === pinnedVersion)))) {
+    return {
+      status: "no-compatible-release",
+      installedVersion: input.installed.version,
+      ...(currentRelease ? { currentRelease } : {}),
+      includedReleases: parseSemanticVersion(pinnedVersion)
+        ? skillReleaseUpgradeRange(releases, input.installed.version, pinnedVersion)
+        : [],
+      blockers: ["pinned-release-unavailable"],
+    };
+  }
   if (newer.length === 0) {
     const newest = releases.at(-1);
     return {
-      status: newest && compareSemanticVersions(input.installed.version, newest.version) > 0 ? "installed-newer" : "current",
+      status: pinnedToInstalled ? "pinned"
+        : newest && compareSemanticVersions(input.installed.version, newest.version) > 0 ? "installed-newer" : "current",
       installedVersion: input.installed.version,
       ...(currentRelease ? { currentRelease } : {}),
       includedReleases: [],
@@ -260,24 +303,38 @@ export function evaluateSkillUpdate(input: SkillUpdateEvaluationInput): SkillUpd
   }
 
   const blockerSet = new Set<SkillUpdateBlockerCode>();
-  const compatible = newer.filter((release) => {
+  const allowedChangeKinds = input.policy?.allowedChangeKinds;
+  // Preserve every visible restriction even if supplemental history is partial
+  // or records a different kind for the same version.
+  const changeHistory = [...releases, ...(input.changeHistory ?? [])];
+  const firstDisallowedRelease = allowedChangeKinds
+    ? skillReleaseUpgradeRange(changeHistory, input.installed.version, newer.at(-1)!.version)
+      .find((release) => !allowedChangeKinds.includes(release.changeKind))
+    : undefined;
+  let candidate: SkillReleaseUpdateCandidate | undefined;
+  for (const release of newer) {
+    // Evaluate the exact pin while retaining earlier releases for range policy.
+    if (pinnedVersion && !pinnedToInstalled && release.version !== pinnedVersion) continue;
     const blockers = skillReleaseUpdateBlockers(release, input);
+    if (firstDisallowedRelease && compareSemanticVersions(firstDisallowedRelease.version, release.version) <= 0) {
+      blockers.push("change-kind-not-allowed");
+    }
     for (const blocker of blockers) blockerSet.add(blocker);
-    return blockers.length === 0;
-  });
-  const candidate = compatible.at(-1);
+    if (blockers.length === 0) candidate = release;
+  }
   if (!candidate) {
     return {
       status: "no-compatible-release",
       installedVersion: input.installed.version,
       ...(currentRelease ? { currentRelease } : {}),
-      includedReleases: [],
+      includedReleases: skillReleaseUpgradeRange(releases, input.installed.version,
+        pinnedVersion && !pinnedToInstalled ? pinnedVersion : newer.at(-1)!.version),
       blockers: [...blockerSet].sort(),
     };
   }
 
-  const includedReleases = newer.filter((release) => compareSemanticVersions(release.version, candidate.version) <= 0);
-  if (input.policy?.pinnedVersion && compareSemanticVersions(input.policy.pinnedVersion, input.installed.version) === 0) {
+  const includedReleases = skillReleaseUpgradeRange(releases, input.installed.version, candidate.version);
+  if (pinnedToInstalled) {
     return {
       status: "pinned",
       installedVersion: input.installed.version,
@@ -308,6 +365,9 @@ export function skillReleaseUpdateBlockers(
   }
   if (isPrereleaseVersion(release.version) && input.policy?.includePrerelease !== true) {
     blockers.push("prerelease-not-selected");
+  }
+  if (input.policy?.allowedChangeKinds && !input.policy.allowedChangeKinds.includes(release.changeKind)) {
+    blockers.push("change-kind-not-allowed");
   }
   const compatibility = release.compatibility;
   if (

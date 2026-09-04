@@ -159,8 +159,11 @@ export async function runOperationalAcceptance({ env = process.env, callbacks = 
     await assertInstalled(installRoot, "0.1.1", initialArtifact);
     check("consumer.built-cli-install-and-exact-files", { artifactSha256: initialArtifact.sha256 });
 
-    const next = await submit("0.2.0", false);
+    const intermediate = await submit("0.1.2", false, "breaking");
+    const intermediateArtifact = await publish(intermediate);
+    const next = await submit("0.2.0", false, "fix");
     const nextArtifact = await publish(next);
+    await verifyCodexWorkspace(initialArtifact, intermediateArtifact, nextArtifact);
     await cli(["update", slug, "--dry-run", "--dir", installRoot], actors.consumer);
     await assertInstalled(installRoot, "0.1.1", initialArtifact);
     await cli(["update", slug, "--dir", installRoot], actors.consumer);
@@ -170,9 +173,8 @@ export async function runOperationalAcceptance({ env = process.env, callbacks = 
     await assertInstalled(installRoot, "0.1.1", initialArtifact);
     check("consumer.rollback-restores-verified-original-files");
 
-    await verifyCodexWorkspace(initialArtifact, nextArtifact);
     await callbacks.beforeRevocation?.({ slug, version: "0.2.0", actor: actors.consumer, actors, cli, api, workspace });
-    for (const version of ["0.1.1", "0.2.0"]) {
+    for (const version of ["0.1.1", "0.1.2", "0.2.0"]) {
       await cli(["releases", "revoke", `${slug}@${version}`, "--reason", "Operational acceptance revocation check"], actors.reviewer);
       await api(`/v1/skills/${slug}/releases/${version}`, { token: actors.consumer.token, status: 404 });
       await api(`/v1/skills/${slug}/releases/${version}/bundle?platform=codex`, { token: actors.consumer.token, status: 404 });
@@ -203,7 +205,7 @@ export async function runOperationalAcceptance({ env = process.env, callbacks = 
   if (failure) throw failure;
   return report;
 
-  async function verifyCodexWorkspace(initialArtifact, nextArtifact) {
+  async function verifyCodexWorkspace(initialArtifact, intermediateArtifact, nextArtifact) {
     const { createFlatArchitecture } = await import("@myskills-app/core");
     const actor = actors.reviewer;
     const codexWorkspace = join(workspace, "codex-project");
@@ -246,6 +248,8 @@ export async function runOperationalAcceptance({ env = process.env, callbacks = 
     const executor = { token: token.token };
     const companionArgs = ["companion", "run-once", "--workspace", codexWorkspace, "--holder", `acceptance-${suffix}`];
 
+    await verifyUpgradePolicy();
+
     // Deliberately modify only this isolated fixture to prove that local drift is not overwritten.
     const readmePath = join(installRoot, slug, "README.md");
     const originalReadme = await readFile(readmePath, "utf8");
@@ -285,6 +289,87 @@ export async function runOperationalAcceptance({ env = process.env, callbacks = 
     check("codex.revoked-target-cannot-execute-queued-operation");
     await api(`/v1/auth/api-tokens/${token.id}`, { token: actor.token, method: "DELETE" });
     executionTokens.splice(executionTokens.indexOf(token.id), 1);
+
+    async function verifyUpgradePolicy() {
+      const initial = await api(`/v1/architecture-targets/${targetId}/updates`, { token: actor.token });
+      const originalPolicy = initial.policy?.policy;
+      const initialEvaluation = initial.items.find((item) => item.slug === slug)?.evaluation;
+      if (!originalPolicy || initial.policy.source !== "default" || originalPolicy.pins[slug]
+        || initialEvaluation?.status !== "update-available" || initialEvaluation.candidate?.version !== nextArtifact.version) {
+        throw new Error("The isolated target did not begin with an unpinned default upgrade policy.");
+      }
+      let policyRevision = initial.policy.revision?.revisionNumber ?? 0;
+      const crossedOperation = await schedule("update", nextArtifact.version, "before-policy-restriction");
+      await savePolicy({ ...originalPolicy, allowedChangeKinds: ["fix"] });
+      const blocked = (await api(`/v1/architecture-targets/${targetId}/updates`, { token: actor.token }))
+        .items.find((item) => item.slug === slug)?.evaluation;
+      if (blocked?.status !== "no-compatible-release" || blocked.candidate
+        || !blocked.blockers.includes("change-kind-not-allowed") || blocked.includedReleases.length !== 2
+        || [intermediateArtifact, nextArtifact].some((artifact, index) => {
+          const release = blocked.includedReleases[index];
+          return release.version !== artifact.version || release.changeKind !== artifact.changeKind || release.releaseNotes !== artifact.releaseNotes;
+        })) {
+        throw new Error("Fix-only policy did not retain and block the complete crossed release range.");
+      }
+      const denied = await api(`/v1/architecture-targets/${targetId}/operations`, { token: actor.token, method: "POST", status: 409, body: {
+        action: "update", slug, version: nextArtifact.version, platform: "codex", idempotencyKey: `${suffix}-policy-denied`,
+      } });
+      if (denied.error?.code !== "TARGET_OPERATION_POLICY_CHANGE_KIND_BLOCKED") throw new Error("An update crossing a breaking release was not rejected for the expected policy reason.");
+      const { claim } = await api("/v1/target-operations/claim", { token: executor.token, method: "POST", body: {
+        targetId, targetGeneration: enrolled.generation, holderId: `acceptance-${suffix}`,
+      } });
+      const { operations } = await api(`/v1/architecture-targets/${targetId}/operations`, { token: actor.token });
+      if (claim !== null || operations.length !== 1 || operations[0].id !== crossedOperation.id || operations[0].state !== "queued") {
+        throw new Error("The new policy did not prevent a previously queued update from being claimed without creating another operation.");
+      }
+      await cancel(crossedOperation.id);
+      await assertInstalled(installRoot, initialArtifact.version, initialArtifact);
+      check("codex.policy-blocks-crossed-breaking-release-at-preview-schedule-and-claim", {
+        installedVersion: initialArtifact.version, crossedVersions: blocked.includedReleases.map((release) => release.version),
+      });
+      await callbacks.afterPolicyBlocked?.({ slug, actor, targetName: `Acceptance ${suffix}`, releases: [intermediateArtifact, nextArtifact] });
+
+      await savePolicy({ ...originalPolicy, pins: { [slug]: intermediateArtifact.version } });
+      const pinned = (await api(`/v1/architecture-targets/${targetId}/updates`, { token: actor.token }))
+        .items.find((item) => item.slug === slug)?.evaluation;
+      if (pinned?.status !== "update-available" || pinned.candidate?.version !== intermediateArtifact.version
+        || pinned.candidate.artifact.sha256 !== intermediateArtifact.sha256
+        || pinned.includedReleases.length !== 1 || pinned.includedReleases[0].version !== intermediateArtifact.version) {
+        throw new Error("An exact newer pin selected the wrong version or included a release beyond the pin.");
+      }
+      const pinnedOperation = await schedule("update", intermediateArtifact.version, "exact-newer-pin");
+      if (pinnedOperation.state !== "queued" || pinnedOperation.fromVersion !== initialArtifact.version
+        || pinnedOperation.toVersion !== intermediateArtifact.version || pinnedOperation.artifact.sha256 !== intermediateArtifact.sha256) {
+        throw new Error("The pinned operation plan did not bind the exact requested version and artifact.");
+      }
+      await cancel(pinnedOperation.id);
+      await assertInstalled(installRoot, initialArtifact.version, initialArtifact);
+      check("codex.exact-newer-pin-selects-and-queues-requested-artifact", { pinnedVersion: intermediateArtifact.version, newerVersion: nextArtifact.version });
+
+      await savePolicy(originalPolicy);
+      const restored = await api(`/v1/architecture-targets/${targetId}/updates`, { token: actor.token });
+      const restoredEvaluation = restored.items.find((item) => item.slug === slug)?.evaluation;
+      if (restored.policy.policy.mode !== originalPolicy.mode || restored.policy.policy.includePrerelease !== originalPolicy.includePrerelease
+        || restored.policy.policy.pins[slug] || restored.policy.policy.allowedChangeKinds.length !== originalPolicy.allowedChangeKinds.length
+        || originalPolicy.allowedChangeKinds.some((kind) => !restored.policy.policy.allowedChangeKinds.includes(kind))
+        || restoredEvaluation?.status !== "update-available" || restoredEvaluation.candidate?.version !== nextArtifact.version) {
+        throw new Error("The original upgrade policy values were not restored before normal companion execution.");
+      }
+      check("codex.original-policy-values-restored-before-update-and-rollback");
+
+      async function savePolicy(policy) {
+        const { revision } = await api(`/v1/architecture-targets/${targetId}/update-policy`, { token: actor.token, method: "PUT", status: 201, body: {
+          expectedRevisionNumber: policyRevision, policy, reason: "Isolated operational acceptance policy check",
+        } });
+        if (revision?.revisionNumber !== policyRevision + 1) throw new Error("The acceptance upgrade policy revision was not persisted.");
+        policyRevision = revision.revisionNumber;
+      }
+      async function cancel(operationId) {
+        await api(`/v1/target-operations/${operationId}/cancel`, { token: actor.token, method: "POST" });
+        const { operation } = await api(`/v1/target-operations/${operationId}`, { token: actor.token });
+        if (operation.state !== "cancelled") throw new Error("The policy acceptance operation was not cancelled before execution resumed.");
+      }
+    }
 
     async function schedule(action, version, key, status = 202) {
       return (await api(`/v1/architecture-targets/${targetId}/operations`, { token: actor.token, method: "POST", status, body: {
@@ -370,7 +455,7 @@ export async function runOperationalAcceptance({ env = process.env, callbacks = 
     return session;
   }
 
-  async function submit(version, warning) {
+  async function submit(version, warning, changeKind = "feature") {
     const directory = join(workspace, `package-${version}`);
     await mkdir(directory);
     const files = {
@@ -380,9 +465,12 @@ export async function runOperationalAcceptance({ env = process.env, callbacks = 
       ...(warning ? { "review-example.json": JSON.stringify({ postinstall: "echo unused-example" }) } : {}),
     };
     for (const [name, content] of Object.entries(files)) await writeFile(join(directory, name), content, { mode: 0o600 });
-    const result = await cli(["submit", "--path", directory, "--change-kind", "feature"], actors.author, { json: true });
+    const releaseNotes = `Operational acceptance ${version}: ${changeKind} release.`;
+    const releaseNotesFile = join(workspace, `release-notes-${version}.md`);
+    await writeFile(releaseNotesFile, releaseNotes, { mode: 0o600 });
+    const result = await cli(["submit", "--path", directory, "--change-kind", changeKind, "--release-notes-file", releaseNotesFile], actors.author, { json: true });
     if (!result.submission?.id || result.submission.securityStatus === "blocked") throw new Error("Acceptance submission did not pass intake.");
-    return { id: result.submission.id, version, directory, files };
+    return { id: result.submission.id, version, directory, files, changeKind, releaseNotes };
   }
 
   async function publish(submission) {
@@ -394,12 +482,14 @@ export async function runOperationalAcceptance({ env = process.env, callbacks = 
     await cli(["review", "action", submission.id, "--action", "publish"], actors.reviewer);
     const { release } = await api(`/v1/skills/${slug}/releases/${submission.version}`, { token: actors.consumer.token });
     const delivered = await api(`/v1/skills/${slug}/releases/${submission.version}/bundle?platform=codex`, { token: actors.consumer.token, raw: true });
-    if (digest(delivered.text) !== sha256 || release.artifact.sha256 !== sha256 || release.artifact.byteSize !== Buffer.byteLength(delivered.text)) {
+    if (digest(delivered.text) !== sha256 || release.artifact.sha256 !== sha256 || release.artifact.byteSize !== Buffer.byteLength(delivered.text)
+      || release.changeKind !== submission.changeKind || release.releaseNotes !== submission.releaseNotes) {
       throw new Error("Published metadata and delivered bytes differ from the reviewed artifact.");
     }
     const files = JSON.parse(delivered.text).files;
     if (files.length !== Object.keys(submission.files).length || files.some((file) => submission.files[file.path] !== file.content)) throw new Error("Delivered package files differ from the author's package.");
-    const artifact = { version: submission.version, sha256, byteSize: Buffer.byteLength(delivered.text), files };
+    const artifact = { version: submission.version, sha256, byteSize: Buffer.byteLength(delivered.text), files,
+      changeKind: release.changeKind, releaseNotes: release.releaseNotes };
     artifacts.push({ version: artifact.version, sha256, byteSize: artifact.byteSize });
     check("publication.reviewed-and-delivered-artifact-match", { version: submission.version, sha256 });
     return artifact;

@@ -131,6 +131,101 @@ test("production queue rechecks consent, policy, lifecycle, capabilities, source
   });
 });
 
+test("production upgrade planning and atomic scheduling enforce every crossed published change", { timeout: 60_000 }, async (t) => {
+  const { pool, db } = await fixture(t);
+  await insertRangeRelease(pool);
+  await pool.query("UPDATE skill_versions SET change_kind = 'breaking', release_notes = 'Breaking migration' WHERE version = '1.1.0'");
+  const store = new PostgresTargetSkillOperationStore(db);
+  const service = serviceFor(db, store);
+  await new PostgresSkillUpgradePolicyStore(db).append(policyInput(0, { ...defaultSkillUpgradePolicyV1, allowedChangeKinds: ["fix"] }));
+  const updates = await service.listUpdates({ id: owner, roles: [] }, target);
+  assert.equal(updates.items[0]?.evaluation.status, "no-compatible-release");
+  assert.ok(updates.items[0]?.evaluation.blockers.includes("change-kind-not-allowed"));
+  assert.deepEqual(updates.items[0]?.evaluation.includedReleases.map((release) => release.releaseNotes), ["Breaking migration", "Follow-up fix"]);
+  await assert.rejects(service.schedule({ actorId: owner, targetId: target, action: "update", slug: "release-helper", version: "1.1.1", idempotencyKey: "range-blocked" }), code("TARGET_OPERATION_POLICY_CHANGE_KIND_BLOCKED"));
+  await insertRangeRelease(pool, "1.0.1");
+  await assert.rejects(store.createBatch([{ operation: operation({ toVersion: "1.0.1" }) }, { operation: operation({ toVersion: "1.1.1" }) }]), code("TARGET_OPERATION_POLICY_CHANGED"));
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM target_skill_operations")).rows[0].n, 0);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM audit_events WHERE action LIKE 'target-operation.%'")).rows[0].n, 0);
+  await insertObservation(pool, randomUUID(), "1.1.0", new Date().toISOString());
+  assert.equal((await service.schedule({ actorId: owner, targetId: target, action: "update", slug: "release-helper", version: "1.1.1", idempotencyKey: "already-crossed" })).operation.fromVersion, "1.1.0", "the installed source release is outside the upgrade range");
+});
+
+test("production queue rechecks full-range policy at claim, promotion, renewal, verification, and success", { timeout: 60_000 }, async (t) => {
+  for (const boundary of ["claim", "apply", "renew", "verify", "complete"] as const) await t.test(boundary, async (sub) => {
+    const { pool, db } = await fixture(sub);
+    await insertRangeRelease(pool);
+    await pool.query("UPDATE skill_versions SET change_kind = 'breaking' WHERE version = '1.1.0'");
+    const store = new PostgresTargetSkillOperationStore(db);
+    const op = operation({ toVersion: "1.1.1" });
+    await store.create({ operation: op });
+    const leased = boundary === "claim" ? null : await store.claim(claim(op));
+    const binding = { ...claim(op), fencingToken: leased?.fencingToken ?? 0 };
+    if (boundary !== "claim" && boundary !== "apply") await store.advance({ ...binding, state: "applying" });
+    if (boundary === "complete") await store.advance({ ...binding, state: "verifying" });
+    const previous = (await store.get(op.id))?.state;
+    await new PostgresSkillUpgradePolicyStore(db).append(policyInput(0, { ...defaultSkillUpgradePolicyV1, allowedChangeKinds: ["fix"] }));
+    await assert.rejects(boundary === "claim" ? store.claim(claim(op))
+      : boundary === "complete" ? store.complete({ ...binding, result: { ...result(), installedVersion: "1.1.1" } })
+        : store.advance({ ...binding, state: boundary === "verify" ? "verifying" : "applying" }), code("TARGET_OPERATION_POLICY_CHANGED"));
+    assert.equal((await store.get(op.id))?.state, previous);
+    if (boundary === "claim") assert.equal(await serviceFor(db, store).claim({ actorId: owner, targetId: target, targetGeneration: 1, holderId: "poller" }), null);
+    if (boundary !== "claim" && boundary !== "apply") {
+      assert.equal((await store.complete({ ...binding, result: { status: "failed", code: "operation.policy-changed", recordedAt: now } }))?.state, "failed");
+    }
+  });
+});
+
+test("withdrawn and unsafe intermediate releases remain policy evidence without exposing their metadata", { timeout: 60_000 }, async (t) => {
+  const { pool, db } = await fixture(t, true);
+  await insertRangeRelease(pool);
+  await new PostgresSkillUpgradePolicyStore(db).append(policyInput(0, { ...defaultSkillUpgradePolicyV1, allowedChangeKinds: ["fix"] }));
+  const store = new PostgresTargetSkillOperationStore(db);
+  const service = serviceFor(db, store);
+  const submissions = new PostgresSubmissionStore(db);
+  for (const state of ["unpublished", "revoked", "deleted", "unsafe"]) {
+    await pool.query(`UPDATE skill_versions SET change_kind = 'breaking', release_notes = 'Hidden release notes', lifecycle_status = $1,
+      deleted_at = $2, security_status = $3 WHERE version = '1.1.0'`, [state === "deleted" ? "archived" : state === "unsafe" ? "approved" : state, state === "deleted" ? now : null, state === "unsafe" ? "failed" : "passed"]);
+    const history = await submissions.listSkillReleaseChangeHistory({ slug: "release-helper", actorId: member });
+    assert.deepEqual(history.find((release) => release.version === "1.1.0"), { version: "1.1.0", changeKind: "breaking" });
+    const updates = await service.listUpdates({ id: member, roles: [] }, target);
+    assert.equal(updates.items[0]?.evaluation.status, "no-compatible-release", state);
+    assert.ok(updates.items[0]?.evaluation.blockers.includes("change-kind-not-allowed"), state);
+    assert.deepEqual(updates.items[0]?.evaluation.includedReleases.map((release) => release.version), ["1.1.1"], state);
+    assert.equal(JSON.stringify(updates).includes("Hidden release notes"), false, state);
+    await assert.rejects(service.schedule({ actorId: owner, targetId: target, action: "update", slug: "release-helper", version: "1.1.1", idempotencyKey: state }), code("TARGET_OPERATION_POLICY_CHANGE_KIND_BLOCKED"));
+    await assert.rejects(store.create({ operation: operation({ toVersion: "1.1.1" }) }), code("TARGET_OPERATION_POLICY_CHANGED"));
+  }
+  await pool.query("UPDATE skills SET visibility = 'private' WHERE slug = 'release-helper'");
+  assert.deepEqual(await submissions.listSkillReleaseChangeHistory({ slug: "release-helper", actorId: member }), []);
+  assert.deepEqual((await service.listUpdates({ id: member, roles: [] }, target)).items, []);
+});
+
+test("production full-range checks lock intermediate metadata and new published versions through commit", { timeout: 60_000 }, async (t) => {
+  const { pool, db } = await fixture(t);
+  await insertRangeRelease(pool);
+  await pool.query("UPDATE skill_versions SET change_kind = 'fix'");
+  await pool.query("INSERT INTO skill_versions (skill_id, version, change_kind) SELECT id, '1.0.2', 'breaking' FROM skills WHERE slug = 'release-helper'");
+  await new PostgresSkillUpgradePolicyStore(db).append(policyInput(0, { ...defaultSkillUpgradePolicyV1, allowedChangeKinds: ["fix"] }));
+  const op = operation({ toVersion: "1.1.1" });
+  await new PostgresTargetSkillOperationStore(db).create({ operation: op });
+  const entered = deferred(); const finish = deferred();
+  const store = new PostgresTargetSkillOperationStore(db, { beforeAuditInsert: async () => { entered.resolve(); await finish.promise; } });
+  const pending = store.claim(claim(op));
+  await entered.promise;
+  const writer = await pool.connect();
+  try {
+    await writer.query("SET lock_timeout = '50ms'");
+    await assert.rejects(writer.query("UPDATE skill_versions SET change_kind = 'breaking' WHERE version = '1.1.0'"), code("55P03"));
+    await assert.rejects(writer.query("UPDATE skill_versions SET published_at = clock_timestamp(), lifecycle_status = 'approved', review_status = 'approved', security_status = 'passed' WHERE version = '1.0.2'"), code("55P03"));
+    await assert.rejects(writer.query("INSERT INTO skill_versions (skill_id, version, lifecycle_status, review_status, security_status, published_at, change_kind) SELECT id, '1.0.1', 'approved', 'approved', 'passed', clock_timestamp(), 'breaking' FROM skills WHERE slug = 'release-helper'"), code("55P03"));
+  } finally { await writer.query("RESET lock_timeout"); writer.release(); finish.resolve(); }
+  const leased = await pending;
+  assert.ok(leased);
+  await pool.query("UPDATE skill_versions SET change_kind = 'breaking' WHERE version = '1.1.0'");
+  await assert.rejects(store.advance({ ...claim(op), fencingToken: leased.fencingToken, state: "applying" }), code("TARGET_OPERATION_POLICY_CHANGED"));
+});
+
 test("current membership is checked after preflight and held through operation audit commit", { timeout: 60_000 }, async (t) => {
   const { pool, db } = await fixture(t, true);
   const gate = deferred();
@@ -382,7 +477,10 @@ function deferred() { let resolve!: () => void; const promise = new Promise<void
 function serviceFor(db: ReturnType<typeof createDb>, store: PostgresTargetSkillOperationStore) {
   const targets = new ArchitectureTargetService(new PostgresArchitectureTargetStore(db), { authorizeBinding: async () => ({ allowed: false }) });
   const submissions = new PostgresSubmissionStore(db);
-  return new TargetSkillOperationService(store, targets, { getPublicRelease: (input: Parameters<PostgresSubmissionStore["getPublicRelease"]>[0]) => submissions.getPublicRelease(input) } as SubmissionService, { now: () => new Date(), upgradePolicies: new SkillUpgradePolicyService(new PostgresSkillUpgradePolicyStore(db)) });
+  return new TargetSkillOperationService(store, targets, { getPublicRelease: (input: Parameters<PostgresSubmissionStore["getPublicRelease"]>[0]) => submissions.getPublicRelease(input),
+    listSkillReleases: (input: Parameters<PostgresSubmissionStore["listSkillReleases"]>[0]) => submissions.listSkillReleases(input),
+    listSkillReleaseChangeHistory: (input: Parameters<PostgresSubmissionStore["listSkillReleaseChangeHistory"]>[0]) => submissions.listSkillReleaseChangeHistory(input),
+  } as SubmissionService, { now: () => new Date(), upgradePolicies: new SkillUpgradePolicyService(new PostgresSkillUpgradePolicyStore(db)) });
 }
 async function fixture(t: test.TestContext, teamOwned = false) {
   const connection = process.env.TEST_DATABASE_URL;
@@ -420,6 +518,11 @@ async function insertObservation(pool: ReturnType<typeof createPgPool>, id: stri
     skills: [{ slug: "release-helper", version, digest: hash, managed: true }], configFindings: [], promptAwareness: { detected: false, count: 0 } });
   await pool.query(`INSERT INTO skill_architecture_observations (id,target_id,generation,adapter_kind,adapter_contract_version,adapter_version,adapter_digest,capabilities_digest,observed_digest,observed_state,captured_at)
     VALUES ($1,$2,1,'codex-workspace',2,'1.0.0',$3,$4,$5,$6,$7)`, [id, targetId, "e".repeat(64), capabilitiesDigest, record.observedDigest, record, captured]);
+}
+async function insertRangeRelease(pool: ReturnType<typeof createPgPool>, version = "1.1.1") {
+  const release = await pool.query("INSERT INTO skill_versions (skill_id,version,lifecycle_status,review_status,security_status,published_at,change_kind,release_notes) SELECT id,$2,'approved','approved','passed',$1,'fix','Follow-up fix' FROM skills WHERE slug = 'release-helper' RETURNING id", [now, version]);
+  await pool.query("INSERT INTO skill_artifacts (skill_version_id,storage_key,sha256,byte_size,content_type) VALUES ($1,$3,$2,123,'application/json')", [release.rows[0].id, hash, `fixture/${version}`]);
+  await pool.query("INSERT INTO skill_platform_variants (skill_version_id,name,install_target,status) VALUES ($1,'codex','codex-skill','supported')", [release.rows[0].id]);
 }
 async function insertSyncRun(pool: ReturnType<typeof createPgPool>, id: string) {
   await pool.query(`INSERT INTO skill_architecture_sync_runs (id,architecture_id,revision_id,target_id,target_generation,observed_snapshot_id,profile_id,environment_id,actor_user_id,run_kind,request_key,idempotency_key,desired_digest,compiled_digest,observed_digest,plan_digest,created_at,updated_at,status_updated_at)

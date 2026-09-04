@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { SkillUpdateBlockerCode } from "@myskills-app/core";
 import { Check, CircleAlert, Clock3, PackageCheck, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,7 +67,8 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
 
   const availableCount = rows.reduce((count, row) => count + (row.updates?.items.filter((item) => item.evaluation.status === "update-available").length ?? 0), 0);
   const activeCount = rows.reduce((count, row) => count + row.operations.filter((operation) => ["queued", "claimed", "applying", "verifying"].includes(operation.state)).length, 0);
-  const reviewed = review ? candidateFor(rows, review) : null;
+  const reviewed = review ? reviewFor(rows, review) : null;
+  const reviewedPin = review ? rows.find((row) => row.target.id === review.targetId)?.updates?.policy?.policy.pins[review.slug] : undefined;
 
   async function queueOne(selection: SelectedUpdate) {
     const candidate = candidateFor(rows, selection);
@@ -187,7 +189,7 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
     {state === "ready" && rows.length === 0 && <Card className="control-plane-card"><CardContent className="control-plane-empty-state"><PackageCheck size={28} aria-hidden="true" /><strong>No installed targets</strong><span>Register a target and submit its bounded inventory before checking for updates.</span></CardContent></Card>}
     {state === "ready" && selected.length > 0 && <Card className="control-plane-card update-batch-card"><CardHeader><CardTitle>{selected.length} selected updates</CardTitle><CardDescription>Batch execution creates one separately fenced and recoverable operation per target and skill.</CardDescription></CardHeader><CardContent><div className="target-action-row">{batchReview ? <><Button disabled={busy === "batch"} onClick={() => void queueBatch()}><Check size={15} />{busy === "batch" ? "Queueing…" : "Confirm batch"}</Button><Button variant="outline" onClick={() => setBatchReview(false)}>Back</Button></> : <Button onClick={() => setBatchReview(true)}>Review batch</Button>}<Button variant="outline" onClick={() => setSelected([])}>Clear</Button></div>{batchReview && <ul>{selected.map((item) => { const candidate = candidateFor(rows, item); return <li key={`${item.targetId}:${item.slug}`}>{item.slug} → {candidate?.evaluation.candidate?.version} on {rows.find((row) => row.target.id === item.targetId)?.target.name}</li>; })}</ul>}</CardContent></Card>}
     <div className="update-centre-grid">{rows.map((row) => <TargetUpdateCard key={row.target.id} row={row} selected={selected} busy={busy} architectureReview={architectureReviewTarget === row.target.id} onSelect={(selection, checked) => setSelected((current) => checked ? [...current.filter((item) => item.targetId !== selection.targetId || item.slug !== selection.slug), selection] : current.filter((item) => item.targetId !== selection.targetId || item.slug !== selection.slug))} onReview={setReview} onArchitectureReview={() => setArchitectureReviewTarget((current) => current === row.target.id ? null : row.target.id)} onPromoteArchitecture={() => void promoteArchitecture(row.target.id)} onCancel={(operation) => void cancel(operation)} onRollback={(operation) => void rollback(operation)} client={client} onPolicySaved={() => void load(true)} />)}</div>
-    {reviewed && review && <Card className="control-plane-card update-review-card" aria-label="Update review"><CardHeader><CardTitle>Review {review.slug} {reviewed.evaluation.installedVersion} → {reviewed.evaluation.candidate?.version}</CardTitle><CardDescription>Review every included release before queueing the exact artifact.</CardDescription></CardHeader><CardContent><div className="release-review-list">{reviewed.evaluation.includedReleases.map((release) => <article key={release.version}><div><strong>{release.version}</strong> <Badge variant="outline">{release.changeKind}</Badge>{release.requiresUserAction && <Badge variant="destructive">User action required</Badge>}</div><p>{release.releaseNotes || "No release notes were supplied."}</p><small>SHA-256 {release.artifact.sha256.slice(0, 12)}… · {release.artifact.byteSize.toLocaleString()} bytes</small></article>)}</div><div className="target-action-row"><Button disabled={busy?.startsWith("queue:")} onClick={() => void queueOne(review)}><ShieldCheck size={15} />Queue exact update</Button><Button variant="outline" onClick={() => setReview(null)}>Close</Button></div></CardContent></Card>}
+    {reviewed && review && <Card className="control-plane-card update-review-card" aria-label="Update review"><CardHeader><CardTitle>{reviewed.evaluation.candidate ? `Review ${review.slug} ${reviewed.evaluation.installedVersion} → ${reviewed.evaluation.candidate.version}` : `Review blocked update for ${review.slug}`}</CardTitle><CardDescription>Review every included release before queueing the exact artifact.</CardDescription></CardHeader><CardContent>{reviewed.evaluation.blockers.length > 0 && <p>{reviewed.evaluation.blockers.map((blocker) => updateBlockerText(blocker, reviewedPin)).join(" ")}</p>}<div className="release-review-list">{reviewed.evaluation.includedReleases.map((release) => <article key={release.version}><div><strong>{release.version}</strong> <Badge variant="outline">{release.changeKind}</Badge>{release.requiresUserAction && <Badge variant="destructive">User action required</Badge>}</div><p>{release.releaseNotes || "No release notes were supplied."}</p><small>SHA-256 {release.artifact.sha256.slice(0, 12)}… · {release.artifact.byteSize.toLocaleString()} bytes</small></article>)}</div><div className="target-action-row"><Button disabled={reviewed.evaluation.status !== "update-available" || busy?.startsWith("queue:")} onClick={() => void queueOne(review)}><ShieldCheck size={15} />Queue exact update</Button><Button variant="outline" onClick={() => setReview(null)}>Close</Button></div></CardContent></Card>}
   </main>;
 }
 
@@ -211,7 +213,7 @@ function TargetUpdateCard({ row, selected, busy, architectureReview, onSelect, o
     {row.updates && <><div className="target-update-policy-summary"><span>Policy: {row.updates.policy?.source ?? "default"}</span><span>Channel: {row.updates.policy?.policy.includePrerelease ? "prerelease" : "stable"}</span><span>Mode: {row.updates.policy?.policy.mode ?? "manual"}</span></div><div className="target-update-list">{row.updates.items.map((item) => {
       const selection = { targetId: row.target.id, slug: item.slug };
       const checked = selected.some((candidate) => candidate.targetId === selection.targetId && candidate.slug === selection.slug);
-      return <div className="target-update-row" key={item.slug}><label><input type="checkbox" disabled={item.evaluation.status !== "update-available"} checked={checked} onChange={(event) => onSelect(selection, event.target.checked)} /><span><strong>{item.slug}</strong><small>{item.evaluation.installedVersion} {item.evaluation.candidate ? `→ ${item.evaluation.candidate.version}` : ""}</small></span></label><Badge variant={item.evaluation.status === "update-available" ? "secondary" : item.evaluation.status === "drifted" ? "destructive" : "outline"}>{item.evaluation.status}</Badge>{item.evaluation.status === "update-available" && <Button size="sm" variant="outline" onClick={() => onReview(selection)}>Review</Button>}</div>;
+      return <div className="target-update-row" key={item.slug}><label><input type="checkbox" disabled={item.evaluation.status !== "update-available"} checked={checked} onChange={(event) => onSelect(selection, event.target.checked)} /><span><strong>{item.slug}</strong><small>{item.evaluation.installedVersion} {item.evaluation.candidate ? `→ ${item.evaluation.candidate.version}` : ""}</small>{item.evaluation.blockers.length > 0 && <small className="block">{item.evaluation.blockers.map((blocker) => updateBlockerText(blocker, row.updates?.policy?.policy.pins[item.slug])).join(" ")}</small>}</span></label><Badge variant={item.evaluation.status === "update-available" ? "secondary" : item.evaluation.status === "drifted" ? "destructive" : "outline"}>{item.evaluation.status}</Badge>{(item.evaluation.status === "update-available" || (item.evaluation.blockers.length > 0 && item.evaluation.includedReleases.length > 0)) && <Button size="sm" variant="outline" onClick={() => onReview(selection)}>Review</Button>}</div>;
     })}</div>{row.updates.items.length === 0 && <p className="control-plane-muted">No managed installed skills were present in the latest observation.</p>}
     <div className="target-action-row"><Button disabled={!candidates.length} size="sm" variant="outline" onClick={onArchitectureReview}>Review architecture revision</Button>{architectureReview && <Button disabled={busy === `architecture:${row.target.id}`} size="sm" onClick={onPromoteArchitecture}>{busy === `architecture:${row.target.id}` ? "Creating…" : `Confirm ${candidates.length} pinned versions`}</Button>}</div>
     <UpgradePolicyEditor client={client} target={row.target} resolved={row.updates.policy} onSaved={onPolicySaved} /></>}
@@ -221,6 +223,25 @@ function TargetUpdateCard({ row, selected, busy, architectureReview, onSelect, o
 
 function candidateFor(rows: TargetUpdateState[], selection: SelectedUpdate) {
   return rows.find((row) => row.target.id === selection.targetId)?.updates?.items.find((item) => item.slug === selection.slug && item.evaluation.status === "update-available") ?? null;
+}
+
+function reviewFor(rows: TargetUpdateState[], selection: SelectedUpdate) {
+  return rows.find((row) => row.target.id === selection.targetId)?.updates?.items.find((item) => item.slug === selection.slug && (item.evaluation.candidate || item.evaluation.includedReleases.length > 0)) ?? null;
+}
+
+function updateBlockerText(blocker: SkillUpdateBlockerCode, pinnedVersion?: string): string {
+  if (blocker === "pinned-release-unavailable" && pinnedVersion) return `Pinned release ${pinnedVersion} is unavailable. Choose an available version in the upgrade policy.`;
+  const messages: Record<SkillUpdateBlockerCode, string> = {
+    "release-deprecated": "This release is deprecated.",
+    "platform-unsupported": "This release does not support the target's platform.",
+    "prerelease-not-selected": "Prereleases are disabled by the upgrade policy.",
+    "minimum-myskills-version": "Update the MySkills CLI before installing this release.",
+    "minimum-adapter-contract-version": "This release requires a newer adapter contract.",
+    "minimum-source-version": "Install the required intermediate release first.",
+    "pinned-release-unavailable": "The pinned release is unavailable.",
+    "change-kind-not-allowed": "The upgrade crosses a release change kind that your policy does not allow.",
+  };
+  return messages[blocker];
 }
 
 function operationKey(action: string): string {
