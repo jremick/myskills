@@ -4,7 +4,7 @@ const browserExecutable = process.env.MYSKILLS_E2E_BROWSER_EXECUTABLE?.trim();
 
 export default defineConfig({
   testDir: "./test/e2e",
-  testIgnore: "full-stack.spec.ts",
+  testIgnore: ["full-stack.spec.ts", "**/fullstack/**"],
   fullyParallel: false,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
