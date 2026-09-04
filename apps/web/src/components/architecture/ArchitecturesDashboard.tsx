@@ -123,6 +123,7 @@ export function ArchitecturesDashboard({ client, session, onNavigationGuardChang
     void refresh();
   }, [refresh, refreshKey]);
 
+  // A fast list refresh can batch loading and ready, so detail also tracks refresh intent.
   useEffect(() => {
     if (!selectedArchitectureId || loadState !== "ready") {
       setSelectedDetail(null);
@@ -184,7 +185,7 @@ export function ArchitecturesDashboard({ client, session, onNavigationGuardChang
     return () => {
       active = false;
     };
-  }, [client, loadState, selectedArchitectureId]);
+  }, [client, loadState, refreshKey, selectedArchitectureId]);
 
   useEffect(() => {
     if (!selectedDetail || !architectureIsOrganizationOnly(selectedDetail)) {

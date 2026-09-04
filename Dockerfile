@@ -14,6 +14,8 @@ COPY scripts ./scripts
 RUN npm ci
 
 FROM deps AS api-build
+ARG MYSKILLS_BUILD_REVISION
+RUN MYSKILLS_BUILD_REVISION=${MYSKILLS_BUILD_REVISION} node scripts/write-build-info.mjs
 RUN npm run build -w @myskills-app/core \
   && npm run build -w @myskills-app/auth \
   && npm run build -w @myskills-app/skill-package \
@@ -26,11 +28,13 @@ RUN npm run build -w @myskills-app/core \
 RUN npm prune --omit=dev
 
 FROM deps AS web-build
+ARG MYSKILLS_BUILD_REVISION
 ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN node -e "const value = process.env.VITE_API_BASE_URL; if (!value) throw new Error('VITE_API_BASE_URL build arg is required for the web image.'); if (!value.startsWith('/')) { const url = new URL(value); const local = ['localhost','127.0.0.1','::1'].includes(url.hostname); if (url.protocol !== 'https:' && !local) throw new Error('VITE_API_BASE_URL must use https outside local builds.'); }"
 RUN npm run build -w @myskills-app/core \
   && npm run build -w @myskills-app/web
+RUN MYSKILLS_BUILD_REVISION=${MYSKILLS_BUILD_REVISION} node scripts/write-build-info.mjs apps/web/dist/version.json
 
 FROM node:${NODE_VERSION} AS api
 ENV NODE_ENV=production \
@@ -38,6 +42,7 @@ ENV NODE_ENV=production \
     PORT=3001
 WORKDIR /app
 COPY --from=api-build /app/package.json /app/package-lock.json ./
+COPY --from=api-build /app/build-info.json ./build-info.json
 COPY --from=api-build /app/node_modules ./node_modules
 COPY --from=api-build /app/packages ./packages
 COPY --from=api-build /app/apps/api/package.json ./apps/api/package.json

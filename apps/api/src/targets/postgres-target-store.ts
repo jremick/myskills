@@ -166,7 +166,7 @@ export class PostgresArchitectureTargetStore implements ArchitectureTargetStore 
             consentDeniedAt: target.consent.deniedAt ? new Date(target.consent.deniedAt) : null,
             consentRevokedAt: target.consent.revokedAt ? new Date(target.consent.revokedAt) : null,
             capabilities: target.capabilities,
-            capabilitiesDigest: architectureTargetCapabilitiesDigest(target.capabilities),
+            capabilitiesDigest: architectureTargetCapabilitiesDigest(target.capabilities, target.adapter.contractVersion),
             identityDigest: target.identityDigest,
             generation: target.generation,
             metadata: target.metadata ?? {},
@@ -279,7 +279,7 @@ export class PostgresArchitectureTargetStore implements ArchitectureTargetStore 
         if (observation.adapterDigest !== expectedAdapterDigest) {
           throw new AppError("Observation adapter digest does not match the current target binding.", "ARCHITECTURE_TARGET_ADAPTER_DIGEST_MISMATCH", 409);
         }
-        const expectedCapabilitiesDigest = architectureTargetCapabilitiesDigest(target.capabilities);
+        const expectedCapabilitiesDigest = architectureTargetCapabilitiesDigest(target.capabilities, target.adapter.contractVersion);
         if (observation.capabilitiesDigest !== expectedCapabilitiesDigest) {
           throw new AppError(
             "Observation capability digest does not match the current target binding.",
@@ -650,7 +650,7 @@ export class PostgresArchitectureTargetStore implements ArchitectureTargetStore 
  * the target row is locked. Team-owned targets follow the shared team ->
  * parent organization -> policy/membership -> user -> team-membership order.
  */
-async function lockTargetMutationAuthority(
+export async function lockTargetMutationAuthority(
   db: DbLike,
   owner: ArchitectureTargetOwnerReference,
   actorUserId: string,
@@ -984,7 +984,7 @@ function toTargetRecord(row: TargetRow): ArchitectureTargetRecord {
       issueCodes: [...new Set(validation.errors.map((error) => error.code))].sort(),
     });
   }
-  if (architectureTargetCapabilitiesDigest(validation.value.capabilities) !== row.capabilitiesDigest) {
+  if (architectureTargetCapabilitiesDigest(validation.value.capabilities, validation.value.adapter.contractVersion) !== row.capabilitiesDigest) {
     throw new AppError("Persisted architecture target digest is invalid.", "PERSISTED_ARCHITECTURE_TARGET_INVALID", 500);
   }
   const health = healthFromRow(row);

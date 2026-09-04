@@ -46,7 +46,7 @@ export type ArchitectureTargetAccessReason = (typeof architectureTargetAccessRea
 export const architectureTargetConsentStatuses = ["pending", "granted", "denied", "revoked"] as const;
 export type ArchitectureTargetConsentStatus = (typeof architectureTargetConsentStatuses)[number];
 
-export const architectureTargetAdapterContractVersions = [1] as const;
+export const architectureTargetAdapterContractVersions = [1, 2] as const;
 export type ArchitectureTargetAdapterContractVersion = (typeof architectureTargetAdapterContractVersions)[number];
 
 export interface ArchitectureTargetAdapterDescriptor {
@@ -59,9 +59,8 @@ export const architectureTargetReadCapabilities = ["inventory.read", "health.rea
 export type ArchitectureTargetReadCapability = (typeof architectureTargetReadCapabilities)[number];
 
 /**
- * Mutation names are reserved in v1 so a target cannot accidentally advertise
- * a write surface. They may be omitted or explicitly set to false, but never
- * true until a later version defines an apply/recovery contract.
+ * Mutation names remain false in v1. Contract v2 may advertise them only
+ * through the consent-gated, leased companion operation protocol.
  */
 export const architectureTargetMutationCapabilities = ["apply", "rollback", "sync.write"] as const;
 export type ArchitectureTargetMutationCapability = (typeof architectureTargetMutationCapabilities)[number];

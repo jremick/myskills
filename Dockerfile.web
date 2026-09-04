@@ -6,6 +6,7 @@ ARG NPM_VERSION=11.12.1
 FROM node:${NODE_VERSION} AS build
 ARG NPM_VERSION
 ARG VITE_API_BASE_URL
+ARG MYSKILLS_BUILD_REVISION
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 WORKDIR /app
 RUN npm install -g npm@${NPM_VERSION}
@@ -17,6 +18,7 @@ RUN node -e "const value = process.env.VITE_API_BASE_URL; if (!value) throw new 
 RUN npm ci \
   && npm run build -w @myskills-app/core \
   && npm run build -w @myskills-app/web
+RUN MYSKILLS_BUILD_REVISION=${MYSKILLS_BUILD_REVISION} node scripts/write-build-info.mjs apps/web/dist/version.json
 
 FROM nginx:1.31-alpine AS web
 ENV PORT=80 \

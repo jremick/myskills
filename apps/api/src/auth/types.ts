@@ -1,6 +1,6 @@
 import type { AuthenticatedUser, RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 
-export const apiTokenScopes = ["profile:read", "skills:read", "architectures:read", "skills:submit", "review:read", "review:write"] as const;
+export const apiTokenScopes = ["profile:read", "skills:read", "architectures:read", "skills:submit", "review:read", "review:write", "targets:execute"] as const;
 export const authActionTokenPurposes = ["email_verification", "password_reset", "registration_invitation", "email_change"] as const;
 export const providerTypes = ["oidc", "saml", "cloudflare_access", "github", "google"] as const;
 
@@ -184,6 +184,7 @@ export interface UpsertProviderConfigInput {
   clientId?: string | null;
   enabled?: boolean;
   roleMappings: ProviderRoleMappingRecord[];
+  audit?: CreateAuditEventInput;
 }
 
 export type MfaFactorStatus = "pending" | "enabled" | "disabled";
@@ -253,7 +254,7 @@ export interface ListAuditEventsInput {
 
 export interface AuthStore {
   getRegistrationMode(): Promise<RegistrationMode>;
-  setRegistrationMode(mode: RegistrationMode): Promise<RegistrationMode>;
+  setRegistrationMode(mode: RegistrationMode, audit?: CreateAuditEventInput): Promise<RegistrationMode>;
   createUserWithPassword(input: CreateUserWithPasswordInput): Promise<CreateUserWithPasswordResult>;
   createInvitedUser(input: CreateInvitedUserInput): Promise<CreateInvitedUserResult | null>;
   deletePendingInvitedUser(input: { userId: string; email: string }): Promise<boolean>;
@@ -268,9 +269,10 @@ export interface AuthStore {
     emailVerifiedAt?: Date | null;
     protectLastActiveOwner: boolean;
     revokeCredentials: boolean;
+    audit?: CreateAuditEventInput;
   }): Promise<AdminUserStatusChangeResult>;
   updateUserRoles(input: { userId: string; roles: AuthenticatedUser["roles"] }): Promise<AuthUserRecord | null>;
-  updateUserRolesAndRevokeCredentials(input: { userId: string; roles: AuthenticatedUser["roles"] }): Promise<AuthUserRecord | null>;
+  updateUserRolesAndRevokeCredentials(input: { userId: string; roles: AuthenticatedUser["roles"]; audit?: CreateAuditEventInput }): Promise<AuthUserRecord | null>;
   updatePasswordCredential(input: { userId: string; passwordHash: string; passwordUpdatedAt?: Date }): Promise<boolean>;
   changePasswordAndRevokeCredentials(input: ChangePasswordAndRevokeCredentialsInput): Promise<boolean>;
   completePasswordReset(input: CompletePasswordResetInput): Promise<boolean>;
@@ -293,7 +295,7 @@ export interface AuthStore {
   listApiTokensForAdmin(): Promise<AdminApiTokenRecord[]>;
   findUserByApiTokenHash(tokenHash: string, now?: Date): Promise<AuthUserWithApiToken | null>;
   revokeApiToken(input: { userId: string; tokenId: string }): Promise<ApiTokenRecord | null>;
-  revokeAnyApiToken(input: { tokenId: string }): Promise<AdminApiTokenRecord | null>;
+  revokeAnyApiToken(input: { tokenId: string; audit?: CreateAuditEventInput }): Promise<AdminApiTokenRecord | null>;
   listProviderConfigs(): Promise<ProviderConfigRecord[]>;
   upsertProviderConfig(input: UpsertProviderConfigInput): Promise<ProviderConfigRecord>;
   countEnabledMfaFactors(userId: string): Promise<number>;

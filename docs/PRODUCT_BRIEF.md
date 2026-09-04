@@ -1,6 +1,6 @@
 # Product Brief
 
-Version: 0.1.0-beta.4
+Version: 0.1.0-beta.5
 Last updated: 2026-07-13
 
 This brief describes the intended product direction, not a claim that every capability below is implemented or live. The current beta acceptance boundary is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md); runtime/platform support is [Compatibility](COMPATIBILITY.md); implemented and planned client surfaces are [API, MCP, and CLI](API_MCP_CLI_PLAN.md).

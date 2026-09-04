@@ -100,6 +100,31 @@ test("authors can list and export their own submitted skill package", async (t) 
   assert.equal(JSON.stringify(list.json()).includes("Summarize release notes."), false);
   assert.equal(JSON.stringify(list.json()).includes("storageKey"), false);
 
+  const detail = await app.inject({
+    method: "GET", url: `/v1/submissions/${submissionId}`,
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(detail.statusCode, 200);
+  assert.deepEqual(detail.json().submission.scanRuns[0].findings, []);
+  assert.deepEqual(detail.json().submission.correction, { requiresNewVersion: true, canSubmitNewVersion: true });
+  const otherDetail = await app.inject({
+    method: "GET", url: `/v1/submissions/${submissionId}`,
+    headers: { authorization: `Bearer ${otherToken}` },
+  });
+  assert.equal(otherDetail.statusCode, 404);
+  const inventory = await app.inject({
+    method: "GET", url: "/v1/manage/skills",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(inventory.statusCode, 200);
+  assert.equal(inventory.json().skills[0].slug, "release-notes-helper");
+  assert.equal(inventory.json().nextCursor, null);
+  const otherInventory = await app.inject({
+    method: "GET", url: "/v1/manage/skills",
+    headers: { authorization: `Bearer ${otherToken}` },
+  });
+  assert.deepEqual(otherInventory.json().skills, []);
+
   const bundle = await app.inject({
     method: "GET",
     url: `/v1/submissions/${submissionId}/bundle?platform=codex`,
@@ -151,6 +176,38 @@ test("authors can submit clean archive packages", async (t) => {
   assert.equal(response.json().scan.findingCount, 0);
   assert.equal(JSON.stringify(response.json()).includes("storageKey"), false);
   assert.equal(submissionStore.count(), 1);
+});
+
+test("submission detail exposes review reasons and scan evidence only to its author or a reviewer", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const authorToken = await addAndLoginAs(app, authStore, "feedback-author@example.com", ["author"]);
+  const reviewerToken = await addAndLoginWithMfa(app, authStore, "feedback-reviewer@example.com", ["maintainer"]);
+  const payload = cleanSubmissionPayload();
+  payload.files.push({ path: "package.json", content: JSON.stringify({ scripts: { postinstall: "node setup.js" } }) });
+  const created = await app.inject({ method: "POST", url: "/v1/submissions", headers: { authorization: `Bearer ${authorToken}` }, payload });
+  assert.equal(created.statusCode, 202);
+  const id = created.json().submission.id;
+  const requested = await app.inject({
+    method: "POST", url: `/v1/review/submissions/${id}/actions`,
+    headers: { authorization: `Bearer ${reviewerToken}` },
+    payload: { action: "request-changes", reason: "Remove the install hook." },
+  });
+  assert.equal(requested.statusCode, 200);
+  for (const [url, token] of [[`/v1/submissions/${id}`, authorToken], [`/v1/review/submissions/${id}`, reviewerToken]]) {
+    const detail = await app.inject({ method: "GET", url, headers: { authorization: `Bearer ${token}` } });
+    assert.equal(detail.statusCode, 200);
+    assert.equal(detail.json().submission.changeRequestReason, "Remove the install hook.");
+    assert.equal(detail.json().submission.reviewHistory[0].reason, "Remove the install hook.");
+    assert.equal(detail.json().submission.scanRuns[0].findings[0].path, "package.json");
+    assert.equal(JSON.stringify(detail.json()).includes("storageKey"), false);
+  }
+  const denied = await app.inject({ method: "GET", url: `/v1/review/submissions/${id}`, headers: { authorization: `Bearer ${authorToken}` } });
+  assert.equal(denied.statusCode, 403);
+  const unauthenticated = await app.inject({ method: "GET", url: `/v1/submissions/${id}` });
+  assert.equal(unauthenticated.statusCode, 401);
 });
 
 test("privileged submitters require MFA verification", async (t) => {
@@ -323,6 +380,35 @@ test("invalid manifests are rejected", async (t) => {
 
   assert.equal(response.statusCode, 400);
   assert.equal(response.json().error.code, "INVALID_PACKAGE_MANIFEST");
+  assert.equal(submissionStore.count(), 0);
+});
+
+test("release metadata is strict and fails before submission persistence", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const token = await addAndLogin(app, authStore, ["author"]);
+  const payload = {
+    ...cleanSubmissionPayload(),
+    release: {
+      releaseNotes: "Breaking update",
+      changeKind: "breaking",
+      requiresUserAction: true,
+      compatibility: { minimumMyskillsVersion: "latest" },
+    },
+  };
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/submissions",
+    headers: { authorization: `Bearer ${token}` },
+    payload,
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error.code, "INVALID_RELEASE_METADATA");
+  assert.equal(response.body.includes("latest"), false);
   assert.equal(submissionStore.count(), 0);
 });
 

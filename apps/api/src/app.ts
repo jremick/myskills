@@ -1,5 +1,6 @@
+import { parseSkillPageQuery, searchVisibleSkillPage } from "./repositories/skill-pagination.js";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyServerOptions } from "fastify";
-import { AppError, createArchitectureDiagramArtifact, type ArchitecturePatternMigrationMapping, type ArchitectureSpecV1, type SharingSettings, type SkillRepository, type VisibilityScope } from "@myskills-app/core";
+import { AppError, createArchitectureDiagramArtifact, parseSkillReleaseMetadata, type ArchitecturePatternMigrationMapping, type ArchitectureSpecV1, type SharingSettings, type SkillReleaseMetadata, type SkillRepository, type VisibilityScope } from "@myskills-app/core";
 import {
   MAX_PACKAGE_ARCHIVE_BYTES,
   MAX_PACKAGE_FILES,
@@ -58,6 +59,8 @@ import type {
 } from "./organizations/types.js";
 import type { ArchitectureRecord, ArchitectureStore } from "./architectures/types.js";
 import type { ArchitectureTargetService } from "./targets/service.js";
+import type { TargetSkillOperationService } from "./target-operations/service.js";
+import type { SkillUpgradePolicyService } from "./upgrade-policies/service.js";
 import type {
   ArchitectureTargetAdapterDescriptor,
   ArchitectureTargetCapabilities,
@@ -82,7 +85,7 @@ import {
   type ArchitectureResolutionScope,
 } from "./architectures/exact-release-authorizer.js";
 import { freezeArchitectureRevisionAuthorizationSnapshot } from "./architectures/revision-authorization.js";
-import { API_VERSION } from "./version.js";
+import { API_VERSION, readBuildRevision } from "./version.js";
 
 const SESSION_COOKIE_NAME = "myskills_session";
 const COOKIE_SESSION_RESPONSE_HEADER = "x-myskills-session-response";
@@ -102,12 +105,15 @@ export interface ReadinessProbes {
 
 export interface BuildAppOptions {
   skillRepository: SkillRepository;
+  registryInstanceId?: string;
   authService?: AuthService;
   submissionService?: SubmissionService;
   teamService?: TeamService;
   organizationService?: OrganizationService;
   architectureStore?: ArchitectureStore;
   architectureTargetService?: ArchitectureTargetService;
+  targetSkillOperationService?: TargetSkillOperationService;
+  skillUpgradePolicyService?: SkillUpgradePolicyService;
   architectureOrganizationGrantService?: ArchitectureOrganizationGrantService;
   architecturePatternMigrationService?: ArchitecturePatternMigrationService;
   architectureProjectionLimiter?: AuthRateLimiter;
@@ -121,6 +127,7 @@ export interface BuildAppOptions {
 }
 
 export function buildApp(options: BuildAppOptions): FastifyInstance {
+  const revision = readBuildRevision();
   const app = Fastify({
     logger: options.logger ?? false,
     bodyLimit: DEFAULT_BODY_LIMIT_BYTES,
@@ -223,6 +230,11 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     service: "myskills-app-api",
   }));
 
+  app.get("/version.json", async (_request, reply) => {
+    reply.header("cache-control", "no-store");
+    return { version: API_VERSION, revision };
+  });
+
   app.get("/ready", async (_request, reply) => {
     const [postgres, artifactStorage] = await Promise.all([
       readinessCheck(options.readinessProbes?.postgres, readinessTimeoutMs),
@@ -256,6 +268,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       : true;
     return {
       version: API_VERSION,
+      ...(options.registryInstanceId ? { instanceId: options.registryInstanceId } : {}),
       capabilities: {
         auth: Boolean(options.authService),
         search: true,
@@ -705,15 +718,119 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     };
   });
 
+  app.post("/v1/architecture-targets/:id/operations", async (request, reply) => {
+    const user = await authenticateArchitectureTargetSession(options, request, reply, { mfaRequired: true });
+    if (!user) return;
+    requireMfaForSession(user);
+    const input = parseScheduleTargetOperationInput(request.body);
+    const result = await requireTargetSkillOperationService(options).schedule({
+      actorId: user.id,
+      targetId: parseArchitectureTargetIdParam(request.params),
+      ...input,
+    });
+    return reply.code(result.replayed ? 200 : 202).send(result);
+  });
+
+  app.get("/v1/architecture-targets/:id/updates", async (request, reply) => {
+    const user = await authenticateArchitectureTargetSession(options, request, reply);
+    if (!user) return;
+    return requireTargetSkillOperationService(options).listUpdates(
+      { id: user.id, roles: user.roles },
+      parseArchitectureTargetIdParam(request.params),
+    );
+  });
+
+  app.get("/v1/architecture-targets/:id/update-policy", async (request, reply) => {
+    const user = await authenticateArchitectureTargetSession(options, request, reply);
+    if (!user) return;
+    const targetId = parseArchitectureTargetIdParam(request.params);
+    const target = await requireArchitectureTargetService(options).getTarget(user.id, targetId);
+    if (!target) return architectureTargetNotFound(reply);
+    return { revision: await requireSkillUpgradePolicyService(options).get("target", targetId) };
+  });
+
+  app.put("/v1/architecture-targets/:id/update-policy", async (request, reply) => {
+    const user = await authenticateArchitectureTargetSession(options, request, reply, { mfaRequired: true });
+    if (!user) return;
+    requireMfaForSession(user);
+    const targetId = parseArchitectureTargetIdParam(request.params);
+    await requireArchitectureTargetService(options).authorizeUpgradePolicy(user.id, targetId);
+    const input = parseSkillUpgradePolicyInput(request.body);
+    const result = await requireSkillUpgradePolicyService(options).append({ actorUserId: user.id, scopeType: "target", scopeId: targetId, ...input });
+    return reply.code(result.created ? 201 : 200).send(result);
+  });
+
+  app.post("/v1/target-operations/batch", async (request, reply) => {
+    const user = await authenticateArchitectureTargetSession(options, request, reply, { mfaRequired: true });
+    if (!user) return;
+    requireMfaForSession(user);
+    const operations = parseTargetOperationBatchInput(request.body);
+    const results = await requireTargetSkillOperationService(options).scheduleBatch({ actorId: user.id, operations });
+    return reply.code(results.every((item) => item.replayed) ? 200 : 202).send({ results });
+  });
+
+  app.get("/v1/architecture-targets/:id/operations", async (request, reply) => {
+    const user = await authenticateArchitectureTargetSession(options, request, reply);
+    if (!user) return;
+    return {
+      operations: await requireTargetSkillOperationService(options).list(
+        user.id,
+        parseArchitectureTargetIdParam(request.params),
+      ),
+    };
+  });
+
+  app.get("/v1/target-operations/:id", async (request, reply) => {
+    const user = await authenticateArchitectureTargetSession(options, request, reply);
+    if (!user) return;
+    return { operation: await requireTargetSkillOperationService(options).get(user.id, parseTargetOperationIdParam(request.params)) };
+  });
+
+  app.post("/v1/target-operations/:id/cancel", async (request, reply) => {
+    const user = await authenticateArchitectureTargetSession(options, request, reply, { mfaRequired: true });
+    if (!user) return;
+    requireMfaForSession(user);
+    return { operation: await requireTargetSkillOperationService(options).cancel(user.id, parseTargetOperationIdParam(request.params)) };
+  });
+
+  app.post("/v1/target-operations/claim", async (request, reply) => {
+    const actor = await authenticateTargetExecutor(options, request, reply);
+    if (!actor) return;
+    const claimed = await requireTargetSkillOperationService(options).claim({ actorId: actor.id, ...parseTargetOperationClaimInput(request.body) });
+    return { claim: claimed };
+  });
+
+  app.post("/v1/target-operations/:id/state", async (request, reply) => {
+    const actor = await authenticateTargetExecutor(options, request, reply);
+    if (!actor) return;
+    return {
+      operation: await requireTargetSkillOperationService(options).advance({
+        actorId: actor.id,
+        operationId: parseTargetOperationIdParam(request.params),
+        ...parseTargetOperationStateInput(request.body),
+      }),
+    };
+  });
+
+  app.post("/v1/target-operations/:id/receipt", async (request, reply) => {
+    const actor = await authenticateTargetExecutor(options, request, reply);
+    if (!actor) return;
+    return {
+      operation: await requireTargetSkillOperationService(options).complete({
+        actorId: actor.id,
+        operationId: parseTargetOperationIdParam(request.params),
+        ...parseTargetOperationReceiptInput(request.body),
+      }),
+    };
+  });
+
   app.get("/v1/skills", async (request) => {
-    const query = parseQuery(request.query);
+    const query = parseSkillPageQuery(request.query);
     const user = await authenticateOptionalRegistryReader(options.authService, requestAuthorization(request));
-    const skills = await options.skillRepository.searchVisibleSkills({
-      query: query.q,
-      limit: query.limit,
+    return searchVisibleSkillPage(options.skillRepository, {
+      ...query,
       actorId: user?.id ?? null,
     });
-    return { skills };
   });
 
   app.get("/v1/skills/:slug/releases", async (request) => {
@@ -1543,6 +1660,32 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     };
   });
 
+  app.get("/v1/organizations/:id/update-policy", async (request, reply) => {
+    const service = requireOrganizationService(options);
+    if (!options.authService) throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    const user = await authenticateSessionUser(options.authService, requestAuthorization(request));
+    if (!user) return authFailureReply(options.authService, requestAuthorization(request), reply);
+    const organizationId = parseOrganizationIdParam(request.params);
+    const organization = await service.getOrganization({ id: user.id, email: user.email, name: user.name }, organizationId);
+    if (!organization) throw new AppError("Organization was not found.", "ORGANIZATION_NOT_FOUND", 404);
+    return { revision: await requireSkillUpgradePolicyService(options).get("organization", organizationId) };
+  });
+
+  app.put("/v1/organizations/:id/update-policy", async (request, reply) => {
+    const service = requireOrganizationService(options);
+    if (!options.authService) throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    const user = await authenticateSessionUser(options.authService, requestAuthorization(request));
+    if (!user) return authFailureReply(options.authService, requestAuthorization(request), reply);
+    requireMfaForOrganizationSession(user);
+    const organizationId = parseOrganizationIdParam(request.params);
+    const organization = await service.getOrganization({ id: user.id, email: user.email, name: user.name }, organizationId);
+    if (!organization) throw new AppError("Organization was not found.", "ORGANIZATION_NOT_FOUND", 404);
+    if (organization.role !== "owner") throw new AppError("Only an organization owner can change upgrade policy.", "ORGANIZATION_ROLE_REQUIRED", 403);
+    const input = parseSkillUpgradePolicyInput(request.body);
+    const result = await requireSkillUpgradePolicyService(options).append({ actorUserId: user.id, scopeType: "organization", scopeId: organizationId, ...input });
+    return reply.code(result.created ? 201 : 200).send(result);
+  });
+
   app.post("/v1/organizations/:id/policy-revisions", async (request, reply) => {
     const service = requireOrganizationService(options);
     if (!options.authService) {
@@ -1892,6 +2035,57 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     };
   });
 
+  app.get("/v1/manage/skills", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, requestAuthorization(request));
+    if (!user) return authFailureReply(options.authService, requestAuthorization(request), reply);
+    return options.submissionService.listManagedSkills({
+      actor: { id: user.id, roles: user.roles },
+      ...parseSkillPageQuery(request.query),
+    });
+  });
+
+  app.get("/v1/submissions/:id", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, requestAuthorization(request));
+    if (!user) return authFailureReply(options.authService, requestAuthorization(request), reply);
+    const submission = await options.submissionService.getUserSubmissionDetail({
+      actor: { id: user.id, roles: user.roles },
+      submissionId: parseSubmissionIdParam(request.params),
+    });
+    if (!submission) throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+    return { submission };
+  });
+
+  app.get("/v1/review/submissions/:id", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const actor = await authenticateActor(options.authService, requestAuthorization(request), "review:read", { mfaRequired: true });
+    if (!actor) {
+      return reply.code(401).send({ error: { code: "AUTHENTICATION_REQUIRED", message: "Authentication is required." } });
+    }
+    const submission = await options.submissionService.getReviewSubmissionDetail({
+      actor,
+      submissionId: parseSubmissionIdParam(request.params),
+    });
+    if (!submission) throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+    return { submission };
+  });
+
   app.get("/v1/submissions/mine", async (request, reply) => {
     if (!options.authService) {
       throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
@@ -1989,6 +2183,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       actor,
       manifest: input.manifest,
       files: input.files,
+      release: input.release,
     });
     return reply.code(202).send(submissionResponse(submission));
   });
@@ -2138,6 +2333,25 @@ async function authenticateArchitectureTargetSession(
   return user;
 }
 
+async function authenticateTargetExecutor(
+  options: BuildAppOptions,
+  request: { headers: { authorization?: string | string[]; cookie?: string | string[] } },
+  reply: FastifyReply,
+) {
+  if (!options.authService) throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+  if (!options.targetSkillOperationService) throw new AppError("Target operation service is not configured.", "TARGET_OPERATION_SERVICE_UNAVAILABLE", 503);
+  const context = await options.authService.authenticateRequest(requestAuthorization(request));
+  if (!context) {
+    await authFailureReply(options.authService, requestAuthorization(request), reply);
+    return null;
+  }
+  if (context.credential.kind !== "api_token") {
+    throw new AppError("A target executor API token is required.", "API_TOKEN_REQUIRED", 403);
+  }
+  requireScope(context, "targets:execute");
+  return context.user;
+}
+
 function requireArchitectureStore(options: BuildAppOptions): ArchitectureStore {
   if (!options.architectureStore) {
     throw new AppError("Architecture service is not configured.", "ARCHITECTURE_SERVICE_UNAVAILABLE", 503);
@@ -2150,6 +2364,18 @@ function requireArchitectureTargetService(options: BuildAppOptions): Architectur
     throw new AppError("Architecture target service is not configured.", "ARCHITECTURE_TARGET_SERVICE_UNAVAILABLE", 503);
   }
   return options.architectureTargetService;
+}
+
+function requireTargetSkillOperationService(options: BuildAppOptions): TargetSkillOperationService {
+  if (!options.targetSkillOperationService) {
+    throw new AppError("Target operation service is not configured.", "TARGET_OPERATION_SERVICE_UNAVAILABLE", 503);
+  }
+  return options.targetSkillOperationService;
+}
+
+function requireSkillUpgradePolicyService(options: BuildAppOptions): SkillUpgradePolicyService {
+  if (!options.skillUpgradePolicyService) throw new AppError("Skill upgrade policy service is not configured.", "SKILL_UPGRADE_POLICY_SERVICE_UNAVAILABLE", 503);
+  return options.skillUpgradePolicyService;
 }
 
 function requireArchitectureOrganizationGrantService(options: BuildAppOptions): ArchitectureOrganizationGrantService {
@@ -2818,6 +3044,19 @@ function parseAppendOrganizationPolicyInput(input: unknown): {
   };
 }
 
+function parseSkillUpgradePolicyInput(input: unknown): { policy: Record<string, unknown>; expectedRevisionNumber: number; reason?: string } {
+  const body = parseJsonObject(input);
+  rejectFields(body, ["policy", "expectedRevisionNumber", "reason"], "SKILL_UPGRADE_POLICY_FIELD");
+  if (typeof body.expectedRevisionNumber !== "number" || !Number.isInteger(body.expectedRevisionNumber) || body.expectedRevisionNumber < 0) {
+    throw new AppError("expectedRevisionNumber must be a non-negative integer.", "INVALID_SKILL_UPGRADE_POLICY", 400);
+  }
+  return {
+    policy: parseJsonObject(body.policy),
+    expectedRevisionNumber: body.expectedRevisionNumber,
+    reason: optionalString(body.reason, "reason"),
+  };
+}
+
 function parseOrganizationPolicyActionInput(input: unknown): { action: "activate" } {
   const body = parseJsonObject(input);
   rejectFields(body, ["action"], "ORGANIZATION_POLICY_ACTION_FIELD");
@@ -3322,13 +3561,13 @@ function parseArchitectureTargetOwner(input: unknown): ArchitectureTargetOwnerRe
 function parseArchitectureTargetAdapter(input: unknown): ArchitectureTargetAdapterDescriptor {
   const adapter = parseJsonObject(input);
   rejectFields(adapter, ["kind", "version", "contractVersion"], "ARCHITECTURE_TARGET_ADAPTER_FIELD");
-  if (adapter.contractVersion !== 1) {
-    throw new AppError("Architecture target adapter contract version must be 1.", "INVALID_ARCHITECTURE_TARGET_ADAPTER", 400);
+  if (adapter.contractVersion !== 1 && adapter.contractVersion !== 2) {
+    throw new AppError("Architecture target adapter contract version must be 1 or 2.", "INVALID_ARCHITECTURE_TARGET_ADAPTER", 400);
   }
   return {
     kind: requiredString(adapter.kind, "adapter.kind").trim(),
     version: requiredString(adapter.version, "adapter.version").trim(),
-    contractVersion: 1,
+    contractVersion: adapter.contractVersion,
   };
 }
 
@@ -3409,6 +3648,104 @@ function parseArchitectureTargetObservationQuery(input: unknown): { limit?: numb
 function parseArchitectureTargetIdParam(input: unknown): string {
   const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
   return parseArchitectureTargetIdentifier(params.id, "id");
+}
+
+function parseTargetOperationIdParam(input: unknown): string {
+  const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  return parseArchitectureTargetIdentifier(params.id, "id");
+}
+
+function parseScheduleTargetOperationInput(input: unknown) {
+  const body = parseJsonObject(input);
+  rejectFields(body, ["action", "slug", "version", "platform", "idempotencyKey"], "TARGET_OPERATION_FIELD");
+  const action = requiredString(body.action, "action");
+  if (action !== "install" && action !== "update" && action !== "rollback") {
+    throw new AppError("Target operation action is invalid.", "INVALID_TARGET_OPERATION", 400);
+  }
+  return {
+    action: action as "install" | "update" | "rollback",
+    slug: requiredString(body.slug, "slug"),
+    version: requiredString(body.version, "version"),
+    platform: optionalString(body.platform, "platform"),
+    idempotencyKey: parseArchitectureTargetIdentifier(body.idempotencyKey, "idempotencyKey"),
+  };
+}
+
+function parseTargetOperationBatchInput(input: unknown) {
+  const body = parseJsonObject(input);
+  rejectFields(body, ["operations"], "TARGET_OPERATION_FIELD");
+  if (!Array.isArray(body.operations) || body.operations.length === 0 || body.operations.length > 100) {
+    throw new AppError("Target operation batch must contain from 1 to 100 operations.", "INVALID_TARGET_OPERATION", 400);
+  }
+  return body.operations.map((operation) => {
+    const row = parseJsonObject(operation);
+    rejectFields(row, ["targetId", "action", "slug", "version", "platform", "idempotencyKey"], "TARGET_OPERATION_FIELD");
+    return {
+      targetId: parseArchitectureTargetIdentifier(row.targetId, "targetId"),
+      ...parseScheduleTargetOperationInput(row),
+    };
+  });
+}
+
+function parseTargetOperationClaimInput(input: unknown) {
+  const body = parseJsonObject(input);
+  rejectFields(body, ["targetId", "targetGeneration", "holderId", "leaseSeconds"], "TARGET_OPERATION_FIELD");
+  return {
+    targetId: parseArchitectureTargetIdentifier(body.targetId, "targetId"),
+    targetGeneration: requiredPositiveInteger(body.targetGeneration, "targetGeneration"),
+    holderId: parseArchitectureTargetIdentifier(body.holderId, "holderId"),
+    leaseSeconds: optionalPositiveInteger(body.leaseSeconds, "leaseSeconds"),
+  };
+}
+
+function parseTargetOperationStateInput(input: unknown) {
+  const body = parseJsonObject(input);
+  rejectFields(body, ["holderId", "claimToken", "fencingToken", "state", "leaseSeconds"], "TARGET_OPERATION_FIELD");
+  const state = requiredString(body.state, "state");
+  if (state !== "applying" && state !== "verifying") {
+    throw new AppError("Target operation state is invalid.", "INVALID_TARGET_OPERATION", 400);
+  }
+  return {
+    holderId: parseArchitectureTargetIdentifier(body.holderId, "holderId"),
+    claimToken: requiredString(body.claimToken, "claimToken"),
+    fencingToken: requiredPositiveInteger(body.fencingToken, "fencingToken"),
+    state: state as "applying" | "verifying",
+    leaseSeconds: optionalPositiveInteger(body.leaseSeconds, "leaseSeconds"),
+  };
+}
+
+function parseTargetOperationReceiptInput(input: unknown) {
+  const body = parseJsonObject(input);
+  rejectFields(body, ["holderId", "claimToken", "fencingToken", "result"], "TARGET_OPERATION_FIELD");
+  const result = parseJsonObject(body.result);
+  rejectFields(result, ["status", "code", "installedVersion", "artifactSha256", "contentDigest"], "TARGET_OPERATION_RESULT_FIELD");
+  const status = requiredString(result.status, "result.status");
+  if (status !== "succeeded" && status !== "failed") {
+    throw new AppError("Target operation result status is invalid.", "INVALID_TARGET_OPERATION", 400);
+  }
+  return {
+    holderId: parseArchitectureTargetIdentifier(body.holderId, "holderId"),
+    claimToken: requiredString(body.claimToken, "claimToken"),
+    fencingToken: requiredPositiveInteger(body.fencingToken, "fencingToken"),
+    result: {
+      status: status as "succeeded" | "failed",
+      code: requiredString(result.code, "result.code"),
+      ...(optionalString(result.installedVersion, "result.installedVersion") ? { installedVersion: optionalString(result.installedVersion, "result.installedVersion") } : {}),
+      ...(optionalString(result.artifactSha256, "result.artifactSha256") ? { artifactSha256: optionalString(result.artifactSha256, "result.artifactSha256") } : {}),
+      ...(optionalString(result.contentDigest, "result.contentDigest") ? { contentDigest: optionalString(result.contentDigest, "result.contentDigest") } : {}),
+    },
+  };
+}
+
+function requiredPositiveInteger(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    throw new AppError(`${field} must be a positive integer.`, "INVALID_REQUEST_BODY", 400);
+  }
+  return value;
+}
+
+function optionalPositiveInteger(value: unknown, field: string): number | undefined {
+  return value === undefined ? undefined : requiredPositiveInteger(value, field);
 }
 
 function parseArchitectureTargetIdentifier(value: unknown, field: string): string {
@@ -3582,9 +3919,16 @@ function parseCreateApiTokenInput(input: unknown): CreateApiTokenRequest {
 async function parseSubmissionInput(input: unknown): Promise<{
   manifest: ReturnType<typeof parseSkillManifest>;
   files: PackageInputFile[];
+  release: SkillReleaseMetadata;
 }> {
   const body = parseJsonObject(input);
   rejectServerManagedSubmissionFields(body);
+  let release: SkillReleaseMetadata;
+  try {
+    release = parseSkillReleaseMetadata(body.release);
+  } catch (error) {
+    throw new AppError(error instanceof Error ? error.message : "Invalid release metadata.", "INVALID_RELEASE_METADATA", 400);
+  }
 
   const hasFiles = "files" in body;
   const hasArchive = "archive" in body;
@@ -3603,6 +3947,7 @@ async function parseSubmissionInput(input: unknown): Promise<{
     return {
       manifest: parseSubmissionManifest(body.manifest, files, { optional: true }),
       files,
+      release,
     };
   }
 
@@ -3630,6 +3975,7 @@ async function parseSubmissionInput(input: unknown): Promise<{
   return {
     manifest: parseSubmissionManifest(body.manifest, files, { optional: false }),
     files,
+    release,
   };
 }
 
@@ -3981,14 +4327,6 @@ function parseProviderRoleMappings(input: unknown): UpsertProviderConfigRequest[
       role: requiredString(record.role, `roleMappings[${index}].role`),
     };
   });
-}
-
-function parseQuery(input: unknown): { q?: string; limit?: number } {
-  const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
-  const q = typeof params.q === "string" ? params.q : undefined;
-  const rawLimit = typeof params.limit === "string" ? Number.parseInt(params.limit, 10) : undefined;
-  const limit = rawLimit && Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : undefined;
-  return { q, limit };
 }
 
 function parseBundleQuery(input: unknown): { platform?: string } {

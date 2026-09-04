@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 
 const BCRYPT_COST = 12;
+const MAX_NEW_PASSWORD_BYTES = 72;
 
 export async function hashPassword(password: string): Promise<string> {
   validatePasswordInput(password);
@@ -24,7 +25,7 @@ export function validatePasswordInput(password: string): void {
   if (password.length < 12) {
     throw new Error("Password must be at least 12 characters.");
   }
-  if (password.length > 1024) {
-    throw new Error("Password is too long.");
+  if (Buffer.byteLength(password, "utf8") > MAX_NEW_PASSWORD_BYTES) {
+    throw new Error("Password must be at most 72 UTF-8 bytes. Non-ASCII characters can use more than one byte.");
   }
 }

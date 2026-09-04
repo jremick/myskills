@@ -228,7 +228,7 @@ export class MemoryArchitectureTargetStore implements ArchitectureTargetStore {
     if (observation.adapterDigest !== expectedAdapterDigest) {
       throw new AppError("Observation adapter digest does not match the current target binding.", "ARCHITECTURE_TARGET_ADAPTER_DIGEST_MISMATCH", 409);
     }
-    const expectedCapabilitiesDigest = architectureTargetCapabilitiesDigest(target.capabilities);
+    const expectedCapabilitiesDigest = architectureTargetCapabilitiesDigest(target.capabilities, target.adapter.contractVersion);
     if (observation.capabilitiesDigest !== expectedCapabilitiesDigest) {
       throw new AppError("Observation capability digest does not match the current target binding.", "ARCHITECTURE_TARGET_CAPABILITIES_DIGEST_MISMATCH", 409);
     }

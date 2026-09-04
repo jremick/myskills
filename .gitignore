@@ -12,6 +12,7 @@ test-results/
 .next/
 .turbo/
 *.tsbuildinfo
+/build-info.json
 
 # Runtime and local state
 .env

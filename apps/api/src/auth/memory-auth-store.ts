@@ -1,3 +1,4 @@
+import { AppError } from "@myskills-app/core";
 import type { RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type {
@@ -148,6 +149,8 @@ export class MemoryAuthStore implements AuthStore {
   private mfaChallenges = new Map<string, MemoryMfaChallenge>();
   private authActionTokens = new Map<string, MemoryAuthActionToken>();
   private audit = new Map<string, MemoryAuditEvent>();
+  private auditSequence = 0;
+  private adminMutationTail: Promise<void> = Promise.resolve();
 
   constructor(private registrationMode: RegistrationMode = "closed") {}
 
@@ -184,9 +187,14 @@ export class MemoryAuthStore implements AuthStore {
     return this.registrationMode;
   }
 
-  async setRegistrationMode(mode: RegistrationMode): Promise<RegistrationMode> {
-    this.registrationMode = mode;
-    return this.registrationMode;
+  async setRegistrationMode(mode: RegistrationMode, audit?: CreateAuditEventInput): Promise<RegistrationMode> {
+    return this.commitAdminMutation(() => ({
+      audit: audit ? { ...audit, details: { ...audit.details, oldMode: this.registrationMode, newMode: mode } } : undefined,
+      commit: () => {
+        this.registrationMode = mode;
+        return mode;
+      },
+    }));
   }
 
   async createUserWithPassword(input: CreateUserWithPasswordInput): Promise<CreateUserWithPasswordResult> {
@@ -311,28 +319,43 @@ export class MemoryAuthStore implements AuthStore {
     emailVerifiedAt?: Date | null;
     protectLastActiveOwner: boolean;
     revokeCredentials: boolean;
+    audit?: CreateAuditEventInput;
   }): Promise<AdminUserStatusChangeResult> {
-    const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
-    if (!user) {
-      return { outcome: "not_found" };
-    }
-    if (
-      input.protectLastActiveOwner &&
-      user.status === "active" &&
-      user.roles.includes("owner") &&
-      input.status !== "active" &&
-      [...this.users.values()].filter((candidate) => candidate.status === "active" && candidate.roles.includes("owner")).length <= 1
-    ) {
-      return { outcome: "last_owner" };
-    }
-    user.status = input.status;
-    if (input.emailVerifiedAt !== undefined) {
-      user.emailVerifiedAt = input.emailVerifiedAt;
-    }
-    if (input.revokeCredentials) {
-      await this.revokeUserCredentials(user.id);
-    }
-    return { outcome: "updated", user: toRecord(user) };
+    return this.commitAdminMutation<AdminUserStatusChangeResult>(() => {
+      const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
+      if (!user) {
+        return { commit: () => ({ outcome: "not_found" }) };
+      }
+      if (
+        input.protectLastActiveOwner &&
+        user.status === "active" &&
+        user.roles.includes("owner") &&
+        input.status !== "active" &&
+        [...this.users.values()].filter((candidate) => candidate.status === "active" && candidate.roles.includes("owner")).length <= 1
+      ) {
+        return { commit: () => ({ outcome: "last_owner" }) };
+      }
+      const emailVerifiedAt = input.emailVerifiedAt === undefined ? user.emailVerifiedAt : input.emailVerifiedAt;
+      return {
+        audit: input.audit ? {
+          ...input.audit,
+          resourceId: user.id,
+          details: {
+            ...input.audit.details,
+            statusBefore: user.status,
+            statusAfter: input.status,
+            emailVerifiedBefore: Boolean(user.emailVerifiedAt),
+            emailVerifiedAfter: Boolean(emailVerifiedAt),
+          },
+        } : undefined,
+        commit: () => {
+          user.status = input.status;
+          user.emailVerifiedAt = emailVerifiedAt;
+          if (input.revokeCredentials) this.revokeCredentialsInMemory(user.id);
+          return { outcome: "updated", user: toRecord(user) };
+        },
+      };
+    });
   }
 
   async updateUserRoles(input: { userId: string; roles: Role[] }): Promise<AuthUserRecord | null> {
@@ -344,12 +367,27 @@ export class MemoryAuthStore implements AuthStore {
     return toRecord(user);
   }
 
-  async updateUserRolesAndRevokeCredentials(input: { userId: string; roles: Role[] }): Promise<AuthUserRecord | null> {
-    const updated = await this.updateUserRoles(input);
-    if (updated) {
-      await this.revokeUserCredentials(input.userId);
-    }
-    return updated;
+  async updateUserRolesAndRevokeCredentials(input: { userId: string; roles: Role[]; audit?: CreateAuditEventInput }): Promise<AuthUserRecord | null> {
+    return this.commitAdminMutation<AuthUserRecord | null>(() => {
+      const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
+      if (!user) return { commit: () => null };
+      if (user.status === "active" && user.roles.includes("owner") && !input.roles.includes("owner") &&
+        ![...this.users.values()].some((candidate) => candidate.id !== user.id && candidate.status === "active" && candidate.roles.includes("owner"))) {
+        throw new AppError("At least one active owner is required.", "LAST_OWNER_REQUIRED", 409);
+      }
+      return {
+        audit: input.audit ? {
+          ...input.audit,
+          resourceId: user.id,
+          details: { ...input.audit.details, rolesBefore: [...user.roles], rolesAfter: [...input.roles] },
+        } : undefined,
+        commit: () => {
+          user.roles = [...input.roles];
+          this.revokeCredentialsInMemory(user.id);
+          return toRecord(user);
+        },
+      };
+    });
   }
 
   async updatePasswordCredential(input: { userId: string; passwordHash: string; passwordUpdatedAt?: Date }): Promise<boolean> {
@@ -523,6 +561,10 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async revokeUserCredentials(userId: string): Promise<void> {
+    this.revokeCredentialsInMemory(userId);
+  }
+
+  private revokeCredentialsInMemory(userId: string): void {
     const now = new Date();
     for (const session of this.sessions.values()) {
       if (session.userId === userId && !session.revokedAt) {
@@ -602,19 +644,23 @@ export class MemoryAuthStore implements AuthStore {
     return toApiTokenRecord(token);
   }
 
-  async revokeAnyApiToken(input: { tokenId: string }): Promise<AdminApiTokenRecord | null> {
-    const token = [...this.apiTokens.values()].find((candidate) => candidate.id === input.tokenId);
-    if (!token) {
-      return null;
-    }
-    const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
-    if (!user) {
-      return null;
-    }
-    if (!token.revokedAt) {
-      token.revokedAt = new Date();
-    }
-    return { ...toApiTokenRecord(token), user: toRecord(user) };
+  async revokeAnyApiToken(input: { tokenId: string; audit?: CreateAuditEventInput }): Promise<AdminApiTokenRecord | null> {
+    return this.commitAdminMutation<AdminApiTokenRecord | null>(() => {
+      const token = [...this.apiTokens.values()].find((candidate) => candidate.id === input.tokenId);
+      const user = token ? [...this.users.values()].find((candidate) => candidate.id === token.userId) : null;
+      if (!token || !user) return { commit: () => null };
+      return {
+        audit: input.audit ? {
+          ...input.audit,
+          resourceId: token.id,
+          details: { ...input.audit.details, targetUserId: user.id, targetEmail: user.email, scopes: [...token.scopes] },
+        } : undefined,
+        commit: () => {
+          token.revokedAt ??= new Date();
+          return { ...toApiTokenRecord(token), user: toRecord(user) };
+        },
+      };
+    });
   }
 
   async listProviderConfigs(): Promise<ProviderConfigRecord[]> {
@@ -624,22 +670,29 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async upsertProviderConfig(input: UpsertProviderConfigInput): Promise<ProviderConfigRecord> {
-    const existing = this.providerConfigs.get(input.key);
-    const now = new Date();
-    const config: MemoryProviderConfig = {
-      id: existing?.id ?? `provider-${this.providerConfigs.size + 1}`,
-      key: input.key,
-      type: input.type,
-      displayName: input.displayName,
-      issuer: input.issuer ?? null,
-      clientId: input.clientId ?? null,
-      enabled: input.enabled ?? false,
-      roleMappings: [...input.roleMappings].sort(compareProviderRoleMappings),
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    };
-    this.providerConfigs.set(config.key, config);
-    return toProviderConfigRecord(config);
+    return this.commitAdminMutation(() => {
+      const existing = this.providerConfigs.get(input.key);
+      const now = new Date();
+      const config: MemoryProviderConfig = {
+        id: existing?.id ?? `provider-${this.providerConfigs.size + 1}`,
+        key: input.key,
+        type: input.type,
+        displayName: input.displayName,
+        issuer: input.issuer ?? null,
+        clientId: input.clientId ?? null,
+        enabled: input.enabled ?? false,
+        roleMappings: [...input.roleMappings].sort(compareProviderRoleMappings),
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+      return {
+        audit: input.audit ? { ...input.audit, resourceId: config.id } : undefined,
+        commit: () => {
+          this.providerConfigs.set(config.key, config);
+          return toProviderConfigRecord(config);
+        },
+      };
+    });
   }
 
   async countEnabledMfaFactors(userId: string): Promise<number> {
@@ -844,8 +897,13 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async recordAuditEvent(input: CreateAuditEventInput): Promise<void> {
-    const event: MemoryAuditEvent = {
-      id: `audit-${this.audit.size + 1}`,
+    const event = await this.prepareAuditEvent(input);
+    this.audit.set(event.id, event);
+  }
+
+  protected async prepareAuditEvent(input: CreateAuditEventInput): Promise<MemoryAuditEvent> {
+    return {
+      id: `audit-${++this.auditSequence}`,
       actorUserId: input.actorUserId ?? null,
       action: input.action,
       decision: input.decision,
@@ -854,14 +912,31 @@ export class MemoryAuthStore implements AuthStore {
       details: sanitizeAuditDetails(input.details ?? {}),
       createdAt: new Date(),
     };
-    this.audit.set(event.id, event);
+  }
+
+  // Prepare a fallible audit write first, then commit the in-memory state and
+  // event without another await. Serialize privileged changes for owner parity.
+  private async commitAdminMutation<T>(prepare: () => { audit?: CreateAuditEventInput; commit: () => T }): Promise<T> {
+    const previous = this.adminMutationTail;
+    let release!: () => void;
+    this.adminMutationTail = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try {
+      const prepared = prepare();
+      const event = prepared.audit ? await this.prepareAuditEvent(prepared.audit) : null;
+      const result = prepared.commit();
+      if (event) this.audit.set(event.id, event);
+      return result;
+    } finally {
+      release();
+    }
   }
 
   async listAuditEvents(input: ListAuditEventsInput): Promise<AuditEventRecord[]> {
     return [...this.audit.values()]
       .sort((a, b) => {
         const time = b.createdAt.getTime() - a.createdAt.getTime();
-        return time === 0 ? b.id.localeCompare(a.id) : time;
+        return time === 0 ? Number(b.id.slice(6)) - Number(a.id.slice(6)) : time;
       })
       .slice(0, input.limit)
       .map(toAuditEventRecord);

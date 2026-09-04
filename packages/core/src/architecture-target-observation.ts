@@ -56,9 +56,12 @@ export function architectureTargetAdapterDigest(input: ArchitectureTargetAdapter
 }
 
 /** Calculate the stable digest of a target capability projection. */
-export function architectureTargetCapabilitiesDigest(input: ArchitectureTargetCapabilitySet): string {
+export function architectureTargetCapabilitiesDigest(
+  input: ArchitectureTargetCapabilitySet,
+  contractVersion: ArchitectureTargetAdapterDescriptor["contractVersion"] = 1,
+): string {
   const errors: ArchitectureTargetValidationIssue[] = [];
-  const normalized = validateCapabilities(input, "capabilities", errors);
+  const normalized = validateCapabilities(input, "capabilities", errors, contractVersion);
   if (errors.length > 0 || !normalized) throw new ArchitectureTargetValidationError(errors.length > 0 ? errors : [{ code: "ARCHITECTURE_TARGET_CAPABILITIES_INVALID", message: "Capabilities are invalid." }]);
   return sha256Hex(canonicalizeJson(normalizeCapabilities(normalized)));
 }

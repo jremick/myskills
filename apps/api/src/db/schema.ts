@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import type { SkillReleaseChangeKind, SkillReleaseCompatibility, SkillUpgradePolicyV1, TargetSkillOperationResult } from "@myskills-app/core";
 import {
   check,
   foreignKey,
@@ -41,6 +42,7 @@ export const organizationMembershipRole = pgEnum("organization_membership_role",
 export const organizationInvitationStatus = pgEnum("organization_invitation_status", ["pending", "accepted", "revoked", "expired"]);
 export const architectureTargetStatus = pgEnum("architecture_target_status", ["connected", "degraded", "revoked"]);
 export const architectureTargetConsentStatus = pgEnum("architecture_target_consent_status", ["pending", "granted", "denied", "revoked"]);
+export const skillUpgradePolicyScope = pgEnum("skill_upgrade_policy_scope", ["target", "organization"]);
 export const architectureSyncRunKind = pgEnum("architecture_sync_run_kind", ["preview", "sync", "recovery", "rollback"]);
 export const architectureSyncRunStatus = pgEnum("architecture_sync_run_status", [
   "drafted",
@@ -432,6 +434,9 @@ export const skillVersions = pgTable("skill_versions", {
   skillId: uuid("skill_id").notNull().references(() => skills.id, { onDelete: "cascade" }),
   version: text("version").notNull(),
   releaseNotes: text("release_notes").notNull().default(""),
+  changeKind: text("change_kind").$type<SkillReleaseChangeKind>().notNull().default("maintenance"),
+  requiresUserAction: boolean("requires_user_action").notNull().default(false),
+  compatibility: jsonb("compatibility").$type<SkillReleaseCompatibility>().notNull().default({}),
   lifecycleStatus: skillLifecycleStatus("lifecycle_status").notNull().default("submitted"),
   reviewStatus: reviewStatus("review_status").notNull().default("unreviewed"),
   securityStatus: securityStatus("security_status").notNull().default("not-run"),
@@ -768,7 +773,7 @@ export const skillArchitectureTargets = pgTable("skill_architecture_targets", {
   ),
   check(
     "skill_architecture_targets_adapter_contract_version_check",
-    sql`${table.adapterContractVersion} = 1`,
+    sql`${table.adapterContractVersion} IN (1, 2)`,
   ),
   check(
     "skill_architecture_targets_adapter_version_check",
@@ -796,7 +801,7 @@ export const skillArchitectureTargets = pgTable("skill_architecture_targets", {
   ),
   check(
     "skill_architecture_targets_capabilities_mutation_disabled_check",
-    sql`(NOT ${table.capabilities} ? 'apply' OR ${table.capabilities} -> 'apply' = 'false'::jsonb) AND (NOT ${table.capabilities} ? 'rollback' OR ${table.capabilities} -> 'rollback' = 'false'::jsonb) AND (NOT ${table.capabilities} ? 'sync.write' OR ${table.capabilities} -> 'sync.write' = 'false'::jsonb)`,
+    sql`(${table.adapterContractVersion} = 1 AND (NOT ${table.capabilities} ? 'apply' OR ${table.capabilities} -> 'apply' = 'false'::jsonb) AND (NOT ${table.capabilities} ? 'rollback' OR ${table.capabilities} -> 'rollback' = 'false'::jsonb) AND (NOT ${table.capabilities} ? 'sync.write' OR ${table.capabilities} -> 'sync.write' = 'false'::jsonb)) OR (${table.adapterContractVersion} = 2 AND (COALESCE((${table.capabilities} ->> 'apply')::boolean, false) = false AND COALESCE((${table.capabilities} ->> 'rollback')::boolean, false) = false OR ${table.capabilities} -> 'sync.write' = 'true'::jsonb))`,
   ),
   check(
     "skill_architecture_targets_capabilities_safe_check",
@@ -899,7 +904,7 @@ export const skillArchitectureObservations = pgTable("skill_architecture_observa
   ),
   check(
     "skill_architecture_observations_adapter_contract_version_check",
-    sql`${table.adapterContractVersion} = 1`,
+    sql`${table.adapterContractVersion} IN (1, 2)`,
   ),
   check(
     "skill_architecture_observations_adapter_version_check",
@@ -941,6 +946,84 @@ export const skillArchitectureObservations = pgTable("skill_architecture_observa
     "skill_architecture_observations_health_summary_safe_check",
     sql`${table.healthSummary}::text !~* '(^|[^a-z])(api[_-]?key|authorization|cookie|password|secret|token|credential|private[_-]?key|prompt|path|endpoint|url|package|content|config|root|body|source|raw|snapshot|payload|file|filename|directory|home|host|machine)([^a-z]|$)' AND ${table.healthSummary}::text !~* '(https?://|ftp://|file://)' AND ${table.healthSummary}::text !~* '(^|[^a-z0-9])/(Users|home|root|private|var|tmp|etc|opt|workspace|mnt|Volumes)(/|[^a-z0-9]|$)' AND ${table.healthSummary}::text !~* '(^|[^a-z0-9])(\.{1,2}[\\/]|~[\\/]|[A-Za-z]:[\\/]|localhost(:[0-9]+)?[\\/]|127\.0\.0\.1(:[0-9]+)?[\\/])'`,
   ),
+]);
+
+export const targetSkillOperations = pgTable("target_skill_operations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  schemaVersion: integer("schema_version").notNull().default(1),
+  targetId: uuid("target_id").notNull().references(() => skillArchitectureTargets.id, { onDelete: "restrict" }),
+  targetGeneration: integer("target_generation").notNull(),
+  actorUserId: uuid("actor_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  action: text("action").notNull(),
+  skillSlug: text("skill_slug").notNull(),
+  fromVersion: text("from_version"),
+  toVersion: text("to_version").notNull(),
+  platform: text("platform").notNull(),
+  artifactSha256: text("artifact_sha256").notNull(),
+  artifactByteSize: bigint("artifact_byte_size", { mode: "number" }).notNull(),
+  artifactContentType: text("artifact_content_type").notNull(),
+  planDigest: text("plan_digest").notNull(),
+  state: text("state").notNull().default("queued"),
+  fencingToken: integer("fencing_token").notNull().default(0),
+  holderId: text("holder_id"),
+  claimTokenHash: text("claim_token_hash"),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+  result: jsonb("result").$type<TargetSkillOperationResult>(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("target_skill_operations_target_history_idx").on(table.targetId, table.createdAt, table.id),
+  index("target_skill_operations_success_idx").on(table.targetId, table.targetGeneration, table.skillSlug, table.updatedAt, table.id).where(sql`${table.state} = 'succeeded'`),
+  index("target_skill_operations_queue_idx").on(table.targetId, table.createdAt, table.id).where(sql`${table.state} = 'queued'`),
+  unique("target_skill_operations_target_idempotency_unique").on(table.targetId, table.idempotencyKey),
+  check("target_skill_operations_schema_version_check", sql`${table.schemaVersion} = 1`),
+  check("target_skill_operations_generation_check", sql`${table.targetGeneration} BETWEEN 1 AND 1000000000`),
+  check("target_skill_operations_action_check", sql`${table.action} IN ('install', 'update', 'rollback')`),
+  check("target_skill_operations_slug_check", sql`${table.skillSlug} ~ '^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$'`),
+  check("target_skill_operations_state_check", sql`${table.state} IN ('queued', 'claimed', 'applying', 'verifying', 'succeeded', 'failed', 'cancelled', 'expired')`),
+  check("target_skill_operations_digest_check", sql`${table.artifactSha256} ~ '^[0-9a-f]{64}$' AND ${table.planDigest} ~ '^[0-9a-f]{64}$'`),
+  check("target_skill_operations_version_check", sql`${table.toVersion} ~ '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$' AND (${table.fromVersion} IS NULL OR ${table.fromVersion} ~ '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$')`),
+  check("target_skill_operations_artifact_check", sql`${table.artifactByteSize} BETWEEN 1 AND 14680064 AND length(${table.artifactContentType}) BETWEEN 1 AND 120 AND ${table.artifactContentType} !~ '[[:cntrl:]]'`),
+  check("target_skill_operations_platform_check", sql`${table.platform} ~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'`),
+  check("target_skill_operations_fencing_check", sql`${table.fencingToken} BETWEEN 0 AND 1000000000`),
+  check("target_skill_operations_idempotency_check", sql`${table.idempotencyKey} ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'`),
+  check("target_skill_operations_claim_pair_check", sql`(${table.holderId} IS NULL) = (${table.claimTokenHash} IS NULL) AND (${table.claimTokenHash} IS NULL) = (${table.leaseExpiresAt} IS NULL)`),
+  check("target_skill_operations_claim_state_check", sql`(${table.state} IN ('claimed', 'applying', 'verifying')) = (${table.holderId} IS NOT NULL)`),
+  check("target_skill_operations_holder_check", sql`${table.holderId} IS NULL OR ${table.holderId} ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'`),
+  check("target_skill_operations_claim_hash_check", sql`${table.claimTokenHash} IS NULL OR ${table.claimTokenHash} ~ '^[0-9a-f]{64}$'`),
+  check("target_skill_operations_result_state_check", sql`(${table.state} IN ('succeeded', 'failed')) = (${table.result} IS NOT NULL)`),
+  check("target_skill_operations_result_check", sql`${table.result} IS NULL OR (jsonb_typeof(${table.result}) = 'object' AND ${table.result} - ARRAY['status', 'code', 'recordedAt', 'installedVersion', 'artifactSha256', 'contentDigest'] = '{}'::jsonb AND ${table.result}->>'status' = ${table.state} AND ${table.result}->>'code' ~ '^[a-z][a-z0-9._:-]{0,95}$' AND ${table.result}->>'recordedAt' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T' AND (NOT ${table.result} ? 'installedVersion' OR ${table.result}->>'installedVersion' ~ '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') AND (NOT ${table.result} ? 'artifactSha256' OR ${table.result}->>'artifactSha256' ~ '^[0-9a-f]{64}$') AND (NOT ${table.result} ? 'contentDigest' OR ${table.result}->>'contentDigest' ~ '^[0-9a-f]{64}$'))`),
+  check("target_skill_operations_success_evidence_check", sql`${table.state} <> 'succeeded' OR coalesce(${table.result}->>'installedVersion' = ${table.toVersion} AND ${table.result}->>'artifactSha256' = ${table.artifactSha256} AND ${table.result}->>'contentDigest' ~ '^[0-9a-f]{64}$', false)`),
+  check("target_skill_operations_timestamp_check", sql`${table.updatedAt} >= ${table.createdAt}`),
+]);
+
+// A bounded companion poll advances this cursor even when candidates are temporarily blocked.
+export const targetSkillOperationClaimCursors = pgTable("target_skill_operation_claim_cursors", {
+  targetId: uuid("target_id").primaryKey().references(() => skillArchitectureTargets.id, { onDelete: "cascade" }),
+  operationCreatedAt: timestamp("operation_created_at", { withTimezone: true }).notNull(),
+  operationId: uuid("operation_id").notNull(),
+});
+
+export const skillUpgradePolicyRevisions = pgTable("skill_upgrade_policy_revisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  schemaVersion: integer("schema_version").notNull().default(1),
+  scopeType: skillUpgradePolicyScope("scope_type").notNull(),
+  scopeId: uuid("scope_id").notNull(),
+  revisionNumber: integer("revision_number").notNull(),
+  policy: jsonb("policy").$type<SkillUpgradePolicyV1>().notNull(),
+  policySha256: text("policy_sha256").notNull(),
+  reason: text("reason").notNull().default(""),
+  createdByUserId: uuid("created_by_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("skill_upgrade_policy_revisions_scope_idx").on(table.scopeType, table.scopeId, table.revisionNumber),
+  unique("skill_upgrade_policy_revisions_scope_revision_unique").on(table.scopeType, table.scopeId, table.revisionNumber),
+  check("skill_upgrade_policy_revisions_schema_check", sql`${table.schemaVersion} = 1`),
+  check("skill_upgrade_policy_revisions_revision_check", sql`${table.revisionNumber} BETWEEN 1 AND 1000000000`),
+  check("skill_upgrade_policy_revisions_digest_check", sql`${table.policySha256} ~ '^[0-9a-f]{64}$'`),
+  check("skill_upgrade_policy_revisions_reason_check", sql`length(${table.reason}) <= 500 AND ${table.reason} !~ '[[:cntrl:]]'`),
+  check("skill_upgrade_policy_revisions_policy_check", sql`skill_upgrade_policy_is_safe(${table.policy}) AND pg_column_size(${table.policy}) <= 65536`),
 ]);
 
 export const skillArchitectureSyncRuns = pgTable("skill_architecture_sync_runs", {

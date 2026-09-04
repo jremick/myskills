@@ -37,6 +37,8 @@ export interface SkillSearchFilters {
   query?: string;
   limit?: number;
   actorId?: string | null;
+  /** Seek position in the stable, ascending slug order. */
+  afterSlug?: string;
 }
 
 export interface SkillSharingActor {
@@ -128,6 +130,10 @@ export class AppError extends Error {
     super(message);
   }
 }
+
+export * from "./skill-updates.js";
+export * from "./skill-upgrade-policy.js";
+export * from "./target-skill-operations.js";
 
 export function assertNever(value: never): never {
   throw new AppError(`Unhandled value: ${String(value)}`, "UNHANDLED_VALUE", 500);

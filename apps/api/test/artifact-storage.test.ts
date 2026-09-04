@@ -7,6 +7,7 @@ import {
   createArtifactObjectStorageFromEnv,
   MemoryArtifactObjectStorage,
   S3ArtifactObjectStorage,
+  ArtifactStorageTimeoutError,
 } from "../src/artifacts/storage.js";
 
 const PACKAGE_CONTENT_TYPE = "application/vnd.myskills-app.package+json";
@@ -119,6 +120,47 @@ test("artifact payload reader serves object-backed payloads when metadata matche
   });
 
   assert.deepEqual(await readArtifactPayload({ artifactStorage: storage, artifact }), payload);
+});
+
+test("S3 PUT, GET, and DELETE abort and return within their operation deadline", async () => {
+  const signals: AbortSignal[] = [];
+  const storage = new S3ArtifactObjectStorage({
+    bucket: "timeout-fixture",
+    requestTimeoutMs: 15,
+    client: {
+      async send(_command: unknown, options: { abortSignal: AbortSignal }) {
+        signals.push(options.abortSignal);
+        return new Promise(() => {});
+      },
+    },
+  });
+  await assert.rejects(storage.putObject({ key: "key", body: "body", contentType: "text/plain", sha256: "0".repeat(64) }), ArtifactStorageTimeoutError);
+  await assert.rejects(storage.getObject("key"), ArtifactStorageTimeoutError);
+  await assert.rejects(storage.deleteObject("key"), ArtifactStorageTimeoutError);
+  assert.equal(signals.length, 3);
+  assert.ok(signals.every((signal) => signal.aborted));
+});
+
+test("S3 GET bounds response-body consumption after headers arrive and destroys a stalled Node stream", async () => {
+  let destroyed = false;
+  let failBody!: (error: Error) => void;
+  const storage = new S3ArtifactObjectStorage({
+    bucket: "timeout-fixture",
+    requestTimeoutMs: 15,
+    client: {
+      async send() {
+        return {
+          ContentType: PACKAGE_CONTENT_TYPE,
+          Body: {
+            transformToString: () => new Promise<string>((_, reject) => { failBody = reject; }),
+            destroy(error: Error) { destroyed = true; failBody(error); },
+          },
+        };
+      },
+    },
+  });
+  await assert.rejects(storage.getObject("key"), ArtifactStorageTimeoutError);
+  assert.equal(destroyed, true);
 });
 
 test("artifact payload reader supports legacy DB payload fallback only when the object is missing", async () => {

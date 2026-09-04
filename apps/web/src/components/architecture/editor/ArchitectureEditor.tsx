@@ -126,11 +126,15 @@ export function ArchitectureEditor({
   const treeItemRefs = useRef(new Map<string, HTMLDivElement>());
   const registryRequestEpoch = useRef(0);
   const latestInitialSpec = useRef(initialSpec);
+  const appliedInitialSpecKey = useRef(initialSpecKey);
   latestInitialSpec.current = initialSpec;
 
-  // A new server revision is an intentional reset point. Object identity is
-  // not used, so parent renders do not discard an in-progress draft.
+  // State already contains the initial spec on mount. Reset only for a changed
+  // server spec so an early input cannot be overwritten by the first effect.
+  // Object identity alone must not discard an in-progress draft.
   useEffect(() => {
+    if (appliedInitialSpecKey.current === initialSpecKey) return;
+    appliedInitialSpecKey.current = initialSpecKey;
     const nextSpec = latestInitialSpec.current;
     setDraft(cloneArchitectureSpec(nextSpec));
     setBaselineKey(initialSpecKey);

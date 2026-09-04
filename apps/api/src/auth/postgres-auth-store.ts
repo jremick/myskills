@@ -80,21 +80,31 @@ export class PostgresAuthStore implements AuthStore {
     return mode === "open" || mode === "request" ? mode : "closed";
   }
 
-  async setRegistrationMode(mode: RegistrationMode): Promise<RegistrationMode> {
-    await this.db
-      .insert(instanceSettings)
-      .values({
-        key: "registration",
-        value: { mode },
-      })
-      .onConflictDoUpdate({
-        target: instanceSettings.key,
-        set: {
+  async setRegistrationMode(mode: RegistrationMode, audit?: CreateAuditEventInput): Promise<RegistrationMode> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('myskills-registration-settings'))`);
+      const [previous] = await tx.select().from(instanceSettings).where(eq(instanceSettings.key, "registration")).limit(1);
+      await tx
+        .insert(instanceSettings)
+        .values({
+          key: "registration",
           value: { mode },
-          updatedAt: new Date(),
-        },
-      });
-    return mode;
+        })
+        .onConflictDoUpdate({
+          target: instanceSettings.key,
+          set: {
+            value: { mode },
+            updatedAt: new Date(),
+          },
+        });
+      if (audit) {
+        await recordAuditEvent(tx, {
+          ...audit,
+          details: { ...audit.details, oldMode: parseRegistrationMode(previous?.value), newMode: mode },
+        });
+      }
+      return mode;
+    });
   }
 
   async createUserWithPassword(input: CreateUserWithPasswordInput): Promise<CreateUserWithPasswordResult> {
@@ -313,6 +323,7 @@ export class PostgresAuthStore implements AuthStore {
     emailVerifiedAt?: Date | null;
     protectLastActiveOwner: boolean;
     revokeCredentials: boolean;
+    audit?: CreateAuditEventInput;
   }): Promise<AdminUserStatusChangeResult> {
     return this.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext('myskills-active-owner-guard'))`);
@@ -360,6 +371,19 @@ export class PostgresAuthStore implements AuthStore {
           isNull(apiTokens.revokedAt),
         ));
       }
+      if (input.audit) {
+        await recordAuditEvent(tx, {
+          ...input.audit,
+          resourceId: updated.id,
+          details: {
+            ...input.audit.details,
+            statusBefore: target.status,
+            statusAfter: updated.status,
+            emailVerifiedBefore: Boolean(target.emailVerifiedAt),
+            emailVerifiedAfter: Boolean(updated.emailVerifiedAt),
+          },
+        });
+      }
       return { outcome: "updated", user: { ...toRecord(updated), roles: targetRoles } };
     });
   }
@@ -368,12 +392,12 @@ export class PostgresAuthStore implements AuthStore {
     return this.updateUserRolesAtomically(input, false);
   }
 
-  async updateUserRolesAndRevokeCredentials(input: { userId: string; roles: Role[] }): Promise<AuthUserRecord | null> {
+  async updateUserRolesAndRevokeCredentials(input: { userId: string; roles: Role[]; audit?: CreateAuditEventInput }): Promise<AuthUserRecord | null> {
     return this.updateUserRolesAtomically(input, true);
   }
 
   private async updateUserRolesAtomically(
-    input: { userId: string; roles: Role[] },
+    input: { userId: string; roles: Role[]; audit?: CreateAuditEventInput },
     revokeCredentials: boolean,
   ): Promise<AuthUserRecord | null> {
     return this.db.transaction(async (tx) => {
@@ -399,6 +423,7 @@ export class PostgresAuthStore implements AuthStore {
       if (!user) {
         return null;
       }
+      const previousRoles = await rolesForUser(tx, user.id);
       await tx.delete(roleAssignments).where(and(
         eq(roleAssignments.userId, input.userId),
         instanceRoleScopePredicate(),
@@ -435,6 +460,13 @@ export class PostgresAuthStore implements AuthStore {
           eq(apiTokens.userId, input.userId),
           isNull(apiTokens.revokedAt),
         ));
+      }
+      if (input.audit) {
+        await recordAuditEvent(tx, {
+          ...input.audit,
+          resourceId: user.id,
+          details: { ...input.audit.details, rolesBefore: previousRoles, rolesAfter: input.roles },
+        });
       }
       return { ...toRecord(user), roles: input.roles };
     });
@@ -767,17 +799,30 @@ export class PostgresAuthStore implements AuthStore {
     return token ? toApiTokenRecord(token) : null;
   }
 
-  async revokeAnyApiToken(input: { tokenId: string }): Promise<AdminApiTokenRecord | null> {
-    const [token] = await this.db
-      .update(apiTokens)
-      .set({ revokedAt: new Date() })
-      .where(eq(apiTokens.id, input.tokenId))
-      .returning();
-    if (!token) {
-      return null;
-    }
-    const user = await this.findUserById(token.userId);
-    return user ? { ...toApiTokenRecord(token), user } : null;
+  async revokeAnyApiToken(input: { tokenId: string; audit?: CreateAuditEventInput }): Promise<AdminApiTokenRecord | null> {
+    return this.db.transaction(async (tx) => {
+      const [token] = await tx
+        .update(apiTokens)
+        .set({ revokedAt: new Date() })
+        .where(eq(apiTokens.id, input.tokenId))
+        .returning();
+      if (!token) {
+        return null;
+      }
+      const [row] = await tx.select().from(users).where(eq(users.id, token.userId)).limit(1);
+      if (!row) {
+        throw new Error("Revoked API token user not found.");
+      }
+      const user = { ...toRecord(row), roles: await rolesForUser(tx, row.id) };
+      if (input.audit) {
+        await recordAuditEvent(tx, {
+          ...input.audit,
+          resourceId: token.id,
+          details: { ...input.audit.details, targetUserId: user.id, targetEmail: user.email, scopes: token.scopes },
+        });
+      }
+      return { ...toApiTokenRecord(token), user };
+    });
   }
 
   async listProviderConfigs(): Promise<ProviderConfigRecord[]> {
@@ -829,6 +874,9 @@ export class PostgresAuthStore implements AuthStore {
           value: mapping.value,
           role: mapping.role,
         })));
+      }
+      if (input.audit) {
+        await recordAuditEvent(tx, { ...input.audit, resourceId: config.id });
       }
       return {
         ...toProviderConfigRecord(config),
@@ -1045,14 +1093,7 @@ export class PostgresAuthStore implements AuthStore {
   }
 
   async recordAuditEvent(input: CreateAuditEventInput): Promise<void> {
-    await this.db.insert(auditEvents).values({
-      actorUserId: input.actorUserId ?? null,
-      action: input.action,
-      decision: input.decision,
-      resourceType: input.resourceType ?? "",
-      resourceId: input.resourceId && isUuid(input.resourceId) ? input.resourceId : null,
-      details: sanitizeAuditDetails(input.details ?? {}),
-    });
+    await recordAuditEvent(this.db, input);
   }
 
   async listAuditEvents(input: ListAuditEventsInput): Promise<AuditEventRecord[]> {
@@ -1088,6 +1129,22 @@ export class PostgresAuthStore implements AuthStore {
 }
 
 type DbLike = Database | Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+async function recordAuditEvent(db: DbLike, input: CreateAuditEventInput): Promise<void> {
+  await db.insert(auditEvents).values({
+    actorUserId: input.actorUserId ?? null,
+    action: input.action,
+    decision: input.decision,
+    resourceType: input.resourceType ?? "",
+    resourceId: input.resourceId && isUuid(input.resourceId) ? input.resourceId : null,
+    details: sanitizeAuditDetails(input.details ?? {}),
+  });
+}
+
+function parseRegistrationMode(input: unknown): RegistrationMode {
+  const mode = input && typeof input === "object" && "mode" in input ? input.mode : "closed";
+  return mode === "open" || mode === "request" ? mode : "closed";
+}
 
 async function revokeCredentials(db: DbLike, userId: string, revokedAt: Date): Promise<void> {
   await db
@@ -1244,7 +1301,8 @@ function parseApiTokenScopes(input: unknown): ApiTokenScope[] {
     scope === "architectures:read" ||
     scope === "skills:submit" ||
     scope === "review:read" ||
-    scope === "review:write"
+    scope === "review:write" ||
+    scope === "targets:execute"
   ));
 }
 

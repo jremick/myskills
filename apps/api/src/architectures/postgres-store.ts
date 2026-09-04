@@ -95,9 +95,14 @@ export const PHASE2_ARCHITECTURE_MIGRATION_IDS = [
   "0018_architecture_targets_and_observations",
   "0019_architecture_sync_control",
   "0020_architecture_pattern_migrations",
+  "0021_skill_release_metadata",
+  "0022_target_companion_contract",
+  "0023_target_skill_operations",
+  "0024_skill_upgrade_policies",
 ] as const;
 
 const PHASE2_ARCHITECTURE_SCHEMA_COLUMNS = {
+  skill_versions: ["release_notes", "change_kind", "requires_user_action", "compatibility"],
   skill_architectures: [
     "id",
     "owner_user_id",
@@ -273,6 +278,13 @@ const PHASE2_ARCHITECTURE_SCHEMA_COLUMNS = {
     "actor_user_id",
     "idempotency_key",
   ],
+  target_skill_operations: [
+    "id", "target_id", "target_generation", "action", "skill_slug", "from_version", "to_version",
+    "platform", "artifact_sha256", "plan_digest", "state", "fencing_token", "lease_expires_at", "result",
+  ],
+  skill_upgrade_policy_revisions: [
+    "id", "scope_type", "scope_id", "revision_number", "policy", "policy_sha256", "created_by_user_id",
+  ],
 } as const;
 
 type ArchitectureSchemaReadinessDb = Pick<Database, "execute">;
@@ -302,7 +314,11 @@ export function createPostgresArchitectureReadinessProbe(
         '0017_organizations_and_org_sharing',
         '0018_architecture_targets_and_observations',
         '0019_architecture_sync_control',
-        '0020_architecture_pattern_migrations'
+        '0020_architecture_pattern_migrations',
+        '0021_skill_release_metadata',
+        '0022_target_companion_contract',
+        '0023_target_skill_operations',
+        '0024_skill_upgrade_policies'
       )
     `);
     const applied = new Set(migrations.rows.map((row) => row.id));
@@ -333,7 +349,10 @@ export function createPostgresArchitectureReadinessProbe(
           'skill_architecture_sync_baselines',
           'skill_architecture_sync_receipts',
           'skill_architecture_sync_recovery_evidence',
-          'skill_architecture_pattern_migrations'
+          'skill_architecture_pattern_migrations',
+          'skill_versions',
+          'target_skill_operations',
+          'skill_upgrade_policy_revisions'
         )
     `);
     const present = new Set(columns.rows.map((row) => `${row.table_name}.${row.column_name}`));

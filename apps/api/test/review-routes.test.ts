@@ -59,7 +59,18 @@ test("review artifact preview requires review read permissions and MFA", async (
     method: "POST",
     url: "/v1/submissions",
     headers: { authorization: `Bearer ${authorToken}` },
-    payload: cleanSubmissionPayload(),
+    payload: cleanSubmissionPayload({
+      release: {
+        releaseNotes: "Adds compatibility-aware update planning.",
+        changeKind: "feature",
+        requiresUserAction: true,
+        compatibility: {
+          minimumMyskillsVersion: "0.1.0-beta.4",
+          minimumAdapterContractVersion: 1,
+          minimumSourceVersion: "0.0.1",
+        },
+      },
+    }),
   });
   assert.equal(submitResponse.statusCode, 202);
   const submissionId = submitResponse.json().submission.id as string;
@@ -203,6 +214,14 @@ test("maintainers can approve and publish a clean public submission", async (t) 
   });
   assert.equal(releaseResponse.statusCode, 200);
   assert.equal(releaseResponse.json().release.slug, "release-notes-helper");
+  assert.equal(releaseResponse.json().release.releaseNotes, "Adds compatibility-aware update planning.");
+  assert.equal(releaseResponse.json().release.changeKind, "feature");
+  assert.equal(releaseResponse.json().release.requiresUserAction, true);
+  assert.deepEqual(releaseResponse.json().release.compatibility, {
+    minimumMyskillsVersion: "0.1.0-beta.4",
+    minimumAdapterContractVersion: 1,
+    minimumSourceVersion: "0.0.1",
+  });
   assert.equal(JSON.stringify(releaseResponse.json()).includes("storageKey"), false);
   assert.equal(JSON.stringify(releaseResponse.json()).includes("Summarize release notes."), false);
 
@@ -915,8 +934,28 @@ function cleanSubmissionPayload(input: {
   name?: string;
   version?: string;
   visibility?: "public" | "private";
+  release?: {
+    releaseNotes: string;
+    changeKind: "fix" | "feature" | "breaking" | "security" | "maintenance";
+    requiresUserAction: boolean;
+    compatibility: {
+      minimumMyskillsVersion?: string;
+      minimumAdapterContractVersion?: number;
+      minimumSourceVersion?: string;
+    };
+  };
 } = {}) {
   return {
+    release: input.release ?? {
+      releaseNotes: "Adds compatibility-aware update planning.",
+      changeKind: "feature" as const,
+      requiresUserAction: true,
+      compatibility: {
+        minimumMyskillsVersion: "0.1.0-beta.4",
+        minimumAdapterContractVersion: 1,
+        minimumSourceVersion: "0.0.1",
+      },
+    },
     manifest: {
       name: input.name ?? "release-notes-helper",
       title: "Release Notes Helper",

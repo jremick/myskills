@@ -1,7 +1,7 @@
 # Compatibility
 
-Version: 0.1.0-beta.4
-Last updated: 2026-07-13
+Version: 0.1.0-beta.5
+Last updated: 2026-09-05
 
 This is the supported public-beta evaluation surface. MySkills remains prerelease software, so compatibility is intentionally narrower than a stable `v1.0` contract.
 
@@ -12,7 +12,7 @@ This is the supported public-beta evaluation surface. MySkills remains prereleas
 - macOS and Linux developer environments.
 - Docker with Compose for the documented Postgres 17 and MinIO dependency path.
 
-CI runs the repo gate on Node 22 and 24, while browser/Postgres/release jobs use Node 22 LTS. Node 20 is EOL and unsupported. Odd-numbered/EOL Node releases are outside the beta matrix. Windows may work through WSL2 but is not currently verified.
+CI runs repository, browser, and Postgres checks on Node 22 and 24. Railway images use Node 22. Odd-numbered and EOL Node releases are outside the beta matrix. Native Windows local package intake and filesystem writes are refused. WSL2 is unverified; API buffer uploads remain portable.
 
 The published CLI uses the same Node range. Its bundle is self-contained except for the public optional keyring runtime dependency; no private `@myskills-app/*` package is required after installation.
 
@@ -20,7 +20,7 @@ The published CLI uses the same Node range. Its bundle is self-contained except 
 
 The documented self-hosted path expects:
 
-- Postgres 17 for local, CI, and production examples.
+- Postgres 17 for local and CI. The existing Railway environments use Postgres 18; recovery requires matching or newer PostgreSQL dump tools.
 - S3-compatible object storage for production artifact bytes.
 - HTTPS reverse proxy in front of web/API services for authenticated production-like browser use.
 - SMTP or Resend for production auth notifications.
@@ -47,10 +47,12 @@ Within one beta tag, API capability version, root/workspace versions, CLI versio
 - General hosted signup; the maintained live instance remains owner-controlled.
 - Provider login/linking beyond non-secret provider metadata and role-mapping administration.
 - Browser/device-code CLI login.
-- Platform-specific install adapters beyond filesystem install/export.
+- Provider install adapters beyond the personal, user-owned Codex workspace path. Team-shared releases can be installed into that personal workspace when authorized.
+- Automatic attachment of old installations without a registry identity; preserve and reinstall them into a new root after review.
+- Isolation from hostile local processes with the same OS account. Root locks coordinate MySkills writers; they are not an OS sandbox.
 - Background scan/eval workers and durable eval evidence.
 - Backward-compatible migration from every historical prerelease database shape.
-- Production backup/restore and incident-response coverage.
+- Automated recovery scheduling, incident-response staffing, or recovery-time guarantees. The operational beta gate rehearses a database-plus-artifact restore and verifies the recovered API separately.
 - MCP clients/transports outside the tested stdio and Streamable HTTP paths.
 
 ## Version Expectations

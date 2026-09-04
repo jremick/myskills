@@ -1,9 +1,11 @@
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { useLayoutEffect, useRef } from "react";
 import { createArchitectureDiagramArtifact, type PublicSkill, type SkillSharingDetails, type TeamSharedSkillGroup } from "@myskills-app/core";
 import { RegistryApp } from "../src/App.js";
+import { ArchitectureEditor } from "../src/components/architecture/editor/ArchitectureEditor.js";
 import type {
   AdminAuditEvent,
   AdminApiToken,
@@ -13,6 +15,7 @@ import type {
   AdminRegistrationMode,
   AdminUser,
   ArchitectureAccessMetadata,
+  ArchitectureTargetRecord,
   ArchitectureDraftPreview,
   ArchitecturePattern,
   ArchitecturePatternId,
@@ -110,6 +113,33 @@ test("registration invitation pages handle missing and expired links safely", as
   assert.equal(document.body.textContent?.includes("expired-token"), false);
 });
 
+test("new passwords are checked by UTF-8 bytes without restricting legacy login", async () => {
+  setupDom("http://localhost/auth/register#token=invitation-token");
+  const client = mockClient();
+  const view = render(<RegistryApp client={client} />);
+  const oversized = "é".repeat(37);
+  fireEvent.input(view.getByLabelText("Email"), { target: { value: "invited@example.com" } });
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: oversized } });
+  fireEvent.input(view.getByLabelText("Confirm password"), { target: { value: oversized } });
+  fireEvent.click(view.getByRole("button", { name: "Create account" }));
+  await view.findByText("Password must be at most 72 UTF-8 bytes. Non-ASCII characters can use more than one byte.");
+  assert.equal(client.registrationCalls.length, 0);
+  const allowed = "é".repeat(36);
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: allowed } });
+  fireEvent.input(view.getByLabelText("Confirm password"), { target: { value: allowed } });
+  fireEvent.click(view.getByRole("button", { name: "Create account" }));
+  await view.findByText("Registration complete. You can now log in.");
+  assert.equal(client.registrationCalls[0]?.password, allowed);
+  cleanup();
+
+  setupDom("http://localhost/login");
+  const loginView = render(<RegistryApp client={mockClient()} />);
+  fireEvent.input(loginView.getByLabelText("Email"), { target: { value: "reader@example.com" } });
+  fireEvent.input(loginView.getByLabelText("Password"), { target: { value: oversized } });
+  fireEvent.click(loginView.getByRole("button", { name: /sign in/i }));
+  await loginView.findByText("reader@example.com");
+});
+
 test("anonymous registry routes load approved public skills without a session", async () => {
   setupDom("http://localhost/registry");
   const client = mockClient();
@@ -119,7 +149,36 @@ test("anonymous registry routes load approved public skills without a session", 
   await view.findByText("Release Notes Helper");
   assert.deepEqual(client.searchCalls, [""]);
   assert.equal(document.body.textContent?.includes("owner@example.com"), false);
-  assert.equal(window.location.pathname, "/skills/release-notes-helper");
+  await waitFor(() => assert.equal(window.location.pathname, "/skills/release-notes-helper"));
+});
+
+test("an explicit authorized skill URL survives a result page that excludes it", async () => {
+  setupDom("http://localhost/skills/outside-page");
+  const client = mockClient({ searchResults: () => [publicSkill("first-page")] });
+  const view = render(<RegistryApp client={client} />);
+  await waitFor(() => assert.equal(client.releaseCalls.includes("outside-page@0.1.0"), true));
+  await view.findByText("Turns merged changes into concise release notes.");
+  assert.equal(window.location.pathname, "/skills/outside-page");
+  assert.equal(client.releaseCalls.some((call) => call.startsWith("first-page@")), false);
+});
+
+test("registry pagination reaches later skills without replacing the selected detail", async () => {
+  setupDom("http://localhost/registry");
+  const first = { ...publicSkill("first-helper"), title: "First helper" };
+  const second = { ...publicSkill("second-helper"), title: "Second helper" };
+  const client = mockClient({ skills: [first, second] });
+  const cursors: Array<string | undefined> = [];
+  client.searchSkillPage = async (input) => {
+    cursors.push(input.cursor);
+    return input.cursor ? { skills: [second], nextCursor: null } : { skills: [first], nextCursor: "opaque-next-page" };
+  };
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("button", { name: "Load more skills" }));
+  await view.findByRole("link", { name: /Second helper/ });
+  assert.deepEqual(cursors, [undefined, "opaque-next-page"]);
+  assert.equal(window.location.pathname, "/skills/first-helper");
+  fireEvent.click(view.getByRole("link", { name: /Second helper/ }));
+  await waitFor(() => assert.equal(window.location.pathname, "/skills/second-helper"));
 });
 
 test("browse page requests skills with query and renders API-returned skills", async () => {
@@ -158,13 +217,14 @@ test("default registry client is stable between renders", async () => {
     const view = render(<RegistryApp />);
 
     await view.findByText("Turns merged changes into concise release notes.");
-    await waitFor(() => assert.equal(calls.length, 4));
+    await waitFor(() => assert.equal(calls.length, 5));
     await delay(25);
     assert.deepEqual([...calls].sort(), [
       "http://localhost:3001/v1/me",
       "http://localhost:3001/v1/skills",
       "http://localhost:3001/v1/skills/release-notes-helper",
       "http://localhost:3001/v1/skills/release-notes-helper/releases/0.1.0",
+      "http://localhost:3001/v1/architecture-targets",
     ].sort());
   } finally {
     globalThis.fetch = previousFetch;
@@ -222,6 +282,57 @@ test("skill detail displays public metadata and release artifact metadata only",
   assert.equal(document.body.textContent?.includes("storageKey"), false);
   assert.equal(document.body.textContent?.includes("Summarize release notes."), false);
   assert.equal(client.bundleCalls, 0);
+});
+
+test("signed-in users review an exact release before queueing a connected-target install", async () => {
+  setupAuthenticatedDom("http://localhost/skills/release-notes-helper");
+  const client = mockClient();
+  const operations: Array<Record<string, unknown>> = [];
+  const target: ArchitectureTargetRecord = {
+    schemaVersion: 1,
+    id: "target-install-1",
+    name: "Personal companion",
+    owner: { type: "user", id: "user-1" },
+    adapter: { kind: "codex-companion", version: "1", contractVersion: 2 },
+    architectureId: "architecture-1",
+    environmentId: "personal",
+    profileId: "default",
+    status: "connected",
+    consent: { status: "granted", requestedAt: "2026-09-01T00:00:00.000Z", grantedAt: "2026-09-01T00:01:00.000Z" },
+    generation: 1,
+    identityDigest: "a".repeat(64),
+    capabilities: { "inventory.read": true, apply: true, rollback: true, "sync.write": true },
+    createdAt: "2026-09-01T00:00:00.000Z",
+    updatedAt: "2026-09-01T00:00:00.000Z",
+    health: null,
+  };
+  client.listArchitectureTargets = async () => [target];
+  client.scheduleTargetSkillOperation = async (targetId, input) => {
+    operations.push({ targetId, ...input });
+    return { operation: {} as never, replayed: false };
+  };
+
+  const view = render(<RegistryApp client={client} />);
+  await view.findByRole("heading", { name: "Install this exact release" });
+  fireEvent.click(await view.findByRole("button", { name: "Review install" }));
+  await view.findByText("release-notes-helper 0.1.0");
+  assert.equal(operations.length, 0);
+  fireEvent.click(view.getByRole("button", { name: "Confirm exact install" }));
+  await waitFor(() => assert.equal(operations.length, 1));
+  assert.deepEqual({
+    targetId: operations[0]?.targetId,
+    action: operations[0]?.action,
+    slug: operations[0]?.slug,
+    version: operations[0]?.version,
+    platform: operations[0]?.platform,
+  }, {
+    targetId: "target-install-1",
+    action: "install",
+    slug: "release-notes-helper",
+    version: "0.1.0",
+    platform: "codex",
+  });
+  assert.match(String(operations[0]?.idempotencyKey), /^install:[a-z0-9]+$/);
 });
 
 test("privileged skill controls stay locked without an MFA-verified session and do not request management data", async () => {
@@ -895,6 +1006,64 @@ test("architecture editor previews an unsaved draft through the API with its rev
   });
 });
 
+test("the editor preserves input delivered before its initial passive effects", async () => {
+  const spec = defaultArchitecturePreview().revision.spec;
+  const previewedLabels: string[] = [];
+  function EarlyInputEditor({ initialSpec }: { initialSpec: typeof spec }) {
+    const container = useRef<HTMLDivElement>(null);
+    useLayoutEffect(() => {
+      const input = container.current?.querySelector<HTMLInputElement>('input[aria-label="Selected node label"]');
+      assert.ok(input);
+      // Deliver input after the field mounts but before passive initialization.
+      const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
+      setValue.call(input, "Immediate edit");
+      input.dispatchEvent(new window.Event("input", { bubbles: true }));
+    }, []);
+    return <div ref={container}><ArchitectureEditor initialSpec={initialSpec} expectedRevisionId="revision-1" onPreview={async ({ spec: draft }) => { previewedLabels.push(draft.nodes[0]!.label); }} /></div>;
+  }
+  let view!: ReturnType<typeof render>;
+  await act(async () => { view = render(<EarlyInputEditor initialSpec={spec} />); });
+  await view.findByText("Unsaved changes");
+  assert.equal((view.getByLabelText("Selected node label") as HTMLInputElement).value, "Immediate edit");
+  fireEvent.click(view.getByRole("button", { name: "Preview draft" }));
+  await waitFor(() => assert.deepEqual(previewedLabels, ["Immediate edit"]));
+  const nextSpec = { ...spec, nodes: [{ ...spec.nodes[0]!, label: "New server revision" }, ...spec.nodes.slice(1)] };
+  await act(async () => { view.rerender(<EarlyInputEditor initialSpec={nextSpec} />); });
+  await view.findByText("All changes saved");
+  assert.equal((view.getByLabelText("Selected node label") as HTMLInputElement).value, "New server revision");
+});
+
+test("an initial server preview settling around an edit preserves the unsaved editor draft", async () => {
+  for (const responseTiming of ["before-edit", "after-edit"] as const) {
+    setupAuthenticatedDom("http://localhost/architectures");
+    let resolveInitialPreview!: (preview: ArchitecturePreview) => void;
+    const initialPreview = new Promise<ArchitecturePreview>((resolve) => { resolveInitialPreview = resolve; });
+    const client = mockClient({
+      architecturePatterns: defaultArchitecturePatterns(),
+      architectures: [defaultArchitectureSummary()],
+    });
+    client.previewArchitecture = async () => initialPreview;
+    const view = render(<RegistryApp client={client} />);
+    await view.findByTestId("architecture-editor");
+    assert.equal(view.queryByText("Skills available in this context"), null);
+
+    await act(async () => {
+      if (responseTiming === "before-edit") resolveInitialPreview(defaultArchitecturePreview());
+      fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Edited before preview settled" } });
+      if (responseTiming === "after-edit") resolveInitialPreview(defaultArchitecturePreview());
+    });
+
+    await view.findByText("Skills available in this context");
+    await view.findByText("Unsaved changes");
+    assert.equal((view.getByLabelText("Selected node label") as HTMLInputElement).value, "Edited before preview settled", responseTiming);
+    fireEvent.click(view.getByRole("button", { name: "Preview draft" }));
+    await waitFor(() => assert.equal(client.architectureDraftPreviewCalls.length, 1));
+    assert.equal(client.architectureDraftPreviewCalls[0]?.spec.nodes[0]?.label, "Edited before preview settled", responseTiming);
+    assert.equal(client.architectureDraftPreviewCalls[0]?.expectedCurrentRevisionId, "revision-1", responseTiming);
+    cleanup();
+  }
+});
+
 test("team members receive a read-only architecture editor without revision controls", async () => {
   setupAuthenticatedDom("http://localhost/architectures");
   const owner = { type: "team" as const, id: "team-1" };
@@ -950,6 +1119,15 @@ test("architecture editor sends the immutable revision token and refreshes after
     architecturePatterns: defaultArchitecturePatterns(),
     architectures: [defaultArchitectureSummary()],
   });
+  // Complete the save after the click's React batch; the list refresh resolves immediately.
+  let finishSave: (() => void) | undefined;
+  const saveResponse = new Promise<void>((resolve) => { finishSave = resolve; });
+  const createRevision = client.createArchitectureRevision.bind(client);
+  client.createArchitectureRevision = async (...args) => {
+    const revision = await createRevision(...args);
+    await saveResponse;
+    return revision;
+  };
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
@@ -960,8 +1138,15 @@ test("architecture editor sends the immutable revision token and refreshes after
   await waitFor(() => assert.equal(client.architectureRevisionCreates.length, 1));
   assert.equal(client.architectureRevisionCreates[0]?.expectedCurrentRevisionId, "revision-1");
   assert.equal(client.architectureRevisionCreates[0]?.message, "Clarify review routing");
+  finishSave?.();
   await waitFor(() => assert.equal(client.architectureDetailCalls >= 2, true));
   await view.findByText("Revision 2");
+  assert.equal((view.getByLabelText("Selected node label") as HTMLInputElement).value, "Saved review router");
+
+  fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Follow-up review router" } });
+  fireEvent.click(view.getByRole("button", { name: "Save revision" }));
+  await waitFor(() => assert.equal(client.architectureRevisionCreates.length, 2));
+  assert.equal(client.architectureRevisionCreates[1]?.expectedCurrentRevisionId, "revision-2");
 });
 
 test("architecture selection clears stale detail before previewing a new draft", async () => {

@@ -301,3 +301,20 @@ test("returns a core-valid observation and exposes no mutation method", async ()
   assert.equal(rejected.valid, false);
   if (!rejected.valid) assert.equal(rejected.errors.some((error) => error.code === "ARCHITECTURE_TARGET_ADAPTER_MUTATION_METHOD"), true);
 });
+
+test("standard description blocks cannot supply inventory identity or managed state", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "myskills-description-block-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(path.join(root, "skills", "standard-skill"), { recursive: true });
+  await writeFile(path.join(root, "skills", "standard-skill", "SKILL.md"), [
+    "---", "name: standard-skill", "description: |", "  PRIVATE_DESCRIPTION_TEXT",
+    "  version: 9.0.0", `  digest: ${"a".repeat(64)}`, "  managed: true", "---", "PRIVATE_BODY",
+  ].join("\n"));
+  const observation = await adapter(root, "personal").observe(context("personal"));
+  const skill = observation.skills[0];
+  assert.equal(skill?.slug, "standard-skill");
+  assert.equal(skill?.managed, false);
+  assert.equal(skill?.version, undefined);
+  assert.equal(skill?.digest, undefined);
+  assert.equal(JSON.stringify(observation).includes("PRIVATE_"), false);
+});

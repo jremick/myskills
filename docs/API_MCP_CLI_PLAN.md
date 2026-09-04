@@ -1,6 +1,6 @@
 # API, MCP, And CLI
 
-Version: 0.1.0-beta.4
+Version: 0.1.0-beta.5
 Document revision: 0.2.0-draft
 Last updated: 2026-09-01
 

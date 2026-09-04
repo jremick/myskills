@@ -38,7 +38,7 @@ export interface InternalRegistrySnapshotInput {
   architectureId: string;
   owner: ArchitectureOwnerReference | null;
   organizationIds: readonly string[];
-  spec: ArchitectureSpecV1;
+  spec: Pick<ArchitectureSpecV1, "skills">;
 }
 
 interface LockedRegistryRelease {

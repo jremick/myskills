@@ -36,6 +36,13 @@ test("registry client keeps organization and target management on explicit API r
       targets: [],
       observations: [],
       observation: { id: "observation-1" },
+      operations: [],
+      operation: { id: "operation-1", state: "queued" },
+      results: [],
+      items: [],
+      observedAt: null,
+      policy: null,
+      replayed: false,
     }), { status: 200, headers: { "content-type": "application/json" } });
   }, "session-token");
 
@@ -72,6 +79,15 @@ test("registry client keeps organization and target management on explicit API r
   await client.listArchitectureTargetObservations!("target-1", 25);
   await client.updateArchitectureTargetHealth!("target-1", { status: "healthy", checkedAt: "2026-08-30T00:00:00.000Z" });
   await client.revokeArchitectureTarget!("target-1");
+  await client.listTargetSkillUpdates!("target-1");
+  await client.listTargetSkillOperations!("target-1");
+  await client.scheduleTargetSkillOperation!("target-1", { action: "update", slug: "release-notes-helper", version: "1.1.0", idempotencyKey: "update-1" });
+  await client.cancelTargetSkillOperation!("operation-1");
+  await client.getTargetSkillUpgradePolicy!("target-1");
+  await client.updateTargetSkillUpgradePolicy!("target-1", { policy: { schemaVersion: 1 } as never, expectedRevisionNumber: 0 });
+  await client.scheduleTargetSkillOperationBatch!([{ targetId: "target-1", action: "update", slug: "release-notes-helper", version: "1.1.0", idempotencyKey: "update-2" }]);
+  await client.getOrganizationSkillUpgradePolicy!("org-1");
+  await client.updateOrganizationSkillUpgradePolicy!("org-1", { policy: { schemaVersion: 1 } as never, expectedRevisionNumber: 0 });
 
   assert.deepEqual(calls.map((call) => `${call.method ?? "GET"} ${new URL(call.url).pathname}`), [
     "GET /v1/organizations",
@@ -98,6 +114,15 @@ test("registry client keeps organization and target management on explicit API r
     "GET /v1/architecture-targets/target-1/observations",
     "POST /v1/architecture-targets/target-1/health",
     "DELETE /v1/architecture-targets/target-1",
+    "GET /v1/architecture-targets/target-1/updates",
+    "GET /v1/architecture-targets/target-1/operations",
+    "POST /v1/architecture-targets/target-1/operations",
+    "POST /v1/target-operations/operation-1/cancel",
+    "GET /v1/architecture-targets/target-1/update-policy",
+    "PUT /v1/architecture-targets/target-1/update-policy",
+    "POST /v1/target-operations/batch",
+    "GET /v1/organizations/org-1/update-policy",
+    "PUT /v1/organizations/org-1/update-policy",
   ]);
   assert.equal(calls.find((call) => call.method === "POST" && call.url.endsWith("/v1/architecture-targets"))?.body?.includes("secret-ref"), true);
 });

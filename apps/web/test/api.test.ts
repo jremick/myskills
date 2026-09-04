@@ -46,6 +46,41 @@ test("registry client fetches skill and release metadata without bundle content"
   assert.equal(calls.some((call) => call.includes("/bundle")), false);
 });
 
+test("registry pages retain opaque cursors across public and managed inventory routes", async () => {
+  const calls: string[] = [];
+  const client = createRegistryClient("http://api.test", async (input) => {
+    calls.push(String(input));
+    return jsonResponse(200, { skills: [{ slug: "page-item" }], nextCursor: "next/opaque+cursor=" });
+  });
+  const page = await client.searchSkillPage!({ query: "release notes", limit: 2 });
+  await client.searchSkillPage!({ query: "release notes", limit: 2, cursor: page.nextCursor! });
+  await client.listManagedSkills!({ cursor: page.nextCursor! });
+  assert.deepEqual(calls, [
+    "http://api.test/v1/skills?q=release+notes&limit=2",
+    "http://api.test/v1/skills?q=release+notes&cursor=next%2Fopaque%2Bcursor%3D&limit=2",
+    "http://api.test/v1/manage/skills?cursor=next%2Fopaque%2Bcursor%3D",
+  ]);
+});
+
+test("submission feedback and exact package inspection preserve their API response shapes", async () => {
+  const calls: string[] = [];
+  const evidence = { id: "submission 1", changeRequestReason: "Add a safe example.", scanRuns: [{ findings: [{ message: "Review the command." }] }], reviewHistory: [], correction: { requiresNewVersion: true, canSubmitNewVersion: true } };
+  const bundle = { files: [{ path: "SKILL.md", content: "Reviewed instructions" }] };
+  const client = createRegistryClient("http://api.test", async (input, init) => {
+    calls.push(String(input));
+    assert.equal(init?.credentials, "include");
+    return jsonResponse(200, String(input).includes("/bundle") ? bundle : { submission: evidence });
+  });
+  assert.equal((await client.getUserSubmissionDetail!("submission 1")).changeRequestReason, evidence.changeRequestReason);
+  assert.equal((await client.getReviewSubmissionDetail!("submission 1")).scanRuns[0]?.findings[0]?.message, "Review the command.");
+  assert.deepEqual(await client.getReleaseBundle!("example", "1.2.3", "codex"), bundle);
+  assert.deepEqual(calls, [
+    "http://api.test/v1/submissions/submission%201",
+    "http://api.test/v1/review/submissions/submission%201",
+    "http://api.test/v1/skills/example/releases/1.2.3/bundle?platform=codex",
+  ]);
+});
+
 test("registry client round-trips the complete skill organization grant set", async () => {
   const calls: Array<{ body?: string; method?: string; url: string }> = [];
   const sharing = {

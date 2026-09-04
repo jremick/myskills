@@ -37,4 +37,9 @@ server {
     add_header Content-Type text/plain;
     return 200 "ok\n";
   }
+
+  location = /version.json {
+    add_header Cache-Control "no-store";
+    try_files $uri =404;
+  }
 }

@@ -6,6 +6,7 @@ import type {
   SecurityStatus,
   SkillLifecycleStatus,
   SkillPlatformVariant,
+  SkillReleaseMetadata,
   VisibilityScope,
 } from "@myskills-app/core";
 
@@ -22,6 +23,7 @@ export interface CreateSubmissionInput {
   actor: SubmissionActor;
   manifest: SkillManifest;
   files: PackageInputFile[];
+  release?: SkillReleaseMetadata;
 }
 
 export interface StoredSubmission {
@@ -39,6 +41,7 @@ export interface StoredSubmission {
   approvedArtifactSha256: string | null;
   publishedAt: string | null;
   createdAt: string;
+  release: SkillReleaseMetadata;
   artifact: {
     storageKey: string;
     sha256: string;
@@ -128,6 +131,36 @@ export interface UserSubmissionSummary {
   allowedActions: Array<"export" | SubmissionOwnerAction>;
 }
 
+export interface SubmissionFeedback {
+  changeRequestReason: string | null;
+  reviewHistory: Array<{
+    action: ReviewAction;
+    reason: string | null;
+    createdAt: string;
+  }>;
+  scanRuns: Array<{
+    id: string;
+    status: "queued" | "running" | "succeeded" | "failed";
+    createdAt: string;
+    startedAt: string | null;
+    completedAt: string | null;
+    findings: ScanFinding[];
+  }>;
+}
+
+export interface UserSubmissionDetail extends UserSubmissionSummary, SubmissionFeedback {
+  correction: { requiresNewVersion: true; canSubmitNewVersion: boolean };
+}
+
+export interface ReviewSubmissionDetail extends ReviewSubmissionSummary, SubmissionFeedback {}
+
+export interface ManagedSkillFilters {
+  actor: SubmissionActor;
+  query?: string;
+  afterSlug?: string;
+  limit?: number;
+}
+
 export interface PublicReleaseMetadata {
   slug: string;
   title: string;
@@ -138,6 +171,10 @@ export interface PublicReleaseMetadata {
   securityStatus: "passed";
   publishedAt: string;
   platforms: SkillPlatformVariant[];
+  releaseNotes: string;
+  changeKind: SkillReleaseMetadata["changeKind"];
+  requiresUserAction: boolean;
+  compatibility: SkillReleaseMetadata["compatibility"];
   artifact: {
     sha256: string;
     byteSize: number;
@@ -164,9 +201,21 @@ export interface SkillReleaseSummary {
   securityStatus: SecurityStatus;
   publishedAt: string | null;
   platforms: SkillPlatformVariant[];
+  releaseNotes: string;
+  changeKind: SkillReleaseMetadata["changeKind"];
+  requiresUserAction: boolean;
+  compatibility: SkillReleaseMetadata["compatibility"];
+  artifact: {
+    sha256: string;
+    byteSize: number;
+    contentType: string;
+  };
   findingCount: number;
   allowedActions: ReleaseLifecycleAction[];
 }
+
+/** Internal policy evidence; never expands the release metadata returned to a viewer. */
+export type SkillReleaseChangeHistoryEntry = Pick<SkillReleaseSummary, "version" | "changeKind">;
 
 export interface PublicBundle extends PublicReleaseMetadata {
   payload: ArtifactPayload;
@@ -187,23 +236,28 @@ export interface ReviewSubmissionBundle extends ReviewSubmissionSummary {
 
 export interface SubmissionStore {
   createSubmission(input: CreateSubmissionInput & {
+    release: StoredSubmission["release"];
     artifact: StoredSubmission["artifact"];
     findings: ScanFinding[];
     securityStatus: SecurityStatus;
   }): Promise<StoredSubmission>;
   listUserSubmissions(userId: string): Promise<UserSubmissionSummary[]>;
+  getUserSubmissionDetail(input: { userId: string; submissionId: string }): Promise<UserSubmissionDetail | null>;
   getUserSubmissionBundle(input: { userId: string; submissionId: string; platform?: string }): Promise<UserSubmissionBundle | null>;
   performSubmissionOwnerAction(input: { actorId: string; submissionId: string; action: SubmissionOwnerAction; reason?: string }): Promise<UserSubmissionSummary>;
   listReviewSubmissions(): Promise<ReviewSubmissionSummary[]>;
+  getReviewSubmissionDetail(submissionId: string): Promise<ReviewSubmissionDetail | null>;
   getReviewSubmissionBundle(input: { submissionId: string; platform?: string }): Promise<ReviewSubmissionBundle | null>;
   approveSubmission(input: { actorId: string; submissionId: string; artifactSha256: string; reason?: string }): Promise<ReviewActionResult>;
   requestChanges(input: { actorId: string; submissionId: string; reason?: string }): Promise<ReviewActionResult>;
   rejectSubmission(input: { actorId: string; submissionId: string; reason?: string }): Promise<ReviewActionResult>;
   publishSubmission(input: { actorId: string; submissionId: string; reason?: string }): Promise<ReviewActionResult>;
   getSkillManagement(input: { slug: string; actor: SubmissionActor }): Promise<SkillManagementSummary | null>;
+  listManagedSkills(input: ManagedSkillFilters): Promise<SkillManagementSummary[]>;
   updateSkillMetadata(input: { slug: string; actor: SubmissionActor; update: SkillMetadataUpdate; reason?: string }): Promise<SkillManagementSummary>;
   performSkillAction(input: { slug: string; actor: SubmissionActor; action: SkillLifecycleAction; reason?: string }): Promise<SkillManagementSummary>;
   listSkillReleases(input: { slug: string; actor?: SubmissionActor | null }): Promise<SkillReleaseSummary[]>;
+  listSkillReleaseChangeHistory(input: { slug: string; actorId: string }): Promise<SkillReleaseChangeHistoryEntry[]>;
   performReleaseAction(input: { slug: string; version: string; actor: SubmissionActor; action: ReleaseLifecycleAction; reason?: string; replacement?: string }): Promise<SkillReleaseSummary>;
   recordReviewDenied(input: {
     actorId: string;

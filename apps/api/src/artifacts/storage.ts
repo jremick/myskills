@@ -1,6 +1,13 @@
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { createHash, randomUUID } from "node:crypto";
 
+export class ArtifactStorageTimeoutError extends Error {
+  constructor() {
+    super("Artifact storage request timed out.");
+    this.name = "ArtifactStorageTimeoutError";
+  }
+}
+
 export interface ArtifactObjectStorage {
   // Artifact keys are immutable: implementations must fail rather than overwrite an existing key.
   putObject(input: {
@@ -61,11 +68,16 @@ export class S3ArtifactObjectStorage implements ArtifactObjectStorage {
     private readonly options: {
       bucket: string;
       client: Pick<S3Client, "send">;
+      requestTimeoutMs?: number;
     },
-  ) {}
+  ) {
+    if (options.requestTimeoutMs !== undefined && (!Number.isFinite(options.requestTimeoutMs) || options.requestTimeoutMs <= 0)) {
+      throw new Error("Artifact storage request timeout must be positive.");
+    }
+  }
 
   async putObject(input: { key: string; body: string; contentType: string; sha256: string }): Promise<void> {
-    await this.options.client.send(new PutObjectCommand({
+    await this.withRequestTimeout((abortSignal) => this.options.client.send(new PutObjectCommand({
       Bucket: this.options.bucket,
       Key: input.key,
       Body: input.body,
@@ -75,32 +87,62 @@ export class S3ArtifactObjectStorage implements ArtifactObjectStorage {
       Metadata: {
         sha256: input.sha256,
       },
-    }));
+    }), { abortSignal }));
   }
 
   async getObject(key: string): Promise<ArtifactObject> {
-    const response = await this.options.client.send(new GetObjectCommand({
-      Bucket: this.options.bucket,
-      Key: key,
-    }));
-    if (!response.Body) {
-      throw new Error("Artifact object body is empty.");
-    }
-    if (!response.ContentType) {
-      throw new Error("Artifact object content type is empty.");
-    }
-    return {
-      body: await response.Body.transformToString(),
-      contentType: response.ContentType,
-      sha256: response.Metadata?.sha256,
-    };
+    return this.withRequestTimeout(async (abortSignal) => {
+      const response = await this.options.client.send(new GetObjectCommand({
+        Bucket: this.options.bucket,
+        Key: key,
+      }), { abortSignal });
+      if (!response.Body) throw new Error("Artifact object body is empty.");
+      if (!response.ContentType) throw new Error("Artifact object content type is empty.");
+      const body = response.Body;
+      if (abortSignal.aborted) {
+        if ("destroy" in body && typeof body.destroy === "function") body.destroy();
+        throw new ArtifactStorageTimeoutError();
+      }
+      // The SDK can finish its request promise before its response stream ends.
+      // Bound consumption too, and release the Node stream on cancellation.
+      const abortBody = () => {
+        if ("destroy" in body && typeof body.destroy === "function") body.destroy(new ArtifactStorageTimeoutError());
+      };
+      abortSignal.addEventListener("abort", abortBody, { once: true });
+      try {
+        return {
+          body: await body.transformToString(),
+          contentType: response.ContentType,
+          sha256: response.Metadata?.sha256,
+        };
+      } finally {
+        abortSignal.removeEventListener("abort", abortBody);
+      }
+    });
   }
 
   async deleteObject(key: string): Promise<void> {
-    await this.options.client.send(new DeleteObjectCommand({
+    await this.withRequestTimeout((abortSignal) => this.options.client.send(new DeleteObjectCommand({
       Bucket: this.options.bucket,
       Key: key,
-    }));
+    }), { abortSignal }));
+  }
+
+  private async withRequestTimeout<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        const error = new ArtifactStorageTimeoutError();
+        reject(error);
+        controller.abort(error);
+      }, this.options.requestTimeoutMs ?? 15_000);
+    });
+    try {
+      return await Promise.race([operation(controller.signal), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async checkReady(): Promise<void> {

@@ -25,11 +25,22 @@ import { createExactArchitectureReleaseAuthorizer } from "./architectures/exact-
 import { ArchitectureTargetBindingAuthorizer } from "./targets/architecture-binding-authorizer.js";
 import { PostgresArchitectureTargetStore } from "./targets/postgres-target-store.js";
 import { ArchitectureTargetService } from "./targets/service.js";
+import { PostgresTargetSkillOperationStore } from "./target-operations/postgres-store.js";
+import { TargetSkillOperationService } from "./target-operations/service.js";
+import { PostgresSkillUpgradePolicyStore } from "./upgrade-policies/postgres-store.js";
+import { SkillUpgradePolicyService } from "./upgrade-policies/service.js";
 
 const port = Number.parseInt(process.env.PORT ?? "3001", 10);
 const host = process.env.HOST ?? "0.0.0.0";
 const pool = createPgPool();
 const db = createDb(pool);
+const instanceIdentity = await pool.query<{ value: string }>(
+  "SELECT value FROM instance_settings WHERE key = 'instance_id'",
+);
+const registryInstanceId = instanceIdentity.rows[0]?.value;
+if (!registryInstanceId || !/^[a-f0-9-]{36}$/.test(registryInstanceId)) {
+  throw new Error("Registry instance identity is unavailable. Apply database migrations before starting the API.");
+}
 const artifactStorage = createArtifactObjectStorageFromEnv(process.env);
 const submissionStore = new PostgresSubmissionStore(db, { artifactStorage });
 await submissionStore.reconcilePendingArtifactWrites();
@@ -64,8 +75,16 @@ const architectureTargetService = new ArchitectureTargetService(
   architectureTargetStore,
   new ArchitectureTargetBindingAuthorizer(architectureStore, organizationStore),
 );
+const skillUpgradePolicyService = new SkillUpgradePolicyService(new PostgresSkillUpgradePolicyStore(db));
+const targetSkillOperationService = new TargetSkillOperationService(
+  new PostgresTargetSkillOperationStore(db),
+  architectureTargetService,
+  submissionService,
+  { upgradePolicies: skillUpgradePolicyService },
+);
 const app = buildApp({
   skillRepository,
+  registryInstanceId,
   authService: new AuthService(new PostgresAuthStore(db), {
     mfaSecretKey: requiredAuthSecret(),
     totpIssuer: process.env.TOTP_ISSUER ?? "MySkills",
@@ -84,6 +103,8 @@ const app = buildApp({
   architectureOrganizationGrantService,
   architecturePatternMigrationService: patternMigrationService,
   architectureTargetService,
+  targetSkillOperationService,
+  skillUpgradePolicyService,
   allowedOrigins: allowedOrigins(),
   trustProxy: trustProxy(),
   requestLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 600, windowMs: 60_000 }),

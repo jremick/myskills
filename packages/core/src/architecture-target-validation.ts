@@ -256,17 +256,18 @@ export function validateAdapterDescriptor(
   if (!validText(value.version, architectureTargetLimits.adapterVersionLength)) {
     issue(errors, "ARCHITECTURE_TARGET_ADAPTER_VERSION_INVALID", "Adapter version must be a bounded string.", `${path}.version`);
   }
-  if (value.contractVersion !== architectureTargetAdapterContractVersions[0]) {
-    issue(errors, "ARCHITECTURE_TARGET_ADAPTER_CONTRACT_VERSION_INVALID", "Only adapter contract version 1 is supported.", `${path}.contractVersion`);
+  if (!(architectureTargetAdapterContractVersions as readonly unknown[]).includes(value.contractVersion)) {
+    issue(errors, "ARCHITECTURE_TARGET_ADAPTER_CONTRACT_VERSION_INVALID", "Adapter contract version must be 1 or 2.", `${path}.contractVersion`);
   }
-  if (typeof value.kind !== "string" || !adapterKindPattern.test(value.kind) || !validText(value.version, architectureTargetLimits.adapterVersionLength) || value.contractVersion !== 1) return undefined;
-  return { kind: value.kind, version: value.version, contractVersion: 1 };
+  if (typeof value.kind !== "string" || !adapterKindPattern.test(value.kind) || !validText(value.version, architectureTargetLimits.adapterVersionLength) || (value.contractVersion !== 1 && value.contractVersion !== 2)) return undefined;
+  return { kind: value.kind, version: value.version, contractVersion: value.contractVersion };
 }
 
 export function validateCapabilities(
   value: unknown,
   path: string,
   errors: ArchitectureTargetValidationIssue[],
+  contractVersion: 1 | 2 = 1,
 ): ArchitectureTargetCapabilitySet | undefined {
   if (!isRecord(value)) {
     issue(errors, "ARCHITECTURE_TARGET_CAPABILITIES_INVALID", "Target capabilities must be an object.", path);
@@ -281,11 +282,14 @@ export function validateCapabilities(
       issue(errors, "ARCHITECTURE_TARGET_CAPABILITY_INVALID", "Capability values must be boolean.", `${path}.${key}`);
       continue;
     }
-    if ((architectureTargetMutationCapabilities as readonly string[]).includes(key) && item === true) {
+    if (contractVersion === 1 && (architectureTargetMutationCapabilities as readonly string[]).includes(key) && item === true) {
       issue(errors, "ARCHITECTURE_TARGET_MUTATION_CAPABILITY_ENABLED", "Mutation capabilities must be absent or explicitly false in contract version 1.", `${path}.${key}`);
       continue;
     }
     normalized[key as ArchitectureTargetCapability] = item;
+  }
+  if (contractVersion === 2 && (normalized.apply === true || normalized.rollback === true) && normalized["sync.write"] !== true) {
+    issue(errors, "ARCHITECTURE_TARGET_MUTATION_CAPABILITY_ENABLED", "Contract version 2 requires sync.write when apply or rollback is enabled.", `${path}.sync.write`);
   }
   return normalized;
 }
@@ -379,7 +383,7 @@ export function validateArchitectureTarget(input: unknown): ArchitectureTargetVa
     issue(errors, "ARCHITECTURE_TARGET_GENERATION_INVALID", "Target generation must be a positive bounded integer.", "target.generation");
   }
   if (!validDigest(input.identityDigest)) issue(errors, "ARCHITECTURE_TARGET_IDENTITY_DIGEST_INVALID", "Target identityDigest must be a lowercase SHA-256 digest.", "target.identityDigest");
-  const capabilities = validateCapabilities(input.capabilities, "target.capabilities", errors);
+  const capabilities = validateCapabilities(input.capabilities, "target.capabilities", errors, adapter?.contractVersion ?? 1);
   const metadata = validateMetadata(input.metadata, "target.metadata", errors);
   const createdAt = validateOptionalTimestamp(input.createdAt, "target.createdAt", errors);
   const updatedAt = validateOptionalTimestamp(input.updatedAt, "target.updatedAt", errors);

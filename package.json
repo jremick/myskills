@@ -1,6 +1,6 @@
 {
   "name": "myskills-app",
-  "version": "0.1.0-beta.4",
+  "version": "0.1.0-beta.5",
   "license": "Apache-2.0",
   "private": true,
   "description": "Open-source skill registry, sharing, installation, API, MCP, and CLI platform for AI agent skills.",
@@ -35,7 +35,7 @@
     "test": "npm run test:tooling && npm test --workspaces --if-present",
     "test:e2e:fullstack": "node scripts/run-fullstack-e2e.mjs",
     "test:postgres": "npm run build && npm run test:postgres -w @myskills-app/api",
-    "test:tooling": "node --test scripts/test/release-tooling.test.mjs",
+    "test:tooling": "node --test scripts/test/*.test.mjs",
     "typecheck:web": "npm run typecheck -w @myskills-app/web"
   },
   "engines": {

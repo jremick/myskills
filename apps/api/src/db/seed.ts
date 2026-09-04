@@ -164,6 +164,10 @@ export async function seedDatabase(db: Database, options: SeedDatabaseOptions = 
         content: DEMO_SKILL_SUMMARY,
       },
       {
+        path: "SKILL.md",
+        content: `---\nname: ${DEMO_SKILL_SLUG}\ndescription: ${DEMO_SKILL_SUMMARY}\n---\n\n# ${DEMO_SKILL_TITLE}\n\nDraft concise release notes from the reviewed changes supplied by the user. Include upgrade steps, known risks, and verification notes. Do not invent changes or include secrets. Mark missing information as unknown.\n`,
+      },
+      {
         path: "skill.json",
         content: JSON.stringify({
           name: DEMO_SKILL_SLUG,

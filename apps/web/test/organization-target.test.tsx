@@ -275,7 +275,7 @@ test("reselecting the active target refreshes detail and exposes selected state"
   const view = render(<ArchitectureTargetsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
   await view.findByRole("heading", { name: "Personal Codex" });
   await waitFor(() => assert.equal(detailReads, 1));
-  const row = within(view.getByRole("list")).getByRole("button", { name: /Personal Codex/ });
+  const row = within(view.getByLabelText("Connected target list")).getByRole("button", { name: /Personal Codex/ });
   assert.equal(row.getAttribute("aria-pressed"), "true");
   fireEvent.click(row);
   await waitFor(() => assert.equal(detailReads, 2));

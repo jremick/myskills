@@ -9,18 +9,189 @@ import { createDb, createPgPool } from "../src/db/client.js";
 import {
   skillTeamGrants,
   skillUserGrants,
+  skills,
+  skillVersions,
+  skillArtifacts,
+  artifactWriteIntents,
   teamMemberships,
   teams,
   users,
 } from "../src/db/schema.js";
 import { PostgresSkillRepository } from "../src/repositories/postgres-skill-repository.js";
+import { searchVisibleSkillPage } from "../src/repositories/skill-pagination.js";
 import { PostgresSubmissionStore } from "../src/submissions/postgres-submission-store.js";
 import { artifactPayloadSha256 } from "../src/submissions/artifact-hash.js";
 import { SubmissionService } from "../src/submissions/service.js";
 import type { ArtifactObject, ArtifactObjectStorage } from "../src/artifacts/storage.js";
+import { ArtifactStorageTimeoutError } from "../src/artifacts/storage.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const migrationsDir = fileURLToPath(new URL("../migrations", import.meta.url));
+
+test("Postgres pagination limits unique authorized skills and exposes all historical managed releases", { timeout: 60_000 }, async (t) => {
+  assert.ok(databaseUrl);
+  assertSafeTestDatabaseUrl(databaseUrl);
+  const pool = createPgPool(databaseUrl);
+  t.after(() => pool.end());
+  await resetDatabase(pool);
+  await applyMigrations(pool);
+  const db = createDb(pool);
+  const author = await insertUser(db, "pages-author@example.com", "Author");
+  const fixtureSkills = await db.insert(skills).values([
+    ...Array.from({ length: 65 }, (_, index) => ({
+      slug: `page-${String(index).padStart(2, "0")}`, title: `Page ${index}`, summary: "Registry page fixture.",
+      lifecycleStatus: "approved" as const, visibility: "public" as const, ownerUserId: author.id,
+    })),
+    { slug: "page-private", title: "Private", summary: "Registry page fixture.", lifecycleStatus: "approved", visibility: "private", ownerUserId: author.id },
+    { slug: "page-archived", title: "Archived", summary: "Registry page fixture.", lifecycleStatus: "archived", visibility: "public", ownerUserId: author.id },
+  ]).returning({ id: skills.id, slug: skills.slug });
+  const versions = await db.insert(skillVersions).values(fixtureSkills.flatMap((skill) => (
+    Array.from({ length: skill.slug === "page-00" ? 302 : 1 }, (_, index) => ({
+      skillId: skill.id, version: `1.0.${index}`, lifecycleStatus: "approved" as const,
+      reviewStatus: "approved" as const, securityStatus: index === 301 ? "failed" as const : "passed" as const,
+      createdAt: new Date(Date.UTC(2026, 0, 1, 0, index)), publishedAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
+    }))
+  ))).returning({ id: skillVersions.id });
+  await db.insert(skillArtifacts).values(versions.map((version) => ({
+    skillVersionId: version.id, storageKey: `fixture/${version.id}`, sha256: "1".repeat(64),
+    byteSize: 12, contentType: "application/vnd.myskills-app.package+json", payload: { files: [] },
+  })));
+  const repository = new PostgresSkillRepository(db);
+  const seen: string[] = [];
+  let cursor: string | undefined;
+  let pages = 0;
+  do {
+    const page = await searchVisibleSkillPage(repository, { query: "page", limit: 13, cursor });
+    assert.equal(page.skills.length, 13);
+    if (pages === 0) assert.equal(page.skills[0]?.latestVersion, "1.0.300");
+    seen.push(...page.skills.map((skill) => skill.slug));
+    cursor = page.nextCursor ?? undefined;
+    pages += 1;
+    assert.ok(pages <= 5, "pagination must terminate");
+  } while (cursor);
+  assert.equal(pages, 5);
+  assert.deepEqual(seen, fixtureSkills.filter((skill) => /^page-\d/.test(skill.slug)).map((skill) => skill.slug).sort());
+  assert.equal(new Set(seen).size, 65);
+  assert.equal((await repository.getVisibleSkillBySlug("page-00"))?.latestVersion, "1.0.300");
+  assert.deepEqual(await repository.searchVisibleSkills({ query: "%" }), []);
+  const service = new SubmissionService(new PostgresSubmissionStore(db));
+  const releases = await service.listSkillReleases({ actor: { id: author.id, roles: ["author"] }, slug: "page-00" });
+  assert.equal(releases.length, 302, "managed history must not silently stop at 100");
+  assert.equal((await service.listManagedSkills({ actor: { id: author.id, roles: ["author"] }, query: "archived" })).skills[0]?.slug, "page-archived");
+  assert.equal((await service.listManagedSkills({ actor: { id: "00000000-0000-4000-8000-000000000000", roles: ["author"] } })).skills.length, 0);
+});
+
+test("Postgres author feedback retains reasons and findings through correction, archive, and restore", { timeout: 60_000 }, async (t) => {
+  assert.ok(databaseUrl);
+  assertSafeTestDatabaseUrl(databaseUrl);
+  const pool = createPgPool(databaseUrl);
+  t.after(() => pool.end());
+  await resetDatabase(pool);
+  await applyMigrations(pool);
+  const db = createDb(pool);
+  const author = { ...await insertUser(db, "feedback-author@example.com", "Author"), roles: ["author" as const] };
+  const maintainer = { ...await insertUser(db, "feedback-reviewer@example.com", "Reviewer"), roles: ["maintainer" as const] };
+  const service = new SubmissionService(new PostgresSubmissionStore(db));
+  const initial = cleanPackageInput();
+  initial.files.push({ path: "package.json", content: JSON.stringify({ scripts: { postinstall: "node setup.js" } }) });
+  const submitted = await service.createSubmission({ actor: author, ...initial });
+  await service.performReviewAction({ actor: maintainer, submissionId: submitted.id, action: "request-changes", reason: "Remove the install hook and explain setup." });
+  const detail = await service.getUserSubmissionDetail({ actor: author, submissionId: submitted.id });
+  assert.equal(detail?.changeRequestReason, "Remove the install hook and explain setup.");
+  assert.equal(detail?.reviewHistory[0]?.reason, detail?.changeRequestReason);
+  assert.equal(detail?.scanRuns[0]?.findings[0]?.category, "install-hook");
+  assert.equal(detail?.scanRuns[0]?.findings[0]?.path, "package.json");
+  assert.equal(await service.getUserSubmissionDetail({ actor: maintainer, submissionId: submitted.id }), null);
+  assert.equal((await service.getReviewSubmissionDetail({ actor: maintainer, submissionId: submitted.id }))?.changeRequestReason, detail?.changeRequestReason);
+  const next = cleanPackageInput();
+  next.manifest.version = "0.1.1";
+  next.files[0]!.content = JSON.stringify(next.manifest);
+  const corrected = await service.createSubmission({ actor: author, ...next });
+  await service.performReviewAction({ actor: maintainer, submissionId: corrected.id, action: "approve", artifactSha256: corrected.artifact.sha256 });
+  await service.performReviewAction({ actor: maintainer, submissionId: corrected.id, action: "publish" });
+  await service.performReleaseAction({ actor: author, slug: "workflow-helper", version: "0.1.1", action: "unpublish" });
+  assert.equal(await service.getPublicRelease({ slug: "workflow-helper", version: "0.1.1" }), null);
+  assert.equal((await service.listManagedSkills({ actor: author })).skills[0]?.slug, "workflow-helper");
+  await service.performSkillAction({ actor: author, slug: "workflow-helper", action: "archive" });
+  assert.equal((await service.listManagedSkills({ actor: maintainer })).skills[0]?.lifecycleStatus, "archived");
+  assert.equal((await service.listSkillReleases({ actor: author, slug: "workflow-helper" })).length, 2);
+  await service.performReleaseAction({ actor: author, slug: "workflow-helper", version: "0.1.1", action: "restore" });
+  await service.performSkillAction({ actor: author, slug: "workflow-helper", action: "restore" });
+  assert.equal((await service.getPublicRelease({ slug: "workflow-helper", version: "0.1.1" }))?.version, "0.1.1");
+  assert.equal((await service.getUserSubmissionDetail({ actor: author, submissionId: submitted.id }))?.changeRequestReason, detail?.changeRequestReason);
+});
+
+test("Postgres cleanup skips a publication paused after object PUT and retains the committed bundle", { timeout: 60_000 }, async (t) => {
+  assert.ok(databaseUrl);
+  assertSafeTestDatabaseUrl(databaseUrl);
+  const pool = createPgPool(databaseUrl);
+  t.after(() => pool.end());
+  await resetDatabase(pool);
+  await applyMigrations(pool);
+  const db = createDb(pool);
+  const author = { ...await insertUser(db, "race-author@example.com", "Author"), roles: ["author" as const] };
+  const maintainer = { ...await insertUser(db, "race-reviewer@example.com", "Reviewer"), roles: ["maintainer" as const] };
+  const storage = new MutatingArtifactStorage();
+  let announceWritten!: () => void;
+  let finishWrite!: () => void;
+  const written = new Promise<void>((resolve) => { announceWritten = resolve; });
+  const mayFinish = new Promise<void>((resolve) => { finishWrite = resolve; });
+  const originalPut = storage.putObject.bind(storage);
+  storage.putObject = async (input) => {
+    await originalPut(input);
+    announceWritten();
+    await mayFinish;
+  };
+  const store = new PostgresSubmissionStore(db, { artifactStorage: storage });
+  const service = new SubmissionService(store);
+  const pending = service.createSubmission({ actor: author, ...cleanPackageInput() });
+  try {
+    await Promise.race([written, pending]);
+    const [intent] = await db.select().from(artifactWriteIntents);
+    assert.ok(intent);
+    assert.deepEqual(await store.reconcilePendingArtifactWrites({ staleIntentMs: 0 }), { recovered: 0, retained: 1 });
+    assert.ok((await storage.getObject(intent.storageKey)).body);
+  } finally {
+    finishWrite();
+  }
+  const submission = await pending;
+  assert.deepEqual(await db.select().from(artifactWriteIntents), []);
+  await service.performReviewAction({ actor: maintainer, submissionId: submission.id, action: "approve", artifactSha256: submission.artifact.sha256 });
+  await service.performReviewAction({ actor: maintainer, submissionId: submission.id, action: "publish" });
+  assert.deepEqual(await store.reconcilePendingArtifactWrites({ staleIntentMs: 0 }), { recovered: 0, retained: 0 });
+  const bundle = await service.getPublicBundle({ slug: "workflow-helper", version: "0.1.0" });
+  assert.equal(bundle?.artifact.sha256, submission.artifact.sha256);
+  assert.deepEqual(bundle?.payload, submission.artifact.payload);
+});
+
+test("Postgres preserves a timed-out PUT intent so reconciliation can delete a late object", { timeout: 60_000 }, async (t) => {
+  assert.ok(databaseUrl);
+  assertSafeTestDatabaseUrl(databaseUrl);
+  const pool = createPgPool(databaseUrl);
+  t.after(() => pool.end());
+  await resetDatabase(pool);
+  await applyMigrations(pool);
+  const db = createDb(pool);
+  const author = { ...await insertUser(db, "timeout-author@example.com", "Author"), roles: ["author" as const] };
+  const storage = new MutatingArtifactStorage();
+  const originalPut = storage.putObject.bind(storage);
+  let latePut: (() => Promise<void>) | undefined;
+  storage.putObject = async (input) => {
+    latePut = () => originalPut(input);
+    throw new ArtifactStorageTimeoutError();
+  };
+  const store = new PostgresSubmissionStore(db, { artifactStorage: storage });
+  const service = new SubmissionService(store);
+  await assert.rejects(service.createSubmission({ actor: author, ...cleanPackageInput() }), ArtifactStorageTimeoutError);
+  assert.equal((await db.select().from(skillVersions)).length, 0);
+  const [intent] = await db.select().from(artifactWriteIntents);
+  assert.equal(intent?.lastError, "artifact_write_timeout");
+  assert.ok(latePut);
+  await latePut();
+  assert.deepEqual(await store.reconcilePendingArtifactWrites({ staleIntentMs: 0 }), { recovered: 1, retained: 0 });
+  assert.deepEqual(await db.select().from(artifactWriteIntents), []);
+  await assert.rejects(storage.getObject(intent!.storageKey), /Artifact object not found/);
+});
 
 test("Postgres registry publishes searchable releases and enforces bundle sharing", {
   timeout: 60_000,
@@ -241,6 +412,10 @@ test("approval artifact hash migration backfills legacy approved unpublished row
     [version.rows[0].id],
   );
   assert.equal(backfilled.rows[0].approved_artifact_sha256, artifactSha256);
+
+  // The store uses the current schema projection. Add the later release
+  // metadata columns after proving the isolated 0012 backfill behavior.
+  await applyMigration(pool, "0021_skill_release_metadata");
 
   const db = createDb(pool);
   const maintainer = await insertUser(db, "legacy-maintainer@example.com", "Legacy Maintainer");
