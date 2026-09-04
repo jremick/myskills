@@ -89,7 +89,8 @@ export async function readPackageFilesFromPath(inputPath: string): Promise<Packa
   try {
     if (expected.isFile()) {
       if (path.extname(rootPath).toLowerCase() === ".zip") {
-        return readZipPackageFiles(await readBoundedFile(handle, expected, MAX_PACKAGE_ARCHIVE_BYTES, path.basename(rootPath), true));
+        // Handle parser rejection before asynchronous cleanup can yield.
+        return await readZipPackageFiles(await readBoundedFile(handle, expected, MAX_PACKAGE_ARCHIVE_BYTES, path.basename(rootPath), true));
       }
       const relativePath = normalizePackageFilePath(path.basename(rootPath));
       const raw = await readBoundedFile(handle, expected, MAX_PACKAGE_TEXT_BYTES, relativePath);
@@ -131,17 +132,19 @@ async function openPackageRoot(requestedPath: string): Promise<{ rootPath: strin
     return { rootPath, expected, handle: await openCheckedPath(rootPath, expected) };
   }
   // Resolve each Linux component from a pinned directory, never by following an
-  // untrusted intermediate symlink in the original absolute path.
+  // untrusted intermediate symlink in the original absolute path. Ancestors may
+  // change unrelated entries; only the package itself must stay unchanged.
+  const components = rootPath.split("/").filter(Boolean);
   const rootStat = await checkedStat("/");
-  let handle = await openCheckedPath("/", rootStat);
+  let handle = await openCheckedPath("/", rootStat, components.length > 0 ? "identity" : "unchanged");
   let expected = rootStat;
   try {
-    const components = rootPath.split("/").filter(Boolean);
     for (let index = 0; index < components.length; index += 1) {
       const childPath = `/proc/self/fd/${handle.fd}/${components[index]}`;
       expected = await checkedStat(childPath);
-      if (index < components.length - 1 && !expected.isDirectory()) throw new Error("Package ancestor must be a directory.");
-      const child = await openCheckedPath(childPath, expected);
+      const isAncestor = index < components.length - 1;
+      if (isAncestor && !expected.isDirectory()) throw new Error("Package ancestor must be a directory.");
+      const child = await openCheckedPath(childPath, expected, isAncestor ? "identity" : "unchanged");
       await handle.close();
       handle = child;
     }
@@ -159,7 +162,11 @@ async function checkedStat(filePath: string): Promise<BigIntStats> {
   return stat;
 }
 
-async function openCheckedPath(filePath: string, expected: BigIntStats): Promise<FileHandle> {
+async function openCheckedPath(
+  filePath: string,
+  expected: BigIntStats,
+  check: "identity" | "unchanged" = "unchanged",
+): Promise<FileHandle> {
   // Darwin exposes O_NOFOLLOW_ANY in sys/fcntl.h, but Node does not export it.
   // Unlike O_NOFOLLOW it rejects symlinks in every path component.
   // https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/fcntl.h
@@ -173,7 +180,9 @@ async function openCheckedPath(filePath: string, expected: BigIntStats): Promise
     throw error;
   }
   try {
-    assertUnchanged(expected, await handle.stat({ bigint: true }));
+    const actual = await handle.stat({ bigint: true });
+    if (check === "identity") assertSameIdentity(expected, actual);
+    else assertUnchanged(expected, actual);
     return handle;
   } catch (error) {
     await handle.close();
@@ -247,8 +256,14 @@ async function readBoundedFile(
 }
 
 function assertUnchanged(expected: BigIntStats, actual: BigIntStats): void {
-  if (expected.dev !== actual.dev || expected.ino !== actual.ino || expected.mode !== actual.mode ||
-    expected.size !== actual.size || expected.mtimeNs !== actual.mtimeNs || expected.ctimeNs !== actual.ctimeNs) {
+  assertSameIdentity(expected, actual);
+  if (expected.size !== actual.size || expected.mtimeNs !== actual.mtimeNs || expected.ctimeNs !== actual.ctimeNs) {
+    throw new Error("Package changed while it was being read. Retry with an unchanged package.");
+  }
+}
+
+function assertSameIdentity(expected: BigIntStats, actual: BigIntStats): void {
+  if (expected.dev !== actual.dev || expected.ino !== actual.ino || expected.mode !== actual.mode) {
     throw new Error("Package changed while it was being read. Retry with an unchanged package.");
   }
 }

@@ -48,6 +48,97 @@ test("ZIP buffer reads take ownership of a copy before asynchronous decompressio
   assert.equal((await reading)[0].content, manifest);
 });
 
+test("invalid ZIP rejection stays handled while the source file closes asynchronously", async (t) => {
+  const dir = await fixture(t);
+  const archive = path.join(dir, "invalid.zip");
+  await fs.writeFile(archive, "invalid archive");
+  const originalOpen = fs.open;
+  let closed = false;
+  t.mock.method(fs, "open", async (filePath, flags, mode) => {
+    const handle = await originalOpen(filePath, flags, mode);
+    if (String(filePath).endsWith("/invalid.zip")) {
+      const originalClose = handle.close.bind(handle);
+      t.mock.method(handle, "close", async () => {
+        // Keep cleanup pending across event-loop turns after yauzl rejects.
+        await new Promise<void>((resolve) => setImmediate(() => setImmediate(resolve)));
+        await originalClose();
+        closed = true;
+      });
+    }
+    return handle;
+  });
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  await assert.rejects(readPackageFilesFromPath(archive), /end of central directory/i);
+  assert.equal(closed, true);
+});
+
+test("Linux ancestor directory changes outside the package do not invalidate its snapshot", { skip: process.platform !== "linux" }, async (t) => {
+  const dir = await fixture(t);
+  const ancestor = path.join(dir, "ancestor");
+  const source = path.join(ancestor, "source");
+  await fs.mkdir(source, { recursive: true });
+  await fs.writeFile(path.join(source, "skill.json"), manifest);
+  const originalOpen = fs.open;
+  let changed = false;
+  t.mock.method(fs, "open", async (filePath, flags, mode) => {
+    if (String(filePath).endsWith("/ancestor") && !changed) {
+      changed = true;
+      await fs.writeFile(path.join(ancestor, "unrelated.txt"), "outside package");
+      await fs.utimes(ancestor, new Date(0), new Date(0));
+    }
+    return originalOpen(filePath, flags, mode);
+  });
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  assert.equal((await readPackageSnapshot(source)).files[0].content, manifest);
+  assert.equal(changed, true);
+});
+
+test("Linux ancestor replacement after inspection still fails identity verification", { skip: process.platform !== "linux" }, async (t) => {
+  const dir = await fixture(t);
+  const ancestor = path.join(dir, "ancestor");
+  const source = path.join(ancestor, "source");
+  await fs.mkdir(source, { recursive: true });
+  await fs.writeFile(path.join(source, "skill.json"), manifest);
+  const originalOpen = fs.open;
+  let replaced = false;
+  t.mock.method(fs, "open", async (filePath, flags, mode) => {
+    if (String(filePath).endsWith("/ancestor") && !replaced) {
+      replaced = true;
+      await fs.rename(ancestor, path.join(dir, "original"));
+      await fs.mkdir(source, { recursive: true });
+      await fs.writeFile(path.join(source, "skill.json"), manifest);
+    }
+    return originalOpen(filePath, flags, mode);
+  });
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  await assert.rejects(readPackageSnapshot(source), /changed/);
+  assert.equal(replaced, true);
+});
+
+test("package directory contents changing after inspection still invalidate the snapshot", async (t) => {
+  const dir = await fixture(t);
+  const source = path.join(dir, "source");
+  await fs.mkdir(source);
+  await fs.writeFile(path.join(source, "skill.json"), manifest);
+  const originalOpen = fs.open;
+  let changed = false;
+  t.mock.method(fs, "open", async (filePath, flags, mode) => {
+    if (String(filePath).endsWith("/source") && !changed) {
+      changed = true;
+      await fs.writeFile(path.join(source, "new.txt"), "added during read");
+      await fs.utimes(source, new Date(0), new Date(0));
+    }
+    return originalOpen(filePath, flags, mode);
+  });
+  syncBuiltinESMExports();
+  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+  await assert.rejects(readPackageSnapshot(source), /changed/);
+  assert.equal(changed, true);
+});
+
 test("direct manifest snapshots remain supported and ambiguous directory manifests fail", async (t) => {
   const dir = await fixture(t);
   await fs.writeFile(path.join(dir, "custom.json"), manifest);

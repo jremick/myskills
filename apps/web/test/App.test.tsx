@@ -1,9 +1,11 @@
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { useLayoutEffect, useRef } from "react";
 import { createArchitectureDiagramArtifact, type PublicSkill, type SkillSharingDetails, type TeamSharedSkillGroup } from "@myskills-app/core";
 import { RegistryApp } from "../src/App.js";
+import { ArchitectureEditor } from "../src/components/architecture/editor/ArchitectureEditor.js";
 import type {
   AdminAuditEvent,
   AdminApiToken,
@@ -1002,6 +1004,64 @@ test("architecture editor previews an unsaved draft through the API with its rev
     profileId: "personal",
     environmentId: "codex-personal",
   });
+});
+
+test("the editor preserves input delivered before its initial passive effects", async () => {
+  const spec = defaultArchitecturePreview().revision.spec;
+  const previewedLabels: string[] = [];
+  function EarlyInputEditor({ initialSpec }: { initialSpec: typeof spec }) {
+    const container = useRef<HTMLDivElement>(null);
+    useLayoutEffect(() => {
+      const input = container.current?.querySelector<HTMLInputElement>('input[aria-label="Selected node label"]');
+      assert.ok(input);
+      // Deliver input after the field mounts but before passive initialization.
+      const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
+      setValue.call(input, "Immediate edit");
+      input.dispatchEvent(new window.Event("input", { bubbles: true }));
+    }, []);
+    return <div ref={container}><ArchitectureEditor initialSpec={initialSpec} expectedRevisionId="revision-1" onPreview={async ({ spec: draft }) => { previewedLabels.push(draft.nodes[0]!.label); }} /></div>;
+  }
+  let view!: ReturnType<typeof render>;
+  await act(async () => { view = render(<EarlyInputEditor initialSpec={spec} />); });
+  await view.findByText("Unsaved changes");
+  assert.equal((view.getByLabelText("Selected node label") as HTMLInputElement).value, "Immediate edit");
+  fireEvent.click(view.getByRole("button", { name: "Preview draft" }));
+  await waitFor(() => assert.deepEqual(previewedLabels, ["Immediate edit"]));
+  const nextSpec = { ...spec, nodes: [{ ...spec.nodes[0]!, label: "New server revision" }, ...spec.nodes.slice(1)] };
+  await act(async () => { view.rerender(<EarlyInputEditor initialSpec={nextSpec} />); });
+  await view.findByText("All changes saved");
+  assert.equal((view.getByLabelText("Selected node label") as HTMLInputElement).value, "New server revision");
+});
+
+test("an initial server preview settling around an edit preserves the unsaved editor draft", async () => {
+  for (const responseTiming of ["before-edit", "after-edit"] as const) {
+    setupAuthenticatedDom("http://localhost/architectures");
+    let resolveInitialPreview!: (preview: ArchitecturePreview) => void;
+    const initialPreview = new Promise<ArchitecturePreview>((resolve) => { resolveInitialPreview = resolve; });
+    const client = mockClient({
+      architecturePatterns: defaultArchitecturePatterns(),
+      architectures: [defaultArchitectureSummary()],
+    });
+    client.previewArchitecture = async () => initialPreview;
+    const view = render(<RegistryApp client={client} />);
+    await view.findByTestId("architecture-editor");
+    assert.equal(view.queryByText("Skills available in this context"), null);
+
+    await act(async () => {
+      if (responseTiming === "before-edit") resolveInitialPreview(defaultArchitecturePreview());
+      fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Edited before preview settled" } });
+      if (responseTiming === "after-edit") resolveInitialPreview(defaultArchitecturePreview());
+    });
+
+    await view.findByText("Skills available in this context");
+    await view.findByText("Unsaved changes");
+    assert.equal((view.getByLabelText("Selected node label") as HTMLInputElement).value, "Edited before preview settled", responseTiming);
+    fireEvent.click(view.getByRole("button", { name: "Preview draft" }));
+    await waitFor(() => assert.equal(client.architectureDraftPreviewCalls.length, 1));
+    assert.equal(client.architectureDraftPreviewCalls[0]?.spec.nodes[0]?.label, "Edited before preview settled", responseTiming);
+    assert.equal(client.architectureDraftPreviewCalls[0]?.expectedCurrentRevisionId, "revision-1", responseTiming);
+    cleanup();
+  }
 });
 
 test("team members receive a read-only architecture editor without revision controls", async () => {
