@@ -31,6 +31,7 @@ import type {
   ArchitectureTargetOwnerReference,
 } from "@myskills-app/core";
 import { architectureDigest, type ArchitectureSpecV1 } from "@myskills-app/core";
+import { CodexWorkspaceGuide } from "./CodexWorkspaceGuide.js";
 
 interface TargetSession {
   user: {
@@ -340,6 +341,7 @@ export function ArchitectureTargetsDashboard({ client, session }: { client: Regi
       <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw size={16} aria-hidden="true" />Refresh</Button>
     </section>
     {message && <div className="safe-message control-plane-message" role="alert" tabIndex={-1}>{message}</div>}
+    <CodexWorkspaceGuide />
     <section className="target-layout">
       <div className="target-sidebar">
         <RegisterTargetCard client={client} session={session} onRegistered={(target) => { setSelectedId(target.id); setRefreshKey((value) => value + 1); }} />
@@ -348,7 +350,7 @@ export function ArchitectureTargetsDashboard({ client, session }: { client: Regi
           <CardContent className="target-list-content">
             {state === "loading" && <TargetLoadingRows />}
             {state === "error" && <TargetEmptyState icon={<CircleAlert size={22} aria-hidden="true" />} title="Targets unavailable" copy="Retry when the target service is ready." action={<Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw size={15} aria-hidden="true" />Retry</Button>} />}
-            {state === "ready" && targets.length === 0 && <TargetEmptyState icon={<Link2 size={22} aria-hidden="true" />} title="No connected targets" copy="Register a read-only adapter target to inspect its bounded state." />}
+            {state === "ready" && targets.length === 0 && <TargetEmptyState icon={<Link2 size={22} aria-hidden="true" />} title="No connected targets" copy="Use the workspace setup guide to enroll Codex, or register an adapter target below." />}
             {state === "ready" && targets.length > 0 && <div className="target-list" role="list">{targets.map((target) => <div key={target.id} role="listitem"><button aria-current={target.id === selectedId ? "true" : undefined} aria-pressed={target.id === selectedId} className={target.id === selectedId ? "target-list-row selected" : "target-list-row"} type="button" onClick={() => selectTarget(target.id)}><span className="target-list-icon"><Activity size={15} aria-hidden="true" /></span><span className="target-list-main"><strong>{target.name}</strong><small>{target.adapter.kind} · {target.owner.type} · {target.consent.status}</small></span><Badge variant={target.status === "connected" ? "secondary" : target.status === "revoked" ? "destructive" : "outline"}>{target.status}</Badge></button></div>)}</div>}
           </CardContent>
         </Card>
@@ -558,7 +560,7 @@ function RegisterTargetCard({ client, session, onRegistered }: { client: Registr
       return;
     }
     if (!selectedAdapter) {
-      setFormError("adapter", "Select a supported read-only adapter.");
+      setFormError("adapter", "Select a supported adapter.");
       return;
     }
     let metadata: ArchitectureTargetMetadata | undefined;

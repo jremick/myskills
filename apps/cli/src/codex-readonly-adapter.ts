@@ -747,9 +747,17 @@ function parseFrontmatter(lines: string[]): ParsedFrontmatter {
   let sensitiveFieldCount = 0;
   let unsupportedFieldCount = 0;
   let duplicateFieldCount = 0;
+  let descriptionBlock = false;
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
+    // Never interpret prompt text in a YAML description block as inventory
+    // identity or management fields. Only top-level scalar metadata is read.
+    if (/^\s/.test(line)) {
+      if (!descriptionBlock) unsupportedFieldCount += 1;
+      continue;
+    }
+    descriptionBlock = false;
     const separator = trimmed.indexOf(":");
     if (separator <= 0) {
       unsupportedFieldCount += 1;
@@ -758,7 +766,10 @@ function parseFrontmatter(lines: string[]): ParsedFrontmatter {
     const key = trimmed.slice(0, separator).trim();
     // Codex uses `description` as a prompt-facing field. It is recognized so
     // standard files remain readable, but its value is intentionally discarded.
-    if (key === "description") continue;
+    if (key === "description") {
+      descriptionBlock = /^[|>][+-]?(?:\s+#.*)?$/.test(trimmed.slice(separator + 1).trim());
+      continue;
+    }
     const isAllowedField = SAFE_KEY_PATTERN.test(key) && (FRONTMATTER_FIELDS as readonly string[]).includes(key);
     if (!isAllowedField && SENSITIVE_KEY_PATTERN.test(key)) {
       sensitiveFieldCount += 1;

@@ -53,6 +53,9 @@ import { ArchitecturesDashboard } from "@/components/architecture/ArchitecturesD
 import { OrganizationsDashboard } from "@/components/organization/OrganizationsDashboard";
 import { ArchitectureTargetsDashboard } from "@/components/target/ArchitectureTargetsDashboard";
 import { SystemUpdateCenter } from "@/components/update/SystemUpdateCenter";
+import { PackageFileViewer } from "@/components/registry/PackageFileViewer";
+import { ManagedSkillsDashboard } from "@/components/registry/ManagedSkillsDashboard";
+import { SubmissionEvidencePanel } from "@/components/registry/SubmissionEvidencePanel";
 import {
   createRegistryClient,
   exportCommand,
@@ -98,7 +101,7 @@ interface RegistryAppProps {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type AuthState = "idle" | "loading" | "mfa";
-type AppView = "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "organizations" | "targets" | "updates" | "admin" | "review" | "submit" | "teams" | "settings" | "not-found";
+type AppView = "manage" | "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "organizations" | "targets" | "updates" | "admin" | "review" | "submit" | "teams" | "settings" | "not-found";
 
 interface AppLocation {
   view: AppView;
@@ -174,6 +177,10 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [release, setRelease] = useState<ReleaseMetadata | null>(null);
   const [platform, setPlatform] = useState(initialLocation.platform);
   const [listState, setListState] = useState<LoadState>("idle");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const listEpoch = useRef(0);
+  const searchSelectionQuery = useRef<string | null>(null);
   const [detailState, setDetailState] = useState<LoadState>("idle");
   const [listMessage, setListMessage] = useState<string | null>(null);
   const [detailMessage, setDetailMessage] = useState<string | null>(null);
@@ -209,6 +216,8 @@ export function RegistryApp({ client }: RegistryAppProps) {
           ? "targets"
         : view === "updates" && canUseTargets
           ? "updates"
+        : view === "manage" && session
+          ? "manage"
         : view === "teams" && canUseTeams
           ? "teams"
         : view === "settings"
@@ -287,6 +296,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
       }
       currentLocationRef.current = next;
       currentUrlRef.current = currentBrowserUrl();
+      searchSelectionQuery.current = null;
       setView(next.view);
       setSelectedSlug(next.slug);
       setQuery(next.query);
@@ -391,6 +401,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }, [registryClient, session?.expiresAt]);
 
   useEffect(() => {
+    const requestEpoch = ++listEpoch.current;
     if (activeView !== "browse") {
       setListState("idle");
       return;
@@ -398,12 +409,22 @@ export function RegistryApp({ client }: RegistryAppProps) {
     let active = true;
     setListState("loading");
     setListMessage(null);
-    registryClient.searchSkills(query)
-      .then((result) => {
+    setNextCursor(null);
+    setLoadingMore(false);
+    const request = registryClient.searchSkillPage
+      ? registryClient.searchSkillPage({ query })
+      : registryClient.searchSkills(query).then((items) => ({ skills: items, nextCursor: null }));
+    request.then((result) => {
         if (!active) {
           return;
         }
-        setSkills(result);
+        if (requestEpoch !== listEpoch.current) return;
+        setSkills(result.skills);
+        setNextCursor(result.nextCursor ?? null);
+        if (searchSelectionQuery.current === query) {
+          searchSelectionQuery.current = null;
+          setSelectedSlug((current) => result.skills.some((skill) => skill.slug === current) ? current : result.skills[0]?.slug ?? null);
+        }
         setListMessage(null);
         setListState("ready");
       })
@@ -412,7 +433,6 @@ export function RegistryApp({ client }: RegistryAppProps) {
           return;
         }
         setSkills([]);
-        setSelectedSlug(null);
         setListMessage(safeErrorMessage(error));
         setListState("error");
       });
@@ -428,9 +448,9 @@ export function RegistryApp({ client }: RegistryAppProps) {
     if (currentLocationRef.current.view !== "browse") {
       return;
     }
-    const nextSlug = selectedSlug && skills.some((skill) => skill.slug === selectedSlug)
-      ? selectedSlug
-      : skills[0]?.slug ?? null;
+    // An explicit detail URL is independent of a filtered or paginated list.
+    // Only choose the first result when no skill has been selected.
+    const nextSlug = selectedSlug ?? skills[0]?.slug ?? null;
     if (nextSlug !== selectedSlug) {
       setSelectedSlug(nextSlug);
     }
@@ -491,6 +511,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   ), [platform, release, selectedSkill]);
 
   function selectSkill(slug: string) {
+    searchSelectionQuery.current = null;
     setView("browse");
     setSelectedSlug(slug);
     pushAppHistory(browseUrl(slug, query, platform));
@@ -511,6 +532,23 @@ export function RegistryApp({ client }: RegistryAppProps) {
     const nextSlug = selectedSlug ?? skills[0]?.slug ?? null;
     setSelectedSlug(nextSlug);
     pushAppHistory(browseUrl(nextSlug, query, platform));
+  }
+
+  async function loadMoreSkills() {
+    if (!nextCursor || !registryClient.searchSkillPage || loadingMore) return;
+    const requestEpoch = listEpoch.current;
+    setLoadingMore(true);
+    setListMessage(null);
+    try {
+      const result = await registryClient.searchSkillPage({ query, cursor: nextCursor });
+      if (requestEpoch !== listEpoch.current) return;
+      setSkills((current) => [...new Map([...current, ...result.skills].map((skill) => [skill.slug, skill])).values()]);
+      setNextCursor(result.nextCursor ?? null);
+    } catch (error) {
+      if (requestEpoch === listEpoch.current) setListMessage(safeErrorMessage(error));
+    } finally {
+      if (requestEpoch === listEpoch.current) setLoadingMore(false);
+    }
   }
 
   function retryRegistry() {
@@ -628,6 +666,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }
 
   function updateSearch(nextQuery: string) {
+    searchSelectionQuery.current = nextQuery;
     setQuery(nextQuery);
     replaceAppHistory(browseUrl(selectedSlug, nextQuery, platform));
   }
@@ -695,6 +734,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
     { view: "browse" as const, label: "Registry", group: "Library" as const, icon: <Boxes size={18} aria-hidden="true" />, enabled: true },
     { view: "architectures" as const, label: "Architectures", group: "Build" as const, icon: <Workflow size={18} aria-hidden="true" />, enabled: Boolean(session) },
     { view: "submit" as const, label: "Submit", group: "Build" as const, icon: <Upload size={18} aria-hidden="true" />, enabled: canUseSubmit },
+    { view: "manage" as const, label: "Manage skills", group: "Govern" as const, icon: <PackageOpen size={18} aria-hidden="true" />, enabled: Boolean(session && registryClient.listManagedSkills) },
     { view: "review" as const, label: "Review", group: "Govern" as const, icon: <ClipboardList size={18} aria-hidden="true" />, enabled: canUseReview },
     { view: "teams" as const, label: "Teams", group: "Govern" as const, icon: <UsersRound size={18} aria-hidden="true" />, enabled: canUseTeams },
     { view: "organizations" as const, label: "Organizations", group: "Govern" as const, icon: <UsersRound size={18} aria-hidden="true" />, enabled: canUseOrganizations },
@@ -795,7 +835,9 @@ export function RegistryApp({ client }: RegistryAppProps) {
         )}
 
         <div className="app-content" id="main-content" tabIndex={-1}>
-          {activeView === "review" && session ? (
+          {activeView === "manage" && session ? (
+            <ManagedSkillsDashboard client={registryClient} mfaVerified={session.user.mfaVerified} />
+          ) : activeView === "review" && session ? (
             <ReviewDashboard client={registryClient} session={session} />
           ) : activeView === "submit" && session ? (
             <SubmitDashboard client={registryClient} session={session} />
@@ -825,7 +867,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
                   <div className="registry-page-title-row">
                     <h1>Skill registry</h1>
                     <Badge className="registry-count-badge" variant="outline" aria-live="polite">
-                      {listState === "ready" ? `${skills.length} approved` : resultCountText(listState, skills.length)}
+                      {listState === "ready" ? `${skills.length} ${nextCursor ? "shown" : "approved"}` : resultCountText(listState, skills.length)}
                     </Badge>
                   </div>
                   <p>Find an exact release, inspect its trust evidence, and carry the approved reference into your workflow.</p>
@@ -835,7 +877,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
                 <CardHeader className="panel-heading review-registry-heading shadcn-card-header">
                   <div>
                     <CardTitle>Approved skills</CardTitle>
-                    <CardDescription aria-live="polite">{resultCountText(listState, skills.length)}</CardDescription>
+                    <CardDescription aria-live="polite">{nextCursor && listState === "ready" ? `${skills.length} shown · more available` : resultCountText(listState, skills.length)}</CardDescription>
                   </div>
                   <span className="registry-panel-note">Exact references</span>
                 </CardHeader>
@@ -874,13 +916,15 @@ export function RegistryApp({ client }: RegistryAppProps) {
                         </span>
                       </a>
                     ))}
+                    {listState === "ready" && nextCursor && <Button type="button" size="sm" variant="outline" disabled={loadingMore} onClick={() => void loadMoreSkills()}>{loadingMore ? "Loading more skills…" : "Load more skills"}</Button>}
+                    {listState === "ready" && listMessage && <p role="alert">{listMessage}</p>}
                     {listState === "ready" && skills.length === 0 && (
                       <div className="empty-state">
                         <CircleAlert size={22} aria-hidden="true" />
                         <strong>No skills found.</strong>
                         <span>{query.trim() ? `No approved skills match "${query.trim()}".` : "Approved skills will appear here after publication."}</span>
                         {query.trim() && (
-                          <Button className="state-action shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => setQuery("")}>
+                          <Button className="state-action shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => updateSearch("")}>
                             Clear search
                           </Button>
                         )}
@@ -991,7 +1035,7 @@ function MarketingLanding({ onLogin }: { onLogin: () => void }) {
             <img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" width={360} height={110} />
           </a>
           <div className="landing-links">
-            <a href="#registry">Registry</a>
+            <a href="/registry">Browse registry</a>
             <a href="#trust">Trust model</a>
             <a href="#beta-status">Status</a>
             <Button asChild className="shadcn-action-button" size="sm">
@@ -1014,7 +1058,8 @@ function MarketingLanding({ onLogin }: { onLogin: () => void }) {
                   <ArrowRight size={18} aria-hidden="true" />
                 </a>
               </Button>
-              <a className="landing-secondary" href="#beta-status">Read current status</a>
+              <a className="landing-secondary" href="/registry">Browse public skills</a>
+              <a className="landing-secondary" href="https://github.com/jremick/myskills/blob/main/docs/GETTING_STARTED.md">Run your own instance</a>
             </div>
           </div>
           <LandingPreview />
@@ -1064,9 +1109,10 @@ function MarketingLanding({ onLogin }: { onLogin: () => void }) {
           <span>Current status</span>
           <h2 id="status-heading">Public beta release is live.</h2>
           <p>
-            MySkills is available for external trial use and experimental self-hosting. This hosted registry remains owner-gated while public account creation, abuse handling, and support workflows mature.
+            MySkills is available for external trial use and experimental self-hosting. To join this hosted registry, ask its owner for an invitation, then open the invitation email to create your account. You can browse public skills before signing in.
           </p>
         </div>
+        <p><a href="https://github.com/jremick/myskills">Source and releases on GitHub</a> · <a href="https://github.com/jremick/myskills/blob/main/docs/GETTING_STARTED.md">Setup documentation</a></p>
         <Button asChild className="landing-primary shadcn-action-button" size="sm">
           <a href="/login" onClick={(event) => handleCallbackLink(event, onLogin)}>
             Login
@@ -1116,6 +1162,12 @@ function LandingPreview() {
   );
 }
 
+function newPasswordByteError(password: string): string | null {
+  return new TextEncoder().encode(password).byteLength > 72
+    ? "Password must be at most 72 UTF-8 bytes. Non-ASCII characters can use more than one byte."
+    : null;
+}
+
 function LoginPage({
   authMessage,
   authState,
@@ -1148,7 +1200,8 @@ function LoginPage({
       <section className="login-panel" aria-labelledby="login-heading">
         <p className="landing-status">Public beta. Hosted signups are closed.</p>
         <h1 id="login-heading">Login</h1>
-        <p>Use an approved owner or team account to access the hosted beta workspace.</p>
+        <p>Use an approved owner or team account to access the hosted beta workspace. Need an account? Ask the instance owner for an invitation and follow the email link.</p>
+        <p><a href="/registry">Browse public skills</a> · <a href="https://github.com/jremick/myskills/blob/main/docs/GETTING_STARTED.md">Self-host MySkills</a></p>
         <AuthWidget
           authMessage={authMessage}
           authState={authState}
@@ -1198,6 +1251,12 @@ function InvitationRegistrationPage({
     if (password.length < 12) {
       setState("error");
       setMessage("Use a password with at least 12 characters.");
+      return;
+    }
+    const passwordError = newPasswordByteError(password);
+    if (passwordError) {
+      setState("error");
+      setMessage(passwordError);
       return;
     }
     if (password !== confirmPassword) {
@@ -1345,6 +1404,7 @@ function NotFoundPage({ onHome }: { onHome: () => void }) {
 
 function SubmitDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
   const [file, setFile] = useState<File | null>(null);
+  const [feedbackId, setFeedbackId] = useState<string | null>(null);
   const [state, setState] = useState<LoadState>("idle");
   const [submissionsState, setSubmissionsState] = useState<LoadState>("loading");
   const [message, setMessage] = useState<string | null>(null);
@@ -1578,6 +1638,7 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
                   <span>{formatBytes(submission.artifact.byteSize)}</span>
                 </span>
                 <span className="submission-actions">
+                  {client.getUserSubmissionDetail && <Button type="button" size="sm" variant="outline" onClick={() => setFeedbackId(submission.id)}>View feedback for {submission.version}</Button>}
                   <Button
                     className="save-button compact-button shadcn-action-button"
                     disabled={exportingId === submission.id}
@@ -1615,6 +1676,16 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
           </CardContent>
         </Card>
       </section>
+      {feedbackId && <Card><CardContent>
+        <SubmissionEvidencePanel key={feedbackId} client={client} submissionId={feedbackId} mode="author" onCorrect={() => {
+          setFile(null);
+          setResult(null);
+          setMessage("Choose the corrected archive with a new semantic version. Previous submissions remain immutable.");
+          const input = document.getElementById("package-archive") as HTMLInputElement | null;
+          if (input) { input.value = ""; input.focus(); input.scrollIntoView?.({ block: "center" }); }
+        }} />
+        <PackageFileViewer resourceKey={`author:${feedbackId}`} loadBundle={() => client.exportUserSubmission(feedbackId)} />
+      </CardContent></Card>}
       {confirmation && <ConfirmationDialog key={confirmation.key} request={confirmation} onClose={() => setConfirmation(null)} />}
     </main>
   );
@@ -1644,7 +1715,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
         ? "This submission is approved. Publish it when release notes and metadata are ready."
         : selectedArtifactHash
           ? "Approve after checking metadata, package integrity, and scan output."
-          : "Download the review artifact before approving so the approval records its exact hash."
+          : "Inspect or download the review artifact before approving so the approval records its exact hash."
     : "";
 
   async function refreshReview() {
@@ -1850,7 +1921,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
                   </div>
                   <div>
                     <dt>Artifact hash</dt>
-                    <dd className="mono">{selectedArtifactHash ? `${selectedArtifactHash.slice(0, 12)}…` : "download required"}</dd>
+                    <dd className="mono">{selectedArtifactHash ? `${selectedArtifactHash.slice(0, 12)}…` : "inspection required"}</dd>
                   </div>
                   <div>
                     <dt>Submitted</dt>
@@ -1861,6 +1932,13 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
                     <dd className="mono">{selected.id}</dd>
                   </div>
                 </dl>
+
+                {client.getReviewSubmissionDetail && <SubmissionEvidencePanel key={`${selected.id}:${selected.reviewStatus}`} client={client} submissionId={selected.id} mode="reviewer" />}
+                <PackageFileViewer resourceKey={`review:${selected.id}`} loadBundle={async () => {
+                  const bundle = await client.getReviewSubmissionBundle(selected.id);
+                  setReviewArtifactHashes((current) => ({ ...current, [selected.id]: bundle.artifactSha256 }));
+                  return bundle.payload;
+                }} />
 
                 <label className="shadcn-review-reason">
                   <span>Reason</span>
@@ -2962,6 +3040,12 @@ function AuthTokenPage({
       setMessage("Passwords do not match.");
       return;
     }
+    const passwordError = newPasswordByteError(password);
+    if (passwordError) {
+      setState("error");
+      setMessage(passwordError);
+      return;
+    }
     setState("loading");
     try {
       await client.confirmPasswordReset({ token, password });
@@ -3106,6 +3190,11 @@ function AccountSettings({
     };
     if (passwordInput.password !== passwordInput.confirmPassword) {
       setMessage("Passwords do not match.");
+      return;
+    }
+    const passwordError = newPasswordByteError(passwordInput.password);
+    if (passwordError) {
+      setMessage(passwordError);
       return;
     }
     setState("loading");
@@ -4258,6 +4347,11 @@ function SkillDetail({
           />
         )}
 
+        {client.getReleaseBundle && <PackageFileViewer
+          resourceKey={`${selectedSkill.slug}:${release.version}:${platform}`}
+          loadBundle={() => client.getReleaseBundle!(selectedSkill.slug, release.version, platform)}
+        />}
+
         <div className="command-panel registry-command-panel">
           <div className="command-heading">
             <TerminalSquare size={18} aria-hidden="true" />
@@ -4266,6 +4360,7 @@ function SkillDetail({
           <code>{command}</code>
           <CopyButton text={command} variant="outline" />
         </div>
+        <p className="control-plane-muted">For a personal Codex workspace, follow <a href="/targets">Connect a Codex workspace</a> to enroll the directory and install this exact version with the matching CLI release.</p>
         {session && canUsePrivilegedControls && (
           <SharingPanel client={client} selectedSkill={selectedSkill} session={session} />
         )}
@@ -4856,6 +4951,7 @@ function isPublicView(view: AppView): boolean {
 }
 
 function initialViewFromPath(pathname: string): AppView {
+  if (pathname === "/manage/skills") return "manage";
   if (pathname === "/") {
     return "landing";
   }
@@ -4908,6 +5004,7 @@ function initialViewFromPath(pathname: string): AppView {
 }
 
 function pathForView(view: AppView): string {
+  if (view === "manage") return "/manage/skills";
   if (view === "landing") {
     return "/";
   }

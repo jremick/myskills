@@ -8659,3 +8659,58 @@ textarea:focus-visible {
     white-space: normal;
   }
 }
+.package-file-viewer {
+  min-width: 0;
+}
+
+.package-file-viewer select {
+  max-width: 100%;
+}
+
+.package-file-content {
+  max-height: 32rem;
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  text-align: left;
+}
+
+.codex-workspace-guide pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 0.8rem;
+  border-radius: 0.5rem;
+  background: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.codex-workspace-guide li + li {
+  margin-top: 1.25rem;
+}
+
+.managed-skills-layout {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1fr) minmax(0, 2fr);
+  gap: 1rem;
+  align-items: start;
+}
+.managed-skill-row {
+  width: 100%;
+  min-height: 3.5rem;
+  height: auto;
+  margin-bottom: 0.5rem;
+  justify-content: space-between;
+  white-space: normal;
+  text-align: left;
+}
+.managed-skill-row small { display: block; overflow-wrap: anywhere; }
+@media (max-width: 768px) {
+  .managed-skills-layout { grid-template-columns: minmax(0, 1fr); }
+}

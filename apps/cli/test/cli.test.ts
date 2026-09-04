@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { runCli, type FetchLike } from "../src/cli.js";
@@ -300,7 +300,7 @@ test("submit sends package entries to the API", async (t) => {
   assert.deepEqual(output.stdout, ["release-notes-helper@0.1.0\tunreviewed\tpassed\tfindings=0"]);
 });
 
-test("submit sends zip archives to the API without extracted file entries", async (t) => {
+test("submit sends the exact normalized snapshot scanned from a zip", async (t) => {
   const dir = await makeTempPackage();
   t.after(() => rm(dir, { recursive: true, force: true }));
   const zipPath = path.join(dir, "package.zip");
@@ -338,9 +338,11 @@ test("submit sends zip archives to the API without extracted file entries", asyn
   assert.equal(method, "POST");
   assert.equal(authorization, "Bearer submit-token");
   assert.equal(body.manifest?.name, "release-notes-helper");
-  assert.equal(body.archive?.filename, "package.zip");
-  assert.equal(body.archive?.contentBase64, (await readFile(zipPath)).toString("base64"));
-  assert.equal(body.files, undefined);
+  assert.equal(body.archive, undefined);
+  assert.deepEqual(body.files, [
+    { path: "README.md", content: "Summarize release notes." },
+    { path: "skill.json", content: manifestJson() },
+  ]);
   assert.deepEqual(output.stdout, ["release-notes-helper@0.1.0\tunreviewed\tpassed\tfindings=0"]);
 });
 
@@ -2008,6 +2010,7 @@ test("install downloads the latest verified bundle and records local state", asy
   const calls: string[] = [];
   const fetch: FetchLike = async (input, init) => {
     calls.push(`${init?.headers?.authorization ?? ""} ${String(input)}`);
+    if (String(input).endsWith("/v1/skills/release-notes-helper/releases")) return response(200, { releases: [releaseSummary("0.2.0", bundle)] });
     if (String(input).endsWith("/v1/skills/release-notes-helper")) {
       return response(200, {
         skill: {
@@ -2037,9 +2040,10 @@ test("install downloads the latest verified bundle and records local state", asy
 
   assert.equal(code, 0);
   assert.deepEqual(calls, [
-    "Bearer install-token http://api.test/v1/skills/release-notes-helper",
+    "Bearer install-token http://api.test/v1/skills/release-notes-helper/releases",
     "Bearer install-token http://api.test/v1/skills/release-notes-helper/releases/0.2.0",
     "Bearer install-token http://api.test/v1/skills/release-notes-helper/releases/0.2.0/bundle?platform=codex",
+    "Bearer install-token http://api.test/v1/skills/release-notes-helper/releases/0.2.0",
   ]);
   assert.equal(await readFile(path.join(installRoot, "release-notes-helper", "README.md"), "utf8"), "Release notes helper 0.2.0");
   assert.match(output.stdout[0], /release-notes-helper@0\.2\.0\tinstalled\tplatform=codex/);
@@ -2076,7 +2080,7 @@ test("list prints local installed skills without registry calls", async (t) => {
 
   assert.equal(code, 0);
   assert.equal(calls, 0);
-  assert.deepEqual(output.stdout, [`release-notes-helper\t0.2.0\tcodex\t${path.join(installRoot, "release-notes-helper")}`]);
+  assert.deepEqual(output.stdout, [`release-notes-helper\t0.2.0\tcodex\t${path.join(await realpath(installRoot), "release-notes-helper")}`]);
 });
 
 test("update stores a rollback snapshot and rollback restores it", async (t) => {
@@ -2167,6 +2171,20 @@ test("companion run-once claims, applies, verifies, and receipts an exact operat
   const installRoot = await mkdtemp(path.join(os.tmpdir(), "myskills-companion-"));
   t.after(() => rm(installRoot, { recursive: true, force: true }));
   const output = createOutput();
+  await mkdir(path.join(installRoot, ".myskills-app"), { recursive: true });
+  await writeFile(path.join(installRoot, ".myskills-app", "codex-workspace.json"), JSON.stringify({
+    schemaVersion: 1,
+    rootDigest: createHash("sha256").update(await realpath(installRoot)).digest("hex"),
+    provenance: { origin: "http://api.test", instanceId: "00000000-0000-4000-8000-000000000001" },
+    target: {
+      schemaVersion: 1, id: "target-1", name: "Test workspace", owner: { type: "user", id: "user-1" },
+      adapter: { kind: "codex-workspace", version: "1.0.0", contractVersion: 2 },
+      architectureId: "architecture-1", environmentId: "environment-1", profileId: "profile-1",
+      status: "connected", consent: { status: "granted", requestedAt: "2026-09-02T00:00:00.000Z", grantedAt: "2026-09-02T00:00:00.000Z" },
+      generation: 2, identityDigest: "a".repeat(64),
+      capabilities: { "inventory.read": true, "health.read": true, "plan.read": true, apply: true, rollback: true, "sync.write": true },
+    },
+  }));
   const bundle = bundleText("1.0.0");
   const artifact = {
     sha256: createHash("sha256").update(bundle).digest("hex"),
@@ -2189,7 +2207,7 @@ test("companion run-once claims, applies, verifies, and receipts an exact operat
     planDigest: targetSkillOperationPlanDigest(plan),
     state: "claimed",
     fencingToken: 1,
-    leaseExpiresAt: "2026-09-02T00:05:00.000Z",
+    leaseExpiresAt: new Date(Date.now() + 300_000).toISOString(),
     createdAt: "2026-09-02T00:00:00.000Z",
     updatedAt: "2026-09-02T00:00:00.000Z",
   };
@@ -2203,6 +2221,7 @@ test("companion run-once claims, applies, verifies, and receipts an exact operat
     }
     if (url.endsWith("/releases/1.0.0/bundle?platform=codex")) return rawResponse(200, bundle);
     if (url.endsWith("/releases/1.0.0")) return response(200, releaseBody("1.0.0", bundle));
+    if (url.endsWith("/state")) return response(200, { operation: { ...operation, state: body.state, leaseExpiresAt: new Date(Date.now() + 300_000).toISOString() } });
     return response(200, { operation });
   };
 
@@ -2440,6 +2459,7 @@ function bundleText(version: string): string {
   return JSON.stringify({
     files: [
       { path: "README.md", content: `Release notes helper ${version}` },
+      { path: "SKILL.md", content: "---\nname: release-notes-helper\ndescription: Write release notes from supplied changes.\n---\nUse only supplied changes.\n" },
       { path: "skill.json", content: manifestJson(version) },
     ],
   });
@@ -2520,7 +2540,9 @@ function testRuntime(
 ) {
   return {
     env,
-    fetch,
+    fetch: ((input, init) => String(input).endsWith("/v1/capabilities")
+      ? Promise.resolve(response(200, { instanceId: "00000000-0000-4000-8000-000000000001" }))
+      : fetch(input, init)) as FetchLike,
     ...(codexAdapterClock ? { codexAdapterClock } : {}),
     io: {
       stdout: (line: string) => output.stdout.push(line),

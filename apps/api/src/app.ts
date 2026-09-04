@@ -1,3 +1,4 @@
+import { parseSkillPageQuery, searchVisibleSkillPage } from "./repositories/skill-pagination.js";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyServerOptions } from "fastify";
 import { AppError, createArchitectureDiagramArtifact, parseSkillReleaseMetadata, type ArchitecturePatternMigrationMapping, type ArchitectureSpecV1, type SharingSettings, type SkillReleaseMetadata, type SkillRepository, type VisibilityScope } from "@myskills-app/core";
 import {
@@ -84,7 +85,7 @@ import {
   type ArchitectureResolutionScope,
 } from "./architectures/exact-release-authorizer.js";
 import { freezeArchitectureRevisionAuthorizationSnapshot } from "./architectures/revision-authorization.js";
-import { API_VERSION } from "./version.js";
+import { API_VERSION, readBuildRevision } from "./version.js";
 
 const SESSION_COOKIE_NAME = "myskills_session";
 const COOKIE_SESSION_RESPONSE_HEADER = "x-myskills-session-response";
@@ -104,6 +105,7 @@ export interface ReadinessProbes {
 
 export interface BuildAppOptions {
   skillRepository: SkillRepository;
+  registryInstanceId?: string;
   authService?: AuthService;
   submissionService?: SubmissionService;
   teamService?: TeamService;
@@ -125,6 +127,7 @@ export interface BuildAppOptions {
 }
 
 export function buildApp(options: BuildAppOptions): FastifyInstance {
+  const revision = readBuildRevision();
   const app = Fastify({
     logger: options.logger ?? false,
     bodyLimit: DEFAULT_BODY_LIMIT_BYTES,
@@ -227,6 +230,11 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     service: "myskills-app-api",
   }));
 
+  app.get("/version.json", async (_request, reply) => {
+    reply.header("cache-control", "no-store");
+    return { version: API_VERSION, revision };
+  });
+
   app.get("/ready", async (_request, reply) => {
     const [postgres, artifactStorage] = await Promise.all([
       readinessCheck(options.readinessProbes?.postgres, readinessTimeoutMs),
@@ -260,6 +268,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       : true;
     return {
       version: API_VERSION,
+      ...(options.registryInstanceId ? { instanceId: options.registryInstanceId } : {}),
       capabilities: {
         auth: Boolean(options.authService),
         search: true,
@@ -745,7 +754,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     if (!user) return;
     requireMfaForSession(user);
     const targetId = parseArchitectureTargetIdParam(request.params);
-    await requireArchitectureTargetService(options).authorizeCompanionOperation(user.id, targetId, "update");
+    await requireArchitectureTargetService(options).authorizeUpgradePolicy(user.id, targetId);
     const input = parseSkillUpgradePolicyInput(request.body);
     const result = await requireSkillUpgradePolicyService(options).append({ actorUserId: user.id, scopeType: "target", scopeId: targetId, ...input });
     return reply.code(result.created ? 201 : 200).send(result);
@@ -816,14 +825,12 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   });
 
   app.get("/v1/skills", async (request) => {
-    const query = parseQuery(request.query);
+    const query = parseSkillPageQuery(request.query);
     const user = await authenticateOptionalRegistryReader(options.authService, requestAuthorization(request));
-    const skills = await options.skillRepository.searchVisibleSkills({
-      query: query.q,
-      limit: query.limit,
+    return searchVisibleSkillPage(options.skillRepository, {
+      ...query,
       actorId: user?.id ?? null,
     });
-    return { skills };
   });
 
   app.get("/v1/skills/:slug/releases", async (request) => {
@@ -2026,6 +2033,57 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         scopes: context.credential.scopes,
       },
     };
+  });
+
+  app.get("/v1/manage/skills", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, requestAuthorization(request));
+    if (!user) return authFailureReply(options.authService, requestAuthorization(request), reply);
+    return options.submissionService.listManagedSkills({
+      actor: { id: user.id, roles: user.roles },
+      ...parseSkillPageQuery(request.query),
+    });
+  });
+
+  app.get("/v1/submissions/:id", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, requestAuthorization(request));
+    if (!user) return authFailureReply(options.authService, requestAuthorization(request), reply);
+    const submission = await options.submissionService.getUserSubmissionDetail({
+      actor: { id: user.id, roles: user.roles },
+      submissionId: parseSubmissionIdParam(request.params),
+    });
+    if (!submission) throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+    return { submission };
+  });
+
+  app.get("/v1/review/submissions/:id", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const actor = await authenticateActor(options.authService, requestAuthorization(request), "review:read", { mfaRequired: true });
+    if (!actor) {
+      return reply.code(401).send({ error: { code: "AUTHENTICATION_REQUIRED", message: "Authentication is required." } });
+    }
+    const submission = await options.submissionService.getReviewSubmissionDetail({
+      actor,
+      submissionId: parseSubmissionIdParam(request.params),
+    });
+    if (!submission) throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+    return { submission };
   });
 
   app.get("/v1/submissions/mine", async (request, reply) => {
@@ -4269,14 +4327,6 @@ function parseProviderRoleMappings(input: unknown): UpsertProviderConfigRequest[
       role: requiredString(record.role, `roleMappings[${index}].role`),
     };
   });
-}
-
-function parseQuery(input: unknown): { q?: string; limit?: number } {
-  const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
-  const q = typeof params.q === "string" ? params.q : undefined;
-  const rawLimit = typeof params.limit === "string" ? Number.parseInt(params.limit, 10) : undefined;
-  const limit = rawLimit && Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : undefined;
-  return { q, limit };
 }
 
 function parseBundleQuery(input: unknown): { platform?: string } {

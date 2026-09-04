@@ -1,7 +1,7 @@
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { CliTokenStore, CliTokenStoreInfo, StoredCliToken } from "./cli.js";
+import type { CliTokenStore, StoredCliToken } from "./cli.js";
 
 const KEYRING_SERVICE = "ai.jarel.myskills.cli";
 
@@ -47,60 +47,91 @@ export function createFileTokenStore(env: Record<string, string | undefined> = p
   };
 }
 
-function createKeyringTokenStore(fallback: CliTokenStore): CliTokenStore {
-  const fallbackInfo = fallback.describe?.() as CliTokenStoreInfo | undefined;
+export interface KeyringTokenBackend {
+  get: (apiUrl: string) => Promise<string | null>;
+  set: (apiUrl: string, raw: string) => Promise<void>;
+  delete: (apiUrl: string) => Promise<void>;
+}
+
+export function createKeyringTokenStore(
+  fallback: CliTokenStore,
+  backend: KeyringTokenBackend = nativeKeyringBackend,
+): CliTokenStore {
+  let usedFallback = false;
   return {
     async get(apiUrl) {
-      const keyringToken = await readKeyringToken(apiUrl);
-      return keyringToken ?? await fallback.get(apiUrl);
+      let raw: string | null;
+      try {
+        raw = await backend.get(apiUrl);
+      } catch {
+        throw new Error("Cannot read the OS keyring. Unlock or restore keyring access, or explicitly select MYSKILLS_TOKEN_STORE=file.");
+      }
+      if (raw === null) {
+        const token = await fallback.get(apiUrl);
+        usedFallback = token !== null;
+        return token;
+      }
+      let token: StoredCliToken | null;
+      try {
+        token = parseStoredToken(JSON.parse(raw) as unknown);
+      } catch {
+        token = null;
+      }
+      if (!token) {
+        throw new Error("The OS keyring credential has an invalid format. Remove it with myskills logout, then log in again.");
+      }
+      usedFallback = false;
+      return token;
     },
     async set(apiUrl, token) {
-      if (await writeKeyringToken(apiUrl, token)) {
-        return;
+      try {
+        await backend.set(apiUrl, JSON.stringify(token));
+      } catch {
+        throw new Error("Cannot save the token in the OS keyring. Unlock or restore keyring access, or explicitly select MYSKILLS_TOKEN_STORE=file.");
       }
-      await fallback.set(apiUrl, token);
+      usedFallback = false;
+      try {
+        await fallback.delete(apiUrl);
+      } catch {
+        throw new Error("The token was saved in the OS keyring, but the older file credential could not be removed. Token storage cleanup is incomplete.");
+      }
     },
     async delete(apiUrl) {
-      await deleteKeyringToken(apiUrl);
-      await fallback.delete(apiUrl);
+      const results = await Promise.allSettled([backend.delete(apiUrl), fallback.delete(apiUrl)]);
+      const failed = results.flatMap((result, index) => result.status === "rejected" ? [index === 0 ? "OS keyring" : "file"] : []);
+      if (failed.length > 0) {
+        throw new Error(`Logout cleanup is incomplete: could not remove the ${failed.join(" and ")} credential. Restore storage access and retry logout.`);
+      }
+      usedFallback = false;
     },
-    describe() {
+    async describe() {
+      const fallbackInfo = await fallback.describe?.();
+      if (usedFallback && fallbackInfo) {
+        return fallbackInfo;
+      }
       return {
-        backend: "keyring",
+        backend: "keyring" as const,
         fallbackFilePath: fallbackInfo?.filePath,
       };
     },
   };
 }
 
-async function readKeyringToken(apiUrl: string): Promise<StoredCliToken | null> {
-  try {
+// keyring >=2 propagates access failures; null/false mean a confirmed missing entry.
+const nativeKeyringBackend: KeyringTokenBackend = {
+  async get(apiUrl) {
     const { Entry } = await import("@napi-rs/keyring");
-    const raw = new Entry(KEYRING_SERVICE, keyringAccount(apiUrl)).getPassword();
-    return raw ? parseStoredToken(JSON.parse(raw) as unknown) : null;
-  } catch {
-    return null;
-  }
-}
-
-async function writeKeyringToken(apiUrl: string, token: StoredCliToken): Promise<boolean> {
-  try {
+    return new Entry(KEYRING_SERVICE, keyringAccount(apiUrl)).getPassword();
+  },
+  async set(apiUrl, raw) {
     const { Entry } = await import("@napi-rs/keyring");
-    new Entry(KEYRING_SERVICE, keyringAccount(apiUrl)).setPassword(JSON.stringify(token));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function deleteKeyringToken(apiUrl: string): Promise<void> {
-  try {
+    new Entry(KEYRING_SERVICE, keyringAccount(apiUrl)).setPassword(raw);
+  },
+  async delete(apiUrl) {
     const { Entry } = await import("@napi-rs/keyring");
     new Entry(KEYRING_SERVICE, keyringAccount(apiUrl)).deletePassword();
-  } catch {
-    // Missing keyring support or missing credential should not block logout cleanup.
-  }
-}
+  },
+};
 
 function tokenFilePath(env: Record<string, string | undefined>): string {
   if (env.MYSKILLS_TOKEN_FILE) {
@@ -134,7 +165,13 @@ async function writePayload(filePath: string, payload: TokenFilePayload): Promis
 }
 
 function parsePayload(raw: string): TokenFilePayload {
-  const parsed = JSON.parse(raw) as unknown;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    // JSON parser errors can include an excerpt of the credential file.
+    throw new Error("Token store file contains invalid JSON. Repair or remove the file before logging in again.");
+  }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("Token store file must contain a JSON object.");
   }

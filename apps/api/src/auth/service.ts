@@ -807,22 +807,18 @@ export class AuthService {
 
   async revokeAdminApiToken(actor: AuthResponseUser, tokenId: string): Promise<SafeAdminApiToken> {
     assertAdmin(actor);
-    const token = await this.store.revokeAnyApiToken({ tokenId: cleanId(tokenId, "tokenId") });
+    const token = await this.store.revokeAnyApiToken({
+      tokenId: cleanId(tokenId, "tokenId"),
+      audit: {
+        actorUserId: actor.id,
+        action: "admin.api_token.revoke",
+        decision: "allow",
+        resourceType: "api_token",
+      },
+    });
     if (!token) {
       throw new AppError("API token not found.", "API_TOKEN_NOT_FOUND", 404);
     }
-    await this.store.recordAuditEvent({
-      actorUserId: actor.id,
-      action: "admin.api_token.revoke",
-      decision: "allow",
-      resourceType: "api_token",
-      resourceId: token.id,
-      details: {
-        targetUserId: token.user.id,
-        targetEmail: token.user.email,
-        scopes: token.scopes,
-      },
-    });
     return safeAdminApiToken(token);
   }
 
@@ -919,18 +915,14 @@ export class AuthService {
 
   async updateRegistrationSettings(actor: AuthResponseUser, input: UpdateRegistrationSettingsInput): Promise<AdminRegistrationSettings> {
     assertAdmin(actor);
-    const oldMode = await this.store.getRegistrationMode();
     const mode = normalizeRegistrationMode(input.mode);
-    const nextMode = await this.store.setRegistrationMode(mode);
-    await this.store.recordAuditEvent({
+    const nextMode = await this.store.setRegistrationMode(mode, {
       actorUserId: actor.id,
       action: "admin.registration.update",
       decision: "allow",
       resourceType: "instance_setting",
       details: {
         setting: "registration",
-        oldMode,
-        newMode: nextMode,
       },
     });
     return { mode: nextMode };
@@ -944,18 +936,19 @@ export class AuthService {
   async upsertAdminProviderConfig(actor: AuthResponseUser, input: UpsertProviderConfigRequest): Promise<SafeProviderConfig> {
     assertAdmin(actor);
     const provider = normalizeProviderConfigInput(input);
-    const saved = await this.store.upsertProviderConfig(provider);
-    await this.store.recordAuditEvent({
-      actorUserId: actor.id,
-      action: "admin.provider.upsert",
-      decision: "allow",
-      resourceType: "provider_config",
-      resourceId: saved.id,
-      details: {
-        providerKey: saved.key,
-        type: saved.type,
-        enabled: saved.enabled,
-        mappingCount: saved.roleMappings.length,
+    const saved = await this.store.upsertProviderConfig({
+      ...provider,
+      audit: {
+        actorUserId: actor.id,
+        action: "admin.provider.upsert",
+        decision: "allow",
+        resourceType: "provider_config",
+        details: {
+          providerKey: provider.key,
+          type: provider.type,
+          enabled: provider.enabled,
+          mappingCount: provider.roleMappings.length,
+        },
       },
     });
     return safeProviderConfig(saved);
@@ -988,6 +981,18 @@ export class AuthService {
       emailVerifiedAt: update.emailVerifiedAt,
       protectLastActiveOwner: action === "disable" || action === "delete",
       revokeCredentials: action === "disable" || action === "delete",
+      audit: {
+        actorUserId: actor.id,
+        action: `admin.user.${action}`,
+        decision: "allow",
+        resourceType: "user",
+        resourceId: target.id,
+        details: {
+          targetUserId: target.id,
+          credentialsRevoked: action === "disable" || action === "delete",
+          reason: input.reason,
+        },
+      },
     });
     if (result.outcome === "last_owner") {
       await this.recordAdminUserDeny(actor, action, target.id, "last_owner_required", input.reason, target);
@@ -996,24 +1001,7 @@ export class AuthService {
     if (result.outcome === "not_found") {
       throw new AppError("User not found.", "USER_NOT_FOUND", 404);
     }
-    const updated = result.user;
-    await this.store.recordAuditEvent({
-      actorUserId: actor.id,
-      action: `admin.user.${action}`,
-      decision: "allow",
-      resourceType: "user",
-      resourceId: target.id,
-      details: {
-        targetUserId: target.id,
-        statusBefore: target.status,
-        statusAfter: updated.status,
-        emailVerifiedBefore: Boolean(target.emailVerifiedAt),
-        emailVerifiedAfter: Boolean(updated.emailVerifiedAt),
-        credentialsRevoked: action === "disable" || action === "delete",
-        reason: input.reason,
-      },
-    });
-    return this.safeAdminUser(updated);
+    return this.safeAdminUser(result.user);
   }
 
   async updateAdminUserRoles(actor: AuthResponseUser, input: AdminUserRoleUpdateInput): Promise<SafeAdminUser> {
@@ -1040,7 +1028,22 @@ export class AuthService {
 
     let updated: AuthUserRecord | null;
     try {
-      updated = await this.store.updateUserRolesAndRevokeCredentials({ userId: target.id, roles });
+      updated = await this.store.updateUserRolesAndRevokeCredentials({
+        userId: target.id,
+        roles,
+        audit: {
+          actorUserId: actor.id,
+          action: "admin.user.roles.update",
+          decision: "allow",
+          resourceType: "user",
+          resourceId: target.id,
+          details: {
+            targetUserId: target.id,
+            credentialsRevoked: true,
+            reason: input.reason,
+          },
+        },
+      });
     } catch (error) {
       if (error instanceof AppError && error.code === "LAST_OWNER_REQUIRED") {
         await this.recordAdminUserDeny(actor, "roles.update", target.id, "last_owner_required", input.reason, target);
@@ -1050,20 +1053,6 @@ export class AuthService {
     if (!updated) {
       throw new AppError("User not found.", "USER_NOT_FOUND", 404);
     }
-    await this.store.recordAuditEvent({
-      actorUserId: actor.id,
-      action: "admin.user.roles.update",
-      decision: "allow",
-      resourceType: "user",
-      resourceId: target.id,
-      details: {
-        targetUserId: target.id,
-        rolesBefore: target.roles,
-        rolesAfter: updated.roles,
-        credentialsRevoked: true,
-        reason: input.reason,
-      },
-    });
     return this.safeAdminUser(updated);
   }
 

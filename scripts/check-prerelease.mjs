@@ -190,9 +190,12 @@ function checkPublicPackages() {
     }
     if (manifest.name === "@jarel/myskills") {
       const actualFiles = [...(manifest.files ?? [])].sort();
-      const expectedFiles = ["README.md", "dist/index.js"].sort();
+      const expectedFiles = ["LICENSE", "README.md", "dist/index.js"].sort();
       if (JSON.stringify(actualFiles) !== JSON.stringify(expectedFiles)) {
-        failures.push(`${path} files must allowlist only README.md and dist/index.js.`);
+        failures.push(`${path} files must allowlist only LICENSE, README.md and dist/index.js.`);
+      }
+      if (readText("apps/cli/LICENSE") !== readText("LICENSE")) {
+        failures.push("The CLI package must include the current root LICENSE.");
       }
       if (!expectedNpmTag || manifest.publishConfig?.tag !== expectedNpmTag) {
         failures.push(`${path} publishConfig.tag must match prerelease channel ${JSON.stringify(expectedNpmTag)}.`);
@@ -223,7 +226,7 @@ function checkCapabilityVersion() {
 
   const appSourcePath = "apps/api/src/app.ts";
   const appSource = readText(appSourcePath) ?? "";
-  if (!/import\s*\{\s*API_VERSION\s*\}\s*from\s*["']\.\/version\.js["']/.test(appSource)
+  if (!/import\s*\{[^}]*\bAPI_VERSION\b[^}]*\}\s*from\s*["']\.\/version\.js["']/.test(appSource)
       || !/version:\s*API_VERSION/.test(appSource)) {
     failures.push(`${appSourcePath} must expose the shared API_VERSION in /v1/capabilities.`);
   }

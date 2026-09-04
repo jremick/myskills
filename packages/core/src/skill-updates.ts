@@ -261,7 +261,7 @@ export function evaluateSkillUpdate(input: SkillUpdateEvaluationInput): SkillUpd
 
   const blockerSet = new Set<SkillUpdateBlockerCode>();
   const compatible = newer.filter((release) => {
-    const blockers = releaseBlockers(release, input);
+    const blockers = skillReleaseUpdateBlockers(release, input);
     for (const blocker of blockers) blockerSet.add(blocker);
     return blockers.length === 0;
   });
@@ -297,7 +297,7 @@ export function evaluateSkillUpdate(input: SkillUpdateEvaluationInput): SkillUpd
   };
 }
 
-function releaseBlockers(
+export function skillReleaseUpdateBlockers(
   release: SkillReleaseUpdateCandidate,
   input: SkillUpdateEvaluationInput,
 ): SkillUpdateBlockerCode[] {

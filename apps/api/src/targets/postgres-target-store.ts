@@ -650,7 +650,7 @@ export class PostgresArchitectureTargetStore implements ArchitectureTargetStore 
  * the target row is locked. Team-owned targets follow the shared team ->
  * parent organization -> policy/membership -> user -> team-membership order.
  */
-async function lockTargetMutationAuthority(
+export async function lockTargetMutationAuthority(
   db: DbLike,
   owner: ArchitectureTargetOwnerReference,
   actorUserId: string,

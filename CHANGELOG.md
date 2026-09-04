@@ -2,7 +2,14 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
-## Unreleased
+## 0.1.0-beta.5 - Unreleased
+
+Target release: `v0.1.0-beta.5`.
+
+This operational candidate completes registry feedback and recovery paths, hardens
+local and managed updates, and adds immutable deployment and registry identity.
+Verification and Railway promotion are tracked in
+[Operational Beta Delivery](docs/OPERATIONAL_BETA_DELIVERY.md).
 
 ### Added
 
@@ -22,6 +29,12 @@ All notable user-facing changes will be tracked here. MySkills is still prerelea
 - Added immutable target and organization upgrade-policy revisions with stable
   or prerelease channels, exact pins, allowed change types, and optional
   maintenance-window execution.
+- Added author review feedback, historical release and archived-skill management,
+  explicit package-file inspection, stable direct links, and registry pagination.
+- Added personal Codex workspace enrollment, filesystem observations, and an
+  explicit companion command for queued updates and verified rollback.
+- Added embedded API/web build identity, stable registry identity, and executable
+  operational acceptance and database-plus-artifact recovery tooling.
 
 ### Security
 
@@ -29,6 +42,27 @@ All notable user-facing changes will be tracked here. MySkills is still prerelea
   `rollback` capability plus `sync.write`, and an API token with the dedicated
   `targets:execute` scope. Stale generations, claims, fences, observations,
   policy revisions, and artifact plans fail closed.
+- Queue state and audit commit together. Batches are atomic, completed retries
+  return their original operation, and bounded polling progresses past blockers.
+- Admin status, roles, token revocation, registration settings, and provider
+  changes roll back when their audit write fails. Artifact publication and
+  cleanup coordinate through durable write intents and bounded storage requests.
+- Package intake holds one bounded byte snapshot. Local installs retain unknown
+  edits during recovery and reject unsafe payload paths. Production dependency
+  updates address the fast-uri and qs advisories.
+
+### Compatibility changes
+
+- Existing local installations without a registry identity require review and a
+  fresh install root; automatic adoption is disabled. Preserve the old files.
+- Local package intake and filesystem writes require macOS or Linux. Native
+  Windows is unsupported; portable API buffer uploads remain available.
+- Keyring failures are reported instead of silently writing a fallback file.
+  Select file storage explicitly when required. New passwords must fit within
+  bcrypt's 72-byte UTF-8 limit; legacy password verification remains compatible.
+- A fresh Codex workspace creates its own personal target. Existing target IDs
+  cannot bind a second workspace. Full architecture graph execution, background
+  agents, and additional provider adapters remain outside this beta.
 
 ## 0.1.0-beta.4 - 2026-09-02
 

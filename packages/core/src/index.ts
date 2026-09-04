@@ -37,6 +37,8 @@ export interface SkillSearchFilters {
   query?: string;
   limit?: number;
   actorId?: string | null;
+  /** Seek position in the stable, ascending slug order. */
+  afterSlug?: string;
 }
 
 export interface SkillSharingActor {

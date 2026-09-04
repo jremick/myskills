@@ -3,11 +3,13 @@ import {
   AppError,
   compareSemanticVersions,
   evaluateSkillUpdate,
+  skillReleaseUpdateBlockers,
   isPrereleaseVersion,
   isWithinSkillUpgradeMaintenanceWindow,
   parseSemanticVersion,
   targetSkillOperationActions,
   targetSkillOperationPlanDigest,
+  targetSkillOperationResultMatchesPlan,
   type TargetSkillOperation,
   type TargetSkillOperationResult,
 } from "@myskills-app/core";
@@ -30,30 +32,39 @@ export class TargetSkillOperationService {
   ) {}
 
   async schedule(input: ScheduleTargetSkillOperationInput): Promise<{ operation: TargetSkillOperation; replayed: boolean }> {
+    return this.store.create({ operation: await this.prepare(input) });
+  }
+
+  private async prepare(input: ScheduleTargetSkillOperationInput): Promise<StoredTargetSkillOperation> {
     const actorId = identifier(input.actorId, "actorId");
     const targetId = identifier(input.targetId, "targetId");
     if (!targetSkillOperationActions.includes(input.action)) throw invalid("Target operation action is invalid.");
     const slug = skillSlug(input.slug);
     const version = semanticVersion(input.version, "version");
     const idempotencyKey = identifier(input.idempotencyKey, "idempotencyKey");
+    const readable = await this.targets.getTarget(actorId, targetId);
+    if (!readable) throw notFound();
+    const existing = await this.store.findByIdempotencyKey(targetId, idempotencyKey);
+    if (existing) {
+      if (existing.actorUserId !== actorId || existing.action !== input.action || existing.skillSlug !== slug
+        || existing.toVersion !== version || (input.platform !== undefined && existing.platform !== input.platform)) {
+        throw new AppError("The target operation idempotency key is already bound to another request.", "TARGET_OPERATION_IDEMPOTENCY_CONFLICT", 409);
+      }
+      if (!await this.canReadRelease(actorId, existing)) throw notFound();
+      return existing;
+    }
     const target = await this.targets.authorizeCompanionOperation(actorId, targetId, input.action);
     const observations = await this.targets.listObservations(actorId, targetId, 1);
-    const observed = observations[0]?.skills.find((skill) => skill.slug === slug && skill.managed !== false);
-    const recentOperations = await this.store.listForTarget(targetId, 100);
-    const receiptVersion = recentOperations.find((operation) => (
-      operation.skillSlug === slug
-      && operation.targetGeneration === target.generation
-      && operation.state === "succeeded"
-      && operation.result?.installedVersion
-      && (!observations[0] || operation.updatedAt > observations[0].observedAt)
-    ))?.result?.installedVersion;
+    const observed = observations.find((item) => item.targetGeneration === undefined || item.targetGeneration === target.generation)?.skills.find((skill) => skill.slug === slug && skill.managed !== false);
+    const receipt = await this.store.latestSuccess(targetId, target.generation, slug);
+    const receiptVersion = receipt && (!observations[0] || receipt.updatedAt > observations[0].observedAt) ? receipt.result?.installedVersion : undefined;
     const fromVersion = receiptVersion && parseSemanticVersion(receiptVersion)
       ? receiptVersion
       : observed?.version && parseSemanticVersion(observed.version) ? observed.version : undefined;
     enforceActionVersions(input.action, fromVersion, version);
 
     const release = await this.submissions.getPublicRelease({ slug, version, actorId });
-    if (!release) throw new AppError("The requested release is unavailable for this target.", "TARGET_OPERATION_RELEASE_NOT_FOUND", 404);
+    if (!release || !await this.canReadRelease(actorId, { targetId, skillSlug: slug, toVersion: version })) throw new AppError("The requested release is unavailable for this target.", "TARGET_OPERATION_RELEASE_NOT_FOUND", 404);
     const platform = input.platform
       ? release.platforms.find((item) => item.name === input.platform && item.status === "supported")
       : release.platforms.find((item) => item.name === "codex" && item.status === "supported")
@@ -66,7 +77,7 @@ export class TargetSkillOperationService {
       if (!resolvedPolicy.policy.includePrerelease && isPrereleaseVersion(version)) throw new AppError("Prerelease upgrades are disabled by policy.", "TARGET_OPERATION_POLICY_PRERELEASE_BLOCKED", 409);
       if (!resolvedPolicy.policy.allowedChangeKinds.includes(release.changeKind)) throw new AppError("This release change kind is blocked by policy.", "TARGET_OPERATION_POLICY_CHANGE_KIND_BLOCKED", 409);
     }
-    const compatibility = evaluateSkillUpdate({
+    const blockers = skillReleaseUpdateBlockers(release, {
       installed: { version: fromVersion ?? "0.0.0", platform: platform.name },
       releases: [release],
       policy: { includePrerelease: true },
@@ -75,8 +86,8 @@ export class TargetSkillOperationService {
         ...(typeof target.metadata?.myskillsVersion === "string" ? { myskillsVersion: target.metadata.myskillsVersion } : {}),
       },
     });
-    if (compatibility.status === "no-compatible-release") {
-      throw new AppError("The target does not meet this release's compatibility requirements.", "TARGET_OPERATION_RELEASE_INCOMPATIBLE", 409, { blockers: compatibility.blockers });
+    if (blockers.some((code) => input.action !== "rollback" || code !== "release-deprecated")) {
+      throw new AppError("The target does not meet this release's compatibility requirements.", "TARGET_OPERATION_RELEASE_INCOMPATIBLE", 409, { blockers });
     }
     const plan = {
       targetId,
@@ -101,14 +112,7 @@ export class TargetSkillOperationService {
       actorUserId: actorId,
       idempotencyKey,
     };
-    try {
-      return await this.store.create({ operation });
-    } catch (error) {
-      if (errorCode(error) === "TARGET_OPERATION_IDEMPOTENCY_CONFLICT") {
-        throw new AppError("The target operation idempotency key is already bound to another plan.", "TARGET_OPERATION_IDEMPOTENCY_CONFLICT", 409);
-      }
-      throw error;
-    }
+    return operation;
   }
 
   async list(actorIdInput: string, targetIdInput: string): Promise<TargetSkillOperation[]> {
@@ -116,7 +120,9 @@ export class TargetSkillOperationService {
     const targetId = identifier(targetIdInput, "targetId");
     const target = await this.targets.getTarget(actorId, targetId);
     if (!target) throw notFound();
-    return this.store.listForTarget(targetId);
+    const operations = await this.store.listForTarget(targetId);
+    const visible = await Promise.all(operations.map(async (operation) => await this.canReadRelease(actorId, operation) ? operation : null));
+    return visible.filter((operation): operation is TargetSkillOperation => operation !== null);
   }
 
   async listUpdates(actor: SubmissionActor, targetIdInput: string): Promise<{
@@ -131,19 +137,14 @@ export class TargetSkillOperationService {
     if (!target) throw notFound();
     const observations = await this.targets.listObservations(actorId, targetId, 1);
     const observation = observations[0];
-    const operations = await this.store.listForTarget(targetId, 100);
     const policy = await this.options.upgradePolicies?.resolveForTarget(target) ?? null;
     const items = [];
     for (const skill of observation?.skills ?? []) {
       if (skill.managed === false || !skill.version || !parseSemanticVersion(skill.version)) continue;
-      const receiptVersion = operations.find((operation) => (
-        operation.skillSlug === skill.slug
-        && operation.targetGeneration === target.generation
-        && operation.state === "succeeded"
-        && operation.result?.installedVersion
-        && operation.updatedAt > observation.observedAt
-      ))?.result?.installedVersion;
+      const receipt = await this.store.latestSuccess(targetId, target.generation, skill.slug);
+      const receiptVersion = receipt && receipt.updatedAt > observation.observedAt ? receipt.result?.installedVersion : undefined;
       const installedVersion = receiptVersion && parseSemanticVersion(receiptVersion) ? receiptVersion : skill.version;
+      if (!await this.canReadRelease(actorId, { targetId, skillSlug: skill.slug, toVersion: installedVersion })) continue;
       const platform = target.adapter.kind.startsWith("codex") ? "codex" : target.adapter.kind;
       const releases = (await this.submissions.listSkillReleases({ slug: skill.slug, actor }))
         .filter((release) => (release.lifecycleStatus === "approved" || release.lifecycleStatus === "deprecated") && Boolean(release.publishedAt))
@@ -177,7 +178,7 @@ export class TargetSkillOperationService {
     const actorId = identifier(actorIdInput, "actorId");
     const operation = await this.requireOperation(operationIdInput);
     const target = await this.targets.getTarget(actorId, operation.targetId);
-    if (!target) throw notFound();
+    if (!target || !await this.canReadRelease(actorId, operation)) throw notFound();
     return publicOperation(operation);
   }
 
@@ -185,7 +186,7 @@ export class TargetSkillOperationService {
     const actorId = identifier(actorIdInput, "actorId");
     const operation = await this.requireOperation(operationIdInput);
     await this.targets.authorizeCompanionOperation(actorId, operation.targetId, operation.action);
-    const cancelled = await this.store.cancel(operation.id, this.now());
+    const cancelled = await this.store.cancel(operation.id, this.now(), actorId);
     if (!cancelled) throw new AppError("Only a queued target operation can be cancelled.", "TARGET_OPERATION_CANCEL_STATE_INVALID", 409);
     return cancelled;
   }
@@ -203,14 +204,21 @@ export class TargetSkillOperationService {
     if (!Number.isInteger(input.targetGeneration) || input.targetGeneration < 1) throw invalid("Target generation is invalid.");
     const leaseSeconds = boundedLease(input.leaseSeconds);
     const now = this.now();
-    const claimable = await this.store.listClaimable(targetId, now, 10);
+    const claimable = await this.store.listClaimable(targetId, now, 10, actorId);
     for (const candidate of claimable) {
       const target = await this.targets.authorizeCompanionOperation(actorId, targetId, candidate.action);
+      if (target.generation !== input.targetGeneration) continue;
+      const release = await this.submissions.getPublicRelease({ slug: candidate.skillSlug, version: candidate.toVersion, actorId });
+      if (!release || !await this.canReadRelease(actorId, candidate)) continue;
       const policy = await this.options.upgradePolicies?.resolveForTarget(target);
+      if (policy && ((policy.policy.pins[candidate.skillSlug] && policy.policy.pins[candidate.skillSlug] !== candidate.toVersion)
+        || (!policy.policy.includePrerelease && isPrereleaseVersion(candidate.toVersion))
+        || !policy.policy.allowedChangeKinds.includes(release.changeKind))) continue;
       if (policy?.policy.mode === "maintenance-window" && !isWithinSkillUpgradeMaintenanceWindow(policy.policy, new Date(now))) continue;
       if (candidate.targetGeneration !== input.targetGeneration) continue;
       const claimToken = randomBytes(32).toString("base64url");
       const claimed = await this.store.claim({
+        actorId,
         id: candidate.id,
         targetGeneration: input.targetGeneration,
         holderId,
@@ -228,9 +236,9 @@ export class TargetSkillOperationService {
     operations: Array<Omit<ScheduleTargetSkillOperationInput, "actorId">>;
   }): Promise<Array<{ operation: TargetSkillOperation; replayed: boolean }>> {
     if (!Array.isArray(input.operations) || input.operations.length === 0 || input.operations.length > 100) throw invalid("Target operation batch must contain from 1 to 100 items.");
-    const results = [];
-    for (const operation of input.operations) results.push(await this.schedule({ actorId: input.actorId, ...operation }));
-    return results;
+    const prepared = [];
+    for (const operation of input.operations) prepared.push({ operation: await this.prepare({ ...operation, actorId: input.actorId }) });
+    return this.store.createBatch(prepared);
   }
 
   async advance(input: {
@@ -246,6 +254,7 @@ export class TargetSkillOperationService {
     await this.targets.authorizeCompanionOperation(identifier(input.actorId, "actorId"), operation.targetId, operation.action);
     const now = this.now();
     const advanced = await this.store.advance({
+      actorId: identifier(input.actorId, "actorId"),
       id: operation.id,
       holderId: identifier(input.holderId, "holderId"),
       claimTokenHash: tokenHash(input.claimToken),
@@ -269,7 +278,9 @@ export class TargetSkillOperationService {
     const operation = await this.requireOperation(input.operationId);
     await this.targets.authorizeCompanionOperation(identifier(input.actorId, "actorId"), operation.targetId, operation.action);
     const result = normalizeResult(input.result, this.now());
+    if (!targetSkillOperationResultMatchesPlan(operation, result)) throw new AppError("Success requires verification of the exact planned release.", "TARGET_OPERATION_RECEIPT_MISMATCH", 409);
     const completed = await this.store.complete({
+      actorId: identifier(input.actorId, "actorId"),
       id: operation.id,
       holderId: identifier(input.holderId, "holderId"),
       claimTokenHash: tokenHash(input.claimToken),
@@ -279,6 +290,14 @@ export class TargetSkillOperationService {
     });
     if (!completed) throw claimConflict();
     return completed;
+  }
+
+  private async canReadRelease(actorId: string, operation: Pick<TargetSkillOperation, "targetId" | "skillSlug" | "toVersion">): Promise<boolean> {
+    if (this.store.canReadRelease) return this.store.canReadRelease(actorId, operation);
+    const target = await this.targets.getTarget(actorId, operation.targetId);
+    // A shared target needs an explicitly configured scope-aware authority.
+    if (!target || target.owner.type !== "user") return false;
+    return Boolean(await this.submissions.getPublicRelease({ slug: operation.skillSlug, version: operation.toVersion, actorId }));
   }
 
   private async requireOperation(idInput: string): Promise<StoredTargetSkillOperation> {
@@ -360,8 +379,4 @@ function notFound(): AppError {
 
 function claimConflict(): AppError {
   return new AppError("The target operation claim is stale or invalid.", "TARGET_OPERATION_CLAIM_CONFLICT", 409);
-}
-
-function errorCode(error: unknown): string {
-  return error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : "";
 }

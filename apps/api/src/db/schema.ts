@@ -974,13 +974,9 @@ export const targetSkillOperations = pgTable("target_skill_operations", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("target_skill_operations_target_history_idx").on(table.targetId, table.createdAt, table.id),
+  index("target_skill_operations_success_idx").on(table.targetId, table.targetGeneration, table.skillSlug, table.updatedAt, table.id).where(sql`${table.state} = 'succeeded'`),
   index("target_skill_operations_queue_idx").on(table.targetId, table.createdAt, table.id).where(sql`${table.state} = 'queued'`),
   unique("target_skill_operations_target_idempotency_unique").on(table.targetId, table.idempotencyKey),
-  foreignKey({
-    name: "target_skill_operations_target_generation_fk",
-    columns: [table.targetId, table.targetGeneration],
-    foreignColumns: [skillArchitectureTargets.id, skillArchitectureTargets.generation],
-  }),
   check("target_skill_operations_schema_version_check", sql`${table.schemaVersion} = 1`),
   check("target_skill_operations_generation_check", sql`${table.targetGeneration} BETWEEN 1 AND 1000000000`),
   check("target_skill_operations_action_check", sql`${table.action} IN ('install', 'update', 'rollback')`),
@@ -998,8 +994,16 @@ export const targetSkillOperations = pgTable("target_skill_operations", {
   check("target_skill_operations_claim_hash_check", sql`${table.claimTokenHash} IS NULL OR ${table.claimTokenHash} ~ '^[0-9a-f]{64}$'`),
   check("target_skill_operations_result_state_check", sql`(${table.state} IN ('succeeded', 'failed')) = (${table.result} IS NOT NULL)`),
   check("target_skill_operations_result_check", sql`${table.result} IS NULL OR (jsonb_typeof(${table.result}) = 'object' AND ${table.result} - ARRAY['status', 'code', 'recordedAt', 'installedVersion', 'artifactSha256', 'contentDigest'] = '{}'::jsonb AND ${table.result}->>'status' = ${table.state} AND ${table.result}->>'code' ~ '^[a-z][a-z0-9._:-]{0,95}$' AND ${table.result}->>'recordedAt' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T' AND (NOT ${table.result} ? 'installedVersion' OR ${table.result}->>'installedVersion' ~ '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') AND (NOT ${table.result} ? 'artifactSha256' OR ${table.result}->>'artifactSha256' ~ '^[0-9a-f]{64}$') AND (NOT ${table.result} ? 'contentDigest' OR ${table.result}->>'contentDigest' ~ '^[0-9a-f]{64}$'))`),
+  check("target_skill_operations_success_evidence_check", sql`${table.state} <> 'succeeded' OR coalesce(${table.result}->>'installedVersion' = ${table.toVersion} AND ${table.result}->>'artifactSha256' = ${table.artifactSha256} AND ${table.result}->>'contentDigest' ~ '^[0-9a-f]{64}$', false)`),
   check("target_skill_operations_timestamp_check", sql`${table.updatedAt} >= ${table.createdAt}`),
 ]);
+
+// A bounded companion poll advances this cursor even when candidates are temporarily blocked.
+export const targetSkillOperationClaimCursors = pgTable("target_skill_operation_claim_cursors", {
+  targetId: uuid("target_id").primaryKey().references(() => skillArchitectureTargets.id, { onDelete: "cascade" }),
+  operationCreatedAt: timestamp("operation_created_at", { withTimezone: true }).notNull(),
+  operationId: uuid("operation_id").notNull(),
+});
 
 export const skillUpgradePolicyRevisions = pgTable("skill_upgrade_policy_revisions", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -1015,7 +1019,6 @@ export const skillUpgradePolicyRevisions = pgTable("skill_upgrade_policy_revisio
 }, (table) => [
   index("skill_upgrade_policy_revisions_scope_idx").on(table.scopeType, table.scopeId, table.revisionNumber),
   unique("skill_upgrade_policy_revisions_scope_revision_unique").on(table.scopeType, table.scopeId, table.revisionNumber),
-  unique("skill_upgrade_policy_revisions_scope_digest_unique").on(table.scopeType, table.scopeId, table.policySha256),
   check("skill_upgrade_policy_revisions_schema_check", sql`${table.schemaVersion} = 1`),
   check("skill_upgrade_policy_revisions_revision_check", sql`${table.revisionNumber} BETWEEN 1 AND 1000000000`),
   check("skill_upgrade_policy_revisions_digest_check", sql`${table.policySha256} ~ '^[0-9a-f]{64}$'`),

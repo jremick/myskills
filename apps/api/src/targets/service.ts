@@ -147,6 +147,13 @@ export class ArchitectureTargetService {
     }
   }
 
+  async authorizeUpgradePolicy(
+    actorInput: ArchitectureTargetActorInput,
+    targetId: string,
+  ): Promise<ArchitectureTargetRecord> {
+    return this.requireAction(actorInput, normalizeIdentifier(targetId, "targetId"), "register");
+  }
+
   async authorizeCompanionOperation(
     actorInput: ArchitectureTargetActorInput,
     targetIdInput: string,

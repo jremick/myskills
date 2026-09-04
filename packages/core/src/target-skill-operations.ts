@@ -73,3 +73,14 @@ export function targetSkillOperationPlanDigest(input: TargetSkillOperationPlanIn
     artifact: input.artifact,
   }));
 }
+
+/** A receipt reports executor verification; it does not prove runtime recognition. */
+export function targetSkillOperationResultMatchesPlan(operation: TargetSkillOperation, result: TargetSkillOperationResult): boolean {
+  return result.status === "failed" || (
+    operation.state === "verifying"
+    && result.installedVersion === operation.toVersion
+    && result.artifactSha256 === operation.artifact.sha256
+    && typeof result.contentDigest === "string"
+    && /^[a-f0-9]{64}$/.test(result.contentDigest)
+  );
+}

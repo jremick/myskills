@@ -25,17 +25,18 @@ Responsibilities:
 - install/export/update/rollback packages
 - submit drafts
 - support maintainer/admin workflows through role-gated API calls
+- enroll a personal Codex workspace and execute approved updates with an explicit companion command
 - inspect an explicitly selected local Codex profile with a read-only metadata observation or health report
 
 CLI tokens should be stored in the platform secret store where possible.
 
 ## Current Slice
 
-The command list below describes the beta.3 Phase 2 source and CLI surface. It
-does not claim that the hosted Phase 1 Railway baseline includes these Phase 2
-architecture capabilities; hosted deployment requires a separate production
-promotion and live verification. The beta.2 visibility compatibility shims
-remain available for existing clients.
+This document describes the beta.5 candidate. Use a CLI built from the same
+release as the registry for managed updates and Codex workspace commands. The
+beta.2 visibility compatibility shims remain available for existing clients.
+Source versions and npm publication are separate from hosted deployment; the
+API and web expose their deployed version and commit at `/version.json`.
 
 ### Beta.3 breaking security changes
 
@@ -111,6 +112,12 @@ myskills install <skill-slug> [--version <version>] [--platform <platform>] [--d
 myskills list [--dir <install-root>]
 myskills update [skill-slug] [--version <version>] [--platform <platform>] [--dir <install-root>]
 myskills rollback <skill-slug> [--dir <install-root>]
+myskills codex enroll --workspace <absolute-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>]
+myskills codex observe --workspace <absolute-dir> [--upload] [--json]
+myskills install <skill-slug> --version <version> --workspace <absolute-dir>
+myskills update [skill-slug] [--version <version>] --workspace <absolute-dir>
+myskills rollback <skill-slug> --workspace <absolute-dir>
+myskills companion run-once --workspace <absolute-dir> --holder <name>
 myskills token create --name <name> --scope <scope> [--scope <scope>]
 myskills token list
 myskills token revoke <token-id>
@@ -144,11 +151,11 @@ this command.
 
 `architectures plan` and `architectures dry-run` accept a bounded observed
 fixture and return a dry-run plan. The fixture is not an implicit target and
-the command does not apply changes. Local Phase 2 sync/recovery control is
+the command does not apply changes. General architecture graph execution remains
 fixture-only, even though its API persistence and recovery/rollback evidence
-can be stored in Postgres. No public sync-run route, live adapter, target
-apply, rollback, package installation, or target filesystem writer is
-available. Each bounded run allows at most 500 steps and 2,004 append-only
+can be stored in Postgres. The separate Codex workspace and managed skill
+operation commands below support one explicit filesystem installation path.
+Each bounded architecture fixture run allows at most 500 steps and 2,004 append-only
 receipts: a 1,002-receipt max-step lifecycle, one full apply/verify retry, and
 two recovery/terminal receipts. Further retries require a new bounded run.
 
@@ -160,31 +167,103 @@ not expose a second policy implementation or write command for them.
 
 ## Published And Candidate Channels
 
-The currently published package remains available under npm's `alpha` tag:
+The published beta channel is installed with:
 
 ```bash
-npm install -g @jarel/myskills@alpha
+npm install -g @jarel/myskills@beta
 myskills --version
 myskills login
 ```
 
-Update the CLI with:
+At the start of beta.5 delivery, npm's beta tag points to beta.4. Do not assume
+it includes these candidate commands. From this repository, build and run the
+candidate without publishing:
 
 ```bash
-npm install -g @jarel/myskills@alpha
+npm ci
+npm run build
+node apps/cli/dist/index.js --version
+node apps/cli/dist/index.js login
+npm pack -w @jarel/myskills
 ```
 
-The `0.1.0-beta.4` source manifest is configured for the `beta` dist-tag. The release-verification workflow packs and installs the candidate without publishing it.
+Use the resulting tarball for a fresh isolated installation, or run the bundle
+directly. The release gate verifies the packed executable and Apache license.
+Public npm publication is a separate release step.
 
 `validate`, `scan`, and `submit` accept a manifest file, package directory, or local `.zip` package. `login` prompts for the API URL when one is not supplied; the default is the local API at `http://localhost:3001`, and custom hosted URLs can be entered manually. Successful login stores the selected API URL in local CLI config so later commands can omit `--api-url`. API URL resolution is `--api-url`, then `MYSKILLS_API_URL`, then saved config, then `http://localhost:3001`.
 
-`login` supports an email/password session flow and an API-key flow. The email/password flow handles MFA challenges with a TOTP or recovery code prompt and stores only the verified session token. The API-key flow validates the key with `/v1/me` before storing it. Token resolution is `--token`, then `MYSKILLS_TOKEN`, then the stored login token. The default token store uses the platform credential store through `@napi-rs/keyring` and falls back to `tokens.json` with user-only file permissions when keyring storage is unavailable or `MYSKILLS_TOKEN_STORE=file`/`MYSKILLS_TOKEN_FILE` is set. `auth status` validates the current token without printing it. `logout` revokes stored session tokens and clears the local entry; stored API tokens are removed locally and must be revoked with `token revoke`.
+`login` supports an email/password session flow and an API-key flow. Password
+login handles MFA challenges and stores the verified session token. API-key
+login validates the key with `/v1/me`. Token resolution is `--token`, then
+`MYSKILLS_TOKEN`, then the stored token. The default store uses the platform
+credential store through `@napi-rs/keyring`. Credential-store failures are
+reported; a failed write does not silently store the credential in a file.
+An existing legacy file credential can be read when the keyring entry is
+confirmed absent. Explicit `MYSKILLS_TOKEN_STORE=file` or `MYSKILLS_TOKEN_FILE`
+selects file storage with user-only permissions. A successful keyring write
+clears the obsolete file entry.
+
+`auth status` validates the token without printing it. `logout` revokes stored
+sessions and clears local credentials. If a malformed keyring entry prevents
+revocation, logout attempts local deletion and reports that remote revocation
+is unconfirmed. It reports deletion failures. Stored API tokens are removed
+locally and must be revoked with `token revoke`. Malformed file-store JSON
+requires repair or removal of that file; other stored accounts are not silently
+discarded.
 
 `config get api-url`, `config set api-url <url>`, `config reset api-url`, and `config list` manage the saved API URL. `doctor` checks the CLI version, Node version, resolved API URL, `/health`, auth status, token-store backend, install-directory writability, and `/v1/capabilities`. If the CLI is pointed at the web app instead of the API, or a newer command is sent to an older server, command errors include concrete next steps and `--json` returns structured error codes.
 
-`submit` validates and scans locally before sending package directories as normalized text entries or `.zip` packages as base64 archive uploads for server-side extraction. Authors can inspect their submitted versions with `submissions list` and withdraw unreviewed or changes-requested submissions with `submissions withdraw`. Maintainers can fetch the reviewed artifact and approval hash with `review bundle`, then approve, request changes, reject, and publish submitted versions through `review action`.
+`validate`, `scan`, and `submit` read one bounded snapshot of the local package.
+`submit` sends those same validated and scanned text entries for directory and
+ZIP inputs. Authors can inspect and withdraw submissions; maintainers fetch the
+reviewed artifact and approval hash before approving, requesting changes,
+rejecting, or publishing it. The browser shows review reasons and scan findings.
+Corrections create another immutable version.
 
-Published artifacts remain immutable. `skills edit` changes mutable skill metadata only, while `releases deprecate`, `releases unpublish`, `releases revoke`, `releases restore`, and `releases delete` update server-owned lifecycle state for a specific version. Deprecated releases remain visible and installable; unpublished, revoked, archived, and deleted releases are hidden from install/export queries. `export` downloads server-authorized bundle content, verifies byte size and SHA-256 against release metadata, and writes normalized package paths under the requested output directory. `install` uses the same verified bundle path, writes into `--dir`, `MYSKILLS_INSTALL_DIR`, or the user data directory, and records local state in `.myskills-app/installed.json`; `update` preserves a rollback snapshot before replacing files, and `rollback` restores the most recent snapshot. `token create` prints the plaintext API token only once and does not overwrite the stored login session. Browser/device login, platform-specific install adapters, and archive creation are still planned.
+Published artifacts remain immutable. `skills edit` changes metadata;
+`releases deprecate`, `unpublish`, `revoke`, `restore`, and `delete` change
+server-owned lifecycle state. Deprecated releases remain installable. Hidden,
+revoked, archived, or deleted releases cannot be installed or exported.
+`export` verifies artifact size and SHA-256 before writing normalized paths.
+
+`install`, `update`, and `rollback` share an exclusive install-root lock and
+verify package bytes and current eligibility before promotion. Updates retain
+a verified rollback snapshot. Interrupted transactions preserve unknown or
+edited local bytes for investigation. Each installation binds the API origin
+and registry instance ID. Legacy records without that identity are not adopted
+automatically: keep their files as a backup, review the source, and install into
+a new root. A registry change requires a separate root.
+
+Local package intake, install, export, and rollback support macOS and Linux.
+No-follow payload reads and writes, private staging directories, and drift
+checks protect these operations. They do not isolate the workspace from a
+hostile process already running as the same OS user. Other operating systems
+can use the API's portable buffer upload path; native Windows filesystem
+installation is unsupported.
+
+### Personal Codex workspace
+
+Create a personal architecture in the browser and note its architecture,
+environment, and profile IDs. Enable MFA and sign in with a password session.
+Enroll an existing absolute workspace directory using the command above.
+Enrollment creates a user-owned target, grants consent, and stores a local
+binding. A fresh workspace cannot attach to an existing target ID; that option
+only confirms or resumes its existing local binding.
+
+Use `--workspace` for all managed writes. Skills are installed under
+`.agents/skills`, and records stay under `.myskills-app` in that workspace.
+The CLI checks Codex compatibility and valid `SKILL.md` YAML frontmatter with a
+matching name and text description. `--dir` cannot bypass an enrolled workspace's
+binding. Team-shared skills can be installed when your account can read them;
+team-owned execution targets are outside this adapter's beta scope.
+
+`codex observe --upload` records verified filesystem state. Confirm separately
+that Codex loaded the skill. To process one browser-queued update, supply a
+separate token with `skills:read` and `targets:execute` through `MYSKILLS_TOKEN`
+and run `companion run-once`. This command checks current authorization, consent,
+policy, lease, and exact release identity. It does not start a background daemon.
+Browser/device login and additional provider install adapters remain planned.
 
 To change skill visibility, use the canonical `myskills sharing set
 <skill-slug> --visibility <scope>` command. It accepts either

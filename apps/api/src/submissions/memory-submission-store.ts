@@ -34,15 +34,21 @@ import type {
   SubmissionStore,
   UserSubmissionBundle,
   UserSubmissionSummary,
+  UserSubmissionDetail,
+  ReviewSubmissionDetail,
+  SubmissionFeedback,
+  ManagedSkillFilters,
 } from "./types.js";
 import { assertNoVisibilityMetadataUpdate } from "./types.js";
 import { artifactPayloadSha256 } from "./artifact-hash.js";
+import { submissionReviewHistory } from "./feedback.js";
 
 interface AuditRecord {
   action: string;
   decision: "allow" | "deny";
   actorId?: string | null;
   details: Record<string, unknown>;
+  createdAt: string;
 }
 
 interface MemoryOrganization {
@@ -118,6 +124,7 @@ export class MemorySubmissionStore implements SubmissionStore {
   private userGrants = new Set<string>();
   private denied = 0;
   private audit: AuditRecord[] = [];
+  private tags = new Map<string, string[]>();
 
   constructor(options: MemorySubmissionStoreOptions = {}) {
     this.sharingSettings = normalizeSharingSettings(options.sharingSettings);
@@ -276,6 +283,10 @@ export class MemorySubmissionStore implements SubmissionStore {
     securityStatus: StoredSubmission["securityStatus"];
   }): Promise<StoredSubmission> {
     const key = `${input.manifest.name}@${input.manifest.version}`;
+    const existing = this.findSubmissionsBySlug(input.manifest.name)[0];
+    if (existing && existing.ownerUserId !== input.actor.id) {
+      throw new AppError("Package slug is unavailable.", "PACKAGE_SLUG_UNAVAILABLE", 409);
+    }
     if (this.submissions.has(key)) {
       throw new AppError("Package version already exists.", "PACKAGE_VERSION_EXISTS", 409);
     }
@@ -309,6 +320,7 @@ export class MemorySubmissionStore implements SubmissionStore {
       },
     };
     this.submissions.set(key, submission);
+    this.tags.set(input.manifest.name, [...new Set([...(this.tags.get(input.manifest.name) ?? []), ...input.manifest.tags])].sort());
     this.skillLifecycle.set(
       submission.skillSlug,
       this.skillLifecycle.get(submission.skillSlug) === "approved" ? "approved" : "submitted",
@@ -321,6 +333,28 @@ export class MemorySubmissionStore implements SubmissionStore {
       .filter((submission) => submission.ownerUserId === userId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map(userSubmissionSummary);
+  }
+
+  async getUserSubmissionDetail(input: { userId: string; submissionId: string }): Promise<UserSubmissionDetail | null> {
+    const submission = this.findSubmission(input.submissionId);
+    if (!submission || submission.ownerUserId !== input.userId) return null;
+    return {
+      ...userSubmissionSummary(submission),
+      ...this.submissionFeedback(submission),
+      correction: {
+        requiresNewVersion: true,
+        canSubmitNewVersion: true,
+      },
+    };
+  }
+
+  async getReviewSubmissionDetail(submissionId: string): Promise<ReviewSubmissionDetail | null> {
+    const submission = this.findSubmission(submissionId);
+    if (!submission) return null;
+    return {
+      ...reviewSubmissionSummary(submission, this.skillLifecycle.get(submission.skillSlug)),
+      ...this.submissionFeedback(submission),
+    };
   }
 
   async getUserSubmissionBundle(input: { userId: string; submissionId: string; platform?: string }): Promise<UserSubmissionBundle | null> {
@@ -611,7 +645,19 @@ export class MemorySubmissionStore implements SubmissionStore {
       return null;
     }
     assertCanManageSkill(first, input.actor);
-    return skillManagementSummary(submissions, this.skillLifecycle.get(input.slug));
+    return skillManagementSummary(submissions, this.skillLifecycle.get(input.slug), this.tags.get(input.slug));
+  }
+
+  async listManagedSkills(input: ManagedSkillFilters): Promise<SkillManagementSummary[]> {
+    const query = input.query?.trim().toLowerCase() ?? "";
+    const slugs = [...new Set([...this.submissions.values()]
+      .filter((submission) => canManageSkill(submission, input.actor))
+      .map((submission) => submission.skillSlug))].sort();
+    return slugs
+      .filter((slug) => !input.afterSlug || slug > input.afterSlug)
+      .map((slug) => skillManagementSummary(this.findSubmissionsBySlug(slug), this.skillLifecycle.get(slug), this.tags.get(slug)))
+      .filter((skill) => !query || [skill.slug, skill.title, skill.summary].some((value) => value.toLowerCase().includes(query)))
+      .slice(0, input.limit ?? 50);
   }
 
   async updateSkillMetadata(input: { slug: string; actor: SubmissionActor; update: SkillMetadataUpdate; reason?: string }): Promise<SkillManagementSummary> {
@@ -622,6 +668,7 @@ export class MemorySubmissionStore implements SubmissionStore {
       throw new AppError("Skill not found.", "SKILL_NOT_FOUND", 404);
     }
     assertCanManageSkill(first, input.actor);
+    if (input.update.tags !== undefined) this.tags.set(input.slug, [...new Set(input.update.tags)].sort());
     for (const submission of submissions) {
       if (input.update.title !== undefined) {
         submission.title = input.update.title;
@@ -635,7 +682,7 @@ export class MemorySubmissionStore implements SubmissionStore {
       fields: Object.keys(input.update),
       reason: input.reason,
     });
-    return skillManagementSummary(submissions, this.skillLifecycle.get(input.slug));
+    return skillManagementSummary(submissions, this.skillLifecycle.get(input.slug), this.tags.get(input.slug));
   }
 
   async performSkillAction(input: { slug: string; actor: SubmissionActor; action: SkillLifecycleAction; reason?: string }): Promise<SkillManagementSummary> {
@@ -655,7 +702,7 @@ export class MemorySubmissionStore implements SubmissionStore {
       reason: input.reason,
     });
     return {
-      ...skillManagementSummary(submissions, lifecycleStatus),
+      ...skillManagementSummary(submissions, lifecycleStatus, this.tags.get(input.slug)),
       lifecycleStatus,
     };
   }
@@ -670,7 +717,10 @@ export class MemorySubmissionStore implements SubmissionStore {
     return submissions
       .filter((submission) => canManage || this.isVisibleReleaseForActor(submission, input.actor?.id ?? null, skillLifecycle))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map((submission) => releaseSummary(submission, input.actor ?? null));
+      .map((submission) => ({
+        ...releaseSummary(submission, input.actor ?? null),
+        ...(canManage ? {} : { allowedActions: [] }),
+      }));
   }
 
   async performReleaseAction(input: { slug: string; version: string; actor: SubmissionActor; action: ReleaseLifecycleAction; reason?: string; replacement?: string }): Promise<SkillReleaseSummary> {
@@ -905,7 +955,27 @@ export class MemorySubmissionStore implements SubmissionStore {
   }
 
   private recordAudit(action: string, decision: "allow" | "deny", actorId: string | null | undefined, details: Record<string, unknown>): void {
-    this.audit.push({ action, decision, actorId, details: sanitizeAuditDetails(details) });
+    this.audit.push({ action, decision, actorId, details: sanitizeAuditDetails(details), createdAt: new Date().toISOString() });
+  }
+
+  private submissionFeedback(submission: StoredSubmission): SubmissionFeedback {
+    const reviewHistory = submissionReviewHistory(this.audit.filter((event) => (
+      event.decision === "allow" && event.details.submissionId === submission.id
+    )));
+    return {
+      changeRequestReason: submission.reviewStatus === "changes-requested"
+        ? [...reviewHistory].reverse().find((event) => event.action === "request-changes")?.reason ?? null
+        : null,
+      reviewHistory,
+      scanRuns: [{
+        id: `${submission.id}:scan`,
+        status: submission.scan.status,
+        createdAt: submission.createdAt,
+        startedAt: submission.createdAt,
+        completedAt: submission.createdAt,
+        findings: submission.scan.findings.map((finding) => ({ ...finding })),
+      }],
+    };
   }
 }
 
@@ -919,7 +989,7 @@ function assertCanManageSkill(submission: StoredSubmission, actor: SubmissionAct
   }
 }
 
-function skillManagementSummary(submissions: StoredSubmission[], lifecycleStatus?: SkillLifecycleStatus): SkillManagementSummary {
+function skillManagementSummary(submissions: StoredSubmission[], lifecycleStatus?: SkillLifecycleStatus, tags: string[] = []): SkillManagementSummary {
   const latest = [...submissions].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   if (!latest) {
     throw new AppError("Skill not found.", "SKILL_NOT_FOUND", 404);
@@ -930,7 +1000,7 @@ function skillManagementSummary(submissions: StoredSubmission[], lifecycleStatus
     summary: latest.summary,
     lifecycleStatus: lifecycleStatus ?? restoredSkillLifecycle(submissions),
     visibility: latest.visibility,
-    tags: [],
+    tags: [...tags],
     allowedActions: ["edit", "archive", "restore", "delete"],
   };
 }

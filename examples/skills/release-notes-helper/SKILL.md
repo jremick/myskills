@@ -1,3 +1,8 @@
+---
+name: release-notes-helper
+description: Draft release notes from a reviewed list of merged changes, issue summaries, or maintainer notes.
+---
+
 # Release Notes Helper
 
 Use this skill when asked to draft release notes from a reviewed list of merged changes, issue summaries, or maintainer notes.

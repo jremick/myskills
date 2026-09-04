@@ -1,9 +1,13 @@
 # Railway Deployment
 
-Version: 0.1.0-beta.4
-Last updated: 2026-08-30
+Version: 0.1.0-beta.5
+Last updated: 2026-09-05
 
-This is the maintained deployment runbook for the owner-controlled public beta at `myskills.sh`. Live Railway readback on 2026-07-13 showed beta.2 commit `b69dd5e`: API deployment `ef995431-ae75-461b-b05c-b1a486cc03c9` and web deployment `97ae81a3-dcf9-42b1-b120-9b62d2cd9b79`. Re-check deployment IDs and commit IDs before making a current-state claim.
+This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.
+The operational beta candidate is tracked in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
+The baseline readback on 5 September 2026 found production reporting beta.2, with
+API and web deployments created on 30 August. Deployment metadata did not identify
+an exact source revision. A document version is not a deployed-version claim.
 
 ## Railway Project
 
@@ -27,20 +31,47 @@ The optional HTTP MCP service is not part of the maintained live beta service se
 
 ## Live Production Readback
 
-As of the 2026-07-13 readback:
+At the 5 September 2026 baseline:
 
 - The API service uses `/ready` with a 300-second deployment timeout; the web service uses `/health` with the same timeout.
-- The API used `TRUST_PROXY=1` at this readback. Fastify 5.12.1 later disabled numeric hop-count trust; migrate this value to the address-aware setting below before deploying that upgrade.
-- API and web run the same approved beta.2 release commit and report successful deployment status.
-- A locked manual Postgres volume backup named `pre-v0.1.0-beta.2-2026-07-13` is the database rollback point for this promotion.
+- Production uses an address-aware `TRUST_PROXY` setting. Staging still needed migration from a numeric hop count before the candidate deploy.
+- Production API deployment: `5a7470b5-d13d-412f-afec-9cb001bfc45f`; web: `18f6388a-7aa0-459f-8a6e-9e6b19ca08d2`.
+- Existing backups included a locked `pre-architecture-mve-2026-08-30` snapshot. Capture a current recovery point before promotion; a historical snapshot is not current recovery evidence.
 
-The previous beta.1 API deployment `accf248a-6a1d-432d-b3cd-710430fb9c75` and web deployment `ba82d0c3-629b-480e-b436-fa4054b0866e` remain redeployable application rollback targets. Database migrations are forward-only unless the explicit backup-restore path and accepted data-loss boundary are approved.
+Keep previous deployment IDs for incident investigation. A Railway redeploy
+button does not prove that an old application can safely use the current schema
+and artifacts. Prefer a tested fix-forward candidate. Before reverting an
+application, test that exact application against a copy of the migrated database,
+drain incompatible writers and cleanup workers, and verify its required flows.
+Database migrations are forward-only; a production restore requires an explicit
+recovery point and accepted data-loss boundary. Never use production as a restore
+rehearsal destination.
 
 ## Domains
 
 - `myskills.sh` -> `web`
 - `www.myskills.sh` -> `web`
 - `api.myskills.sh` -> `api`
+
+The existing `beta2-staging` environment uses
+`web-beta2-staging.up.railway.app` and `api-beta2-staging.up.railway.app`.
+Its database, artifact bucket, credentials, and auth secret must remain separate
+from production. Keep its private Mailpit capture service off public ingress.
+
+## Deployed Source Identity
+
+Set the non-secret build variable `MYSKILLS_BUILD_REVISION` to the complete
+40-character source commit SHA on API and web before uploading a clean checkout.
+Use the same source for both deployments. The Docker builds embed the revision
+and package version in `/version.json`; the API also serves it through the web
+proxy at `/api/version.json`. These responses use `Cache-Control: no-store`.
+Changing a runtime variable alone does not change the embedded revision.
+
+Compare all three responses with the approved commit before calling a deployment
+verified. A null revision means an unidentified local build and cannot pass live
+promotion. `/v1/capabilities` also exposes `instanceId`, a stable database-owned
+registry identity used by the CLI to prevent accidental cross-registry updates.
+Preserve it when restoring the same registry; it is independent of build revision.
 
 The web build must receive `VITE_API_BASE_URL=/api` so browser auth and registry requests stay same-origin on `myskills.sh`.
 The web runtime must receive `API_PROXY_TARGET=https://api.myskills.sh` so nginx forwards `/api/*` to the API service without requiring the user's browser DNS cache to resolve `api.myskills.sh`.

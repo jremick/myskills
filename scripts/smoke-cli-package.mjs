@@ -12,7 +12,7 @@ const temporaryRoot = await mkdtemp(join(tmpdir(), "myskills-cli-pack-"));
 const packRoot = join(temporaryRoot, "pack");
 const installRoot = join(temporaryRoot, "install");
 const copiedExample = join(installRoot, "release-notes-helper");
-const expectedFiles = ["README.md", "dist/index.js", "package.json"];
+const expectedFiles = ["LICENSE", "README.md", "dist/index.js", "package.json"];
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 
 try {
@@ -35,6 +35,10 @@ try {
   await cp(exampleRoot, copiedExample, { recursive: true, errorOnExist: true });
 
   run(npm, ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--package-lock=false", tarball], { cwd: installRoot });
+  const installedLicense = await readFile(join(installRoot, "node_modules", "@jarel", "myskills", "LICENSE"), "utf8");
+  if (installedLicense !== await readFile(join(root, "LICENSE"), "utf8")) {
+    fail("Freshly installed CLI does not include the current project license.");
+  }
   const executable = join(installRoot, "node_modules", ".bin", process.platform === "win32" ? "myskills.cmd" : "myskills");
   const version = run(executable, ["--version"], { capture: true }).stdout.trim();
   if (version !== cliPackage.version) {

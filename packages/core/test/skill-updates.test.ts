@@ -6,6 +6,7 @@ import {
   isPrereleaseVersion,
   parseSemanticVersion,
   parseSkillReleaseMetadata,
+  skillReleaseUpdateBlockers,
   type SkillReleaseUpdateCandidate,
 } from "../src/index.js";
 
@@ -99,6 +100,15 @@ test("update evaluation fails closed for prerelease and compatibility requiremen
     "minimum-myskills-version",
     "prerelease-not-selected",
   ]);
+});
+
+test("explicit rollback eligibility still checks the destination compatibility", () => {
+  const destination = release("1.0.0", { minimumMyskillsVersion: "2.0.0", minimumAdapterContractVersion: 3 });
+  assert.deepEqual(skillReleaseUpdateBlockers(destination, {
+    installed: { version: "1.1.0", platform: "codex" },
+    releases: [destination],
+    client: { myskillsVersion: "1.0.0", adapterContractVersion: 2 },
+  }).sort(), ["minimum-adapter-contract-version", "minimum-myskills-version"]);
 });
 
 test("update evaluation reports pins, drift, and installed-newer state", () => {

@@ -31,8 +31,11 @@ import type {
   SkillReleaseSummary,
   UserSubmissionBundle,
   UserSubmissionSummary,
+  UserSubmissionDetail,
+  ReviewSubmissionDetail,
 } from "./types.js";
 import { artifactPayloadSha256 } from "./artifact-hash.js";
+import { skillPagePosition, skillPageResult, type SkillPageFilters, type SkillPage } from "../repositories/skill-pagination.js";
 
 const PACKAGE_CONTENT_TYPE = "application/vnd.myskills-app.package+json";
 
@@ -119,6 +122,25 @@ export class SubmissionService {
     return this.store.listUserSubmissions(actor.id);
   }
 
+  async getUserSubmissionDetail(input: { actor: SubmissionActor; submissionId: string }): Promise<UserSubmissionDetail | null> {
+    const detail = await this.store.getUserSubmissionDetail({ userId: input.actor.id, submissionId: input.submissionId });
+    if (detail) detail.correction.canSubmitNewVersion &&= canSubmit(input.actor.roles);
+    return detail;
+  }
+
+  async getReviewSubmissionDetail(input: { actor: SubmissionActor; submissionId: string }): Promise<ReviewSubmissionDetail | null> {
+    if (!canReview(input.actor.roles)) {
+      await this.store.recordReviewDenied({
+        actorId: input.actor.id,
+        action: "review.submission.detail",
+        submissionId: input.submissionId,
+        reason: "review_role_required",
+      });
+      throw new AppError("Review requires maintainer permissions.", "REVIEW_ROLE_REQUIRED", 403);
+    }
+    return this.store.getReviewSubmissionDetail(input.submissionId);
+  }
+
   async performSubmissionOwnerAction(input: {
     actor: SubmissionActor;
     submissionId: string;
@@ -202,6 +224,17 @@ export class SubmissionService {
 
   async getSkillManagement(input: { actor: SubmissionActor; slug: string }): Promise<SkillManagementSummary | null> {
     return this.store.getSkillManagement(input);
+  }
+
+  async listManagedSkills(input: SkillPageFilters & { actor: SubmissionActor }): Promise<SkillPage<SkillManagementSummary>> {
+    const position = skillPagePosition(input, `managed:${input.actor.id}`);
+    const rows = await this.store.listManagedSkills({
+      actor: input.actor,
+      query: position.query,
+      afterSlug: position.afterSlug,
+      limit: position.limit + 1,
+    });
+    return skillPageResult(rows, position);
   }
 
   async updateSkillMetadata(input: {

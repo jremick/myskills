@@ -131,6 +131,36 @@ export interface UserSubmissionSummary {
   allowedActions: Array<"export" | SubmissionOwnerAction>;
 }
 
+export interface SubmissionFeedback {
+  changeRequestReason: string | null;
+  reviewHistory: Array<{
+    action: ReviewAction;
+    reason: string | null;
+    createdAt: string;
+  }>;
+  scanRuns: Array<{
+    id: string;
+    status: "queued" | "running" | "succeeded" | "failed";
+    createdAt: string;
+    startedAt: string | null;
+    completedAt: string | null;
+    findings: ScanFinding[];
+  }>;
+}
+
+export interface UserSubmissionDetail extends UserSubmissionSummary, SubmissionFeedback {
+  correction: { requiresNewVersion: true; canSubmitNewVersion: boolean };
+}
+
+export interface ReviewSubmissionDetail extends ReviewSubmissionSummary, SubmissionFeedback {}
+
+export interface ManagedSkillFilters {
+  actor: SubmissionActor;
+  query?: string;
+  afterSlug?: string;
+  limit?: number;
+}
+
 export interface PublicReleaseMetadata {
   slug: string;
   title: string;
@@ -209,15 +239,18 @@ export interface SubmissionStore {
     securityStatus: SecurityStatus;
   }): Promise<StoredSubmission>;
   listUserSubmissions(userId: string): Promise<UserSubmissionSummary[]>;
+  getUserSubmissionDetail(input: { userId: string; submissionId: string }): Promise<UserSubmissionDetail | null>;
   getUserSubmissionBundle(input: { userId: string; submissionId: string; platform?: string }): Promise<UserSubmissionBundle | null>;
   performSubmissionOwnerAction(input: { actorId: string; submissionId: string; action: SubmissionOwnerAction; reason?: string }): Promise<UserSubmissionSummary>;
   listReviewSubmissions(): Promise<ReviewSubmissionSummary[]>;
+  getReviewSubmissionDetail(submissionId: string): Promise<ReviewSubmissionDetail | null>;
   getReviewSubmissionBundle(input: { submissionId: string; platform?: string }): Promise<ReviewSubmissionBundle | null>;
   approveSubmission(input: { actorId: string; submissionId: string; artifactSha256: string; reason?: string }): Promise<ReviewActionResult>;
   requestChanges(input: { actorId: string; submissionId: string; reason?: string }): Promise<ReviewActionResult>;
   rejectSubmission(input: { actorId: string; submissionId: string; reason?: string }): Promise<ReviewActionResult>;
   publishSubmission(input: { actorId: string; submissionId: string; reason?: string }): Promise<ReviewActionResult>;
   getSkillManagement(input: { slug: string; actor: SubmissionActor }): Promise<SkillManagementSummary | null>;
+  listManagedSkills(input: ManagedSkillFilters): Promise<SkillManagementSummary[]>;
   updateSkillMetadata(input: { slug: string; actor: SubmissionActor; update: SkillMetadataUpdate; reason?: string }): Promise<SkillManagementSummary>;
   performSkillAction(input: { slug: string; actor: SubmissionActor; action: SkillLifecycleAction; reason?: string }): Promise<SkillManagementSummary>;
   listSkillReleases(input: { slug: string; actor?: SubmissionActor | null }): Promise<SkillReleaseSummary[]>;

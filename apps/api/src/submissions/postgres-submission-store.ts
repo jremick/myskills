@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, ilike, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { AppError, type SharingSettings, type SkillLifecycleStatus } from "@myskills-app/core";
 import {
   loadSkillManifestFromPackageFiles,
@@ -8,6 +8,7 @@ import { assertArtifactBodyMatchesMetadata, parseArtifactPayload, readArtifactPa
 import { sanitizeAuditDetails, sanitizeAuditValue } from "../audit/sanitize.js";
 import type { Database } from "../db/client.js";
 import type { ArtifactObjectStorage } from "../artifacts/storage.js";
+import { ArtifactStorageTimeoutError } from "../artifacts/storage.js";
 import {
   auditEvents,
   artifactWriteIntents,
@@ -46,9 +47,14 @@ import type {
   SubmissionStore,
   UserSubmissionBundle,
   UserSubmissionSummary,
+  UserSubmissionDetail,
+  ReviewSubmissionDetail,
+  SubmissionFeedback,
+  ManagedSkillFilters,
 } from "./types.js";
 import { assertNoVisibilityMetadataUpdate } from "./types.js";
 import { artifactPayloadSha256 } from "./artifact-hash.js";
+import { reviewHistoryActions, submissionReviewHistory } from "./feedback.js";
 
 const DEFAULT_SHARING_SETTINGS: SharingSettings = {
   publicVisibilityEnabled: true,
@@ -71,9 +77,23 @@ export class PostgresSubmissionStore implements SubmissionStore {
     findings: StoredSubmission["scan"]["findings"];
     securityStatus: StoredSubmission["securityStatus"];
   }): Promise<StoredSubmission> {
-    const recoveryTracked = await this.prepareArtifactWrite(input.artifact);
+    const recoveryTracked = await this.reserveArtifactWrite(input.artifact);
     try {
       const submission: StoredSubmission = await this.db.transaction(async (tx) => {
+      if (recoveryTracked) {
+        // The durable row survives a failed publication, while its transaction
+        // lock excludes cleanup from the first object write through commit.
+        const [intent] = await tx.select({ storageKey: artifactWriteIntents.storageKey })
+          .from(artifactWriteIntents)
+          .where(eq(artifactWriteIntents.storageKey, input.artifact.storageKey))
+          .for("update");
+        if (!intent) {
+          throw new AppError("Artifact write reservation expired. Retry the submission.", "ARTIFACT_WRITE_RESERVATION_EXPIRED", 409);
+        }
+        await this.writeArtifactObject(input.artifact);
+        await tx.update(artifactWriteIntents).set({ state: "object_written", updatedAt: new Date() })
+          .where(eq(artifactWriteIntents.storageKey, input.artifact.storageKey));
+      }
       const sharing = await getSharingSettings(tx);
       if (input.manifest.visibility === "organization" && !sharing.organizationVisibilityEnabled) {
         throw new AppError("Organization sharing is disabled for this instance.", "ORGANIZATION_SHARING_DISABLED", 403);
@@ -202,6 +222,10 @@ export class PostgresSubmissionStore implements SubmissionStore {
         },
       });
 
+      if (recoveryTracked) {
+        await tx.delete(artifactWriteIntents).where(eq(artifactWriteIntents.storageKey, input.artifact.storageKey));
+      }
+
       return {
         id: version.id,
         skillSlug: skill.slug,
@@ -229,13 +253,6 @@ export class PostgresSubmissionStore implements SubmissionStore {
         },
       };
       });
-      if (recoveryTracked) {
-        try {
-          await this.db.delete(artifactWriteIntents).where(eq(artifactWriteIntents.storageKey, input.artifact.storageKey));
-        } catch {
-          // The durable intent is safe to leave for startup reconciliation after the DB commit.
-        }
-      }
       return submission;
     } catch (error) {
       if (recoveryTracked) {
@@ -265,26 +282,9 @@ export class PostgresSubmissionStore implements SubmissionStore {
     let recovered = 0;
     let retained = 0;
     for (const intent of rows) {
-      const [referenced] = await this.db
-        .select({ id: skillArtifacts.id })
-        .from(skillArtifacts)
-        .where(eq(skillArtifacts.storageKey, intent.storageKey))
-        .limit(1);
-      try {
-        if (!referenced) {
-          await this.options.artifactStorage.deleteObject(intent.storageKey);
-        }
-        await this.db.delete(artifactWriteIntents).where(eq(artifactWriteIntents.storageKey, intent.storageKey));
-        recovered += 1;
-      } catch {
-        retained += 1;
-        await this.db.update(artifactWriteIntents).set({
-          state: "object_written",
-          attempts: sql`${artifactWriteIntents.attempts} + 1`,
-          lastError: "artifact_delete_failed",
-          updatedAt: new Date(),
-        }).where(eq(artifactWriteIntents.storageKey, intent.storageKey));
-      }
+      const result = await this.cleanupArtifactWrite(intent.storageKey, { staleBefore, skipLocked: true });
+      if (result === "recovered") recovered += 1;
+      else retained += 1;
     }
     return { recovered, retained };
   }
@@ -292,6 +292,39 @@ export class PostgresSubmissionStore implements SubmissionStore {
   async listUserSubmissions(userId: string): Promise<UserSubmissionSummary[]> {
     const rows = await selectUserSubmissions(this.db, userId);
     return rows.map(userSubmissionSummary);
+  }
+
+  async getUserSubmissionDetail(input: { userId: string; submissionId: string }): Promise<UserSubmissionDetail | null> {
+    if (!isUuid(input.submissionId)) return null;
+    const [row] = await selectUserSubmissions(this.db, input.userId, input.submissionId);
+    if (!row) return null;
+    return {
+      ...userSubmissionSummary(row),
+      ...await selectSubmissionFeedback(this.db, row.id, row.reviewStatus, row.lifecycleReason),
+      correction: { requiresNewVersion: true, canSubmitNewVersion: true },
+    };
+  }
+
+  async getReviewSubmissionDetail(submissionId: string): Promise<ReviewSubmissionDetail | null> {
+    if (!isUuid(submissionId)) return null;
+    const row = await selectVersionForReview(this.db, submissionId);
+    if (!row) return null;
+    return {
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      version: row.version,
+      visibility: row.visibility,
+      lifecycleStatus: row.lifecycleStatus,
+      reviewStatus: row.reviewStatus,
+      securityStatus: row.securityStatus,
+      approvedArtifactSha256: row.approvedArtifactSha256,
+      platforms: row.platforms,
+      findingCount: row.findingCount,
+      createdAt: row.createdAt.toISOString(),
+      allowedActions: reviewAllowedActions(row),
+      ...await selectSubmissionFeedback(this.db, row.id, row.reviewStatus, row.lifecycleReason),
+    };
   }
 
   async getUserSubmissionBundle(input: { userId: string; submissionId: string; platform?: string }): Promise<UserSubmissionBundle | null> {
@@ -823,6 +856,25 @@ export class PostgresSubmissionStore implements SubmissionStore {
     return skillManagementSummary(this.db, skill);
   }
 
+  async listManagedSkills(input: ManagedSkillFilters): Promise<SkillManagementSummary[]> {
+    const query = input.query?.trim() ?? "";
+    const pattern = `%${query.replace(/[\\%_]/g, "\\$&")}%`;
+    const privileged = input.actor.roles.some((role) => role === "owner" || role === "admin" || role === "maintainer");
+    const rows = await this.db.select({
+      slug: skills.slug,
+      title: skills.title,
+      summary: skills.summary,
+      lifecycleStatus: skills.lifecycleStatus,
+      visibility: skills.visibility,
+      tags: sql<string[]>`array(select ${skillTags.tag} from ${skillTags} where ${skillTags.skillId} = ${skills.id} order by ${skillTags.tag})`,
+    }).from(skills).where(and(
+      privileged ? undefined : eq(skills.ownerUserId, input.actor.id),
+      input.afterSlug ? sql`${skills.slug} collate "C" > ${input.afterSlug}` : undefined,
+      query ? or(ilike(skills.slug, pattern), ilike(skills.title, pattern), ilike(skills.summary, pattern)) : undefined,
+    )).orderBy(sql`${skills.slug} collate "C"`).limit(input.limit ?? 50);
+    return rows.map((row) => ({ ...row, allowedActions: ["edit", "archive", "restore", "delete"] }));
+  }
+
   async updateSkillMetadata(input: { slug: string; actor: SubmissionActor; update: SkillMetadataUpdate; reason?: string }): Promise<SkillManagementSummary> {
     assertNoVisibilityMetadataUpdate(input.update);
     return this.db.transaction(async (tx) => {
@@ -919,7 +971,10 @@ export class PostgresSubmissionStore implements SubmissionStore {
             visibleToActorPredicate(input.actor?.id ?? null, sharing),
           ),
     });
-    return rows.map((row) => releaseSummary(row, input.actor ?? null));
+    return rows.map((row) => ({
+      ...releaseSummary(row, input.actor ?? null),
+      ...(canManage ? {} : { allowedActions: [] }),
+    }));
   }
 
   async performReleaseAction(input: { slug: string; version: string; actor: SubmissionActor; action: ReleaseLifecycleAction; reason?: string; replacement?: string }): Promise<SkillReleaseSummary> {
@@ -1252,62 +1307,68 @@ export class PostgresSubmissionStore implements SubmissionStore {
     });
   }
 
-  private async prepareArtifactWrite(artifact: StoredSubmission["artifact"]): Promise<boolean> {
+  private async reserveArtifactWrite(artifact: StoredSubmission["artifact"]): Promise<boolean> {
     if (!this.options.artifactStorage) {
       return false;
     }
     await this.db.insert(artifactWriteIntents).values({ storageKey: artifact.storageKey });
-    let putAttempted = false;
-    try {
-      putAttempted = true;
-      await this.writeArtifactObject(artifact);
-      await this.db.update(artifactWriteIntents).set({
-        state: "object_written",
-        updatedAt: new Date(),
-      }).where(eq(artifactWriteIntents.storageKey, artifact.storageKey));
-      return true;
-    } catch (error) {
-      if (putAttempted) {
-        try {
-          await this.options.artifactStorage.deleteObject(artifact.storageKey);
-        } catch (compensationError) {
-          try {
-            await this.db.update(artifactWriteIntents).set({
-              state: "object_written",
-              attempts: sql`${artifactWriteIntents.attempts} + 1`,
-              lastError: "artifact_delete_failed",
-              updatedAt: new Date(),
-            }).where(eq(artifactWriteIntents.storageKey, artifact.storageKey));
-          } catch {
-            // The original reserved intent remains durable for stale-intent reconciliation.
-          }
-          throw new AggregateError([error, compensationError], `Artifact write recovery is pending for ${artifact.storageKey}.`);
-        }
-      }
-      await this.db.delete(artifactWriteIntents).where(eq(artifactWriteIntents.storageKey, artifact.storageKey));
-      throw error;
-    }
+    return true;
   }
 
   private async compensateArtifactWrite(storageKey: string, originalError: unknown): Promise<void> {
     if (!this.options.artifactStorage) {
       return;
     }
+    if (originalError instanceof ArtifactStorageTimeoutError) {
+      // An aborted PUT may still finish at the object server. Keep its durable
+      // reservation for stale cleanup rather than erase recovery evidence now.
+      await this.db.update(artifactWriteIntents).set({ lastError: "artifact_write_timeout", updatedAt: new Date() })
+        .where(eq(artifactWriteIntents.storageKey, storageKey));
+      return;
+    }
     try {
-      await this.options.artifactStorage.deleteObject(storageKey);
-      await this.db.delete(artifactWriteIntents).where(eq(artifactWriteIntents.storageKey, storageKey));
+      if (await this.cleanupArtifactWrite(storageKey) === "retained") {
+        throw new Error("Artifact cleanup remains pending.");
+      }
     } catch (compensationError) {
-      await this.db.update(artifactWriteIntents).set({
-        state: "object_written",
-        attempts: sql`${artifactWriteIntents.attempts} + 1`,
-        lastError: "artifact_delete_failed",
-        updatedAt: new Date(),
-      }).where(eq(artifactWriteIntents.storageKey, storageKey));
       throw new AggregateError(
         [originalError, compensationError],
         `Submission failed and artifact recovery is pending for ${storageKey}.`,
       );
     }
+  }
+
+  private async cleanupArtifactWrite(
+    storageKey: string,
+    options: { staleBefore?: Date; skipLocked?: boolean } = {},
+  ): Promise<"recovered" | "retained"> {
+    const storage = this.options.artifactStorage;
+    if (!storage) return "recovered";
+    return this.db.transaction(async (tx) => {
+      const [intent] = await tx.select({ storageKey: artifactWriteIntents.storageKey })
+        .from(artifactWriteIntents).where(and(
+          eq(artifactWriteIntents.storageKey, storageKey),
+          options.staleBefore ? lt(artifactWriteIntents.updatedAt, options.staleBefore) : undefined,
+        )).for("update", options.skipLocked ? { skipLocked: true } : undefined);
+      if (!intent) return options.skipLocked ? "retained" : "recovered";
+      const [referenced] = await tx.select({ id: skillArtifacts.id }).from(skillArtifacts)
+        .where(eq(skillArtifacts.storageKey, storageKey)).limit(1);
+      if (!referenced) {
+        try {
+          await storage.deleteObject(storageKey);
+        } catch {
+          await tx.update(artifactWriteIntents).set({
+            state: "object_written",
+            attempts: sql`${artifactWriteIntents.attempts} + 1`,
+            lastError: "artifact_delete_failed",
+            updatedAt: new Date(),
+          }).where(eq(artifactWriteIntents.storageKey, storageKey));
+          return "retained";
+        }
+      }
+      await tx.delete(artifactWriteIntents).where(eq(artifactWriteIntents.storageKey, storageKey));
+      return "recovered";
+    });
   }
 }
 
@@ -1464,6 +1525,7 @@ async function selectUserSubmissions(db: DbLike, userId: string, submissionId?: 
       version: skillVersions.version,
       visibility: skills.visibility,
       lifecycleStatus: skillVersions.lifecycleStatus,
+      lifecycleReason: skillVersions.lifecycleReason,
       reviewStatus: skillVersions.reviewStatus,
       securityStatus: skillVersions.securityStatus,
       publishedAt: skillVersions.publishedAt,
@@ -1537,6 +1599,55 @@ async function selectUserSubmissionStateForUpdate(db: DbLike, userId: string, su
 
 type UserSubmissionRow = Awaited<ReturnType<typeof selectUserSubmissions>>[number];
 
+async function selectSubmissionFeedback(
+  db: DbLike,
+  submissionId: string,
+  reviewStatus: StoredSubmission["reviewStatus"],
+  lifecycleReason: string,
+): Promise<SubmissionFeedback> {
+  const [events, rows] = await Promise.all([
+    db.select({ action: auditEvents.action, details: auditEvents.details, createdAt: auditEvents.createdAt })
+      .from(auditEvents).where(and(
+        eq(auditEvents.resourceType, "skill_version"),
+        eq(auditEvents.resourceId, submissionId),
+        eq(auditEvents.decision, "allow"),
+        inArray(auditEvents.action, Object.keys(reviewHistoryActions)),
+      )).orderBy(auditEvents.createdAt, auditEvents.id),
+    db.select({
+      run: scanRuns,
+      finding: scanFindings,
+    }).from(scanRuns).leftJoin(scanFindings, eq(scanFindings.scanRunId, scanRuns.id))
+      .where(eq(scanRuns.skillVersionId, submissionId))
+      .orderBy(scanRuns.createdAt, scanRuns.id, scanFindings.createdAt, scanFindings.id),
+  ]);
+  const scans = new Map<string, SubmissionFeedback["scanRuns"][number]>();
+  for (const { run, finding } of rows) {
+    let scan = scans.get(run.id);
+    if (!scan) {
+      scan = {
+        id: run.id,
+        status: run.status,
+        createdAt: run.createdAt.toISOString(),
+        startedAt: run.startedAt?.toISOString() ?? null,
+        completedAt: run.completedAt?.toISOString() ?? null,
+        findings: [],
+      };
+      scans.set(run.id, scan);
+    }
+    if (finding) scan.findings.push({
+      category: finding.category as StoredSubmission["scan"]["findings"][number]["category"],
+      severity: finding.severity as StoredSubmission["scan"]["findings"][number]["severity"],
+      message: finding.message,
+      ...(finding.path ? { path: finding.path } : {}),
+    });
+  }
+  return {
+    changeRequestReason: reviewStatus === "changes-requested" ? lifecycleReason || null : null,
+    reviewHistory: submissionReviewHistory(events.map((event) => ({ ...event, createdAt: event.createdAt.toISOString() }))),
+    scanRuns: [...scans.values()],
+  };
+}
+
 function userSubmissionSummary(row: UserSubmissionRow): UserSubmissionSummary {
   return {
     id: row.id,
@@ -1565,7 +1676,7 @@ async function selectSkillReleaseRows(
   db: DbLike,
   input: { slug: string; where: SQL | undefined; limit?: number },
 ) {
-  return db
+  const query = db
     .select({
       id: skillVersions.id,
       slug: skills.slug,
@@ -1616,8 +1727,8 @@ async function selectSkillReleaseRows(
       skillArtifacts.byteSize,
       skillArtifacts.contentType,
     )
-    .orderBy(sql`${skillVersions.createdAt} desc`)
-    .limit(input.limit ?? 100);
+    .orderBy(sql`${skillVersions.createdAt} desc`, sql`${skillVersions.id} desc`);
+  return input.limit === undefined ? query : query.limit(input.limit);
 }
 
 async function selectSkillReleaseActionStateForUpdate(db: DbLike, input: { slug: string; version: string }) {
@@ -1846,6 +1957,7 @@ async function selectVersionForReview(db: DbLike, submissionId: string) {
       visibility: skills.visibility,
       skillLifecycleStatus: skills.lifecycleStatus,
       lifecycleStatus: skillVersions.lifecycleStatus,
+      lifecycleReason: skillVersions.lifecycleReason,
       reviewStatus: skillVersions.reviewStatus,
       securityStatus: skillVersions.securityStatus,
       approvedArtifactSha256: skillVersions.approvedArtifactSha256,

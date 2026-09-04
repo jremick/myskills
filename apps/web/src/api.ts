@@ -749,7 +749,30 @@ export interface SessionResult {
   user: WebAuthUser;
 }
 
+export interface RegistryPage<T> {
+  skills: T[];
+  nextCursor: string | null;
+}
+
+export interface RegistryPageInput { query?: string; cursor?: string; limit?: number }
+
+export interface SubmissionEvidence {
+  changeRequestReason: string | null;
+  reviewHistory: Array<{ action: ReviewActionName; reason: string | null; createdAt: string }>;
+  scanRuns: Array<{ id: string; status: string; createdAt: string; startedAt: string | null; completedAt: string | null; findings: SubmissionScanFinding[] }>;
+}
+
+export interface UserSubmissionDetail extends UserSubmissionSummary, SubmissionEvidence {
+  correction: { requiresNewVersion: true; canSubmitNewVersion: boolean };
+}
+export interface ReviewSubmissionDetail extends ReviewSubmissionSummary, SubmissionEvidence {}
+
 export interface RegistryClient {
+  searchSkillPage?(input: RegistryPageInput): Promise<RegistryPage<PublicSkill>>;
+  listManagedSkills?(input: RegistryPageInput): Promise<RegistryPage<SkillManagementSummary>>;
+  getUserSubmissionDetail?(submissionId: string): Promise<UserSubmissionDetail>;
+  getReviewSubmissionDetail?(submissionId: string): Promise<ReviewSubmissionDetail>;
+  getReleaseBundle?(slug: string, version: string, platform?: string): Promise<SkillPackageBundle>;
   searchSkills(query: string): Promise<PublicSkill[]>;
   getSkill(slug: string): Promise<PublicSkill>;
   getRelease(slug: string, version: string): Promise<ReleaseMetadata>;
@@ -926,6 +949,25 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
   const root = baseUrl.replace(/\/+$/, "");
   const cookieSessionHeaders = { "x-myskills-session-response": "cookie" };
   return {
+    async searchSkillPage(input) {
+      const params = registryPageQuery(input);
+      return requestJson<RegistryPage<PublicSkill>>(fetchImpl, `${root}/v1/skills${params}`, { token });
+    },
+    async listManagedSkills(input) {
+      return requestJson<RegistryPage<SkillManagementSummary>>(fetchImpl, `${root}/v1/manage/skills${registryPageQuery(input)}`, { token });
+    },
+    async getUserSubmissionDetail(submissionId) {
+      const body = await requestJson<{ submission: UserSubmissionDetail }>(fetchImpl, `${root}/v1/submissions/${encodeURIComponent(submissionId)}`, { token });
+      return body.submission;
+    },
+    async getReviewSubmissionDetail(submissionId) {
+      const body = await requestJson<{ submission: ReviewSubmissionDetail }>(fetchImpl, `${root}/v1/review/submissions/${encodeURIComponent(submissionId)}`, { token });
+      return body.submission;
+    },
+    async getReleaseBundle(slug, version, platform) {
+      const query = platform ? `?platform=${encodeURIComponent(platform)}` : "";
+      return requestJson<SkillPackageBundle>(fetchImpl, `${root}/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}/bundle${query}`, { token });
+    },
     async searchSkills(query: string) {
       const params = query.trim() ? `?q=${encodeURIComponent(query.trim())}` : "";
       const body = await requestJson<{ skills: PublicSkill[] }>(fetchImpl, `${root}/v1/skills${params}`, {
@@ -2042,4 +2084,13 @@ function isSafeApiError(error: unknown): error is SafeApiError {
 
 function defaultApiBaseUrl(): string {
   return import.meta.env?.VITE_API_BASE_URL ?? "http://localhost:3001";
+}
+
+function registryPageQuery(input: RegistryPageInput): string {
+  const params = new URLSearchParams();
+  if (input.query?.trim()) params.set("q", input.query.trim());
+  if (input.cursor) params.set("cursor", input.cursor);
+  if (input.limit) params.set("limit", String(input.limit));
+  const query = params.toString();
+  return query ? `?${query}` : "";
 }

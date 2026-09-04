@@ -111,6 +111,33 @@ test("registration invitation pages handle missing and expired links safely", as
   assert.equal(document.body.textContent?.includes("expired-token"), false);
 });
 
+test("new passwords are checked by UTF-8 bytes without restricting legacy login", async () => {
+  setupDom("http://localhost/auth/register#token=invitation-token");
+  const client = mockClient();
+  const view = render(<RegistryApp client={client} />);
+  const oversized = "é".repeat(37);
+  fireEvent.input(view.getByLabelText("Email"), { target: { value: "invited@example.com" } });
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: oversized } });
+  fireEvent.input(view.getByLabelText("Confirm password"), { target: { value: oversized } });
+  fireEvent.click(view.getByRole("button", { name: "Create account" }));
+  await view.findByText("Password must be at most 72 UTF-8 bytes. Non-ASCII characters can use more than one byte.");
+  assert.equal(client.registrationCalls.length, 0);
+  const allowed = "é".repeat(36);
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: allowed } });
+  fireEvent.input(view.getByLabelText("Confirm password"), { target: { value: allowed } });
+  fireEvent.click(view.getByRole("button", { name: "Create account" }));
+  await view.findByText("Registration complete. You can now log in.");
+  assert.equal(client.registrationCalls[0]?.password, allowed);
+  cleanup();
+
+  setupDom("http://localhost/login");
+  const loginView = render(<RegistryApp client={mockClient()} />);
+  fireEvent.input(loginView.getByLabelText("Email"), { target: { value: "reader@example.com" } });
+  fireEvent.input(loginView.getByLabelText("Password"), { target: { value: oversized } });
+  fireEvent.click(loginView.getByRole("button", { name: /sign in/i }));
+  await loginView.findByText("reader@example.com");
+});
+
 test("anonymous registry routes load approved public skills without a session", async () => {
   setupDom("http://localhost/registry");
   const client = mockClient();
@@ -120,7 +147,36 @@ test("anonymous registry routes load approved public skills without a session", 
   await view.findByText("Release Notes Helper");
   assert.deepEqual(client.searchCalls, [""]);
   assert.equal(document.body.textContent?.includes("owner@example.com"), false);
-  assert.equal(window.location.pathname, "/skills/release-notes-helper");
+  await waitFor(() => assert.equal(window.location.pathname, "/skills/release-notes-helper"));
+});
+
+test("an explicit authorized skill URL survives a result page that excludes it", async () => {
+  setupDom("http://localhost/skills/outside-page");
+  const client = mockClient({ searchResults: () => [publicSkill("first-page")] });
+  const view = render(<RegistryApp client={client} />);
+  await waitFor(() => assert.equal(client.releaseCalls.includes("outside-page@0.1.0"), true));
+  await view.findByText("Turns merged changes into concise release notes.");
+  assert.equal(window.location.pathname, "/skills/outside-page");
+  assert.equal(client.releaseCalls.some((call) => call.startsWith("first-page@")), false);
+});
+
+test("registry pagination reaches later skills without replacing the selected detail", async () => {
+  setupDom("http://localhost/registry");
+  const first = { ...publicSkill("first-helper"), title: "First helper" };
+  const second = { ...publicSkill("second-helper"), title: "Second helper" };
+  const client = mockClient({ skills: [first, second] });
+  const cursors: Array<string | undefined> = [];
+  client.searchSkillPage = async (input) => {
+    cursors.push(input.cursor);
+    return input.cursor ? { skills: [second], nextCursor: null } : { skills: [first], nextCursor: "opaque-next-page" };
+  };
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("button", { name: "Load more skills" }));
+  await view.findByRole("link", { name: /Second helper/ });
+  assert.deepEqual(cursors, [undefined, "opaque-next-page"]);
+  assert.equal(window.location.pathname, "/skills/first-helper");
+  fireEvent.click(view.getByRole("link", { name: /Second helper/ }));
+  await waitFor(() => assert.equal(window.location.pathname, "/skills/second-helper"));
 });
 
 test("browse page requests skills with query and renders API-returned skills", async () => {

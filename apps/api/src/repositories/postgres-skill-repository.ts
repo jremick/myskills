@@ -61,16 +61,17 @@ export class PostgresSkillRepository implements SkillRepository {
     const where = and(
       visibleReleasedSkillPredicate(),
       visibleToActorPredicate(filters.actorId ?? null, sharing),
+      filters.afterSlug ? sql`${skills.slug} collate "C" > ${filters.afterSlug}` : undefined,
       query
         ? or(
-            ilike(skills.slug, `%${query}%`),
-            ilike(skills.title, `%${query}%`),
-            ilike(skills.summary, `%${query}%`),
+            ilike(skills.slug, `%${escapeLike(query)}%`),
+            ilike(skills.title, `%${escapeLike(query)}%`),
+            ilike(skills.summary, `%${escapeLike(query)}%`),
           )
         : undefined,
     );
 
-    return uniqueBySlug(await this.visibleSkillRows(where, limit * 5, filters.actorId ?? null, sharing)).slice(0, limit);
+    return this.visibleSkillRows(where, limit, filters.actorId ?? null, sharing);
   }
 
   async getVisibleSkillBySlug(slug: string, actorId?: string | null): Promise<PublicSkill | null> {
@@ -321,7 +322,7 @@ export class PostgresSkillRepository implements SkillRepository {
     sharing: SharingSettings,
   ): Promise<PublicSkill[]> {
     const rows = await this.db
-      .select({
+      .selectDistinctOn([sql`${skills.slug} collate "C"`], {
         id: skills.id,
         slug: skills.slug,
         title: skills.title,
@@ -383,8 +384,9 @@ export class PostgresSkillRepository implements SkillRepository {
         skillVersions.reviewStatus,
         skillVersions.securityStatus,
         skillVersions.createdAt,
+        skillVersions.id,
       )
-      .orderBy(sql`${skillVersions.createdAt} desc`, skills.title)
+      .orderBy(sql`${skills.slug} collate "C"`, sql`${skillVersions.createdAt} desc`, sql`${skillVersions.id} desc`)
       .limit(limit);
 
     return rows.map((row) => ({
@@ -1144,4 +1146,8 @@ function normalizeEmail(input: string): string {
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
 }

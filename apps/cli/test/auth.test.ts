@@ -531,6 +531,40 @@ test("logout without a token does not call the API", async () => {
   assert.match(output.stderr.join("\n"), /Not logged in/);
 });
 
+test("logout clears unreadable local credentials without claiming remote revocation", async () => {
+  const output = createOutput();
+  let deleted = false;
+  const tokenStore: CliTokenStore = {
+    get: async () => { throw new Error("Stored credential is invalid. Use logout."); },
+    set: async () => assert.fail("must not set"),
+    delete: async (api) => { assert.equal(api, "http://api.test"); deleted = true; },
+  };
+  const code = await runCli(["logout", "--api-url", "http://api.test"], testRuntime(output, async () => {
+    assert.fail("unreadable credentials cannot authorize remote revocation");
+  }, {}, tokenStore));
+  assert.equal(code, 1);
+  assert.equal(deleted, true);
+  assert.deepEqual(output.stdout, ["local credentials removed\tremote-revocation-unconfirmed"]);
+  assert.match(output.stderr.join("\n"), /remote revocation could not be confirmed/);
+});
+
+test("logout reports incomplete cleanup when unreadable credentials cannot be removed", async () => {
+  const output = createOutput();
+  let attempted = false;
+  const tokenStore: CliTokenStore = {
+    get: async () => { throw new Error("keyring denied"); },
+    set: async () => assert.fail("must not set"),
+    delete: async () => { attempted = true; throw new Error("keyring denied"); },
+  };
+  const code = await runCli(["logout", "--api-url", "http://api.test"], testRuntime(output, async () => {
+    assert.fail("must not call API");
+  }, {}, tokenStore));
+  assert.equal(code, 1);
+  assert.equal(attempted, true);
+  assert.deepEqual(output.stdout, []);
+  assert.match(output.stderr.join("\n"), /local cleanup failed/);
+});
+
 test("logout removes stored API tokens locally without claiming remote revocation", async () => {
   const output = createOutput();
   const tokenStore = new MemoryTokenStore({

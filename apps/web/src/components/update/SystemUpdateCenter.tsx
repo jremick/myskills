@@ -1,29 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, CircleAlert, Clock3, PackageCheck, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
-import type { SkillUpgradePolicyV1 } from "@myskills-app/core";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
   ArchitectureTargetRecord,
   RegistryClient,
-  SkillUpgradePolicyRevisionRecord,
   TargetSkillOperationRecord,
   TargetSkillUpdates,
 } from "../../api.js";
 import { safeArchitectureTargetErrorMessage } from "../../api.js";
+import { UpgradePolicyEditor } from "./UpgradePolicyEditor.js";
 
 interface UpdateSession { user: { email: string } }
 interface TargetUpdateState { target: ArchitectureTargetRecord; updates: TargetSkillUpdates | null; operations: TargetSkillOperationRecord[]; error?: string }
 interface SelectedUpdate { targetId: string; slug: string }
-
-const defaultPolicy: SkillUpgradePolicyV1 = {
-  schemaVersion: 1,
-  mode: "manual",
-  includePrerelease: false,
-  allowedChangeKinds: ["breaking", "feature", "fix", "maintenance", "security"],
-  pins: {},
-};
 
 export function SystemUpdateCenter({ client, session }: { client: RegistryClient; session: UpdateSession }) {
   const [rows, setRows] = useState<TargetUpdateState[]>([]);
@@ -226,40 +217,6 @@ function TargetUpdateCard({ row, selected, busy, architectureReview, onSelect, o
     <UpgradePolicyEditor client={client} target={row.target} resolved={row.updates.policy} onSaved={onPolicySaved} /></>}
     <section className="target-operation-history" aria-label={`Operation history for ${row.target.name}`}><h3>Operations and recovery</h3>{row.operations.map((operation) => <div className="target-operation-row" key={operation.id}><Clock3 size={15} aria-hidden="true" /><span><strong>{operation.action} {operation.skillSlug}</strong><small>{operation.fromVersion ?? "not installed"} → {operation.toVersion} · {operation.result?.code ?? operation.state}</small></span><Badge variant={operation.state === "succeeded" ? "secondary" : operation.state === "failed" ? "destructive" : "outline"}>{operation.state}</Badge>{operation.state === "queued" && <Button size="sm" variant="outline" disabled={busy === `cancel:${operation.id}`} onClick={() => onCancel(operation)}>Cancel</Button>}{operation.state === "succeeded" && operation.action !== "rollback" && operation.fromVersion && <Button size="sm" variant="outline" disabled={busy === `rollback:${operation.id}`} onClick={() => onRollback(operation)}><RotateCcw size={14} />Rollback</Button>}</div>)}{row.operations.length === 0 && <p className="control-plane-muted">No update or rollback operations yet.</p>}</section>
   </CardContent></Card>;
-}
-
-function UpgradePolicyEditor({ client, target, resolved, onSaved }: { client: RegistryClient; target: ArchitectureTargetRecord; resolved: TargetSkillUpdates["policy"]; onSaved: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [targetRevision, setTargetRevision] = useState<SkillUpgradePolicyRevisionRecord | null>(null);
-  const [organizationRevision, setOrganizationRevision] = useState<SkillUpgradePolicyRevisionRecord | null>(null);
-  const [policy, setPolicy] = useState<SkillUpgradePolicyV1>(resolved?.policy ?? defaultPolicy);
-  const [scope, setScope] = useState<"target" | "organization">("target");
-  const [message, setMessage] = useState<string | null>(null);
-  useEffect(() => setPolicy(resolved?.policy ?? defaultPolicy), [resolved]);
-  useEffect(() => {
-    if (!open) return;
-    void Promise.all([
-      client.getTargetSkillUpgradePolicy?.(target.id).then((revision) => setTargetRevision(revision)),
-      target.owner.type === "organization" ? client.getOrganizationSkillUpgradePolicy?.(target.owner.id).then((revision) => setOrganizationRevision(revision)) : Promise.resolve(),
-    ]).catch((error: unknown) => setMessage(safeArchitectureTargetErrorMessage(error)));
-  }, [client, open, target.id, target.owner]);
-  const revision = scope === "target" ? targetRevision : organizationRevision;
-  async function save() {
-    try {
-      const input = { policy, expectedRevisionNumber: revision?.revisionNumber ?? 0, reason: "Update centre policy change" };
-      const result = scope === "target"
-        ? await client.updateTargetSkillUpgradePolicy?.(target.id, input)
-        : target.owner.type === "organization" ? await client.updateOrganizationSkillUpgradePolicy?.(target.owner.id, input) : undefined;
-      if (result) {
-        if (scope === "target") setTargetRevision(result.revision); else setOrganizationRevision(result.revision);
-        setMessage(result.created ? `Saved policy revision ${result.revision.revisionNumber}.` : "Policy is unchanged.");
-        onSaved();
-      }
-    } catch (error) {
-      setMessage(safeArchitectureTargetErrorMessage(error));
-    }
-  }
-  return <details className="target-advanced-settings" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}><summary>Upgrade policy</summary><div className="control-plane-form"><label><span>Scope</span><select value={scope} onChange={(event) => setScope(event.target.value as "target" | "organization")}><option value="target">This target</option>{target.owner.type === "organization" && <option value="organization">Organization</option>}</select></label><label className="control-plane-checkbox"><input type="checkbox" checked={policy.includePrerelease} onChange={(event) => setPolicy({ ...policy, includePrerelease: event.target.checked })} /><span><strong>Prerelease channel</strong><small>Include compatible prerelease versions.</small></span></label><label><span>Execution mode</span><select value={policy.mode} onChange={(event) => setPolicy(event.target.value === "manual" ? { ...policy, mode: "manual", maintenanceWindow: undefined } : { ...policy, mode: "maintenance-window", maintenanceWindow: policy.maintenanceWindow ?? { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, daysOfWeek: [1, 2, 3, 4, 5], startMinute: 120, durationMinutes: 120 } })}><option value="manual">Manual</option><option value="maintenance-window">Maintenance window</option></select></label>{policy.mode === "maintenance-window" && <p className="control-plane-muted">Default window: weekdays, 02:00–04:00 in {policy.maintenanceWindow?.timeZone}. The companion cannot claim queued work outside this window.</p>}<Button size="sm" type="button" onClick={() => void save()}>Save immutable policy revision</Button>{message && <div className="control-plane-inline-message" role="status">{message}</div>}</div></details>;
 }
 
 function candidateFor(rows: TargetUpdateState[], selection: SelectedUpdate) {

@@ -210,16 +210,17 @@ export class MemorySkillRepository implements SkillRepository {
   async searchVisibleSkills(filters: SkillSearchFilters = {}): Promise<PublicSkill[]> {
     const query = filters.query?.trim().toLowerCase() ?? "";
     const limit = filters.limit ?? 50;
-    return this.skills
+    const matches = this.skills
       .filter((skill) => this.isVisibleReleasedSkill(skill, filters.actorId ?? null))
+      .filter((skill) => !filters.afterSlug || skill.slug > filters.afterSlug)
       .filter((skill) => !query || [
         skill.slug,
         skill.title,
         skill.summary,
-        skill.latestVersion ?? "",
-        ...skill.tags,
-        ...skill.platforms.map((platform) => platform.name),
       ].some((value) => value.toLowerCase().includes(query)))
+      .sort((a, b) => a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0);
+    return matches
+      .filter((skill, index) => index === 0 || skill.slug !== matches[index - 1]!.slug)
       .map((skill) => this.publicSkill(skill, filters.actorId ?? null))
       .slice(0, limit);
   }

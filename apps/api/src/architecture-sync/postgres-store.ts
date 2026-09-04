@@ -40,6 +40,7 @@ import {
   skillArchitectureSyncSteps,
   skillArchitectureSyncTargetLeases,
   skillArchitectureTargets,
+  targetSkillOperations,
   users,
 } from "../db/schema.js";
 import {
@@ -515,7 +516,19 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
         if (current && (nowDate.getTime() < current.acquiredAt.getTime() || nowDate.getTime() < current.updatedAt.getTime())) {
           throw new AppError("Sync lease acquisition time must move forward.", "ARCHITECTURE_SYNC_TIMESTAMP_INVALID", 409);
         }
-        const fencingToken = Number(current?.fencingToken ?? 0) + 1;
+        // The target row is the shared mutex for both execution systems. Older
+        // control-only schemas predate the companion queue; migrations add it.
+        let operationFence = 0;
+        const installed = await tx.execute(sql`SELECT to_regclass(current_schema() || '.target_skill_operations') AS queue`);
+        if (installed.rows[0]?.queue) {
+          const [operations] = await tx.select({
+            fence: sql<number>`coalesce(max(${targetSkillOperations.fencingToken}), 0)`,
+            busy: sql<boolean>`coalesce(bool_or(${targetSkillOperations.state} IN ('claimed', 'applying', 'verifying') AND ${targetSkillOperations.leaseExpiresAt} > ${nowDate}), false)`,
+          }).from(targetSkillOperations).where(eq(targetSkillOperations.targetId, dbTargetId));
+          if (operations?.busy) throw new AppError("The target is leased by a companion operation.", "ARCHITECTURE_SYNC_LEASE_CONFLICT", 409);
+          operationFence = Number(operations?.fence ?? 0);
+        }
+        const fencingToken = Math.max(Number(current?.fencingToken ?? 0), operationFence) + 1;
         if (fencingToken > architectureSyncControlLimits.fencingTokenMaximum) {
           throw new AppError("Sync fencing token limit was reached.", "ARCHITECTURE_SYNC_LEASE_INVALID", 409);
         }

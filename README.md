@@ -16,7 +16,7 @@ MySkills is an open-source beta platform for publishing, reviewing, discovering,
 
 ## Release Status
 
-Current target: **v0.1.0-beta.4**.
+Current target: **v0.1.0-beta.5**.
 
 The beta.4 source and CLI release includes the Phase 2 architecture control plane
 and the read-only Codex adapter file-safety fix-forward.

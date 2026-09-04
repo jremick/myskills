@@ -37,7 +37,10 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 try {
   await run("docker", [...composeArgs, "config", "--quiet"]);
   await run("docker", [...composeArgs, "up", "--build", "--detach", "--wait", "--wait-timeout", "300"]);
-  environment.MYSKILLS_E2E_OWNER_RECOVERY_CODES = JSON.stringify(await prepareOwnerMfa());
+  await run("npm", ["run", "build", "-w", "@myskills-app/core", "-w", "@myskills-app/skill-package", "-w", "@jarel/myskills"]);
+  const owner = await prepareOwnerMfa();
+  environment.MYSKILLS_E2E_OWNER_RECOVERY_CODES = JSON.stringify(owner.recoveryCodes);
+  environment.MYSKILLS_ACCEPTANCE_OWNER_TOKEN = owner.sessionToken;
   await run(resolve(root, "node_modules/.bin/playwright"), [
     "test",
     "--config",
@@ -114,7 +117,23 @@ async function prepareOwnerMfa() {
   if (!Array.isArray(recoveryCodes) || recoveryCodes.length < 4 || recoveryCodes.some((code) => typeof code !== "string")) {
     throw new Error("Owner E2E MFA confirmation did not return enough recovery codes.");
   }
-  return recoveryCodes;
+  // Enrollment does not upgrade the existing session's MFA assurance. Obtain a
+  // verified session for fixture administration without consuming browser codes.
+  const challengeResponse = await fetch(`${baseURL}/api/v1/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: environment.MYSKILLS_E2E_OWNER_EMAIL, password: environment.MYSKILLS_E2E_OWNER_PASSWORD }),
+  });
+  const challenge = await requireJson(challengeResponse, "Owner E2E MFA login");
+  if (!challenge.mfaRequired || !challenge.challengeToken || !recoveryCodes[6]) throw new Error("Owner E2E MFA challenge was incomplete.");
+  const verifiedResponse = await fetch(`${baseURL}/api/v1/auth/mfa/verify`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ challengeToken: challenge.challengeToken, recoveryCode: recoveryCodes[6] }),
+  });
+  const verified = await requireJson(verifiedResponse, "Owner E2E MFA verification");
+  if (!verified.token || !verified.user?.mfaVerified) throw new Error("Owner E2E session was not MFA verified.");
+  return { recoveryCodes, sessionToken: verified.token };
 }
 
 async function requireJson(response, label) {
