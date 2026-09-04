@@ -1119,6 +1119,15 @@ test("architecture editor sends the immutable revision token and refreshes after
     architecturePatterns: defaultArchitecturePatterns(),
     architectures: [defaultArchitectureSummary()],
   });
+  // Complete the save after the click's React batch; the list refresh resolves immediately.
+  let finishSave: (() => void) | undefined;
+  const saveResponse = new Promise<void>((resolve) => { finishSave = resolve; });
+  const createRevision = client.createArchitectureRevision.bind(client);
+  client.createArchitectureRevision = async (...args) => {
+    const revision = await createRevision(...args);
+    await saveResponse;
+    return revision;
+  };
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
@@ -1129,8 +1138,15 @@ test("architecture editor sends the immutable revision token and refreshes after
   await waitFor(() => assert.equal(client.architectureRevisionCreates.length, 1));
   assert.equal(client.architectureRevisionCreates[0]?.expectedCurrentRevisionId, "revision-1");
   assert.equal(client.architectureRevisionCreates[0]?.message, "Clarify review routing");
+  finishSave?.();
   await waitFor(() => assert.equal(client.architectureDetailCalls >= 2, true));
   await view.findByText("Revision 2");
+  assert.equal((view.getByLabelText("Selected node label") as HTMLInputElement).value, "Saved review router");
+
+  fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Follow-up review router" } });
+  fireEvent.click(view.getByRole("button", { name: "Save revision" }));
+  await waitFor(() => assert.equal(client.architectureRevisionCreates.length, 2));
+  assert.equal(client.architectureRevisionCreates[1]?.expectedCurrentRevisionId, "revision-2");
 });
 
 test("architecture selection clears stale detail before previewing a new draft", async () => {
