@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "yauzl": "^3.4.0",
-    "zod": "^4.1.13"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/yauzl": "^3.4.0",
