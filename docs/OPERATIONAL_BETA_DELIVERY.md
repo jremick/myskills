@@ -121,7 +121,14 @@ scanning. Its tarball SHA-256 is
 `9b27929dfedcf2195760a3980d0471f3f301227b373e038a410076dd6ea8302b`;
 the installed CLI bundle SHA-256 is
 `dbf0512e64011668ad0d9f282d725e92af974c5971605b0622a2a9f87cb0e75c`.
-Public npm and tag publication remain separate release actions.
+The follow-up release was authorized after operational verification. Annotated
+tag `v0.1.0-beta.5` targets `0721e0b54b8f9c7ad78d7194a57f2c8216e4a3a2`.
+The intervening changes are documentation and one test readiness wait; the
+application code and packed CLI bytes match the deployed candidate. The clean
+local canonical gate and the tag's [Release workflow](https://github.com/jremick/myskills/actions/runs/33937140879)
+passed, including all five deployment image builds. The source archive from
+GitHub matches the locally verified archive byte for byte. npm publication and
+the GitHub prerelease remain pending maintainer npm authentication.
 
 Final staging API `f69f826e-f71b-4baa-9dcf-3e414be69658` and web
 `1154add2-b701-4bbc-8d40-be52e123f910` succeeded from that exact revision.
@@ -183,3 +190,17 @@ tested recovery-time, retention, and backup scheduling targets. This delivery
 has not established a recurring backup schedule, external email deliverability,
 a hostile same-user filesystem sandbox, full architecture graph execution, or
 model behavior.
+
+## Authorized operational follow-up
+
+The [backup follow-up](BACKUPS.md) adds a private coordinated job and an executable
+restore from a retained remote set. Its daily schedule remains disabled until
+that exact retained set passes isolated data and API recovery. The job receives
+database and object-storage references, never the API's `AUTH_SECRET`. Historical
+MFA recovery also requires the matching encryption key in an approved secret
+store; the key's retention location has not been verified.
+
+The [independent-user pilot](PILOT.md) is ready for participant selection. No
+independent-use results or external email delivery have been recorded. The
+production notification provider has a send-only key; its presence does not
+establish delivery to a recipient's inbox.

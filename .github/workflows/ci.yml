@@ -95,6 +95,11 @@ jobs:
         run: docker build --file Dockerfile.api --tag myskills-app-api:ci .
       - name: Build Railway web image
         run: docker build --file Dockerfile.web --build-arg VITE_API_BASE_URL=/api --tag myskills-app-web:ci .
+      - name: Build and smoke backup image without credentials
+        run: |
+          docker build --file Dockerfile.backup --tag myskills-registry-backup:ci .
+          docker run --rm --network none myskills-registry-backup:ci node scripts/run-registry-backup.mjs --help
+          docker run --rm --network none myskills-registry-backup:ci node scripts/restore-registry-backup.mjs --help
 
   postgres-supported-node:
     name: Postgres / Node ${{ matrix.node-version }}
