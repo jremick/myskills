@@ -139,6 +139,10 @@ and `@jarel/myskills@beta` passed version, license, and integrity checks. The
 exact-version install also validated and scanned the public example. The
 release instructions now use `npm install -g @jarel/myskills@beta`.
 
+The immutable beta.5 tarball retains its pre-publication README wording. The
+[current CLI documentation](../apps/cli/README.md) and GitHub release notes
+record the published channel and installation guidance.
+
 Final staging API `f69f826e-f71b-4baa-9dcf-3e414be69658` and web
 `1154add2-b701-4bbc-8d40-be52e123f910` succeeded from that exact revision.
 Preflight, 29 migrations, registry instance identity, direct API/web/proxy

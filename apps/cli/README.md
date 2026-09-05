@@ -32,7 +32,7 @@ CLI tokens should be stored in the platform secret store where possible.
 
 ## Current Slice
 
-This document describes the beta.5 candidate. Use a CLI built from the same
+This document describes the beta.5 CLI. Use a CLI built from the same
 release as the registry for managed updates and Codex workspace commands. The
 beta.2 visibility compatibility shims remain available for existing clients.
 Source versions and npm publication are separate from hosted deployment; the
@@ -165,7 +165,7 @@ Those operations require the server's current-revision, organization-policy,
 membership, exact-release, limit, idempotency, and MFA checks. This CLI does
 not expose a second policy implementation or write command for them.
 
-## Published And Candidate Channels
+## Published CLI And Local Builds
 
 The published beta channel is installed with:
 
@@ -175,9 +175,9 @@ myskills --version
 myskills login
 ```
 
-At the start of beta.5 delivery, npm's beta tag points to beta.4. Do not assume
-it includes these candidate commands. From this repository, build and run the
-candidate without publishing:
+The expected version is `0.1.0-beta.5`. This published release includes the
+managed update and Codex workspace commands described here. To test repository
+changes before their next release, build and run them locally:
 
 ```bash
 npm ci
