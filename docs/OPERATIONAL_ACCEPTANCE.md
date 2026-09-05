@@ -124,12 +124,14 @@ the exact CI, package, deployment, and production verification status. Public np
 and tag publication remain separate actions.
 
 Final production verification on that revision passed eight identity/health HTTP
-readbacks, seven HTML/header checks, and 12 read-only Comet/API checks. It used
-the existing owner session for private delivery and a fresh anonymous mobile
+readbacks, seven HTML/header checks, and 12 Comet/API checks using read requests.
+It used the existing owner session for private delivery and a fresh anonymous mobile
 context for loaded registry/skill detail. Package bytes, literal file display,
 direct links, session preservation, and absence of horizontal overflow were verified.
-No production fixture writes or model turns occurred. HTML cached before the
-revalidation fix needs one reload to obtain the new policy.
+Allowed and denied package downloads create normal `artifact.bundle` audit
+events in production. No fixture or administrative change requests or model
+turns occurred. HTML cached before the revalidation fix needs one reload to
+obtain the new policy.
 
 ## Database and object recovery
 

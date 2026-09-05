@@ -75,7 +75,7 @@ tests alone does not establish deployed behavior or provider runtime recognition
 | A15 | Browser and CLI checks cover author → review → publish → discover → install → update → rollback → revoke across distinct roles. | Linux Node 22 and 24 each passed eight mocked browser tests and five full-stack tests. Final live staging Comet passed 20 checks in 135 seconds, including policy denial, exact pin, update, rollback, and revocation. |
 | A16 | Database and artifact recovery is rehearsed in an isolated destination; the operator has executable migration, rollback, and restore instructions. | Final logical recovery verified all 50 tables at migration 29 and all 87 artifacts, including 86 object-backed packages, with no source writes. Earlier isolated runtime recovery verified migrations 18→29, readiness, auth, private delivery, and anonymous denial with email disabled. The final copy did not repeat that runtime check. |
 | A17 | Required GitHub checks pass for the candidate; staging API and web expose the same source identity and pass live acceptance. | Final main [CI](https://github.com/jremick/myskills/actions/runs/33932735785) and [CodeQL](https://github.com/jremick/myskills/actions/runs/33932735819) passed at `d8c7179`. Final staging identity, readiness, HTML headers, and the complete 20-check journey passed. |
-| A18 | Production API and web expose the promoted source identity; readiness, auth, registry, artifact delivery, and recent logs are verified. | Final `d8c7179` preflight, 29 migrations, eight HTTP readbacks, seven HTML/header checks, and all 12 read-only Comet/API checks passed. These include owner cookie auth, exact private delivery, literal text, anonymous mobile, and session preservation. Sampled API/nginx logs had no actual errors or 5xx. |
+| A18 | Production API and web expose the promoted source identity; readiness, auth, registry, artifact delivery, and recent logs are verified. | Final `d8c7179` preflight, 29 migrations, eight HTTP readbacks, seven HTML/header checks, and all 12 Comet/API checks using read requests passed. These include owner cookie auth, exact private delivery, literal text, anonymous mobile, and session preservation. Package access creates normal audit events; no fixture or administrative change requests were sent. Sampled API/nginx logs had no actual errors or 5xx. |
 
 ## Architecture and failure boundaries
 
@@ -134,9 +134,11 @@ Resend values were cleared, and address-aware proxy trust was verified.
 Final production API `0e8af8f9-c385-4fbd-a236-a05912a59793` and web
 `07c178e6-81d7-4fe6-a239-8a8c9ab16598` deployments succeeded from that same
 source. Preflight passed without warnings. Eight identity/health HTTP readbacks,
-seven HTML/header checks, and all 12 read-only Comet/API checks passed. The
-browser check made 21 API GETs, with no page errors or production writes. It
-verified private direct links under an unrelated filter, owner cookie auth,
+seven HTML/header checks, and all 12 Comet/API checks using read requests passed.
+The browser check made 21 API GETs and reported no page errors. It sent no
+fixture or administrative change requests. Allowed and denied package downloads
+create normal `artifact.bundle` audit events in production. The check verified
+private direct links under an unrelated filter, owner cookie auth,
 exact package bytes, literal file display, anonymous mobile navigation at
 390 × 844 with loaded registry/skill detail and no horizontal overflow, and
 preservation of the owner session.

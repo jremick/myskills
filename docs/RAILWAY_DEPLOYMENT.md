@@ -50,12 +50,14 @@ seven-check HTML header probe passed. The full Comet journey passed 20 checks
 in 135 seconds; separate Codex recognition and temporary MFA cleanup passed.
 Production API/web succeeded at 00:35:01/00:36:37 UTC; final preflight, headers,
 eight identity/health HTTP readbacks, seven HTML/header checks, and all 12
-read-only Comet/API checks passed. The browser checks included private delivery,
-literal package text, loaded anonymous mobile registry/skill detail without horizontal
-overflow, and preservation of the existing owner session. There were no browser
-page errors or production writes. Sampled API/nginx logs through 00:37:54 UTC
-had no actual errors or 5xx. The 54 Railway error-level nginx startup records
-were `[notice]` messages.
+Comet/API checks using read requests passed. The browser checks included private
+delivery, literal package text, loaded anonymous mobile registry/skill detail
+without horizontal overflow, and preservation of the existing owner session.
+There were no browser page errors. The checks sent no fixture or administrative
+change requests. Allowed and denied package downloads create normal
+`artifact.bundle` audit events in production. Sampled API/nginx logs through
+00:37:54 UTC had no actual errors or 5xx. The 54 Railway error-level nginx startup
+records were `[notice]` messages.
 
 The API uses `/ready` with a 300-second deployment timeout; web uses `/health`
 with the same timeout. Both environments use address-aware `TRUST_PROXY`.
@@ -244,6 +246,6 @@ The current live project is intentionally manual but can be made easier without 
 3. When changing artifact publication or cleanup coordination, remove incompatible API writers and cleanup workers before starting the replacement. Account for the resulting API interruption in the rollout plan.
 4. Deploy `api` from the approved commit and wait for Railway success and direct `/ready` before uploading `web` from the same commit. The web proxy must start after the healthy API so it does not retain an address for a retiring private instance.
 5. Compare direct API, web, and proxy `/version.json` with the approved source. Verify web health and same-origin `/api/health` and `/api/ready`.
-6. Complete staging's real browser/CLI journey before production. After production promotion, verify HTML revalidation in an existing browser cache, existing-session auth, authorized private package delivery, anonymous denial, rendered package text and navigation, and recent logs. Use a fresh context for anonymous checks and preserve existing user sessions during read-only checks.
+6. Complete staging's real browser/CLI journey before production. After production promotion, verify HTML revalidation in an existing browser cache, existing-session auth, authorized private package delivery, anonymous denial, rendered package text and navigation, and recent logs. Use a fresh context for anonymous checks and preserve existing user sessions during verification. Use read requests for production checks; package access still writes its normal audit events.
 
 The release workflow is intentionally verification-only and does not deploy Railway. Follow the staging, production approval, and rollback boundary in [Release Process](RELEASE.md). Any future deploy automation must use scoped project credentials, preserve a separate staging/user-test step, require explicit production approval, deploy API and web from the same commit in API-ready-then-web order, and report resulting deployment IDs plus direct and same-origin health/browser readback.
