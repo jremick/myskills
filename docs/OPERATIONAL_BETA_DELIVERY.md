@@ -130,9 +130,14 @@ passed, including all five deployment image builds. The source archive from
 GitHub matches the locally verified archive byte for byte. The
 [GitHub prerelease](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.5)
 is published with the verified CLI tarball, source archive, metadata, and
-checksums. Its instructions install the CLI directly from the release asset.
-npm publication remains pending maintainer authentication; the npm `beta`
-channel is still `0.1.0-beta.4` and `latest` is still `0.1.0-alpha.3`.
+checksums. npm publication completed on 5 September 2026 at 08:53 UTC. The npm
+`beta` channel resolves to `0.1.0-beta.5`; `latest` and `alpha` remain on
+`0.1.0-alpha.3`. The public npm tarball matches the verified release asset byte
+for byte, including the SHA-256 above and the published SHA-1 and SHA-512
+integrity metadata. Separate fresh-cache installations of the exact version
+and `@jarel/myskills@beta` passed version, license, and integrity checks. The
+exact-version install also validated and scanned the public example. The
+release instructions now use `npm install -g @jarel/myskills@beta`.
 
 Final staging API `f69f826e-f71b-4baa-9dcf-3e414be69658` and web
 `1154add2-b701-4bbc-8d40-be52e123f910` succeeded from that exact revision.
