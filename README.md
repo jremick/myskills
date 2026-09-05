@@ -18,17 +18,17 @@ MySkills is an open-source beta platform for publishing, reviewing, discovering,
 
 Current target: **v0.1.0-beta.6**.
 
-Published release: **[v0.1.0-beta.5](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.5)**.
+Published release: **[v0.1.0-beta.6](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.6)**.
 
-The beta.6 candidate adds a dry-run-only work/team Codex bootstrap planner to
+The beta.6 release adds a dry-run-only work/team Codex bootstrap planner to
 the beta.5 operational baseline. It does not add an apply or implicit discovery
 path. The hosted beta at [myskills.sh](https://myskills.sh) remains on its
-separately verified operational release; this CLI-only candidate does not
-require a Railway promotion.
+separately verified operational release; this CLI-only release did not promote
+Railway.
 
 This beta is intended for real external trial use with documented compatibility, support, and upgrade expectations. It is still prerelease software and not yet the business-safe production release: API contracts, package formats, deployment defaults, and operational guidance may still change before `v1.0`.
 
-Operational beta acceptance is tracked in [docs/OPERATIONAL_BETA_DELIVERY.md](docs/OPERATIONAL_BETA_DELIVERY.md); the one executable candidate gate is `npm run release:verify`.
+Operational beta acceptance is tracked in [docs/OPERATIONAL_BETA_DELIVERY.md](docs/OPERATIONAL_BETA_DELIVERY.md); the canonical executable release gate is `npm run release:verify`.
 
 ## Name
 
