@@ -47,6 +47,7 @@ test("managed inventory restores an archived skill and an exact historical relea
     async performReleaseAction(slug: string, version: string, action: string) { calls.push(`${slug}:${version}:${action}`); return releases[1]; },
   } as unknown as RegistryClient;
   const view = render(<ManagedSkillsDashboard client={client} mfaVerified />);
+  await view.findByLabelText("Managed release version");
   fireEvent.click(await view.findByRole("button", { name: "Restore skill" }));
   fireEvent.click(view.getByRole("button", { name: "Confirm restore" }));
   await waitFor(() => assert.equal(calls[0], "archived-helper:restore"));

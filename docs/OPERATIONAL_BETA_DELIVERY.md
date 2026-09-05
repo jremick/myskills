@@ -113,8 +113,8 @@ only two nginx configurations from the first beta.5 deployment. Main
 [CI](https://github.com/jremick/myskills/actions/runs/33932735785) and
 [CodeQL](https://github.com/jremick/myskills/actions/runs/33932735819) passed.
 GitHub reported zero open Dependabot and CodeQL alerts after the final merge on
-5 September 2026. A later documentation-only commit does not change the deployed
-application's embedded revision.
+5 September 2026. Later documentation and test-only commits do not change the
+deployed application's embedded revision.
 
 The freshly packed CLI passed installation, license inclusion, validation, and
 scanning. Its tarball SHA-256 is
