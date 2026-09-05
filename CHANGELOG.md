@@ -2,11 +2,17 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
-## 0.1.0-beta.5 - Unreleased
+## Unreleased
+
+### Changed
+
+- Updated AWS SDK, Nodemailer, Resend, Zod, React Flow, and Lucide dependencies.
+
+## 0.1.0-beta.5 - 2026-09-05
 
 Target release: `v0.1.0-beta.5`.
 
-This operational candidate completes registry feedback and recovery paths, hardens
+This operational release completes registry feedback and recovery paths, hardens
 local and managed updates, and adds immutable deployment and registry identity.
 Verification and Railway promotion are tracked in
 [Operational Beta Delivery](docs/OPERATIONAL_BETA_DELIVERY.md).
