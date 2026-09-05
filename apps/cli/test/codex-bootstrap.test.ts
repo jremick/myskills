@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -49,8 +49,15 @@ test("work canary is explicitly selected, privately reported, and never mutates 
   assert.deepEqual(await fileTree(fixture.paths.workSourceRoot), beforeSource);
   assert.deepEqual(await fileTree(fixture.paths.liveSkillsRoot), beforeLive);
   assert.deepEqual(await readdir(fixture.reportDir), ["canary.json"]);
-  assert.equal((await stat(result.reportPath)).mode & 0o777, 0o600);
-  const persisted = JSON.parse(await readFile(result.reportPath, "utf8")) as typeof result.report;
+  const reportHandle = await open(result.reportPath, "r");
+  let reportText: string;
+  try {
+    assert.equal((await reportHandle.stat()).mode & 0o777, 0o600);
+    reportText = await reportHandle.readFile("utf8");
+  } finally {
+    await reportHandle.close();
+  }
+  const persisted = JSON.parse(reportText) as typeof result.report;
   assert.equal(JSON.stringify(persisted).includes(fixture.root), false);
   assert.equal(calculateCodexBootstrapReportChecksum(persisted), persisted.reportChecksum);
   assert.equal(calculateCodexBootstrapReportChecksum(result.report), result.report.reportChecksum);

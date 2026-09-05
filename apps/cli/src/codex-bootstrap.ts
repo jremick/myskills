@@ -1275,38 +1275,41 @@ async function readBootstrapDirectory(
   state: SnapshotReadState,
   testHooks?: CodexBootstrapTestHooks,
 ): Promise<void> {
-  const before = await lstat(directoryPath, { bigint: true });
-  if (before.isSymbolicLink() || !before.isDirectory()) throw new Error("snapshot directory is not regular");
-  const beforeReal = await realpath(directoryPath);
-  if (!isContained(boundaryRoot, beforeReal)) throw new Error("snapshot directory escapes boundary");
-  state.directories.push({
-    relativePath: relativePrefix,
-    absolutePath: directoryPath,
-    realPath: beforeReal,
-    stats: before,
-  });
-  if (relativePrefix === "") {
-    state.rootPath = directoryPath;
-    state.rootRealPath = beforeReal;
-    state.rootStats = before;
-  }
   const directoryHandle = await open(directoryPath, fsConstants.O_RDONLY | DIRECTORY_FLAG | NO_FOLLOW_FLAG);
   try {
     const opened = await directoryHandle.stat({ bigint: true });
-    if (!opened.isDirectory() || !sameDirectoryIdentity(before, opened)) throw new Error("snapshot directory changed before read");
+    const openedPath = await lstat(directoryPath, { bigint: true });
+    const openedReal = await realpath(directoryPath);
+    if (
+      !opened.isDirectory()
+      || openedPath.isSymbolicLink()
+      || !openedPath.isDirectory()
+      || !sameDirectoryIdentity(opened, openedPath)
+    ) {
+      throw new Error("snapshot directory changed before read");
+    }
+    if (!isContained(boundaryRoot, openedReal)) throw new Error("snapshot directory escapes boundary");
+    state.directories.push({
+      relativePath: relativePrefix,
+      absolutePath: directoryPath,
+      realPath: openedReal,
+      stats: opened,
+    });
+    if (relativePrefix === "") {
+      state.rootPath = directoryPath;
+      state.rootRealPath = openedReal;
+      state.rootStats = opened;
+    }
     const entries = await readdir(directoryPath, { withFileTypes: true });
     entries.sort((left, right) => compareOrdinal(left.name, right.name));
     for (const entry of entries) {
       const entryPath = path.join(directoryPath, entry.name);
       const relativePath = relativePrefix ? `${relativePrefix}/${entry.name}` : entry.name;
-      const entryStats = await lstat(entryPath, { bigint: true });
-      if (entryStats.isSymbolicLink()) throw new Error("snapshot symlink is not allowed");
+      if (entry.isSymbolicLink()) throw new Error("snapshot symlink is not allowed");
       if (isSensitiveSnapshotPath(relativePath)) throw new Error("snapshot sensitive path is not allowed");
-      if (entryStats.isDirectory()) {
-        const entryReal = await realpath(entryPath);
-        if (!isContained(boundaryRoot, entryReal)) throw new Error("snapshot child escapes boundary");
+      if (entry.isDirectory()) {
         await readBootstrapDirectory(entryPath, boundaryRoot, relativePath, state, testHooks);
-      } else if (entryStats.isFile()) {
+      } else if (entry.isFile()) {
         if (state.files.length >= MAX_PACKAGE_FILES) throw new Error("snapshot file count exceeded");
         const readResult = await readBootstrapFile(entryPath, boundaryRoot, relativePath, MAX_PACKAGE_TEXT_BYTES - state.totalBytes, testHooks);
         state.files.push(readResult.file);
@@ -1316,9 +1319,18 @@ async function readBootstrapDirectory(
         throw new Error("snapshot special file is not allowed");
       }
     }
-    const after = await lstat(directoryPath, { bigint: true });
+    const afterHandle = await directoryHandle.stat({ bigint: true });
+    const afterPath = await lstat(directoryPath, { bigint: true });
     const afterReal = await realpath(directoryPath);
-    if (after.isSymbolicLink() || !after.isDirectory() || !sameDirectoryIdentity(before, after) || beforeReal !== afterReal || !isContained(boundaryRoot, afterReal)) {
+    if (
+      !afterHandle.isDirectory()
+      || afterPath.isSymbolicLink()
+      || !afterPath.isDirectory()
+      || !sameDirectoryIdentity(opened, afterHandle)
+      || !sameDirectoryIdentity(opened, afterPath)
+      || openedReal !== afterReal
+      || !isContained(boundaryRoot, afterReal)
+    ) {
       throw new Error("snapshot directory changed during read");
     }
   } finally {
@@ -1333,14 +1345,22 @@ async function readBootstrapFile(
   remainingBytes: number,
   testHooks?: CodexBootstrapTestHooks,
 ): Promise<BootstrapFileReadResult> {
-  const before = await lstat(filePath, { bigint: true });
-  if (before.isSymbolicLink() || !before.isFile() || before.nlink !== 1n) throw new Error("snapshot file is not a private regular file");
-  const beforeReal = await realpath(filePath);
-  if (!isContained(boundaryRoot, beforeReal)) throw new Error("snapshot file escapes boundary");
   const fileHandle = await open(filePath, fsConstants.O_RDONLY | NO_FOLLOW_FLAG);
   try {
     const opened = await fileHandle.stat({ bigint: true });
-    if (!opened.isFile() || opened.nlink !== 1n || !sameFileIdentity(before, opened)) throw new Error("snapshot file changed before read");
+    const openedPath = await lstat(filePath, { bigint: true });
+    const openedReal = await realpath(filePath);
+    if (
+      !opened.isFile()
+      || opened.nlink !== 1n
+      || openedPath.isSymbolicLink()
+      || !openedPath.isFile()
+      || openedPath.nlink !== 1n
+      || !sameFileIdentity(opened, openedPath)
+    ) {
+      throw new Error("snapshot file changed before read");
+    }
+    if (!isContained(boundaryRoot, openedReal)) throw new Error("snapshot file escapes boundary");
     const openedSize = safeBigIntToNumber(opened.size);
     if (openedSize > remainingBytes) throw new Error("snapshot byte bound exceeded");
     const bytes = await readHandleBytes(fileHandle, openedSize);
@@ -1348,7 +1368,17 @@ async function readBootstrapFile(
     const afterHandle = await fileHandle.stat({ bigint: true });
     const afterPath = await lstat(filePath, { bigint: true });
     const afterReal = await realpath(filePath);
-    if (!afterHandle.isFile() || afterHandle.nlink !== 1n || !sameFileIdentity(opened, afterHandle) || !sameFileIdentity(opened, afterPath) || beforeReal !== afterReal || !isContained(boundaryRoot, afterReal)) {
+    if (
+      !afterHandle.isFile()
+      || afterHandle.nlink !== 1n
+      || afterPath.isSymbolicLink()
+      || !afterPath.isFile()
+      || afterPath.nlink !== 1n
+      || !sameFileIdentity(opened, afterHandle)
+      || !sameFileIdentity(opened, afterPath)
+      || openedReal !== afterReal
+      || !isContained(boundaryRoot, afterReal)
+    ) {
       throw new Error("snapshot file changed during read");
     }
     return {
@@ -1356,7 +1386,7 @@ async function readBootstrapFile(
       identity: {
         relativePath,
         absolutePath: filePath,
-        realPath: beforeReal,
+        realPath: openedReal,
         stats: opened,
       },
     };
