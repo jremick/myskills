@@ -6,6 +6,8 @@ import path from "node:path";
 import {
   MAX_PACKAGE_FILES,
   MAX_PACKAGE_TEXT_BYTES,
+  SKILL_PACKAGE_MANIFEST_CONTRACT_ID,
+  SKILL_PACKAGE_SCANNER_CONTRACT_ID,
   loadSkillManifestFromPackageFiles,
   normalizePackageFilePath,
   loadSkillManifestFromPath,
@@ -16,6 +18,11 @@ import {
 } from "../src/package-path.js";
 import { hasBlockingFindings } from "../src/scan.js";
 import { writeStoredZip } from "../../../test-support/zip-fixture.js";
+
+test("exports stable package manifest and scanner contract identifiers", () => {
+  assert.equal(SKILL_PACKAGE_MANIFEST_CONTRACT_ID, "myskills.skill-package.manifest.strict-root.v1");
+  assert.equal(SKILL_PACKAGE_SCANNER_CONTRACT_ID, "myskills.skill-package.scanner.text-risk.v1");
+});
 
 test("loads a skill manifest from a package directory", async (t) => {
   const dir = await makeTempPackage();

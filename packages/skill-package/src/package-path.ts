@@ -12,6 +12,14 @@ export const MAX_PACKAGE_TEXT_BYTES = 1024 * 1024;
 export const MAX_PACKAGE_ARCHIVE_BYTES = 10 * 1024 * 1024;
 export const MAX_PACKAGE_ARCHIVE_ENTRIES = MAX_PACKAGE_FILES * 2;
 
+/**
+ * Stable compatibility identifiers owned by the package reader/scanner
+ * boundary. Consumers must bind these identifiers instead of asserting a
+ * planner-local scanner or manifest contract.
+ */
+export const SKILL_PACKAGE_MANIFEST_CONTRACT_ID = "myskills.skill-package.manifest.strict-root.v1" as const;
+export const SKILL_PACKAGE_SCANNER_CONTRACT_ID = "myskills.skill-package.scanner.text-risk.v1" as const;
+
 export interface PackageScanResult {
   rootPath: string;
   filesScanned: number;

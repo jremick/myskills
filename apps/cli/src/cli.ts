@@ -43,6 +43,14 @@ import {
 } from "./install-filesystem.js";
 import { codexWorkspaceCapabilities, codexWorkspaceDescriptor, parseWorkspaceTarget, validateCodexSkill, workspaceRootDigest } from "./codex-workspace.js";
 import { CompanionLease } from "./companion-lease.js";
+import {
+  CodexBootstrapError,
+  codexBootstrapStdoutDto,
+  createCodexBootstrapDryRun,
+  readCodexBootstrapContextFile,
+  type CodexBootstrapSourceTrustCompartment,
+  type CodexBootstrapTargetTrustCompartment,
+} from "./codex-bootstrap.js";
 
 const DEFAULT_API_URL = "http://localhost:3001";
 const CLI_VERSION = process.env.MYSKILLS_CLI_VERSION ?? "0.0.0-dev";
@@ -155,8 +163,18 @@ interface ParsedArgs {
 
 export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {
   let parsed: ParsedArgs;
-  try { parsed = parseArgs(argv); }
-  catch { runtime.io.stderr("Invalid command options."); return 2; }
+  try {
+    parsed = parseArgs(argv);
+  } catch {
+    const wantsJson = Array.isArray(argv) && argv.some((value) => value === "--json");
+    const parseError = new CliError("Invalid command options.", 2, "CLI_ARGUMENTS_INVALID");
+    if (wantsJson) {
+      runtime.io.stderr(JSON.stringify({ error: parseError.toJSON() }, null, 2));
+    } else {
+      runtime.io.stderr(parseError.message);
+    }
+    return parseError.exitCode;
+  }
   try {
     if (["install", "list", "update", "updates", "rollback", "companion", "codex", "doctor"].includes(parsed.command)) {
       if (parsed.options.workspace && parsed.options.dir) throw new CliError("Choose --workspace or --dir, not both.", 2);
@@ -232,6 +250,8 @@ async function dispatchCli(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
         return await configCommand(parsed, runtime);
       case "doctor":
         return await doctorCommand(parsed, runtime);
+      case "bootstrap":
+        return await bootstrapCommand(parsed, runtime);
       case "submit":
         return await submitCommand(parsed, runtime);
       case "review":
@@ -1414,6 +1434,104 @@ async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     runtime.io.stdout(`${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tfindings=${responseScan.findingCount}`);
   }
   return 0;
+}
+
+async function bootstrapCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  if (parsed.args.length !== 1 || parsed.args[0] !== "codex") {
+    throw new CliError("Usage: myskills bootstrap codex --dry-run --profile work --context <file> [--work-source-root <dir>] [--shared-source-root <dir>] --live-root <dir> --include-slug <slug> --output <report.json>", 2, "USAGE_ERROR");
+  }
+  const allowedOptions = new Set([
+    "dry-run", "profile", "context", "context-file", "workspace-id", "tenant-id", "live-root", "live-skills-root",
+    "work-source-root", "shared-source-root", "output", "target-origin", "instance-id", "target-instance-id", "actor-id",
+    "source-trust-compartment", "target-trust-compartment", "include-slug", "allow-loopback-http", "planner-version",
+    "scanner-version", "manifest-version", "json",
+  ]);
+  if (Object.keys(parsed.options).some((key) => !allowedOptions.has(key))) {
+    throw new CliError("Codex bootstrap accepts planning options only.", 2, "BOOTSTRAP_OPTION_UNSUPPORTED");
+  }
+  if (Object.entries(parsed.options).some(([key, value]) => Array.isArray(value) && key !== "include-slug")) {
+    throw new CliError("Codex bootstrap options cannot be repeated.", 2, "BOOTSTRAP_OPTION_REPEATED");
+  }
+  if (parsed.options["dry-run"] !== true) {
+    throw new CliError("Codex bootstrap is a dry-run-only planner; pass --dry-run.", 2, "BOOTSTRAP_DRY_RUN_REQUIRED");
+  }
+  try {
+    const contextOption = optionalStringOption(parsed, "context");
+    const contextFileOption = optionalStringOption(parsed, "context-file");
+    if (contextOption && contextFileOption) throw new CliError("Pass one work context file, not multiple context options.", 2, "BOOTSTRAP_CONTEXT_INVALID");
+    const contextPath = contextOption ?? contextFileOption;
+    if (!contextPath) throw new CliError("--context is required for work bootstrap.", 2, "BOOTSTRAP_CONTEXT_REQUIRED");
+    const context = await readCodexBootstrapContextFile(contextPath);
+    const workspaceId = optionalStringOption(parsed, "workspace-id");
+    const tenantId = optionalStringOption(parsed, "tenant-id");
+    if (workspaceId && tenantId && workspaceId !== tenantId) {
+      throw new CliError("--workspace-id and --tenant-id must match when both are supplied.", 2, "BOOTSTRAP_CONTEXT_INVALID");
+    }
+    const liveRootOption = optionalStringOption(parsed, "live-root");
+    const liveSkillsRootOption = optionalStringOption(parsed, "live-skills-root");
+    if (liveRootOption && liveSkillsRootOption && liveRootOption !== liveSkillsRootOption) {
+      throw new CliError("The target root options must agree.", 2, "BOOTSTRAP_ROOT_INVALID");
+    }
+    const liveSkillsRoot = liveRootOption ?? liveSkillsRootOption;
+    if (!liveSkillsRoot) throw new CliError("--live-root is required.", 2, "BOOTSTRAP_ROOT_REQUIRED");
+    const workSourceRoot = optionalStringOption(parsed, "work-source-root");
+    const sharedSourceRoot = optionalStringOption(parsed, "shared-source-root");
+    if (!workSourceRoot && !sharedSourceRoot) {
+      throw new CliError("At least one typed work or shared source root is required.", 2, "BOOTSTRAP_SOURCE_ROOT_REQUIRED");
+    }
+    const reportPath = stringOption(parsed, "output");
+    const instanceOption = optionalStringOption(parsed, "instance-id");
+    const targetInstanceOption = optionalStringOption(parsed, "target-instance-id");
+    if (instanceOption && targetInstanceOption && instanceOption !== targetInstanceOption) {
+      throw new CliError("The target instance options must agree.", 2, "BOOTSTRAP_CONTEXT_INVALID");
+    }
+    const result = await createCodexBootstrapDryRun({
+      paths: {
+        liveSkillsRoot,
+        reportPath,
+        ...(workSourceRoot ? { workSourceRoot } : {}),
+        ...(sharedSourceRoot ? { sharedSourceRoot } : {}),
+      },
+      context,
+      profile: optionalStringOption(parsed, "profile"),
+      targetOrigin: optionalStringOption(parsed, "target-origin"),
+      targetInstanceId: instanceOption ?? targetInstanceOption,
+      tenantId: tenantId ?? workspaceId,
+      actorId: optionalStringOption(parsed, "actor-id"),
+      sourceTrustCompartment: optionalStringOption(parsed, "source-trust-compartment") as CodexBootstrapSourceTrustCompartment | undefined,
+      targetTrustCompartment: optionalStringOption(parsed, "target-trust-compartment") as CodexBootstrapTargetTrustCompartment | undefined,
+      candidateAllowlist: stringListOption(parsed, "include-slug"),
+      allowLoopbackHttp: parsed.options["allow-loopback-http"] === true,
+      contractVersions: {
+        ...(optionalStringOption(parsed, "planner-version") ? { planner: optionalStringOption(parsed, "planner-version") } : {}),
+        ...(optionalStringOption(parsed, "scanner-version") ? { scanner: optionalStringOption(parsed, "scanner-version") } : {}),
+        ...(optionalStringOption(parsed, "manifest-version") ? { manifest: optionalStringOption(parsed, "manifest-version") } : {}),
+      },
+    });
+    const dto = codexBootstrapStdoutDto(result.report);
+    if (parsed.options.json) {
+      runtime.io.stdout(JSON.stringify(dto, null, 2));
+    } else {
+      runtime.io.stdout([
+        "dry-run",
+        "work-team",
+        `status=${dto.status}`,
+        `candidates=${dto.candidateCount}`,
+        `ready=${dto.readyCandidateCount}`,
+        `excluded=${dto.exclusionCount}`,
+        `blocked=${dto.blockerCount}`,
+        `plan=${dto.planIdentity}`,
+        `report=${dto.reportChecksum}`,
+      ].join("\t"));
+    }
+    return result.report.status === "ready" ? 0 : 1;
+  } catch (error) {
+    if (error instanceof CliError) throw error;
+    if (error instanceof CodexBootstrapError) {
+      throw new CliError(error.message, 1, error.code);
+    }
+    throw new CliError("The Codex bootstrap planner failed.", 1, "BOOTSTRAP_PLANNER_FAILED");
+  }
 }
 
 async function releaseMetadataOptions(parsed: ParsedArgs): Promise<SkillReleaseMetadata> {
@@ -4755,6 +4873,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       || key === "health"
       || key === "clear-organizations"
       || key === "dry-run"
+      || key === "allow-loopback-http"
       || key === "upload"
       || key === "include-prerelease"
       || key === "requires-user-action"
@@ -4765,7 +4884,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
     const next = rest[index + 1];
     if (!next || next.startsWith("--")) {
-      throw new CliError(`Option --${key} requires a value.`, 2);
+      throw new CliError("Invalid command options.", 2, "CLI_ARGUMENTS_INVALID");
     }
     const existing = options[key];
     if (typeof existing === "string") {
@@ -4801,6 +4920,7 @@ function helpText(): string {
     "  config set api-url <url>",
     "  config reset api-url",
     "  config list",
+    "  bootstrap codex --dry-run --profile work --context <file> [--work-source-root <dir>] [--shared-source-root <dir>] --live-root <dir> --include-slug <slug> [--include-slug <slug>] --output <report.json>",
     "  submit --path <file-directory-or-zip> [--release-notes-file <file>] [--change-kind <fix|feature|breaking|security|maintenance>] [--requires-user-action] [--minimum-myskills-version <version>] [--minimum-adapter-contract-version <number>] [--minimum-source-version <version>] [--api-url <url>] [--token <token>]",
     "  review submissions [--api-url <url>] [--token <token>]",
     "  review bundle <submission-id> [--platform <name>] [--output <file>] [--api-url <url>] [--token <token>]",
