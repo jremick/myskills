@@ -1,3 +1,15 @@
+map $sent_http_content_type $myskills_content_cache_control {
+  default "";
+  "~^text/html(?:;|$)" "no-cache";
+}
+
+# URI overrides retain the policy when a 304 response omits Content-Type.
+map $uri $myskills_cache_control {
+  default $myskills_content_cache_control;
+  /index.html "no-cache";
+  /version.json "no-store";
+}
+
 server {
   listen ${PORT};
   server_name _;
@@ -14,6 +26,7 @@ server {
   add_header X-Content-Type-Options "nosniff" always;
   add_header Referrer-Policy "strict-origin-when-cross-origin" always;
   add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;
+  add_header Cache-Control $myskills_cache_control always;
 
   location / {
     try_files $uri $uri/ /index.html;
@@ -39,7 +52,6 @@ server {
   }
 
   location = /version.json {
-    add_header Cache-Control "no-store";
     try_files $uri =404;
   }
 }
