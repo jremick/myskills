@@ -19,14 +19,17 @@ separate CLI/package proof for the new planner.
 
 ## Release Outcome
 
-Beta.5 is the previously published source, CLI, and hosted operational release.
-Beta.6 is a CLI-focused candidate. It adds the work/team bootstrap planner and
-no API, web, migration, or hosted runtime behavior. A beta.6 source version or
-passing unit test does not establish that Railway runs beta.6, and this release
-does not require a Railway promotion.
+Beta.6 was published as a CLI-focused npm package and GitHub prerelease on
+5 September 2026. It adds the work/team bootstrap planner and no API, web,
+migration, or hosted runtime behavior. The release did not promote Railway;
+beta.5 remains the separately verified hosted operational baseline.
 
-Public npm publication, a GitHub prerelease, and a release tag remain separate
-release actions. Building and testing a tarball does not publish it.
+[PR #62](https://github.com/jremick/myskills/pull/62) merged as
+`c940e4523397966975bf182b3f8239a3e9ee7376`. The immutable
+`v0.1.0-beta.6` tag targets that exact commit. Its
+[release workflow](https://github.com/jremick/myskills/actions/runs/33964168764)
+passed before the [GitHub prerelease](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.6)
+was published.
 
 ## Canonical Executable Gate
 
@@ -47,25 +50,30 @@ verification surfaces, not substitute deployment evidence.
 The CLI package includes `LICENSE`, `README.md`, `dist/index.js`, and the npm
 package manifest. The installed license must match the root project license.
 
-## Candidate Acceptance
+## Release Verification
 
-- Run the complete canonical release gate on the immutable beta.6 candidate.
-- Install the packed CLI in a fresh temporary root and verify its exact version.
-- Run one disposable work-owned canary through `bootstrap codex --dry-run`.
-  Verify no network access, no source or target mutation, a new private report,
-  redacted terminal output, stable plan identities, and explicit target state.
-- Verify that unapproved trust compartments, implicit selectors, sensitive
-  configuration paths, stale contracts, and changing source or target identities
-  fail closed.
-- Read back the tag workflow, immutable npm package, npm `beta` selector, and
-  GitHub prerelease. Keep `latest` and `alpha` unchanged.
+- The complete canonical release gate passed on the clean beta.6 candidate.
+- The CLI tarball contains only `LICENSE`, `README.md`, `dist/index.js`, and
+  `package.json`. Its SHA-256 is
+  `d20b0ffe61d5783f47bab43d22accb480fc1d799de8ce5937010be7364571098`.
+- Fresh-cache installs of both the exact npm version and the `beta` selector
+  returned `0.1.0-beta.6`, matched the verified package integrity, and passed
+  public example validation and scanning.
+- The disposable work-owned planner canary verified no network access, no
+  source or target mutation, a new private report, redacted terminal output,
+  stable plan identities, and explicit target state.
+- Negative tests verified that unapproved trust compartments, implicit
+  selectors, sensitive paths, stale contracts, changing identities, symlinks,
+  and out-of-bound plans fail closed.
+- npm `beta` resolves to `0.1.0-beta.6`. The `latest` and `alpha` selectors
+  remain on `0.1.0-alpha.3`.
 
 ## Beta Boundaries
 
 - Hosted registration stays owner-controlled.
 - Self-hosting and the supported local runtime path are the product focus.
 - SSO, hosted billing, more provider runtimes, and durable model evaluations are
-  outside this operational candidate.
+  outside this CLI release.
 - Adoption and support evidence are still required before a stable release.
 - Unverified platform or runtime behavior must be listed as a limitation.
 
