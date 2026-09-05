@@ -18,15 +18,16 @@ MySkills is an open-source beta platform for publishing, reviewing, discovering,
 
 Current target: **v0.1.0-beta.5**.
 
-The beta.4 source and CLI release includes the Phase 2 architecture control plane
-and the read-only Codex adapter file-safety fix-forward.
-The hosted beta at [myskills.sh](https://myskills.sh) remains a separately
-verified deployment surface and must not be assumed to run beta.4 until its
-production promotion is read back.
+Published release: **[v0.1.0-beta.5](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.5)**.
+
+The beta.5 source and CLI release completes reviewed skill delivery into a Codex
+workspace, with verified updates and rollback. Publication and live verification
+of the hosted beta at [myskills.sh](https://myskills.sh) are recorded in the
+[operational delivery ledger](docs/OPERATIONAL_BETA_DELIVERY.md).
 
 This beta is intended for real external trial use with documented compatibility, support, and upgrade expectations. It is still prerelease software and not yet the business-safe production release: API contracts, package formats, deployment defaults, and operational guidance may still change before `v1.0`.
 
-The closed beta acceptance ledger is tracked in [docs/BETA_RELEASE_GOAL.md](docs/BETA_RELEASE_GOAL.md); the one executable candidate gate is `npm run release:verify`.
+Operational beta acceptance is tracked in [docs/OPERATIONAL_BETA_DELIVERY.md](docs/OPERATIONAL_BETA_DELIVERY.md); the one executable candidate gate is `npm run release:verify`.
 
 ## Name
 
@@ -128,7 +129,7 @@ node apps/cli/dist/index.js token create --name "Local CLI" --scope profile:read
 node apps/cli/dist/index.js logout
 ```
 
-The `0.1.0-beta.4` CLI uses npm's `beta` dist-tag. The `latest` and `alpha` tags remain on `0.1.0-alpha.3`, so prerelease users must select the beta channel explicitly:
+The `0.1.0-beta.5` CLI uses npm's `beta` dist-tag. The `latest` and `alpha` tags remain on `0.1.0-alpha.3`, so prerelease users must select the beta channel explicitly:
 
 ```bash
 npm install -g @jarel/myskills@beta
