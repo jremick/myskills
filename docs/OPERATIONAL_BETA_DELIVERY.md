@@ -1,6 +1,6 @@
 # Operational beta delivery
 
-Status: source implementation and recovery checks passed; local browser journey passed; Railway gates in progress. Started 5 September 2026.
+Status: operational beta deployed and verified in staging and production on 5 September 2026. Stable-release limits are recorded below.
 
 ## Intended outcome
 
@@ -58,24 +58,24 @@ tests alone does not establish deployed behavior or provider runtime recognition
 
 | ID | Acceptance criterion | Evidence / status |
 | --- | --- | --- |
-| A01 | Candidate contains current main plus the intended upgrade and UI work; unrelated WIP is preserved. | Integrated main plus the unique upgrade/UI commits in an isolated worktree. Original dirty checkout unchanged on readback; final remote integration pending. |
-| A02 | Declared-runtime checks and production audit pass; packed CLI contains its license and runs after fresh installation. | `npm run check`: 769 tests passed on Node 24.19/npm 11.12.1; production audit zero; fresh packed CLI install, LICENSE, validate and scan passed. Node 22/Linux CI pending. |
-| A03 | Direct skill URLs stay stable outside the current result page; all authorized skills are reachable once despite many versions. | Registry pagination tests and real Postgres coverage passed. Direct-link component tests passed; deployed browser check pending. |
-| A04 | An author sees change-request reasons and scan findings, corrects the package, and completes review with another account. | Feedback/privacy/API tests passed; local rendered author feedback and immutable publication passed. The five-test local browser/API/CLI journey passed. Live staging pending. |
-| A05 | An authorized maintainer can find archived or unpublished resources, select historical releases, and restore them. | Local rendered unpublished history and archived inventory checks passed; immutable lifecycle restoration verified. Live staging pending. |
-| A06 | Package contents are readable before adoption; onboarding explains ownership and supported installation scope. | Package viewer and onboarding component checks passed; local rendered escaped SKILL.md content inspected. Live staging pending. |
-| A07 | A private release cannot leak through a broader target; authorization, consent, policy, lifecycle, and source state are rechecked at execution boundaries. | Production-store negative authorization/policy/consent/source tests passed in the 139-test Postgres gate; live companion journey pending. |
-| A08 | Conflicting workers cannot apply simultaneously; expired workers cannot promote; success requires the planned identity and verification evidence. | Lease expiry, target-wide fences, queue/sync exclusivity, exact success, and contention regressions passed. Independent review closed findings; live journey pending. |
-| A09 | Batch persistence and audits are atomic; retries return the original operation without state-dependent replay failures. | Real Postgres batch rollback, audit injection, and completed replay tests passed; no duplicate operation/audit on contention retry. |
-| A10 | Local installs, updates, recovery, and rollback share a root lock and eligibility checks; rollback bytes are verified and retained until verification succeeds. | 133 CLI tests passed, including root contention, interrupted recovery, unknown edits, rollback tampering, and lease refusal. Same-OS-account hostile directory swaps remain outside the isolation guarantee. |
-| A11 | Registry provenance is bound to installs; intake uses one bounded byte snapshot; export and package reads reject symlink escapes. | Bounded directory/ZIP snapshot, traversal/race, provenance, and export tests passed on macOS. Linux runtime evidence awaits CI. |
+| A01 | Candidate contains current main plus the intended upgrade and UI work; unrelated WIP is preserved. | [PR #55](https://github.com/jremick/myskills/pull/55) integrated the operational beta. [PR #57](https://github.com/jremick/myskills/pull/57) added only the two nginx cache fixes. Final application source is `d8c7179789bdbf0930fe0e496081377f6c63cd20`; original dirty checkout preserved. |
+| A02 | Declared-runtime checks and production audit pass; packed CLI contains its license and runs after fresh installation. | Linux Node 22 and 24 each passed 798 source tests and the required check gate. Production audit passed; fresh packed CLI install, LICENSE, validate and scan passed. |
+| A03 | Direct skill URLs stay stable outside the current result page; all authorized skills are reachable once despite many versions. | Pagination, direct-link component, and real Postgres tests passed. Production Comet preserved an authenticated private skill's direct link under an unrelated search filter. |
+| A04 | An author sees change-request reasons and scan findings, corrects the package, and completes review with another account. | Live staging verified exact author feedback, scan evidence, immutable correction, and publication across distinct author and maintainer accounts. |
+| A05 | An authorized maintainer can find archived or unpublished resources, select historical releases, and restore them. | Live staging verified rendered unpublished history, archived inventory, restoration, and unchanged artifact bytes. |
+| A06 | Package contents are readable before adoption; onboarding explains ownership and supported installation scope. | Package viewer and onboarding component checks passed. Staging rendered escaped SKILL.md before installation; production rendered SKILL.md and an available supporting file as literal text. |
+| A07 | A private release cannot leak through a broader target; authorization, consent, policy, lifecycle, and source state are rechecked at execution boundaries. | The 148-test Postgres gate passed on both Node lines, including private-target boundaries and hidden release history. Live staging blocked an upgrade crossing a breaking release at preview, scheduling, and claim, then verified exact pin selection. |
+| A08 | Conflicting workers cannot apply simultaneously; expired workers cannot promote; success requires the planned identity and verification evidence. | Lease expiry, target-wide fences, queue/sync exclusivity, and contention regressions passed. Live staging verified exact companion receipts and refusal after target revocation. |
+| A09 | Batch persistence and audits are atomic; retries return the original operation without state-dependent replay failures. | Real Postgres batch rollback, audit injection, and contention retry tests passed. Live staging replay returned the completed operation and its original receipt. |
+| A10 | Local installs, updates, recovery, and rollback share a root lock and eligibility checks; rollback bytes are verified and retained until verification succeeds. | CLI locking, interrupted recovery, unknown edits, rollback tampering, and lease refusal passed the Node 22/24 gates. Live staging preserved local edits and verified update/rollback bytes. Hostile swaps by the same OS account remain outside the isolation guarantee. |
+| A11 | Registry provenance is bound to installs; intake uses one bounded byte snapshot; export and package reads reject symlink escapes. | Bounded directory/ZIP snapshot, traversal/race, provenance, and export checks passed on macOS and in the Linux Node 22/24 gates. |
 | A12 | Password length handling prevents bcrypt truncation for new credentials; token storage reports failures honestly; the five admin mutation paths (status, roles, token revocation, registration settings, and provider configuration) commit with their audits. | Password, token-store and real Postgres injected-audit-failure tests passed. Self-service MFA/email/password and invitations retain separate audit sequencing. |
-| A13 | Artifact cleanup cannot delete an in-flight committed publication; real Postgres tests exercise production stores and contention. | Real Postgres registry/reaper tests and bounded S3 request tests passed. All old writers/reapers must be drained during rollout. |
-| A14 | One standard-frontmatter skill is enrolled, installed, observed, updated, and recovered in a disposable Codex workspace using the built CLI and live staging API. Runtime recognition has separate evidence. | Local complete journey passed, including installed Codex 0.152.0 skills/list recognition without a model turn. Live staging pending. |
-| A15 | Browser and CLI checks cover author → review → publish → discover → install → update → rollback → revoke across distinct roles. | Five local full-stack browser tests passed in Comet against Docker API/Postgres/S3/SMTP, including the distinct-role operational journey and exact companion receipts. Live staging pending. |
-| A16 | Database and artifact recovery is rehearsed in an isolated destination; the operator has executable migration, rollback, and restore instructions. | Staging data restore: 30 tables/3 artifacts. Production restore: 32 tables/87 artifacts; every table and artifact verified. Restored candidate API passed 18→29 migrations, readiness, restored auth, private S3 delivery and anonymous denial, with email disabled. Private backup/runtime receipts retained outside Git. |
-| A17 | Required GitHub checks pass for the candidate; staging API and web expose the same source identity and pass live acceptance. | Pending. |
-| A18 | Production API and web expose the promoted source identity; readiness, auth, registry, artifact delivery, and recent logs are verified. | Pending. |
+| A13 | Artifact cleanup cannot delete an in-flight committed publication; real Postgres tests exercise production stores and contention. | Real Postgres registry/reaper and bounded S3 tests passed. Old API deployments were removed before the new artifact protocol started in staging and production. |
+| A14 | One standard-frontmatter skill is enrolled, installed, observed, updated, and recovered in a disposable Codex workspace using the built CLI and live staging API. Runtime recognition has separate evidence. | Live staging passed the complete workspace journey. A separate local Codex `skills/list` result confirmed recognition without a model turn. |
+| A15 | Browser and CLI checks cover author → review → publish → discover → install → update → rollback → revoke across distinct roles. | Linux Node 22 and 24 each passed eight mocked browser tests and five full-stack tests. Final live staging Comet passed 20 checks in 135 seconds, including policy denial, exact pin, update, rollback, and revocation. |
+| A16 | Database and artifact recovery is rehearsed in an isolated destination; the operator has executable migration, rollback, and restore instructions. | Final logical recovery verified all 50 tables at migration 29 and all 87 artifacts, including 86 object-backed packages, with no source writes. Earlier isolated runtime recovery verified migrations 18→29, readiness, auth, private delivery, and anonymous denial with email disabled. The final copy did not repeat that runtime check. |
+| A17 | Required GitHub checks pass for the candidate; staging API and web expose the same source identity and pass live acceptance. | Final main [CI](https://github.com/jremick/myskills/actions/runs/33932735785) and [CodeQL](https://github.com/jremick/myskills/actions/runs/33932735819) passed at `d8c7179`. Final staging identity, readiness, HTML headers, and the complete 20-check journey passed. |
+| A18 | Production API and web expose the promoted source identity; readiness, auth, registry, artifact delivery, and recent logs are verified. | Final `d8c7179` preflight, 29 migrations, eight HTTP readbacks, seven HTML/header checks, and all 12 Comet/API checks using read requests passed. These include owner cookie auth, exact private delivery, literal text, anonymous mobile, and session preservation. Package access creates normal audit events; no fixture or administrative change requests were sent. Sampled API/nginx logs had no actual errors or 5xx. |
 
 ## Architecture and failure boundaries
 
@@ -100,34 +100,86 @@ recovery. Keep backups and credentials outside source control and public reports
 
 ## Operational closeout
 
-Record the final commit, required CI runs, package digest, deployment identities,
-verification commands and results, recovery evidence, and any unverified behavior.
-Do not describe an unrun check or an inferred runtime state as passed. Retain
-remaining adoption and stable-release work as explicit follow-up items.
+The records below identify the verified source, checks, package, deployments,
+and recovery points. Account-bearing browser and runtime reports remain private.
+Adoption and stable-release work remain explicit follow-up items.
 
-## Evidence collected before live promotion
+## Source and rollout evidence
 
-On Node 24.19.0 and npm 11.12.1, `npm run check` passed 769 tests,
-production dependency audit, lint, builds, web types, release policy and the
-fresh-package smoke. `npm run test:postgres` passed 139 tests against a
-disposable Postgres 17 database. The independent queue and CLI reviews closed
-their confirmed findings after targeted regressions.
+The final application revision is
+`d8c7179789bdbf0930fe0e496081377f6c63cd20`, merged through PR #57 at
+2026-09-05 00:21:58 UTC after its required candidate checks passed. It changes
+only two nginx configurations from the first beta.5 deployment. Main
+[CI](https://github.com/jremick/myskills/actions/runs/33932735785) and
+[CodeQL](https://github.com/jremick/myskills/actions/runs/33932735819) passed.
+GitHub reported zero open Dependabot and CodeQL alerts after the final merge on
+5 September 2026. Later documentation and test-only commits do not change the
+deployed application's embedded revision.
 
-A production snapshot taken at 2026-09-04 21:33 UTC restored 32 tables and 87
-artifacts into newly created loopback destinations. The candidate API applied
-11 additional migrations to that copy and passed readiness, restored session,
-admin/anonymous access, and private S3 artifact digest checks. Email was disabled;
-no production writes were performed by the rehearsal. Backup material and
-account-bearing runtime receipts remain private and outside source control.
+The freshly packed CLI passed installation, license inclusion, validation, and
+scanning. Its tarball SHA-256 is
+`9b27929dfedcf2195760a3980d0471f3f301227b373e038a410076dd6ea8302b`;
+the installed CLI bundle SHA-256 is
+`dbf0512e64011668ad0d9f282d725e92af974c5971605b0622a2a9f87cb0e75c`.
+Public npm and tag publication remain separate release actions.
 
-This is bounded beta evidence. It does not establish recovery-time guarantees,
-continuous backup scheduling, a hostile same-user filesystem sandbox, external
-email deliverability, full architecture graph execution, or model behavior.
+Final staging API `f69f826e-f71b-4baa-9dcf-3e414be69658` and web
+`1154add2-b701-4bbc-8d40-be52e123f910` succeeded from that exact revision.
+Preflight, 29 migrations, registry instance identity, direct API/web/proxy
+responses, and the seven-check HTML header probe passed. The full staging
+journey passed 20 checks in 135 seconds, with separate Codex recognition and
+temporary MFA cleanup verified. The capture mailbox stayed private, unused
+Resend values were cleared, and address-aware proxy trust was verified.
 
-The five-test local full-stack gate also passed with Comet, Docker API/web,
-Postgres, MinIO and Mailpit. It exercised password/MFA login, invitations,
-author feedback, review, publication, lifecycle restoration, package inspection,
-CLI install/update/rollback, companion drift refusal and exact receipts, target
-revocation and release revocation. With runtime proof enabled, Codex 0.152.0
-recognized the installed standard-frontmatter skill through `skills/list`; no
-model turn was created. The test's temporary containers were removed afterward.
+Final production API `0e8af8f9-c385-4fbd-a236-a05912a59793` and web
+`07c178e6-81d7-4fe6-a239-8a8c9ab16598` deployments succeeded from that same
+source. Preflight passed without warnings. Eight identity/health HTTP readbacks,
+seven HTML/header checks, and all 12 Comet/API checks using read requests passed.
+The browser check made 21 API GETs and reported no page errors. It sent no
+fixture or administrative change requests. Allowed and denied package downloads
+create normal `artifact.bundle` audit events in production. The check verified
+private direct links under an unrelated filter, owner cookie auth,
+exact package bytes, literal file display, anonymous mobile navigation at
+390 × 844 with loaded registry/skill detail and no horizontal overflow, and
+preservation of the owner session.
+Sampled API/nginx logs through 00:37:54 UTC had no actual errors or 5xx responses;
+Railway's error-level nginx startup entries were `[notice]` messages.
+
+An existing-browser check during the first deployment found that its cache could
+serve beta.2 HTML and assets until reload, although fresh HTTP requests returned beta.5.
+Root and deep-link HTML lacked an explicit `Cache-Control` response header.
+The two-file nginx fix passed 30 baseline/30 fixed HTTP response checks, 168
+security-header value checks, official entrypoint/environment substitution, and
+syntax validation. JavaScript, CSS, and API proxy behavior are unchanged. HTML
+cached before this fix needs one reload to obtain the new revalidation policy.
+An existing authenticated Codex browser tab passed that check: one reload showed
+the current Approved skills and Manage skills interface, and subsequent Registry
+navigation retained it without errors or loss of session.
+Final staging and production confirmed `no-cache` on HTML for both 200 and 304
+responses, preserved security headers and hashed assets, and `no-store` on
+`/version.json`.
+
+## Recovery evidence and beta limits
+
+The final logical recovery point was captured at 2026-09-05 00:31:16 UTC and
+verified by 00:33:47 UTC. Every table and artifact matched the snapshot: 50 tables
+at the 29-migration schema, 87 artifacts, 86 object-backed packages, and 3,394,519
+artifact bytes. It used new isolated destinations and made no source writes.
+The earlier recovered API check remains the runtime evidence for migrations,
+auth, and private delivery; the final recovery verified data only. The 32-table
+copy captured before the first production promotion remains historical evidence.
+The temporary test/recovery containers and clean release worktree were removed
+after verification. Verified backup files and release evidence were retained
+outside source control.
+
+A Railway manual Postgres snapshot was created at 2026-09-04 23:38:10 UTC.
+That physical snapshot has not been restored by this work. It is additional
+backup material, separate from the verified database-and-artifact logical copy.
+Account-bearing evidence, backup contents, and private package identities remain
+in operator-held records outside source control.
+
+Stable release readiness still needs sustained adoption evidence and defined,
+tested recovery-time, retention, and backup scheduling targets. This delivery
+has not established a recurring backup schedule, external email deliverability,
+a hostile same-user filesystem sandbox, full architecture graph execution, or
+model behavior.
