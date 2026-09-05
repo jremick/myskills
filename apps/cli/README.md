@@ -33,11 +33,12 @@ CLI tokens should be stored in the platform secret store where possible.
 
 ## Current Slice
 
-This document describes the beta.6 CLI release. Use a CLI built from the same
-release as the registry for managed updates and Codex workspace commands. The
-beta.2 visibility compatibility shims remain available for existing clients.
-Source versions and npm publication are separate from hosted deployment; the
-API and web expose their deployed version and commit at `/version.json`.
+This document describes the beta.6 CLI release. It remains compatible with the
+beta.5 hosted registry because beta.6 changes only the local dry-run bootstrap
+planner and does not change API contracts or hosted behavior. The beta.2
+visibility compatibility shims remain available for existing clients. Source
+versions and npm publication are separate from hosted deployment; the API and
+web expose their deployed version and commit at `/version.json`.
 
 ### Beta.3 breaking security changes
 
