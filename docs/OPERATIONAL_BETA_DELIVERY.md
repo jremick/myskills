@@ -185,20 +185,23 @@ backup material, separate from the verified database-and-artifact logical copy.
 Account-bearing evidence, backup contents, and private package identities remain
 in operator-held records outside source control.
 
-Stable release readiness still needs sustained adoption evidence and defined,
-tested recovery-time, retention, and backup scheduling targets. This delivery
-has not established a recurring backup schedule, external email deliverability,
-a hostile same-user filesystem sandbox, full architecture graph execution, or
-model behavior.
+Stable release readiness still needs sustained adoption evidence, external email
+delivery evidence, historical secret retention, and observed scheduled backup
+and notification behavior. The follow-up below establishes the first retained-set
+restore and the daily schedule. A hostile same-user filesystem sandbox, full
+architecture graph execution, and model behavior remain outside the proven scope.
 
 ## Authorized operational follow-up
 
-The [backup follow-up](BACKUPS.md) adds a private coordinated job and an executable
-restore from a retained remote set. Its daily schedule remains disabled until
-that exact retained set passes isolated data and API recovery. The job receives
-database and object-storage references, never the API's `AUTH_SECRET`. Historical
-MFA recovery also requires the matching encryption key in an approved secret
-store; the key's retention location has not been verified.
+The [backup follow-up](BACKUPS.md#live-beta-record-5-september-2026) is merged and
+deployed. Its first 30-second capture verified 50 tables and 87 artifacts. Restore
+of that exact retained remote set passed in 24 seconds, followed by recovered API
+readiness, authorization, MFA decryption, and private package delivery with email
+disabled. Daily 16:00 UTC scheduling and an independent 06:15 Melbourne-time
+freshness check are configured. The first clock-triggered run and notification
+delivery remain pending. The job receives database and object-storage references,
+never the API's `AUTH_SECRET`. Historical MFA recovery also requires the matching
+key in an approved secret store; its retention location has not been verified.
 
 The [independent-user pilot](PILOT.md) is ready for participant selection. No
 independent-use results or external email delivery have been recorded. The

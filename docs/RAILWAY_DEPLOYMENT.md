@@ -29,8 +29,9 @@ Do not deploy this project into any team or work Railway workspace.
 - `api`: Fastify API deployed separately from the same project source/commit. The live service builds `Dockerfile.api`.
 - `Postgres`: managed Railway Postgres.
 - `artifacts`: Railway Storage Bucket for S3-compatible package artifact storage.
-- `registry-backup`: private backup job built from `Dockerfile.backup`; initial
-  schedule disabled until the stored-set recovery gate passes.
+- `registry-backup`: private daily backup job built from `Dockerfile.backup`,
+  with `RAILWAY_DOCKERFILE_PATH` set explicitly; schedule 16:00 UTC after a
+  successful stored-set recovery drill.
 - `registry-backups`: separate private Storage Bucket for coordinated database
   and artifact recovery sets. See [Coordinated registry backups](BACKUPS.md).
 
@@ -77,8 +78,11 @@ writes. The earlier 32-table copy preceded the first promotion. Earlier isolated
 API recovery verified migrations, auth, and package delivery; the final copy did
 not repeat that runtime check. A Railway manual Postgres snapshot created at
 2026-09-04 23:38:10 UTC was not restored by this work. The recurring backup
-follow-up is configured separately and must pass the stored-set recovery gate
-before its schedule is enabled. Its operation does not require API/web changes.
+follow-up then captured and restored an exact retained remote set and passed
+recovered API checks. Daily scheduling is enabled. Deployment
+`1309565e-756e-4efc-ae47-13a373da239f` is `SUCCESS`/`cronReady`; the first
+clock-triggered run remains pending. See [the backup record](BACKUPS.md#live-beta-record-5-september-2026)
+for timings, image identity, monitoring, and remaining limits. API/web were not redeployed.
 
 Previous deployment IDs:
 

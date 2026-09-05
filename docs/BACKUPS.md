@@ -61,6 +61,9 @@ Both commands emit a small JSON status and exit nonzero on failure. Status also 
 Create one private Railway service in the existing project/environment with these native settings:
 
 - Dockerfile: `Dockerfile.backup`, repository root as build context.
+- Service variable: `RAILWAY_DOCKERFILE_PATH=Dockerfile.backup`. Keep this explicit
+  as well as the native Dockerfile setting; a configuration redeploy otherwise
+  selected Railpack during the first live setup. [Custom Dockerfile path](https://docs.railway.com/builds/dockerfiles#custom-dockerfile-path)
 - Start command: `node scripts/run-registry-backup.mjs --execute`.
 - One replica; restart policy `NEVER`; no public domain, port, healthcheck, or persistent volume.
 - Cron schedule **unset** for initial manual capture and restore proof. After proof, the candidate is `0 16 * * *` (16:00 UTC daily).
@@ -123,3 +126,43 @@ npx --no-install eslint scripts/lib/registry-recovery.mjs scripts/lib/registry-b
 ```
 
 The focused tests cover snapshot and inline-byte handling, namespace/source identity boundaries, corruption, incomplete sets, retention days, pagination refusal, overlap, connection loss, stalled streams, the whole-job deadline, independent path styles, stale status, download-before-restore verification, and legacy rehearsal behavior. They use local fake transports and do not replace the live PostgreSQL 18/object-store restore drill.
+
+## Live beta record: 5 September 2026
+
+[PR #59](https://github.com/jremick/myskills/pull/59) merged the runner at
+`bd2e8ee030e3db8eef956517d7bd4d587c5be738`. Required PR checks and subsequent
+main [CI](https://github.com/jremick/myskills/actions/runs/33938901776) and
+[CodeQL](https://github.com/jremick/myskills/actions/runs/33938901728) passed.
+The final focused recovery suite passed 27 tests. API/web application code and
+their deployed revision remain unchanged.
+
+The first production capture completed in 30 seconds. It verified 50 tables,
+87 artifacts (86 object-backed), and 3,394,519 artifact bytes. Run
+`2026-09-05T02-24-28.363Z_6afebe6519c7559d` has manifest SHA-256
+`302415341843a497856a6800d2d19d3126083ff22b1f8a44ccc92e38af87c87c`.
+Downloading and restoring that exact retained set into fresh local PostgreSQL 18
+and S3 destinations passed in 24 seconds. The recovered API passed readiness,
+restored owner access, anonymous denial, MFA-secret decryption, and exact private
+package delivery with email disabled. All 29 migrations were already present.
+Elapsed time from download start through the API check was 96 seconds; this
+does not measure incident response or replacement cloud infrastructure setup.
+Disposable restore services were removed; private backup and evidence files
+were retained outside the repository.
+
+Production `registry-backup` is now configured for 16:00 UTC daily, one replica,
+restart `NEVER`, and no public domain. Its scheduled deployment
+`1309565e-756e-4efc-ae47-13a373da239f` reports `SUCCESS` and `cronReady`.
+It uses the same image digest as the successful first run:
+`sha256:51b5cfb6f1c8980e2a252aa2fd4af3604a7e3c8b1b206fb5b0c6fefb69d28cda`.
+The earlier configuration redeploy `d4679cd0-7b63-4997-897b-afe41b87d0c3`
+failed at build time before running the job; the explicit Dockerfile selector
+fixed it. No active Railway warning or critical notification remained at readback.
+
+An independent local Codex check is configured for 06:15 Melbourne time daily.
+Its exact Railway-injected `--status` command passed after the restore. It will
+report the first automatic execution or an actionable failure, missed run, stale
+capture, or verification problem. It depends on the local host being available;
+notification delivery and the first clock-triggered run at 16:00 UTC on
+5 September remain unobserved. Seven-day retention is tested policy, not seven
+days of collected history. Historical `AUTH_SECRET` retention in an independent
+approved secret store remains unverified.
