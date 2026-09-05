@@ -13,7 +13,7 @@ import {
   readCodexBootstrapContextFile,
   type CodexBootstrapPaths,
 } from "../src/codex-bootstrap.js";
-import { SKILL_PACKAGE_MANIFEST_CONTRACT_ID, SKILL_PACKAGE_SCANNER_CONTRACT_ID } from "@myskills-app/skill-package";
+import { MAX_PACKAGE_ARCHIVE_ENTRIES, SKILL_PACKAGE_MANIFEST_CONTRACT_ID, SKILL_PACKAGE_SCANNER_CONTRACT_ID } from "@myskills-app/skill-package";
 import { runCli, type FetchLike } from "../src/cli.js";
 
 test("work canary is explicitly selected, privately reported, and never mutates source or target", async (t) => {
@@ -285,6 +285,39 @@ test("a nested directory addition after traversal fails closed", async (t) => {
   assert.equal(report.exclusions[0]?.reason, "SOURCE_UNAVAILABLE");
   assert.equal(JSON.stringify(report).includes(blockedContent), false);
   assert.equal((await readFile(reportPath, "utf8")).includes(blockedContent), false);
+});
+
+test("source snapshots bound directory entries and nesting depth", async (t) => {
+  const entryFixture = await makeFixture();
+  t.after(() => rm(entryFixture.root, { recursive: true, force: true }));
+  const entrySource = path.join(entryFixture.paths.workSourceRoot, "work-canary");
+  for (let index = 0; index < MAX_PACKAGE_ARCHIVE_ENTRIES; index += 1) {
+    await mkdir(path.join(entrySource, `empty-${index.toString().padStart(4, "0")}`));
+  }
+  const entryResult = await createCodexBootstrapDryRun({
+    paths: { ...entryFixture.paths, reportPath: path.join(entryFixture.reportDir, "entry-limit.json") },
+    context: entryFixture.context,
+    candidateAllowlist: ["work-canary"],
+  });
+  assert.equal(entryResult.report.status, "blocked");
+  assert.deepEqual(entryResult.report.candidates, []);
+  assert.equal(entryResult.report.exclusions[0]?.reason, "SOURCE_UNAVAILABLE");
+
+  const depthFixture = await makeFixture();
+  t.after(() => rm(depthFixture.root, { recursive: true, force: true }));
+  let nested = path.join(depthFixture.paths.workSourceRoot, "work-canary");
+  for (let depth = 0; depth < 33; depth += 1) {
+    nested = path.join(nested, "nested");
+    await mkdir(nested);
+  }
+  const depthResult = await createCodexBootstrapDryRun({
+    paths: { ...depthFixture.paths, reportPath: path.join(depthFixture.reportDir, "depth-limit.json") },
+    context: depthFixture.context,
+    candidateAllowlist: ["work-canary"],
+  });
+  assert.equal(depthResult.report.status, "blocked");
+  assert.deepEqual(depthResult.report.candidates, []);
+  assert.equal(depthResult.report.exclusions[0]?.reason, "SOURCE_UNAVAILABLE");
 });
 
 test("source and target snapshots reject invalid UTF-8 and NUL bytes", async (t) => {
@@ -560,6 +593,17 @@ test("empty and implicit-all allowlists are rejected", async (t) => {
       (error: unknown) => error instanceof CodexBootstrapError && error.code.startsWith("BOOTSTRAP_ALLOWLIST") && !error.message.includes(fixture.root),
     );
   }
+});
+
+test("candidate allowlists are bounded before any source snapshot is retained", async (t) => {
+  const fixture = await makeFixture();
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const allowlist = Array.from({ length: 9 }, (_, index) => `candidate-${index}`);
+  await assert.rejects(
+    createCodexBootstrapDryRun({ paths: fixture.paths, context: fixture.context, candidateAllowlist: allowlist }),
+    (error: unknown) => error instanceof CodexBootstrapError && error.code === "BOOTSTRAP_ALLOWLIST_LIMIT",
+  );
+  assert.deepEqual(await readdir(fixture.reportDir), []);
 });
 
 test("resolved duplicate selectors are rejected and terminal outcomes bind the plan", async (t) => {

@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import type { BigIntStats } from "node:fs";
-import { lstat, open, readFile, realpath, readdir, stat, unlink } from "node:fs/promises";
+import { lstat, open, opendir, readFile, realpath, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 import { TextDecoder } from "node:util";
 import {
   DEFAULT_MANIFEST_NAMES,
+  MAX_PACKAGE_ARCHIVE_ENTRIES,
   MAX_PACKAGE_FILES,
   MAX_PACKAGE_TEXT_BYTES,
   parseSkillManifest,
@@ -39,6 +40,8 @@ const MAX_TIMESTAMP_LENGTH = 64;
 const MAX_FRONTMATTER_BYTES = 64 * 1024;
 const MAX_FRONTMATTER_LINES = 4096;
 const MAX_REPORT_BYTES = 8 * 1024 * 1024;
+const MAX_BOOTSTRAP_CANDIDATES = 8;
+const MAX_BOOTSTRAP_SNAPSHOT_DEPTH = 32;
 const SNAPSHOT_CHUNK_BYTES = 64 * 1024;
 const NO_FOLLOW_FLAG = fsConstants.O_NOFOLLOW;
 const DIRECTORY_FLAG = fsConstants.O_DIRECTORY;
@@ -512,6 +515,9 @@ function normalizeCandidateAllowlist(input: {
   const values = input.candidateAllowlist ?? input.includeSlugs ?? input.include;
   if (!Array.isArray(values) || values.length === 0) {
     throw new CodexBootstrapError("BOOTSTRAP_ALLOWLIST_REQUIRED", "A positive candidate include allowlist is required.");
+  }
+  if (values.length > MAX_BOOTSTRAP_CANDIDATES) {
+    throw new CodexBootstrapError("BOOTSTRAP_ALLOWLIST_LIMIT", `The candidate include allowlist cannot contain more than ${MAX_BOOTSTRAP_CANDIDATES} entries.`);
   }
   const selectors: NormalizedSelector[] = [];
   for (const value of values) {
@@ -1239,8 +1245,8 @@ async function readBootstrapSnapshot(
   }
   const absoluteRoot = path.resolve(rootPath);
   const absoluteBoundaryRoot = path.resolve(boundaryRoot);
-  const state: SnapshotReadState = { directories: [], files: [], identities: [], totalBytes: 0 };
-  await readBootstrapDirectory(absoluteRoot, absoluteBoundaryRoot, "", state, testHooks);
+  const state: SnapshotReadState = { directories: [], files: [], identities: [], entries: 0, totalBytes: 0 };
+  await readBootstrapDirectory(absoluteRoot, absoluteBoundaryRoot, "", 0, state, testHooks);
   if (!state.rootPath || !state.rootRealPath || !state.rootStats || state.directories.length === 0 || state.files.length !== state.identities.length) {
     throw new Error("snapshot identity ledger is incomplete");
   }
@@ -1262,6 +1268,7 @@ interface SnapshotReadState {
   directories: BootstrapDirectoryIdentity[];
   files: BootstrapSnapshotFile[];
   identities: BootstrapFileIdentity[];
+  entries: number;
   totalBytes: number;
   rootPath?: string;
   rootRealPath?: string;
@@ -1272,9 +1279,11 @@ async function readBootstrapDirectory(
   directoryPath: string,
   boundaryRoot: string,
   relativePrefix: string,
+  depth: number,
   state: SnapshotReadState,
   testHooks?: CodexBootstrapTestHooks,
 ): Promise<void> {
+  if (depth > MAX_BOOTSTRAP_SNAPSHOT_DEPTH) throw new Error("snapshot directory depth exceeded");
   const directoryHandle = await open(directoryPath, fsConstants.O_RDONLY | DIRECTORY_FLAG | NO_FOLLOW_FLAG);
   try {
     const opened = await directoryHandle.stat({ bigint: true });
@@ -1300,7 +1309,13 @@ async function readBootstrapDirectory(
       state.rootRealPath = openedReal;
       state.rootStats = opened;
     }
-    const entries = await readdir(directoryPath, { withFileTypes: true });
+    const entries = [];
+    const directory = await opendir(directoryPath);
+    for await (const entry of directory) {
+      state.entries += 1;
+      if (state.entries > MAX_PACKAGE_ARCHIVE_ENTRIES) throw new Error("snapshot entry count exceeded");
+      entries.push(entry);
+    }
     entries.sort((left, right) => compareOrdinal(left.name, right.name));
     for (const entry of entries) {
       const entryPath = path.join(directoryPath, entry.name);
@@ -1308,7 +1323,7 @@ async function readBootstrapDirectory(
       if (entry.isSymbolicLink()) throw new Error("snapshot symlink is not allowed");
       if (isSensitiveSnapshotPath(relativePath)) throw new Error("snapshot sensitive path is not allowed");
       if (entry.isDirectory()) {
-        await readBootstrapDirectory(entryPath, boundaryRoot, relativePath, state, testHooks);
+        await readBootstrapDirectory(entryPath, boundaryRoot, relativePath, depth + 1, state, testHooks);
       } else if (entry.isFile()) {
         if (state.files.length >= MAX_PACKAGE_FILES) throw new Error("snapshot file count exceeded");
         const readResult = await readBootstrapFile(entryPath, boundaryRoot, relativePath, MAX_PACKAGE_TEXT_BYTES - state.totalBytes, testHooks);

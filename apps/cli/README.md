@@ -225,7 +225,9 @@ for the target), typed `work` and/or `shared` source roots, a target root, and
 a positive `--include-slug` allowlist. The context must approve the computed
 source-root type/digests and target-root digest. Personal, consumer, public,
 and unclassified sources are rejected, and candidates are never selected by
-implicit inventory discovery. A one-skill work-owned canary is supported.
+implicit inventory discovery. A plan accepts at most eight selected candidates;
+each candidate snapshot accepts at most 1,000 entries and 32 nested directory
+levels. A one-skill work-owned canary is supported.
 
 The context JSON must include `profile: "work"`, `targetOrigin`,
 `instanceId`, one `tenantId` or `workspaceId`, `actorId`, the canonical trust

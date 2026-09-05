@@ -21,8 +21,10 @@ publish, adoption, target-write, or implicit discovery path.
 
 - The planner snapshots bounded regular UTF-8 files without following symlinks,
   rejects sensitive credential/configuration paths and ambiguous manifests,
-  revalidates source and target identities around planning, and binds the exact
-  target precondition for a future compare-and-swap executor.
+  caps plans at eight candidates and each snapshot at 1,000 entries and 32
+  nested directory levels, revalidates source and target identities around
+  planning, and binds the exact target precondition for a future
+  compare-and-swap executor.
 - Personal, consumer, public, unclassified, implicit-all, stale-contract, and
   source/target-mismatch inputs fail closed before any target mutation. The
   command performs no network or registry call.
