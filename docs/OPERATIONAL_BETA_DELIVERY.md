@@ -127,8 +127,12 @@ The intervening changes are documentation and one test readiness wait; the
 application code and packed CLI bytes match the deployed candidate. The clean
 local canonical gate and the tag's [Release workflow](https://github.com/jremick/myskills/actions/runs/33937140879)
 passed, including all five deployment image builds. The source archive from
-GitHub matches the locally verified archive byte for byte. npm publication and
-the GitHub prerelease remain pending maintainer npm authentication.
+GitHub matches the locally verified archive byte for byte. The
+[GitHub prerelease](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.5)
+is published with the verified CLI tarball, source archive, metadata, and
+checksums. Its instructions install the CLI directly from the release asset.
+npm publication remains pending maintainer authentication; the npm `beta`
+channel is still `0.1.0-beta.4` and `latest` is still `0.1.0-alpha.3`.
 
 Final staging API `f69f826e-f71b-4baa-9dcf-3e414be69658` and web
 `1154add2-b701-4bbc-8d40-be52e123f910` succeeded from that exact revision.
