@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1
+# This image runs only the recovery scripts. It never starts or migrates the API.
+FROM node:24.19.0-alpine3.23 AS dependencies
+WORKDIR /app
+RUN npm install -g npm@11.12.1
+COPY package.json package-lock.json ./
+COPY packages ./packages
+COPY apps ./apps
+RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+
+FROM node:24.19.0-alpine3.23 AS backup
+RUN apk add --no-cache postgresql18-client=18.6-r0 \
+  && pg_dump --version \
+  && pg_restore --version
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY scripts/lib/registry-recovery.mjs scripts/lib/registry-backup.mjs ./scripts/lib/
+COPY scripts/run-registry-backup.mjs scripts/restore-registry-backup.mjs scripts/rehearse-registry-recovery.mjs ./scripts/
+USER node
+CMD ["node", "scripts/run-registry-backup.mjs", "--execute"]

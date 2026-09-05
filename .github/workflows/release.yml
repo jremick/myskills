@@ -81,6 +81,12 @@ jobs:
       - name: Build Railway web image
         run: docker build --file Dockerfile.web --build-arg VITE_API_BASE_URL=/api --tag myskills-app-railway-web:${{ github.ref_name }} .
 
+      - name: Build and smoke backup image without credentials
+        run: |
+          docker build --file Dockerfile.backup --tag myskills-registry-backup:${{ github.ref_name }} .
+          docker run --rm --network none myskills-registry-backup:${{ github.ref_name }} node scripts/run-registry-backup.mjs --help
+          docker run --rm --network none myskills-registry-backup:${{ github.ref_name }} node scripts/restore-registry-backup.mjs --help
+
       - name: Upload release artifacts
         uses: actions/upload-artifact@v7
         with:

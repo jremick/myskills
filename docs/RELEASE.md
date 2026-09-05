@@ -1,7 +1,7 @@
 # Release Process
 
 Version: 0.1.0-beta.5
-Last updated: 2026-09-02
+Last updated: 2026-09-05
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
 
@@ -60,6 +60,7 @@ The release workflow triggers on `v*.*.*` tags and:
 - resolves the tag commit and requires it to be an ancestor of `origin/main`;
 - runs the canonical release gate with tag enforcement;
 - builds the root Dockerfile `api`, `web`, and `mcp-http` targets plus the exact `Dockerfile.api` and `Dockerfile.web` used by Railway;
+- builds `Dockerfile.backup` and checks both command entrypoints without credentials or network access;
 - uploads verification artifacts only.
 
 Configure a GitHub ruleset for the release-tag pattern (for example `v*`) that restricts tag creation, update, and deletion to the release maintainer role. Protect `main` with the aggregate `check` context (which requires both Node matrix jobs), web E2E, and Postgres integration; require current branches and choose administrator bypass deliberately. Read the live ruleset/protection state immediately before release; workflow YAML cannot prove that repository settings are applied.
@@ -78,11 +79,11 @@ Draft public release text in a file and use `--notes-file` or the GitHub UI if a
 
 ## CLI Package Candidate
 
-The source version `0.1.0-beta.4` and `publishConfig.tag=beta` are coherent. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle.
+The source version `0.1.0-beta.5` and `publishConfig.tag=beta` are coherent. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle.
 
 The canonical gate proves:
 
-- npm's tarball metadata exactly matches the allowlist (`README.md`, `dist/index.js`, `package.json`);
+- npm's tarball metadata exactly matches the allowlist (`LICENSE`, `README.md`, `dist/index.js`, `package.json`), and its license matches the repository license;
 - the bundle has no private workspace runtime import;
 - a clean temporary install succeeds from the packed tarball with only public npm dependencies;
 - the installed `myskills` runs `--version`, validates the public example, and scans it.
