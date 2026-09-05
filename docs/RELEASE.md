@@ -1,6 +1,6 @@
 # Release Process
 
-Version: 0.1.0-beta.5
+Version: 0.1.0-beta.6
 Last updated: 2026-09-05
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
@@ -79,7 +79,7 @@ Draft public release text in a file and use `--notes-file` or the GitHub UI if a
 
 ## CLI Package Candidate
 
-The source version `0.1.0-beta.5` and `publishConfig.tag=beta` are coherent. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle.
+The source version `0.1.0-beta.6` and `publishConfig.tag=beta` are coherent. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle.
 
 The canonical gate proves:
 

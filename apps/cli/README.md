@@ -27,12 +27,13 @@ Responsibilities:
 - support maintainer/admin workflows through role-gated API calls
 - enroll a personal Codex workspace and execute approved updates with an explicit companion command
 - inspect an explicitly selected local Codex profile with a read-only metadata observation or health report
+- create a dry-run-only work/team bootstrap plan from explicit approved roots and skill selectors
 
 CLI tokens should be stored in the platform secret store where possible.
 
 ## Current Slice
 
-This document describes the beta.5 CLI. Use a CLI built from the same
+This document describes the beta.6 CLI candidate. Use a CLI built from the same
 release as the registry for managed updates and Codex workspace commands. The
 beta.2 visibility compatibility shims remain available for existing clients.
 Source versions and npm publication are separate from hosted deployment; the
@@ -176,9 +177,10 @@ myskills --version
 myskills login
 ```
 
-The expected version is `0.1.0-beta.5`. This published release includes the
-managed update and Codex workspace commands described here. To test repository
-changes before their next release, build and run them locally:
+The expected candidate version is `0.1.0-beta.6`. It includes the beta.5 managed
+update and personal Codex workspace commands plus the dry-run-only work/team
+bootstrap planner. To test repository changes before release, build and run them
+locally:
 
 ```bash
 npm ci

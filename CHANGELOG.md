@@ -2,7 +2,30 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
-## Unreleased
+## 0.1.0-beta.6 - 2026-09-05
+
+Target release: `v0.1.0-beta.6`.
+
+This CLI-focused prerelease adds a fail-closed, dry-run-only planner for an
+explicitly approved work/team Codex skill bootstrap. It does not add an apply,
+publish, adoption, target-write, or implicit discovery path.
+
+### Added
+
+- Added `myskills bootstrap codex --dry-run` for typed work/shared source roots,
+  an explicit positive skill allowlist, approved work-context and root identity
+  bindings, deterministic candidate and execution identities, and a private
+  report with redacted terminal output.
+
+### Security
+
+- The planner snapshots bounded regular UTF-8 files without following symlinks,
+  rejects sensitive credential/configuration paths and ambiguous manifests,
+  revalidates source and target identities around planning, and binds the exact
+  target precondition for a future compare-and-swap executor.
+- Personal, consumer, public, unclassified, implicit-all, stale-contract, and
+  source/target-mismatch inputs fail closed before any target mutation. The
+  command performs no network or registry call.
 
 ### Changed
 

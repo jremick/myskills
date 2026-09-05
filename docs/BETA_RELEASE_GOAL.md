@@ -1,31 +1,32 @@
 # Operational Beta Delivery Brief
 
-Version: 0.1.0-beta.5
+Version: 0.1.0-beta.6
 Last updated: 2026-09-05
 
-Target release: `v0.1.0-beta.5`.
+Target release: `v0.1.0-beta.6`.
 
 ## Goal
 
-Complete the reviewed-package-to-working-skill journey for individuals and small
-teams, with safe updates, useful review feedback, reliable discovery, and tested
-operator recovery. Preserve the API/Postgres source of truth and prove one
-workspace-scoped Codex runtime path.
+Extend the verified beta.5 operational baseline with one safe, local planning
+path for explicitly approved work/team Codex skill bootstrap. The command must
+remain dry-run only, must not discover candidates implicitly, and must not gain
+network, registry, adoption, apply, or target-write behavior.
 
 The complete work sequence, failure boundaries, and criterion-by-criterion
 verification ledger are in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
-The candidate remains in progress until that ledger contains actual evidence.
+The beta.5 operational evidence remains the hosted baseline. Beta.6 adds a
+separate CLI/package proof for the new planner.
 
 ## Release Outcome
 
-Beta.4 is the previously published source and CLI release. Beta.5 is the current
-operational candidate. A source version or passing unit test does not establish
-that Railway runs it. Verify the immutable revision returned by API and web
-`/version.json`, plus rendered and runtime behavior, before making a live claim.
+Beta.5 is the previously published source, CLI, and hosted operational release.
+Beta.6 is a CLI-focused candidate. It adds the work/team bootstrap planner and
+no API, web, migration, or hosted runtime behavior. A beta.6 source version or
+passing unit test does not establish that Railway runs beta.6, and this release
+does not require a Railway promotion.
 
 Public npm publication, a GitHub prerelease, and a release tag remain separate
-release actions. Building and testing a tarball does not publish it. The current
-work includes existing Railway staging and production promotion after the gates.
+release actions. Building and testing a tarball does not publish it.
 
 ## Canonical Executable Gate
 
@@ -46,18 +47,18 @@ verification surfaces, not substitute deployment evidence.
 The CLI package includes `LICENSE`, `README.md`, `dist/index.js`, and the npm
 package manifest. The installed license must match the root project license.
 
-## Live Acceptance
+## Candidate Acceptance
 
-Use the existing isolated Railway staging environment. Exercise distinct author,
-reviewer, and consumer accounts through correction, approval, publication,
-discovery, installation, update, rollback, and revocation. Use a disposable Codex
-workspace and preserve the user's existing skills and credentials. A successful
-filesystem operation is not evidence that Codex loaded the skill.
-
-Rehearse database plus artifact recovery into an isolated destination. Capture a
-current production recovery point, then deploy API before web from the same
-verified source. Require direct and same-origin readiness, source identity,
-authentication, registry, and artifact-delivery checks plus rendered evidence.
+- Run the complete canonical release gate on the immutable beta.6 candidate.
+- Install the packed CLI in a fresh temporary root and verify its exact version.
+- Run one disposable work-owned canary through `bootstrap codex --dry-run`.
+  Verify no network access, no source or target mutation, a new private report,
+  redacted terminal output, stable plan identities, and explicit target state.
+- Verify that unapproved trust compartments, implicit selectors, sensitive
+  configuration paths, stale contracts, and changing source or target identities
+  fail closed.
+- Read back the tag workflow, immutable npm package, npm `beta` selector, and
+  GitHub prerelease. Keep `latest` and `alpha` unchanged.
 
 ## Beta Boundaries
 
@@ -70,8 +71,8 @@ authentication, registry, and artifact-delivery checks plus rendered evidence.
 
 ## Stop Rule
 
-Do not promote or publish with failed gates, mismatched API/web revisions, unsafe
-migration compatibility, missing recovery evidence, or unverified authentication.
-Fix the candidate and rerun the affected checks. Never overwrite production to
-prove restore behavior. See [Release Process](RELEASE.md) and
-[Railway Deployment](RAILWAY_DEPLOYMENT.md) for operator procedures.
+Do not publish with failed gates, a mismatched tag or version, incomplete planner
+canary evidence, an unexpected npm selector change, or unverified immutable
+package bytes. Fix the candidate and rerun the affected checks. Do not mutate
+Railway for this CLI-only release. See [Release Process](RELEASE.md) for the
+release and rollback procedures.
