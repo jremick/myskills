@@ -39,22 +39,17 @@ import type {
   UserSubmissionSummary,
 } from "../src/api.js";
 
-test("landing page explains public beta status and opens the login page", async () => {
+test("root entry opens login without exposing the public landing page", async () => {
   setupDom("http://localhost/");
   const client = mockClient();
 
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByRole("heading", { name: "MySkills" });
-  assert.equal(document.body.textContent?.includes("Public beta. Hosted signups are owner-gated."), true);
-  assert.equal(client.searchCalls.length, 0);
-
-  fireEvent.click(view.getAllByRole("link", { name: "Login" })[0]!);
-
   await view.findByRole("heading", { name: "Login" });
   assert.deepEqual(client.searchCalls, []);
+  assert.equal(view.queryByRole("link", { name: "Public site" }), null);
   assert.equal(document.body.textContent?.includes("Release Notes Helper"), false);
-  assert.equal(window.location.pathname, "/login");
+  assert.equal(window.location.pathname, "/");
 });
 
 test("invited users complete registration without leaving the token in browser history", async () => {

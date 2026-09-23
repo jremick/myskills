@@ -12,6 +12,7 @@ map $uri $myskills_cache_control {
 
 server {
   listen ${PORT};
+  absolute_redirect off;
   server_name _;
   # Keep proxy ingress aligned with the API's submission JSON limit. The
   # package archive remains capped at 10 MiB after base64 decoding.
@@ -27,6 +28,10 @@ server {
   add_header Referrer-Policy "strict-origin-when-cross-origin" always;
   add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;
   add_header Cache-Control $myskills_cache_control always;
+
+  location = / {
+    return 308 /login;
+  }
 
   location / {
     try_files $uri $uri/ /index.html;

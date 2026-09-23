@@ -518,8 +518,8 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }
 
   function openLanding() {
-    setView("landing");
-    pushAppHistory("/");
+    setView("login");
+    pushAppHistory("/login");
   }
 
   function openLogin() {
@@ -1190,12 +1190,9 @@ function LoginPage({
     <a className="skip-link" href="#main-content">Skip to main content</a>
     <main className="login-page" id="main-content">
       <nav className="login-nav" aria-label="Login navigation">
-        <a className="landing-brand" href="/" onClick={(event) => handleCallbackLink(event, onHome)}>
+        <a className="landing-brand" href="/login" onClick={(event) => handleCallbackLink(event, onHome)}>
           <img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" width={360} height={110} />
         </a>
-        <Button asChild className="login-back shadcn-action-button" size="sm" variant="outline">
-          <a href="/" onClick={(event) => handleCallbackLink(event, onHome)}>Public site</a>
-        </Button>
       </nav>
       <section className="login-panel" aria-labelledby="login-heading">
         <p className="landing-status">Public beta. Hosted signups are closed.</p>
@@ -4953,7 +4950,7 @@ function isPublicView(view: AppView): boolean {
 function initialViewFromPath(pathname: string): AppView {
   if (pathname === "/manage/skills") return "manage";
   if (pathname === "/") {
-    return "landing";
+    return "login";
   }
   if (pathname === "/login") {
     return "login";
