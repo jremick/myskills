@@ -49,6 +49,6 @@
     "yaml": "2.9.0"
   },
   "dependencies": {
-    "@napi-rs/keyring": "2.0.0"
+    "@napi-rs/keyring": "2.1.0"
   }
 }
