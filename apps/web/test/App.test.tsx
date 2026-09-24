@@ -190,7 +190,7 @@ test("browse page requests skills with query and renders API-returned skills", a
   fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "release" } });
 
   await waitFor(() => assert.equal(client.searchCalls.includes("release"), true));
-  assert.equal(view.getAllByText("release-notes-helper").length, 2);
+  await waitFor(() => assert.equal(view.getAllByText("release-notes-helper").length, 2));
   assert.equal(document.body.textContent?.includes("private-risk-reviewer"), false);
 });
 
@@ -321,6 +321,23 @@ test("public release history selects exact metadata and a supported platform wit
   assert.equal(client.releaseManagementCalls, 0);
 });
 
+test("a pinned release repairs its platform URL even when the skill list fails", async () => {
+  setupDom("http://localhost/skills/release-notes-helper?q=writing&platform=codex&version=0.1.0");
+  const fixture = releaseHistoryFixture();
+  const client = historyClient(fixture);
+  client.searchSkillPage = async () => { throw new Error("Search list unavailable"); };
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("The list could not load. Retry the registry request before selecting a skill.");
+  await view.findByText(fixture.older.releaseNotes!);
+  await waitFor(() => assert.equal(window.location.search, "?q=writing&platform=generic&version=0.1.0"));
+  assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, fixture.older.version);
+  assert.equal(view.getByRole("button", { name: "generic" }).classList.contains("active"), true);
+  assert.equal(view.queryByRole("button", { name: "codex" }), null);
+  await view.findByText(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/);
+  assert.deepEqual(client.releaseCalls, ["release-notes-helper@0.1.0"]);
+});
+
 test("manager-only history cannot be pinned and offers an explicit return to latest", async () => {
   setupDom("http://localhost/skills/release-notes-helper?version=0.3.0");
   const fixture = releaseHistoryFixture();
@@ -338,6 +355,29 @@ test("manager-only history cannot be pinned and offers an explicit return to lat
   fireEvent.click(view.getByRole("button", { name: "Return to latest" }));
   await view.findByText(fixture.latest.releaseNotes!);
   assert.equal(window.location.search, "");
+});
+
+test("return to latest retries skill detail after a pinned skill fails to load", async () => {
+  setupDom("http://localhost/skills/release-notes-helper?q=writing&version=0.1.0");
+  const fixture = releaseHistoryFixture();
+  const client = historyClient(fixture);
+  const getSkill = client.getSkill.bind(client);
+  let skillCalls = 0;
+  client.getSkill = async (slug) => {
+    skillCalls += 1;
+    if (skillCalls === 1) throw safeApiError(404, "SKILL_NOT_FOUND", "Private skill detail");
+    return getSkill(slug);
+  };
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText("Skill or release not found.");
+  assert.equal(window.location.search, "?q=writing&version=0.1.0");
+  assert.equal(document.body.textContent?.includes("Private skill detail"), false);
+  fireEvent.click(view.getByRole("button", { name: "Return to latest" }));
+  await view.findByText(fixture.latest.releaseNotes!);
+  assert.equal(skillCalls, 2);
+  assert.equal(window.location.search, "?q=writing");
+  assert.deepEqual(client.releaseCalls, ["release-notes-helper@0.2.0"]);
 });
 
 for (const version of ["not-a-version", "9.9.9"]) {

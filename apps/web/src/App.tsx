@@ -573,7 +573,6 @@ export function RegistryApp({ client }: RegistryAppProps) {
           return;
         }
         setRelease(nextRelease);
-        setPlatform((current) => releasePlatform(nextRelease.platforms, current) ?? current);
         setDetailState("ready");
       })
       .catch((error: unknown) => {
@@ -650,6 +649,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
     setDetailMessage(null);
     setDetailState("loading");
     pushAppHistory(browseUrl(selectedSlug, query, nextPlatform));
+    if (!selectedSkill) setRefreshKey((current) => current + 1);
   }
 
   function openLanding() {
