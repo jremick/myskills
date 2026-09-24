@@ -83,9 +83,19 @@ test("selecting an older release survives its exact URL and browser history", as
   await expect(page).toHaveURL(/\/skills\/release-notes-helper\?q=writing&platform=generic&version=0\.1\.0$/);
   await expect(page.getByText(older.releaseNotes)).toBeVisible();
 
-  await page.setViewportSize({ width: 375, height: 812 });
   await page.goBack();
   await expect(page.getByText(latest.releaseNotes)).toBeVisible();
+  await selector.focus();
+  await expect(selector).toBeFocused();
+  await selector.press("ArrowDown");
+  await expect(page.getByText(older.releaseNotes)).toBeVisible();
+  await expect(selector).toBeFocused();
+  await selector.press("ArrowUp");
+  await expect(page.getByText(latest.releaseNotes)).toBeVisible();
+  await expect(selector).toBeFocused();
+  await expect(page).toHaveURL(/\/skills\/release-notes-helper\?q=writing&platform=generic&version=0\.2\.0$/);
+
+  await page.setViewportSize({ width: 375, height: 812 });
   await selector.scrollIntoViewIfNeeded();
   await expect(selector).toBeVisible();
   await expect(selector).toBeInViewport();
@@ -95,6 +105,11 @@ test("selecting an older release survives its exact URL and browser history", as
   await expect(selector).toHaveValue("0.1.0");
   await expect(page).toHaveURL(/\/skills\/release-notes-helper\?q=writing&platform=generic&version=0\.1\.0$/);
   await expect(page.getByText(older.releaseNotes)).toBeVisible();
+  await expect(selector).toBeFocused();
   await expect(page.getByText("SHA-256").locator("..")).toContainText("bbbbbbbbbb…bbbbbbbb");
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  await selector.press("ArrowUp");
+  await expect(page.getByText(latest.releaseNotes)).toBeVisible();
+  await expect(selector).toBeFocused();
+  await expect(page).toHaveURL(/\/skills\/release-notes-helper\?q=writing&platform=generic&version=0\.2\.0$/);
 });

@@ -563,7 +563,6 @@ export function RegistryApp({ client }: RegistryAppProps) {
         if (nextRelease.slug !== selectedSlug || nextRelease.version !== exactVersion
           || !isPublishedRelease(nextRelease)
           || !Array.isArray(nextRelease.platforms)
-          || !nextRelease.platforms.some((item) => item.status === "supported")
           || !nextRelease.artifact
           || typeof nextRelease.artifact.sha256 !== "string"
           || !Number.isFinite(nextRelease.artifact.byteSize)
@@ -597,10 +596,11 @@ export function RegistryApp({ client }: RegistryAppProps) {
     }
   }, [activeView, platform, release, selectedSlug, selectedVersion]);
 
-  const detailPlatform = release ? releasePlatform(release.platforms, platform) ?? platform : platform;
+  const supportedDetailPlatform = release ? releasePlatform(release.platforms, platform) : null;
+  const detailPlatform = supportedDetailPlatform ?? platform;
   const selectedCommand = useMemo(() => (
-    selectedSkill && release ? exportCommand(selectedSkill.slug, release.version, detailPlatform) : ""
-  ), [detailPlatform, release, selectedSkill]);
+    selectedSkill && release && supportedDetailPlatform ? exportCommand(selectedSkill.slug, release.version, supportedDetailPlatform) : ""
+  ), [release, selectedSkill, supportedDetailPlatform]);
   const latestVisibleRelease = visibleReleases.find((item) => item.version === selectedSkill?.latestVersion) ?? visibleReleases[0] ?? null;
   const historyControls = selectedSkill?.slug === selectedSlug ? (
     <ReleaseHistoryControls
@@ -1074,6 +1074,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
               </Card>
 
               <Card className="detail-panel registry-detail-panel shadcn-console-card" aria-label="Selected skill detail">
+                {historyControls && <CardContent className="shadcn-detail-content registry-detail-content">{historyControls}</CardContent>}
                 {detailMessage && (
                   <CardContent className="registry-state-content">
                     <div className="safe-message panel-state" role="status" aria-live="polite">
@@ -1091,12 +1092,10 @@ export function RegistryApp({ client }: RegistryAppProps) {
                   </CardContent>
                 )}
                 {detailState === "loading" && <DetailSkeleton />}
-                {detailState !== "ready" && historyControls && <CardContent className="registry-state-content">{historyControls}</CardContent>}
                 {detailState === "ready" && !detailMessage && selectedSkill && selectedSkill.slug === selectedSlug && release && (
                   <SkillDetail
                     command={selectedCommand}
                     client={registryClient}
-                    historyControls={historyControls}
                     platform={detailPlatform}
                     release={release}
                     selectedSkill={selectedSkill}
@@ -1106,7 +1105,6 @@ export function RegistryApp({ client }: RegistryAppProps) {
                 )}
                 {detailState === "ready" && selectedSkill && !release && !detailMessage && (
                   <CardContent className="registry-state-content">
-                    {historyControls}
                     <div className="empty-detail">
                       <FileCode2 size={42} aria-hidden="true" />
                       <h2>No published release</h2>
@@ -4449,7 +4447,6 @@ function ReleaseHistoryControls({
 function SkillDetail({
   command,
   client,
-  historyControls,
   platform,
   release,
   selectedSkill,
@@ -4458,7 +4455,6 @@ function SkillDetail({
 }: {
   command: string;
   client: RegistryClient;
-  historyControls: ReactNode;
   platform: string;
   release: ReleaseMetadata;
   selectedSkill: PublicSkill;
@@ -4466,6 +4462,7 @@ function SkillDetail({
   setPlatform: (platform: string) => void;
 }) {
   const supportedPlatforms = release.platforms.filter((item) => item.status === "supported");
+  const hasSupportedPlatform = supportedPlatforms.length > 0;
   const canManageSkill = Boolean(session && selectedSkill.access?.canManageSharing);
   const canUsePrivilegedControls = Boolean(canManageSkill && session?.user.mfaVerified);
   return (
@@ -4494,9 +4491,11 @@ function SkillDetail({
       </CardHeader>
       <CardContent className="shadcn-detail-content registry-detail-content">
         <p className="summary">{selectedSkill.summary}</p>
-        {historyControls}
+        {!hasSupportedPlatform && <div className="control-plane-inline-message" role="status">No supported export platform is available for this release. Export and install are unavailable.</div>}
         <dl className="metadata-grid shadcn-metadata-grid registry-metadata-grid">
-          <Metadata label="Platforms" value={supportedPlatforms.map((item) => item.name).join(", ")} />
+          <Metadata label="Platforms" value={hasSupportedPlatform
+            ? supportedPlatforms.map((item) => item.name).join(", ")
+            : release.platforms.map((item) => `${item.name} (${item.status})`).join(", ") || "None declared"} />
           <Metadata label="Tags" value={selectedSkill.tags.join(", ") || "-"} />
           <Metadata label="Released" value={release.publishedAt ? formatDate(release.publishedAt) : "Not published"} />
           <Metadata label="Review" value={formatStatusLabel(release.reviewStatus)} />
@@ -4513,7 +4512,7 @@ function SkillDetail({
           {release.compatibility && Object.keys(release.compatibility).length > 0 && <dl className="metadata-grid shadcn-metadata-grid registry-metadata-grid"><Metadata label="Minimum MySkills" value={release.compatibility.minimumMyskillsVersion ?? "Any"} /><Metadata label="Minimum adapter contract" value={release.compatibility.minimumAdapterContractVersion?.toString() ?? "Any"} /><Metadata label="Minimum source version" value={release.compatibility.minimumSourceVersion ?? "Any"} /></dl>}
         </section>
 
-        {session && (
+        {session && hasSupportedPlatform && (
           <ReleaseInstallPanel
             key={`${selectedSkill.slug}:${release.version}:${platform}`}
             client={client}
@@ -4523,7 +4522,7 @@ function SkillDetail({
           />
         )}
 
-        <div className="platform-select registry-platform-select">
+        {hasSupportedPlatform && <div className="platform-select registry-platform-select">
           <span>Export platform</span>
           <div>
             {supportedPlatforms.map((item) => (
@@ -4539,7 +4538,7 @@ function SkillDetail({
               </Button>
             ))}
           </div>
-        </div>
+        </div>}
 
         {canManageSkill && !canUsePrivilegedControls && <PrivilegedControlsLocked />}
 
@@ -4552,20 +4551,20 @@ function SkillDetail({
           />
         )}
 
-        {client.getReleaseBundle && <PackageFileViewer
+        {hasSupportedPlatform && client.getReleaseBundle && <PackageFileViewer
           resourceKey={`${selectedSkill.slug}:${release.version}:${platform}`}
           loadBundle={() => client.getReleaseBundle!(selectedSkill.slug, release.version, platform)}
         />}
 
-        <div className="command-panel registry-command-panel">
+        {hasSupportedPlatform && <div className="command-panel registry-command-panel">
           <div className="command-heading">
             <TerminalSquare size={18} aria-hidden="true" />
             <span>CLI export</span>
           </div>
           <code>{command}</code>
           <CopyButton text={command} variant="outline" />
-        </div>
-        <p className="control-plane-muted">For a personal Codex workspace, follow <a href="/targets">Connect a Codex workspace</a> to enroll the directory and install this exact version with the matching CLI release.</p>
+        </div>}
+        {hasSupportedPlatform && <p className="control-plane-muted">For a personal Codex workspace, follow <a href="/targets">Connect a Codex workspace</a> to enroll the directory and install this exact version with the matching CLI release.</p>}
         {session && canUsePrivilegedControls && (
           <SharingPanel client={client} selectedSkill={selectedSkill} session={session} />
         )}
@@ -5127,7 +5126,7 @@ function releasePlatform(platforms: Array<{ name: string; status: string }>, cur
 }
 
 function isExactReleaseVersion(version: string): boolean {
-  return version.length <= 128 && /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(version);
+  return /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version);
 }
 
 function isPublishedRelease(release: Pick<SkillReleaseSummary, "lifecycleStatus" | "reviewStatus" | "securityStatus" | "publishedAt">): boolean {

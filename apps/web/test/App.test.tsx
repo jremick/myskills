@@ -321,6 +321,55 @@ test("public release history selects exact metadata and a supported platform wit
   assert.equal(client.releaseManagementCalls, 0);
 });
 
+for (const version of ["1.02.0", "2026.09.01"]) {
+  for (const pinned of [false, true]) {
+    test(`server-valid version ${version} loads as ${pinned ? "an exact pin" : "the default latest"}`, async () => {
+      setupDom(`http://localhost/skills/release-notes-helper${pinned ? `?version=${version}` : ""}`);
+      const original = releaseHistoryFixture();
+      const latest = { ...original.latest, version, releaseNotes: `Server-valid release ${version}.` };
+      const fixture = {
+        ...original,
+        skill: { ...original.skill, latestVersion: version },
+        latest,
+        history: [releaseSummary(original.older), releaseSummary(latest)],
+      };
+      const client = historyClient(fixture);
+      const view = render(<RegistryApp client={client} />);
+
+      await view.findByText(latest.releaseNotes);
+      assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, version);
+      assert.deepEqual(client.releaseCalls, [`release-notes-helper@${version}`]);
+      assert.equal(window.location.search, pinned ? `?version=${version}` : "");
+      assert.equal(view.queryByText(original.older.releaseNotes!), null);
+    });
+  }
+}
+
+test("release version control keeps the same focused node while an exact release loads", async () => {
+  setupDom("http://localhost/skills/release-notes-helper");
+  const fixture = releaseHistoryFixture();
+  const pending = deferred<ReleaseMetadata>();
+  const client = historyClient(fixture, {
+    releaseLoader: (_slug, version, fallback) => version === fixture.older.version ? pending.promise : fallback,
+  });
+  const view = render(<RegistryApp client={client} />);
+
+  await view.findByText(fixture.latest.releaseNotes!);
+  const selector = view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement;
+  selector.focus();
+  assert.equal(document.activeElement, selector);
+  fireEvent.change(selector, { target: { value: fixture.older.version } });
+  await waitFor(() => assert.equal(client.releaseCalls.at(-1), `release-notes-helper@${fixture.older.version}`));
+  assert.equal(view.getByRole("combobox", { name: "Release version" }), selector);
+  assert.equal(selector.isConnected, true);
+  assert.equal(document.activeElement, selector);
+
+  await act(async () => { pending.resolve(fixture.older); await pending.promise; });
+  await view.findByText(fixture.older.releaseNotes!);
+  assert.equal(view.getByRole("combobox", { name: "Release version" }), selector);
+  assert.equal(document.activeElement, selector);
+});
+
 test("a pinned release repairs its platform URL even when the skill list fails", async () => {
   setupDom("http://localhost/skills/release-notes-helper?q=writing&platform=codex&version=0.1.0");
   const fixture = releaseHistoryFixture();
@@ -437,9 +486,46 @@ test("an empty release list has a visible history state", async () => {
   await view.findByText("Turns merged changes into concise release notes.");
 });
 
-test("signed-in users review an exact release before queueing a connected-target install", async () => {
+test("a release without supported platforms keeps its metadata but offers no export or install", async () => {
+  setupAuthenticatedDom("http://localhost/skills/release-notes-helper?version=0.1.0");
+  const fixture = releaseHistoryFixture();
+  const older: ReleaseMetadata = {
+    ...fixture.older,
+    platforms: [
+      { name: "generic", installTarget: "prompt-pack", status: "planned" },
+      { name: "codex", installTarget: "codex-skill", status: "deprecated" },
+    ],
+  };
+  const client = historyClient({ ...fixture, older, history: [releaseSummary(older), releaseSummary(fixture.latest)] });
+  let targetReads = 0;
+  let installCalls = 0;
+  client.listArchitectureTargets = async () => { targetReads += 1; return []; };
+  client.scheduleTargetSkillOperation = async () => { installCalls += 1; throw new Error("Unexpected install"); };
+
+  const view = render(<RegistryApp client={client} />);
+  await view.findByText(older.releaseNotes!);
+  assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, older.version);
+  assert.match(view.getByText("Platforms").parentElement?.textContent ?? "", /generic \(planned\).*codex \(deprecated\)/);
+  assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /bbbbbbbbbb…bbbbbbbb/);
+  assert.match(view.getByText("Byte size").parentElement?.textContent ?? "", /513/);
+  assert.match(view.getByText(/No supported export platform is available for this release/).textContent ?? "", /Export and install are unavailable/);
+  assert.equal(view.queryByRole("heading", { name: "Install this exact release" }), null);
+  assert.equal(view.queryByRole("button", { name: "generic" }), null);
+  assert.equal(view.queryByRole("button", { name: "codex" }), null);
+  assert.equal(document.querySelector(".package-file-viewer"), null);
+  assert.equal(view.queryByText("CLI export"), null);
+  assert.equal(document.body.textContent?.includes("myskills export 'release-notes-helper'"), false);
+  assert.equal(client.bundleCalls, 0);
+  assert.equal(targetReads, 0);
+  assert.equal(installCalls, 0);
+});
+
+for (const selectedRelease of ["latest", "older"] as const) {
+test(`signed-in users review the ${selectedRelease} release before queueing a connected-target install`, async () => {
   setupAuthenticatedDom("http://localhost/skills/release-notes-helper");
   const fixture = releaseHistoryFixture();
+  const expectedRelease = selectedRelease === "older" ? fixture.older : fixture.latest;
+  const expectedPlatform = selectedRelease === "older" ? "generic" : "codex";
   const client = historyClient(fixture);
   const operations: Array<Record<string, unknown>> = [];
   const target: ArchitectureTargetRecord = {
@@ -468,14 +554,18 @@ test("signed-in users review an exact release before queueing a connected-target
 
   const view = render(<RegistryApp client={client} />);
   await view.findByRole("heading", { name: "Install this exact release" });
-  fireEvent.change(await view.findByRole("combobox", { name: "Release version" }), { target: { value: fixture.older.version } });
-  await view.findByText(fixture.older.releaseNotes!);
+  if (selectedRelease === "older") {
+    fireEvent.change(view.getByRole("combobox", { name: "Release version" }), { target: { value: fixture.older.version } });
+  }
+  await view.findByText(expectedRelease.releaseNotes!);
   assert.equal(operations.length, 0);
   assert.equal(client.bundleCalls, 0);
   fireEvent.click(await view.findByRole("button", { name: "Review install" }));
-  await view.findByText("release-notes-helper 0.1.0");
-  assert.equal(view.getAllByText(fixture.older.releaseNotes!).length, 2);
-  assert.match(document.querySelector(".release-install-review")?.textContent ?? "", /generic · SHA-256 b{12}… · 513 bytes/);
+  await view.findByText(`release-notes-helper ${expectedRelease.version}`);
+  assert.equal(view.getAllByText(expectedRelease.releaseNotes!).length, 2);
+  assert.equal((document.querySelector(".release-install-review")?.textContent ?? "").includes(
+    `${expectedPlatform} · SHA-256 ${expectedRelease.artifact.sha256.slice(0, 12)}… · ${expectedRelease.artifact.byteSize.toLocaleString()} bytes`,
+  ), true);
   assert.equal(operations.length, 0);
   fireEvent.click(view.getByRole("button", { name: "Confirm exact install" }));
   await waitFor(() => assert.equal(operations.length, 1));
@@ -489,11 +579,12 @@ test("signed-in users review an exact release before queueing a connected-target
     targetId: "target-install-1",
     action: "install",
     slug: "release-notes-helper",
-    version: "0.1.0",
-    platform: "generic",
+    version: expectedRelease.version,
+    platform: expectedPlatform,
   });
   assert.match(String(operations[0]?.idempotencyKey), /^install:[a-z0-9]+$/);
 });
+}
 
 test("privileged skill controls stay locked without an MFA-verified session and do not request management data", async () => {
   const owner = authUser({ email: "owner@example.com", roles: ["owner"], mfaVerified: false });
