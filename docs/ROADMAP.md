@@ -98,6 +98,8 @@ Done:
 - Read-only MCP stdio and stateless Streamable HTTP discovery servers.
 - CLI workflows for validation, scanning, login/logout, auth status, API URL selection/config, doctor diagnostics, keyring-first credential storage, search/info, submission, author withdrawal, review actions, skill metadata/lifecycle controls, release lifecycle controls, team/sharing commands, verified export, local install/list/update/rollback, and API-token management.
 - First-pass production container packaging, opt-in web analytics support, and deployment preflight checks.
+- Version-history data and browser navigation for managed skills.
+- Registry backup/restore scripts and operator runbooks. Current scheduled-job execution, backup freshness, and alert delivery require live verification.
 
 Remaining:
 
@@ -107,14 +109,12 @@ Remaining:
 - Provider login/linking and external identity lifecycle.
 - Signed or direct object delivery that preserves authorization and integrity.
 - Platform-specific install adapters.
-- Skill backup jobs.
-- Version-history browsing.
 - Background scan jobs.
-- Release automation.
+- Release publication and provenance automation beyond the existing verification and artifact gates.
 
-Blocking next release:
+Release acceptance:
 
-- Beta.2 acceptance is tracked in [BETA_RELEASE_GOAL.md](BETA_RELEASE_GOAL.md). Remaining production items above stay in Milestone 9 unless they close an accepted beta risk.
+- Use [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md) for the accepted operational baseline and define acceptance for each new delivery slice. [BETA_RELEASE_GOAL.md](BETA_RELEASE_GOAL.md) records the historical beta.2 gate; it does not block the next release.
 
 ## Milestone 2: Auth And User Management Foundation
 
@@ -178,6 +178,11 @@ Acceptance:
 - A new user can login, search, install, list, update, and rollback.
 - An author can create, validate, scan, package, and submit a draft.
 
+Current status: validation, scanning, submission, and the user install lifecycle
+are implemented. `init` and `package` remain planned and belong to
+[AUTHOR-1](#authoring-and-imports-author-1); the full author acceptance above is
+not yet met.
+
 ## Milestone 5: Web App MVP
 
 Goal: make the registry useful without the CLI.
@@ -204,6 +209,7 @@ Done:
 - Public browse/search, skill detail, release metadata, and export-guidance views.
 - Email/password login/logout, password reset, account settings, MFA challenge/setup/reset/removal, current-user refresh, and session-aware API calls.
 - Authenticated author `.zip` package submission and author submitted-version export.
+- Managed-skill version-history browsing.
 - Maintainer review dashboard workflows for approval, requested changes, rejection, and publication.
 - Owner/admin lifecycle controls for skill metadata, skill archive/restore/delete, and release deprecate/unpublish/revoke/restore/delete.
 - User API-key management.
@@ -214,9 +220,8 @@ Remaining:
 
 - Broader color, typography, surface, and component refresh from the identity guidelines.
 - Private draft management.
-- Version-history polish.
-- Backup/restore workflows.
-- Remaining instance settings administration.
+- Version-history comparison and usability polish.
+- Guided operator backup/restore workflows and recovery verification beyond the existing scripts and runbooks; a browser administration surface is not yet implemented.
 
 ## Milestone 6: Skill Evals
 
