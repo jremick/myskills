@@ -16,8 +16,8 @@ Last updated: 2026-09-25
 
 ## Current Focus
 
-- Review the existing backlog together with the adoption features below before
-  assigning release scope, delivery order, owners, or dates.
+- Deliver the first bounded batch below, then review the remaining backlog
+  before assigning later release scope, owners, or dates.
 - Make first use easier: native MCP skill delivery, better authoring and imports,
   optional task-aware recommendations, and simpler self-hosting and deployment.
 - Preserve the API/Postgres registry, immutable reviewed releases, authorization,
@@ -25,13 +25,31 @@ Last updated: 2026-09-25
 - Keep the proven workspace-scoped Codex companion separate from broader
   cross-tool sync and full architecture execution, which remain future work.
 - Use the operational acceptance ledger and current source to reconcile older
-  milestone status lists during the next roadmap review. Earlier branch and
+  milestone status lists. Earlier branch and
   beta.2 labels below are historical; they do not supersede the release tracks.
+
+## Current Delivery Batch
+
+Status checked on 2026-09-25. A reviewed or tested candidate is not a merged,
+released, or deployed feature.
+
+| Slice | Evidence | Remaining gate |
+| --- | --- | --- |
+| Maintenance baseline | [PR #75](https://github.com/jremick/myskills/pull/75) combines bootstrap-directory revalidation, Hono remediation, and the MinIO CI image fix. Required CI checks and source review pass. | Merge approval; then close the duplicate Hono PR #69 and reassess grouped dependency updates. |
+| Roadmap and hosting investigation | [PR #76](https://github.com/jremick/myskills/pull/76) records the adoption workstreams and reconciles shipped foundations. | Review and merge. |
+| HOST-1 build caching | [PR #77](https://github.com/jremick/myskills/pull/77) preserves dependency layers. Six image targets, source and build-argument cache reuse, and runtime smokes passed on a Windows-hosted Linux engine. | Integration checks and merge; no deployment-time improvement is claimed. |
+| AUTHOR-1 CLI scaffold | [PR #78](https://github.com/jremick/myskills/pull/78) creates private Codex skill packages and refuses existing destinations. Windows CLI tests (167), package smoke, lint, and source review passed; the final shell-guidance test also passed. | Integration checks and merge. Archive creation, browser drafts, and imports remain separate slices. |
+| MCP-1 protocol prerequisite | [PR #79](https://github.com/jremick/myskills/pull/79) preserves the six metadata tools while adding modern protocol entrypoints and legacy compatibility. Windows MCP tests (36), remaining repository check stages, image smoke, and security review passed. | Resolve the inherited Hono audit gate through the maintenance baseline, then integrate. Native Skills content handlers remain a following slice. |
+
+Container and other resource-heavy verification for this batch runs on the
+Windows PC. Candidate verification does not establish production deployment or
+native host activation.
 
 ## Adoption Features For Delivery Review
 
-Status: added to the roadmap; implementation scope and delivery order are pending
-review. IDs identify workstreams, not priority. These extend existing milestones
+Status: the first delivery batch is in progress; the full workstream scopes and
+later release order remain subject to review. IDs identify workstreams, not
+priority. These extend existing milestones
 and do not create separate registries or release systems.
 
 | ID | Outcome | Existing milestone | Detail |
@@ -577,6 +595,24 @@ Acceptance:
 Planning decisions: initial host matrix, package/frontmatter compatibility,
 supported file types, release-selection behavior, and audit retention. This work
 does not include agent write tools or automatic skill execution.
+
+Delivery sequence:
+
+1. Migrate the adapter to the released SDK v2.1 entrypoints and verify both legacy
+   clients and protocol `2026-07-28`. A dependency update alone does not enable
+   the modern protocol. Preserve the existing HTTP authorization and limits.
+2. Add bounded Skills handlers over the existing authorized bundle API. Use
+   version-pinned resource URIs whose final skill-directory segment matches the
+   frontmatter name. Reauthorize every resource read and exclude packages without
+   valid root `SKILL.md` frontmatter from native discovery.
+3. Verify digests, complete manifests, pagination, invalid paths, revocation, and
+   client loading with the official conformance tooling. Keep bearer-authorized
+   caches private. Confirm method-level audit coverage before closing MCP-1.
+
+The released TypeScript SDK does not yet include native Skills helpers. Custom
+handlers over the stable protocol are the current implementation path; adopt
+upstream helpers only after release and compatibility verification. See the
+[official protocol migration guide](https://github.com/modelcontextprotocol/typescript-sdk/blob/main/docs/migration/support-2026-07-28.md).
 
 Reference: [official MCP Skills extension](https://modelcontextprotocol.io/extensions/skills/overview).
 Host support must be checked at delivery time.
