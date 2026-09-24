@@ -70,6 +70,7 @@ Implemented commands:
 ```text
 myskills version
 myskills --version
+myskills init <name> [--output <dir>] [--title <text>] [--summary <text>] [--license <text>] [--json]
 myskills validate --path <file-directory-or-zip>
 myskills scan --path <file-directory-or-zip>
 myskills search [query] [--api-url <url>]
@@ -125,6 +126,14 @@ myskills token create --name <name> --scope <scope> [--scope <scope>]
 myskills token list
 myskills token revoke <token-id>
 ```
+
+`myskills init <name>` creates a minimal private Codex package in a new
+directory. The default output is `./<name>`; use `--output` to select another
+destination under an existing parent directory. The command writes `skill.json` and `SKILL.md` with
+version `0.1.0`, `UNLICENSED`, and the `codex-skill` platform target. It does
+not authenticate, call the network, or overwrite an existing file, directory,
+or symlink. Edit the generated `SKILL.md`, then run `myskills validate --path`
+and `myskills scan --path` before any separate authenticated submission.
 
 The API-backed architecture preview includes the compiled graph, escaped
 Mermaid, and a versioned diagram artifact with a plain-text accessible outline.
