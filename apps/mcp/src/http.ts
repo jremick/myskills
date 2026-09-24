@@ -187,14 +187,19 @@ async function handleHttpRequest(
     return;
   }
 
-  const createServer = () => createAiSkillsMcpServer({
-    apiBaseUrl: options.apiBaseUrl,
-    fetchImpl,
-    token,
-  });
+  let closing = false;
+  const createServer = () => {
+    if (closing) {
+      throw new Error("MCP HTTP request was aborted.");
+    }
+    return createAiSkillsMcpServer({
+      apiBaseUrl: options.apiBaseUrl,
+      fetchImpl,
+      token,
+    });
+  };
   const handler = createMcpHandler(createServer, {
     legacy: "reject",
-    responseMode: "json",
     maxRequestBodySize: options.policy.maxRequestBodyBytes,
   });
   let legacyServer: ReturnType<typeof createServer> | undefined;
@@ -205,6 +210,9 @@ async function handleHttpRequest(
       if (await isLegacyRequest(webRequest, context?.parsedBody, {
         maxRequestBodySize: options.policy.maxRequestBodyBytes,
       })) {
+        if (closing || webRequest.signal.aborted) {
+          throw new Error("MCP HTTP request was aborted.");
+        }
         legacyServer = createServer();
         legacyTransport = new WebStandardStreamableHTTPServerTransport({
           enableJsonResponse: true,
@@ -220,16 +228,20 @@ async function handleHttpRequest(
 
   let closePromise: Promise<void> | null = null;
   const closeResources = () => {
+    closing = true;
     closePromise ??= (async () => {
-      await handler.close();
-      if (legacyServer && legacyTransport) {
-        await closeMcpResources(legacyServer, legacyTransport);
+      try {
+        await handler.close();
+      } finally {
+        if (legacyServer && legacyTransport) {
+          await closeMcpResources(legacyServer, legacyTransport);
+        }
       }
     })();
     return closePromise;
   };
   const closeOnDisconnect = () => {
-    void closeResources();
+    void closeResources().catch(() => {});
   };
   response.once("close", closeOnDisconnect);
 
