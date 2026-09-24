@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { lstat, mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -27,6 +28,10 @@ test("init creates a valid private Codex package and leaves validation local", {
   assert.equal(networkCalls, 0);
   const result = JSON.parse(stdout[0] ?? "{}");
   assert.equal(result.output, await realpath(outputPath));
+  const commandArguments = execFileSync("sh", [
+    "-c", `myskills() { printf '%s\\n' "$@"; }\n${result.next.validate}`,
+  ], { encoding: "utf8" });
+  assert.equal(commandArguments, `validate\n--path\n${result.output}\n`);
   assert.equal(result.manifest.name, "quoted-skill");
   assert.equal(result.manifest.title, title);
   assert.equal(result.manifest.summary, summary);
