@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { createRegistryApiClient, type RegistryApiClientOptions } from "./api-client.js";
 import { createAiSkillsMcpHandlers } from "./tools.js";
