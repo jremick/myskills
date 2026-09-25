@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import test, { type TestContext } from "node:test";
 import { and, eq } from "drizzle-orm";
 import {
@@ -440,6 +441,99 @@ test("Postgres architecture grant updates serialize on the architecture lock", {
     `unexpected partial grant set: ${finalIds.join(",")}`,
   );
 });
+
+test("grant replacement and revision append use owner-before-sharing lock order", { timeout: 60_000 }, async (t) => {
+  const fixture = await createFixture(t);
+  await fixture.db.insert(teams).values({ id: teamId, name: "Lock-order team", slug: "lock-order-team", createdByUserId: ownerId });
+  await fixture.db.insert(teamMemberships).values({ teamId, userId: ownerId, role: "owner" });
+  await fixture.db.update(skillArchitectures).set({ ownerUserId: null, ownerTeamId: teamId }).where(eq(skillArchitectures.id, architectureId));
+  const store = new PostgresArchitectureStore(fixture.db);
+  const source = await store.createArchitecture({ actor: ownerId, owner: { type: "team", id: teamId }, name: "Concurrent append", description: "", patternId: "flat" });
+  const spec = createFlatArchitecture({ id: source.id, name: source.name, skills: [{ id: "release", slug: "architecture-grant-release", version: "1.0.0", digest: releaseDigest, packageVisibility: "public" }] });
+  const entered = deferred();
+  const release = deferred();
+  const appendingStore = new PostgresArchitectureStore(fixture.db, { beforeRevisionRegistryRecheck: async () => { entered.resolve(); await release.promise; } });
+  const append = appendingStore.createRevision({ actor: ownerId, architectureId: source.id, expectedCurrentRevisionId: null, message: "Concurrent revision", spec });
+  await entered.promise;
+  const grants = fixture.grantStore.replaceArchitectureOrganizationGrants({ architectureId, actorUserId: ownerId,
+    expectedCurrentRevisionId: firstRevisionId, grants: [grantInput(firstOrganizationId, firstPolicyId)] });
+  // Observe the second connection waiting for the team held by append. Before
+  // the fix it held sharing FOR UPDATE here, forming a cycle when append resumed.
+  try {
+    await waitForTeamLockWait(fixture.pool);
+  } finally {
+    release.resolve();
+  }
+  const [revision, granted] = await Promise.all([append, grants]);
+  assert.ok(revision);
+  assert.equal((await store.getArchitecture(ownerId, source.id))?.currentRevisionId, revision.id);
+  assert.deepEqual(granted.grants.map((grant) => grant.organizationId), [firstOrganizationId]);
+  await assert.rejects(appendingStore.createRevision({ actor: ownerId, architectureId: source.id,
+    expectedCurrentRevisionId: null, message: "Stale revision", spec }), (error: unknown) => codeIs(error, "ARCHITECTURE_REVISION_CONFLICT"));
+});
+
+test("architecture sharing readers coexist while a settings writer waits for commit", { timeout: 60_000 }, async (t) => {
+  const fixture = await createFixture(t);
+  const firstEntered = deferred();
+  const secondEntered = deferred();
+  const finish = deferred();
+  const firstStore = new PostgresArchitectureStore(fixture.db, { beforeAuditInsert: async () => { firstEntered.resolve(); await finish.promise; } });
+  const secondStore = new PostgresArchitectureStore(fixture.db, { beforeAuditInsert: async () => { secondEntered.resolve(); await finish.promise; } });
+  const source = await new PostgresArchitectureStore(fixture.db).createArchitecture({ actor: memberId, name: "Independent owner", description: "", patternId: "flat" });
+  const independentSkillId = randomUUID();
+  const independentVersionId = randomUUID();
+  await fixture.pool.query("INSERT INTO skills (id, slug, title, summary, lifecycle_status, visibility, owner_user_id) VALUES ($1, 'independent-release', 'Independent release', 'Fixture', 'approved', 'public', $2)", [independentSkillId, memberId]);
+  await fixture.pool.query("INSERT INTO skill_versions (id, skill_id, version, lifecycle_status, review_status, security_status, published_at) VALUES ($1, $2, '1.0.0', 'approved', 'approved', 'passed', now())", [independentVersionId, independentSkillId]);
+  await fixture.pool.query("INSERT INTO skill_artifacts (skill_version_id, storage_key, sha256, byte_size, content_type) VALUES ($1, 'independent-release/1.0.0', $2, 1, 'application/json')", [independentVersionId, releaseDigest]);
+  const spec = createFlatArchitecture({ id: source.id, name: source.name, skills: [{ id: "independent", slug: "independent-release", version: "1.0.0", digest: releaseDigest, packageVisibility: "public" }] });
+  const current = await new PostgresArchitectureStore(fixture.db).getRevision(ownerId, architectureId, firstRevisionId);
+  assert.ok(current);
+  const audit = (actorUserId: string, resourceId: string) => ({ actorUserId, action: "architecture.revision.create", resourceType: "skill_architecture", resourceId, details: {} });
+  const first = firstStore.createRevision(ownerId, { architectureId, expectedCurrentRevisionId: firstRevisionId, message: "Sharing read one", spec: current.spec }, audit(ownerId, architectureId));
+  await firstEntered.promise;
+  const second = secondStore.createRevision(memberId, { architectureId: source.id, expectedCurrentRevisionId: null, message: "Sharing read two", spec }, audit(memberId, source.id));
+  const writer = await fixture.pool.connect();
+  try {
+    // Both readers reach their commit barrier while retaining sharing locks.
+    await waitForBarrier(secondEntered.promise);
+    await writer.query("SET lock_timeout = '100ms'");
+    await assert.rejects(writer.query("UPDATE instance_settings SET value = jsonb_set(value, '{publicVisibilityEnabled}', 'false') WHERE key = 'sharing'"),
+      (error: unknown) => codeIs(error, "55P03"));
+  } finally {
+    await writer.query("RESET lock_timeout");
+    writer.release();
+    finish.resolve();
+  }
+  assert.ok((await Promise.all([first, second])).every(Boolean));
+  await fixture.pool.query("UPDATE instance_settings SET value = jsonb_set(value, '{publicVisibilityEnabled}', 'false') WHERE key = 'sharing'");
+  assert.equal((await fixture.pool.query("SELECT value->>'publicVisibilityEnabled' AS enabled FROM instance_settings WHERE key = 'sharing'")).rows[0].enabled, "false");
+});
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+async function waitForBarrier(barrier: Promise<void>): Promise<void> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([barrier, new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => reject(new Error("independent reader was blocked by a sharing reader")), 5_000);
+    })]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+async function waitForTeamLockWait(pool: ReturnType<typeof createPgPool>): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const waiting = await pool.query("SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND wait_event_type = 'Lock' AND query LIKE '%from \"teams\"%' AND query LIKE '%for update%'");
+    if (waiting.rowCount) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.fail("grant replacement did not wait on the shared team owner lock");
+}
 
 test("Postgres team-owned architecture grants recheck effective parent organization authority", {
   timeout: 60_000,

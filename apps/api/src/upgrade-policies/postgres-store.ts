@@ -34,7 +34,7 @@ export class PostgresSkillUpgradePolicyStore implements SkillUpgradePolicyStore 
           eq(organizationMemberships.organizationId, input.scopeId), eq(organizationMemberships.userId, input.actorUserId), isNull(organizationMemberships.removedAt),
         )).limit(1);
         const [actor] = await tx.select({ verifiedAt: users.emailVerifiedAt }).from(users).where(eq(users.id, input.actorUserId)).limit(1);
-        if (!actor?.verifiedAt || !membership || !["owner", "admin"].includes(membership.role)) throw forbidden();
+        if (!actor?.verifiedAt || !membership || membership.role !== "owner") throw forbidden();
       }
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${input.scopeType}:${input.scopeId}`}, 0))`);
       const [latest] = await tx.select().from(skillUpgradePolicyRevisions).where(and(

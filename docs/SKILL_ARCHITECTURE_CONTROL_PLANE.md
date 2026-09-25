@@ -152,11 +152,12 @@ IDs are not authority.
 
 Migration 0016 preserves existing standalone teams while adding the nullable
 team owner path. A child team is effective for an actor only when its parent
-organization is active, has a current policy revision, and the actor has an
-active membership in that same organization. A raw team membership never
-substitutes for organization membership. The organization policy controls
-whether team members must be organization members; the default is fail-closed
-(`requireOrganizationMembershipForTeamMembers: true`). Standalone teams keep
+organization is active and has a current policy revision. By default the actor
+must also have active membership in that organization. Setting
+`requireOrganizationMembershipForTeamMembers: false` permits external team
+members to use their team role for architecture access, migration, and exact
+team-release authorization, including companion operations. This does not make
+them organization members. Standalone teams keep
 their pre-tenancy behavior when `teams.organization_id` is null.
 
 Organizations use statuses `provisioning`, `active`, `suspended`, and
@@ -167,7 +168,18 @@ architecture grants are bound to a policy revision and organization identity;
 architecture grants are `read` only to receiving members. Manager-only GET/PUT
 routes and web controls replace the complete grant set with current-revision,
 policy, membership, exact-release, limit, and sanitized-audit checks; an empty
-set revokes all grants.
+set revokes all grants. Organization grant management has a narrower boundary:
+actors must have active organization membership in each receiving organization
+and in the parent organization of a team-owned architecture, including when
+revoking all grants. Allowing external team members does not waive this
+organization-sharing requirement.
+
+Architecture revision append, pattern migration, and grant replacement lock
+the architecture and owner authority before sharing settings, then exact
+releases. Settings readers use `FOR SHARE`; settings updates remain blocked
+until those authorization transactions commit. Pattern migrations enforce the
+same 25-architecture owner quota as ordinary creation under the owner lock.
+An idempotent migration replay remains valid at the quota.
 
 The v1 default policy enables organization skill and architecture sharing but
 does not let ordinary members share owned skills or team owners share

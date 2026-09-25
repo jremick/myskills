@@ -108,6 +108,71 @@ test("Postgres pattern migration uses actor-scoped idempotency, replays one conc
   assert.equal(await count(fixture.pool, "skill_architecture_pattern_migrations"), 1);
 });
 
+test("Postgres pattern migration shares the owner quota with creation and replays at the limit", { timeout: 60_000, skip: !databaseUrl }, async (t) => {
+  for (const teamOwned of [false, true]) {
+    await t.test(teamOwned ? "team owner" : "personal owner", async (sub) => {
+      const fixture = teamOwned ? await createTeamFixture(sub) : await createFixture(sub);
+      const ownerColumn = teamOwned ? "owner_team_id" : "owner_user_id";
+      const quotaOwner = teamOwned ? teamId : ownerId;
+      await fixture.pool.query(`INSERT INTO skill_architectures (${ownerColumn}, name, pattern_id)
+        SELECT $1, 'Quota shell', 'flat' FROM generate_series(1, 23)`, [quotaOwner]);
+      const created = await fixture.service.create(createInput(fixture));
+      assert.equal(created.created, true);
+      assert.equal(await count(fixture.pool, "skill_architectures", ownerColumn, quotaOwner), 25);
+      assert.equal((await fixture.service.create(createInput(fixture))).replayed, true);
+      await assert.rejects(fixture.service.create(createInput(fixture, { idempotencyKey: "over-quota" })),
+        (error: unknown) => errorCode(error) === "ARCHITECTURE_QUOTA_EXCEEDED");
+      assert.equal(await count(fixture.pool, "skill_architectures", ownerColumn, quotaOwner), 25);
+      assert.equal(await count(fixture.pool, "skill_architecture_pattern_migrations"), 1);
+      assert.equal(await count(fixture.pool, "skill_architecture_revisions", "architecture_id", targetArchitectureIds[1]), 0);
+      assert.equal(Number((await fixture.pool.query("SELECT count(*) AS n FROM audit_events WHERE action = 'architecture.pattern-migration.create' AND decision = 'allow' AND details->>'code' = 'create.committed'")).rows[0].n), 1);
+    });
+  }
+});
+
+test("concurrent migrations from different sources admit only one shell at owner quota 24", { timeout: 60_000, skip: !databaseUrl }, async (t) => {
+  const fixture = await createFixture(t);
+  const secondSource = await fixture.architectureStore.createArchitecture({ actor: ownerId, name: "Second source", description: "", patternId: "flat" });
+  const secondRevision = await fixture.architectureStore.createRevision({ actor: ownerId, architectureId: secondSource.id,
+    expectedCurrentRevisionId: null, message: "Initial", spec: { ...fixture.sourceRevision.spec, id: secondSource.id } });
+  assert.ok(secondRevision);
+  await fixture.pool.query("INSERT INTO skill_architectures (owner_user_id, name, pattern_id) SELECT $1, 'Quota shell', 'flat' FROM generate_series(1, 22)", [ownerId]);
+  const service = new ArchitecturePatternMigrationService(fixture.architectureStore, fixture.migrationStore, {
+    idFactory: randomUUID, releaseAuthorizer: { authorize: async () => true },
+  });
+  const outcomes = await Promise.allSettled([
+    service.create(createInput(fixture, { idempotencyKey: "quota-left" })),
+    service.create(createInput(fixture, { architectureId: secondSource.id, expectedCurrentRevisionId: secondRevision.id, idempotencyKey: "quota-right" })),
+  ]);
+  assert.equal(outcomes.filter((outcome) => outcome.status === "fulfilled").length, 1);
+  const denied = outcomes.find((outcome) => outcome.status === "rejected");
+  assert.ok(denied && denied.status === "rejected");
+  assert.equal(errorCode(denied.reason), "ARCHITECTURE_QUOTA_EXCEEDED");
+  assert.equal(await count(fixture.pool, "skill_architectures", "owner_user_id", ownerId), 25);
+  assert.equal(await count(fixture.pool, "skill_architecture_pattern_migrations"), 1);
+  assert.equal(await count(fixture.pool, "skill_architecture_revisions"), 3);
+});
+
+test("pattern migration honors external team policy for owner authority and exact team releases", { timeout: 60_000, skip: !databaseUrl }, async (t) => {
+  const fixture = await createTeamFixture(t);
+  const policy = { ...defaultOrganizationPolicyV1, teams: { ...defaultOrganizationPolicyV1.teams, requireOrganizationMembershipForTeamMembers: false } };
+  await fixture.pool.query("INSERT INTO organization_policy_revisions (id, organization_id, revision_number, schema_version, policy, policy_sha256, reason, created_by_user_id) VALUES ($1, $2, 2, 1, $3, $4, 'Allow external team members', $5)",
+    [rotatedOrganizationPolicyId, organizationId, policy, organizationPolicyDigest(policy), teamOwnerId]);
+  await fixture.pool.query("UPDATE organizations SET current_policy_revision_id = $1 WHERE id = $2", [rotatedOrganizationPolicyId, organizationId]);
+  await fixture.pool.query("DELETE FROM organization_memberships WHERE organization_id = $1 AND user_id = $2", [organizationId, teamOwnerId]);
+  await fixture.pool.query("UPDATE skills SET visibility = 'team' WHERE slug = 'skill-team'");
+  await fixture.pool.query("INSERT INTO skill_team_grants (skill_id, team_id) SELECT id, $1 FROM skills WHERE slug = 'skill-team'", [teamId]);
+  const revision = await fixture.architectureStore.createRevision({ actor: teamOwnerId, architectureId: fixture.sourceArchitecture.id,
+    expectedCurrentRevisionId: fixture.sourceRevision.id, message: "Team release", spec: { ...fixture.sourceRevision.spec,
+      skills: fixture.sourceRevision.spec.skills.map((skill) => ({ ...skill, packageVisibility: "team" })) } });
+  assert.ok(revision);
+  fixture.sourceRevision = revision;
+  assert.equal((await fixture.service.create(createInput(fixture))).created, true);
+  await fixture.pool.query("UPDATE organizations SET status = 'suspended' WHERE id = $1", [organizationId]);
+  await assert.rejects(fixture.service.create(createInput(fixture, { idempotencyKey: "suspended-external" })),
+    (error: unknown) => ["ARCHITECTURE_NOT_FOUND", "ARCHITECTURE_PATTERN_MIGRATION_FORBIDDEN"].includes(errorCode(error) ?? ""));
+});
+
 test("Postgres pattern migration locks the exact current source revision and rejects an advanced source", { timeout: 60_000, skip: !databaseUrl }, async (t) => {
   const fixture = await createFixture(t);
   await fixture.architectureStore.createRevision({
@@ -402,7 +467,7 @@ async function createTeamFixture(t: TestContext): Promise<Fixture> {
   assert.ok(sourceRevision);
   fixture.service = new ArchitecturePatternMigrationService(fixture.architectureStore, fixture.migrationStore, {
     idFactory: (() => {
-      const generated = [targetArchitectureIds[0], targetRevisionIds[0], lineageIds[0]];
+      const generated = [targetArchitectureIds[0], targetRevisionIds[0], lineageIds[0], targetArchitectureIds[1], targetRevisionIds[1], lineageIds[1]];
       return () => generated.shift() ?? targetArchitectureIds[5];
     })(),
     releaseAuthorizer: { authorize: async () => true },

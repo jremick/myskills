@@ -9,6 +9,7 @@ import {
   type OrganizationPolicyV1,
   type OrganizationStatus,
 } from "@myskills-app/core";
+import { isEffectiveTeamMembership } from "../teams/effective-membership.js";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import {
   architectureAccessForRecord,
@@ -531,12 +532,14 @@ export class MemoryArchitectureStore implements ArchitectureStore {
       const currentPolicy = organization?.currentPolicyRevisionId
         ? this.organizationPolicies.get(organization.currentPolicyRevisionId)
         : undefined;
-      if (
-        organization?.status !== "active"
-        || !currentOrganizationIds.has(organizationId)
-        || !currentPolicy
-        || currentPolicy.organizationId !== organizationId
-      ) {
+      if (!isEffectiveTeamMembership({
+        organizationId,
+        organizationStatus: organization?.status,
+        currentPolicyRevisionId: organization?.currentPolicyRevisionId,
+        hasCurrentPolicy: currentPolicy?.organizationId === organizationId,
+        hasActiveOrganizationMembership: currentOrganizationIds.has(organizationId),
+        requireOrganizationMembershipForTeamMembers: currentPolicy?.policy.teams.requireOrganizationMembershipForTeamMembers,
+      })) {
         memberships.delete(teamId);
       }
     }

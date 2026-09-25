@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { architectureTargetCapabilitiesDigest, assertValidArchitectureTargetObservation, defaultSkillUpgradePolicyV1, skillUpgradePolicyDigest, targetSkillOperationPlanDigest } from "@myskills-app/core";
+import { architectureTargetCapabilitiesDigest, assertValidArchitectureTargetObservation, defaultSkillUpgradePolicyV1, defaultOrganizationPolicyV1, organizationPolicyDigest, skillUpgradePolicyDigest, targetSkillOperationPlanDigest } from "@myskills-app/core";
 import { createDb, createPgPool } from "../src/db/client.js";
 import { PostgresTargetSkillOperationStore } from "../src/target-operations/postgres-store.js";
 import { SkillUpgradePolicyService } from "../src/upgrade-policies/service.js";
@@ -276,6 +276,51 @@ test("policy mutation rechecks authority, audits atomically, and can restore an 
   gate.resolve();
   await rejected;
   assert.equal((await pool.query("SELECT count(*)::int AS n FROM audit_events WHERE action = 'skill-upgrade-policy.append'")).rows[0].n, 3);
+});
+
+test("organization upgrade policy requires a current owner at the store and service commit boundary", { timeout: 60_000 }, async (t) => {
+  const { pool, db } = await fixture(t);
+  const organizationId = randomUUID();
+  const organizationPolicyId = randomUUID();
+  await pool.query("INSERT INTO organizations (id, slug, name, status, created_by_user_id) VALUES ($1, 'policy-org', 'Policy organization', 'provisioning', $2)", [organizationId, owner]);
+  await pool.query("INSERT INTO organization_policy_revisions (id, organization_id, revision_number, schema_version, policy, policy_sha256, created_by_user_id) VALUES ($1, $2, 1, 1, $3, $4, $5)", [organizationPolicyId, organizationId, defaultOrganizationPolicyV1, organizationPolicyDigest(defaultOrganizationPolicyV1), owner]);
+  await pool.query("UPDATE organizations SET status = 'active', current_policy_revision_id = $2 WHERE id = $1", [organizationId, organizationPolicyId]);
+  await pool.query("INSERT INTO organization_memberships (organization_id, user_id, role) VALUES ($1, $2, 'owner'), ($1, $3, 'admin')", [organizationId, owner, member]);
+  const store = new PostgresSkillUpgradePolicyStore(db);
+  const input = { ...policyInput(0), scopeType: "organization" as const, scopeId: organizationId };
+  await assert.rejects(store.append({ ...input, actorUserId: member }), code("SKILL_UPGRADE_POLICY_FORBIDDEN"));
+  await assert.rejects(new SkillUpgradePolicyService(store).append({ ...input, actorUserId: member }), code("SKILL_UPGRADE_POLICY_FORBIDDEN"));
+  assert.equal((await store.append(input)).created, true);
+
+  const entered = deferred();
+  const finish = deferred();
+  const delayed = new PostgresSkillUpgradePolicyStore(db, { beforeAuthorization: async () => { entered.resolve(); await finish.promise; } });
+  const pending = delayed.append({ ...input, id: randomUUID(), expectedRevisionNumber: 1, policy: { ...defaultSkillUpgradePolicyV1, includePrerelease: true }, policySha256: skillUpgradePolicyDigest({ ...defaultSkillUpgradePolicyV1, includePrerelease: true }) });
+  const denied = assert.rejects(pending, code("SKILL_UPGRADE_POLICY_FORBIDDEN"));
+  await entered.promise;
+  await pool.query("UPDATE organization_memberships SET role = 'admin' WHERE organization_id = $1 AND user_id = $2", [organizationId, owner]);
+  finish.resolve();
+  await denied;
+  assert.equal((await store.getLatest("organization", organizationId))?.revisionNumber, 1);
+  // Once the authorization lock is held, a demotion waits for this commit.
+  await pool.query("UPDATE organization_memberships SET role = 'owner' WHERE organization_id = $1 AND user_id = $2", [organizationId, owner]);
+  const authorized = deferred();
+  const commit = deferred();
+  const protectedStore = new PostgresSkillUpgradePolicyStore(db, { beforeAuditInsert: async () => { authorized.resolve(); await commit.promise; } });
+  const protectedAppend = protectedStore.append({ ...input, id: randomUUID(), expectedRevisionNumber: 1,
+    policy: { ...defaultSkillUpgradePolicyV1, includePrerelease: true }, policySha256: skillUpgradePolicyDigest({ ...defaultSkillUpgradePolicyV1, includePrerelease: true }) });
+  await authorized.promise;
+  const demoter = await pool.connect();
+  try {
+    await demoter.query("SET lock_timeout = '100ms'");
+    await assert.rejects(demoter.query("UPDATE organization_memberships SET role = 'admin' WHERE organization_id = $1 AND user_id = $2", [organizationId, owner]), code("55P03"));
+  } finally {
+    await demoter.query("RESET lock_timeout");
+    demoter.release();
+    commit.resolve();
+  }
+  assert.equal((await protectedAppend).revision.revisionNumber, 2);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM audit_events WHERE action = 'skill-upgrade-policy.append'")).rows[0].n, 2);
 });
 
 test("companion and architecture sync share a target mutex and monotonic fences in both directions", { timeout: 60_000 }, async (t) => {

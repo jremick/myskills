@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import {
   AppError,
   architectureDigest,
@@ -25,6 +25,7 @@ import type {
   ArchitecturePatternMigrationPersistedRecord,
   ArchitecturePatternMigrationStore,
 } from "./pattern-migration-service.js";
+import { MAX_ARCHITECTURES_PER_OWNER } from "./service.js";
 import { assertPatternMigrationAllowAudit } from "./pattern-migration-service.js";
 import { assertCurrentActorAuthority, reauthorizeInternalRegistrySnapshot } from "./postgres-pattern-migration-authorization.js";
 import {
@@ -143,6 +144,20 @@ export class PostgresPatternMigrationStore implements ArchitecturePatternMigrati
         }
 
         await assertCurrentActorAuthority(tx, actorId, source.architecture);
+        // Authority holds the same owner user/team lock as ordinary creation.
+        // Count only after replay detection so retries still work at the limit.
+        const [{ count }] = await tx.select({ count: sql<number>`count(*)` })
+          .from(skillArchitectures)
+          .where(source.architecture.ownerUserId
+            ? eq(skillArchitectures.ownerUserId, source.architecture.ownerUserId)
+            : eq(skillArchitectures.ownerTeamId, source.architecture.ownerTeamId!));
+        if (Number(count) >= MAX_ARCHITECTURES_PER_OWNER) {
+          throw new AppError(
+            `An owner may create at most ${MAX_ARCHITECTURES_PER_OWNER} architectures.`,
+            "ARCHITECTURE_QUOTA_EXCEEDED",
+            409,
+          );
+        }
         assertSourceCandidateMatches(input, source.architecture, source.revision);
         await reauthorizeInternalRegistrySnapshot(tx, {
           actorId,

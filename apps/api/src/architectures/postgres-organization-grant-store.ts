@@ -180,7 +180,6 @@ export class PostgresArchitectureOrganizationGrantStore implements ArchitectureO
         409,
       );
     }
-    const sharing = await lockSharingSettings(tx);
 
     // Team-owned architectures lock the team before any parent organization
     // rows. Team adoption and team lifecycle writes use this same order;
@@ -215,6 +214,10 @@ export class PostgresArchitectureOrganizationGrantStore implements ArchitectureO
       policiesByOrganizationId,
       membershipsByOrganizationId,
     );
+    // Match revision append and pattern migration: architecture -> owner
+    // authority -> sharing settings -> exact releases. Readers keep settings
+    // stable with FOR SHARE without serializing unrelated owners.
+    const sharing = await lockSharingSettings(tx);
     const contexts = new Map<string, OrganizationContext>();
     for (const grant of input.grants) {
       const organization = organizationsById.get(grant.organizationId);
@@ -465,7 +468,7 @@ async function lockSharingSettings(db: DbLike): Promise<SharingSettings> {
     .select({ value: instanceSettings.value })
     .from(instanceSettings)
     .where(eq(instanceSettings.key, "sharing"))
-    .for("update")
+    .for("share")
     .limit(1);
   return parseSharingSettings(row?.value);
 }
