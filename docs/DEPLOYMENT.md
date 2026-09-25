@@ -41,7 +41,7 @@ docker compose --env-file .env.production -f docker-compose.production.example.y
 docker compose --env-file .env.production -f docker-compose.production.example.yml up -d api web
 ```
 
-Use `docker compose --env-file .env.production -f docker-compose.production.example.yml config` after editing the env file to validate Compose interpolation before building images.
+Use `docker compose --env-file .env.production -f docker-compose.production.example.yml config --quiet` after editing the env file to validate Compose interpolation without printing resolved secrets.
 
 After the first successful owner bootstrap, rotate the owner password from the application and remove `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` from the production env file or secret store. Do not keep bootstrap credentials around as an operational login path. Normal restarts do not require them; the seed service rejects missing bootstrap values when explicitly run.
 
@@ -58,6 +58,25 @@ The MCP HTTP service requires explicit `MYSKILLS_MCP_ALLOWED_HOSTS` when bound t
 The migration runner stops before migrations 0012 or 0013 if a release has more than one artifact. It holds the artifact table against writes during the check. It does not select a digest, delete a duplicate, or rewrite applied migration history.
 
 If this check fails, stop application writers and take a verified database and object-storage backup. Inspect the affected release's artifact bytes, hashes, review record, and storage references in a restored copy. An operator must establish which artifact was reviewed before removing any duplicate. If migration 0012 already ran, its approval digest alone is not proof of that choice. If evidence is ambiguous, keep the release unavailable and submit it for a fresh review under a new version. Do not invent an approval digest or silently change an immutable release. Validate the repair and migrations on the restored copy before scheduling the production change.
+
+## Review Remediation Upgrade Notes
+
+Apply the additive migrations before starting this API version, and promote API
+and web from the same commit. Rehearse the upgrade on an isolated restore first:
+
+- `0029_architecture_sync_history_retention` prevents deletion and truncation of
+  retained sync runs and steps. It does not activate full architecture execution.
+- `0030_architecture_pattern_migration_diff_shape` validates existing migration
+  lineage against the application reader's established shape. If validation fails,
+  stop the rollout and investigate the retained evidence; do not remove the check
+  or invent replacement history to complete an upgrade.
+- `0031_auth_notification_outbox` adds encrypted, durable auth email delivery.
+  Keep `AUTH_SECRET` consistent across replicas and follow the
+  [delivery and rollback contract](AUTH_STRATEGY.md#public-auth-notification-outbox)
+  before reverting API versions or rotating that secret.
+
+An application-image rollback does not undo migrations. Keep the verified
+database and object-storage recovery point until the upgraded user journeys pass.
 
 ## Reverse Proxy And TLS
 
