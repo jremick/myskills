@@ -28,6 +28,28 @@ export const defaultSkillUpgradePolicyV1: SkillUpgradePolicyV1 = Object.freeze({
   pins: Object.freeze({}),
 });
 
+export interface SkillUpgradePolicyConstraint {
+  source: "organization" | "target" | "default";
+  policy: SkillUpgradePolicyV1;
+}
+
+/** Organization rules remain ceilings; a target adds constraints, never replaces them. */
+export function composeSkillUpgradePolicies(input: {
+  organization?: SkillUpgradePolicyV1;
+  target?: SkillUpgradePolicyV1;
+}): SkillUpgradePolicyConstraint[] {
+  const constraints: SkillUpgradePolicyConstraint[] = [];
+  if (input.organization) constraints.push({ source: "organization", policy: normalizeSkillUpgradePolicyV1(input.organization) });
+  if (input.target) constraints.push({ source: "target", policy: normalizeSkillUpgradePolicyV1(input.target) });
+  return constraints.length ? constraints : [{ source: "default", policy: normalizeSkillUpgradePolicyV1(defaultSkillUpgradePolicyV1) }];
+}
+
+/** Manual mode adds no clock gate. Every declared window must permit this instant. */
+export function skillUpgradePoliciesAllowExecution(constraints: readonly SkillUpgradePolicyConstraint[], date = new Date()): boolean {
+  return constraints.length > 0 && constraints.every(({ policy }) => policy.mode === "manual"
+    || isWithinSkillUpgradeMaintenanceWindow(policy, date));
+}
+
 const slugPattern = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 const timeZonePattern = /^[A-Za-z0-9_+/-]{1,64}$/;
 

@@ -86,7 +86,7 @@ test("a blocked upgrade keeps intermediate release notes readable without allowi
 
 test("an unavailable pin explains the exact version without offering another update", async () => {
   const updates = sampleUpdates();
-  updates.policy!.policy.pins["release-notes-helper"] = "1.5.0";
+  updates.policy!.constraints[0]!.policy.pins["release-notes-helper"] = "1.5.0";
   updates.items[0]!.evaluation = { status: "no-compatible-release", installedVersion: "1.0.0", includedReleases: [], blockers: ["pinned-release-unavailable"] };
   const client = {
     async listArchitectureTargets() { return [workspaceTarget()]; },
@@ -276,6 +276,29 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+test("update centre shows both policy revisions and their windows when pins conflict", async () => {
+  const updates = sampleUpdates();
+  const base = updates.policy!.constraints[0]!.policy;
+  const organizationPolicy = { ...base, pins: { "release-notes-helper": "1.1.0" }, mode: "maintenance-window" as const,
+    maintenanceWindow: { timeZone: "UTC", daysOfWeek: [3], startMinute: 0, durationMinutes: 60 } };
+  const targetPolicy = { ...base, pins: { "release-notes-helper": "1.2.0" }, mode: "maintenance-window" as const,
+    maintenanceWindow: { timeZone: "Australia/Melbourne", daysOfWeek: [3], startMinute: 600, durationMinutes: 60 } };
+  const revision = (scopeType: "organization" | "target", policy: typeof base, revisionNumber: number) => ({ id: `${scopeType}-${revisionNumber}`, scopeType, scopeId: `${scopeType}-1`, policy, revisionNumber,
+    policySha256: "a".repeat(64), reason: "", createdByUserId: "owner-1", createdAt: "2026-09-02T00:00:00.000Z" });
+  updates.policy = { policy: targetPolicy, source: "target", revision: revision("target", targetPolicy, 3), constraints: [
+    { source: "organization", policy: organizationPolicy, revision: revision("organization", organizationPolicy, 2) },
+    { source: "target", policy: targetPolicy, revision: revision("target", targetPolicy, 3) },
+  ] };
+  updates.items[0]!.evaluation = { status: "no-compatible-release", installedVersion: "1.0.0", includedReleases: [], blockers: ["policy-pin-conflict"] };
+  const client = { async listArchitectureTargets() { return [workspaceTarget()]; }, async listTargetSkillUpdates() { return updates; },
+    async listTargetSkillOperations() { return []; }, async getTargetSkillUpgradePolicy() { return null; } } as unknown as RegistryClient;
+  const view = render(<SystemUpdateCenter client={client} session={{ user: { email: "owner@example.com" } }} />);
+  await view.findByText("Policies: organization r2 + target r3");
+  await view.findByText("organization window: Wed 00:00–01:00 (UTC)");
+  await view.findByText("target window: Wed 10:00–11:00 (Australia/Melbourne)");
+  await view.findByText("Organization and target pins conflict. Update the target pin to match the organization ceiling.");
+});
+
 function sampleUpdates(): TargetSkillUpdates {
   const base = {
     lifecycleStatus: "approved" as const,
@@ -287,10 +310,11 @@ function sampleUpdates(): TargetSkillUpdates {
   };
   const first = { ...base, version: "1.1.0", releaseNotes: "Security hardening.", artifact: { sha256: "b".repeat(64), byteSize: 100, contentType: "application/json" } };
   const candidate = { ...base, version: "1.2.0", changeKind: "feature" as const, releaseNotes: "New update workflow.", artifact: { sha256: "c".repeat(64), byteSize: 120, contentType: "application/json" } };
+  const policy: NonNullable<TargetSkillUpdates["policy"]>["policy"] = { schemaVersion: 1, mode: "manual", includePrerelease: false, allowedChangeKinds: ["breaking", "feature", "fix", "maintenance", "security"], pins: {} };
   return {
     targetId: "target-1",
     observedAt: "2026-09-02T00:00:00.000Z",
-    policy: { policy: { schemaVersion: 1, mode: "manual", includePrerelease: false, allowedChangeKinds: ["breaking", "feature", "fix", "maintenance", "security"], pins: {} }, source: "default", revision: null },
+    policy: { policy, source: "default", revision: null, constraints: [{ policy, source: "default", revision: null }] },
     items: [{
       slug: "release-notes-helper",
       platform: "codex",

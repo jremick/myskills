@@ -21,6 +21,7 @@ import type {
   SharingSettings,
   SkillUpdateEvaluation,
   SkillUpgradePolicyV1,
+  SkillUpgradePolicyConstraint,
   TargetSkillOperation,
   SkillSharingDetails,
   TeamSharedSkillGroup,
@@ -297,9 +298,13 @@ export interface TargetSkillUpdates {
   targetId: string;
   observedAt: string | null;
   policy: {
+    /** @deprecated Requested-policy projection only; use constraints for the enforced ceiling. */
     policy: SkillUpgradePolicyV1;
-    source: "target" | "organization" | "default";
+    /** @deprecated Source of the requested-policy projection. */
+    source: SkillUpgradePolicyConstraint["source"];
+    /** @deprecated Revision of the requested-policy projection. */
     revision: SkillUpgradePolicyRevisionRecord | null;
+    constraints: Array<SkillUpgradePolicyConstraint & { revision: SkillUpgradePolicyRevisionRecord | null }>;
   } | null;
   items: Array<{ slug: string; platform: string; evaluation: SkillUpdateEvaluation }>;
 }

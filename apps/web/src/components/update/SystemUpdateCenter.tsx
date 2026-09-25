@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { SkillUpdateBlockerCode } from "@myskills-app/core";
+import type { SkillUpdateBlockerCode, SkillUpgradeMaintenanceWindow } from "@myskills-app/core";
 import { Check, CircleAlert, Clock3, PackageCheck, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -100,7 +100,7 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
   const availableCount = rows.reduce((count, row) => count + (row.updates?.items.filter((item) => item.evaluation.status === "update-available").length ?? 0), 0);
   const activeCount = rows.reduce((count, row) => count + row.operations.filter((operation) => ["queued", "claimed", "applying", "verifying"].includes(operation.state)).length, 0);
   const reviewed = review ? reviewFor(rows, review) : null;
-  const reviewedPin = review ? rows.find((row) => row.target.id === review.targetId)?.updates?.policy?.policy.pins[review.slug] : undefined;
+  const reviewedPin = review ? policyPin(rows.find((row) => row.target.id === review.targetId)?.updates?.policy, review.slug) : undefined;
 
   async function queueOne(selection: SelectedUpdate) {
     const candidate = candidateFor(rows, selection);
@@ -244,10 +244,11 @@ function TargetUpdateCard({ row, selected, busy, architectureReview, onSelect, o
   return <Card className="control-plane-card target-update-card"><CardHeader><div><CardTitle>{row.target.name}</CardTitle><CardDescription>{row.target.adapter.kind} · generation {row.target.generation} · observed {formatDate(row.updates?.observedAt)}</CardDescription></div><Badge variant={candidates.length ? "secondary" : "outline"}>{candidates.length} updates</Badge></CardHeader><CardContent>
     {!canQueueWorkspaceOperation(row.target, "codex", "update") && <p className="control-plane-muted">Browser execution requires a consented personal Codex workspace enrolled with the CLI. Update details and operation history remain available.</p>}
     {row.error && <div className="control-plane-inline-message" role="alert">{row.error}</div>}
-    {row.updates && <><div className="target-update-policy-summary"><span>Policy: {row.updates.policy?.source ?? "default"}</span><span>Channel: {row.updates.policy?.policy.includePrerelease ? "prerelease" : "stable"}</span><span>Mode: {row.updates.policy?.policy.mode ?? "manual"}</span></div><div className="target-update-list">{row.updates.items.map((item) => {
+    {row.updates && <><div className="target-update-policy-summary"><span>Policies: {row.updates.policy?.constraints.map(({ source, revision }) => `${source}${revision ? ` r${revision.revisionNumber}` : ""}`).join(" + ") ?? "default"}</span><span>Channel: {row.updates.policy?.constraints.every(({ policy }) => policy.includePrerelease) ? "prerelease" : "stable"}</span><span>{row.updates.policy?.constraints.some(({ policy }) => policy.mode === "maintenance-window") ? "Queued work requires every maintenance window to be open" : "Manually queued"}</span>{row.updates.policy?.constraints.map(({ source, policy }) => policy.mode === "maintenance-window" && policy.maintenanceWindow
+      ? <span key={source}>{source} window: {windowSummary(policy.maintenanceWindow)}</span> : null)}</div><div className="target-update-list">{row.updates.items.map((item) => {
       const selection = { targetId: row.target.id, slug: item.slug };
       const checked = selected.some((candidate) => candidate.targetId === selection.targetId && candidate.slug === selection.slug);
-      return <div className="target-update-row" key={item.slug}><label><input type="checkbox" disabled={item.evaluation.status !== "update-available" || !canQueueWorkspaceOperation(row.target, item.platform, "update")} checked={checked} onChange={(event) => onSelect(selection, event.target.checked)} /><span><strong>{item.slug}</strong><small>{item.evaluation.installedVersion} {item.evaluation.candidate ? `→ ${item.evaluation.candidate.version}` : ""}</small>{item.evaluation.blockers.length > 0 && <small className="block">{item.evaluation.blockers.map((blocker) => updateBlockerText(blocker, row.updates?.policy?.policy.pins[item.slug])).join(" ")}</small>}</span></label><Badge variant={item.evaluation.status === "update-available" ? "secondary" : item.evaluation.status === "drifted" ? "destructive" : "outline"}>{item.evaluation.status}</Badge>{(item.evaluation.status === "update-available" || (item.evaluation.blockers.length > 0 && item.evaluation.includedReleases.length > 0)) && <Button size="sm" variant="outline" onClick={() => onReview(selection)}>Review</Button>}</div>;
+      return <div className="target-update-row" key={item.slug}><label><input type="checkbox" disabled={item.evaluation.status !== "update-available" || !canQueueWorkspaceOperation(row.target, item.platform, "update")} checked={checked} onChange={(event) => onSelect(selection, event.target.checked)} /><span><strong>{item.slug}</strong><small>{item.evaluation.installedVersion} {item.evaluation.candidate ? `→ ${item.evaluation.candidate.version}` : ""}</small>{item.evaluation.blockers.length > 0 && <small className="block">{item.evaluation.blockers.map((blocker) => updateBlockerText(blocker, policyPin(row.updates?.policy, item.slug))).join(" ")}</small>}</span></label><Badge variant={item.evaluation.status === "update-available" ? "secondary" : item.evaluation.status === "drifted" ? "destructive" : "outline"}>{item.evaluation.status}</Badge>{(item.evaluation.status === "update-available" || (item.evaluation.blockers.length > 0 && item.evaluation.includedReleases.length > 0)) && <Button size="sm" variant="outline" onClick={() => onReview(selection)}>Review</Button>}</div>;
     })}</div>{row.updates.items.length === 0 && <p className="control-plane-muted">No managed installed skills were present in the latest observation.</p>}
     <div className="target-action-row"><Button disabled={!candidates.length} size="sm" variant="outline" onClick={onArchitectureReview}>Review architecture revision</Button>{architectureReview && <Button disabled={busy === `architecture:${row.target.id}`} size="sm" onClick={onPromoteArchitecture}>{busy === `architecture:${row.target.id}` ? "Creating…" : `Confirm ${candidates.length} pinned versions`}</Button>}</div>
     <UpgradePolicyEditor client={client} target={row.target} resolved={row.updates.policy} onSaved={onPolicySaved} /></>}
@@ -266,6 +267,17 @@ function reviewFor(rows: TargetUpdateState[], selection: SelectedUpdate) {
   return rows.find((row) => row.target.id === selection.targetId)?.updates?.items.find((item) => item.slug === selection.slug && (item.evaluation.candidate || item.evaluation.includedReleases.length > 0)) ?? null;
 }
 
+function windowSummary(window: SkillUpgradeMaintenanceWindow): string {
+  const clock = (minute: number) => `${Math.floor(minute / 60).toString().padStart(2, "0")}:${(minute % 60).toString().padStart(2, "0")}`;
+  const days = window.daysOfWeek.map((day) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day]).join(", ");
+  return `${days} ${clock(window.startMinute)}–${clock(window.startMinute + window.durationMinutes)} (${window.timeZone})`;
+}
+
+function policyPin(resolved: TargetSkillUpdates["policy"] | undefined, slug: string): string | undefined {
+  const pins = [...new Set(resolved?.constraints.flatMap(({ policy }) => policy.pins[slug] ? [policy.pins[slug]] : []) ?? [])];
+  return pins.length === 1 ? pins[0] : undefined;
+}
+
 function updateBlockerText(blocker: SkillUpdateBlockerCode, pinnedVersion?: string): string {
   if (blocker === "pinned-release-unavailable" && pinnedVersion) return `Pinned release ${pinnedVersion} is unavailable. Choose an available version in the upgrade policy.`;
   const messages: Record<SkillUpdateBlockerCode, string> = {
@@ -276,6 +288,7 @@ function updateBlockerText(blocker: SkillUpdateBlockerCode, pinnedVersion?: stri
     "minimum-adapter-contract-version": "This release requires a newer adapter contract.",
     "minimum-source-version": "Install the required intermediate release first.",
     "pinned-release-unavailable": "The pinned release is unavailable.",
+    "policy-pin-conflict": "Organization and target pins conflict. Update the target pin to match the organization ceiling.",
     "change-kind-not-allowed": "The upgrade crosses a release change kind that your policy does not allow.",
   };
   return messages[blocker];

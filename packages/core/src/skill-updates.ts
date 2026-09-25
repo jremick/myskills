@@ -70,9 +70,16 @@ export const skillUpdateBlockerCodes = [
   "minimum-adapter-contract-version",
   "minimum-source-version",
   "pinned-release-unavailable",
+  "policy-pin-conflict",
   "change-kind-not-allowed",
 ] as const;
 export type SkillUpdateBlockerCode = (typeof skillUpdateBlockerCodes)[number];
+
+export interface SkillUpdatePolicy {
+  includePrerelease?: boolean;
+  pinnedVersion?: string;
+  allowedChangeKinds?: readonly SkillReleaseChangeKind[];
+}
 
 export interface SkillUpdateEvaluationInput {
   installed: {
@@ -83,11 +90,9 @@ export interface SkillUpdateEvaluationInput {
   releases: readonly SkillReleaseUpdateCandidate[];
   /** Internal history supplements visible releases for policy checks; never returned. */
   changeHistory?: readonly Pick<SkillReleaseUpdateCandidate, "version" | "changeKind">[];
-  policy?: {
-    includePrerelease?: boolean;
-    pinnedVersion?: string;
-    allowedChangeKinds?: readonly SkillReleaseChangeKind[];
-  };
+  policy?: SkillUpdatePolicy;
+  /** Every constraint applies. Kept separate so conflicts never widen a policy. */
+  policyConstraints?: readonly SkillUpdatePolicy[];
   client?: {
     myskillsVersion?: string;
     adapterContractVersion?: number;
@@ -292,7 +297,13 @@ export function evaluateSkillUpdate(input: SkillUpdateEvaluationInput): SkillUpd
   }
 
   const newer = releases.filter((release) => compareSemanticVersions(release.version, input.installed.version) > 0);
-  const pinnedVersion = input.policy?.pinnedVersion;
+  const policies = updatePolicyConstraints(input);
+  const pins = [...new Set(policies.flatMap((policy) => policy.pinnedVersion ? [policy.pinnedVersion] : []))];
+  if (pins.length > 1) {
+    return { status: "no-compatible-release", installedVersion: input.installed.version,
+      ...(currentRelease ? { currentRelease } : {}), includedReleases: [], blockers: ["policy-pin-conflict"] };
+  }
+  const pinnedVersion = pins[0];
   const pinnedToInstalled = pinnedVersion === input.installed.version;
   if (pinnedVersion && (!parseSemanticVersion(pinnedVersion)
     || (!pinnedToInstalled && !newer.some((release) => release.version === pinnedVersion)))) {
@@ -319,14 +330,12 @@ export function evaluateSkillUpdate(input: SkillUpdateEvaluationInput): SkillUpd
   }
 
   const blockerSet = new Set<SkillUpdateBlockerCode>();
-  const allowedChangeKinds = input.policy?.allowedChangeKinds;
+  const changeKindAllowed = (kind: SkillReleaseChangeKind) => policies.every((policy) => !policy.allowedChangeKinds || policy.allowedChangeKinds.includes(kind));
   // Preserve every visible restriction even if supplemental history is partial
   // or records a different kind for the same version.
   const changeHistory = [...releases, ...(input.changeHistory ?? [])];
-  const firstDisallowedRelease = allowedChangeKinds
-    ? skillReleaseUpgradeRange(changeHistory, input.installed.version, newer.at(-1)!.version)
-      .find((release) => !allowedChangeKinds.includes(release.changeKind))
-    : undefined;
+  const firstDisallowedRelease = skillReleaseUpgradeRange(changeHistory, input.installed.version, newer.at(-1)!.version)
+    .find((release) => !changeKindAllowed(release.changeKind));
   let candidate: SkillReleaseUpdateCandidate | undefined;
   for (const release of newer) {
     // Evaluate the exact pin while retaining earlier releases for range policy.
@@ -336,7 +345,8 @@ export function evaluateSkillUpdate(input: SkillUpdateEvaluationInput): SkillUpd
       blockers.push("change-kind-not-allowed");
     }
     for (const blocker of blockers) blockerSet.add(blocker);
-    if (blockers.length === 0) candidate = release;
+    // Equal-precedence build variants retain the caller's newest-first order.
+    if (blockers.length === 0 && (!candidate || compareSemanticVersions(release.version, candidate.version) > 0)) candidate = release;
   }
   if (!candidate) {
     return {
@@ -379,10 +389,11 @@ export function skillReleaseUpdateBlockers(
   if (!release.platforms.some((platform) => platform.name === input.installed.platform && platform.status === "supported")) {
     blockers.push("platform-unsupported");
   }
-  if (isPrereleaseVersion(release.version) && input.policy?.includePrerelease !== true) {
+  const policies = updatePolicyConstraints(input);
+  if (isPrereleaseVersion(release.version) && policies.some((policy) => policy.includePrerelease !== true)) {
     blockers.push("prerelease-not-selected");
   }
-  if (input.policy?.allowedChangeKinds && !input.policy.allowedChangeKinds.includes(release.changeKind)) {
+  if (policies.some((policy) => policy.allowedChangeKinds && !policy.allowedChangeKinds.includes(release.changeKind))) {
     blockers.push("change-kind-not-allowed");
   }
   const compatibility = release.compatibility;
@@ -408,4 +419,9 @@ export function skillReleaseUpdateBlockers(
     blockers.push("minimum-source-version");
   }
   return blockers;
+}
+
+function updatePolicyConstraints(input: SkillUpdateEvaluationInput): readonly SkillUpdatePolicy[] {
+  const policies = [...(input.policy ? [input.policy] : []), ...(input.policyConstraints ?? [])];
+  return policies.length ? policies : [{}];
 }

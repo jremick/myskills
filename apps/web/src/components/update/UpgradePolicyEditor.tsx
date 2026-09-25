@@ -24,9 +24,10 @@ export function UpgradePolicyEditor({ client, target, resolved, onSaved }: {
   const [policy, setPolicy] = useState<SkillUpgradePolicyV1>(defaultPolicy);
   const [state, setState] = useState<"idle" | "loading" | "ready" | "saving" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
-  const inheritedPolicy = useRef(resolved?.policy);
+  const inherited = resolved?.constraints.find((constraint) => constraint.source === "organization")?.policy;
+  const inheritedPolicy = useRef(inherited);
   const epoch = useRef(0);
-  inheritedPolicy.current = resolved?.policy;
+  inheritedPolicy.current = inherited;
   const organizationId = target.owner.type === "organization" ? target.owner.id : null;
 
   useEffect(() => {
@@ -47,7 +48,7 @@ export function UpgradePolicyEditor({ client, target, resolved, onSaved }: {
     void request.then((record) => {
       if (!active) return;
       setRevision(record);
-      // Organization edits must never inherit a single target's override.
+      // Organization edits must never inherit a single target's constraints.
       const source = record?.policy ?? (scope === "target" ? inheritedPolicy.current : undefined) ?? defaultPolicy;
       setPolicy(structuredClone(source));
       setState("ready");
@@ -91,7 +92,8 @@ export function UpgradePolicyEditor({ client, target, resolved, onSaved }: {
     <div className="control-plane-form">
       <label><span>Scope</span><select aria-label="Upgrade policy scope" value={scope} disabled={state === "saving"} onChange={(event) => { setState("loading"); setScope(event.target.value as "target" | "organization"); }}><option value="target">This target</option>{organizationId && <option value="organization">Organization</option>}</select></label>
       {state === "loading" && <p role="status">Loading {scope} policy…</p>}
-      {editable && <p className="control-plane-muted">Editing {scope === "organization" ? "the organization policy for all targets that inherit it" : "this target only"}. {revision ? `Revision ${revision.revisionNumber}.` : "Saving creates the first override for this scope."}</p>}
+      {editable && <p className="control-plane-muted">Editing {scope === "organization" ? "the organization ceiling for its targets" : "this target only"}. {revision ? `Revision ${revision.revisionNumber}.` : "Saving creates the first policy for this scope."}</p>}
+      {organizationId && <p className="control-plane-muted">Organization and target rules both apply. Target settings can add restrictions but cannot relax the organization ceiling. Every maintenance window must be open; all work still requires an explicit queue request.</p>}
       <label className="control-plane-checkbox"><input type="checkbox" disabled={!editable} checked={policy.includePrerelease} onChange={(event) => setPolicy({ ...policy, includePrerelease: event.target.checked })} /><span><strong>Prerelease channel</strong><small>Include compatible prerelease versions.</small></span></label>
       <label><span>Execution mode</span><select disabled={!editable} value={policy.mode} onChange={(event) => setPolicy(event.target.value === "manual" ? { ...policy, mode: "manual", maintenanceWindow: undefined } : { ...policy, mode: "maintenance-window", maintenanceWindow: policy.maintenanceWindow ?? { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, daysOfWeek: [1, 2, 3, 4, 5], startMinute: 120, durationMinutes: 120 } })}><option value="manual">Manual</option><option value="maintenance-window">Maintenance window</option></select></label>
       {policy.mode === "maintenance-window" && policy.maintenanceWindow && <p className="control-plane-muted">Window: days {policy.maintenanceWindow.daysOfWeek.join(", ")} (0 is Sunday), starting {minuteLabel(policy.maintenanceWindow.startMinute)} for {policy.maintenanceWindow.durationMinutes} minutes in {policy.maintenanceWindow.timeZone}. The companion cannot claim queued work outside this window.</p>}

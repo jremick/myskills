@@ -78,12 +78,22 @@ Queued operations can be cancelled before claim. Claimed work uses a short lease
 
 ## Upgrade Policy
 
-Upgrade policies are immutable revisions with optimistic concurrency. A target policy overrides an organization policy; otherwise the fail-safe default is stable-channel, manual updates. A policy can:
+Upgrade policies are immutable revisions with optimistic concurrency. For organization-owned targets, every configured organization and target policy applies. The organization policy is an enforced ceiling: a target policy can add restrictions but cannot relax it. If neither scope has a policy, the default is stable-channel, manual updates. A policy can:
 
 - include or exclude prereleases;
 - permit selected change kinds;
 - pin exact skill versions;
 - keep execution manual or restrict companion claims to a declared timezone-aware maintenance window.
+
+Prereleases must be allowed by both scopes. Each release in the upgrade range must have a change kind allowed by both. Exact version pins are checked independently; conflicting pins leave no eligible version and the update preview reports `policy-pin-conflict`.
+
+Manual mode means an explicitly queued operation with no clock restriction; it does not enable automatic scheduling. Every configured maintenance window must permit the same instant. Windows retain their own time zones and are never flattened into one interval. Disjoint windows therefore prevent claims and successful execution transitions until policy changes allow an overlap. Planning and queueing may occur outside a window; claims, renewal, promotion, verification, and success receipts recheck the current windows. Failure receipts remain recordable after a policy restriction.
+
+The API returns the applied policies in `policy.constraints`, with each scope and immutable revision. This list is the authoritative conjunction: every constraint must permit the operation.
+
+For compatibility with shipped clients, `policy.policy`, `policy.source`, and `policy.revision` remain as deprecated fields. They project the requested target policy when present, otherwise the organization policy, otherwise the default. This legacy projection is not the effective ceiling or permission to execute. A broader preview from a cached client is still rejected by the server when any current constraint blocks it.
+
+Planning, scheduling, claims, execution transitions, and success receipts enforce the current constraints. PostgreSQL checks both streams under the existing target and organization locks, so a queued target policy cannot bypass a later organization restriction.
 
 Organization policy changes require an MFA-verified organization owner. Target policy changes require an MFA-verified target manager and a write-capable, consented target.
 

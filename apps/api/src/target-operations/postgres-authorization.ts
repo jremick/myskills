@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import {
-  AppError, defaultSkillUpgradePolicyV1, isPrereleaseVersion, isWithinSkillUpgradeMaintenanceWindow,
-  parseSemanticVersion, skillReleaseUpdateBlockers, skillReleaseUpgradeRange, skillReleaseChangeKinds, type TargetSkillOperation, type SkillUpgradePolicyV1,
+  AppError, composeSkillUpgradePolicies, isPrereleaseVersion, skillUpgradePoliciesAllowExecution,
+  parseSemanticVersion, skillReleaseUpdateBlockers, skillReleaseUpgradeRange, skillReleaseChangeKinds, type TargetSkillOperation, type SkillUpgradePolicyConstraint,
 } from "@myskills-app/core";
 import type { Database } from "../db/client.js";
 import {
@@ -57,7 +57,7 @@ export async function lockOperationSharing(db: OperationDatabase): Promise<void>
   await db.select({ key: instanceSettings.key }).from(instanceSettings).where(eq(instanceSettings.key, "sharing")).for("update", { noWait: true }).limit(1);
 }
 
-export async function resolveLockedUpgradePolicy(db: OperationDatabase, target: ArchitectureTargetRecord): Promise<SkillUpgradePolicyV1> {
+export async function resolveLockedUpgradePolicy(db: OperationDatabase, target: ArchitectureTargetRecord): Promise<SkillUpgradePolicyConstraint[]> {
   const organizationId = target.owner.type === "organization" ? target.owner.id : undefined;
   // Policy append takes the same target/organization lock before this advisory lock.
   await db.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`target:${target.id}`}, 0))`);
@@ -65,9 +65,10 @@ export async function resolveLockedUpgradePolicy(db: OperationDatabase, target: 
   const latest = async (scopeType: "target" | "organization", scopeId: string) => (await db.select().from(skillUpgradePolicyRevisions)
     .where(and(eq(skillUpgradePolicyRevisions.scopeType, scopeType), eq(skillUpgradePolicyRevisions.scopeId, scopeId)))
     .orderBy(desc(skillUpgradePolicyRevisions.revisionNumber)).limit(1))[0];
-  return (await latest("target", target.id))?.policy
-    ?? (organizationId ? (await latest("organization", organizationId))?.policy : undefined)
-    ?? defaultSkillUpgradePolicyV1;
+  return composeSkillUpgradePolicies({
+    target: (await latest("target", target.id))?.policy,
+    organization: organizationId ? (await latest("organization", organizationId))?.policy : undefined,
+  });
 }
 
 export async function assertOperationEligibility(db: OperationDatabase, actorId: string, operation: TargetSkillOperation, target: ArchitectureTargetRecord,
@@ -86,12 +87,14 @@ export async function assertOperationEligibility(db: OperationDatabase, actorId:
   const release = await new PostgresSubmissionStore(db as Database).getPublicRelease({ slug: operation.skillSlug, version: operation.toVersion, actorId });
   if (!release || release.artifact.sha256 !== operation.artifact.sha256 || release.artifact.byteSize !== operation.artifact.byteSize
     || release.artifact.contentType !== operation.artifact.contentType) throw operationDenied();
-  const policy = await resolveLockedUpgradePolicy(db, target);
-  if ((policy.pins[operation.skillSlug] && policy.pins[operation.skillSlug] !== operation.toVersion)
+  const constraints = await resolveLockedUpgradePolicy(db, target);
+  const policies = constraints.map(({ policy }) => policy);
+  const changeKindAllowed = (kind: (typeof skillReleaseChangeKinds)[number]) => policies.every((policy) => policy.allowedChangeKinds.includes(kind));
+  if (policies.some((policy) => (policy.pins[operation.skillSlug] && policy.pins[operation.skillSlug] !== operation.toVersion)
     || (!policy.includePrerelease && isPrereleaseVersion(operation.toVersion))
-    || !policy.allowedChangeKinds.includes(release.changeKind)) throw operationDenied("TARGET_OPERATION_POLICY_CHANGED");
+    || !policy.allowedChangeKinds.includes(release.changeKind))) throw operationDenied("TARGET_OPERATION_POLICY_CHANGED");
   if (operation.action === "update" && operation.fromVersion
-    && !skillReleaseChangeKinds.every((kind) => policy.allowedChangeKinds.includes(kind))) {
+    && !skillReleaseChangeKinds.every(changeKindAllowed)) {
     // The exact-release authorizer holds the parent skill FOR UPDATE, which
     // prevents new version inserts. Lock every existing version so publication
     // or change metadata cannot alter the crossed range before this commit.
@@ -99,11 +102,11 @@ export async function assertOperationEligibility(db: OperationDatabase, actorId:
     }).from(skillVersions).where(eq(skillVersions.skillId, skill.id)).orderBy(asc(skillVersions.id)).for("update");
     // Withdrawn or newly unsafe releases still contributed changes to later versions.
     const released = versions.filter((item) => item.publishedAt);
-    if (skillReleaseUpgradeRange(released, operation.fromVersion, operation.toVersion).some((item) => !policy.allowedChangeKinds.includes(item.changeKind))) {
+    if (skillReleaseUpgradeRange(released, operation.fromVersion, operation.toVersion).some((item) => !changeKindAllowed(item.changeKind))) {
       throw operationDenied("TARGET_OPERATION_POLICY_CHANGED");
     }
   }
-  if (options.execution && policy.mode === "maintenance-window" && !isWithinSkillUpgradeMaintenanceWindow(policy, new Date(options.now))) {
+  if (options.execution && !skillUpgradePoliciesAllowExecution(constraints, new Date(options.now))) {
     throw operationDenied("TARGET_OPERATION_OUTSIDE_MAINTENANCE_WINDOW");
   }
   const blockers = skillReleaseUpdateBlockers(release, {

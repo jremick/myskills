@@ -388,3 +388,29 @@ test("default discovery ignores backport creation order, prereleases, deprecated
   assert.equal(selectDefaultSkillRelease(releases)?.version, "2.0.0+newer-build");
   assert.equal(selectDefaultSkillRelease(releases.slice(1, 4)), undefined);
 });
+
+test("update evaluation enforces all policy constraints without widening conflicts", () => {
+  const input = { installed: { version: "1.0.0", platform: "codex" }, releases: [release("1.0.0"),
+    { ...release("1.1.0"), changeKind: "breaking" as const }, { ...release("1.1.1"), changeKind: "fix" as const }, release("2.0.0-rc.1")] };
+  const range = evaluateSkillUpdate({ ...input, policyConstraints: [{ allowedChangeKinds: ["fix"] }, { includePrerelease: true }] });
+  assert.equal(range.status, "no-compatible-release");
+  assert.ok(range.blockers.includes("change-kind-not-allowed"));
+  assert.ok(range.blockers.includes("prerelease-not-selected"));
+  const pins = evaluateSkillUpdate({ ...input, policyConstraints: [{ pinnedVersion: "1.1.0" }, { pinnedVersion: "1.1.1" }] });
+  assert.equal(pins.candidate, undefined);
+  assert.deepEqual(pins.blockers, ["policy-pin-conflict"]);
+  const disjoint = evaluateSkillUpdate({ ...input, policyConstraints: [{ allowedChangeKinds: ["fix"] }, { allowedChangeKinds: ["feature"] }] });
+  assert.equal(disjoint.candidate, undefined);
+  assert.ok(disjoint.blockers.includes("change-kind-not-allowed"));
+  const matching = evaluateSkillUpdate({ ...input, releases: [release("1.0.0"), release("1.1.1")], policyConstraints: [{ pinnedVersion: "1.1.1" }, { pinnedVersion: "1.1.1" }] });
+  assert.equal(matching.candidate?.version, "1.1.1");
+});
+
+test("update candidates preserve newest-first order for equal-precedence build identities", () => {
+  const releases = [release("2.0.0+newer"), release("2.0.0+older")];
+  assert.equal(evaluateSkillUpdate({ installed: { version: "1.0.0", platform: "codex" }, releases }).candidate?.version, "2.0.0+newer");
+  const installed = evaluateSkillUpdate({ installed: { version: "2.0.0+older", platform: "codex" }, releases });
+  assert.equal(installed.currentRelease?.version, "2.0.0+older");
+  assert.equal(installed.status, "current");
+  assert.equal(installed.candidate, undefined);
+});

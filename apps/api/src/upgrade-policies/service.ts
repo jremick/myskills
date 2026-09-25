@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import {
   AppError,
-  defaultSkillUpgradePolicyV1,
+  composeSkillUpgradePolicies,
   normalizeSkillUpgradePolicyV1,
   skillUpgradePolicyDigest,
   type SkillUpgradePolicyV1,
 } from "@myskills-app/core";
 import type { ArchitectureTargetRecord } from "../targets/types.js";
-import type { SkillUpgradePolicyRevision, SkillUpgradePolicyScope, SkillUpgradePolicyStore } from "./types.js";
+import type { ResolvedSkillUpgradePolicy, SkillUpgradePolicyRevision, SkillUpgradePolicyScope, SkillUpgradePolicyStore } from "./types.js";
 
 const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
@@ -18,14 +18,15 @@ export class SkillUpgradePolicyService {
     return this.store.getLatest(scopeType(scopeTypeInput), identifier(scopeIdInput));
   }
 
-  async resolveForTarget(target: ArchitectureTargetRecord): Promise<{ policy: SkillUpgradePolicyV1; source: "target" | "organization" | "default"; revision: SkillUpgradePolicyRevision | null }> {
+  async resolveForTarget(target: ArchitectureTargetRecord): Promise<ResolvedSkillUpgradePolicy> {
     const targetRevision = await this.store.getLatest("target", target.id);
-    if (targetRevision) return { policy: targetRevision.policy, source: "target", revision: targetRevision };
-    if (target.owner.type === "organization") {
-      const organizationRevision = await this.store.getLatest("organization", target.owner.id);
-      if (organizationRevision) return { policy: organizationRevision.policy, source: "organization", revision: organizationRevision };
-    }
-    return { policy: structuredClone(defaultSkillUpgradePolicyV1), source: "default", revision: null };
+    const organizationRevision = target.owner.type === "organization"
+      ? await this.store.getLatest("organization", target.owner.id) : null;
+    const constraints = composeSkillUpgradePolicies({ organization: organizationRevision?.policy, target: targetRevision?.policy })
+      .map((constraint) => ({ ...constraint, revision: constraint.source === "organization" ? organizationRevision : constraint.source === "target" ? targetRevision : null }));
+    // Preserve the shipped response projection; authorization always uses every constraint.
+    const requested = constraints.find(({ source }) => source === "target") ?? constraints[0]!;
+    return { policy: requested.policy, source: requested.source, revision: requested.revision, constraints };
   }
 
   async append(input: {

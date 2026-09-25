@@ -86,7 +86,7 @@ test("organization policy editing loads its own revision and preserves its pins"
     async updateOrganizationSkillUpgradePolicy(_id: string, input: { policy: SkillUpgradePolicyV1; expectedRevisionNumber: number }) { saves.push(input); return { created: true, revision: policyRevision("organization", 8, input.policy) }; },
   } as unknown as RegistryClient;
   const target = { id: "target-1", owner: { type: "organization", id: "org-1" } } as ArchitectureTargetRecord;
-  const view = render(<UpgradePolicyEditor client={client} target={target} resolved={{ policy: targetPolicy, source: "target", revision: policyRevision("target", 3, targetPolicy) }} onSaved={() => undefined} />);
+  const view = render(<UpgradePolicyEditor client={client} target={target} resolved={{ policy: targetPolicy, source: "target", revision: policyRevision("target", 3, targetPolicy), constraints: [{ policy: organizationPolicy, source: "organization", revision: policyRevision("organization", 7, organizationPolicy) }, { policy: targetPolicy, source: "target", revision: policyRevision("target", 3, targetPolicy) }] }} onSaved={() => undefined} />);
   const details = view.container.querySelector("details")!;
   details.open = true;
   fireEvent(details, new window.Event("toggle"));

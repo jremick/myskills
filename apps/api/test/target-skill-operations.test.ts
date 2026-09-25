@@ -8,6 +8,7 @@ import { SubmissionService } from "../src/submissions/service.js";
 import { MemorySubmissionStore } from "../src/submissions/memory-submission-store.js";
 import { MemorySkillUpgradePolicyStore } from "../src/upgrade-policies/memory-store.js";
 import type { PublicReleaseMetadata } from "../src/submissions/types.js";
+import type { ArchitectureTargetRecord } from "../src/targets/types.js";
 import { SkillUpgradePolicyService } from "../src/upgrade-policies/service.js";
 
 const now = new Date("2026-09-02T00:00:00.000Z");
@@ -30,12 +31,13 @@ const target = {
   health: null,
 };
 
-function fixture(upgradePolicies?: SkillUpgradePolicyService, releaseSet?: PublicReleaseMetadata[], submissionService?: SubmissionService, observedDigest?: string) {
+function fixture(upgradePolicies?: SkillUpgradePolicyService, releaseSet?: PublicReleaseMetadata[], submissionService?: SubmissionService, observedDigest?: string, targetRecord: ArchitectureTargetRecord = target) {
   let clock = new Date(now);
-  const store = new MemoryTargetSkillOperationStore();
+  const store: MemoryTargetSkillOperationStore & { canReadRelease?: () => Promise<boolean> } = new MemoryTargetSkillOperationStore();
+  if (targetRecord.owner.type === "organization") store.canReadRelease = async () => true;
   const targets = {
-    authorizeCompanionOperation: async () => target,
-    getTarget: async () => target,
+    authorizeCompanionOperation: async () => targetRecord,
+    getTarget: async () => targetRecord,
     listObservations: async () => [{
       schemaVersion: 1,
       id: "observation-1",
@@ -374,3 +376,84 @@ test("expired claims can be recovered with a new fencing token", async () => {
   });
   assert.equal(applying.state, "applying");
 });
+
+const organizationTarget: ArchitectureTargetRecord = { ...target, owner: { type: "organization", id: "org-1" } };
+
+test("organization ceiling survives a wider target policy in planning and scheduling", async () => {
+  const policies = new SkillUpgradePolicyService(new MemorySkillUpgradePolicyStore());
+  await policies.append({ actorUserId: "owner-1", scopeType: "organization", scopeId: "org-1", expectedRevisionNumber: 0, policy: { allowedChangeKinds: ["fix"] } });
+  await policies.append({ actorUserId: "owner-1", scopeType: "target", scopeId: target.id, expectedRevisionNumber: 0, policy: { includePrerelease: true } });
+  const { service } = fixture(policies, rangeReleases(), undefined, undefined, organizationTarget);
+  const updates = await service.listUpdates({ id: "owner-1", roles: [] }, target.id);
+  // The serialized envelope remains additive for shipped clients, while evaluation uses both policies.
+  const envelope = JSON.parse(JSON.stringify(updates)) as typeof updates;
+  assert.ok(envelope.policy);
+  assert.ok(Object.hasOwn(envelope.policy, "policy"));
+  assert.ok(Object.hasOwn(envelope.policy, "source"));
+  assert.ok(Object.hasOwn(envelope.policy, "revision"));
+  assert.equal(envelope.policy.source, "target");
+  assert.equal(envelope.policy.policy.includePrerelease, true);
+  assert.equal(envelope.policy.revision?.scopeType, "target");
+  assert.equal(envelope.policy.revision?.revisionNumber, 1);
+  assert.deepEqual(envelope.policy.constraints.map(({ source, revision }) => [source, revision?.revisionNumber]), [["organization", 1], ["target", 1]]);
+  assert.equal(envelope.policy.constraints[0]?.policy.includePrerelease, false);
+  assert.equal(envelope.items[0]?.evaluation.status, "no-compatible-release");
+  await assert.rejects(service.schedule({ actorId: "owner-1", targetId: target.id, action: "update", slug: "release-notes-helper", version: "1.1.1", idempotencyKey: "org-range" }), errorCode("TARGET_OPERATION_POLICY_CHANGE_KIND_BLOCKED"));
+  const prerelease = rangeReleases().map((release) => ({ ...release, version: release.version === "1.1.1" ? "2.0.0-rc.1" : release.version }));
+  await assert.rejects(fixture(policies, prerelease, undefined, undefined, organizationTarget).service.schedule({ actorId: "owner-1", targetId: target.id, action: "update", slug: "release-notes-helper", version: "2.0.0-rc.1", idempotencyKey: "org-prerelease" }), errorCode("TARGET_OPERATION_POLICY_PRERELEASE_BLOCKED"));
+  await policies.append({ actorUserId: "owner-1", scopeType: "organization", scopeId: "org-1", expectedRevisionNumber: 1, policy: { pins: { "release-notes-helper": "1.1.0" } } });
+  await policies.append({ actorUserId: "owner-1", scopeType: "target", scopeId: target.id, expectedRevisionNumber: 1, policy: { pins: { "release-notes-helper": "1.1.1" } } });
+  assert.deepEqual((await service.listUpdates({ id: "owner-1", roles: [] }, target.id)).items[0]?.evaluation.blockers, ["policy-pin-conflict"]);
+  await assert.rejects(service.schedule({ actorId: "owner-1", targetId: target.id, action: "update", slug: "release-notes-helper", version: "1.1.1", idempotencyKey: "org-pin" }), errorCode("TARGET_OPERATION_POLICY_PIN_CONFLICT"));
+});
+
+test("current organization ceiling is rechecked at every memory execution boundary", async (t) => {
+  for (const boundary of ["claim", "apply", "renew", "verify", "complete"] as const) await t.test(boundary, async () => {
+    const policies = new SkillUpgradePolicyService(new MemorySkillUpgradePolicyStore());
+    await policies.append({ actorUserId: "owner-1", scopeType: "target", scopeId: target.id, expectedRevisionNumber: 0, policy: {} });
+    const { service } = fixture(policies, undefined, undefined, undefined, organizationTarget);
+    await service.schedule({ actorId: "owner-1", targetId: target.id, action: "update", slug: "release-notes-helper", version: "1.1.0", idempotencyKey: boundary });
+    const claimed = boundary === "claim" ? null : await service.claim({ actorId: "owner-1", targetId: target.id, targetGeneration: target.generation, holderId: "companion-1" });
+    const binding = { actorId: "owner-1", operationId: "operation-1", holderId: "companion-1", claimToken: claimed?.claimToken ?? "", fencingToken: claimed?.operation.fencingToken ?? 0 };
+    if (["renew", "verify", "complete"].includes(boundary)) await service.advance({ ...binding, state: "applying" });
+    if (boundary === "complete") await service.advance({ ...binding, state: "verifying" });
+    await policies.append({ actorUserId: "owner-1", scopeType: "organization", scopeId: "org-1", expectedRevisionNumber: 0, policy: { pins: { "release-notes-helper": "1.0.0" } } });
+    if (boundary === "claim") {
+      assert.equal(await service.claim({ actorId: "owner-1", targetId: target.id, targetGeneration: target.generation, holderId: "companion-1" }), null);
+    } else if (boundary === "complete") {
+      await assert.rejects(service.complete({ ...binding, result: { status: "succeeded", code: "operation.succeeded", installedVersion: "1.1.0", artifactSha256: "e".repeat(64), contentDigest: "f".repeat(64) } }), errorCode("TARGET_OPERATION_POLICY_CHANGED"));
+      assert.equal((await service.complete({ ...binding, result: { status: "failed", code: "operation.policy-changed" } })).state, "failed");
+    } else await assert.rejects(service.advance({ ...binding, state: boundary === "verify" ? "verifying" : "applying" }), errorCode("TARGET_OPERATION_POLICY_CHANGED"));
+  });
+});
+
+test("manual target policy cannot bypass an organization maintenance window at receipt", async () => {
+  const policies = new SkillUpgradePolicyService(new MemorySkillUpgradePolicyStore());
+  await policies.append({ actorUserId: "owner-1", scopeType: "target", scopeId: target.id, expectedRevisionNumber: 0, policy: { mode: "manual" } });
+  const { service } = fixture(policies, undefined, undefined, undefined, organizationTarget);
+  await service.schedule({ actorId: "owner-1", targetId: target.id, action: "update", slug: "release-notes-helper", version: "1.1.0", idempotencyKey: "windows" });
+  const claim = await service.claim({ actorId: "owner-1", targetId: target.id, targetGeneration: target.generation, holderId: "companion-1" });
+  assert.ok(claim);
+  const binding = { actorId: "owner-1", operationId: claim.operation.id, holderId: "companion-1", claimToken: claim.claimToken, fencingToken: claim.operation.fencingToken };
+  await service.advance({ ...binding, state: "applying" });
+  await service.advance({ ...binding, state: "verifying" });
+  await policies.append({ actorUserId: "owner-1", scopeType: "organization", scopeId: "org-1", expectedRevisionNumber: 0, policy: { mode: "maintenance-window", maintenanceWindow: { timeZone: "UTC", daysOfWeek: [3], startMinute: 60, durationMinutes: 60 } } });
+  await assert.rejects(service.complete({ ...binding, result: { status: "succeeded", code: "operation.succeeded", installedVersion: "1.1.0", artifactSha256: "e".repeat(64), contentDigest: "f".repeat(64) } }), errorCode("TARGET_OPERATION_OUTSIDE_MAINTENANCE_WINDOW"));
+  assert.equal((await service.complete({ ...binding, result: { status: "failed", code: "operation.window-closed" } })).state, "failed");
+});
+
+test("claims require the intersection of organization and target windows in different zones", async () => {
+  const policies = new SkillUpgradePolicyService(new MemorySkillUpgradePolicyStore());
+  await policies.append({ actorUserId: "owner-1", scopeType: "organization", scopeId: "org-1", expectedRevisionNumber: 0, policy: { mode: "maintenance-window", maintenanceWindow: { timeZone: "UTC", daysOfWeek: [3], startMinute: 0, durationMinutes: 60 } } });
+  await policies.append({ actorUserId: "owner-1", scopeType: "target", scopeId: target.id, expectedRevisionNumber: 0, policy: { mode: "maintenance-window", maintenanceWindow: { timeZone: "America/New_York", daysOfWeek: [2], startMinute: 1200, durationMinutes: 60 } } });
+  const open = fixture(policies, undefined, undefined, undefined, organizationTarget).service;
+  const request = { actorId: "owner-1", targetId: target.id, action: "update" as const, slug: "release-notes-helper", version: "1.1.0", idempotencyKey: "window-intersection" };
+  await open.schedule(request);
+  assert.ok(await open.claim({ actorId: "owner-1", targetId: target.id, targetGeneration: target.generation, holderId: "companion-1" }));
+  await policies.append({ actorUserId: "owner-1", scopeType: "target", scopeId: target.id, expectedRevisionNumber: 1, policy: { mode: "maintenance-window", maintenanceWindow: { timeZone: "UTC", daysOfWeek: [3], startMinute: 60, durationMinutes: 60 } } });
+  const closed = fixture(policies, undefined, undefined, undefined, organizationTarget).service;
+  await closed.schedule(request);
+  assert.equal(await closed.claim({ actorId: "owner-1", targetId: target.id, targetGeneration: target.generation, holderId: "companion-1" }), null);
+});
+
+function errorCode(expected: string) { return (error: unknown) => error instanceof Error && "code" in error && error.code === expected; }
