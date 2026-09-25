@@ -127,7 +127,6 @@ export function OrganizationsDashboard({ client, session }: { client: RegistryCl
     if (
       !getOrganization
       || !client.listOrganizationMembers
-      || !client.listOrganizationInvitations
       || !client.listOrganizationPolicies
       || !client.listOrganizationTeams
     ) {
@@ -136,10 +135,15 @@ export function OrganizationsDashboard({ client, session }: { client: RegistryCl
       return;
     }
     try {
+      const detailRequest = getOrganization(organizationId);
       const [nextDetail, nextMembers, nextInvitations, nextPolicies, nextTeams] = await Promise.all([
-        getOrganization(organizationId),
+        detailRequest,
         client.listOrganizationMembers(organizationId),
-        client.listOrganizationInvitations(organizationId),
+        detailRequest.then((organization) => {
+          if (organization.role !== "owner" && organization.role !== "admin") return [];
+          if (!client.listOrganizationInvitations) throw new Error("Organization invitations are unavailable.");
+          return client.listOrganizationInvitations(organizationId);
+        }),
         client.listOrganizationPolicies(organizationId),
         client.listOrganizationTeams(organizationId),
       ]);
@@ -492,8 +496,8 @@ function OrganizationMembersPanel({ client, detail, members, invitations, canAdm
           <div className="organization-member-row" key={member.id}>
             <UserRound size={16} aria-hidden="true" />
             <span><strong>{member.name || member.email}</strong><small>{member.email}</small></span>
-            {canAdmin ? <select aria-label={`Role for ${member.email}`} disabled={state === "saving" || Boolean(pendingRoleChange)} onChange={(event) => requestRoleChange(member, event.target.value as OrganizationRole)} value={member.role}><option value="member">Member</option><option value="admin">Admin</option><option value="owner">Owner</option></select> : <Badge variant="outline">{member.role}</Badge>}
-            {canAdmin && <Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant={pendingRemoval === member.userId ? "destructive" : "outline"} onClick={() => void removeMember(member)}>{pendingRemoval === member.userId ? "Confirm remove" : "Remove"}</Button>}
+            {canAdmin && (detail.role === "owner" || member.role !== "owner") ? <select aria-label={`Role for ${member.email}`} disabled={state === "saving" || Boolean(pendingRoleChange)} onChange={(event) => requestRoleChange(member, event.target.value as OrganizationRole)} value={member.role}><option value="member">Member</option><option value="admin">Admin</option>{detail.role === "owner" && <option value="owner">Owner</option>}</select> : <Badge variant="outline">{member.role}</Badge>}
+            {canAdmin && (detail.role === "owner" || member.role !== "owner") && <Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant={pendingRemoval === member.userId ? "destructive" : "outline"} onClick={() => void removeMember(member)}>{pendingRemoval === member.userId ? "Confirm remove" : "Remove"}</Button>}
             {pendingRoleChange?.member.userId === member.userId && <div className="control-plane-inline-message" role="alert"><span>Change {member.email} from {member.role} to {pendingRoleChange.nextRole}?</span><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" onClick={() => void confirmRoleChange()}>Confirm role change</Button><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={cancelRoleChange}>Cancel</Button></div>}
           </div>
         ))}
@@ -612,19 +616,19 @@ function OrganizationPolicyPanel({ client, detail, policies, canManage, onChange
       </div>
       {canManage ? <form className="organization-policy-form" onSubmit={(event) => void appendPolicy(event)}>
         <div className="organization-policy-flags">
-          <PolicyCheckbox label="Enable organization skill sharing" checked={draft.sharing.organizationSkillSharingEnabled} onChange={(value) => setFlag("sharing", "organizationSkillSharingEnabled", value)} />
-          <PolicyCheckbox label="Enable organization architecture sharing" checked={draft.sharing.organizationArchitectureSharingEnabled} onChange={(value) => setFlag("sharing", "organizationArchitectureSharingEnabled", value)} />
-          <PolicyCheckbox label="Let members share owned skills" checked={draft.sharing.membersCanShareOwnedSkillsToOrganization} onChange={(value) => setFlag("sharing", "membersCanShareOwnedSkillsToOrganization", value)} />
-          <PolicyCheckbox label="Let team owners share architectures" checked={draft.sharing.teamOwnersCanShareArchitecturesToParentOrganization} onChange={(value) => setFlag("sharing", "teamOwnersCanShareArchitecturesToParentOrganization", value)} />
-          <PolicyCheckbox label="Let members create child teams" checked={draft.teams.membersCanCreateTeams} onChange={(value) => setFlag("teams", "membersCanCreateTeams", value)} />
-          <PolicyCheckbox label="Require organization membership for team members" checked={draft.teams.requireOrganizationMembershipForTeamMembers} onChange={(value) => setFlag("teams", "requireOrganizationMembershipForTeamMembers", value)} />
-          <PolicyCheckbox label="Allow standalone team adoption" checked={draft.teams.allowStandaloneTeamAdoption} onChange={(value) => setFlag("teams", "allowStandaloneTeamAdoption", value)} />
+          <PolicyCheckbox disabled={state === "saving"} label="Enable organization skill sharing" checked={draft.sharing.organizationSkillSharingEnabled} onChange={(value) => setFlag("sharing", "organizationSkillSharingEnabled", value)} />
+          <PolicyCheckbox disabled={state === "saving"} label="Enable organization architecture sharing" checked={draft.sharing.organizationArchitectureSharingEnabled} onChange={(value) => setFlag("sharing", "organizationArchitectureSharingEnabled", value)} />
+          <PolicyCheckbox disabled={state === "saving"} label="Let members share owned skills" checked={draft.sharing.membersCanShareOwnedSkillsToOrganization} onChange={(value) => setFlag("sharing", "membersCanShareOwnedSkillsToOrganization", value)} />
+          <PolicyCheckbox disabled={state === "saving"} label="Let team owners share architectures" checked={draft.sharing.teamOwnersCanShareArchitecturesToParentOrganization} onChange={(value) => setFlag("sharing", "teamOwnersCanShareArchitecturesToParentOrganization", value)} />
+          <PolicyCheckbox disabled={state === "saving"} label="Let members create child teams" checked={draft.teams.membersCanCreateTeams} onChange={(value) => setFlag("teams", "membersCanCreateTeams", value)} />
+          <PolicyCheckbox disabled={state === "saving"} label="Require organization membership for team members" checked={draft.teams.requireOrganizationMembershipForTeamMembers} onChange={(value) => setFlag("teams", "requireOrganizationMembershipForTeamMembers", value)} />
+          <PolicyCheckbox disabled={state === "saving"} label="Allow standalone team adoption" checked={draft.teams.allowStandaloneTeamAdoption} onChange={(value) => setFlag("teams", "allowStandaloneTeamAdoption", value)} />
         </div>
         <div className="organization-policy-limits">
-          <PolicyLimit label="Teams per organization" value={draft.limits.teamsPerOrganization} onChange={(value) => setLimit("teamsPerOrganization", value)} />
-          <PolicyLimit label="Members per organization" value={draft.limits.membersPerOrganization} onChange={(value) => setLimit("membersPerOrganization", value)} />
-          <PolicyLimit label="Skill grants" value={draft.limits.organizationGrantsPerSkill} onChange={(value) => setLimit("organizationGrantsPerSkill", value)} />
-          <PolicyLimit label="Architecture grants" value={draft.limits.organizationGrantsPerArchitecture} onChange={(value) => setLimit("organizationGrantsPerArchitecture", value)} />
+          <PolicyLimit disabled={state === "saving"} label="Teams per organization" value={draft.limits.teamsPerOrganization} onChange={(value) => setLimit("teamsPerOrganization", value)} />
+          <PolicyLimit disabled={state === "saving"} label="Members per organization" value={draft.limits.membersPerOrganization} onChange={(value) => setLimit("membersPerOrganization", value)} />
+          <PolicyLimit disabled={state === "saving"} label="Skill grants" value={draft.limits.organizationGrantsPerSkill} onChange={(value) => setLimit("organizationGrantsPerSkill", value)} />
+          <PolicyLimit disabled={state === "saving"} label="Architecture grants" value={draft.limits.organizationGrantsPerArchitecture} onChange={(value) => setLimit("organizationGrantsPerArchitecture", value)} />
         </div>
         <label><span>Revision reason</span><Textarea aria-label="Policy revision reason" disabled={state === "saving"} onChange={(event) => setReason(event.target.value)} placeholder="Why this policy change is needed" value={reason} /></label>
         {message && <div className="control-plane-inline-message" role={state === "error" ? "alert" : "status"}><span>{message}</span>{state === "error" && <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => pendingActivation ? void commitActivatePolicy(pendingActivation) : void commitAppendPolicy()}>Retry</Button>}</div>}
@@ -634,12 +638,12 @@ function OrganizationPolicyPanel({ client, detail, policies, canManage, onChange
   );
 }
 
-function PolicyCheckbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return <label className="control-plane-checkbox"><input checked={checked} type="checkbox" onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
+function PolicyCheckbox({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled: boolean; onChange: (value: boolean) => void }) {
+  return <label className="control-plane-checkbox"><input checked={checked} disabled={disabled} type="checkbox" onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
 }
 
-function PolicyLimit({ label, value, onChange }: { label: string; value: number; onChange: (value: string) => void }) {
-  return <label><span>{label}</span><Input aria-label={label} min={1} onChange={(event) => onChange(event.target.value)} type="number" value={value} /></label>;
+function PolicyLimit({ label, value, disabled, onChange }: { label: string; value: number; disabled: boolean; onChange: (value: string) => void }) {
+  return <label><span>{label}</span><Input aria-label={label} disabled={disabled} min={1} onChange={(event) => onChange(event.target.value)} type="number" value={value} /></label>;
 }
 
 function OrganizationTeamsPanel({ client, detail, teams, canAdmin, onChanged }: { client: RegistryClient; detail: OrganizationDetail; teams: TeamRecord[]; canAdmin: boolean; onChanged: () => void }) {
