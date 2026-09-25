@@ -221,7 +221,8 @@ myskills --version
 myskills login
 ```
 
-The published GitHub prerelease contains the beta.7 CLI assets. The npm `beta`
+The beta.7 GitHub release and verified CLI assets are held as a draft pending
+authenticated staging acceptance. The npm `beta`
 channel currently resolves to `0.1.0-beta.6`, while hosted production remains
 on the beta.5 application baseline. Beta.7 adds deterministic local package
 authoring and the native MCP delivery work described in the repository release

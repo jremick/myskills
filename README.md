@@ -28,8 +28,9 @@ The beta.7 candidate is merged and tagged at
 `6912d3f9490c6f002431f3064e8a9db417df3d7f`. Its Windows canonical gate,
 candidate CI, tagged release workflow, and public staging checks passed.
 Authenticated staging acceptance remains pending sign-in. GitHub republication,
-npm publication, and production promotion remain pending. Native model-selected host activation, imports, browser
-drafts, and guided self-hosting setup remain open roadmap work.
+npm publication, and production promotion remain pending. Native model-selected
+host activation, imports, browser drafts, and guided self-hosting setup remain
+open roadmap work.
 
 This beta is intended for real external trial use with documented compatibility, support, and upgrade expectations. It is still prerelease software and not yet the business-safe production release: API contracts, package formats, deployment defaults, and operational guidance may still change before `v1.0`.
 
