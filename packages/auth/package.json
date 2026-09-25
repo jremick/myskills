@@ -19,6 +19,6 @@
     "bcryptjs": "^3.0.3"
   },
   "devDependencies": {
-    "tsx": "^4.23.12"
+    "tsx": "^4.23.15"
   }
 }
