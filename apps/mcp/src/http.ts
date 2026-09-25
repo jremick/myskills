@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { isIP } from "node:net";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { toNodeHandler } from "@modelcontextprotocol/node";
+import { createMcpHandler, isLegacyRequest, WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/server";
 import { createRegistryApiClient, RegistryApiError } from "./api-client.js";
 import { createAiSkillsMcpServer } from "./server.js";
 import type { FetchLike } from "./api-client.js";
@@ -186,29 +187,66 @@ async function handleHttpRequest(
     return;
   }
 
-  const server = createAiSkillsMcpServer({
-    apiBaseUrl: options.apiBaseUrl,
-    fetchImpl,
-    token,
+  let closing = false;
+  const createServer = () => {
+    if (closing) {
+      throw new Error("MCP HTTP request was aborted.");
+    }
+    return createAiSkillsMcpServer({
+      apiBaseUrl: options.apiBaseUrl,
+      fetchImpl,
+      token,
+    });
+  };
+  const handler = createMcpHandler(createServer, {
+    legacy: "reject",
+    maxRequestBodySize: options.policy.maxRequestBodyBytes,
   });
-  const transport = new StreamableHTTPServerTransport({
-    enableJsonResponse: true,
-    sessionIdGenerator: undefined,
-  });
+  let legacyServer: ReturnType<typeof createServer> | undefined;
+  let legacyTransport: WebStandardStreamableHTTPServerTransport | undefined;
+  const handleMcp = toNodeHandler({
+    async fetch(webRequest, context) {
+      // Use the SDK's classifier: malformed modern envelopes must not enter the legacy path.
+      if (await isLegacyRequest(webRequest, context?.parsedBody, {
+        maxRequestBodySize: options.policy.maxRequestBodyBytes,
+      })) {
+        if (closing || webRequest.signal.aborted) {
+          throw new Error("MCP HTTP request was aborted.");
+        }
+        legacyServer = createServer();
+        legacyTransport = new WebStandardStreamableHTTPServerTransport({
+          enableJsonResponse: true,
+          sessionIdGenerator: undefined,
+          maxRequestBodySize: options.policy.maxRequestBodyBytes,
+        });
+        await legacyServer.connect(legacyTransport);
+        return legacyTransport.handleRequest(webRequest, context);
+      }
+      return handler.fetch(webRequest, context);
+    },
+  }, { maxRequestBodySize: options.policy.maxRequestBodyBytes });
 
   let closePromise: Promise<void> | null = null;
   const closeResources = () => {
-    closePromise ??= closeMcpResources(server, transport);
+    closing = true;
+    closePromise ??= (async () => {
+      try {
+        await handler.close();
+      } finally {
+        if (legacyServer && legacyTransport) {
+          await closeMcpResources(legacyServer, legacyTransport);
+        }
+      }
+    })();
     return closePromise;
   };
   const closeOnDisconnect = () => {
-    void closeResources();
+    void closeResources().catch(() => {});
   };
   response.once("close", closeOnDisconnect);
 
   try {
-    await server.connect(transport);
-    await transport.handleRequest(request, response, parsedBody);
+    await handleMcp(request, response, parsedBody);
   } catch {
     sendJsonRpcError(response, 500, -32603, "Internal server error.");
   } finally {
@@ -452,7 +490,7 @@ function sendPreBodyJsonRpcError(
 
 async function closeMcpResources(
   server: ReturnType<typeof createAiSkillsMcpServer>,
-  transport: StreamableHTTPServerTransport,
+  transport: WebStandardStreamableHTTPServerTransport,
 ): Promise<void> {
   try {
     await server.close();

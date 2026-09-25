@@ -6,13 +6,38 @@ MCP transport surface for MySkills.
 
 Implemented:
 
-- SDK-backed stdio MCP server
-- stateless Streamable HTTP MCP server
+- SDK v2 stdio MCP server with legacy and `2026-07-28` protocol negotiation
+- stateless Streamable HTTP MCP server with legacy and `2026-07-28` request handling
 - authenticated read-only skill discovery through `search_skills`
 - safe metadata for authorized skills through `get_skill_info`
 - install/export guidance through `get_install_instructions`
 - API-token-only auth check through `GET /v1/mcp/session` (accepts either `skills:read` or `architectures:read`)
 - `skills:read` for MCP registry tools and `architectures:read` for architecture projection tools
+
+## Protocol compatibility
+
+The stdio entrypoint uses `serveStdio` to select the protocol for each connection.
+The HTTP entrypoint uses `createMcpHandler` for modern requests and the SDK's
+request classifier to preserve legacy stateless JSON responses. Both paths expose
+the same six metadata tools. Modern clients can use `server/discover`, `tools/list`,
+and `tools/call`; the SDK supplies the required protocol envelope and server identity
+metadata. Legacy clients continue to use `initialize` and the existing tools.
+
+The adapter keeps its scoped API-token authentication. HTTP validates the bearer
+on every request before protocol handling, including modern discovery, and creates
+each request's server with that request's token. Modern client metadata does not
+establish identity or grant access. The HTTP endpoint accepts only `POST`; `/health`
+remains a separate `GET`, and `OPTIONS` remains unsupported. Browser hosts still need
+an appropriate same-origin or trusted proxy arrangement.
+
+This slice establishes protocol support. Native Skills extension delivery through
+`skills/list`, `skills/get`, and package-content resources remains planned under
+[MCP-1](../../docs/ROADMAP.md). It does not claim full modern authorization or native
+Skills conformance. The adapter continues to return metadata and authorized CLI
+guidance without package bytes.
+
+SDK references: [v2 migration](https://github.com/modelcontextprotocol/typescript-sdk/blob/main/docs/migration/upgrade-to-v2.md)
+and [2026-07-28 serving](https://github.com/modelcontextprotocol/typescript-sdk/blob/main/docs/migration/support-2026-07-28.md).
 
 ## Beta.3 breaking MCP/security changes
 
