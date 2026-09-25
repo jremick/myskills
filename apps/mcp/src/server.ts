@@ -1,7 +1,8 @@
-import { McpServer } from "@modelcontextprotocol/server";
+import { McpServer, ProtocolError, type ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { createRegistryApiClient, type RegistryApiClientOptions } from "./api-client.js";
 import { createAiSkillsMcpHandlers } from "./tools.js";
+import { createNativeSkillsHandlers, SKILLS_EXTENSION } from "./skills.js";
 
 export interface AiSkillsMcpServerOptions extends RegistryApiClientOptions {
   name?: string;
@@ -14,6 +15,33 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
     version: options.version ?? "0.1.0",
   });
   const handlers = createAiSkillsMcpHandlers(createRegistryApiClient(options));
+  const skills = createNativeSkillsHandlers(options);
+  server.server.registerCapabilities({ resources: {}, extensions: { [SKILLS_EXTENSION]: {} } });
+  const requireSkills = (ctx: ServerContext) => {
+    const capabilities = ctx.mcpReq.envelope
+      ? ctx.mcpReq.envelope.clientCapabilities
+      : server.server.getClientCapabilities();
+    const extension = capabilities?.extensions?.[SKILLS_EXTENSION];
+    if (!extension || typeof extension !== "object" || Array.isArray(extension)) {
+      throw new ProtocolError(-32602, "Declare the io.modelcontextprotocol/skills client extension before using Skills methods.");
+    }
+  };
+  server.server.setRequestHandler("skills/list", {
+    params: z.object({ cursor: z.string().max(2048).optional() }).default({}),
+  }, (input, ctx) => {
+    requireSkills(ctx);
+    return skills.list(input, ctx.mcpReq.signal);
+  });
+  server.server.setRequestHandler("skills/get", {
+    params: z.object({ uri: z.string().min(1).max(4096) }),
+  }, (input, ctx) => {
+    requireSkills(ctx);
+    return skills.get(input, ctx.mcpReq.signal);
+  });
+  // Resources are ordinary base-protocol data for older clients too. They are
+  // authorized on every read and never activate a skill or execute its files.
+  server.server.setRequestHandler("resources/read", (input, ctx) => skills.read(input, ctx.mcpReq.signal));
+  server.server.setRequestHandler("resources/list", async () => ({ resources: [], ttlMs: 0, cacheScope: "private" as const }));
 
   server.registerTool(
     "search_skills",
