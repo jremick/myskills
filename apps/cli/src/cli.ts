@@ -4,12 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import {
   hasBlockingFindings,
-  loadSkillManifestFromPackageFiles,
+  loadStoredSkillManifestFromPackageFiles,
   loadSkillManifestFromPath,
   normalizePackageFilePath,
+  readPackageFilesFromPath,
   readPackageSnapshot,
   scanPackagePath,
   type PackageScanResult,
+  type PackageSnapshot,
 } from "@myskills-app/skill-package";
 import {
   assertValidArchitectureTargetAdapterContext,
@@ -1948,7 +1950,7 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
   if (!existing.provenance || !previous.provenance) throw new CliError("Rollback requires a snapshot with verified registry provenance.", 1);
   assertMatchingProvenance(previous, existing.provenance);
   if (!previous.contentDigest) throw new CliError("Rollback snapshot has no verified byte identity.", 1);
-  const snapshot = await readPackageSnapshot(sourceSnapshotPath);
+  const snapshot = await readStoredPackageSnapshot(sourceSnapshotPath);
   if (parsed.options.workspace || runtime.beforeInstallPromotion) validateCodexSkill(snapshot.files, slug);
   if (contentDigestForFiles(snapshot.files, previous.contentDigestAlgorithm) !== previous.contentDigest) throw new CliError("Rollback snapshot was modified. The current installation is unchanged.", 1);
   const targetContentDigest = contentDigestForFiles(snapshot.files, CONTENT_DIGEST_ALGORITHM);
@@ -2111,7 +2113,7 @@ async function observeWorkspace(root: string, binding: WorkspaceBinding): Promis
   for (const installed of Object.values(registry.installations)) {
     assertMatchingProvenance(installed, binding.provenance);
     try {
-      const snapshot = await readPackageSnapshot(installed.path);
+      const snapshot = await readStoredPackageSnapshot(installed.path);
       validateCodexSkill(snapshot.files, installed.slug);
       if (contentDigestForFiles(snapshot.files, installed.contentDigestAlgorithm) !== installed.contentDigest) throw new Error("drift");
       skills.push({ slug: installed.slug, version: installed.version, digest: installed.artifact.sha256,
@@ -2360,8 +2362,9 @@ async function latestCompatibleVersionForSkill(slug: string, existing: Installed
       assertReleaseEligibility(release, existing, parsed, false);
       return true;
     } catch { return false; }
-  }).sort((left, right) => compareSemanticVersions(left.version, right.version));
-  const selected = compatible.at(-1);
+  }).sort((left, right) => compareSemanticVersions(right.version, left.version));
+  // Stable sort preserves the registry order for equal-precedence builds.
+  const selected = compatible[0];
   if (!selected) throw new CliError(`${slug} has no compatible release. Inspect its releases and compatibility requirements.`, 1);
   return selected.version;
 }
@@ -2392,8 +2395,9 @@ function assertMatchingProvenance(installed: { provenance?: RegistryProvenance }
 }
 
 function assertReleaseEligibility(release: SkillReleaseMetadata & { version: string }, existing: InstalledSkillRecord | undefined, parsed: ParsedArgs, requireAction = true): void {
-  if (!parseSemanticVersion(release.version)) throw new CliError("Release version is invalid.", 1);
-  if (parseSemanticVersion(release.version)!.prerelease.length > 0 && parsed.options["include-prerelease"] !== true) throw new CliError("A prerelease requires --include-prerelease.", 1);
+  const version = parseSemanticVersion(release.version);
+  if (!version) throw new CliError("Release version is invalid.", 1);
+  if (version.prerelease.length > 0 && parsed.options["include-prerelease"] !== true) throw new CliError("A prerelease requires --include-prerelease.", 1);
   if (existing && compareSemanticVersions(release.version, existing.version) < 0) throw new CliError("Use rollback to restore a verified earlier snapshot; install cannot downgrade an existing package.", 1);
   const compatibility = release.compatibility;
   if (compatibility.minimumMyskillsVersion && compareSemanticVersions(CLI_VERSION, compatibility.minimumMyskillsVersion) < 0) throw new CliError("Release requires a newer MySkills CLI.", 1);
@@ -2559,7 +2563,7 @@ async function downloadVerifiedBundle(input: {
   }
   let manifest;
   try {
-    manifest = loadSkillManifestFromPackageFiles(files);
+    manifest = loadStoredSkillManifestFromPackageFiles(files);
   } catch {
     throw new CliError("Downloaded bundle has an invalid package manifest.", 1);
   }
@@ -4225,16 +4229,23 @@ function contentDigestForFiles(files: Array<{ path: string; content: string }>, 
   return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
 }
 
+async function readStoredPackageSnapshot(inputPath: string): Promise<Pick<PackageSnapshot, "manifest" | "files">> {
+  const files = await readPackageFilesFromPath(inputPath);
+  // Validate immutable history with the stored-artifact grammar. Keep original
+  // file contents for byte verification; new submissions use readPackageSnapshot.
+  return { files, manifest: loadStoredSkillManifestFromPackageFiles(files) };
+}
+
 async function directoryMatchesDigest(root: string, expected: string, algorithm: ContentDigestAlgorithm | undefined): Promise<boolean> {
   try {
-    return contentDigestForFiles((await readPackageSnapshot(root)).files, algorithm) === expected;
+    return contentDigestForFiles((await readStoredPackageSnapshot(root)).files, algorithm) === expected;
   } catch {
     return false;
   }
 }
 
 async function assertInstalledBytes(existing: InstalledSkillRecord): Promise<InstalledSkillRecord> {
-  const snapshot = await readPackageSnapshot(existing.path).catch(() => null);
+  const snapshot = await readStoredPackageSnapshot(existing.path).catch(() => null);
   if (!snapshot || !existing.contentDigest || contentDigestForFiles(snapshot.files, existing.contentDigestAlgorithm) !== existing.contentDigest) {
     throw new CliError("Installed skill has local drift or no verified byte identity. Its files were not replaced.", 1, "INSTALL_LOCAL_DRIFT");
   }
