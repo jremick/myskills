@@ -487,17 +487,26 @@ export class PostgresAuthStore implements AuthStore {
   async changePasswordAndRevokeCredentials(input: ChangePasswordAndRevokeCredentialsInput): Promise<boolean> {
     const changedAt = input.passwordUpdatedAt ?? new Date();
     return this.db.transaction(async (tx) => {
+      const user = await lockAccountForAction(tx, input.userId);
+      if (!user || user.status !== "active" || !user.emailVerifiedAt ||
+        (input.expectedAccount && user.normalizedEmail !== input.expectedAccount.email)) {
+        return false;
+      }
       const [credential] = await tx
         .update(passwordCredentials)
         .set({
           passwordHash: input.passwordHash,
           passwordUpdatedAt: changedAt,
         })
-        .where(eq(passwordCredentials.userId, input.userId))
+        .where(and(
+          eq(passwordCredentials.userId, input.userId),
+          input.expectedAccount ? eq(passwordCredentials.passwordHash, input.expectedAccount.passwordHash) : undefined,
+        ))
         .returning({ userId: passwordCredentials.userId });
       if (!credential) {
         return false;
       }
+      await invalidateSecurityActionTokens(tx, input.userId, changedAt);
       await revokeCredentials(tx, input.userId, changedAt);
       return true;
     });
@@ -507,6 +516,7 @@ export class PostgresAuthStore implements AuthStore {
     const now = input.now ?? new Date();
     const usedAt = input.usedAt ?? now;
     return this.db.transaction(async (tx) => {
+      if (!await lockActionTokenAccount(tx, input.tokenHash)) return false;
       const [row] = await tx
         .select({ user: users, credentialUserId: passwordCredentials.userId })
         .from(authActionTokens)
@@ -515,12 +525,13 @@ export class PostgresAuthStore implements AuthStore {
         .where(and(
           eq(authActionTokens.tokenHash, input.tokenHash),
           eq(authActionTokens.purpose, "password_reset"),
+          eq(authActionTokens.sentToNormalizedEmail, users.normalizedEmail),
           isNull(authActionTokens.usedAt),
           gt(authActionTokens.expiresAt, now),
           eq(users.status, "active"),
           isNotNull(users.emailVerifiedAt),
         ))
-        .for("update", { of: [authActionTokens, users, passwordCredentials] })
+        .for("update", { of: [authActionTokens, passwordCredentials] })
         .limit(1);
       if (!row) {
         return false;
@@ -535,25 +546,35 @@ export class PostgresAuthStore implements AuthStore {
         throw new Error("Password reset credential update failed.");
       }
 
-      await tx.update(authActionTokens).set({ usedAt }).where(and(
-        eq(authActionTokens.userId, row.user.id),
-        eq(authActionTokens.purpose, "password_reset"),
-        isNull(authActionTokens.usedAt),
-      ));
+      await invalidateSecurityActionTokens(tx, row.user.id, usedAt);
       await revokeCredentials(tx, row.user.id, usedAt);
       return true;
     });
   }
 
-  async createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord> {
-    const [token] = await this.db
-      .insert(authActionTokens)
-      .values(input)
-      .returning();
-    if (!token) {
-      throw new Error("Auth action token insert failed.");
-    }
-    return toAuthActionTokenRecord(token);
+  async createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord | null> {
+    return this.db.transaction(async (tx) => {
+      const user = await lockAccountForAction(tx, input.userId);
+      if (!user) return null;
+      const { expectedAccount, ...tokenInput } = input;
+      if (input.purpose === "password_reset" || input.purpose === "email_change") {
+        const [credential] = await tx.select().from(passwordCredentials)
+          .where(eq(passwordCredentials.userId, user.id)).limit(1);
+        if (user.status !== "active" || !user.emailVerifiedAt || !credential ||
+          (expectedAccount && (user.normalizedEmail !== expectedAccount.email || credential.passwordHash !== expectedAccount.passwordHash)) ||
+          (input.purpose === "password_reset" && input.sentToNormalizedEmail !== user.normalizedEmail)) {
+          return null;
+        }
+      }
+      // Public reset requests preserve existing links. Only a password-authenticated
+      // email-change request supersedes previous email-change requests.
+      if (input.purpose === "email_change") {
+        await invalidateSecurityActionTokens(tx, user.id, new Date(), "email_change");
+      }
+      const [token] = await tx.insert(authActionTokens).values(tokenInput).returning();
+      if (!token) throw new Error("Auth action token insert failed.");
+      return toAuthActionTokenRecord(token);
+    });
   }
 
   async consumeAuthActionToken(input: {
@@ -584,6 +605,7 @@ export class PostgresAuthStore implements AuthStore {
     const now = input.now ?? new Date();
     const usedAt = input.usedAt ?? now;
     return this.db.transaction(async (tx) => {
+      if (!await lockActionTokenAccount(tx, input.tokenHash)) return null;
       const [row] = await tx
         .select({ token: authActionTokens, user: users })
         .from(authActionTokens)
@@ -596,7 +618,7 @@ export class PostgresAuthStore implements AuthStore {
           eq(users.status, "active"),
           isNotNull(users.emailVerifiedAt),
         ))
-        .for("update", { of: [authActionTokens, users] })
+        .for("update", { of: authActionTokens })
         .limit(1);
       if (!row) {
         return null;
@@ -625,14 +647,7 @@ export class PostgresAuthStore implements AuthStore {
       if (!updated) {
         throw new Error("Email change user update failed.");
       }
-      const [consumed] = await tx
-        .update(authActionTokens)
-        .set({ usedAt })
-        .where(and(eq(authActionTokens.id, row.token.id), isNull(authActionTokens.usedAt)))
-        .returning({ id: authActionTokens.id });
-      if (!consumed) {
-        throw new Error("Email change token consumption failed.");
-      }
+      await invalidateSecurityActionTokens(tx, row.user.id, usedAt);
       await revokeCredentials(tx, row.user.id, usedAt);
       return {
         outcome: "changed",
@@ -1129,6 +1144,30 @@ export class PostgresAuthStore implements AuthStore {
 }
 
 type DbLike = Database | Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+// Always lock the account before its actions/credentials. Issuance and completion
+// then share one ordering, including when they start from different action tokens.
+async function lockAccountForAction(db: DbLike, userId: string) {
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).for("update").limit(1);
+  return user;
+}
+
+async function lockActionTokenAccount(db: DbLike, tokenHash: string) {
+  const [token] = await db.select({ userId: authActionTokens.userId }).from(authActionTokens)
+    .where(eq(authActionTokens.tokenHash, tokenHash)).limit(1);
+  return token ? lockAccountForAction(db, token.userId) : undefined;
+}
+
+async function invalidateSecurityActionTokens(db: DbLike, userId: string, usedAt: Date, purpose?: "email_change"): Promise<void> {
+  await db.update(authActionTokens).set({ usedAt }).where(and(
+    eq(authActionTokens.userId, userId),
+    isNull(authActionTokens.usedAt),
+    purpose ? eq(authActionTokens.purpose, purpose) : or(
+      eq(authActionTokens.purpose, "password_reset"),
+      eq(authActionTokens.purpose, "email_change"),
+    ),
+  ));
+}
 
 async function recordAuditEvent(db: DbLike, input: CreateAuditEventInput): Promise<void> {
   await db.insert(auditEvents).values({

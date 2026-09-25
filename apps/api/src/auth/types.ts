@@ -79,6 +79,7 @@ export interface ChangePasswordAndRevokeCredentialsInput {
   userId: string;
   passwordHash: string;
   passwordUpdatedAt?: Date;
+  expectedAccount?: AuthActionAccountSnapshot;
 }
 
 export interface CompleteEmailChangeInput {
@@ -107,6 +108,14 @@ export interface CreateAuthActionTokenInput {
   tokenHash: string;
   sentToNormalizedEmail: string;
   expiresAt: Date;
+  expectedAccount?: AuthActionAccountSnapshot;
+}
+
+// Recheck the account observed before password verification or token issuance
+// while holding the same account lock as security-action completion.
+export interface AuthActionAccountSnapshot {
+  email: string;
+  passwordHash: string;
 }
 
 export interface AuthActionTokenRecord {
@@ -276,7 +285,7 @@ export interface AuthStore {
   updatePasswordCredential(input: { userId: string; passwordHash: string; passwordUpdatedAt?: Date }): Promise<boolean>;
   changePasswordAndRevokeCredentials(input: ChangePasswordAndRevokeCredentialsInput): Promise<boolean>;
   completePasswordReset(input: CompletePasswordResetInput): Promise<boolean>;
-  createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord>;
+  createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord | null>;
   consumeAuthActionToken(input: {
     tokenHash: string;
     purpose: AuthActionTokenPurpose;

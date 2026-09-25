@@ -29,9 +29,11 @@ import {
   type AdminApiTokenRecord,
   type ApiTokenScope,
   type AuthActionTokenPurpose,
+  type AuthActionAccountSnapshot,
   type AuthResponseUser,
   type AuthStore,
   type AuthUserRecord,
+  type AuthUserWithPassword,
   type MfaTotpFactorRecord,
   providerTypes,
   type ProviderConfigRecord,
@@ -532,7 +534,9 @@ export class AuthService {
     await assertAllowed(this.options.passwordResetLimiter, rateLimitKeys("password-reset", email, input.ip));
     const user = await this.store.findUserByEmailWithPassword(email);
     if (user?.passwordHash && isUsableAuthenticatedAccount(user)) {
-      await this.sendAuthActionToken(user, "password_reset");
+      await this.sendAuthActionToken(user, "password_reset", {
+        expectedAccount: { email: user.email, passwordHash: user.passwordHash },
+      });
     }
     return { status: "pending" };
   }
@@ -558,12 +562,13 @@ export class AuthService {
 
   async changePassword(actor: AuthResponseUser, input: ChangePasswordInput): Promise<{ status: "changed" }> {
     await assertAllowed(this.options.passwordResetLimiter, rateLimitKeys("password-change", actor.email, input.ip));
-    await this.assertCanManageAccount(actor, input.currentPassword);
+    const account = await this.assertCanManageAccount(actor, input.currentPassword);
     const passwordHash = await this.hashNewPassword(input.password);
     const updated = await this.store.changePasswordAndRevokeCredentials({
       userId: actor.id,
       passwordHash,
       passwordUpdatedAt: new Date(),
+      expectedAccount: { email: account.email, passwordHash: account.passwordHash },
     });
     if (!updated) {
       throw new AppError("Password credential not found.", "PASSWORD_CREDENTIAL_NOT_FOUND", 404);
@@ -584,7 +589,7 @@ export class AuthService {
   async requestEmailChange(actor: AuthResponseUser, input: RequestEmailChangeInput): Promise<{ status: "pending" }> {
     const email = normalizeEmail(input.email);
     await assertAllowed(this.options.emailVerificationLimiter, rateLimitKeys("email-change", email, input.ip));
-    await this.assertCanManageAccount(actor, input.password);
+    const account = await this.assertCanManageAccount(actor, input.password);
     if (email === actor.email) {
       throw new AppError("New email address must be different.", "EMAIL_UNCHANGED", 400);
     }
@@ -592,7 +597,10 @@ export class AuthService {
     if (existing && existing.id !== actor.id) {
       throw new AppError("Email address is already in use.", "EMAIL_ALREADY_IN_USE", 409);
     }
-    await this.sendAuthActionToken(asAuthUserRecord(actor), "email_change", { emailOverride: email });
+    await this.sendAuthActionToken(asAuthUserRecord(actor), "email_change", {
+      emailOverride: email,
+      expectedAccount: { email: account.email, passwordHash: account.passwordHash },
+    });
     await this.store.recordAuditEvent({
       actorUserId: actor.id,
       action: "account.email_change.request",
@@ -1085,12 +1093,13 @@ export class AuthService {
     await this.assertCanManageAccount(actor, password);
   }
 
-  private async assertCanManageAccount(actor: AuthResponseUser, password: string): Promise<void> {
+  private async assertCanManageAccount(actor: AuthResponseUser, password: string): Promise<AuthUserWithPassword & { passwordHash: string }> {
     await this.assertCanUseMfaManagementSession(actor);
     const user = await this.store.findUserByEmailWithPassword(actor.email);
-    if (!user?.passwordHash || !(await verifyPassword(user.passwordHash, password))) {
+    if (!user?.passwordHash || user.id !== actor.id || !isUsableAuthenticatedAccount(user) || !(await verifyPassword(user.passwordHash, password))) {
       throw new AppError("Invalid email or password.", "INVALID_CREDENTIALS", 401);
     }
+    return { ...user, passwordHash: user.passwordHash };
   }
 
   private async assertCanUseMfaManagementSession(actor: AuthResponseUser): Promise<void> {
@@ -1140,7 +1149,7 @@ export class AuthService {
   private async sendAuthActionToken(
     user: AuthUserRecord,
     purpose: AuthActionTokenPurpose,
-    options: { emailOverride?: string; requireSink?: boolean; swallowDeliveryErrors?: boolean } = {},
+    options: { emailOverride?: string; requireSink?: boolean; swallowDeliveryErrors?: boolean; expectedAccount?: AuthActionAccountSnapshot } = {},
   ): Promise<{ expiresAt: Date } | null> {
     const sink = this.options.notificationSink;
     if (!sink) {
@@ -1152,13 +1161,20 @@ export class AuthService {
     const token = createSessionToken();
     const expiresAt = new Date(Date.now() + this.authActionTokenTtlMs(purpose));
     const email = options.emailOverride ?? user.email;
-    await this.store.createAuthActionToken({
+    const created = await this.store.createAuthActionToken({
       userId: user.id,
       purpose,
       tokenHash: hashSessionToken(token),
       sentToNormalizedEmail: email,
       expiresAt,
+      expectedAccount: options.expectedAccount,
     });
+    if (!created) {
+      if (purpose === "email_change") {
+        throw new AppError("Account changed. Sign in and try again.", "INVALID_CREDENTIALS", 401);
+      }
+      return null;
+    }
     const notification = {
       user,
       email,

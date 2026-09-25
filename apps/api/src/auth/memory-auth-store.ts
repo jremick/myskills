@@ -151,6 +151,7 @@ export class MemoryAuthStore implements AuthStore {
   private audit = new Map<string, MemoryAuditEvent>();
   private auditSequence = 0;
   private adminMutationTail: Promise<void> = Promise.resolve();
+  private accountActionTails = new Map<string, Promise<void>>();
 
   constructor(private registrationMode: RegistrationMode = "closed") {}
 
@@ -400,75 +401,90 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async changePasswordAndRevokeCredentials(input: ChangePasswordAndRevokeCredentialsInput): Promise<boolean> {
-    const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
-    if (!user || user.passwordHash === null) {
-      return false;
-    }
-    const previousPasswordHash = user.passwordHash;
-    const credentials = this.snapshotCredentialRevocationState(user.id);
-    try {
-      user.passwordHash = input.passwordHash;
-      await this.revokeUserCredentials(user.id);
-      return true;
-    } catch (error) {
-      user.passwordHash = previousPasswordHash;
-      this.restoreCredentialRevocationState(credentials);
-      throw error;
-    }
+    return this.withAccountActionLock(input.userId, async () => {
+      const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
+      if (!user || user.passwordHash === null || user.status !== "active" || !user.emailVerifiedAt ||
+        (input.expectedAccount && (user.email !== input.expectedAccount.email || user.passwordHash !== input.expectedAccount.passwordHash))) {
+        return false;
+      }
+      const previousPasswordHash = user.passwordHash;
+      const tokenStates = this.snapshotSecurityActionTokens(user.id);
+      const credentials = this.snapshotCredentialRevocationState(user.id);
+      try {
+        user.passwordHash = input.passwordHash;
+        this.invalidateSecurityActionTokens(user.id, input.passwordUpdatedAt ?? new Date());
+        await this.revokeUserCredentials(user.id);
+        return true;
+      } catch (error) {
+        user.passwordHash = previousPasswordHash;
+        this.restoreSecurityActionTokens(tokenStates);
+        this.restoreCredentialRevocationState(credentials);
+        throw error;
+      }
+    });
   }
 
   async completePasswordReset(input: CompletePasswordResetInput): Promise<boolean> {
-    const now = input.now ?? new Date();
-    const usedAt = input.usedAt ?? now;
-    const token = this.authActionTokens.get(input.tokenHash);
-    if (!token || token.purpose !== "password_reset" || token.usedAt || token.expiresAt <= now) {
-      return false;
-    }
-    const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
-    if (!user || user.status !== "active" || !user.emailVerifiedAt || user.passwordHash === null) {
-      return false;
-    }
+    const userId = this.authActionTokens.get(input.tokenHash)?.userId;
+    if (!userId) return false;
+    return this.withAccountActionLock(userId, async () => {
+      const now = input.now ?? new Date();
+      const usedAt = input.usedAt ?? now;
+      const token = this.authActionTokens.get(input.tokenHash);
+      if (!token || token.purpose !== "password_reset" || token.usedAt || token.expiresAt <= now) {
+        return false;
+      }
+      const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
+      if (!user || user.status !== "active" || !user.emailVerifiedAt || user.passwordHash === null || token.sentToNormalizedEmail !== user.email) {
+        return false;
+      }
 
-    const previousPasswordHash = user.passwordHash;
-    const resetTokenStates = [...this.authActionTokens.values()]
-      .filter((candidate) => candidate.userId === user.id && candidate.purpose === "password_reset")
-      .map((candidate) => ({ tokenHash: candidate.tokenHash, usedAt: candidate.usedAt }));
-    const credentials = this.snapshotCredentialRevocationState(user.id);
-    try {
-      user.passwordHash = input.passwordHash;
-      for (const candidate of this.authActionTokens.values()) {
-        if (candidate.userId === user.id && candidate.purpose === "password_reset" && !candidate.usedAt) {
-          candidate.usedAt = usedAt;
-        }
+      const previousPasswordHash = user.passwordHash;
+      const tokenStates = this.snapshotSecurityActionTokens(user.id);
+      const credentials = this.snapshotCredentialRevocationState(user.id);
+      try {
+        user.passwordHash = input.passwordHash;
+        this.invalidateSecurityActionTokens(user.id, usedAt);
+        await this.revokeUserCredentials(user.id);
+        return true;
+      } catch (error) {
+        user.passwordHash = previousPasswordHash;
+        this.restoreSecurityActionTokens(tokenStates);
+        this.restoreCredentialRevocationState(credentials);
+        throw error;
       }
-      await this.revokeUserCredentials(user.id);
-      return true;
-    } catch (error) {
-      user.passwordHash = previousPasswordHash;
-      for (const state of resetTokenStates) {
-        const candidate = this.authActionTokens.get(state.tokenHash);
-        if (candidate) {
-          candidate.usedAt = state.usedAt;
-        }
-      }
-      this.restoreCredentialRevocationState(credentials);
-      throw error;
-    }
+    });
   }
 
-  async createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord> {
-    const token: MemoryAuthActionToken = {
-      id: `auth-action-token-${this.authActionTokens.size + 1}`,
-      userId: input.userId,
-      purpose: input.purpose,
-      tokenHash: input.tokenHash,
-      sentToNormalizedEmail: input.sentToNormalizedEmail,
-      expiresAt: input.expiresAt,
-      usedAt: null,
-      createdAt: new Date(),
-    };
-    this.authActionTokens.set(token.tokenHash, token);
-    return toAuthActionTokenRecord(token);
+  async createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord | null> {
+    return this.withAccountActionLock(input.userId, () => {
+      const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
+      if (!user) return null;
+      if (input.purpose === "password_reset" || input.purpose === "email_change") {
+        if (user.status !== "active" || !user.emailVerifiedAt || !user.passwordHash ||
+          (input.expectedAccount && (user.email !== input.expectedAccount.email || user.passwordHash !== input.expectedAccount.passwordHash)) ||
+          (input.purpose === "password_reset" && input.sentToNormalizedEmail !== user.email)) {
+          return null;
+        }
+      }
+      const token: MemoryAuthActionToken = {
+        id: `auth-action-token-${this.authActionTokens.size + 1}`,
+        userId: input.userId,
+        purpose: input.purpose,
+        tokenHash: input.tokenHash,
+        sentToNormalizedEmail: input.sentToNormalizedEmail,
+        expiresAt: input.expiresAt,
+        usedAt: null,
+        createdAt: new Date(),
+      };
+      // Only an authenticated email-change request supersedes earlier requests.
+      // Public reset requests must not invalidate links already held by the user.
+      if (input.purpose === "email_change") {
+        this.invalidateSecurityActionTokens(user.id, token.createdAt, "email_change");
+      }
+      this.authActionTokens.set(token.tokenHash, token);
+      return toAuthActionTokenRecord(token);
+    });
   }
 
   async consumeAuthActionToken(input: {
@@ -488,43 +504,47 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async completeEmailChangeAndRevokeCredentials(input: CompleteEmailChangeInput): Promise<CompleteEmailChangeResult | null> {
-    const now = input.now ?? new Date();
-    const usedAt = input.usedAt ?? now;
-    const token = this.authActionTokens.get(input.tokenHash);
-    if (!token || token.purpose !== "email_change" || token.usedAt || token.expiresAt <= now) {
-      return null;
-    }
-    const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
-    if (!user || user.status !== "active" || !user.emailVerifiedAt) {
-      return null;
-    }
-    const nextEmail = token.sentToNormalizedEmail;
-    const existing = this.users.get(nextEmail);
-    if (existing && existing.id !== user.id) {
-      return { outcome: "email_in_use" };
-    }
+    const userId = this.authActionTokens.get(input.tokenHash)?.userId;
+    if (!userId) return null;
+    return this.withAccountActionLock<CompleteEmailChangeResult | null>(userId, async () => {
+      const now = input.now ?? new Date();
+      const usedAt = input.usedAt ?? now;
+      const token = this.authActionTokens.get(input.tokenHash);
+      if (!token || token.purpose !== "email_change" || token.usedAt || token.expiresAt <= now) {
+        return null;
+      }
+      const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
+      if (!user || user.status !== "active" || !user.emailVerifiedAt) {
+        return null;
+      }
+      const nextEmail = token.sentToNormalizedEmail;
+      const existing = this.users.get(nextEmail);
+      if (existing && existing.id !== user.id) {
+        return { outcome: "email_in_use" };
+      }
 
-    const previousEmail = user.email;
-    const previousEmailVerifiedAt = user.emailVerifiedAt;
-    const previousTokenUsedAt = token.usedAt;
-    const credentials = this.snapshotCredentialRevocationState(user.id);
-    try {
-      this.users.delete(previousEmail);
-      user.email = nextEmail;
-      user.emailVerifiedAt = usedAt;
-      this.users.set(nextEmail, user);
-      token.usedAt = usedAt;
-      await this.revokeUserCredentials(user.id);
-      return { outcome: "changed", user: toRecord(user), previousEmail };
-    } catch (error) {
-      this.users.delete(nextEmail);
-      user.email = previousEmail;
-      user.emailVerifiedAt = previousEmailVerifiedAt;
-      this.users.set(previousEmail, user);
-      token.usedAt = previousTokenUsedAt;
-      this.restoreCredentialRevocationState(credentials);
-      throw error;
-    }
+      const previousEmail = user.email;
+      const previousEmailVerifiedAt = user.emailVerifiedAt;
+      const tokenStates = this.snapshotSecurityActionTokens(user.id);
+      const credentials = this.snapshotCredentialRevocationState(user.id);
+      try {
+        this.users.delete(previousEmail);
+        user.email = nextEmail;
+        user.emailVerifiedAt = usedAt;
+        this.users.set(nextEmail, user);
+        this.invalidateSecurityActionTokens(user.id, usedAt);
+        await this.revokeUserCredentials(user.id);
+        return { outcome: "changed", user: toRecord(user), previousEmail };
+      } catch (error) {
+        this.users.delete(nextEmail);
+        user.email = previousEmail;
+        user.emailVerifiedAt = previousEmailVerifiedAt;
+        this.users.set(previousEmail, user);
+        this.restoreSecurityActionTokens(tokenStates);
+        this.restoreCredentialRevocationState(credentials);
+        throw error;
+      }
+    });
   }
 
   async countActiveOwnersExcluding(userId: string): Promise<number> {
@@ -929,6 +949,42 @@ export class MemoryAuthStore implements AuthStore {
       return result;
     } finally {
       release();
+    }
+  }
+
+  private async withAccountActionLock<T>(userId: string, action: () => T | Promise<T>): Promise<T> {
+    const previous = this.accountActionTails.get(userId);
+    let release!: () => void;
+    const tail = new Promise<void>((resolve) => { release = resolve; });
+    this.accountActionTails.set(userId, tail);
+    await previous;
+    try {
+      return await action();
+    } finally {
+      release();
+      if (this.accountActionTails.get(userId) === tail) this.accountActionTails.delete(userId);
+    }
+  }
+
+  private snapshotSecurityActionTokens(userId: string): Array<{ tokenHash: string; usedAt: Date | null }> {
+    return [...this.authActionTokens.values()]
+      .filter((token) => token.userId === userId && (token.purpose === "password_reset" || token.purpose === "email_change"))
+      .map((token) => ({ tokenHash: token.tokenHash, usedAt: token.usedAt }));
+  }
+
+  private invalidateSecurityActionTokens(userId: string, usedAt: Date, purpose?: "email_change"): void {
+    for (const token of this.authActionTokens.values()) {
+      if (token.userId === userId && !token.usedAt &&
+        (purpose ? token.purpose === purpose : token.purpose === "password_reset" || token.purpose === "email_change")) {
+        token.usedAt = usedAt;
+      }
+    }
+  }
+
+  private restoreSecurityActionTokens(states: Array<{ tokenHash: string; usedAt: Date | null }>): void {
+    for (const state of states) {
+      const token = this.authActionTokens.get(state.tokenHash);
+      if (token) token.usedAt = state.usedAt;
     }
   }
 
