@@ -970,3 +970,21 @@ function jsonResponse(status: number, body: Record<string, unknown>, headers: Re
     },
   } as Response;
 }
+
+
+test("review and audit page clients preserve old arrays and carry opaque continuation cursors", async () => {
+  const calls: string[] = [];
+  const client = createRegistryClient("http://api.test", async (input) => {
+    const url = String(input);
+    calls.push(url);
+    return jsonResponse(200, url.includes("/admin/audit") ? { events: [{ id: "event-1" }], nextCursor: "next-audit" } : { submissions: [{ id: "submission-1" }], nextCursor: "next-review" });
+  });
+  assert.equal((await client.listReviewSubmissions())[0]?.id, "submission-1");
+  assert.equal((await client.listAdminAudit())[0]?.id, "event-1");
+  assert.equal((await client.listReviewSubmissionPage!({ limit: 37, cursor: "opaque-review" })).nextCursor, "next-review");
+  assert.equal((await client.listAdminAuditPage!({ limit: 31, cursor: "opaque-audit" })).nextCursor, "next-audit");
+  assert.deepEqual(calls.slice(-2), ["http://api.test/v1/review/submissions?limit=37&cursor=opaque-review", "http://api.test/v1/admin/audit?limit=31&cursor=opaque-audit"]);
+  const legacy = createRegistryClient("http://api.test", async (input) => jsonResponse(200, String(input).includes("/admin/audit") ? { events: [] } : { submissions: [] }));
+  assert.equal((await legacy.listReviewSubmissionPage!()).nextCursor, null);
+  assert.equal((await legacy.listAdminAuditPage!()).nextCursor, null);
+});

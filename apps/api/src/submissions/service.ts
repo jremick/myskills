@@ -1,3 +1,4 @@
+import { chronologicalKey, chronologicalPagePosition, chronologicalPageResult, type ChronologicalPageQuery } from "../repositories/chronological-pagination.js";
 import { randomUUID } from "node:crypto";
 import { AppError, parseSkillReleaseMetadata } from "@myskills-app/core";
 import {
@@ -83,6 +84,19 @@ export class SubmissionService {
   }
 
   async listReviewSubmissions(actor: SubmissionActor): Promise<ReviewSubmissionSummary[]> {
+    await this.authorizeReviewList(actor);
+    return this.store.listReviewSubmissions();
+  }
+
+  async listReviewSubmissionPage(actor: SubmissionActor, query: ChronologicalPageQuery = {}) {
+    await this.authorizeReviewList(actor);
+    const position = chronologicalPagePosition(query, `review:${actor.id}`);
+    const rows = await this.store.listReviewSubmissions({ limit: position.limit + 1, before: position.before });
+    const page = chronologicalPageResult(rows, position, chronologicalKey);
+    return { submissions: page.items, nextCursor: page.nextCursor };
+  }
+
+  private async authorizeReviewList(actor: SubmissionActor): Promise<void> {
     if (!canReview(actor.roles)) {
       await this.store.recordReviewDenied({
         actorId: actor.id,
@@ -91,7 +105,6 @@ export class SubmissionService {
       });
       throw new AppError("Review requires maintainer permissions.", "REVIEW_ROLE_REQUIRED", 403);
     }
-    return this.store.listReviewSubmissions();
   }
 
   async getReviewSubmissionBundle(input: { actor: SubmissionActor; submissionId: string; platform?: string }): Promise<ReviewSubmissionBundle | null> {

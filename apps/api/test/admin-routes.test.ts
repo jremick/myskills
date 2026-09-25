@@ -1056,6 +1056,44 @@ test("MFA-verified admins can list sanitized audit events newest first", async (
   assert.equal(serialized.includes("[redacted]") || serialized.includes("[redacted-token]"), true);
 });
 
+test("audit pages preserve the events envelope and traverse equal timestamps without exposing private fields", async (t) => {
+  class FixedClockAuditStore extends MemoryAuthStore {
+    protected override async prepareAuditEvent(input: Parameters<MemoryAuthStore["recordAuditEvent"]>[0]) {
+      return { ...await super.prepareAuditEvent(input), createdAt: new Date("2026-09-25T00:00:00.123Z") };
+    }
+  }
+  const store = new FixedClockAuditStore("closed");
+  const app = buildAdminApp(store);
+  t.after(() => app.close());
+  const token = await addAndLoginWithMfa(app, store, { id: "owner-pages", email: "owner-pages@example.com", roles: ["owner"] });
+  for (let index = 0; index < 121; index += 1) await store.recordAuditEvent({ action: `fixture.${index}`, decision: "allow", details: { password: "never-render-this" } });
+  const expected = (await store.listAuditEvents({ limit: 1000, stableOrder: true })).map((event) => event.id);
+  const seen: string[] = [];
+  let cursor: string | null = null;
+  let firstCursor = "";
+  for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
+    const response = await app.inject({ method: "GET", url: `/v1/admin/audit?limit=31${cursor ? `&cursor=${cursor}` : ""}`, headers: { authorization: `Bearer ${token}` } });
+    assert.equal(response.statusCode, 200);
+    const body = response.json();
+    assert.ok(Array.isArray(body.events));
+    assert.equal(response.body.includes("never-render-this"), false);
+    assert.equal(response.body.includes("cursorCreatedAt"), false);
+    seen.push(...body.events.map((event: { id: string }) => event.id));
+    cursor = body.nextCursor;
+    firstCursor ||= cursor ?? "";
+    if (!cursor) break;
+  }
+  assert.deepEqual(seen, expected);
+  assert.equal(new Set(seen).size, expected.length);
+  const malformed = await app.inject({ method: "GET", url: "/v1/admin/audit?cursor=invalid", headers: { authorization: `Bearer ${token}` } });
+  assert.equal(malformed.statusCode, 400);
+  const denied = await app.inject({ method: "GET", url: `/v1/admin/audit?cursor=${firstCursor}` });
+  assert.equal(denied.statusCode, 401);
+  const legacy = await app.inject({ method: "GET", url: "/v1/admin/audit?limit=9999", headers: { authorization: `Bearer ${token}` } });
+  assert.equal(legacy.json().events.length, 100);
+  assert.equal(typeof legacy.json().nextCursor, "string");
+});
+
 function buildAdminApp(authStore: MemoryAuthStore, notificationSink?: AuthNotificationSink) {
   return buildApp({
     skillRepository: new MemorySkillRepository([]),

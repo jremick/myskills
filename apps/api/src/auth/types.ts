@@ -1,3 +1,4 @@
+import type { ChronologicalPosition } from "../repositories/chronological-pagination.js";
 import type { AuthNotificationClaim, AuthNotificationIntent, FinishAuthNotificationInput } from "./notification-outbox.js";
 import type { AuthenticatedUser, RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 
@@ -240,6 +241,7 @@ export interface MfaChallengeWithUser extends MfaChallengeRecord {
 }
 
 export interface AuditEventRecord {
+  cursorCreatedAt?: string;
   id: string;
   actorUserId: string | null;
   action: string;
@@ -261,6 +263,8 @@ export interface CreateAuditEventInput {
 
 export interface ListAuditEventsInput {
   limit: number;
+  before?: ChronologicalPosition;
+  stableOrder?: boolean;
 }
 
 export interface AuthStore {

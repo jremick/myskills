@@ -2241,6 +2241,126 @@ test("failed login shows auth-specific safe copy", async () => {
   assert.equal(window.localStorage.getItem("myskills-app:web-session"), null);
 });
 
+test("review pagination appends unique submissions only on request and resets on refresh", async () => {
+  const user = authUser({ roles: ["maintainer"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/review", user);
+  const client = mockClient({ user });
+  const first = defaultReviewSubmissions()[0]!;
+  const older = { ...first, id: "submission-older", title: "Older pending submission" };
+  const cursors: Array<string | undefined> = [];
+  client.listReviewSubmissionPage = async (input) => {
+    cursors.push(input?.cursor);
+    return input?.cursor ? { submissions: [first, older, older], nextCursor: null } : { submissions: [first], nextCursor: "review-next" };
+  };
+  const view = render(<RegistryApp client={client} />);
+  const more = await view.findByRole("button", { name: "Load more submissions" });
+  assert.deepEqual(cursors, [undefined]);
+  fireEvent.click(more);
+  await view.findByRole("button", { name: /Older pending submission/ });
+  assert.equal(document.querySelectorAll(".review-queue .result-row").length, 2);
+  assert.equal(view.queryByRole("button", { name: "Load more submissions" }), null);
+  assert.deepEqual(cursors, [undefined, "review-next"]);
+  fireEvent.click(view.getByRole("button", { name: "Refresh" }));
+  await view.findByRole("button", { name: "Load more submissions" });
+  assert.equal(view.queryByRole("button", { name: /Older pending submission/ }), null);
+  assert.deepEqual(cursors, [undefined, "review-next", undefined]);
+});
+
+test("review refresh invalidates a delayed load-more response", async () => {
+  const user = authUser({ roles: ["maintainer"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/review", user);
+  const client = mockClient({ user });
+  const first = defaultReviewSubmissions()[0]!;
+  const oldPage = deferred<{ submissions: ReviewSubmissionSummary[]; nextCursor: string | null }>();
+  client.listReviewSubmissionPage = async (input) => input?.cursor ? oldPage.promise : { submissions: [first], nextCursor: "review-next" };
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("button", { name: "Load more submissions" }));
+  fireEvent.click(view.getByRole("button", { name: "Refresh" }));
+  await view.findByRole("button", { name: "Load more submissions" });
+  await act(async () => { oldPage.resolve({ submissions: [{ ...first, id: "stale-review", title: "Stale review" }], nextCursor: null }); });
+  assert.equal(view.queryByRole("button", { name: /Stale review/ }), null);
+  assert.ok(view.getByRole("button", { name: "Load more submissions" }));
+});
+
+test("audit pagination appends unique events on request and resets after admin refresh", async () => {
+  const user = authUser({ roles: ["owner"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/admin", user);
+  const client = mockClient({ user });
+  const first = defaultAuditEvents()[0]!;
+  const older = { ...first, id: "event-older", action: "older.audit.event" };
+  const cursors: Array<string | undefined> = [];
+  client.listAdminAuditPage = async (input) => {
+    cursors.push(input?.cursor);
+    return input?.cursor ? { events: [first, older, older], nextCursor: null } : { events: [first], nextCursor: "audit-next" };
+  };
+  const view = render(<RegistryApp client={client} />);
+  const more = await view.findByRole("button", { name: "Load more audit events" });
+  assert.deepEqual(cursors, [undefined]);
+  fireEvent.click(more);
+  await view.findByText("older.audit.event");
+  assert.equal(document.querySelectorAll(".audit-list .audit-row").length, 2);
+  assert.equal(view.queryByRole("button", { name: "Load more audit events" }), null);
+  fireEvent.click(view.getByRole("button", { name: "Refresh" }));
+  await view.findByRole("button", { name: "Load more audit events" });
+  assert.equal(view.queryByText("older.audit.event"), null);
+  assert.deepEqual(cursors, [undefined, "audit-next", undefined]);
+});
+
+test("audit refresh ignores a delayed previous page and permits retry after a page error", async () => {
+  const user = authUser({ roles: ["owner"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/admin", user);
+  const client = mockClient({ user });
+  const first = defaultAuditEvents()[0]!;
+  const oldPage = deferred<{ events: AdminAuditEvent[]; nextCursor: string | null }>();
+  let requests = 0;
+  client.listAdminAuditPage = async (input) => {
+    if (!input?.cursor) return { events: [first], nextCursor: "audit-next" };
+    requests += 1;
+    if (requests === 1) return oldPage.promise;
+    if (requests === 2) throw safeApiError(503, "UNAVAILABLE", "Unavailable");
+    return { events: [{ ...first, id: "retry-event", action: "retried.audit.event" }], nextCursor: null };
+  };
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("button", { name: "Load more audit events" }));
+  fireEvent.click(view.getByRole("button", { name: "Refresh" }));
+  await view.findByRole("button", { name: "Load more audit events" });
+  await act(async () => { oldPage.resolve({ events: [{ ...first, id: "stale-event", action: "stale.audit.event" }], nextCursor: null }); });
+  assert.equal(view.queryByText("stale.audit.event"), null);
+  fireEvent.click(view.getByRole("button", { name: "Load more audit events" }));
+  await waitFor(() => assert.equal((view.getByRole("button", { name: "Load more audit events" }) as HTMLButtonElement).disabled, false));
+  fireEvent.click(view.getByRole("button", { name: "Load more audit events" }));
+  await view.findByText("retried.audit.event");
+  assert.equal(requests, 3);
+});
+
+for (const surface of ["review", "admin"] as const) {
+  test(`${surface} pagination discards an older client's delayed page`, async () => {
+    const user = authUser({ roles: ["owner"], mfaVerified: true });
+    setupAuthenticatedDom(`http://localhost/${surface}`, user);
+    const oldClient = mockClient({ user });
+    const currentClient = mockClient({ user });
+    const submission = defaultReviewSubmissions()[0]!;
+    const event = defaultAuditEvents()[0]!;
+    const oldReview = deferred<{ submissions: ReviewSubmissionSummary[]; nextCursor: string | null }>();
+    const oldAudit = deferred<{ events: AdminAuditEvent[]; nextCursor: string | null }>();
+    oldClient.listReviewSubmissionPage = async (input) => input?.cursor ? oldReview.promise : { submissions: [submission], nextCursor: "old-review" };
+    oldClient.listAdminAuditPage = async (input) => input?.cursor ? oldAudit.promise : { events: [event], nextCursor: "old-audit" };
+    currentClient.listReviewSubmissionPage = async () => ({ submissions: [{ ...submission, id: "current-review", title: "Current review" }], nextCursor: null });
+    currentClient.listAdminAuditPage = async () => ({ events: [{ ...event, id: "current-audit", action: "current.audit" }], nextCursor: null });
+    const view = render(<RegistryApp client={oldClient} />);
+    fireEvent.click(await view.findByRole("button", { name: surface === "review" ? "Load more submissions" : "Load more audit events" }));
+    view.rerender(<RegistryApp client={currentClient} />);
+    if (surface === "review") await view.findByRole("button", { name: /Current review/ });
+    else await view.findByText("current.audit");
+    await act(async () => {
+      oldReview.resolve({ submissions: [{ ...submission, id: "stale-review", title: "Previous session review" }], nextCursor: null });
+      oldAudit.resolve({ events: [{ ...event, id: "stale-audit", action: "previous.session.audit" }], nextCursor: null });
+    });
+    assert.equal(view.queryByRole("button", { name: /Previous session review/ }), null);
+    assert.equal(view.queryByText("previous.session.audit"), null);
+  });
+}
+
 afterEach(() => {
   cleanup();
   window.localStorage.clear();

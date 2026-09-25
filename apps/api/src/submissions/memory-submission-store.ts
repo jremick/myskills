@@ -1,3 +1,4 @@
+import { chronologicalKey, compareChronological, type ChronologicalStoreQuery } from "../repositories/chronological-pagination.js";
 import {
   AppError,
   assertValidOrganizationPolicyV1,
@@ -410,10 +411,13 @@ export class MemorySubmissionStore implements SubmissionStore {
     return userSubmissionSummary(submission);
   }
 
-  async listReviewSubmissions(): Promise<ReviewSubmissionSummary[]> {
-    return [...this.submissions.values()]
+  async listReviewSubmissions(input?: ChronologicalStoreQuery): Promise<ReviewSubmissionSummary[]> {
+    const rows = [...this.submissions.values()]
       .filter((submission) => isReviewQueueSubmission(submission, this.skillLifecycle.get(submission.skillSlug)))
       .map((submission) => reviewSubmissionSummary(submission, this.skillLifecycle.get(submission.skillSlug)));
+    if (!input) return rows;
+    return rows.filter((row) => !input.before || compareChronological(chronologicalKey(row), input.before) > 0)
+      .sort((a, b) => compareChronological(chronologicalKey(a), chronologicalKey(b))).slice(0, input.limit);
   }
 
   async getReviewSubmissionBundle(input: { submissionId: string; platform?: string }): Promise<ReviewSubmissionBundle | null> {

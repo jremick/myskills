@@ -1,3 +1,4 @@
+import { chronologicalKey, chronologicalPagePosition, chronologicalPageResult } from "../repositories/chronological-pagination.js";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { AppError } from "@myskills-app/core";
 import {
@@ -286,6 +287,7 @@ export interface SafeAuditEvent {
 
 export interface ListAdminAuditEventsInput {
   limit?: number;
+  cursor?: string;
 }
 
 export type McpSessionCredentialKind = "none" | "session" | "api";
@@ -1074,6 +1076,14 @@ export class AuthService {
     assertAdmin(actor);
     const events = await this.store.listAuditEvents({ limit: normalizeAuditLimit(input.limit) });
     return events.map(safeAuditEvent);
+  }
+
+  async listAdminAuditPage(actor: AuthResponseUser, input: ListAdminAuditEventsInput = {}) {
+    assertAdmin(actor);
+    const position = chronologicalPagePosition({ ...input, limit: normalizeAuditLimit(input.limit) }, `audit:${actor.id}`);
+    const rows = await this.store.listAuditEvents({ limit: position.limit + 1, before: position.before, stableOrder: true });
+    const page = chronologicalPageResult(rows, position, (row) => chronologicalKey({ id: row.id, createdAt: row.cursorCreatedAt ?? row.createdAt }));
+    return { events: page.items.map(safeAuditEvent), nextCursor: page.nextCursor };
   }
 
   async recordMcpSessionDecision(input: RecordMcpSessionDecisionInput): Promise<void> {

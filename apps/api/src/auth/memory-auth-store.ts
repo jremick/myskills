@@ -1,3 +1,4 @@
+import { chronologicalKey, compareChronological } from "../repositories/chronological-pagination.js";
 import { AppError } from "@myskills-app/core";
 import type { RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
@@ -1065,7 +1066,9 @@ export class MemoryAuthStore implements AuthStore {
 
   async listAuditEvents(input: ListAuditEventsInput): Promise<AuditEventRecord[]> {
     return [...this.audit.values()]
+      .filter((row) => !input.before || compareChronological(chronologicalKey(row), input.before) > 0)
       .sort((a, b) => {
+        if (input.stableOrder) return compareChronological(chronologicalKey(a), chronologicalKey(b));
         const time = b.createdAt.getTime() - a.createdAt.getTime();
         return time === 0 ? Number(b.id.slice(6)) - Number(a.id.slice(6)) : time;
       })

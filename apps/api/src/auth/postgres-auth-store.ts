@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, lte, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { getTableColumns, and, asc, desc, eq, gt, lte, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { AppError } from "@myskills-app/core";
 import { roles as authRoles, type RegistrationMode, type Role, type UserStatus } from "@myskills-app/auth";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
@@ -1179,12 +1179,14 @@ export class PostgresAuthStore implements AuthStore {
   }
 
   async listAuditEvents(input: ListAuditEventsInput): Promise<AuditEventRecord[]> {
+    if (input?.before && !isUuid(input.before.id)) throw new AppError("Invalid cursor for this list.", "INVALID_PAGE_CURSOR", 400);
     const rows = await this.db
-      .select()
+      .select({ ...getTableColumns(auditEvents), cursorCreatedAt: sql<string>`to_char(${auditEvents.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` })
       .from(auditEvents)
+      .where(input.before ? sql`(${auditEvents.createdAt}, ${auditEvents.id}) < (${input.before.createdAt}::timestamptz, ${input.before.id}::uuid)` : undefined)
       .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id))
       .limit(input.limit);
-    return rows.map(toAuditEventRecord);
+    return rows.map((row) => ({ ...toAuditEventRecord(row), ...(input.stableOrder ? { cursorCreatedAt: row.cursorCreatedAt } : {}) }));
   }
 
   private async rolesForUser(userId: string): Promise<Role[]> {

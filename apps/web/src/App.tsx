@@ -1849,11 +1849,24 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
   );
 }
 
+function appendUniqueById<T extends { id: string }>(current: T[], incoming: T[]): T[] {
+  const seen = new Set(current.map((row) => row.id));
+  return [...current, ...incoming.filter((row) => {
+    if (seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  })];
+}
+
 function ReviewDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
   const [state, setState] = useState<LoadState>("loading");
   const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submissions, setSubmissions] = useState<ReviewSubmissionSummary[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const listEpoch = useRef(0);
+  const morePending = useRef(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [confirmation, setConfirmation] = useState<ConfirmationRequest | null>(null);
@@ -1876,12 +1889,25 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
           : "Inspect or download the review artifact before approving so the approval records its exact hash."
     : "";
 
+  async function readReviewPage(cursor?: string) {
+    return client.listReviewSubmissionPage ? client.listReviewSubmissionPage({ limit: 100, cursor })
+      : { submissions: await client.listReviewSubmissions(), nextCursor: null };
+  }
+
   async function refreshReview() {
+    const epoch = ++listEpoch.current;
+    morePending.current = false;
+    setLoadingMore(false);
+    setNextCursor(null);
+    setSubmissions([]);
     setState("loading");
     setMessage(null);
     setNotice(null);
     try {
-      const nextSubmissions = await client.listReviewSubmissions();
+      const page = await readReviewPage();
+      if (epoch !== listEpoch.current) return;
+      const nextSubmissions = page.submissions;
+      setNextCursor(page.nextCursor);
       setSubmissions(nextSubmissions);
       setSelectedId((current) => (
         current && nextSubmissions.some((submission) => submission.id === current)
@@ -1890,6 +1916,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
       ));
       setState("ready");
     } catch (error) {
+      if (epoch !== listEpoch.current) return;
       setMessage(safeReviewErrorMessage(error));
       setState("error");
     }
@@ -1897,11 +1924,31 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
 
   useEffect(() => {
     void refreshReview();
-  }, [client]);
+    return () => { listEpoch.current += 1; };
+  }, [client, session.user.id, session.expiresAt]);
+
+  async function loadMoreReview() {
+    if (!nextCursor || morePending.current || !client.listReviewSubmissionPage) return;
+    const epoch = listEpoch.current;
+    morePending.current = true;
+    setLoadingMore(true);
+    setMessage(null);
+    try {
+      const page = await readReviewPage(nextCursor);
+      if (epoch !== listEpoch.current) return;
+      setSubmissions((current) => appendUniqueById(current, page.submissions));
+      setNextCursor(page.nextCursor);
+    } catch (error) {
+      if (epoch === listEpoch.current) setMessage(safeReviewErrorMessage(error));
+    } finally {
+      if (epoch === listEpoch.current) { morePending.current = false; setLoadingMore(false); }
+    }
+  }
 
   async function commitReviewAction(submission: ReviewSubmissionSummary, action: ReviewActionName, confirmedReason: string) {
     setMessage(null);
     setNotice(null);
+    const epoch = listEpoch.current;
     try {
       if (action === "approve" && !selectedArtifactHash) {
         setMessage("Download the review artifact before approving this submission.");
@@ -1913,9 +1960,9 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
         reason: confirmedReason || undefined,
         ...(action === "approve" && selectedArtifactHash ? { artifactSha256: selectedArtifactHash } : {}),
       });
-      const nextSubmissions = await client.listReviewSubmissions();
-      setSubmissions(nextSubmissions);
-      setSelectedId(result.publishedAt ? nextSubmissions[0]?.id ?? null : result.id);
+      if (epoch !== listEpoch.current) return;
+      await refreshReview();
+      if (!result.publishedAt) setSelectedId(result.id);
       setReason("");
       const actionLabel = action === "request-changes"
         ? "was returned for changes"
@@ -2035,6 +2082,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
                   <Badge className="shadcn-finding-badge review-registry-finding" variant="secondary">{submission.findingCount} findings</Badge>
                 </button>
               ))}
+              {state === "ready" && nextCursor && <Button type="button" size="sm" variant="outline" disabled={loadingMore} onClick={() => void loadMoreReview()}>{loadingMore ? "Loading more submissions…" : "Load more submissions"}</Button>}
               {state === "ready" && submissions.length === 0 && (
                 <div className="empty-state">
                   <ShieldCheck size={22} aria-hidden="true" />
@@ -2540,6 +2588,12 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
   const [apiTokens, setApiTokens] = useState<AdminApiToken[]>([]);
   const [providers, setProviders] = useState<AdminProviderConfig[]>([]);
   const [auditEvents, setAuditEvents] = useState<AdminAuditEvent[]>([]);
+  const [auditCursor, setAuditCursor] = useState<string | null>(null);
+  const [loadingAudit, setLoadingAudit] = useState(false);
+  const auditScope = useMemo(() => ({ active: true }), [client, session.user.id, session.expiresAt]);
+  const auditEpoch = useRef(0);
+  const auditPending = useRef(false);
+  const adminEpoch = useRef(0);
   const [draft, setDraft] = useState<ProviderDraft>(() => emptyProviderDraft());
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
@@ -2549,33 +2603,74 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
   const sessionCanEditPrivilegedRoles = session.user.roles.includes("owner");
   const adminInitialLoading = state === "loading" && users.length === 0 && apiTokens.length === 0 && providers.length === 0 && auditEvents.length === 0;
 
+  async function refreshAudit() {
+    if (!auditScope.active) return;
+    const epoch = ++auditEpoch.current;
+    auditPending.current = false;
+    setAuditCursor(null);
+    setAuditEvents([]);
+    setLoadingAudit(true);
+    try {
+      const page = client.listAdminAuditPage ? await client.listAdminAuditPage({ limit: 25 })
+        : { events: await client.listAdminAudit(25), nextCursor: null };
+      if (!auditScope.active || epoch !== auditEpoch.current) return;
+      setAuditEvents(page.events);
+      setAuditCursor(page.nextCursor);
+    } finally {
+      if (auditScope.active && epoch === auditEpoch.current) setLoadingAudit(false);
+    }
+  }
+
+  async function loadMoreAudit() {
+    if (!auditCursor || auditPending.current || !client.listAdminAuditPage) return;
+    const epoch = auditEpoch.current;
+    auditPending.current = true;
+    setLoadingAudit(true);
+    setMessage(null);
+    try {
+      const page = await client.listAdminAuditPage({ limit: 25, cursor: auditCursor });
+      if (epoch !== auditEpoch.current) return;
+      setAuditEvents((current) => appendUniqueById(current, page.events));
+      setAuditCursor(page.nextCursor);
+    } catch (error) {
+      if (epoch === auditEpoch.current) setMessage(safeAdminErrorMessage(error));
+    } finally {
+      if (epoch === auditEpoch.current) { auditPending.current = false; setLoadingAudit(false); }
+    }
+  }
+
   async function refreshAdmin() {
+    const epoch = ++adminEpoch.current;
     setState("loading");
     setMessage(null);
     try {
-      const [registration, nextUsers, nextApiTokens, nextProviders, nextAuditEvents] = await Promise.all([
+      const [registration, nextUsers, nextApiTokens, nextProviders] = await Promise.all([
         client.getAdminRegistration(),
         client.listAdminUsers(),
         client.listAdminApiTokens(),
         client.listAdminProviders(),
-        client.listAdminAudit(25),
+        refreshAudit(),
       ]);
+      if (epoch !== adminEpoch.current) return;
       setRegistrationMode(registration.mode);
       setUsers(nextUsers);
       setApiTokens(nextApiTokens);
       setProviders(nextProviders);
-      setAuditEvents(nextAuditEvents);
       setDraft((current) => current.key ? current : providerToDraft(nextProviders[0]));
       setState("ready");
     } catch (error) {
+      if (epoch !== adminEpoch.current) return;
       setMessage(safeAdminErrorMessage(error));
       setState("error");
     }
   }
 
   useEffect(() => {
+    auditScope.active = true;
+    setAuditEvents([]);
     void refreshAdmin();
-  }, [client]);
+    return () => { auditScope.active = false; auditEpoch.current += 1; adminEpoch.current += 1; };
+  }, [client, session.user.id, session.expiresAt, auditScope]);
 
   async function updateRegistration(mode: AdminRegistrationMode) {
     setMessage(null);
@@ -2600,7 +2695,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
     try {
       const registration = await client.updateAdminRegistration(mode);
       setRegistrationMode(registration.mode);
-      setAuditEvents(await client.listAdminAudit(25));
+      await refreshAudit();
     } catch (error) {
       const safeMessage = safeAdminErrorMessage(error);
       setMessage(safeMessage);
@@ -2621,7 +2716,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
       setInviteEmail("");
       setInviteName("");
       setInviteState("ready");
-      setAuditEvents(await client.listAdminAudit(25));
+      await refreshAudit();
     } catch (error) {
       setInviteState("error");
       setInviteMessage(safeAdminErrorMessage(error));
@@ -2656,7 +2751,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
     try {
       const updated = await client.performAdminUserAction(userId, action, reason);
       setUsers((current) => current.map((user) => user.id === updated.id ? updated : user));
-      setAuditEvents(await client.listAdminAudit(25));
+      await refreshAudit();
     } catch (error) {
       const safeMessage = safeAdminErrorMessage(error);
       setMessage(safeMessage);
@@ -2682,7 +2777,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
     try {
       const updated = await client.updateAdminUserRoles(userId, roles, reason);
       setUsers((current) => current.map((user) => user.id === updated.id ? updated : user));
-      setAuditEvents(await client.listAdminAudit(25));
+      await refreshAudit();
     } catch (error) {
       const safeMessage = safeAdminErrorMessage(error);
       setMessage(safeMessage);
@@ -2707,7 +2802,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
     try {
       const token = await client.revokeAdminApiToken(tokenId);
       setApiTokens((current) => current.map((item) => item.id === token.id ? token : item));
-      setAuditEvents(await client.listAdminAudit(25));
+      await refreshAudit();
     } catch (error) {
       const safeMessage = safeAdminErrorMessage(error);
       setMessage(safeMessage);
@@ -2728,7 +2823,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
       });
       setProviders((current) => upsertProvider(current, provider));
       setDraft(providerToDraft(provider));
-      setAuditEvents(await client.listAdminAudit(25));
+      await refreshAudit();
     } catch (error) {
       setMessage(safeAdminErrorMessage(error));
     }
@@ -3046,7 +3141,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
         <AdminPanel
           icon={<ShieldCheck size={18} aria-hidden="true" />}
           title="Audit"
-          meta={`${auditEvents.length} latest`}
+          meta={`${auditEvents.length} loaded`}
         >
           <div className="audit-list">
             {adminInitialLoading && <LoadingRows />}
@@ -3062,6 +3157,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
                 <time dateTime={event.createdAt}>{formatDate(event.createdAt)}</time>
               </div>
             ))}
+            {auditCursor && <Button type="button" size="sm" variant="outline" disabled={loadingAudit} onClick={() => void loadMoreAudit()}>{loadingAudit ? "Loading more events…" : "Load more audit events"}</Button>}
             {state === "ready" && auditEvents.length === 0 && <div className="empty-state">No audit events.</div>}
           </div>
         </AdminPanel>

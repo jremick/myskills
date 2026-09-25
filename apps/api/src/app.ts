@@ -1,3 +1,4 @@
+import { parseChronologicalPageQuery } from "./repositories/chronological-pagination.js";
 import { parseSkillPageQuery, searchVisibleSkillPage } from "./repositories/skill-pagination.js";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyServerOptions } from "fastify";
 import { AppError, createArchitectureDiagramArtifact, parseSemanticVersion, parseSkillReleaseMetadata, type ArchitecturePatternMigrationMapping, type ArchitectureSpecV1, type SharingSettings, type SkillReleaseMetadata, type SkillRepository, type VisibilityScope } from "@myskills-app/core";
@@ -1453,7 +1454,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     if (!user) {
       return authFailureReply(options.authService, requestAuthorization(request), reply);
     }
-    return { events: await options.authService.listAdminAuditEvents(user, parseAdminAuditQuery(request.query)) };
+    return options.authService.listAdminAuditPage(user, parseAdminAuditQuery(request.query));
   });
 
   app.get("/v1/me", async (request, reply) => {
@@ -2204,8 +2205,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         },
       });
     }
-    const submissions = await options.submissionService.listReviewSubmissions(actor);
-    return { submissions };
+    return options.submissionService.listReviewSubmissionPage(actor, parseChronologicalPageQuery(request.query));
   });
 
   app.get("/v1/review/submissions/:id/bundle", async (request, reply) => {
@@ -3893,7 +3893,9 @@ function parseProviderConfigInput(paramsInput: unknown, bodyInput: unknown): Ups
 function parseAdminAuditQuery(input: unknown): ListAdminAuditEventsInput {
   const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
   const rawLimit = typeof params.limit === "string" ? Number.parseInt(params.limit, 10) : undefined;
+  const { cursor } = parseChronologicalPageQuery({ cursor: params.cursor });
   return {
+    cursor,
     limit: rawLimit !== undefined && Number.isFinite(rawLimit) ? rawLimit : undefined,
   };
 }
