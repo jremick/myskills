@@ -2,17 +2,30 @@
 
 Version: 0.1.0-beta.7
 Last updated: 2026-09-25
-Status: GitHub prerelease published; npm publication, authenticated staging, and production promotion pending
+Status: verified candidate; GitHub release held as draft pending authenticated staging
 
-This record closes the beta.7 candidate evidence after [PR #84](https://github.com/jremick/myskills/pull/84). It keeps the beta.5 hosted baseline and the published beta.6 release historical. The current detailed release procedure remains in [Release Process](RELEASE.md).
+This record tracks incomplete beta.7 delivery after [PR #84](https://github.com/jremick/myskills/pull/84). It keeps the beta.5 hosted baseline and the published beta.6 release historical. The current detailed release procedure remains in [Release Process](RELEASE.md).
 
 ## Candidate identity
 
 - PR #84 is merged. The merge commit on `main` is `e99c0de7c4f400fc2b37dc51b4fd4a58766cc30c`.
 - The immutable tag `v0.1.0-beta.7` resolves to candidate commit `6912d3f9490c6f002431f3064e8a9db417df3d7f`.
-- The [GitHub prerelease for v0.1.0-beta.7](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.7) was published at `2026-09-25T06:00:53Z`. It is not a draft, has `prerelease=true`, and contains five assets: `myskills-app-0.1.0-beta.7-source.tar`, `release-metadata.json`, `SHA256SUMS`, `jarel-myskills-0.1.0-beta.7.tgz`, and `CLI-SHA256SUMS`.
+- The GitHub prerelease was published at `2026-09-25T06:00:53Z` and returned to draft later on 25 September after review found the sequencing deviation below. Current readback is `isDraft=true` and `isPrerelease=true`. It retains five verified assets: `myskills-app-0.1.0-beta.7-source.tar`, `release-metadata.json`, `SHA256SUMS`, `jarel-myskills-0.1.0-beta.7.tgz`, and `CLI-SHA256SUMS`.
 - Published-asset digest and size readback matched the local release assets for all five GitHub assets.
 - npm publication remains pending sign-in. The npm `beta` selector remains on `0.1.0-beta.6`; `latest` and `alpha` remain on `0.1.0-alpha.3`. Production remains on the beta.5 hosted baseline.
+
+## Release sequencing deviation
+
+The tag and GitHub prerelease preceded authenticated acceptance in the dedicated
+Railway staging environment. This did not follow [Release Process](RELEASE.md#staging-and-user-test).
+The passing disposable Compose journeys and public staging checks do not replace
+that missing acceptance. No acceptance waiver is claimed.
+
+The GitHub release was returned to draft. The source tag remains public and
+immutable; no tag or archive was replaced. npm and production stayed unchanged.
+Authenticated staging acceptance must be completed and recorded before GitHub
+republication, npm publication, or production promotion. Those actions are
+already authorized; missing authentication is the remaining dependency.
 
 ## Completed candidate evidence
 
@@ -42,7 +55,7 @@ Account-bearing browser reports, recovery contents, and private package identiti
 ## Pending release gates
 
 - Authenticated staging acceptance remains pending owner sign-in. The staged public checks do not establish the authenticated author, reviewer, consumer, or owner journey.
-- npm package publication remains pending sign-in. The GitHub prerelease is published, and the npm `beta`, `latest`, and `alpha` selectors remain unchanged.
+- GitHub republication and npm package publication remain pending. npm also requires renewed maintainer authentication. The `beta`, `latest`, and `alpha` selectors remain unchanged.
 - Beta.7 production API/web promotion remains pending. Production remains on the beta.5 hosted baseline until authenticated staging acceptance passes. Production promotion is already authorized.
 
 ## Rollback limitation

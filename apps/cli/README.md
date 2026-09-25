@@ -33,7 +33,8 @@ CLI tokens should be stored in the platform secret store where possible.
 
 ## Current Slice
 
-This document describes the beta.7 CLI in the published GitHub prerelease. It
+This document describes the verified beta.7 CLI candidate. Its GitHub release
+is held as a draft pending authenticated staging acceptance. It
 remains compatible with existing registry workflows against the beta.5 hosted
 production baseline and adds local authoring and deterministic package
 creation. Native MCP Skills delivery is documented separately in the MCP
