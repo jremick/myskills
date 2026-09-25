@@ -413,8 +413,11 @@ export class PostgresSkillRepository implements SkillRepository {
       latestVersion: defaults.get(row.id)?.version ?? null,
       reviewStatus: row.reviewStatus,
       securityStatus: row.securityStatus,
-      platforms: dedupePlatforms(platforms.filter((platform) => platform.skillVersionId === defaults.get(row.id)?.id)
-        .map(({ name, installTarget, status }) => ({ name, installTarget, status }))),
+      platforms: dedupePlatforms(platforms.flatMap(({ skillVersionId, name, installTarget, status }) => (
+        skillVersionId === defaults.get(row.id)?.id && (status === "supported" || status === "planned" || status === "deprecated")
+          ? [{ name, installTarget, status }]
+          : []
+      ))),
       tags: row.tags,
       access: actorId
         ? {
