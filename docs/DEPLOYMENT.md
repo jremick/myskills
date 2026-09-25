@@ -53,6 +53,12 @@ docker compose --env-file .env.production -f docker-compose.production.example.y
 
 The MCP HTTP service requires explicit `MYSKILLS_MCP_ALLOWED_HOSTS` when bound to `0.0.0.0`.
 
+## Legacy Artifact Migration Preflight
+
+The migration runner stops before migrations 0012 or 0013 if a release has more than one artifact. It holds the artifact table against writes during the check. It does not select a digest, delete a duplicate, or rewrite applied migration history.
+
+If this check fails, stop application writers and take a verified database and object-storage backup. Inspect the affected release's artifact bytes, hashes, review record, and storage references in a restored copy. An operator must establish which artifact was reviewed before removing any duplicate. If migration 0012 already ran, its approval digest alone is not proof of that choice. If evidence is ambiguous, keep the release unavailable and submit it for a fresh review under a new version. Do not invent an approval digest or silently change an immutable release. Validate the repair and migrations on the restored copy before scheduling the production change.
+
 ## Reverse Proxy And TLS
 
 Terminate TLS in front of the `web` and optional `mcp-http` services. The production Compose example deliberately does not publish the API to a host port: browser and authenticated API traffic enters through the web service's same-origin `/api` proxy, and nginx reaches `api:3001` over the private Docker network. Point the public reverse proxy at `WEB_PORT`; do not create a second public route to the API.

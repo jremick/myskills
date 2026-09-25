@@ -37,6 +37,18 @@ export async function runMigrations(
       const migrationSql = readFileSync(join(migrationsDir, file), "utf8");
       await client.query("BEGIN");
       try {
+        if (id === "0012_approval_artifact_hash" || id === "0013_skill_artifact_uniqueness") {
+          // Refuse ambiguity before 0012 can persist an arbitrary approval
+          // digest. The table lock also fences concurrent legacy writers.
+          await client.query("LOCK TABLE skill_artifacts IN SHARE MODE");
+          const duplicates = await client.query(`
+            SELECT 1 FROM skill_artifacts
+            GROUP BY skill_version_id HAVING count(*) > 1 LIMIT 1
+          `);
+          if (duplicates.rowCount) {
+            throw new Error("Legacy artifact duplicates require operator review before migration. See docs/DEPLOYMENT.md#legacy-artifact-migration-preflight. No artifact or approval digest was selected or changed by this migration.");
+          }
+        }
         await client.query(migrationSql);
         await client.query("INSERT INTO schema_migrations (id) VALUES ($1)", [id]);
         await client.query("COMMIT");
