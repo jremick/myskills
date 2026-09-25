@@ -19,12 +19,13 @@ It does not claim model-selected native host activation, folder/ZIP imports,
 browser drafts, or guided self-hosting setup; those remain roadmap work.
 
 Acceptance is recorded against the final immutable candidate commit. Before
-tagging or publishing, the release owner must read back the clean canonical
-gate, required GitHub checks, staging and production API/web identity and
-readiness, exact npm package bytes and `beta` selector, and unchanged `latest`
-and `alpha` selectors. The final record must name the candidate SHA, evidence
-links, deployment IDs, and any remaining beta limitations. This preparation
-record does not by itself claim that those gates passed.
+tagging, verify the clean canonical gate, required GitHub checks, staging
+acceptance, migration safety, and recovery readiness. After package publication,
+verify the exact npm bytes and `beta` selector, with `latest` and `alpha`
+unchanged. After production promotion, verify API/web identity, readiness, and
+rendered acceptance. The final record must name the candidate SHA, evidence
+links, deployment IDs, and remaining beta limitations. This preparation record
+does not claim that those gates passed.
 
 ## Canonical Candidate Gate
 

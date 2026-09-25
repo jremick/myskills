@@ -15,10 +15,10 @@ self-hosting repairs. The candidate source is based on
 
 This record is a release candidate scope and acceptance plan. It does not claim
 that the canonical gate, package publication, GitHub release, or Railway
-deployment has passed. The release owner must record the final candidate SHA,
-required CI and canonical-gate evidence, staging and production identity and
-readiness, exact npm bytes and selectors, and rollback target before external
-release actions.
+deployment has passed. Record the final candidate SHA, required CI and
+canonical-gate evidence, staging acceptance, and rollback plan before release.
+Add exact npm bytes and selector readbacks after publication, then production
+identity and rendered acceptance after promotion.
 
 Native model-selected host activation remains open. Folder/ZIP imports, browser
 drafts, and guided self-hosting setup remain subsequent roadmap slices.
