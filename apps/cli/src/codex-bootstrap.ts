@@ -288,6 +288,7 @@ interface BootstrapDirectoryIdentity {
   readonly absolutePath: string;
   readonly realPath: string;
   readonly stats: BigIntStats;
+  readonly entryNames: readonly string[];
 }
 
 interface BootstrapSnapshotIdentity {
@@ -1298,12 +1299,6 @@ async function readBootstrapDirectory(
       throw new Error("snapshot directory changed before read");
     }
     if (!isContained(boundaryRoot, openedReal)) throw new Error("snapshot directory escapes boundary");
-    state.directories.push({
-      relativePath: relativePrefix,
-      absolutePath: directoryPath,
-      realPath: openedReal,
-      stats: opened,
-    });
     if (relativePrefix === "") {
       state.rootPath = directoryPath;
       state.rootRealPath = openedReal;
@@ -1317,6 +1312,13 @@ async function readBootstrapDirectory(
       entries.push(entry);
     }
     entries.sort((left, right) => compareOrdinal(left.name, right.name));
+    state.directories.push({
+      relativePath: relativePrefix,
+      absolutePath: directoryPath,
+      realPath: openedReal,
+      stats: opened,
+      entryNames: entries.map((entry) => entry.name),
+    });
     for (const entry of entries) {
       const entryPath = path.join(directoryPath, entry.name);
       const relativePath = relativePrefix ? `${relativePrefix}/${entry.name}` : entry.name;
@@ -1466,6 +1468,26 @@ async function revalidateBootstrapSnapshot(snapshot: BootstrapSnapshot): Promise
     if (directoryRealPath !== directory.realPath || !isContained(identity.boundaryRoot, directoryRealPath)) {
       throw new Error("snapshot directory path changed");
     }
+    const entryNames: string[] = [];
+    for await (const entry of await opendir(directory.absolutePath)) {
+      if (entryNames.length >= directory.entryNames.length) throw new Error("snapshot directory entries changed");
+      entryNames.push(entry.name);
+    }
+    entryNames.sort(compareOrdinal);
+    if (entryNames.length !== directory.entryNames.length || entryNames.some((name, index) => name !== directory.entryNames[index])) {
+      throw new Error("snapshot directory entries changed");
+    }
+    const afterStats = await lstat(directory.absolutePath, { bigint: true });
+    const afterRealPath = await realpath(directory.absolutePath);
+    if (
+      afterStats.isSymbolicLink()
+      || !afterStats.isDirectory()
+      || !sameDirectoryIdentity(directory.stats, afterStats)
+      || afterRealPath !== directory.realPath
+      || !isContained(identity.boundaryRoot, afterRealPath)
+    ) {
+      throw new Error("snapshot directory changed during revalidation");
+    }
   }
   for (const file of identity.files) {
     const fileStats = await lstat(file.absolutePath, { bigint: true });
@@ -1483,7 +1505,10 @@ function immutableSnapshot(files: readonly BootstrapSnapshotFile[], identity: Bo
   const ordered = [...files]
     .map((file) => Object.freeze({ path: file.path, content: file.content, bytes: Buffer.from(file.bytes) }))
     .sort((left, right) => compareOrdinal(left.path, right.path));
-  const identityDirectories = identity.directories.map((directory) => Object.freeze({ ...directory }));
+  const identityDirectories = identity.directories.map((directory) => Object.freeze({
+    ...directory,
+    entryNames: Object.freeze([...directory.entryNames]),
+  }));
   const identityFiles = identity.files.map((file) => Object.freeze({ ...file }));
   return Object.freeze({
     files: Object.freeze(ordered),
