@@ -35,7 +35,7 @@ released, or deployed feature.
 
 | Slice | Evidence | Remaining gate |
 | --- | --- | --- |
-| Maintenance baseline | [PR #75](https://github.com/jremick/myskills/pull/75) merged bootstrap-directory revalidation, Hono remediation, and the MinIO CI image fix after required CI passed. Duplicate Hono PR #69 is closed. | Reconcile grouped dependency updates after the MCP SDK migration; major runtime updates need a compatibility decision. |
+| Maintenance baseline | [PR #75](https://github.com/jremick/myskills/pull/75) merged bootstrap-directory revalidation, Hono remediation, and the MinIO CI image fix after required CI passed. Duplicate Hono PR #69 is closed. | Grouped production and development updates merged in [PR #81](https://github.com/jremick/myskills/pull/81) and [PR #71](https://github.com/jremick/myskills/pull/71). Node 26 and Nodemailer 10 remain separate compatibility decisions. |
 | Roadmap and hosting investigation | This revision records the adoption workstreams, merged foundations, and verified setup gaps. | Prioritize the remaining delivery slices after the full review. |
 | HOST-1 build caching | [PR #77](https://github.com/jremick/myskills/pull/77) merged after required CI passed. Six Windows image targets, source and build-argument cache reuse, and runtime smokes were verified. | Release images, setup and operations remain later slices. Deployment-time improvement is unmeasured. |
 | AUTHOR-1 CLI scaffold | [PR #78](https://github.com/jremick/myskills/pull/78) merged private Codex skill scaffolding after required CI passed. Windows CLI tests, package smoke, lint, shell-guidance tests, and source review passed. | Archive creation is implemented in the source candidate below. Browser drafts and imports remain subsequent slices. |
@@ -43,8 +43,8 @@ released, or deployed feature.
 | MCP-1 protocol prerequisite | [PR #79](https://github.com/jremick/myskills/pull/79) merged modern protocol entrypoints and legacy compatibility after required CI passed. Windows MCP tests, repository checks, image smoke, and security review support the adapter change. | Native Skills handlers are implemented in the source candidate below. Conformance and host activation remain separate gates. |
 | MCP-1 native delivery | The source candidate adds `skills/list`, `skills/get`, and verified `resources/read` over authorized immutable API bundles. Existing metadata tools remain unchanged. | Official SEP-2640 server scenarios and the released fast-agent importer are the current proof targets; runtime verification is pending. Full on-demand host activation remains open. |
 | Public release history | [PR #80](https://github.com/jremick/myskills/pull/80) merged public history browsing and exact-version links after required CI, including browser tests, passed. | Version comparison and further history usability improvements remain open. |
-| Review remediation | Candidate changes cover auth/token delivery, bounded scanning, CLI integrity and recovery, exact release identity, governance and history constraints, review/audit pagination, and UI refresh behavior. Independent Opus review and Windows regression checks are recorded with the delivery evidence. | Complete integrated checks and required GitHub CI before merge. This row does not claim a release or deployment. |
-| HOST-1 startup repair | The candidate passed Windows storage builds/execution on amd64/arm64, object persistence/restore checks, and a fresh production Compose bootstrap/restart proof at `5de0ced`. | Release images, guided setup, public TLS/email configuration, a complete application restore drill, and elapsed-time measurements remain open. See [repair evidence](SELF_HOSTING_INVESTIGATION.md#verified-startup-gaps-and-repairs). |
+| Review remediation | [PR #82](https://github.com/jremick/myskills/pull/82) merged auth/token delivery, bounded scanning, CLI integrity and recovery, exact release identity, governance and history constraints, review/audit pagination, and UI refresh fixes after Opus review, Windows regression checks and required CI. | Merged source; no release or production deployment is claimed. |
+| HOST-1 startup repair | [PR #82](https://github.com/jremick/myskills/pull/82) merged the repairs after Windows storage builds/execution on amd64/arm64, object persistence/restore checks, and a fresh production Compose bootstrap/restart proof at `5de0ced`. | Release images, guided setup, public TLS/email configuration, a complete application restore drill, and elapsed-time measurements remain open. See [repair evidence](SELF_HOSTING_INVESTIGATION.md#verified-startup-gaps-and-repairs). |
 
 Container and other resource-heavy verification must be reproducible on a Linux
 Docker engine with the repository's supported Node/npm versions. The linked PRs
@@ -762,8 +762,7 @@ Recommended next order:
 1. Resolve validated security, install consistency, and operator startup findings
    from the post-merge review, with focused regression evidence. Keep unresolved
    security details in the private review record until remediation is ready.
-2. Reconcile grouped dependency updates against the SDK v2.1 baseline. Keep major
-   runtime and email-library upgrades separate until compatibility is verified.
+2. Completed: grouped dependency updates merged in [PR #81](https://github.com/jremick/myskills/pull/81) and [PR #71](https://github.com/jremick/myskills/pull/71). Major runtime and email-library upgrades remain separate.
 3. Verify and deliver the current native MCP server and CLI archive source
    candidates. Keep full MCP-1 host activation open. Then add held-byte folder/ZIP
    import previews, followed by commit-pinned public GitHub imports.
