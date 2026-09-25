@@ -612,7 +612,7 @@ with zero cache lifetime. Sanitized session audit records identify native method
 intent; the existing bundle audit records artifact authorization. Neither proves
 that the host activated a skill. See [MCP App](../apps/mcp/README.md).
 
-Remaining decisions and acceptance include modern authorization integration,
+Remaining decisions and acceptance include host-specific authorization integration,
 a verified on-demand host path, the supported host matrix, and any further audit
 retention requirements. This work does not
 include agent write tools or automatic skill execution. MCP-1 remains open.
@@ -761,9 +761,10 @@ Recommended next order:
 
 1. Completed: review remediation merged in [PR #82](https://github.com/jremick/myskills/pull/82) after required checks.
 2. Completed: grouped dependency updates merged in [PR #81](https://github.com/jremick/myskills/pull/81) and [PR #71](https://github.com/jremick/myskills/pull/71). Major runtime and email-library upgrades remain separate.
-3. Verify and deliver the current native MCP server and CLI archive source
-   candidates. Keep full MCP-1 host activation open. Then add held-byte folder/ZIP
-   import previews, followed by commit-pinned public GitHub imports.
+3. CLI archive creation and native MCP server delivery are covered by
+   [PR #83](https://github.com/jremick/myskills/pull/83). Keep full MCP-1 host
+   activation open. Next add held-byte folder/ZIP import previews, followed by
+   commit-pinned public GitHub imports.
 4. Build the HOST-1 versioned image and Compose release bundle, then private
    browser drafts and guided setup/operations as subsequent slices. Measure
    fresh install, update, and recovery before making speed claims.

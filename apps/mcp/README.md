@@ -62,6 +62,10 @@ Native projection bounds versions to 80 characters, platforms to 100, and encode
 resource URIs to 4,096 characters. An incompatible candidate is skipped without
 discarding compatible neighbors or the next-page cursor. An artifact is excluded
 as a whole if any supporting file would have an unreadable URI.
+The five-candidate page has a 5,570,560-byte budget: one 1 MiB manifest plus
+64 KiB of metadata allowance per candidate. Session and individual release
+metadata retain a 512 KiB cap. An oversized release is skipped; an oversized
+page fails and its stream is cancelled. Submission limits are unchanged.
 
 Each entry includes all parsed YAML frontmatter fields and the complete package
 file manifest with SHA-256 digests and byte lengths. YAML duplicate keys, aliases,

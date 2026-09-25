@@ -102,7 +102,12 @@ Opus reviewed source with read-only tools. Its findings led to per-entry handlin
 of unsupported releases, transient upstream error classification, readable URI
 length limits, empty template discovery, and structural validation without
 repeating content-risk scans. A targeted wire check also found and closed legacy
-batch dispatch. Regression checks cover these paths.
+batch dispatch. Follow-up review confirmed those fixes and identified oversized
+platform metadata on the page path. The final adapter gives the five-candidate
+page a budget derived from the 1 MiB package limit, while individual oversized
+release projections are skipped. Session metadata retains its smaller cap.
+Streamed regression checks cover large valid pages, preserved neighbors and
+cursors, early release cancellation, and page-limit cancellation.
 
 Bundle verification still downloads the complete bounded artifact on each read.
 This preserves fresh authorization and full digest verification; it is not a
