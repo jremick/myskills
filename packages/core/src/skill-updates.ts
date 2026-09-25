@@ -258,9 +258,8 @@ export function evaluateSkillUpdate(input: SkillUpdateEvaluationInput): SkillUpd
   const releases = input.releases
     .filter((release) => parseSemanticVersion(release.version))
     .sort((left, right) => compareSemanticVersions(left.version, right.version));
-  const currentRelease = [...releases]
-    .reverse()
-    .find((release) => compareSemanticVersions(release.version, input.installed.version) === 0);
+  // Build metadata does not affect precedence, but it is part of release identity.
+  const currentRelease = releases.find((release) => release.version === input.installed.version);
   if (
     currentRelease
     && input.installed.artifactSha256

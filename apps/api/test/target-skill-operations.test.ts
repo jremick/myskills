@@ -30,7 +30,7 @@ const target = {
   health: null,
 };
 
-function fixture(upgradePolicies?: SkillUpgradePolicyService, releaseSet?: PublicReleaseMetadata[], submissionService?: SubmissionService) {
+function fixture(upgradePolicies?: SkillUpgradePolicyService, releaseSet?: PublicReleaseMetadata[], submissionService?: SubmissionService, observedDigest?: string) {
   let clock = new Date(now);
   const store = new MemoryTargetSkillOperationStore();
   const targets = {
@@ -44,7 +44,7 @@ function fixture(upgradePolicies?: SkillUpgradePolicyService, releaseSet?: Publi
       adapterDigest: "b".repeat(64),
       capabilitiesDigest: "c".repeat(64),
       observedAt: now.toISOString(),
-      skills: [{ slug: "release-notes-helper", version: "1.0.0", managed: true }],
+      skills: [{ slug: "release-notes-helper", version: "1.0.0", managed: true, ...(observedDigest ? { digest: observedDigest } : {}) }],
       configFindings: [],
       promptAwareness: { detected: false, count: 0 },
       observedDigest: "d".repeat(64),
@@ -99,6 +99,28 @@ test("upgrade planning and scheduling retain and enforce every crossed release c
   const updates = await service.listUpdates({ id: "owner-1", roles: [] }, target.id);
   assert.equal(updates.items[0]?.evaluation.status, "no-compatible-release");
   assert.deepEqual(updates.items[0]?.evaluation.includedReleases.map((release) => release.releaseNotes), ["Notes for 1.1.0", "Notes for 1.1.1"]);
+});
+
+test("update planning keeps the version and digest of a newer successful receipt together", async () => {
+  const releases = rangeReleases().map((release, index) => ({
+    ...release, artifact: { ...release.artifact, sha256: ["a", "e", "f"][index].repeat(64) },
+  }));
+  const { service, setNow } = fixture(undefined, releases, undefined, "a".repeat(64));
+  setNow("2026-09-02T00:01:00.000Z");
+  await service.schedule({ actorId: "owner-1", targetId: target.id, action: "update", slug: "release-notes-helper", version: "1.1.0", idempotencyKey: "receipt-identity" });
+  const claim = await service.claim({ actorId: "owner-1", targetId: target.id, targetGeneration: target.generation, holderId: "companion-1" });
+  assert.ok(claim);
+  const binding = { actorId: "owner-1", operationId: claim.operation.id, holderId: "companion-1", claimToken: claim.claimToken, fencingToken: claim.operation.fencingToken };
+  await service.advance({ ...binding, state: "applying" });
+  await service.advance({ ...binding, state: "verifying" });
+  await service.complete({ ...binding, result: {
+    status: "succeeded", code: "operation.succeeded", installedVersion: "1.1.0",
+    artifactSha256: "e".repeat(64), contentDigest: "d".repeat(64),
+  } });
+  const updates = await service.listUpdates({ id: "owner-1", roles: [] }, target.id);
+  assert.equal(updates.items[0]?.evaluation.installedVersion, "1.1.0");
+  assert.equal(updates.items[0]?.evaluation.status, "update-available");
+  assert.equal(updates.items[0]?.evaluation.candidate?.version, "1.1.1");
 });
 
 test("memory queue rechecks the upgrade range after a policy changes at every execution boundary", async (t) => {

@@ -147,7 +147,9 @@ export class TargetSkillOperationService {
       if (skill.managed === false || !skill.version || !parseSemanticVersion(skill.version)) continue;
       const receipt = await this.store.latestSuccess(targetId, target.generation, skill.slug);
       const receiptVersion = receipt && receipt.updatedAt > observation.observedAt ? receipt.result?.installedVersion : undefined;
-      const installedVersion = receiptVersion && parseSemanticVersion(receiptVersion) ? receiptVersion : skill.version;
+      const newerReceipt = receiptVersion && parseSemanticVersion(receiptVersion) ? receipt?.result : undefined;
+      const installedVersion = newerReceipt?.installedVersion ?? skill.version;
+      const installedDigest = newerReceipt ? newerReceipt.artifactSha256 : skill.digest;
       if (!await this.canReadRelease(actorId, { targetId, skillSlug: skill.slug, toVersion: installedVersion })) continue;
       const platform = target.adapter.kind.startsWith("codex") ? "codex" : target.adapter.kind;
       const releases = (await this.submissions.listSkillReleases({ slug: skill.slug, actor }))
@@ -162,7 +164,7 @@ export class TargetSkillOperationService {
           installed: {
             version: installedVersion,
             platform,
-            ...(skill.digest && /^[a-f0-9]{64}$/.test(skill.digest) ? { artifactSha256: skill.digest } : {}),
+            ...(installedDigest && /^[a-f0-9]{64}$/.test(installedDigest) ? { artifactSha256: installedDigest } : {}),
           },
           releases,
           changeHistory,

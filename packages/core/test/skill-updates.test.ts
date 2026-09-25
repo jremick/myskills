@@ -84,6 +84,25 @@ test("update evaluation selects the newest compatible approved release and inclu
   assert.deepEqual(evaluation.includedReleases.map((item) => item.version), ["1.1.0", "1.2.0"]);
 });
 
+test("installed artifact identity distinguishes builds with equal SemVer precedence", () => {
+  const builds = [release("1.0.0+one"), release("1.0.0+two")];
+  for (const installed of builds) {
+    for (const releases of [[...builds, release("1.1.0")], [release("1.1.0"), ...builds.toReversed()]]) {
+      const evaluation = evaluateSkillUpdate({
+        installed: { version: installed.version, platform: "codex", artifactSha256: installed.artifact.sha256 },
+        releases,
+      });
+      assert.equal(evaluation.status, "update-available");
+      assert.equal(evaluation.currentRelease, installed);
+      assert.equal(evaluation.candidate?.version, "1.1.0");
+    }
+  }
+  assert.equal(evaluateSkillUpdate({
+    installed: { version: builds[0].version, platform: "codex", artifactSha256: builds[1].artifact.sha256 },
+    releases: builds,
+  }).status, "drifted", "a changed artifact for the exact installed release still fails closed");
+});
+
 test("release metadata parsing applies safe defaults and rejects malformed compatibility", () => {
   assert.deepEqual(parseSkillReleaseMetadata(undefined), {
     releaseNotes: "",
