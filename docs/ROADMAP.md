@@ -1,7 +1,7 @@
 # Roadmap
 
 Version: 0.1.0-beta.6
-Document revision: 0.3.1
+Document revision: 0.3.2
 Last updated: 2026-09-25
 
 ## Release Tracks
@@ -38,8 +38,10 @@ released, or deployed feature.
 | Maintenance baseline | [PR #75](https://github.com/jremick/myskills/pull/75) merged bootstrap-directory revalidation, Hono remediation, and the MinIO CI image fix after required CI passed. Duplicate Hono PR #69 is closed. | Reconcile grouped dependency updates after the MCP SDK migration; major runtime updates need a compatibility decision. |
 | Roadmap and hosting investigation | This revision records the adoption workstreams, merged foundations, and verified setup gaps. | Prioritize the remaining delivery slices after the full review. |
 | HOST-1 build caching | [PR #77](https://github.com/jremick/myskills/pull/77) merged after required CI passed. Six Windows image targets, source and build-argument cache reuse, and runtime smokes were verified. | Release images, setup and operations remain later slices. Deployment-time improvement is unmeasured. |
-| AUTHOR-1 CLI scaffold | [PR #78](https://github.com/jremick/myskills/pull/78) merged private Codex skill scaffolding after required CI passed. Windows CLI tests, package smoke, lint, shell-guidance tests, and source review passed. | Archive creation, browser drafts, and imports remain separate slices. |
-| MCP-1 protocol prerequisite | [PR #79](https://github.com/jremick/myskills/pull/79) merged modern protocol entrypoints and legacy compatibility after required CI passed. Windows MCP tests, repository checks, image smoke, and security review support the adapter change. | Native Skills content handlers, conformance and real-host loading remain a following slice. |
+| AUTHOR-1 CLI scaffold | [PR #78](https://github.com/jremick/myskills/pull/78) merged private Codex skill scaffolding after required CI passed. Windows CLI tests, package smoke, lint, shell-guidance tests, and source review passed. | Archive creation is implemented in the source candidate below. Browser drafts and imports remain subsequent slices. |
+| AUTHOR-1 CLI archive | The source candidate adds `myskills package --path <directory> --output <file.zip>` with a checked text snapshot, validation and scan gates, deterministic ZIP bytes, and exclusive output creation. | Integrated validation and delivery remain pending; this is not a published CLI release. |
+| MCP-1 protocol prerequisite | [PR #79](https://github.com/jremick/myskills/pull/79) merged modern protocol entrypoints and legacy compatibility after required CI passed. Windows MCP tests, repository checks, image smoke, and security review support the adapter change. | Native Skills handlers are implemented in the source candidate below. Conformance and host activation remain separate gates. |
+| MCP-1 native delivery | The source candidate adds `skills/list`, `skills/get`, and verified `resources/read` over authorized immutable API bundles. Existing metadata tools remain unchanged. | Official SEP-2640 server scenarios and the released fast-agent importer are the current proof targets; runtime verification is pending. Full on-demand host activation remains open. |
 | Public release history | [PR #80](https://github.com/jremick/myskills/pull/80) merged public history browsing and exact-version links after required CI, including browser tests, passed. | Version comparison and further history usability improvements remain open. |
 | Review remediation | Candidate changes cover auth/token delivery, bounded scanning, CLI integrity and recovery, exact release identity, governance and history constraints, review/audit pagination, and UI refresh behavior. Independent Opus review and Windows regression checks are recorded with the delivery evidence. | Complete integrated checks and required GitHub CI before merge. This row does not claim a release or deployment. |
 | HOST-1 startup repair | The candidate passed Windows storage builds/execution on amd64/arm64, object persistence/restore checks, and a fresh production Compose bootstrap/restart proof at `5de0ced`. | Release images, guided setup, public TLS/email configuration, a complete application restore drill, and elapsed-time measurements remain open. See [repair evidence](SELF_HOSTING_INVESTIGATION.md#verified-startup-gaps-and-repairs). |
@@ -202,9 +204,10 @@ Acceptance:
 - An author can create, validate, scan, package, and submit a draft.
 
 Current status: `init`, validation, scanning, submission, and the user install
-lifecycle are implemented. `package` remains planned under
-[AUTHOR-1](#authoring-and-imports-author-1); the full author acceptance above is
-not yet met.
+lifecycle are implemented. The source candidate adds deterministic `package`
+archive creation under [AUTHOR-1](#authoring-and-imports-author-1). The complete
+create/package/submit journey still requires integrated verification; source
+implementation does not establish a published CLI release.
 
 ## Milestone 5: Web App MVP
 
@@ -274,9 +277,10 @@ Current status: planned.
 
 Goal: expose safe agent-facing registry discovery.
 
-MCP-1 extends this existing read-only surface with authorized content delivery.
-The current tool contract remains unchanged until that extension is implemented
-and its compatibility and authorization checks pass.
+MCP-1 extends this existing read-only surface with authorized native content
+delivery. Its source handlers preserve the existing metadata tool contract;
+content is delivered separately through verified resources. Compatibility and
+authorization verification remain delivery gates.
 
 Depends on: Milestones 1, 2, and 4.
 
@@ -574,7 +578,7 @@ Acceptance:
 Goal: let compatible agents discover and load authorized reviewed skills and
 supporting files through the existing MCP connection.
 
-Planned scope:
+Workstream scope:
 
 - Implement the official `io.modelcontextprotocol/skills` extension with
   `skills/list`, `skills/get`, and verified `resources/read` responses.
@@ -585,7 +589,8 @@ Planned scope:
   read. Add bounded pagination and content delivery with sanitized per-tool and
   resource audit evidence.
 - Preserve existing discovery tools and CLI/API delivery for older clients.
-  Expose native delivery only where server and host compatibility are verified.
+  Require the client extension declaration and document verified server and host
+  compatibility separately.
 - Provide connection and first-load guidance with actionable compatibility errors.
 
 Acceptance:
@@ -597,23 +602,38 @@ Acceptance:
 - Existing MCP and CLI clients retain their documented behavior. Reading content
   does not execute code or bypass host approval.
 
-Planning decisions: initial host matrix, package/frontmatter compatibility,
-supported file types, release-selection behavior, and audit retention. This work
-does not include agent write tools or automatic skill execution.
+Implemented source contract: latest stable approved defaults for discovery,
+exact approved releases for direct lookup, valid root `SKILL.md` frontmatter,
+complete manifests, and UTF-8 text packages within the existing package limits.
+Every list/get/read rechecks scoped API authorization. Version-pinned resource
+URIs bind the registry origin, exact release, artifact digest, and frontmatter
+name; each content delivery verifies the immutable bundle. Responses are private
+with zero cache lifetime. Sanitized session audit records identify native method
+intent; the existing bundle audit records artifact authorization. Neither proves
+that the host activated a skill. See [MCP App](../apps/mcp/README.md).
+
+Remaining decisions and acceptance include modern authorization integration,
+a verified on-demand host path, the supported host matrix, and any further audit
+retention requirements. This work does not
+include agent write tools or automatic skill execution. MCP-1 remains open.
 
 Delivery sequence:
 
 1. Completed in [PR #79](https://github.com/jremick/myskills/pull/79): the SDK v2.1
    adapter supports legacy clients and protocol `2026-07-28` while preserving HTTP
-   authorization and limits. This protocol foundation does not yet serve native
-   Skills content.
-2. Add bounded Skills handlers over the existing authorized bundle API. Use
-   version-pinned resource URIs whose final skill-directory segment matches the
-   frontmatter name. Reauthorize every resource read and exclude packages without
-   valid root `SKILL.md` frontmatter from native discovery.
-3. Verify digests, complete manifests, pagination, invalid paths, revocation, and
-   client loading with the official conformance tooling. Keep bearer-authorized
-   caches private. Confirm method-level audit coverage before closing MCP-1.
+   authorization and limits.
+2. Implemented in the source candidate: bounded Skills handlers and verified
+   resources over the existing authorized bundle API, with required client
+   extension negotiation and unchanged legacy metadata tools.
+3. Current proof targets, with runtime verification pending: the official
+   SEP-2640 server conformance scenarios and the released fast-agent importer.
+   Verify manifests, digests, pagination, invalid paths, authorization changes,
+   and complete local-copy import. fast-agent's draft-compatible importer
+   downloads the complete manifest; it does not establish current-spec on-demand
+   skill activation.
+4. Keep MCP-1 open until a supported host proves model-selected, on-demand loading
+   of the required instructions and supporting files with its approval and
+   execution boundaries intact.
 
 The released TypeScript SDK does not yet include native Skills helpers. Custom
 handlers over the stable protocol are the current implementation path; adopt
@@ -630,7 +650,13 @@ preserving the existing submission and review process.
 
 Delivered foundation: [PR #78](https://github.com/jremick/myskills/pull/78) adds
 local `myskills init` for a private Codex package with safe destination checks.
-Archive creation and the browser workflow remain open.
+The source candidate adds `myskills package --path <directory> --output <file.zip>`.
+It validates and scans one held snapshot, preserves exact UTF-8 text bytes,
+creates deterministic ZIP entries, and reports the archive SHA-256, byte size,
+warnings, and a separate submit command. The destination must be new and outside
+the source tree. Neither command contacts the registry or bypasses review.
+Integrated archive validation and delivery are pending; browser drafts and
+imports remain subsequent slices.
 
 Planned scope:
 
@@ -738,10 +764,12 @@ Recommended next order:
    security details in the private review record until remediation is ready.
 2. Reconcile grouped dependency updates against the SDK v2.1 baseline. Keep major
    runtime and email-library upgrades separate until compatibility is verified.
-3. Deliver native MCP content loading and the next authoring/import slice as
-   separate workstreams over the existing registry and review contracts.
-4. Build the HOST-1 release bundle and guided setup on the repaired Compose path;
-   measure fresh install, update, and recovery before making speed claims.
+3. Verify and deliver the current native MCP server and CLI archive source
+   candidates. Keep full MCP-1 host activation open. Then add held-byte folder/ZIP
+   import previews, followed by commit-pinned public GitHub imports.
+4. Build the HOST-1 versioned image and Compose release bundle, then private
+   browser drafts and guided setup/operations as subsequent slices. Measure
+   fresh install, update, and recovery before making speed claims.
 5. Review the recommendation experiment and broader connected management against
    the resulting user evidence and remaining production requirements.
 
