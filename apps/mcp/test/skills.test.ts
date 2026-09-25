@@ -54,6 +54,15 @@ test("Native pagination preserves actor-scoped API cursors and bounds one reques
   await assert.rejects(otherRegistry.list({ cursor: first.nextCursor }), unavailable);
 });
 
+test("Frontmatter preserves authored JSON property names without granting prototype properties", async () => {
+  const fixture = nativeFixture({ instructions: "---\nname: native-test\ndescription: Test\n__proto__:\n  injected: true\nconstructor: authored-label\n---\nInstructions\n" });
+  const skill = (await createNativeSkillsHandlers({ token, fetchImpl: fixture.fetchImpl }).list()).skills[0];
+  assert.ok(skill);
+  assert.equal(Object.hasOwn(skill.frontmatter, "__proto__"), true);
+  assert.equal(Object.getPrototypeOf(skill.frontmatter), Object.prototype);
+  assert.deepEqual(JSON.parse(JSON.stringify(skill.frontmatter)), JSON.parse('{"name":"native-test","description":"Test","__proto__":{"injected":true},"constructor":"authored-label"}'));
+});
+
 test("Registry origins isolate identical immutable packages", async () => {
   const fixture = nativeFixture();
   const first = createNativeSkillsHandlers({ token, fetchImpl: fixture.fetchImpl });
@@ -98,6 +107,7 @@ test("Native delivery rejects invalid files, UTF-8 strings and package limits", 
     [{ path: "invalid.txt", content: "\ud800" }],
     [{ path: "invalid.txt", content: "NUL\0" }],
     [{ path: "large.txt", content: "x".repeat(1024 * 1024) }],
+    Array.from({ length: 500 }, (_, index) => ({ path: `extra-${index}.txt`, content: "x" })),
   ]) {
     const fixture = nativeFixture({ extra });
     assert.deepEqual((await createNativeSkillsHandlers({ token, fetchImpl: fixture.fetchImpl }).list()).skills, []);
@@ -154,6 +164,23 @@ test("Native body reading caps streamed metadata and cancels the stream without 
     body: new ReadableStream({ pull(controller) { controller.enqueue(new Uint8Array(NATIVE_API_METADATA_BYTES + 1)); }, cancel() { cancelled = true; } }),
     async text() { throw new Error("Unbounded text() must not run"); },
   });
+  await assert.rejects(createNativeSkillsHandlers({ token, fetchImpl }).list(), { code: -32603 });
+  assert.equal(cancelled, true);
+});
+
+test("Native response declared sizes and tokenless requests fail before consuming content", async () => {
+  let requests = 0;
+  let cancelled = false;
+  const fetchImpl: FetchLike = async () => {
+    requests += 1;
+    return { ok: true, status: 200,
+      headers: { get: () => String(NATIVE_API_METADATA_BYTES + 1) },
+      body: new ReadableStream({ cancel() { cancelled = true; } }),
+      async text() { throw new Error("must not consume text"); },
+    };
+  };
+  await assert.rejects(createNativeSkillsHandlers({ fetchImpl }).list(), unavailable);
+  assert.equal(requests, 0);
   await assert.rejects(createNativeSkillsHandlers({ token, fetchImpl }).list(), { code: -32603 });
   assert.equal(cancelled, true);
 });
