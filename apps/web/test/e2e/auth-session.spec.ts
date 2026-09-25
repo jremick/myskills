@@ -54,6 +54,13 @@ test("browser login uses the HttpOnly session cookie without storing bearer toke
       body: JSON.stringify({ skill: publicSkill() }),
     });
   });
+  await page.route("**/api/v1/skills/release-notes-helper/releases", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ releases: [{ ...publicRelease(), id: "public-release-0.1.0", findingCount: 0, allowedActions: [] }] }),
+    });
+  });
   await page.route("**/api/v1/skills/release-notes-helper/releases/0.1.0", async (route) => {
     await route.fulfill({
       status: 200,
