@@ -42,9 +42,10 @@ released, or deployed feature.
 | MCP-1 protocol prerequisite | [PR #79](https://github.com/jremick/myskills/pull/79) merged modern protocol entrypoints and legacy compatibility after required CI passed. Windows MCP tests, repository checks, image smoke, and security review support the adapter change. | Native Skills content handlers, conformance and real-host loading remain a following slice. |
 | Public release history | [PR #80](https://github.com/jremick/myskills/pull/80) merged public history browsing and exact-version links after required CI, including browser tests, passed. | Version comparison and further history usability improvements remain open. |
 
-Container and other resource-heavy verification for this batch runs on the
-Windows PC. Candidate verification does not establish production deployment or
-native host activation.
+Container and other resource-heavy verification must be reproducible on a Linux
+Docker engine with the repository's supported Node/npm versions. The linked PRs
+record the batch evidence and required CI results. Candidate verification does
+not establish production deployment or native host activation.
 
 ## Adoption Features For Delivery Review
 
