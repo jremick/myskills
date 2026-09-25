@@ -618,10 +618,6 @@ export class MemoryArchitectureStore implements ArchitectureStore {
   }
 }
 
-function sameOwner(left: { type: string; id: string }, right: { type: string; id: string }): boolean {
-  return left.type === right.type && left.id === right.id;
-}
-
 function strongerRole(current: ArchitectureTeamMemberRole | undefined, next: ArchitectureTeamMemberRole): ArchitectureTeamMemberRole {
   return current === "owner" || next === "owner" ? "owner" : "member";
 }
