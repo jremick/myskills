@@ -25,7 +25,7 @@ acceptance login and cleanup passed. The dedicated staging acceptance is now
 recorded as accepted; no acceptance waiver is claimed.
 
 The GitHub release was held as a draft during sequencing review and republished
-after staging acceptance and production verification. The source tag remains
+after staging acceptance. The source tag remains
 public and immutable; no tag or archive was replaced. npm stayed unchanged.
 Only npm publication remains pending, and it is already authorized.
 
