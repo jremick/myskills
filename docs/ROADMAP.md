@@ -1,7 +1,7 @@
 # Roadmap
 
 Version: 0.1.0-beta.7
-Document revision: 0.3.2
+Document revision: 0.3.3
 Last updated: 2026-09-25
 
 ## Release Tracks
@@ -11,12 +11,14 @@ Last updated: 2026-09-25
 - **Beta follow-up (`v0.1.0-beta.2`)**: released 2026-07-13 with local onboarding, artifact/review safety, public CLI packaging, static quality gates, release discipline, and reconciled docs. See [BETA_RELEASE_GOAL.md](BETA_RELEASE_GOAL.md).
 - **Operational beta (`v0.1.0-beta.5`)**: released with the governed Codex workspace install/update/rollback path and recorded staging and production verification. See [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
 - **CLI follow-up (`v0.1.0-beta.6`)**: released with the dry-run-only work/team Codex bootstrap planner. This CLI release did not promote Railway.
-- **Adoption follow-up (`v0.1.0-beta.7`)**: candidate with deterministic
-  authoring archives, authorized native MCP Skills delivery, release-history
-  navigation, and reviewed registry and self-hosting hardening. Publication,
-  native host activation, imports, and guided setup remain separate gates or
-  later roadmap slices.
-- **Hosted beta baseline**: the operational beta.5 application is the latest documented deployment baseline. Confirm the current commit and health by live read-back; historical acceptance is not a current runtime check.
+- **Adoption follow-up (`v0.1.0-beta.7`)**: GitHub prerelease published and
+  hosted API/web deployed after dedicated staging acceptance. It delivers
+  deterministic authoring archives, authorized native MCP Skills delivery,
+  release-history navigation, and reviewed registry and self-hosting repairs.
+  npm publication awaits maintainer passkey authentication; the `beta` selector
+  remains beta.6. Native host activation, imports, and guided setup remain later
+  roadmap slices. See [Beta.7 Release Delivery](BETA7_RELEASE_DELIVERY.md).
+- **Hosted beta baseline**: beta.7 at `6912d3f9490c6f002431f3064e8a9db417df3d7f` is the verified deployment recorded on 25 September 2026. Confirm subsequent runtime state by live readback; beta.5 evidence is historical.
 - **Business-safe production release**: harden the beta into an operator-ready release with stronger audit, background scanning, skill evals, provider lifecycle, artifact delivery, trusted publishing, deploy/ops guidance, and upgrade policy. See [BUSINESS_SAFE_RELEASE_GOAL.md](BUSINESS_SAFE_RELEASE_GOAL.md).
 
 ## Current Focus
@@ -43,12 +45,12 @@ released, or deployed feature.
 | Maintenance baseline | [PR #75](https://github.com/jremick/myskills/pull/75) merged bootstrap-directory revalidation, Hono remediation, and the MinIO CI image fix after required CI passed. Duplicate Hono PR #69 is closed. | Grouped production and development updates merged in [PR #81](https://github.com/jremick/myskills/pull/81) and [PR #71](https://github.com/jremick/myskills/pull/71). Node 26 and Nodemailer 10 remain separate compatibility decisions. |
 | Roadmap and hosting investigation | This revision records the adoption workstreams, merged foundations, and verified setup gaps. | Prioritize the remaining delivery slices after the full review. |
 | HOST-1 build caching | [PR #77](https://github.com/jremick/myskills/pull/77) merged after required CI passed. Six Windows image targets, source and build-argument cache reuse, and runtime smokes were verified. | Release images, setup and operations remain later slices. Deployment-time improvement is unmeasured. |
-| AUTHOR-1 CLI scaffold | [PR #78](https://github.com/jremick/myskills/pull/78) merged private Codex skill scaffolding after required CI passed. Windows CLI tests, package smoke, lint, shell-guidance tests, and source review passed. | Archive creation is implemented in the source candidate below. Browser drafts and imports remain subsequent slices. |
-| AUTHOR-1 CLI archive | [PR #83](https://github.com/jremick/myskills/pull/83) adds `myskills package --path <directory> --output <file.zip>` with a checked text snapshot, validation and scan gates, deterministic ZIP bytes, and exclusive output creation. Windows-hosted authoring and submission checks passed. | CLI release publication remains separate; browser drafts and imports remain open. |
-| MCP-1 protocol prerequisite | [PR #79](https://github.com/jremick/myskills/pull/79) merged modern protocol entrypoints and legacy compatibility after required CI passed. Windows MCP tests, repository checks, image smoke, and security review support the adapter change. | Native Skills handlers are implemented in the source candidate below. Conformance and host activation remain separate gates. |
+| AUTHOR-1 CLI scaffold | [PR #78](https://github.com/jremick/myskills/pull/78) merged private Codex skill scaffolding after required CI passed. Windows CLI tests, package smoke, lint, shell-guidance tests, and source review passed. | Archive creation is included in the beta.7 GitHub CLI asset; npm publication remains pending. Browser drafts and imports remain subsequent slices. |
+| AUTHOR-1 CLI archive | [PR #83](https://github.com/jremick/myskills/pull/83) adds `myskills package --path <directory> --output <file.zip>` with a checked text snapshot, validation and scan gates, deterministic ZIP bytes, and exclusive output creation. Windows-hosted authoring and submission checks passed. | The verified CLI asset is published on GitHub; npm publication remains pending. Browser drafts and imports remain open. |
+| MCP-1 protocol prerequisite | [PR #79](https://github.com/jremick/myskills/pull/79) merged modern protocol entrypoints and legacy compatibility after required CI passed. Windows MCP tests, repository checks, image smoke, and security review support the adapter change. | Native Skills handlers are included in beta.7. Conformance and host activation remain separate gates. |
 | MCP-1 native delivery | [PR #83](https://github.com/jremick/myskills/pull/83) adds `skills/list`, `skills/get`, and verified `resources/read` over authorized immutable API bundles. Official scenario checks with a configured client and the released fast-agent importer passed. | Stock conformance CLI omits the required client declaration. Full on-demand host activation remains open; see [verification details](AUTHOR_MCP_DELIVERY.md). |
 | Public release history | [PR #80](https://github.com/jremick/myskills/pull/80) merged public history browsing and exact-version links after required CI, including browser tests, passed. | Version comparison and further history usability improvements remain open. |
-| Review remediation | [PR #82](https://github.com/jremick/myskills/pull/82) merged auth/token delivery, bounded scanning, CLI integrity and recovery, exact release identity, governance and history constraints, review/audit pagination, and UI refresh fixes after Opus review, Windows regression checks and required CI. | Merged source; no release or production deployment is claimed. |
+| Review remediation | [PR #82](https://github.com/jremick/myskills/pull/82) merged auth/token delivery, bounded scanning, CLI integrity and recovery, exact release identity, governance and history constraints, review/audit pagination, and UI refresh fixes after Opus review, Windows regression checks and required CI. | Included in the beta.7 GitHub prerelease and verified production API/web deployment. |
 | HOST-1 startup repair | [PR #82](https://github.com/jremick/myskills/pull/82) merged the repairs after Windows storage builds/execution on amd64/arm64, object persistence/restore checks, and a fresh production Compose bootstrap/restart proof at `5de0ced`. | Release images, guided setup, public TLS/email configuration, a complete application restore drill, and elapsed-time measurements remain open. See [repair evidence](SELF_HOSTING_INVESTIGATION.md#verified-startup-gaps-and-repairs). |
 
 Container and other resource-heavy verification must be reproducible on a Linux

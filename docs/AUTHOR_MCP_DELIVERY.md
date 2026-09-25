@@ -5,9 +5,10 @@ Delivery: [PR #83](https://github.com/jremick/myskills/pull/83)
 Baseline: `04d80fc70ae56cce43d73faaac4fb74a99558e8c`
 
 This record covers source delivery. The beta.7 release status is tracked in
-[Beta.7 Release Delivery](BETA7_RELEASE_DELIVERY.md). The GitHub release is held
-as a draft pending authenticated staging acceptance. npm publication, production
-deployment, and native model activation remain separate, incomplete steps.
+[Beta.7 Release Delivery](BETA7_RELEASE_DELIVERY.md). The GitHub prerelease is
+published. Owner recovery and login/MFA preparation passed, and the dedicated
+API/CLI acceptance and production deployment passed. npm publication and native
+model activation remain separate, incomplete steps.
 
 ## Delivered behavior
 
