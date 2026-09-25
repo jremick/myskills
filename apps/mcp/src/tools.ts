@@ -1,4 +1,4 @@
-import type { PublicSkill } from "@myskills-app/core";
+import { parseSemanticVersion, type PublicSkill } from "@myskills-app/core";
 import { RegistryApiError, type McpSession, type RegistryApiClient, type ReleaseMetadata } from "./api-client.js";
 
 export interface McpToolResult {
@@ -752,7 +752,7 @@ function parseSlug(value: string): string {
 }
 
 function parseVersion(value: string): string {
-  if (typeof value !== "string" || !VERSION_PATTERN.test(value)) {
+  if (typeof value !== "string" || (!parseSemanticVersion(value) && !VERSION_PATTERN.test(value))) {
     throw new ToolInputError("Version is invalid.");
   }
   return value;
