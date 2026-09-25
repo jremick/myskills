@@ -487,17 +487,32 @@ function bindingFromExposure(nodeId: string, exposure: EffectiveExposure, enviro
 function generatedBindingsForNode(
   nodeId: string,
   environmentIds: readonly string[],
+  environments: ArchitectureSpecV1["environments"],
   exposureForEnvironment: (environmentId: string) => EffectiveExposure,
 ): ArchitectureProfileBinding[] {
+  const exposures = new Map(environmentIds.map((id) => [id, exposureForEnvironment(id)]));
+  const parents = new Map(environments.map((environment) => [environment.id, environment.parentId]));
+  const ancestorsOfEnabled = new Set<string>();
+  for (const [id, exposure] of exposures) {
+    if (!exposure.enabled) continue;
+    let parent = parents.get(id);
+    while (parent) {
+      ancestorsOfEnabled.add(parent);
+      parent = parents.get(parent);
+    }
+  }
   const byState = new Map<string, string[]>();
   const stateExposure = new Map<string, EffectiveExposure>();
   for (const environmentId of environmentIds) {
-    const exposure = exposureForEnvironment(environmentId);
+    const exposure = exposures.get(environmentId)!;
+    // Missing or inactive ancestor contexts must stay implicit. An explicit
+    // deny here would override a valid descendant's opt-in during compilation.
+    if (!exposure.enabled && ancestorsOfEnabled.has(environmentId)) continue;
     const key = bindingStateKey(exposure);
     byState.set(key, [...(byState.get(key) ?? []), environmentId]);
     stateExposure.set(key, exposure);
   }
-  if (byState.size === 1) {
+  if (byState.size === 1 && [...byState.values()][0].length === environmentIds.length) {
     const exposure = stateExposure.values().next().value as EffectiveExposure;
     return [bindingFromExposure(nodeId, exposure)];
   }
@@ -517,9 +532,9 @@ function rewriteProfileBindings(
   const bindings: ArchitectureProfileBinding[] = [];
   for (const node of target.nodes.slice().sort((left, right) => left.id.localeCompare(right.id))) {
     if (node.kind === "leaf") {
-      bindings.push(...generatedBindingsForNode(node.id, environmentIds, (environmentId) => sourceExposures.get(profile.id)?.get(`${environmentId}\u0000${node.id}`) ?? { enabled: false, runtimeExposure: "disabled" }));
+      bindings.push(...generatedBindingsForNode(node.id, environmentIds, target.environments, (environmentId) => sourceExposures.get(profile.id)?.get(`${environmentId}\u0000${node.id}`) ?? { enabled: false, runtimeExposure: "disabled" }));
     } else {
-      bindings.push(...generatedBindingsForNode(node.id, environmentIds, (environmentId) => targetRouterExposure(target, profile, environmentId, node.id, sourceExposures)));
+      bindings.push(...generatedBindingsForNode(node.id, environmentIds, target.environments, (environmentId) => targetRouterExposure(target, profile, environmentId, node.id, sourceExposures)));
     }
   }
   const oldCount = profile.bindings.filter((binding) => topologyNodeIds.has(binding.nodeId) || source.nodes.some((node) => node.id === binding.nodeId)).length;
