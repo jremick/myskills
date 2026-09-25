@@ -287,6 +287,68 @@ test("a nested directory addition after traversal fails closed", async (t) => {
   assert.equal((await readFile(reportPath, "utf8")).includes(blockedContent), false);
 });
 
+test("a benign nested source addition with an absent target is unavailable", async (t) => {
+  const fixture = await makeFixture();
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const sourceCandidate = path.join(fixture.paths.workSourceRoot, "work-canary");
+  const nestedDirectory = path.join(sourceCandidate, "aaa");
+  await rm(path.join(fixture.paths.liveSkillsRoot, "work-canary"), { recursive: true, force: true });
+  await mkdir(nestedDirectory);
+  await writeFile(path.join(nestedDirectory, "first.md"), "first\n");
+  await writeFile(path.join(sourceCandidate, "zz-later.md"), "later\n");
+  let added = false;
+  const { report } = await createCodexBootstrapDryRun({
+    paths: { ...fixture.paths, reportPath: path.join(fixture.reportDir, "absent-target-nested-source-added.json") },
+    context: fixture.context,
+    candidateAllowlist: ["work-canary"],
+    testHooks: {
+      afterSnapshotFileRead: async (relativePath) => {
+        if (!added && relativePath === "zz-later.md") {
+          added = true;
+          await writeFile(path.join(nestedDirectory, "zz-added.md"), "added\n");
+        }
+      },
+    },
+  });
+  assert.equal(added, true);
+  assert.equal(report.status, "blocked");
+  assert.deepEqual(report.candidates, []);
+  assert.equal(report.exclusions[0]?.reason, "SOURCE_UNAVAILABLE");
+});
+
+test("a benign nested target addition after traversal is unavailable", async (t) => {
+  const fixture = await makeFixture();
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const sourceCandidate = path.join(fixture.paths.workSourceRoot, "work-canary");
+  const targetCandidate = path.join(fixture.paths.liveSkillsRoot, "work-canary");
+  const sourceNested = path.join(sourceCandidate, "aaa");
+  const targetNested = path.join(targetCandidate, "aaa");
+  await mkdir(sourceNested);
+  await mkdir(targetNested);
+  await writeFile(path.join(sourceNested, "first.md"), "first\n");
+  await writeFile(path.join(targetNested, "first.md"), "first\n");
+  await writeFile(path.join(sourceCandidate, "zz-later.md"), "later\n");
+  await writeFile(path.join(targetCandidate, "zz-later.md"), "later\n");
+  let laterReads = 0;
+  const { report } = await createCodexBootstrapDryRun({
+    paths: { ...fixture.paths, reportPath: path.join(fixture.reportDir, "nested-target-added.json") },
+    context: fixture.context,
+    candidateAllowlist: ["work-canary"],
+    testHooks: {
+      afterSnapshotFileRead: async (relativePath) => {
+        if (relativePath === "zz-later.md") {
+          laterReads += 1;
+          if (laterReads === 2) await writeFile(path.join(targetNested, "zz-added.md"), "added\n");
+        }
+      },
+    },
+  });
+  assert.equal(laterReads, 2);
+  assert.equal(report.status, "blocked");
+  assert.deepEqual(report.candidates, []);
+  assert.equal(report.exclusions[0]?.reason, "TARGET_UNAVAILABLE");
+});
+
 test("source snapshots bound directory entries and nesting depth", async (t) => {
   const entryFixture = await makeFixture();
   t.after(() => rm(entryFixture.root, { recursive: true, force: true }));
