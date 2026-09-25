@@ -5,18 +5,26 @@ ARG NPM_VERSION=11.12.1
 
 FROM node:${NODE_VERSION} AS build
 ARG NPM_VERSION
-ARG VITE_API_BASE_URL
-ARG MYSKILLS_BUILD_REVISION
-ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 WORKDIR /app
 RUN npm install -g npm@${NPM_VERSION}
-COPY package.json package-lock.json tsconfig.base.json ./
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/cli/package.json ./apps/cli/package.json
+COPY apps/mcp/package.json ./apps/mcp/package.json
+COPY apps/web/package.json ./apps/web/package.json
+COPY packages/auth/package.json ./packages/auth/package.json
+COPY packages/core/package.json ./packages/core/package.json
+COPY packages/skill-package/package.json ./packages/skill-package/package.json
+RUN npm ci
+COPY tsconfig.base.json ./
 COPY packages ./packages
 COPY apps ./apps
 COPY scripts ./scripts
+ARG VITE_API_BASE_URL
+ARG MYSKILLS_BUILD_REVISION
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN node -e "const value = process.env.VITE_API_BASE_URL; if (!value) throw new Error('VITE_API_BASE_URL build arg is required for the web image.'); if (!value.startsWith('/')) { const url = new URL(value); if (url.protocol !== 'https:') throw new Error('VITE_API_BASE_URL must use https or a same-origin path.'); }"
-RUN npm ci \
-  && npm run build -w @myskills-app/core \
+RUN npm run build -w @myskills-app/core \
   && npm run build -w @myskills-app/web
 RUN MYSKILLS_BUILD_REVISION=${MYSKILLS_BUILD_REVISION} node scripts/write-build-info.mjs apps/web/dist/version.json
 
