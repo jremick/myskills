@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseSkillManifest } from "@myskills-app/skill-package";
-import { createNativeSkillsHandlers } from "../src/skills.js";
+import { MAX_PACKAGE_TEXT_BYTES, parseSkillManifest, validatePackageFiles } from "@myskills-app/skill-package";
+import { createNativeSkillsHandlers, NATIVE_SKILL_PAGE_BYTES } from "../src/skills.js";
 import { NATIVE_API_METADATA_BYTES, type FetchLike } from "../src/api-client.js";
 import { nativeFixture, hash, json } from "./native-fixture.js";
 
@@ -148,6 +148,89 @@ test("A long valid registry version is skipped without losing neighbors or pagin
   assert.ok(listed.nextCursor);
   assert.equal(incompatible.calls.length, 0);
   assert.equal((await handlers.list({ cursor: listed.nextCursor })).skills.length, 0);
+});
+
+test("A streamed large valid registry page preserves neighbors while oversized release metadata is skipped", async () => {
+  const before = nativeFixture({ slug: "a-native" });
+  const wide = nativeFixture({ slug: "m-wide" });
+  const after = nativeFixture({ slug: "z-native" });
+  const platforms = Array.from({ length: 4000 }, (_, index) => ({
+    name: `platform-${String(index).padStart(6, "0")}`,
+    install_target: `target-${"x".repeat(86)}`,
+    status: "supported",
+  }));
+  const manifest = parseSkillManifest({ ...JSON.parse(wide.files[0].content), platforms });
+  const manifestText = JSON.stringify(manifest);
+  assert.ok(Buffer.byteLength(manifestText) < MAX_PACKAGE_TEXT_BYTES);
+  const files = wide.files.map((file) => file.path === "skill.json" ? { ...file, content: manifestText } : file);
+  validatePackageFiles(files);
+  const publicPlatforms = platforms.map((platform) => ({ name: platform.name, installTarget: platform.install_target, status: platform.status }));
+  const bundle = JSON.stringify({ files });
+  const release = { ...wide.release, platforms: publicPlatforms, artifact: { ...wide.release.artifact, sha256: hash(bundle), byteSize: Buffer.byteLength(bundle) } };
+  const page = { skills: [before.skill, { ...wide.skill, platforms: publicPlatforms }, after.skill], nextCursor: "cursor-reader" };
+  assert.ok(Buffer.byteLength(JSON.stringify(page)) > NATIVE_API_METADATA_BYTES);
+  assert.ok(Buffer.byteLength(JSON.stringify(page)) < NATIVE_SKILL_PAGE_BYTES);
+  assert.ok(Buffer.byteLength(JSON.stringify({ release })) > NATIVE_API_METADATA_BYTES);
+  let releaseCancelled = false;
+  const requests: string[] = [];
+  const streamJson = (value: unknown, cancelled?: () => void) => {
+    const bytes = Buffer.from(JSON.stringify(value));
+    let offset = 0;
+    return new Response(new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (offset >= bytes.length) { controller.close(); return; }
+        controller.enqueue(bytes.subarray(offset, offset + 16 * 1024));
+        offset += 16 * 1024;
+      },
+      cancel() { cancelled?.(); },
+    }), { headers: { "content-type": "application/json" } });
+  };
+  const fetchImpl: FetchLike = (url, init) => {
+    const parsed = new URL(url);
+    requests.push(parsed.pathname);
+    if (parsed.pathname === "/v1/skills") {
+      if (parsed.searchParams.has("cursor")) {
+        assert.equal(parsed.searchParams.get("cursor"), "cursor-reader");
+        return Promise.resolve(streamJson({ skills: [], nextCursor: null }));
+      }
+      return Promise.resolve(streamJson(page));
+    }
+    if (parsed.pathname.includes("/m-wide/")) {
+      assert.equal(parsed.pathname.endsWith("/bundle"), false);
+      return Promise.resolve(streamJson({ release }, () => { releaseCancelled = true; }));
+    }
+    return parsed.pathname.includes("/z-native/") ? after.fetchImpl(url, init) : before.fetchImpl(url, init);
+  };
+  const handlers = createNativeSkillsHandlers({ token, fetchImpl });
+  const listed = await handlers.list();
+  assert.equal(listed.skills.length, 2);
+  assert.match(listed.skills[0].uri, /\/a-native\//);
+  assert.match(listed.skills[1].uri, /\/z-native\//);
+  assert.ok(listed.nextCursor);
+  assert.equal(releaseCancelled, true);
+  assert.equal(requests.some((path) => path.includes("/m-wide/") && path.endsWith("/bundle")), false);
+  assert.deepEqual((await handlers.list({ cursor: listed.nextCursor })).skills, []);
+});
+
+test("A streamed registry page above the explicit five-candidate budget is bounded and cancelled", async () => {
+  const fixture = nativeFixture();
+  let cancelled = false;
+  let sentBytes = 0;
+  const fetchImpl: FetchLike = async (url, init) => {
+    if (new URL(url).pathname !== "/v1/skills") return fixture.fetchImpl(url, init);
+    return new Response(new ReadableStream<Uint8Array>({
+      pull(controller) {
+        const chunk = new Uint8Array(64 * 1024);
+        sentBytes += chunk.byteLength;
+        controller.enqueue(chunk);
+      },
+      cancel() { cancelled = true; },
+    }));
+  };
+  await assert.rejects(createNativeSkillsHandlers({ token, fetchImpl }).list(), { code: -32603 });
+  assert.equal(cancelled, true);
+  assert.ok(sentBytes > NATIVE_SKILL_PAGE_BYTES);
+  assert.ok(sentBytes <= NATIVE_SKILL_PAGE_BYTES + 2 * 64 * 1024);
 });
 
 test("A package with an overlong encoded resource URI is excluded atomically", async () => {

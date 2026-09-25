@@ -81,16 +81,19 @@ export function createNativeRegistryApiClient(options: RegistryApiClientOptions,
   return {
     baseUrl: client.baseUrl,
     authenticate: (method: NativeMcpMethod) => client.authenticateMcp(method, signal),
-    json: <T>(path: string) => nativeRequestJson<T>(fetchImpl, token, `${client.baseUrl}${path}`, signal),
+    json: <T>(path: string, maxBytes = NATIVE_API_METADATA_BYTES) => nativeRequestJson<T>(fetchImpl, token, `${client.baseUrl}${path}`, signal, undefined, maxBytes),
     bytes: (path: string, maxBytes: number) => nativeRequestBytes(fetchImpl, token, `${client.baseUrl}${path}`, signal, maxBytes),
   };
 }
 
 async function nativeRequestJson<T>(
   fetchImpl: FetchLike, token: string | undefined, url: string,
-  signal?: AbortSignal, headers?: Record<string, string>,
+  signal?: AbortSignal, headers?: Record<string, string>, maxBytes = NATIVE_API_METADATA_BYTES,
 ): Promise<T> {
-  const bytes = await nativeRequestBytes(fetchImpl, token, url, signal, NATIVE_API_METADATA_BYTES, headers);
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > NATIVE_API_BUNDLE_BYTES) {
+    throw new RegistryApiError(502, "API_INVALID_RESPONSE_LIMIT");
+  }
+  const bytes = await nativeRequestBytes(fetchImpl, token, url, signal, maxBytes, headers);
   try {
     return JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes)) as T;
   } catch {

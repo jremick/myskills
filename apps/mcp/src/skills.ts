@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { parseSemanticVersion } from "@myskills-app/core";
 import {
-  loadStoredSkillManifestFromPackageFiles, MAX_PACKAGE_FILES,
+  loadStoredSkillManifestFromPackageFiles, MAX_PACKAGE_FILES, MAX_PACKAGE_TEXT_BYTES,
   normalizePackageFilePath, skillSlugSchema, validatePackageFiles,
 } from "@myskills-app/skill-package";
 import { ProtocolError } from "@modelcontextprotocol/server";
@@ -14,6 +14,7 @@ import {
 
 export const SKILLS_EXTENSION = "io.modelcontextprotocol/skills";
 export const NATIVE_SKILL_PAGE_SIZE = 5;
+export const NATIVE_SKILL_PAGE_BYTES = NATIVE_SKILL_PAGE_SIZE * (MAX_PACKAGE_TEXT_BYTES + 64 * 1024);
 export const NATIVE_RESOURCE_URI_CHARS = 4096;
 const privateResult = { resultType: "complete" as const, ttlMs: 0, cacheScope: "private" as const };
 const versionSchema = z.string().min(1).max(80).refine((value) => parseSemanticVersion(value) !== null);
@@ -57,7 +58,15 @@ export function createNativeSkillsHandlers(options: RegistryApiClientOptions) {
 
   async function load(client: NativeClient, slug: string, version: string) {
     const prefix = `/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}`;
-    const body = await client.json<unknown>(prefix);
+    let body: unknown;
+    try {
+      body = await client.json<unknown>(prefix);
+    } catch (error) {
+      // Valid registry packages can exceed the native release projection's
+      // metadata budget. Skip that candidate, while preserving real outages.
+      if (error instanceof RegistryApiError && error.code === "API_RESPONSE_TOO_LARGE") throw new IncompatibleSkill();
+      throw error;
+    }
     const projection = z.object({ release: releaseSchema }).safeParse(body);
     if (!projection.success) throw new IncompatibleSkill();
     const release = projection.data.release;
@@ -114,7 +123,7 @@ export function createNativeSkillsHandlers(options: RegistryApiClientOptions) {
         const cursor = decodeCursor(origin, input.cursor);
         const query = new URLSearchParams({ limit: String(NATIVE_SKILL_PAGE_SIZE) });
         if (cursor) query.set("cursor", cursor);
-        const page = pageSchema.parse(await client.json(`/v1/skills?${query}`));
+        const page = pageSchema.parse(await client.json(`/v1/skills?${query}`, NATIVE_SKILL_PAGE_BYTES));
         const skills: NativeSkill[] = [];
         for (const entry of page.skills) {
           if (entry.lifecycleStatus !== "approved" || entry.reviewStatus !== "approved" || entry.securityStatus !== "passed" || !versionSchema.safeParse(entry.latestVersion).success || !entry.latestVersion || entry.latestVersion.split("+", 1)[0].includes("-")) continue;
