@@ -108,6 +108,7 @@ interface AppLocation {
   slug: string | null;
   query: string;
   platform: string;
+  version: string | null;
 }
 
 type ArchitectureNavigationGuard = (action: string) => boolean;
@@ -173,8 +174,11 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [query, setQuery] = useState(initialLocation.query);
   const [skills, setSkills] = useState<PublicSkill[]>([]);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(initialLocation.slug);
+  const [selectedVersion, setSelectedVersion] = useState<string | null>(initialLocation.version);
   const [selectedSkill, setSelectedSkill] = useState<PublicSkill | null>(null);
   const [release, setRelease] = useState<ReleaseMetadata | null>(null);
+  const [visibleReleases, setVisibleReleases] = useState<SkillReleaseSummary[]>([]);
+  const [historyState, setHistoryState] = useState<LoadState>("idle");
   const [platform, setPlatform] = useState(initialLocation.platform);
   const [listState, setListState] = useState<LoadState>("idle");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -298,7 +302,17 @@ export function RegistryApp({ client }: RegistryAppProps) {
       currentUrlRef.current = currentBrowserUrl();
       searchSelectionQuery.current = null;
       setView(next.view);
+      if (next.slug !== previous.slug) {
+        setSelectedSkill(null);
+        setVisibleReleases([]);
+        setHistoryState("idle");
+      }
+      if (next.slug !== previous.slug || next.version !== previous.version) {
+        setRelease(null);
+        setDetailState("loading");
+      }
       setSelectedSlug(next.slug);
+      setSelectedVersion(next.version);
       setQuery(next.query);
       setPlatform(next.platform);
       setMobileMoreOpen(false);
@@ -345,14 +359,14 @@ export function RegistryApp({ client }: RegistryAppProps) {
     }
     if (session && view !== activeView) {
       setView(activeView);
-      replaceAppHistory(activeView === "browse" ? browseUrl(selectedSlug, query, platform) : pathForView(activeView));
+      replaceAppHistory(activeView === "browse" ? browseUrl(selectedSlug, query, platform, selectedVersion) : pathForView(activeView));
       return;
     }
     if (session && view === "login") {
       setView("browse");
       replaceAppHistory("/registry");
     }
-  }, [activeView, platform, query, selectedSlug, session, view]);
+  }, [activeView, platform, query, selectedSlug, selectedVersion, session, view]);
 
   useEffect(() => {
     if (activeView !== "browse") {
@@ -423,7 +437,14 @@ export function RegistryApp({ client }: RegistryAppProps) {
         setNextCursor(result.nextCursor ?? null);
         if (searchSelectionQuery.current === query) {
           searchSelectionQuery.current = null;
-          setSelectedSlug((current) => result.skills.some((skill) => skill.slug === current) ? current : result.skills[0]?.slug ?? null);
+          const currentSlug = currentLocationRef.current.slug;
+          const nextSlug = result.skills.some((skill) => skill.slug === currentSlug) ? currentSlug : result.skills[0]?.slug ?? null;
+          if (nextSlug !== currentSlug) {
+            setSelectedVersion(null);
+            setRelease(null);
+            setDetailState("loading");
+          }
+          setSelectedSlug(nextSlug);
         }
         setListMessage(null);
         setListState("ready");
@@ -451,70 +472,184 @@ export function RegistryApp({ client }: RegistryAppProps) {
     // An explicit detail URL is independent of a filtered or paginated list.
     // Only choose the first result when no skill has been selected.
     const nextSlug = selectedSlug ?? skills[0]?.slug ?? null;
+    const nextVersion = nextSlug === selectedSlug ? selectedVersion : null;
     if (nextSlug !== selectedSlug) {
       setSelectedSlug(nextSlug);
+      setSelectedVersion(null);
     }
-    const nextUrl = browseUrl(nextSlug, query, platform);
+    const nextUrl = browseUrl(nextSlug, query, platform, nextVersion);
     if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
       replaceAppHistory(nextUrl);
     }
-  }, [activeView, listState, platform, query, selectedSlug, skills]);
+  }, [activeView, listState, platform, query, selectedSlug, selectedVersion, skills]);
 
   useEffect(() => {
-    if (activeView !== "browse") {
+    if (activeView !== "browse" || !selectedSlug) {
       setSelectedSkill(null);
       setRelease(null);
+      setVisibleReleases([]);
+      setHistoryState("idle");
       setDetailState("idle");
-      return;
-    }
-    if (!selectedSlug) {
-      setSelectedSkill(null);
-      setRelease(null);
-      setDetailState("idle");
+      setDetailMessage(null);
       return;
     }
     let active = true;
+    setSelectedSkill(null);
+    setRelease(null);
+    setVisibleReleases([]);
+    setHistoryState("loading");
     setDetailState("loading");
     setDetailMessage(null);
     registryClient.getSkill(selectedSlug)
       .then(async (skill) => {
-        const latestVersion = skill.latestVersion;
-        const nextRelease = latestVersion ? await registryClient.getRelease(skill.slug, latestVersion) : null;
-        if (!active) {
+        if (!active) return;
+        if (skill.slug !== selectedSlug) {
+          setHistoryState("error");
+          setDetailMessage("Skill or release not found.");
+          setDetailState("error");
           return;
         }
         setSelectedSkill(skill);
-        setRelease(nextRelease);
-        setDetailMessage(null);
-        const availablePlatforms = nextRelease?.platforms ?? skill.platforms;
-        setPlatform((current) => availablePlatforms.some((item) => item.name === current)
-          ? current
-          : preferredPlatform(availablePlatforms));
-        setDetailState("ready");
+        try {
+          const rows = await registryClient.listSkillReleases(selectedSlug);
+          if (!active) return;
+          const visible = rows
+            .filter((row) => row.slug === selectedSlug && isExactReleaseVersion(row.version) && isPublishedRelease(row))
+            .sort((a, b) => Date.parse(b.publishedAt ?? "") - Date.parse(a.publishedAt ?? ""))
+            .filter((row, index, all) => all.findIndex((other) => other.version === row.version) === index);
+          setVisibleReleases(visible);
+          setHistoryState("ready");
+        } catch {
+          if (!active) return;
+          setVisibleReleases([]);
+          setHistoryState("error");
+        }
       })
       .catch((error: unknown) => {
-        if (!active) {
-          return;
-        }
+        if (!active) return;
         setSelectedSkill(null);
         setRelease(null);
+        setVisibleReleases([]);
+        setHistoryState("idle");
         setDetailMessage(safeErrorMessage(error));
         setDetailState("error");
       });
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [activeView, registryClient, selectedSlug, refreshKey]);
 
+  useEffect(() => {
+    if (activeView !== "browse" || !selectedSlug || !selectedSkill || selectedSkill.slug !== selectedSlug
+      || (historyState !== "ready" && historyState !== "error")) return;
+    let active = true;
+    const latestVisible = visibleReleases.find((item) => item.version === selectedSkill.latestVersion) ?? visibleReleases[0];
+    const exactVersion = selectedVersion ?? latestVisible?.version ?? selectedSkill.latestVersion;
+    setRelease(null);
+    setDetailMessage(null);
+    if (selectedVersion === null && !exactVersion) {
+      setDetailState("ready");
+      return;
+    }
+    if (!exactVersion || !isExactReleaseVersion(exactVersion)
+      || (selectedVersion !== null && historyState === "ready"
+        && !visibleReleases.some((item) => item.version === exactVersion))) {
+      setDetailMessage("This exact release is unavailable.");
+      setDetailState("error");
+      return;
+    }
+    setDetailState("loading");
+    registryClient.getRelease(selectedSlug, exactVersion)
+      .then((nextRelease) => {
+        if (!active) return;
+        if (nextRelease.slug !== selectedSlug || nextRelease.version !== exactVersion
+          || !isPublishedRelease(nextRelease)
+          || !Array.isArray(nextRelease.platforms)
+          || !nextRelease.artifact
+          || typeof nextRelease.artifact.sha256 !== "string"
+          || !Number.isFinite(nextRelease.artifact.byteSize)
+          || typeof nextRelease.artifact.contentType !== "string") {
+          setDetailMessage("This exact release is unavailable.");
+          setDetailState("error");
+          return;
+        }
+        setRelease(nextRelease);
+        setDetailState("ready");
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setRelease(null);
+        setDetailMessage(selectedVersion !== null ? "This exact release is unavailable." : safeErrorMessage(error));
+        setDetailState("error");
+      });
+    return () => { active = false; };
+  }, [activeView, registryClient, selectedSlug, selectedSkill, selectedVersion, historyState, visibleReleases]);
+
+  useEffect(() => {
+    if (activeView !== "browse" || !release || release.slug !== selectedSlug
+      || (selectedVersion !== null && release.version !== selectedVersion)) return;
+    const nextPlatform = releasePlatform(release.platforms, platform);
+    if (nextPlatform && nextPlatform !== platform) {
+      setPlatform(nextPlatform);
+      const current = currentLocationRef.current;
+      if (current.slug === selectedSlug && current.version === selectedVersion) {
+        replaceAppHistory(browseUrl(selectedSlug, current.query, nextPlatform, selectedVersion));
+      }
+    }
+  }, [activeView, platform, release, selectedSlug, selectedVersion]);
+
+  const supportedDetailPlatform = release ? releasePlatform(release.platforms, platform) : null;
+  const detailPlatform = supportedDetailPlatform ?? platform;
   const selectedCommand = useMemo(() => (
-    selectedSkill && release ? exportCommand(selectedSkill.slug, release.version, platform) : ""
-  ), [platform, release, selectedSkill]);
+    selectedSkill && release && supportedDetailPlatform ? exportCommand(selectedSkill.slug, release.version, supportedDetailPlatform) : ""
+  ), [release, selectedSkill, supportedDetailPlatform]);
+  const latestVisibleRelease = visibleReleases.find((item) => item.version === selectedSkill?.latestVersion) ?? visibleReleases[0] ?? null;
+  const historyControls = selectedSkill?.slug === selectedSlug ? (
+    <ReleaseHistoryControls
+      historyState={historyState}
+      latestVersion={latestVisibleRelease?.version ?? null}
+      onRetry={retryRegistry}
+      onReturn={returnToLatest}
+      onSelect={selectVersion}
+      releases={visibleReleases}
+      selectedVersion={selectedVersion}
+    />
+  ) : null;
 
   function selectSkill(slug: string) {
     searchSelectionQuery.current = null;
     setView("browse");
+    if (slug !== selectedSlug) {
+      setSelectedVersion(null);
+      setRelease(null);
+      setDetailState("loading");
+    }
     setSelectedSlug(slug);
-    pushAppHistory(browseUrl(slug, query, platform));
+    pushAppHistory(browseUrl(slug, query, platform, slug === selectedSlug ? selectedVersion : null));
+  }
+
+  function selectVersion(version: string) {
+    const target = visibleReleases.find((item) => item.version === version);
+    if (!selectedSlug || !target || version === selectedVersion) return;
+    const nextPlatform = releasePlatform(target.platforms, platform) ?? platform;
+    setSelectedVersion(version);
+    setPlatform(nextPlatform);
+    setRelease(null);
+    setDetailMessage(null);
+    setDetailState("loading");
+    pushAppHistory(browseUrl(selectedSlug, query, nextPlatform, version));
+  }
+
+  function returnToLatest() {
+    if (!selectedSlug) return;
+    const nextPlatform = latestVisibleRelease
+      ? releasePlatform(latestVisibleRelease.platforms, platform) ?? platform
+      : platform;
+    setSelectedVersion(null);
+    setPlatform(nextPlatform);
+    setRelease(null);
+    setDetailMessage(null);
+    setDetailState("loading");
+    pushAppHistory(browseUrl(selectedSlug, query, nextPlatform));
+    if (!selectedSkill) setRefreshKey((current) => current + 1);
   }
 
   function openLanding() {
@@ -530,8 +665,10 @@ export function RegistryApp({ client }: RegistryAppProps) {
   function openRegistry() {
     setView("browse");
     const nextSlug = selectedSlug ?? skills[0]?.slug ?? null;
+    const nextVersion = nextSlug === selectedSlug ? selectedVersion : null;
     setSelectedSlug(nextSlug);
-    pushAppHistory(browseUrl(nextSlug, query, platform));
+    setSelectedVersion(nextVersion);
+    pushAppHistory(browseUrl(nextSlug, query, platform, nextVersion));
   }
 
   async function loadMoreSkills() {
@@ -649,8 +786,10 @@ export function RegistryApp({ client }: RegistryAppProps) {
     setView(nextView);
     if (nextView === "browse") {
       const nextSlug = selectedSlug ?? skills[0]?.slug ?? null;
+      const nextVersion = nextSlug === selectedSlug ? selectedVersion : null;
       setSelectedSlug(nextSlug);
-      pushAppHistory(browseUrl(nextSlug, query, platform));
+      setSelectedVersion(nextVersion);
+      pushAppHistory(browseUrl(nextSlug, query, platform, nextVersion));
     } else {
       pushAppHistory(pathForView(nextView));
     }
@@ -668,12 +807,12 @@ export function RegistryApp({ client }: RegistryAppProps) {
   function updateSearch(nextQuery: string) {
     searchSelectionQuery.current = nextQuery;
     setQuery(nextQuery);
-    replaceAppHistory(browseUrl(selectedSlug, nextQuery, platform));
+    replaceAppHistory(browseUrl(selectedSlug, nextQuery, platform, selectedVersion));
   }
 
   function updatePlatform(nextPlatform: string) {
     setPlatform(nextPlatform);
-    replaceAppHistory(browseUrl(selectedSlug, query, nextPlatform));
+    replaceAppHistory(browseUrl(selectedSlug, query, nextPlatform, selectedVersion));
   }
 
   if (activeView === "landing") {
@@ -899,7 +1038,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
                       <a
                         aria-current={skill.slug === selectedSlug ? "true" : undefined}
                         className={skill.slug === selectedSlug ? "result-row review-registry-row registry-result-row selected" : "result-row review-registry-row registry-result-row"}
-                        href={browseUrl(skill.slug, query, platform)}
+                        href={browseUrl(skill.slug, query, platform, skill.slug === selectedSlug ? selectedVersion : null)}
                         key={skill.slug}
                         onClick={(event) => handleCallbackLink(event, () => selectSkill(skill.slug))}
                       >
@@ -935,30 +1074,43 @@ export function RegistryApp({ client }: RegistryAppProps) {
               </Card>
 
               <Card className="detail-panel registry-detail-panel shadcn-console-card" aria-label="Selected skill detail">
+                {historyControls && <CardContent className="shadcn-detail-content registry-detail-content">{historyControls}</CardContent>}
                 {detailMessage && (
                   <CardContent className="registry-state-content">
                     <div className="safe-message panel-state" role="status" aria-live="polite">
                       <CircleAlert size={24} aria-hidden="true" />
                       <strong>{detailMessage}</strong>
-                      <span>The selected skill could not load. Retry the request or choose a different approved skill.</span>
+                      <span>{selectedVersion !== null
+                        ? "The requested exact version was not substituted. Choose a published version or return to latest."
+                        : "The selected skill could not load. Retry the request or choose a different approved skill."}</span>
                       <Button className="state-action shadcn-action-button" size="sm" type="button" variant="outline" onClick={retryRegistry}>
                         <RotateCw size={15} aria-hidden="true" />
                         Retry
                       </Button>
+                      {selectedVersion !== null && !selectedSkill && <Button size="sm" type="button" variant="outline" onClick={returnToLatest}>Return to latest</Button>}
                     </div>
                   </CardContent>
                 )}
                 {detailState === "loading" && <DetailSkeleton />}
-                {detailState !== "loading" && !detailMessage && selectedSkill && release && (
+                {detailState === "ready" && !detailMessage && selectedSkill && selectedSkill.slug === selectedSlug && release && (
                   <SkillDetail
                     command={selectedCommand}
                     client={registryClient}
-                    platform={platform}
+                    platform={detailPlatform}
                     release={release}
                     selectedSkill={selectedSkill}
                     session={session}
                     setPlatform={updatePlatform}
                   />
+                )}
+                {detailState === "ready" && selectedSkill && !release && !detailMessage && (
+                  <CardContent className="registry-state-content">
+                    <div className="empty-detail">
+                      <FileCode2 size={42} aria-hidden="true" />
+                      <h2>No published release</h2>
+                      <p>No published release is available for this skill.</p>
+                    </div>
+                  </CardContent>
                 )}
                 {detailState !== "loading" && !selectedSkill && !detailMessage && (
                   <CardContent className="registry-state-content">
@@ -4246,6 +4398,52 @@ function MfaSetupPanel({
   );
 }
 
+function ReleaseHistoryControls({
+  historyState,
+  latestVersion,
+  onRetry,
+  onReturn,
+  onSelect,
+  releases,
+  selectedVersion,
+}: {
+  historyState: LoadState;
+  latestVersion: string | null;
+  onRetry: () => void;
+  onReturn: () => void;
+  onSelect: (version: string) => void;
+  releases: SkillReleaseSummary[];
+  selectedVersion: string | null;
+}) {
+  const missingPin = selectedVersion !== null && !releases.some((item) => item.version === selectedVersion);
+  return (
+    <div className="release-install-controls">
+      {historyState === "loading" && <p className="control-plane-muted" role="status">Loading release history…</p>}
+      {historyState === "ready" && releases.length === 0 && <p className="control-plane-muted" role="status">No published release history is available.</p>}
+      {historyState === "error" && (
+        <div role="status">
+          <p className="control-plane-muted">Release history is unavailable.</p>
+          <Button size="sm" type="button" variant="outline" onClick={onRetry}>Retry release history</Button>
+        </div>
+      )}
+      {historyState === "ready" && releases.length > 0 && (
+        <label>
+          <span>Release version</span>
+          <select value={selectedVersion ?? latestVersion ?? ""} onChange={(event) => onSelect(event.target.value)}>
+            {selectedVersion !== null && missingPin && <option value={selectedVersion} disabled>Unavailable exact version</option>}
+            {releases.map((item) => (
+              <option key={item.version} value={item.version}>
+                {item.version}{item.version === latestVersion ? " (latest)" : item.lifecycleStatus === "deprecated" ? " (deprecated)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {selectedVersion !== null && <Button size="sm" type="button" variant="outline" onClick={onReturn}>Return to latest</Button>}
+    </div>
+  );
+}
+
 function SkillDetail({
   command,
   client,
@@ -4263,6 +4461,8 @@ function SkillDetail({
   session: WebSession | null;
   setPlatform: (platform: string) => void;
 }) {
+  const supportedPlatforms = release.platforms.filter((item) => item.status === "supported");
+  const hasSupportedPlatform = supportedPlatforms.length > 0;
   const canManageSkill = Boolean(session && selectedSkill.access?.canManageSharing);
   const canUsePrivilegedControls = Boolean(canManageSkill && session?.user.mfaVerified);
   return (
@@ -4291,8 +4491,11 @@ function SkillDetail({
       </CardHeader>
       <CardContent className="shadcn-detail-content registry-detail-content">
         <p className="summary">{selectedSkill.summary}</p>
+        {!hasSupportedPlatform && <div className="control-plane-inline-message" role="status">No supported export platform is available for this release. Export and install are unavailable.</div>}
         <dl className="metadata-grid shadcn-metadata-grid registry-metadata-grid">
-          <Metadata label="Platforms" value={release.platforms.map((item) => item.name).join(", ")} />
+          <Metadata label="Platforms" value={hasSupportedPlatform
+            ? supportedPlatforms.map((item) => item.name).join(", ")
+            : release.platforms.map((item) => `${item.name} (${item.status})`).join(", ") || "None declared"} />
           <Metadata label="Tags" value={selectedSkill.tags.join(", ") || "-"} />
           <Metadata label="Released" value={release.publishedAt ? formatDate(release.publishedAt) : "Not published"} />
           <Metadata label="Review" value={formatStatusLabel(release.reviewStatus)} />
@@ -4309,8 +4512,9 @@ function SkillDetail({
           {release.compatibility && Object.keys(release.compatibility).length > 0 && <dl className="metadata-grid shadcn-metadata-grid registry-metadata-grid"><Metadata label="Minimum MySkills" value={release.compatibility.minimumMyskillsVersion ?? "Any"} /><Metadata label="Minimum adapter contract" value={release.compatibility.minimumAdapterContractVersion?.toString() ?? "Any"} /><Metadata label="Minimum source version" value={release.compatibility.minimumSourceVersion ?? "Any"} /></dl>}
         </section>
 
-        {session && (
+        {session && hasSupportedPlatform && (
           <ReleaseInstallPanel
+            key={`${selectedSkill.slug}:${release.version}:${platform}`}
             client={client}
             platform={platform}
             release={release}
@@ -4318,10 +4522,10 @@ function SkillDetail({
           />
         )}
 
-        <div className="platform-select registry-platform-select">
+        {hasSupportedPlatform && <div className="platform-select registry-platform-select">
           <span>Export platform</span>
           <div>
-            {release.platforms.map((item) => (
+            {supportedPlatforms.map((item) => (
               <Button
                 className={item.name === platform ? "platform-button active shadcn-action-button" : "platform-button shadcn-action-button"}
                 key={item.name}
@@ -4334,7 +4538,7 @@ function SkillDetail({
               </Button>
             ))}
           </div>
-        </div>
+        </div>}
 
         {canManageSkill && !canUsePrivilegedControls && <PrivilegedControlsLocked />}
 
@@ -4347,20 +4551,20 @@ function SkillDetail({
           />
         )}
 
-        {client.getReleaseBundle && <PackageFileViewer
+        {hasSupportedPlatform && client.getReleaseBundle && <PackageFileViewer
           resourceKey={`${selectedSkill.slug}:${release.version}:${platform}`}
           loadBundle={() => client.getReleaseBundle!(selectedSkill.slug, release.version, platform)}
         />}
 
-        <div className="command-panel registry-command-panel">
+        {hasSupportedPlatform && <div className="command-panel registry-command-panel">
           <div className="command-heading">
             <TerminalSquare size={18} aria-hidden="true" />
             <span>CLI export</span>
           </div>
           <code>{command}</code>
           <CopyButton text={command} variant="outline" />
-        </div>
-        <p className="control-plane-muted">For a personal Codex workspace, follow <a href="/targets">Connect a Codex workspace</a> to enroll the directory and install this exact version with the matching CLI release.</p>
+        </div>}
+        {hasSupportedPlatform && <p className="control-plane-muted">For a personal Codex workspace, follow <a href="/targets">Connect a Codex workspace</a> to enroll the directory and install this exact version with the matching CLI release.</p>}
         {session && canUsePrivilegedControls && (
           <SharingPanel client={client} selectedSkill={selectedSkill} session={session} />
         )}
@@ -4915,6 +5119,24 @@ function preferredPlatform(platforms: Array<{ name: string; status?: string }>):
   return platforms.find((item) => item.name === "codex")?.name ?? platforms[0]?.name ?? "codex";
 }
 
+function releasePlatform(platforms: Array<{ name: string; status: string }>, current: string): string | null {
+  const supported = platforms.filter((item) => item.status === "supported");
+  if (supported.length === 0) return null;
+  return supported.some((item) => item.name === current) ? current : preferredPlatform(supported);
+}
+
+function isExactReleaseVersion(version: string): boolean {
+  return /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version);
+}
+
+function isPublishedRelease(release: Pick<SkillReleaseSummary, "lifecycleStatus" | "reviewStatus" | "securityStatus" | "publishedAt">): boolean {
+  return (release.lifecycleStatus === "approved" || release.lifecycleStatus === "deprecated")
+    && release.reviewStatus === "approved"
+    && release.securityStatus === "passed"
+    && typeof release.publishedAt === "string"
+    && Number.isFinite(Date.parse(release.publishedAt));
+}
+
 function shortHash(value: string): string {
   return value.length > 18 ? `${value.slice(0, 10)}…${value.slice(-8)}` : value;
 }
@@ -5031,11 +5253,13 @@ function pathForView(view: AppView): string {
 
 function appLocationFromWindow(): AppLocation {
   const params = new URLSearchParams(window.location.search);
+  const slug = skillSlugFromPath(window.location.pathname);
   return {
     view: initialViewFromPath(window.location.pathname),
-    slug: skillSlugFromPath(window.location.pathname),
+    slug,
     query: params.get("q") ?? "",
     platform: params.get("platform") ?? "codex",
+    version: slug ? params.get("version") : null,
   };
 }
 
@@ -5059,13 +5283,16 @@ function appHistoryState(index: number): Record<string, unknown> {
   return { ...base, [APP_HISTORY_INDEX_KEY]: index };
 }
 
-function browseUrl(slug: string | null, query: string, platform: string): string {
+function browseUrl(slug: string | null, query: string, platform: string, version: string | null = null): string {
   const params = new URLSearchParams();
   if (query.trim()) {
     params.set("q", query);
   }
   if (platform !== "codex") {
     params.set("platform", platform);
+  }
+  if (slug && version !== null) {
+    params.set("version", version);
   }
   const pathname = slug ? `/skills/${slug}` : "/registry";
   const search = params.toString();
