@@ -526,6 +526,7 @@ test(`signed-in users review the ${selectedRelease} release before queueing a co
   const fixture = releaseHistoryFixture();
   fixture.older.platforms = fixture.latest.platforms;
   fixture.older.releaseNotes = "Earlier Codex release.";
+  fixture.history = fixture.history.map((row) => row.version === fixture.older.version ? releaseSummary(fixture.older) : row);
   const expectedRelease = selectedRelease === "older" ? fixture.older : fixture.latest;
   const expectedPlatform = "codex";
   const client = historyClient(fixture);
