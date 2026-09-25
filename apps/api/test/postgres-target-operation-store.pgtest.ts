@@ -3,11 +3,13 @@ import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { architectureTargetCapabilitiesDigest, assertValidArchitectureTargetObservation, defaultSkillUpgradePolicyV1, skillUpgradePolicyDigest, targetSkillOperationPlanDigest } from "@myskills-app/core";
+import { architectureSyncPlanDigest, architectureTargetCapabilitiesDigest, assertValidArchitectureTargetObservation, defaultSkillUpgradePolicyV1, defaultOrganizationPolicyV1, organizationPolicyDigest, skillUpgradePolicyDigest, targetSkillOperationPlanDigest } from "@myskills-app/core";
 import { createDb, createPgPool } from "../src/db/client.js";
 import { PostgresTargetSkillOperationStore } from "../src/target-operations/postgres-store.js";
 import { SkillUpgradePolicyService } from "../src/upgrade-policies/service.js";
 import { PostgresSkillUpgradePolicyStore } from "../src/upgrade-policies/postgres-store.js";
+import { ArchitectureSyncService } from "../src/architecture-sync/service.js";
+import { MemoryArchitectureSyncFixtureExecutor } from "../src/architecture-sync/fixture-executor.js";
 import { PostgresArchitectureSyncStore } from "../src/architecture-sync/postgres-store.js";
 import { TargetSkillOperationService } from "../src/target-operations/service.js";
 import { ArchitectureTargetService } from "../src/targets/service.js";
@@ -176,6 +178,143 @@ test("production queue rechecks full-range policy at claim, promotion, renewal, 
   });
 });
 
+test("organization ceilings recheck every crossed change at claim, promotion, renewal, verification, and receipt", { timeout: 60_000 }, async (t) => {
+  for (const boundary of ["claim", "apply", "renew", "verify", "complete"] as const) await t.test(boundary, async (sub) => {
+    const { pool, db, organizationId } = await organizationFixture(sub);
+    await insertRangeRelease(pool);
+    await pool.query("UPDATE skill_versions SET change_kind = 'breaking' WHERE version = '1.1.0'");
+    const policies = new PostgresSkillUpgradePolicyStore(db);
+    await policies.append(policyInput(0));
+    const store = new PostgresTargetSkillOperationStore(db);
+    const op = operation({ toVersion: "1.1.1" });
+    await store.create({ operation: op });
+    const leased = boundary === "claim" ? null : await store.claim(claim(op));
+    const binding = { ...claim(op), fencingToken: leased?.fencingToken ?? 0 };
+    if (boundary !== "claim" && boundary !== "apply") await store.advance({ ...binding, state: "applying" });
+    if (boundary === "complete") await store.advance({ ...binding, state: "verifying" });
+    const previous = (await store.get(op.id))?.state;
+    await policies.append({ ...policyInput(0, { ...defaultSkillUpgradePolicyV1, allowedChangeKinds: ["fix"] }), scopeType: "organization", scopeId: organizationId });
+    const resolved = await new SkillUpgradePolicyService(policies).resolveForTarget((await new PostgresArchitectureTargetStore(db).getTarget(owner, target))!);
+    assert.deepEqual(resolved.constraints.map(({ source }) => source), ["organization", "target"]);
+    await assert.rejects(boundary === "claim" ? store.claim(claim(op))
+      : boundary === "complete" ? store.complete({ ...binding, result: { ...result(), installedVersion: "1.1.1" } })
+        : store.advance({ ...binding, state: boundary === "verify" ? "verifying" : "applying" }), code("TARGET_OPERATION_POLICY_CHANGED"));
+    assert.equal((await store.get(op.id))?.state, previous);
+    if (boundary === "claim") {
+      await assert.rejects(store.create({ operation: operation({ toVersion: "1.1.1" }) }), code("TARGET_OPERATION_POLICY_CHANGED"));
+      assert.equal((await serviceFor(db, store).listUpdates({ id: owner, roles: [] }, target)).items[0]?.evaluation.status, "no-compatible-release");
+    }
+    if (boundary === "complete") assert.equal((await store.complete({ ...binding, result: { status: "failed", code: "operation.policy-changed", recordedAt: now } }))?.state, "failed");
+  });
+});
+
+test("organization prerelease and pin ceilings remain effective with a broader target policy", { timeout: 60_000 }, async (t) => {
+  const { pool, db, organizationId } = await organizationFixture(t);
+  await insertRangeRelease(pool, "2.0.0-rc.1");
+  const policies = new PostgresSkillUpgradePolicyStore(db);
+  await policies.append(policyInput(0, { ...defaultSkillUpgradePolicyV1, includePrerelease: true }));
+  await policies.append({ ...policyInput(0), scopeType: "organization", scopeId: organizationId });
+  const store = new PostgresTargetSkillOperationStore(db);
+  await assert.rejects(store.create({ operation: operation({ toVersion: "2.0.0-rc.1" }) }), code("TARGET_OPERATION_POLICY_CHANGED"));
+  await policies.append(policyInput(1, { ...defaultSkillUpgradePolicyV1, pins: { "release-helper": "1.1.0" } }));
+  await policies.append({ ...policyInput(1, { ...defaultSkillUpgradePolicyV1, pins: { "release-helper": "1.0.0" } }), scopeType: "organization", scopeId: organizationId });
+  await assert.rejects(store.create({ operation: operation() }), code("TARGET_OPERATION_POLICY_CHANGED"));
+  assert.deepEqual((await serviceFor(db, store).listUpdates({ id: owner, roles: [] }, target)).items[0]?.evaluation.blockers, ["policy-pin-conflict"]);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM target_skill_operations")).rows[0].n, 0);
+});
+
+test("a queued target override cannot bypass an organization policy committed before claim authorization", { timeout: 60_000 }, async (t) => {
+  const { db, organizationId } = await organizationFixture(t);
+  const policies = new PostgresSkillUpgradePolicyStore(db);
+  await policies.append(policyInput(0));
+  const store = new PostgresTargetSkillOperationStore(db);
+  const op = operation();
+  await store.create({ operation: op });
+  const entered = deferred();
+  const finish = deferred();
+  const delayed = new PostgresTargetSkillOperationStore(db, { beforeAuthorization: async () => { entered.resolve(); await finish.promise; } });
+  const pending = delayed.claim(claim(op));
+  const rejected = assert.rejects(pending, code("TARGET_OPERATION_POLICY_CHANGED"));
+  await entered.promise;
+  try {
+    await policies.append({ ...policyInput(0, { ...defaultSkillUpgradePolicyV1, pins: { "release-helper": "1.0.0" } }), scopeType: "organization", scopeId: organizationId });
+  } finally { finish.resolve(); }
+  await rejected;
+  assert.equal((await store.get(op.id))?.state, "queued");
+  assert.equal((await store.get(op.id))?.fencingToken, 0);
+});
+
+test("organization maintenance windows constrain manual targets at every execution boundary", { timeout: 60_000 }, async (t) => {
+  for (const boundary of ["claim", "apply", "renew", "verify", "complete"] as const) await t.test(boundary, async (sub) => {
+    const { pool, db, organizationId } = await organizationFixture(sub);
+    const policies = new PostgresSkillUpgradePolicyStore(db);
+    await policies.append(policyInput(0));
+    const store = new PostgresTargetSkillOperationStore(db);
+    const op = operation();
+    await store.create({ operation: op });
+    const leased = boundary === "claim" ? null : await store.claim(claim(op));
+    if (boundary !== "claim") assert.ok(leased);
+    const binding = { ...claim(op), fencingToken: leased?.fencingToken ?? 0 };
+    if (["renew", "verify", "complete"].includes(boundary)) await store.advance({ ...binding, state: "applying" });
+    if (boundary === "complete") await store.advance({ ...binding, state: "verifying" });
+    const before = await store.get(op.id);
+    const databaseNow = new Date((await pool.query("SELECT clock_timestamp() AS now")).rows[0].now);
+    // Three days away stays closed across midnight within this test's bounded timeout.
+    const closedPolicy = { ...defaultSkillUpgradePolicyV1, mode: "maintenance-window" as const, maintenanceWindow: {
+      timeZone: "UTC", daysOfWeek: [(databaseNow.getUTCDay() + 3) % 7], startMinute: 0, durationMinutes: 1440,
+    } };
+    await policies.append({ ...policyInput(0, closedPolicy), scopeType: "organization", scopeId: organizationId });
+    await assert.rejects(boundary === "claim" ? store.claim(claim(op))
+      : boundary === "complete" ? store.complete({ ...binding, result: result() })
+        : store.advance({ ...binding, state: boundary === "verify" ? "verifying" : "applying" }), code("TARGET_OPERATION_OUTSIDE_MAINTENANCE_WINDOW"));
+    assert.deepEqual(await store.get(op.id), before, "rejected windows leave state, lease, fence and receipt unchanged");
+    if (boundary === "complete") assert.equal((await store.complete({ ...binding, result: { status: "failed", code: "operation.window-closed", recordedAt: now } }))?.state, "failed");
+  });
+});
+
+test("Postgres claims require both maintenance windows across different time zones", { timeout: 60_000 }, async (t) => {
+  const { pool, db, organizationId } = await organizationFixture(t);
+  const policies = new PostgresSkillUpgradePolicyStore(db);
+  const allDays = [0, 1, 2, 3, 4, 5, 6];
+  const organizationPolicy = { ...defaultSkillUpgradePolicyV1, mode: "maintenance-window" as const,
+    maintenanceWindow: { timeZone: "Australia/Melbourne", daysOfWeek: allDays, startMinute: 0, durationMinutes: 1440 } };
+  const targetPolicy = { ...organizationPolicy, maintenanceWindow: { ...organizationPolicy.maintenanceWindow, timeZone: "America/New_York" } };
+  await policies.append({ ...policyInput(0, organizationPolicy), scopeType: "organization", scopeId: organizationId });
+  await policies.append(policyInput(0, targetPolicy));
+  const store = new PostgresTargetSkillOperationStore(db);
+  const op = operation();
+  await store.create({ operation: op });
+  const leased = await store.claim(claim(op));
+  assert.ok(leased, "overlapping windows in both zones permit a claim");
+  const binding = { ...claim(op), fencingToken: leased.fencingToken };
+  await store.advance({ ...binding, state: "applying" });
+  const databaseNow = new Date((await pool.query("SELECT clock_timestamp() AS now")).rows[0].now);
+  const localDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short" }).format(databaseNow));
+  // Three days away remains closed even if this test crosses local midnight.
+  await policies.append(policyInput(1, { ...targetPolicy, maintenanceWindow: { ...targetPolicy.maintenanceWindow, daysOfWeek: [(localDay + 3) % 7] } }));
+  const before = await store.get(op.id);
+  await assert.rejects(store.advance({ ...binding, state: "verifying" }), code("TARGET_OPERATION_OUTSIDE_MAINTENANCE_WINDOW"));
+  assert.deepEqual(await store.get(op.id), before, "an open organization window cannot bypass the target window");
+});
+
+test("Postgres treats constructor as unpinned but enforces an explicit constructor pin", { timeout: 60_000 }, async (t) => {
+  const { db } = await fixture(t, false, "constructor");
+  const policies = new PostgresSkillUpgradePolicyStore(db);
+  await policies.append(policyInput(0));
+  const store = new PostgresTargetSkillOperationStore(db);
+  const op = operation({ skillSlug: "constructor" });
+  await store.create({ operation: op });
+  const leased = await store.claim(claim(op));
+  assert.ok(leased);
+  const binding = { ...claim(op), fencingToken: leased.fencingToken };
+  await store.advance({ ...binding, state: "applying" });
+  await store.advance({ ...binding, state: "applying" });
+  await store.advance({ ...binding, state: "verifying" });
+  assert.equal((await store.complete({ ...binding, result: result() }))?.state, "succeeded");
+  await policies.append(policyInput(1, { ...defaultSkillUpgradePolicyV1, pins: { constructor: "1.1.0" } }));
+  await assert.rejects(store.create({ operation: operation({ skillSlug: "constructor", action: "rollback", fromVersion: "1.1.0", toVersion: "1.0.0" }) }), code("TARGET_OPERATION_POLICY_CHANGED"));
+});
+
 test("withdrawn and unsafe intermediate releases remain policy evidence without exposing their metadata", { timeout: 60_000 }, async (t) => {
   const { pool, db } = await fixture(t, true);
   await insertRangeRelease(pool);
@@ -278,43 +417,136 @@ test("policy mutation rechecks authority, audits atomically, and can restore an 
   assert.equal((await pool.query("SELECT count(*)::int AS n FROM audit_events WHERE action = 'skill-upgrade-policy.append'")).rows[0].n, 3);
 });
 
+test("organization upgrade policy requires a current owner at the store and service commit boundary", { timeout: 60_000 }, async (t) => {
+  const { pool, db } = await fixture(t);
+  const organizationId = randomUUID();
+  const organizationPolicyId = randomUUID();
+  await pool.query("INSERT INTO organizations (id, slug, name, status, created_by_user_id) VALUES ($1, 'policy-org', 'Policy organization', 'provisioning', $2)", [organizationId, owner]);
+  await pool.query("INSERT INTO organization_policy_revisions (id, organization_id, revision_number, schema_version, policy, policy_sha256, created_by_user_id) VALUES ($1, $2, 1, 1, $3, $4, $5)", [organizationPolicyId, organizationId, defaultOrganizationPolicyV1, organizationPolicyDigest(defaultOrganizationPolicyV1), owner]);
+  await pool.query("UPDATE organizations SET status = 'active', current_policy_revision_id = $2 WHERE id = $1", [organizationId, organizationPolicyId]);
+  await pool.query("INSERT INTO organization_memberships (organization_id, user_id, role) VALUES ($1, $2, 'owner'), ($1, $3, 'admin')", [organizationId, owner, member]);
+  const store = new PostgresSkillUpgradePolicyStore(db);
+  const input = { ...policyInput(0), scopeType: "organization" as const, scopeId: organizationId };
+  await assert.rejects(store.append({ ...input, actorUserId: member }), code("SKILL_UPGRADE_POLICY_FORBIDDEN"));
+  await assert.rejects(new SkillUpgradePolicyService(store).append({ ...input, actorUserId: member }), code("SKILL_UPGRADE_POLICY_FORBIDDEN"));
+  assert.equal((await store.append(input)).created, true);
+
+  const entered = deferred();
+  const finish = deferred();
+  const delayed = new PostgresSkillUpgradePolicyStore(db, { beforeAuthorization: async () => { entered.resolve(); await finish.promise; } });
+  const pending = delayed.append({ ...input, id: randomUUID(), expectedRevisionNumber: 1, policy: { ...defaultSkillUpgradePolicyV1, includePrerelease: true }, policySha256: skillUpgradePolicyDigest({ ...defaultSkillUpgradePolicyV1, includePrerelease: true }) });
+  const denied = assert.rejects(pending, code("SKILL_UPGRADE_POLICY_FORBIDDEN"));
+  await entered.promise;
+  await pool.query("UPDATE organization_memberships SET role = 'admin' WHERE organization_id = $1 AND user_id = $2", [organizationId, owner]);
+  finish.resolve();
+  await denied;
+  assert.equal((await store.getLatest("organization", organizationId))?.revisionNumber, 1);
+  // Once the authorization lock is held, a demotion waits for this commit.
+  await pool.query("UPDATE organization_memberships SET role = 'owner' WHERE organization_id = $1 AND user_id = $2", [organizationId, owner]);
+  const authorized = deferred();
+  const commit = deferred();
+  const protectedStore = new PostgresSkillUpgradePolicyStore(db, { beforeAuditInsert: async () => { authorized.resolve(); await commit.promise; } });
+  const protectedAppend = protectedStore.append({ ...input, id: randomUUID(), expectedRevisionNumber: 1,
+    policy: { ...defaultSkillUpgradePolicyV1, includePrerelease: true }, policySha256: skillUpgradePolicyDigest({ ...defaultSkillUpgradePolicyV1, includePrerelease: true }) });
+  await authorized.promise;
+  const demoter = await pool.connect();
+  try {
+    await demoter.query("SET lock_timeout = '100ms'");
+    await assert.rejects(demoter.query("UPDATE organization_memberships SET role = 'admin' WHERE organization_id = $1 AND user_id = $2", [organizationId, owner]), code("55P03"));
+  } finally {
+    await demoter.query("RESET lock_timeout");
+    demoter.release();
+    commit.resolve();
+  }
+  assert.equal((await protectedAppend).revision.revisionNumber, 2);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM audit_events WHERE action = 'skill-upgrade-policy.append'")).rows[0].n, 2);
+});
+
 test("companion and architecture sync share a target mutex and monotonic fences in both directions", { timeout: 60_000 }, async (t) => {
+  for (const boundary of ["acquireLease", "claimApply"] as const) await t.test(boundary, async (sub) => {
+    const { pool, db } = await fixture(sub);
+    const runId = randomUUID();
+    await insertSyncRun(pool, runId, boundary === "claimApply" ? architectureSyncPlanDigest([]) : hash);
+    const sync = new PostgresArchitectureSyncStore(db);
+    if (boundary === "claimApply") await syncService(sync).approve({ actor: owner, runId });
+    const acquire = async (input: Parameters<PostgresArchitectureSyncStore["acquireLease"]>[0]) => {
+      if (boundary === "acquireLease") return sync.acquireLease(input);
+      const claim = await sync.claimApply(input);
+      assert.equal(claim.decision, "claimed");
+      assert.ok(claim.run.lease);
+      return claim.run.lease;
+    };
+    const op = operation();
+    const store = new PostgresTargetSkillOperationStore(db);
+    await store.create({ operation: op });
+    const entered = deferred();
+    const gate = deferred();
+    const delayed = new PostgresTargetSkillOperationStore(db, { beforeAuditInsert: async () => { entered.resolve(); await gate.promise; } });
+    const queueClaim = delayed.claim(claim(op));
+    await entered.promise;
+    const syncInput = { runId, targetId: target, targetGeneration: 1, holderId: "sync-worker", now: new Date().toISOString(), leaseSeconds: 60 };
+    const syncAttempt = acquire(syncInput);
+    const rejected = assert.rejects(syncAttempt, code("ARCHITECTURE_SYNC_LEASE_CONFLICT"));
+    gate.resolve();
+    assert.equal((await queueClaim)?.fencingToken, 1);
+    await rejected;
+    // Force the reverse interleaving: sync owns target and waits on its run row.
+    await pool.query("UPDATE target_skill_operations SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE id = $1", [op.id]);
+    const blocker = await pool.connect();
+    await blocker.query("BEGIN");
+    await blocker.query("SELECT id FROM skill_architecture_sync_runs WHERE id = $1 FOR UPDATE", [runId]);
+    const syncPending = acquire({ ...syncInput, now: new Date().toISOString() });
+    try {
+      await waitForTargetLock(pool);
+      const queuePending = store.claim({ ...claim(op), now: later, leaseExpiresAt: new Date(Date.parse(later) + 60_000).toISOString() });
+      await blocker.query("COMMIT");
+      assert.equal((await syncPending).fencingToken, 2);
+      assert.equal(await queuePending, null);
+    } finally { await blocker.query("ROLLBACK"); blocker.release(); }
+    await sync.releaseLease({ runId, targetId: target, fencingToken: 2 });
+    const renewed = await store.claim({ ...claim(op), now: later, leaseExpiresAt: new Date(Date.parse(later) + 60_000).toISOString() });
+    assert.equal(renewed?.fencingToken, 3);
+    assert.equal(await store.advance({ ...claim(op), fencingToken: 1, state: "applying", now: later }), null, "expired fence cannot promote");
+  });
+});
+
+test("sync recovery excludes a concurrent companion claim and advances past its expired fence", { timeout: 60_000 }, async (t) => {
   const { pool, db } = await fixture(t);
   const runId = randomUUID();
-  await insertSyncRun(pool, runId);
+  await insertSyncRun(pool, runId, architectureSyncPlanDigest([]));
   const sync = new PostgresArchitectureSyncStore(db);
+  const service = syncService(sync);
+  await service.approve({ actor: owner, runId });
+  const claimed = await sync.claimApply({ runId, targetId: target, targetGeneration: 1, holderId: "sync-worker", now: new Date().toISOString(), leaseSeconds: 60 });
+  assert.ok(claimed.run.lease);
+  await sync.releaseLease({ runId, targetId: target, fencingToken: claimed.run.lease.fencingToken });
   const op = operation();
   const store = new PostgresTargetSkillOperationStore(db);
   await store.create({ operation: op });
-  const entered = deferred();
-  const gate = deferred();
+  const entered = deferred(); const gate = deferred();
   const delayed = new PostgresTargetSkillOperationStore(db, { beforeAuditInsert: async () => { entered.resolve(); await gate.promise; } });
-  const queueClaim = delayed.claim(claim(op));
+  const pending = delayed.claim(claim(op));
   await entered.promise;
-  const syncInput = { runId, targetId: target, targetGeneration: 1, holderId: "sync-worker", now, leaseSeconds: 60 };
-  const syncAttempt = sync.acquireLease(syncInput);
-  const rejected = assert.rejects(syncAttempt, code("ARCHITECTURE_SYNC_LEASE_CONFLICT"));
+  const recovery = assert.rejects(service.recover({ actor: owner, runId }), code("ARCHITECTURE_SYNC_LEASE_CONFLICT"));
   gate.resolve();
-  assert.equal((await queueClaim)?.fencingToken, 1);
-  await rejected;
-  // Force the reverse interleaving: sync owns target and waits on its run row.
+  assert.equal((await pending)?.fencingToken, 2);
+  await recovery;
+  assert.deepEqual(await sync.getRun(runId), claimed.run);
   await pool.query("UPDATE target_skill_operations SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE id = $1", [op.id]);
-  const blocker = await pool.connect();
-  await blocker.query("BEGIN");
-  await blocker.query("SELECT id FROM skill_architecture_sync_runs WHERE id = $1 FOR UPDATE", [runId]);
-  const syncPending = sync.acquireLease({ ...syncInput, now: new Date().toISOString() });
-  try {
-    await waitForTargetLock(pool);
-    const queuePending = store.claim({ ...claim(op), now: later, leaseExpiresAt: new Date(Date.parse(later) + 60_000).toISOString() });
-    await blocker.query("COMMIT");
-    assert.equal((await syncPending).fencingToken, 2);
-    assert.equal(await queuePending, null);
-  } finally { await blocker.query("ROLLBACK"); blocker.release(); }
-  await sync.releaseLease({ runId, targetId: target, fencingToken: 2 });
-  const renewed = await store.claim({ ...claim(op), now: later, leaseExpiresAt: new Date(Date.parse(later) + 60_000).toISOString() });
-  assert.equal(renewed?.fencingToken, 3);
-  assert.equal(await store.advance({ ...claim(op), fencingToken: 1, state: "applying", now: later }), null, "expired fence cannot promote");
+  const recovered = await service.recover({ actor: owner, runId });
+  assert.equal(recovered.run.state, "queued");
+  assert.equal(recovered.run.lease?.fencingToken, 3);
+  assert.equal(await sync.getCurrentLease(target), null);
 });
+
+function syncService(store: PostgresArchitectureSyncStore) {
+  return new ArchitectureSyncService(store, new MemoryArchitectureSyncFixtureExecutor(), {
+    authorization: { authorize: async () => ({ allowed: true }) },
+    mfa: { verify: async () => ({ allowed: true }) },
+    consent: { check: async () => ({ allowed: true }) },
+    recovery: { read: async () => ({ sourceState: "revalidating", condition: "no-mutation", decision: "retry", nextRunState: "queued", evidenceDigest: hash }) },
+  });
+}
 
 
 test("bounded queue polling reaches work behind more than 100 temporary blockers and wraps", { timeout: 60_000 }, async (t) => {
@@ -482,7 +714,7 @@ function serviceFor(db: ReturnType<typeof createDb>, store: PostgresTargetSkillO
     listSkillReleaseChangeHistory: (input: Parameters<PostgresSubmissionStore["listSkillReleaseChangeHistory"]>[0]) => submissions.listSkillReleaseChangeHistory(input),
   } as SubmissionService, { now: () => new Date(), upgradePolicies: new SkillUpgradePolicyService(new PostgresSkillUpgradePolicyStore(db)) });
 }
-async function fixture(t: test.TestContext, teamOwned = false) {
+async function fixture(t: test.TestContext, teamOwned = false, skillSlug = "release-helper") {
   const connection = process.env.TEST_DATABASE_URL;
   assert.ok(connection, "TEST_DATABASE_URL is required");
   assert.match(new URL(connection).pathname, /(test|ci)/i);
@@ -503,8 +735,8 @@ async function fixture(t: test.TestContext, teamOwned = false) {
   await pool.query("INSERT INTO skill_architecture_revisions (id, architecture_id, revision_number, spec, created_by_user_id) VALUES ($1, $2, 1, '{\"schemaVersion\":1}', $3)", [revision, architecture, owner]);
   await pool.query(`INSERT INTO skill_architecture_targets (id, architecture_id, owner_user_id, owner_team_id, name, adapter_kind, adapter_contract_version, adapter_version, environment_id, profile_id, status, consent_status, consent_requested_at, consent_granted_at, capabilities, capabilities_digest, identity_digest, generation, created_by_user_id, created_at, updated_at)
     VALUES ($1,$2,$3,$4,'Companion','codex-workspace',2,'1.0.0','personal','default','connected','granted',$5,$5,$6,$7,$8,1,$9,$5,$5)`, [target, architecture, teamOwned ? null : owner, teamOwned ? team : null, now, capabilities, capabilitiesDigest, "d".repeat(64), owner]);
-  await insertObservation(pool, observation, "1.0.0", now);
-  const skill = await pool.query("INSERT INTO skills (slug,title,summary,lifecycle_status,visibility,owner_user_id) VALUES ('release-helper','Release helper','Fixture','approved','public',$1) RETURNING id", [owner]);
+  await insertObservation(pool, observation, "1.0.0", now, target, skillSlug);
+  const skill = await pool.query("INSERT INTO skills (slug,title,summary,lifecycle_status,visibility,owner_user_id) VALUES ($2,'Release helper','Fixture','approved','public',$1) RETURNING id", [owner, skillSlug]);
   for (const version of ["1.0.0", "1.1.0"]) {
     const release = await pool.query("INSERT INTO skill_versions (skill_id,version,lifecycle_status,review_status,security_status,published_at,change_kind) VALUES ($1,$2,'approved','approved','passed',$3,'feature') RETURNING id", [skill.rows[0].id, version, now]);
     await pool.query("INSERT INTO skill_artifacts (skill_version_id,storage_key,sha256,byte_size,content_type) VALUES ($1,$2,$3,123,'application/json')", [release.rows[0].id, `fixture/${version}`, hash]);
@@ -512,10 +744,22 @@ async function fixture(t: test.TestContext, teamOwned = false) {
   }
   return { pool, db: createDb(pool) };
 }
-async function insertObservation(pool: ReturnType<typeof createPgPool>, id: string, version: string, captured: string, targetId = target) {
+async function organizationFixture(t: test.TestContext) {
+  const existing = await fixture(t);
+  const organizationId = randomUUID();
+  const organizationPolicyId = randomUUID();
+  await existing.pool.query("INSERT INTO organizations (id, slug, name, status, created_by_user_id) VALUES ($1, 'ceiling-org', 'Ceiling organization', 'provisioning', $2)", [organizationId, owner]);
+  await existing.pool.query("INSERT INTO organization_policy_revisions (id, organization_id, revision_number, schema_version, policy, policy_sha256, created_by_user_id) VALUES ($1, $2, 1, 1, $3, $4, $5)", [organizationPolicyId, organizationId, defaultOrganizationPolicyV1, organizationPolicyDigest(defaultOrganizationPolicyV1), owner]);
+  await existing.pool.query("UPDATE organizations SET status = 'active', current_policy_revision_id = $2 WHERE id = $1", [organizationId, organizationPolicyId]);
+  await existing.pool.query("INSERT INTO organization_memberships (organization_id, user_id, role) VALUES ($1, $2, 'owner')", [organizationId, owner]);
+  await existing.pool.query("UPDATE skill_architecture_targets SET owner_user_id = NULL, owner_organization_id = $2 WHERE id = $1", [target, organizationId]);
+  return { ...existing, organizationId };
+}
+
+async function insertObservation(pool: ReturnType<typeof createPgPool>, id: string, version: string, captured: string, targetId = target, skillSlug = "release-helper") {
   const record = assertValidArchitectureTargetObservation({ schemaVersion: 1, id, targetId, targetGeneration: 1,
     adapterDigest: "e".repeat(64), capabilitiesDigest, observedAt: captured,
-    skills: [{ slug: "release-helper", version, digest: hash, managed: true }], configFindings: [], promptAwareness: { detected: false, count: 0 } });
+    skills: [{ slug: skillSlug, version, digest: hash, managed: true }], configFindings: [], promptAwareness: { detected: false, count: 0 } });
   await pool.query(`INSERT INTO skill_architecture_observations (id,target_id,generation,adapter_kind,adapter_contract_version,adapter_version,adapter_digest,capabilities_digest,observed_digest,observed_state,captured_at)
     VALUES ($1,$2,1,'codex-workspace',2,'1.0.0',$3,$4,$5,$6,$7)`, [id, targetId, "e".repeat(64), capabilitiesDigest, record.observedDigest, record, captured]);
 }
@@ -524,9 +768,9 @@ async function insertRangeRelease(pool: ReturnType<typeof createPgPool>, version
   await pool.query("INSERT INTO skill_artifacts (skill_version_id,storage_key,sha256,byte_size,content_type) VALUES ($1,$3,$2,123,'application/json')", [release.rows[0].id, hash, `fixture/${version}`]);
   await pool.query("INSERT INTO skill_platform_variants (skill_version_id,name,install_target,status) VALUES ($1,'codex','codex-skill','supported')", [release.rows[0].id]);
 }
-async function insertSyncRun(pool: ReturnType<typeof createPgPool>, id: string) {
+async function insertSyncRun(pool: ReturnType<typeof createPgPool>, id: string, planDigest = hash) {
   await pool.query(`INSERT INTO skill_architecture_sync_runs (id,architecture_id,revision_id,target_id,target_generation,observed_snapshot_id,profile_id,environment_id,actor_user_id,run_kind,request_key,idempotency_key,desired_digest,compiled_digest,observed_digest,plan_digest,created_at,updated_at,status_updated_at)
-    VALUES ($1,$2,$3,$4,1,$5,'default','personal',$6,'sync',($1::uuid)::text,($1::uuid)::text,$7,$7,$7,$7,$8,$8,$8)`, [id, architecture, revision, target, observation, owner, hash, now]);
+    VALUES ($1,$2,$3,$4,1,$5,'default','personal',$6,'sync',($1::uuid)::text,($1::uuid)::text,$7,$7,$7,$9,$8,$8,$8)`, [id, architecture, revision, target, observation, owner, hash, now, planDigest]);
 }
 
 async function waitForTargetLock(pool: ReturnType<typeof createPgPool>) {

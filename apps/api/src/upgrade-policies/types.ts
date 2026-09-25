@@ -1,4 +1,4 @@
-import type { SkillUpgradePolicyV1 } from "@myskills-app/core";
+import type { SkillUpgradePolicyConstraint, SkillUpgradePolicyV1 } from "@myskills-app/core";
 
 export type SkillUpgradePolicyScope = "target" | "organization";
 
@@ -28,4 +28,14 @@ export interface SkillUpgradePolicyStore {
     actorUserId: string;
     createdAt: string;
   }): Promise<{ revision: SkillUpgradePolicyRevision; created: boolean }>;
+}
+
+export interface ResolvedSkillUpgradePolicy {
+  /** @deprecated Requested-policy projection only; constraints define the enforced ceiling. */
+  policy: SkillUpgradePolicyV1;
+  /** @deprecated Source of the requested-policy projection, not the effective ceiling. */
+  source: SkillUpgradePolicyConstraint["source"];
+  /** @deprecated Revision of the requested-policy projection. */
+  revision: SkillUpgradePolicyRevision | null;
+  constraints: Array<SkillUpgradePolicyConstraint & { revision: SkillUpgradePolicyRevision | null }>;
 }

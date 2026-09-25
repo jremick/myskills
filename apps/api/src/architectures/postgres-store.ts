@@ -388,6 +388,8 @@ type DbLike = Database | Parameters<Parameters<Database["transaction"]>[0]>[0];
 export interface PostgresArchitectureStoreOptions {
   /** Test-only barrier used to prove post-preflight revocation is fail-closed. */
   beforeRevisionAuthorizationRecheck?: () => void | Promise<void>;
+  /** Test-only barrier after owner authority is locked, before registry locks. */
+  beforeRevisionRegistryRecheck?: () => void | Promise<void>;
   /** Test-only failure injection immediately before an allow audit insert. */
   beforeAuditInsert?: (input: ArchitectureAuditInput) => void | Promise<void>;
 }
@@ -666,6 +668,7 @@ export class PostgresArchitectureStore implements ArchitectureStore {
           409,
         );
       }
+      await this.options.beforeRevisionRegistryRecheck?.();
       await reauthorizeRevisionRegistrySnapshot(tx, {
         actorId: actor.id,
         architectureId: architecture.id,
@@ -718,7 +721,7 @@ export class PostgresArchitectureStore implements ArchitectureStore {
     await this.db.insert(auditEvents).values({
       actorUserId: input.actorUserId,
       action: input.action,
-      decision: "allow",
+      decision: input.decision ?? "allow",
       resourceType: input.resourceType,
       resourceId: input.resourceId ?? null,
       details: sanitizeAuditDetails(input.details ?? {}),
@@ -1441,7 +1444,7 @@ async function lockRevisionSharingSettings(db: DbLike): Promise<RevisionRegistry
     .select({ value: instanceSettings.value })
     .from(instanceSettings)
     .where(eq(instanceSettings.key, "sharing"))
-    .for("update")
+    .for("share")
     .limit(1);
   const value = row?.value;
   if (!value || typeof value !== "object" || Array.isArray(value)) {

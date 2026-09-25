@@ -238,6 +238,26 @@ export const authActionTokens = pgTable("auth_action_tokens", {
   index("auth_action_tokens_active_idx").on(table.tokenHash, table.purpose, table.expiresAt).where(sql`${table.usedAt} IS NULL`),
 ]);
 
+export const authNotificationOutbox = pgTable("auth_notification_outbox", {
+  id: uuid("id").primaryKey(),
+  actionTokenId: uuid("action_token_id").notNull().unique().references(() => authActionTokens.id, { onDelete: "cascade" }),
+  payloadCiphertext: text("payload_ciphertext"),
+  status: text("status").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
+  leaseId: uuid("lease_id"),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  check("auth_notification_status", sql`${table.status} IN ('pending', 'leased', 'delivered', 'invalid', 'expired', 'failed')`),
+  check("auth_notification_attempts", sql`${table.attempts} >= 0 AND ${table.attempts} <= 5`),
+  check("auth_notification_payload", sql`(${table.status} IN ('pending', 'leased')) = (${table.payloadCiphertext} IS NOT NULL)`),
+  check("auth_notification_lease", sql`(${table.status} = 'leased') = (${table.leaseId} IS NOT NULL AND ${table.leaseExpiresAt} IS NOT NULL)`),
+  index("auth_notification_outbox_due_idx").on(table.availableAt).where(sql`${table.status} IN ('pending', 'leased')`),
+  index("auth_notification_outbox_retention_idx").on(table.updatedAt).where(sql`${table.payloadCiphertext} IS NULL`),
+]);
+
 export const authRateLimits = pgTable("auth_rate_limits", {
   bucketKey: text("bucket_key").primaryKey(),
   attemptCount: integer("attempt_count").notNull().default(0),
@@ -658,6 +678,10 @@ export const skillArchitecturePatternMigrations = pgTable("skill_architecture_pa
   check(
     "skill_architecture_pattern_migrations_diff_check",
     sql`architecture_pattern_migration_diff_is_safe(${table.diff})`,
+  ),
+  check(
+    "skill_architecture_pattern_migrations_diff_shape_check",
+    sql`architecture_pattern_migration_diff_has_valid_shape(${table.diff})`,
   ),
   check(
     "skill_architecture_pattern_migrations_source_digest_check",

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { MemoryArchitectureCreationQuota } from "./memory-creation-quota.js";
 import {
   AppError,
   assertValidOrganizationPolicyV1,
@@ -9,6 +10,7 @@ import {
   type OrganizationPolicyV1,
   type OrganizationStatus,
 } from "@myskills-app/core";
+import { isEffectiveTeamMembership } from "../teams/effective-membership.js";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import {
   architectureAccessForRecord,
@@ -29,7 +31,6 @@ import {
 } from "./types.js";
 import {
   assertArchitectureSpecSize,
-  MAX_ARCHITECTURES_PER_OWNER,
   MAX_VISIBLE_ARCHITECTURES,
   MAX_REVISIONS_PER_ARCHITECTURE,
   validateArchitectureSpec,
@@ -110,6 +111,7 @@ interface MemoryArchitecture extends ArchitectureRecord {
 
 export class MemoryArchitectureStore implements ArchitectureStore {
   readonly kind = "memory" as const;
+  readonly creationQuota = new MemoryArchitectureCreationQuota();
   private readonly architectures = new Map<string, MemoryArchitecture>();
   private readonly auditEvents: ArchitectureAuditEvent[] = [];
   private readonly memberships = new Map<string, Map<string, ArchitectureTeamMemberRole>>();
@@ -334,14 +336,6 @@ export class MemoryArchitectureStore implements ArchitectureStore {
         403,
       );
     }
-    const ownerCount = [...this.architectures.values()].filter((architecture) => sameOwner(architecture.owner, owner)).length;
-    if (ownerCount >= MAX_ARCHITECTURES_PER_OWNER) {
-      throw new AppError(
-        `An owner may create at most ${MAX_ARCHITECTURES_PER_OWNER} architectures.`,
-        "ARCHITECTURE_QUOTA_EXCEEDED",
-        409,
-      );
-    }
     const now = new Date().toISOString();
     const architecture: MemoryArchitecture = {
       id: `architecture-${this.architectures.size + 1}-${randomUUID().slice(0, 8)}`,
@@ -366,6 +360,7 @@ export class MemoryArchitectureStore implements ArchitectureStore {
       ? this.prepareArchitectureAudit(audit, actor.id, "architecture.create", architecture.id)
       : null;
     if (auditEvent && audit) await this.beforeCommit?.({ ...audit, resourceId: architecture.id });
+    this.creationQuota.claim(owner, architecture.id);
     this.architectures.set(architecture.id, architecture);
     if (auditEvent) this.auditEvents.push(auditEvent);
     return this.stripRevisions(architecture, actor);
@@ -484,7 +479,7 @@ export class MemoryArchitectureStore implements ArchitectureStore {
       id: `architecture-audit-${this.auditEvents.length + 1}`,
       actorUserId: input.actorUserId,
       action: input.action,
-      decision: "allow",
+      decision: input.decision ?? "allow",
       resourceType: input.resourceType,
       resourceId: input.resourceId ?? null,
       details: sanitizeAuditDetails(input.details ?? {}),
@@ -531,12 +526,14 @@ export class MemoryArchitectureStore implements ArchitectureStore {
       const currentPolicy = organization?.currentPolicyRevisionId
         ? this.organizationPolicies.get(organization.currentPolicyRevisionId)
         : undefined;
-      if (
-        organization?.status !== "active"
-        || !currentOrganizationIds.has(organizationId)
-        || !currentPolicy
-        || currentPolicy.organizationId !== organizationId
-      ) {
+      if (!isEffectiveTeamMembership({
+        organizationId,
+        organizationStatus: organization?.status,
+        currentPolicyRevisionId: organization?.currentPolicyRevisionId,
+        hasCurrentPolicy: currentPolicy?.organizationId === organizationId,
+        hasActiveOrganizationMembership: currentOrganizationIds.has(organizationId),
+        requireOrganizationMembershipForTeamMembers: currentPolicy?.policy.teams.requireOrganizationMembershipForTeamMembers,
+      })) {
         memberships.delete(teamId);
       }
     }
@@ -619,10 +616,6 @@ export class MemoryArchitectureStore implements ArchitectureStore {
         : {}),
     };
   }
-}
-
-function sameOwner(left: { type: string; id: string }, right: { type: string; id: string }): boolean {
-  return left.type === right.type && left.id === right.id;
 }
 
 function strongerRole(current: ArchitectureTeamMemberRole | undefined, next: ArchitectureTeamMemberRole): ArchitectureTeamMemberRole {

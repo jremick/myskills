@@ -14,12 +14,17 @@ import {
   type ArchitectureSyncReceipt,
 } from "../src/architecture-sync/types.js";
 import { MemoryArchitectureSyncFixtureExecutor } from "../src/architecture-sync/fixture-executor.js";
+import { MemoryTargetSkillOperationStore } from "../src/target-operations/memory-store.js";
+import type { StoredTargetSkillOperation } from "../src/target-operations/types.js";
+import { MemoryTargetLeaseCoordinator } from "../src/architecture-sync/memory-target-lease-coordinator.js";
 import { MemoryArchitectureSyncStore } from "../src/architecture-sync/memory-store.js";
 import { ArchitectureSyncService, type ArchitectureSyncPorts } from "../src/architecture-sync/service.js";
 
 const now = new Date("2026-08-30T00:00:00.000Z");
 
 interface FixtureOptions {
+  readonly now?: () => Date;
+  readonly targetLeases?: MemoryTargetLeaseCoordinator;
   readonly authorization?: (action: string) => boolean;
   readonly mfa?: boolean | (() => boolean);
   readonly consent?: (boundary: string) => boolean;
@@ -31,8 +36,9 @@ interface FixtureOptions {
 
 function fixture(options: FixtureOptions = {}) {
   const store = new MemoryArchitectureSyncStore({
-    now: () => new Date(now),
+    now: options.now ?? (() => new Date(now)),
     onRecoveryPhase: options.onRecoveryPhase,
+    targetLeases: options.targetLeases,
   });
   const executor = options.executor ?? new MemoryArchitectureSyncFixtureExecutor();
   const ports: ArchitectureSyncPorts = {
@@ -69,7 +75,7 @@ function fixture(options: FixtureOptions = {}) {
   };
   let sequence = 0;
   const service = new ArchitectureSyncService(store, executor, ports, {
-    now: () => new Date(now),
+    now: options.now ?? (() => new Date(now)),
     idFactory: () => `fixture-${++sequence}`,
     defaultLeaseSeconds: 60,
     defaultApprovalSeconds: 900,
@@ -181,6 +187,86 @@ test("concurrent apply deliveries replay in progress without blocking the winnin
   const winner = await first;
   assert.equal(winner.state, "succeeded");
   assert.equal((await service.getRun(approved.identity.runId))?.state, "succeeded");
+});
+
+function companionFixture(targetLeases: MemoryTargetLeaseCoordinator) {
+  const store = new MemoryTargetSkillOperationStore(targetLeases);
+  const operation: StoredTargetSkillOperation = {
+    schemaVersion: 1, id: "operation-1", targetId: "target-1", targetGeneration: 2,
+    actorUserId: "owner-1", idempotencyKey: "operation-intent", action: "update",
+    skillSlug: "release-helper", fromVersion: "1.0.0", toVersion: "1.1.0", platform: "codex",
+    artifact: { sha256: "a".repeat(64), byteSize: 123, contentType: "application/json" },
+    planDigest: "b".repeat(64), state: "queued", fencingToken: 0,
+    createdAt: now.toISOString(), updatedAt: now.toISOString(),
+  };
+  const claim = { actorId: "owner-1", id: operation.id, targetGeneration: 2, holderId: "companion",
+    claimTokenHash: "c".repeat(64), now: now.toISOString(), leaseExpiresAt: new Date(now.getTime() + 60_000).toISOString() };
+  return { store, operation, claim };
+}
+
+test("shared memory stores exclude simultaneous sync and companion claims in either order", async () => {
+  for (const syncFirst of [false, true]) {
+    // Full sync is unwired; any future composition must inject this same instance into both stores.
+    const targetLeases = new MemoryTargetLeaseCoordinator();
+    const { store, approved } = await approvedFixture({ targetLeases });
+    const companion = companionFixture(targetLeases);
+    await companion.store.create({ operation: companion.operation });
+    const syncClaim = () => store.claimApply({ runId: approved.identity.runId, targetId: "target-1", targetGeneration: 2,
+      holderId: "sync-worker", now: now.toISOString(), leaseSeconds: 60 });
+    const companionClaim = () => companion.store.claim(companion.claim);
+    const results = await Promise.allSettled(syncFirst ? [syncClaim(), companionClaim()] : [companionClaim(), syncClaim()]);
+    assert.equal(results.filter((result) => result.status === "fulfilled" && result.value !== null).length, 1);
+    if (syncFirst) {
+      assert.equal((await store.getCurrentLease("target-1"))?.fencingToken, 1);
+      assert.equal((await companion.store.get(companion.operation.id))?.state, "queued");
+    } else {
+      assert.equal((results[1] as PromiseRejectedResult).reason.code, "ARCHITECTURE_SYNC_LEASE_CONFLICT");
+      assert.equal((await store.getRun(approved.identity.runId))?.state, "approved");
+      assert.equal(await store.getCurrentLease("target-1"), null);
+    }
+  }
+});
+
+test("memory sync claims advance past expired companion fences and fence old operations", async () => {
+  let clock = new Date(now);
+  const targetLeases = new MemoryTargetLeaseCoordinator();
+  const { store, approved } = await approvedFixture({ targetLeases, now: () => new Date(clock) });
+  const companion = companionFixture(targetLeases);
+  await companion.store.create({ operation: companion.operation });
+  assert.equal((await companion.store.claim(companion.claim))?.fencingToken, 1);
+  await assert.rejects(store.acquireLease({ runId: approved.identity.runId, targetId: "target-1", targetGeneration: 2,
+    holderId: "sync-worker", now: now.toISOString(), leaseSeconds: 60 }),
+  (error: unknown) => error instanceof Error && "code" in error && error.code === "ARCHITECTURE_SYNC_LEASE_CONFLICT");
+  clock = new Date(now.getTime() + 61_000);
+  const afterCompanion = clock.toISOString();
+  const claimed = await store.claimApply({ runId: approved.identity.runId, targetId: "target-1", targetGeneration: 2,
+    holderId: "sync-worker", now: afterCompanion, leaseSeconds: 60 });
+  assert.equal(claimed.run.lease?.fencingToken, 2);
+  clock = new Date(now.getTime() + 122_000);
+  const afterSync = clock.toISOString();
+  const renewed = await companion.store.claim({ ...companion.claim, now: afterSync, leaseExpiresAt: new Date(now.getTime() + 182_000).toISOString() });
+  assert.equal(renewed?.fencingToken, 3);
+  assert.equal(await companion.store.advance({ ...companion.claim, now: afterSync, fencingToken: 1, state: "applying" }), null);
+});
+
+test("memory recovery refuses an active companion without changing the interrupted journal", async () => {
+  let clock = new Date(now);
+  const targetLeases = new MemoryTargetLeaseCoordinator();
+  const { store, service, approved } = await approvedFixture({ targetLeases, now: () => new Date(clock) });
+  const claimed = await store.claimApply({ runId: approved.identity.runId, targetId: "target-1", targetGeneration: 2,
+    holderId: "sync-worker", now: now.toISOString(), leaseSeconds: 60 });
+  store.expireLease("target-1");
+  const companion = companionFixture(targetLeases);
+  await companion.store.create({ operation: companion.operation });
+  assert.equal((await companion.store.claim(companion.claim))?.fencingToken, 2);
+  await assert.rejects(service.recover({ actor: "owner-1", runId: approved.identity.runId }),
+    (error: unknown) => error instanceof Error && "code" in error && error.code === "ARCHITECTURE_SYNC_LEASE_CONFLICT");
+  assert.deepEqual(await store.getRun(approved.identity.runId), claimed.run);
+  clock = new Date(now.getTime() + 61_000);
+  const recovered = await service.recover({ actor: "owner-1", runId: approved.identity.runId });
+  assert.equal(recovered.run.state, "queued");
+  assert.equal(recovered.run.lease?.fencingToken, 3);
+  assert.equal(await store.getCurrentLease("target-1"), null);
 });
 
 test("public digest and baseline identity cannot be changed after creation", async () => {

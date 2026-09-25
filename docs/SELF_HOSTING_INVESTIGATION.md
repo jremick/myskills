@@ -1,7 +1,7 @@
 # Self-Hosting And Deployment Investigation
 
 Date: 2026-09-25
-Status: build-cache improvement merged; setup, image publication and operations remain delivery candidates.
+Status: build-cache improvement merged; Compose repairs verified in the review candidate. Setup, image publication and operations remain delivery candidates.
 Roadmap: [HOST-1](ROADMAP.md#self-hosting-and-deployment-host-1).
 
 ## Recommendation For Review
@@ -55,7 +55,7 @@ deployment or a supported release-image installation path.
 | Readiness and dependency ordering already exist. | [Compose](../docker-compose.production.example.yml), [Deployment](DEPLOYMENT.md) | Preserve API `/ready` and web health checks; add a bounded operator-facing completion result. |
 | Coordinated database/artifact capture, status, and isolated restore helpers already exist. | [Backups](BACKUPS.md), [backup image](../Dockerfile.backup) | Package the existing recovery path rather than introduce an unrelated backup format. |
 
-## Verified Startup Gaps
+## Verified Startup Gaps And Repairs
 
 A follow-up on 2026-09-25 found two gaps in the existing Compose path:
 
@@ -72,8 +72,25 @@ A follow-up on 2026-09-25 found two gaps in the existing Compose path:
 
 The Compose checks ran on Docker Engine 28.3.0 and Compose 2.38.1 on a Windows
 Linux engine with synthetic values. They created no application containers and
-establish configuration behavior, not runtime health. Repair these paths before
-advertising the guided self-hosting journey.
+establish configuration behavior, not runtime health.
+
+The review candidate repairs both paths: development and production build the
+pinned storage image through `Dockerfile.minio`, and only the explicit bootstrap
+job requires owner credentials. Windows verification on 2026-09-25 established:
+
+- Anonymous storage-image builds and binary execution for amd64 and arm64.
+- Object persistence across container recreation, plus a checksum-verified copy
+  and restore. This is storage evidence, not a complete application restore drill.
+- A fresh production Compose install at `5de0ced`, including migrations, explicit
+  owner bootstrap, API/web health, owner sign-in, password rotation, and successful
+  sign-in with the rotated password after recreation without bootstrap values.
+- Browser and real API/CLI journeys at the same candidate: invitations through
+  captured SMTP, review/publication, install, update, rollback, and revocation.
+
+These checks used disposable Windows-hosted Linux containers and synthetic
+configuration. They do not establish public TLS, production email delivery,
+published application images, Railway deployment, or setup-time improvements.
+The guided setup and release bundle still require the delivery gates below.
 
 ## Candidate Delivery Slices
 

@@ -19,6 +19,7 @@ class RegistryFixture {
   calls: Array<{ path: string; body: Record<string, unknown> }> = [];
   observations: Record<string, unknown>[] = [];
   operation?: TargetSkillOperation;
+  releaseListResponse?: unknown;
   renewalCount = 0;
   denyRenewalAt?: number;
   target: ArchitectureTarget = {
@@ -82,10 +83,11 @@ class RegistryFixture {
       return response({ operation: { ...this.operation, state: body.state, leaseExpiresAt: new Date(Date.now() + 300_000).toISOString() } });
     }
     if (url.pathname.endsWith("/receipt")) return response({ operation: this.operation });
-    if (url.pathname === `/v1/skills/${slug}/releases`) return response({ releases: [...this.releases.keys()].map((version) => this.release(version)) });
+    if (url.pathname === `/v1/skills/${slug}/releases`) return response(this.releaseListResponse ?? { releases: [...this.releases.keys()].map((version) => this.release(version)) });
     const match = url.pathname.match(/\/releases\/([^/]+)(\/bundle)?$/);
-    if (match && this.releases.has(match[1]!)) {
-      return match[2] ? raw(this.releases.get(match[1]!)!.bundle) : response({ release: this.release(match[1]!) });
+    const version = match ? decodeURIComponent(match[1]!) : undefined;
+    if (match && version && this.releases.has(version)) {
+      return match[2] ? raw(this.releases.get(version)!.bundle) : response({ release: this.release(version) });
     }
     throw new Error(`Unexpected fixture request: ${url.pathname}`);
   };
@@ -351,4 +353,161 @@ test("doctor uses the root lock and cannot overwrite the old fixed test-file des
   await invoke(api, ["doctor", "--dir", root]);
   assert.equal(await readFile(outside, "utf8"), "preserve");
   assert.deepEqual(await readdir(path.join(root, ".myskills-app")), ["doctor-write-test"]);
+});
+
+test("latest install and updates tolerate manager-only releases and historical non-SemVer versions", async (t) => {
+  const root = await temp(t);
+  const api = new RegistryFixture(); api.add("0.1.0"); api.add("0.2.0");
+  const unavailable = ["draft", "private", "submitted", "review", "unpublished", "revoked", "archived"]
+    .map((lifecycleStatus) => ({ slug, version: "9.0.0", lifecycleStatus, artifact: null }));
+  const historical = { ...api.release("0.1.0"), version: "legacy-version", artifact: null };
+  api.releaseListResponse = { releases: [...unavailable, historical, api.release("0.1.0")] };
+  const initial = await invoke(api, ["install", slug, "--dir", root]);
+  assert.equal(initial.code, 0, initial.stderr.join("\n"));
+  assert.equal((await installed(root)).version, "0.1.0");
+  api.releaseListResponse = { releases: [...unavailable, historical, api.release("0.1.0"), api.release("0.2.0")] };
+  const inspection = await invoke(api, ["updates", "--dir", root, "--json"]);
+  assert.equal(inspection.code, 0, inspection.stderr.join("\n"));
+  assert.equal(JSON.parse(inspection.stdout.join("\n")).updates[0].evaluation.candidate.version, "0.2.0");
+  const update = await invoke(api, ["update", slug, "--dir", root]);
+  assert.equal(update.code, 0, update.stderr.join("\n"));
+  assert.equal((await installed(root)).version, "0.2.0");
+  assert.equal(await readFile(path.join(root, slug, "README.md"), "utf8"), "0.2.0");
+});
+
+test("release selection rejects malformed envelopes, unknown lifecycle states, and malformed installable candidates", async (t) => {
+  const api = new RegistryFixture(); api.add("0.1.0");
+  const valid = api.release("0.1.0");
+  for (const releaseListResponse of [
+    { releases: null },
+    { releases: [valid, null] },
+    { releases: [valid, { ...valid, lifecycleStatus: "unexpected" }] },
+    { releases: [valid, { ...valid, version: 42 }] },
+    { releases: [valid, { ...valid, version: "0.2.0", artifact: null }] },
+    { releases: [valid, { ...valid, version: "0.2.0", requiresUserAction: "yes" }] },
+  ]) {
+    const root = await temp(t);
+    api.releaseListResponse = releaseListResponse;
+    const result = await invoke(api, ["install", slug, "--dir", root]);
+    assert.equal(result.code, 1, JSON.stringify(releaseListResponse));
+    assert.match(result.stderr.join("\n"), /API release list/);
+    await assert.rejects(readFile(path.join(root, slug, "README.md")), { code: "ENOENT" });
+  }
+});
+
+test("late companion renewal failure restores update and rollback bytes before returning the original error", async (t) => {
+  for (const action of ["update", "rollback"] as const) {
+    const workspace = await temp(t);
+    const root = path.join(workspace, ".agents", "skills");
+    const api = new RegistryFixture(); api.add("0.1.0"); api.add("0.2.0");
+    await enroll(api, workspace);
+    assert.equal((await invoke(api, ["install", slug, "--workspace", workspace, "--version", "0.1.0"])).code, 0);
+    if (action === "rollback") {
+      assert.equal((await invoke(api, ["install", slug, "--workspace", workspace, "--version", "0.2.0"])).code, 0);
+    }
+    const before = await installed(root);
+    const registryBefore = await readFile(path.join(root, ".myskills-app", "installed.json"), "utf8");
+    api.plan(action, action === "update" ? "0.2.0" : "0.1.0", before.version);
+    api.denyRenewalAt = 3;
+    let oldBytesMoved = false;
+    const fixture = runtime(api);
+    fixture.context.installFault = async (point) => {
+      if (point === "previous-staged") {
+        await assert.rejects(readFile(path.join(root, slug, "README.md")), { code: "ENOENT" });
+        oldBytesMoved = true;
+      }
+    };
+    const result = await invoke(api, ["companion", "run-once", "--workspace", workspace, "--holder", "test-holder"], fixture.context);
+    assert.equal(result.code, 1);
+    assert.equal(oldBytesMoved, true);
+    assert.equal(api.renewalCount, 3);
+    assert.match(fixture.output.stderr.join("\n"), /Consent was revoked/);
+    // Inspect files directly: another CLI command would hide delayed recovery.
+    assert.equal(await readFile(path.join(root, slug, "README.md"), "utf8"), before.version);
+    assert.deepEqual(JSON.parse(await readFile(path.join(root, ".myskills-app", "installed.json"), "utf8")), JSON.parse(registryBefore));
+    assert.deepEqual(await readdir(path.join(root, ".myskills-app", "transactions")), []);
+    assert.equal(api.calls.filter((call) => call.path.endsWith("/receipt")).some((call) => (call.body.result as { status: string }).status === "succeeded"), false);
+    for (const snapshot of before.history) {
+      assert.equal(await readFile(path.join(snapshot.snapshotPath, "README.md"), "utf8"), "0.1.0");
+    }
+  }
+});
+
+test("update --version without a slug rejects before root creation or API calls", async (t) => {
+  const parent = await temp(t);
+  const api = new RegistryFixture();
+  const result = await invoke(api, ["update", "--version", "0.2.0", "--dir", path.join(parent, "new-root")]);
+  assert.equal(result.code, 2);
+  assert.match(result.stderr.join("\n"), /--version requires a skill slug/);
+  assert.deepEqual(api.calls, []);
+  assert.deepEqual(await readdir(parent), []);
+});
+
+test("exact historical exports preserve non-SemVer artifact bytes without enabling fresh intake or installation", async (t) => {
+  const root = await temp(t);
+  const api = new RegistryFixture(); api.add("01.0.0");
+  const output = path.join(root, "exported");
+  const result = await invoke(api, ["export", slug, "--version", "01.0.0", "--platform", "codex", "--output", output]);
+  assert.equal(result.code, 0, result.stderr.join("\n"));
+  const files = JSON.parse(api.releases.get("01.0.0")!.bundle).files as Array<{ path: string; content: string }>;
+  for (const file of files) assert.equal(await readFile(path.join(output, file.path), "utf8"), file.content);
+  assert.equal(JSON.parse(await readFile(path.join(output, "skill.json"), "utf8")).version, "01.0.0");
+
+  for (const command of ["validate", "submit"]) {
+    const callsBefore = api.calls.length;
+    const intake = await invoke(api, [command, "--path", output]);
+    assert.equal(intake.code, 1);
+    assert.match(intake.stderr.join("\n"), /Package manifest file is invalid/);
+    assert.equal(api.calls.length, callsBefore, "invalid new intake must not reach the API");
+  }
+  const installRoot = path.join(root, "install-root");
+  const install = await invoke(api, installArgs(installRoot, "01.0.0"));
+  assert.equal(install.code, 1);
+  assert.deepEqual(install.stderr, ["Release version is invalid."]);
+  await assert.rejects(readFile(path.join(installRoot, slug, "README.md")), { code: "ENOENT" });
+  for (const file of files) assert.equal(await readFile(path.join(output, file.path), "utf8"), file.content);
+});
+
+test("historical exports reject manifest identity mismatches and changed bundle bytes", async (t) => {
+  for (const mismatch of [{ name: "another-skill" }, { version: "1.0.0" }]) {
+    const root = await temp(t);
+    const api = new RegistryFixture(); api.add("01.0.0");
+    const release = api.releases.get("01.0.0")!;
+    const bundle = JSON.parse(release.bundle) as { files: Array<{ path: string; content: string }> };
+    const manifest = bundle.files.find((file) => file.path === "skill.json")!;
+    manifest.content = JSON.stringify({ ...JSON.parse(manifest.content), ...mismatch });
+    release.bundle = JSON.stringify(bundle);
+    const output = path.join(root, "exported");
+    const result = await invoke(api, ["export", slug, "--version", "01.0.0", "--platform", "codex", "--output", output]);
+    assert.equal(result.code, 1);
+    assert.deepEqual(result.stderr, ["Downloaded bundle manifest does not match release metadata."]);
+    assert.deepEqual(await readdir(root), []);
+  }
+  const root = await temp(t);
+  const api = new RegistryFixture(); api.add("01.0.0");
+  const fixture = runtime(api);
+  fixture.context.fetch = async (input, init) => new URL(input).pathname.endsWith("/bundle")
+    ? raw(`${api.releases.get("01.0.0")!.bundle} `)
+    : api.fetch(input, init);
+  const result = await invoke(api, ["export", slug, "--version", "01.0.0", "--platform", "codex", "--output", path.join(root, "exported")], fixture.context);
+  assert.equal(result.code, 1);
+  assert.deepEqual(fixture.output.stderr, ["Downloaded bundle did not match release metadata."]);
+  assert.deepEqual(await readdir(root), []);
+});
+
+test("latest install retains the first equal-precedence build in either registry order and filters unsupported platforms", async (t) => {
+  for (const versions of [["2.0.0+newer", "2.0.0+older"], ["2.0.0+older", "2.0.0+newer"]]) {
+    const root = await temp(t);
+    const api = new RegistryFixture();
+    for (const version of ["1.0.0", "3.0.0", ...versions]) api.add(version);
+    api.releaseListResponse = { releases: [
+      { ...api.release("3.0.0"), platforms: [{ name: "codex", installTarget: "codex-skill", status: "planned" }] },
+      api.release("1.0.0"),
+      ...versions.map((version) => api.release(version)),
+    ] };
+    const result = await invoke(api, ["install", slug, "--dir", root]);
+    assert.equal(result.code, 0, result.stderr.join("\n"));
+    assert.equal((await installed(root)).version, versions[0]);
+    assert.equal(await readFile(path.join(root, slug, "README.md"), "utf8"), versions[0]);
+  }
 });

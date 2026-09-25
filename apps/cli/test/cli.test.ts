@@ -2574,3 +2574,66 @@ function rawResponse(status: number, body: string, headers: Record<string, strin
     },
   };
 }
+
+test("human skill details escape remote control characters while JSON preserves the values", async () => {
+  const unsafe = "before\u001b]52;c;fixture\u0007\r\n\t\u009b31mafter";
+  const safe = "before ]52;c;fixture     31mafter";
+  const skill = { slug: unsafe, title: unsafe, summary: unsafe, latestVersion: unsafe,
+    platforms: [{ name: unsafe, installTarget: "codex-skill", status: "supported" }], tags: [unsafe] };
+  for (const command of [["search"], ["info", "safe-example"]]) {
+    const body = command[0] === "search" ? { skills: [skill] } : { skill };
+    const output = createOutput();
+    assert.equal(await runCli(command, testRuntime(output, async () => response(200, body))), 0);
+    assert.equal(output.stdout.some((line) => line.includes(safe)), true);
+    for (const line of output.stdout) assert.doesNotMatch(line.replaceAll("\t", ""), /[\u0000-\u001f\u007f-\u009f]/u);
+    if (command[0] === "search") assert.equal(output.stdout[0], `${safe}\t${safe}\t${safe}`);
+    else assert.deepEqual(output.stdout, [`${safe} (${safe})`, `version: ${safe}`, `platforms: ${safe}`, `tags: ${safe}`, safe]);
+    const json = createOutput();
+    assert.equal(await runCli([...command, "--json"], testRuntime(json, async () => response(200, body))), 0);
+    assert.deepEqual(JSON.parse(json.stdout.join("\n")), body);
+  }
+});
+
+test("human team names and generic release and skill rows escape control characters", async () => {
+  const unsafe = "visible\u001b[2J\r\n\t\u009bhidden";
+  const safe = "visible [2J    hidden";
+  const cases = [
+    { command: ["teams", "create", "Synthetic"], body: { team: { id: "team-1", name: unsafe, role: "owner", members: [], invitations: [] } }, expected: `team-1\t${safe}\tcreated\trole=owner` },
+    { command: ["releases", "list", "safe-example"], body: { releases: [{ slug: "safe-example", version: "0.1.0", lifecycleStatus: unsafe }] }, expected: `safe-example@0.1.0\t${safe}\t-\t-\tpublished=-` },
+    { command: ["skills", "edit", "safe-example", "--title", "Synthetic"], body: { skill: { slug: "safe-example", title: unsafe, lifecycleStatus: "approved", visibility: "private" } }, expected: `safe-example\t${safe}\tapproved\tprivate` },
+  ];
+  for (const { command, body, expected } of cases) {
+    const output = createOutput();
+    assert.equal(await runCli(command, testRuntime(output, async () => response(200, body), { MYSKILLS_TOKEN: "synthetic-token" })), 0);
+    assert.deepEqual(output.stdout, [expected]);
+  }
+});
+
+test("human failures escape control characters and structured failures preserve their message", async () => {
+  const message = "Failure\u001b[2J\r\n\t\u009bdetail";
+  const output = createOutput();
+  const fetch: FetchLike = async () => ({ ok: true, status: 200, text: async () => { throw new Error(message); } });
+  assert.equal(await runCli(["search"], testRuntime(output, fetch)), 1);
+  assert.deepEqual(output.stderr, ["Failure [2J    detail"]);
+  const json = createOutput();
+  assert.equal(await runCli(["search", "--json"], testRuntime(json, fetch)), 1);
+  assert.equal(JSON.parse(json.stderr.join("\n")).error.message, message);
+});
+
+test("doctor Node support matches the declared 22.13 and 24 engine ranges", async (t) => {
+  const root = await makeTempPackage();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const descriptor = Object.getOwnPropertyDescriptor(process.versions, "node")!;
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  try {
+    for (const [version, supported] of [["20.19.0", false], ["22.12.0", false], ["22.13.0", true], ["22.99.0", true], ["23.0.0", false], ["24.0.0", true], ["24.99.0", true], ["25.0.0", false]] as const) {
+      Object.defineProperty(process.versions, "node", { ...descriptor, value: version });
+      const output = createOutput();
+      await runCli(["doctor", "--dir", root, "--json"], testRuntime(output, async () => response(200, { ok: true })));
+      const check = JSON.parse(output.stdout.join("\n")).checks.find((item: { name: string }) => item.name === "node");
+      assert.equal(check.ok, supported, version);
+      assert.equal(check.details.engine, manifest.engines.node);
+      assert.equal(check.details.version, version);
+    }
+  } finally { Object.defineProperty(process.versions, "node", descriptor); }
+});

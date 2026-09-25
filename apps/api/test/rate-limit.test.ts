@@ -1,6 +1,30 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PostgresAuthRateLimiter, type QueryablePool } from "../src/auth/rate-limit.js";
+import { MemoryAuthRateLimiter, PostgresAuthRateLimiter, type QueryablePool } from "../src/auth/rate-limit.js";
+
+test("memory limiter bounds identities without evicting active attempt budgets", () => {
+  const limiter = new MemoryAuthRateLimiter({ maxAttempts: 2, windowMs: 60_000, maxBuckets: 2 });
+  const now = new Date("2026-09-25T00:00:00Z");
+  assert.equal(limiter.consume("first", now).allowed, true);
+  assert.equal(limiter.consume("second", now).allowed, true);
+  for (let index = 0; index < 100; index += 1) {
+    assert.equal(limiter.consume(`extra:${index}`, now).allowed, false);
+  }
+  assert.equal(limiter.consume("first", now).allowed, true);
+  assert.equal(limiter.consume("first", now).allowed, false);
+  assert.equal(limiter.consume("extra", new Date(now.getTime() + 60_000)).allowed, true);
+});
+
+test("memory limiter reclaims expired identities across bounded cleanup passes", () => {
+  const limiter = new MemoryAuthRateLimiter({ maxAttempts: 1, windowMs: 1000, maxBuckets: 64 });
+  const now = new Date("2026-09-25T00:00:00Z");
+  for (let index = 0; index < 64; index += 1) assert.equal(limiter.consume(`old:${index}`, now).allowed, true);
+  assert.equal(limiter.consume("overflow", now).allowed, false);
+  const later = new Date(now.getTime() + 1000);
+  for (let index = 0; index < 64; index += 1) assert.equal(limiter.consume(`new:${index}`, later).allowed, true);
+  assert.equal(limiter.consume("overflow", later).allowed, false);
+  assert.equal(limiter.consume("new:0", later).allowed, false);
+});
 
 test("PostgresAuthRateLimiter enforces shared bucket counts", async () => {
   const queries: Array<{ query: string; values: unknown[] }> = [];

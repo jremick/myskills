@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { useLayoutEffect, useRef } from "react";
 import { createArchitectureDiagramArtifact, type PublicSkill, type SkillSharingDetails, type TeamSharedSkillGroup } from "@myskills-app/core";
+import { unsupportedWorkspaceTargets, workspaceTarget } from "./workspace-target-fixture.js";
 import { RegistryApp } from "../src/App.js";
 import { ArchitectureEditor } from "../src/components/architecture/editor/ArchitectureEditor.js";
 import type {
@@ -15,7 +16,6 @@ import type {
   AdminRegistrationMode,
   AdminUser,
   ArchitectureAccessMetadata,
-  ArchitectureTargetRecord,
   ArchitectureDraftPreview,
   ArchitecturePattern,
   ArchitecturePatternId,
@@ -524,28 +524,14 @@ for (const selectedRelease of ["latest", "older"] as const) {
 test(`signed-in users review the ${selectedRelease} release before queueing a connected-target install`, async () => {
   setupAuthenticatedDom("http://localhost/skills/release-notes-helper");
   const fixture = releaseHistoryFixture();
+  fixture.older.platforms = fixture.latest.platforms;
+  fixture.older.releaseNotes = "Earlier Codex release.";
+  fixture.history = fixture.history.map((row) => row.version === fixture.older.version ? releaseSummary(fixture.older) : row);
   const expectedRelease = selectedRelease === "older" ? fixture.older : fixture.latest;
-  const expectedPlatform = selectedRelease === "older" ? "generic" : "codex";
+  const expectedPlatform = "codex";
   const client = historyClient(fixture);
   const operations: Array<Record<string, unknown>> = [];
-  const target: ArchitectureTargetRecord = {
-    schemaVersion: 1,
-    id: "target-install-1",
-    name: "Personal companion",
-    owner: { type: "user", id: "user-1" },
-    adapter: { kind: "codex-companion", version: "1", contractVersion: 2 },
-    architectureId: "architecture-1",
-    environmentId: "personal",
-    profileId: "default",
-    status: "connected",
-    consent: { status: "granted", requestedAt: "2026-09-01T00:00:00.000Z", grantedAt: "2026-09-01T00:01:00.000Z" },
-    generation: 1,
-    identityDigest: "a".repeat(64),
-    capabilities: { "inventory.read": true, apply: true, rollback: true, "sync.write": true },
-    createdAt: "2026-09-01T00:00:00.000Z",
-    updatedAt: "2026-09-01T00:00:00.000Z",
-    health: null,
-  };
+  const target = { ...workspaceTarget(), id: "target-install-1" };
   client.listArchitectureTargets = async () => [target];
   client.scheduleTargetSkillOperation = async (targetId, input) => {
     operations.push({ targetId, ...input });
@@ -586,6 +572,59 @@ test(`signed-in users review the ${selectedRelease} release before queueing a co
 });
 }
 
+for (const [name, patch] of unsupportedWorkspaceTargets) {
+  test(`browser install excludes a ${name} target`, async () => {
+    setupAuthenticatedDom("http://localhost/skills/release-notes-helper");
+    const client = historyClient(releaseHistoryFixture());
+    let queued = 0;
+    client.listArchitectureTargets = async () => [{ ...workspaceTarget(), ...patch }];
+    client.scheduleTargetSkillOperation = async () => { queued += 1; return { operation: {} as never, replayed: false }; };
+    const view = render(<RegistryApp client={client} />);
+    await view.findByText(/Browser installs require a consented personal Codex workspace/);
+    assert.equal(view.queryByRole("button", { name: "Review install" }), null);
+    assert.equal(queued, 0);
+  });
+}
+
+test("generic exact releases remain readable and exportable without browser queue actions", async () => {
+  setupAuthenticatedDom("http://localhost/skills/release-notes-helper");
+  const fixture = releaseHistoryFixture();
+  const client = historyClient(fixture);
+  let queued = 0;
+  client.listArchitectureTargets = async () => [workspaceTarget()];
+  client.scheduleTargetSkillOperation = async () => { queued += 1; return { operation: {} as never, replayed: false }; };
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.change(await view.findByRole("combobox", { name: "Release version" }), { target: { value: fixture.older.version } });
+  await view.findByText(fixture.older.releaseNotes!);
+  await view.findByText(/Browser installs require a consented personal Codex workspace/);
+  assert.equal(view.queryByRole("button", { name: "Review install" }), null);
+  assert.match(document.querySelector(".command-panel")?.textContent ?? "", /generic/);
+  assert.equal(queued, 0);
+});
+
+for (const releaseKind of ["prerelease", "deprecated"] as const) {
+  test(`a ${releaseKind}-only skill has no implicit default but preserves exact release selection`, async () => {
+    setupDom("http://localhost/skills/release-notes-helper");
+    const fixture = releaseHistoryFixture();
+    const exact: ReleaseMetadata = releaseKind === "deprecated"
+      ? fixture.older
+      : { ...fixture.latest, version: "1.0.0-rc.1+build.2" };
+    const skill: PublicSkill = { ...fixture.skill, latestVersion: null, platforms: [] };
+    const client = mockClient({
+      skills: [skill],
+      registryReleases: { [skill.slug]: [releaseSummary(exact)] },
+      releaseMetadata: { [`${skill.slug}@${exact.version}`]: exact },
+    });
+    const view = render(<RegistryApp client={client} />);
+    await view.findByRole("heading", { name: "No default stable release" });
+    assert.deepEqual(client.releaseCalls, []);
+    fireEvent.change(view.getByRole("combobox", { name: "Release version" }), { target: { value: exact.version } });
+    await view.findByText(exact.releaseNotes!);
+    assert.deepEqual(client.releaseCalls, [`${skill.slug}@${exact.version}`]);
+    assert.ok(document.querySelector(".command-panel")?.textContent?.includes(`--version '${exact.version}'`));
+  });
+}
+
 test("privileged skill controls stay locked without an MFA-verified session and do not request management data", async () => {
   const owner = authUser({ email: "owner@example.com", roles: ["owner"], mfaVerified: false });
   setupAuthenticatedDom("http://localhost/skills/release-notes-helper", owner);
@@ -615,6 +654,64 @@ test("MFA-verified managers can load lifecycle and sharing controls", async () =
   assert.deepEqual(client.releaseHistoryCalls, [managedSkill.slug]);
   assert.equal(client.releaseManagementCalls, 1);
   assert.equal(client.sharingDetailCalls, 1);
+});
+
+test("metadata saves refresh the parent registry detail", async () => {
+  const owner = authUser({ roles: ["owner"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/skills/release-notes-helper", owner);
+  let skill = { ...publicSkill(), access: { canManageSharing: true, reasons: ["owner", "public"] } } as PublicSkill;
+  const client = mockClient({ user: owner, skills: [skill], skillLoader: () => skill });
+  client.updateSkillMetadata = async (input) => {
+    skill = { ...skill, title: input.title ?? skill.title, summary: input.summary ?? skill.summary };
+    return { ...skill, lifecycleStatus: "approved", allowedActions: ["edit"] };
+  };
+  const view = render(<RegistryApp client={client} />);
+  await view.findByRole("region", { name: "Skill lifecycle controls" });
+  fireEvent.input(view.getByRole("textbox", { name: "Title" }), { target: { value: "Updated registry title" } });
+  fireEvent.input(view.getByRole("textbox", { name: "Summary" }), { target: { value: "Updated registry summary" } });
+  fireEvent.click(view.getByRole("button", { name: "Save metadata" }));
+  await view.findByRole("heading", { name: "Updated registry title" });
+  await view.findByText("Updated registry summary");
+});
+
+test("skill deletion clears the parent detail and its stale export actions", async () => {
+  const owner = authUser({ roles: ["owner"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/skills/release-notes-helper", owner);
+  const skill = { ...publicSkill(), access: { canManageSharing: true, reasons: ["owner", "public"] } } as PublicSkill;
+  let deleted = false;
+  const client = mockClient({ user: owner, skills: [skill], skillLoader: () => {
+    if (deleted) throw safeApiError(404, "NOT_FOUND", "Deleted");
+    return skill;
+  } });
+  client.performSkillAction = async () => { deleted = true; return { ...skill, lifecycleStatus: "deleted", allowedActions: [] }; };
+  const view = render(<RegistryApp client={client} />);
+  await view.findByRole("region", { name: "Skill lifecycle controls" });
+  const deleteButton = view.getByRole("button", { name: "Delete skill" }) as HTMLButtonElement;
+  await waitFor(() => assert.equal(deleteButton.disabled, false));
+  fireEvent.click(deleteButton);
+  const dialog = await view.findByRole("dialog");
+  fireEvent.input(dialog.querySelector("textarea")!, { target: { value: "Remove obsolete skill" } });
+  fireEvent.click(Array.from(dialog.querySelectorAll("button")).find((button) => button.textContent === "Delete skill")!);
+  await view.findByText("Skill or release not found.");
+  assert.equal(view.queryByText("CLI export"), null);
+});
+
+test("release mutation refreshes parent history before offering the old artifact", async () => {
+  const owner = authUser({ roles: ["owner"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/skills/release-notes-helper?version=0.2.0", owner);
+  const fixture = releaseHistoryFixture();
+  fixture.skill = { ...fixture.skill, access: { canManageSharing: true, reasons: ["owner", "public"] } };
+  let revoked = false;
+  const current = { ...releaseSummary(fixture.latest), allowedActions: ["revoke" as const] };
+  const client = historyClient(fixture, { user: owner, releaseListLoader: () => revoked ? [{ ...current, lifecycleStatus: "revoked" }] : [current] });
+  client.performReleaseAction = async () => { revoked = true; return { ...current, lifecycleStatus: "revoked", allowedActions: [] }; };
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("button", { name: "Revoke" }));
+  const dialog = await view.findByRole("dialog");
+  fireEvent.input(dialog.querySelector("textarea")!, { target: { value: "Withdraw this artifact" } });
+  fireEvent.click(Array.from(dialog.querySelectorAll("button")).find((button) => button.textContent === "Revoke release")!);
+  await view.findByText("This exact release is unavailable.");
+  assert.equal(view.queryByText("CLI export"), null);
 });
 
 test("404 detail responses render generic not found state", async () => {
@@ -792,6 +889,29 @@ test("copy actions announce success to assistive technology", async (t) => {
 
   await view.findByText("Copied to clipboard.");
   assert.equal(writes[0]?.includes("myskills export"), true);
+});
+
+for (const failure of [safeApiError(503, "UNAVAILABLE", "Temporary outage"), new Error("Network unavailable")]) {
+  test(`current-user refresh preserves the session on ${failure.message}`, async () => {
+    setupAuthenticatedDom();
+    const stored = window.localStorage.getItem("myskills-app:web-session");
+    const client = mockClient();
+    client.getMe = async () => { throw failure; };
+    const view = render(<RegistryApp client={client} />);
+    await view.findByRole("button", { name: /sign out/i });
+    await act(async () => { await Promise.resolve(); });
+    assert.equal(window.localStorage.getItem("myskills-app:web-session"), stored);
+    assert.equal(view.queryByText("Session expired."), null);
+  });
+}
+
+test("current-user refresh still clears an unauthenticated session", async () => {
+  setupAuthenticatedDom();
+  const client = mockClient();
+  client.getMe = async () => { throw safeApiError(401, "UNAUTHENTICATED", "Expired"); };
+  const view = render(<RegistryApp client={client} />);
+  await waitFor(() => assert.equal(window.localStorage.getItem("myskills-app:web-session"), null));
+  assert.equal(view.queryByRole("button", { name: /sign out/i }), null);
 });
 
 test("login stores session metadata without persisting bearer tokens and logout clears it", async () => {
@@ -2120,6 +2240,126 @@ test("failed login shows auth-specific safe copy", async () => {
   assert.equal(document.body.textContent?.includes("Wrong password"), false);
   assert.equal(window.localStorage.getItem("myskills-app:web-session"), null);
 });
+
+test("review pagination appends unique submissions only on request and resets on refresh", async () => {
+  const user = authUser({ roles: ["maintainer"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/review", user);
+  const client = mockClient({ user });
+  const first = defaultReviewSubmissions()[0]!;
+  const older = { ...first, id: "submission-older", title: "Older pending submission" };
+  const cursors: Array<string | undefined> = [];
+  client.listReviewSubmissionPage = async (input) => {
+    cursors.push(input?.cursor);
+    return input?.cursor ? { submissions: [first, older, older], nextCursor: null } : { submissions: [first], nextCursor: "review-next" };
+  };
+  const view = render(<RegistryApp client={client} />);
+  const more = await view.findByRole("button", { name: "Load more submissions" });
+  assert.deepEqual(cursors, [undefined]);
+  fireEvent.click(more);
+  await view.findByRole("button", { name: /Older pending submission/ });
+  assert.equal(document.querySelectorAll(".review-queue .result-row").length, 2);
+  assert.equal(view.queryByRole("button", { name: "Load more submissions" }), null);
+  assert.deepEqual(cursors, [undefined, "review-next"]);
+  fireEvent.click(view.getByRole("button", { name: "Refresh" }));
+  await view.findByRole("button", { name: "Load more submissions" });
+  assert.equal(view.queryByRole("button", { name: /Older pending submission/ }), null);
+  assert.deepEqual(cursors, [undefined, "review-next", undefined]);
+});
+
+test("review refresh invalidates a delayed load-more response", async () => {
+  const user = authUser({ roles: ["maintainer"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/review", user);
+  const client = mockClient({ user });
+  const first = defaultReviewSubmissions()[0]!;
+  const oldPage = deferred<{ submissions: ReviewSubmissionSummary[]; nextCursor: string | null }>();
+  client.listReviewSubmissionPage = async (input) => input?.cursor ? oldPage.promise : { submissions: [first], nextCursor: "review-next" };
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("button", { name: "Load more submissions" }));
+  fireEvent.click(view.getByRole("button", { name: "Refresh" }));
+  await view.findByRole("button", { name: "Load more submissions" });
+  await act(async () => { oldPage.resolve({ submissions: [{ ...first, id: "stale-review", title: "Stale review" }], nextCursor: null }); });
+  assert.equal(view.queryByRole("button", { name: /Stale review/ }), null);
+  assert.ok(view.getByRole("button", { name: "Load more submissions" }));
+});
+
+test("audit pagination appends unique events on request and resets after admin refresh", async () => {
+  const user = authUser({ roles: ["owner"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/admin", user);
+  const client = mockClient({ user });
+  const first = defaultAuditEvents()[0]!;
+  const older = { ...first, id: "event-older", action: "older.audit.event" };
+  const cursors: Array<string | undefined> = [];
+  client.listAdminAuditPage = async (input) => {
+    cursors.push(input?.cursor);
+    return input?.cursor ? { events: [first, older, older], nextCursor: null } : { events: [first], nextCursor: "audit-next" };
+  };
+  const view = render(<RegistryApp client={client} />);
+  const more = await view.findByRole("button", { name: "Load more audit events" });
+  assert.deepEqual(cursors, [undefined]);
+  fireEvent.click(more);
+  await view.findByText("older.audit.event");
+  assert.equal(document.querySelectorAll(".audit-list .audit-row").length, 2);
+  assert.equal(view.queryByRole("button", { name: "Load more audit events" }), null);
+  fireEvent.click(view.getByRole("button", { name: "Refresh" }));
+  await view.findByRole("button", { name: "Load more audit events" });
+  assert.equal(view.queryByText("older.audit.event"), null);
+  assert.deepEqual(cursors, [undefined, "audit-next", undefined]);
+});
+
+test("audit refresh ignores a delayed previous page and permits retry after a page error", async () => {
+  const user = authUser({ roles: ["owner"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/admin", user);
+  const client = mockClient({ user });
+  const first = defaultAuditEvents()[0]!;
+  const oldPage = deferred<{ events: AdminAuditEvent[]; nextCursor: string | null }>();
+  let requests = 0;
+  client.listAdminAuditPage = async (input) => {
+    if (!input?.cursor) return { events: [first], nextCursor: "audit-next" };
+    requests += 1;
+    if (requests === 1) return oldPage.promise;
+    if (requests === 2) throw safeApiError(503, "UNAVAILABLE", "Unavailable");
+    return { events: [{ ...first, id: "retry-event", action: "retried.audit.event" }], nextCursor: null };
+  };
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("button", { name: "Load more audit events" }));
+  fireEvent.click(view.getByRole("button", { name: "Refresh" }));
+  await view.findByRole("button", { name: "Load more audit events" });
+  await act(async () => { oldPage.resolve({ events: [{ ...first, id: "stale-event", action: "stale.audit.event" }], nextCursor: null }); });
+  assert.equal(view.queryByText("stale.audit.event"), null);
+  fireEvent.click(view.getByRole("button", { name: "Load more audit events" }));
+  await waitFor(() => assert.equal((view.getByRole("button", { name: "Load more audit events" }) as HTMLButtonElement).disabled, false));
+  fireEvent.click(view.getByRole("button", { name: "Load more audit events" }));
+  await view.findByText("retried.audit.event");
+  assert.equal(requests, 3);
+});
+
+for (const surface of ["review", "admin"] as const) {
+  test(`${surface} pagination discards an older client's delayed page`, async () => {
+    const user = authUser({ roles: ["owner"], mfaVerified: true });
+    setupAuthenticatedDom(`http://localhost/${surface}`, user);
+    const oldClient = mockClient({ user });
+    const currentClient = mockClient({ user });
+    const submission = defaultReviewSubmissions()[0]!;
+    const event = defaultAuditEvents()[0]!;
+    const oldReview = deferred<{ submissions: ReviewSubmissionSummary[]; nextCursor: string | null }>();
+    const oldAudit = deferred<{ events: AdminAuditEvent[]; nextCursor: string | null }>();
+    oldClient.listReviewSubmissionPage = async (input) => input?.cursor ? oldReview.promise : { submissions: [submission], nextCursor: "old-review" };
+    oldClient.listAdminAuditPage = async (input) => input?.cursor ? oldAudit.promise : { events: [event], nextCursor: "old-audit" };
+    currentClient.listReviewSubmissionPage = async () => ({ submissions: [{ ...submission, id: "current-review", title: "Current review" }], nextCursor: null });
+    currentClient.listAdminAuditPage = async () => ({ events: [{ ...event, id: "current-audit", action: "current.audit" }], nextCursor: null });
+    const view = render(<RegistryApp client={oldClient} />);
+    fireEvent.click(await view.findByRole("button", { name: surface === "review" ? "Load more submissions" : "Load more audit events" }));
+    view.rerender(<RegistryApp client={currentClient} />);
+    if (surface === "review") await view.findByRole("button", { name: /Current review/ });
+    else await view.findByText("current.audit");
+    await act(async () => {
+      oldReview.resolve({ submissions: [{ ...submission, id: "stale-review", title: "Previous session review" }], nextCursor: null });
+      oldAudit.resolve({ events: [{ ...event, id: "stale-audit", action: "previous.session.audit" }], nextCursor: null });
+    });
+    assert.equal(view.queryByRole("button", { name: /Previous session review/ }), null);
+    assert.equal(view.queryByText("previous.session.audit"), null);
+  });
+}
 
 afterEach(() => {
   cleanup();

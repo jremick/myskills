@@ -4,6 +4,7 @@ import {
   assertValidOrganizationPolicyV1,
   type ArchitectureOwnerReference,
   type ArchitectureSpecV1,
+  type OrganizationPolicyV1,
 } from "@myskills-app/core";
 import {
   instanceSettings,
@@ -26,6 +27,7 @@ import {
   evaluatePatternMigrationRelease,
   patternMigrationReleaseVisibilities,
 } from "./pattern-migration-release-policy.js";
+import { isEffectiveTeamMembership } from "../teams/effective-membership.js";
 import { ownerFromDb, type DbLike } from "./postgres-pattern-migration-records.js";
 
 export type PatternMigrationAuthorityArchitecture = Pick<
@@ -119,8 +121,9 @@ export async function assertCurrentActorAuthority(
       .for("update")
       .limit(1);
     if (!policy) throw forbidden();
+    let parsedPolicy: OrganizationPolicyV1;
     try {
-      assertValidOrganizationPolicyV1(policy.policy);
+      parsedPolicy = assertValidOrganizationPolicyV1(policy.policy);
     } catch {
       throw forbidden();
     }
@@ -134,7 +137,14 @@ export async function assertCurrentActorAuthority(
       ))
       .for("update")
       .limit(1);
-    if (!organizationMembership) throw forbidden();
+    if (!isEffectiveTeamMembership({
+      organizationId: organization.id,
+      organizationStatus: organization.status,
+      currentPolicyRevisionId: organization.currentPolicyRevisionId,
+      hasCurrentPolicy: true,
+      hasActiveOrganizationMembership: Boolean(organizationMembership),
+      requireOrganizationMembershipForTeamMembers: parsedPolicy.teams.requireOrganizationMembershipForTeamMembers,
+    })) throw forbidden();
   }
 
   const [actor] = await db
@@ -226,7 +236,7 @@ async function lockRegistrySharingSettings(db: DbLike): Promise<RegistrySharingS
     .select({ value: instanceSettings.value })
     .from(instanceSettings)
     .where(eq(instanceSettings.key, "sharing"))
-    .for("update")
+    .for("share")
     .limit(1);
   const value = row?.value;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -339,8 +349,9 @@ async function actorHasTeamReleaseAccess(
       .for("update")
       .limit(1);
     if (!policy) continue;
+    let parsedPolicy: OrganizationPolicyV1;
     try {
-      assertValidOrganizationPolicyV1(policy.policy);
+      parsedPolicy = assertValidOrganizationPolicyV1(policy.policy);
     } catch {
       continue;
     }
@@ -354,7 +365,14 @@ async function actorHasTeamReleaseAccess(
       ))
       .for("update")
       .limit(1);
-    if (membership) return true;
+    if (isEffectiveTeamMembership({
+      organizationId: organization.id,
+      organizationStatus: organization.status,
+      currentPolicyRevisionId: organization.currentPolicyRevisionId,
+      hasCurrentPolicy: true,
+      hasActiveOrganizationMembership: Boolean(membership),
+      requireOrganizationMembershipForTeamMembers: parsedPolicy.teams.requireOrganizationMembershipForTeamMembers,
+    })) return true;
   }
   return false;
 }

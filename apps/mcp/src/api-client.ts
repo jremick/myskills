@@ -8,6 +8,8 @@ export interface ReleaseMetadata {
   reviewStatus: "approved";
   securityStatus: "passed";
   publishedAt: string;
+  releaseNotes?: string;
+  requiresUserAction?: boolean;
   platforms: Array<{ name: string; installTarget: string; status: string }>;
   artifact: {
     sha256: string;

@@ -1,3 +1,5 @@
+import type { ChronologicalPosition } from "../repositories/chronological-pagination.js";
+import type { AuthNotificationClaim, AuthNotificationIntent, FinishAuthNotificationInput } from "./notification-outbox.js";
 import type { AuthenticatedUser, RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 
 export const apiTokenScopes = ["profile:read", "skills:read", "architectures:read", "skills:submit", "review:read", "review:write", "targets:execute"] as const;
@@ -79,6 +81,7 @@ export interface ChangePasswordAndRevokeCredentialsInput {
   userId: string;
   passwordHash: string;
   passwordUpdatedAt?: Date;
+  expectedAccount?: AuthActionAccountSnapshot;
 }
 
 export interface CompleteEmailChangeInput {
@@ -107,6 +110,15 @@ export interface CreateAuthActionTokenInput {
   tokenHash: string;
   sentToNormalizedEmail: string;
   expiresAt: Date;
+  expectedAccount?: AuthActionAccountSnapshot;
+  notification?: AuthNotificationIntent;
+}
+
+// Recheck the account observed before password verification or token issuance
+// while holding the same account lock as security-action completion.
+export interface AuthActionAccountSnapshot {
+  email: string;
+  passwordHash: string;
 }
 
 export interface AuthActionTokenRecord {
@@ -229,6 +241,7 @@ export interface MfaChallengeWithUser extends MfaChallengeRecord {
 }
 
 export interface AuditEventRecord {
+  cursorCreatedAt?: string;
   id: string;
   actorUserId: string | null;
   action: string;
@@ -250,6 +263,8 @@ export interface CreateAuditEventInput {
 
 export interface ListAuditEventsInput {
   limit: number;
+  before?: ChronologicalPosition;
+  stableOrder?: boolean;
 }
 
 export interface AuthStore {
@@ -276,7 +291,10 @@ export interface AuthStore {
   updatePasswordCredential(input: { userId: string; passwordHash: string; passwordUpdatedAt?: Date }): Promise<boolean>;
   changePasswordAndRevokeCredentials(input: ChangePasswordAndRevokeCredentialsInput): Promise<boolean>;
   completePasswordReset(input: CompletePasswordResetInput): Promise<boolean>;
-  createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord>;
+  createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord | null>;
+  claimAuthNotifications(input: { now: Date; limit: number; leaseId: string }): Promise<AuthNotificationClaim[]>;
+  authNotificationRecipient(claim: AuthNotificationClaim, now: Date): Promise<AuthUserRecord | null>;
+  finishAuthNotification(input: FinishAuthNotificationInput): Promise<boolean>;
   consumeAuthActionToken(input: {
     tokenHash: string;
     purpose: AuthActionTokenPurpose;

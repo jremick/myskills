@@ -98,13 +98,14 @@ test("members can create child teams when the current organization policy allows
       policy: { ...samplePolicy(), teams: { ...samplePolicy().teams, membersCanCreateTeams: true } },
     },
   };
+  let invitationReads = 0;
   const created: Array<{ organizationId: string; name: string }> = [];
   const client = {
     async listOrganizations() { return [organization]; },
     async listOrganizationPendingInvitations() { return []; },
     async getOrganization() { return organization; },
     async listOrganizationMembers() { return [sampleMember()]; },
-    async listOrganizationInvitations() { return []; },
+    async listOrganizationInvitations() { invitationReads += 1; throw Object.assign(new Error("Admin access is required."), { status: 403 }); },
     async listOrganizationPolicies() { return [organization.currentPolicy!]; },
     async listOrganizationTeams() { return []; },
     async createOrganizationTeam(input: { organizationId: string; name: string }) {
@@ -116,9 +117,56 @@ test("members can create child teams when the current organization policy allows
   const view = render(<OrganizationsDashboard client={client} session={{ user: { id: "user-2", email: "member@example.com" } }} />);
   await view.findByRole("heading", { name: "Acme Skills" });
   await view.findByText("Your current organization policy allows members to create child teams.");
+  assert.equal(invitationReads, 0, "ordinary members must not request admin-only invitation data");
   fireEvent.input(view.getByLabelText("Child team name"), { target: { value: "Reviews" } });
   fireEvent.click(view.getByRole("button", { name: "Create child team" }));
   await waitFor(() => assert.deepEqual(created, [{ organizationId: "org-1", name: "Reviews" }]));
+});
+
+test("organization policy controls stay disabled while a revision is being saved", async () => {
+  const organization = sampleOrganization();
+  let finishSave: (() => void) | undefined;
+  const client = {
+    async listOrganizations() { return [organization]; },
+    async listOrganizationPendingInvitations() { return []; },
+    async getOrganization() { return organization; },
+    async listOrganizationMembers() { return []; },
+    async listOrganizationInvitations() { return []; },
+    async listOrganizationPolicies() { return [samplePolicyRevision()]; },
+    async listOrganizationTeams() { return []; },
+    async appendOrganizationPolicy() {
+      await new Promise<void>((resolve) => { finishSave = resolve; });
+      return { revision: samplePolicyRevision(), created: true, activated: true };
+    },
+  } as unknown as RegistryClient;
+  const view = render(<OrganizationsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
+  await view.findByRole("heading", { name: "Acme Skills" });
+  fireEvent.click(view.getByRole("button", { name: "Review append and activate" }));
+  fireEvent.click(await view.findByRole("button", { name: "Confirm append and activate" }));
+  await waitFor(() => assert.ok(finishSave));
+  try {
+    for (const control of view.container.querySelectorAll<HTMLInputElement>(".organization-policy-form input")) assert.equal(control.disabled, true);
+  } finally { finishSave?.(); }
+  await view.findByText("Policy revision 1 was appended and activated.");
+});
+
+test("organization admins cannot select or change owner membership", async () => {
+  const organization = { ...sampleOrganization(), role: "admin" as const };
+  const client = {
+    async listOrganizations() { return [organization]; },
+    async listOrganizationPendingInvitations() { return []; },
+    async getOrganization() { return organization; },
+    async listOrganizationMembers() { return [sampleMember(), { ...sampleMember(), id: "owner-membership", userId: "user-1", email: "owner@example.com", role: "owner" }]; },
+    async listOrganizationInvitations() { return []; },
+    async listOrganizationPolicies() { return [samplePolicyRevision()]; },
+    async listOrganizationTeams() { return []; },
+  } as unknown as RegistryClient;
+  const view = render(<OrganizationsDashboard client={client} session={{ user: { id: "admin-1", email: "admin@example.com" } }} />);
+  await view.findByRole("heading", { name: "Acme Skills" });
+  const role = view.getByLabelText("Role for member@example.com");
+  assert.equal(within(role).queryByRole("option", { name: "Owner" }), null);
+  assert.equal(view.queryByLabelText("Role for owner@example.com"), null);
+  assert.equal(view.getAllByRole("button", { name: "Remove" }).length, 1);
 });
 
 test("target registry guides the owner and current architecture context and never renders a credential reference", async () => {
@@ -165,10 +213,20 @@ test("target registry guides the owner and current architecture context and neve
   assert.equal(registered[0]?.environmentId, "personal-laptop");
   assert.equal(registered[0]?.profileId, "personal");
   assert.equal(registered[0]?.credentialReference, "secret-store-token");
+  assert.deepEqual(registered[0]?.adapter, { kind: "codex-readonly", version: "1", contractVersion: 1 });
+  assert.deepEqual(registered[0]?.capabilities, { "inventory.read": true, "health.read": true, "plan.read": true });
+  assert.deepEqual(Array.from((view.getByLabelText("Target adapter") as HTMLSelectElement).options).map((option) => option.value), ["codex-readonly"]);
+  assert.equal(view.queryByRole("checkbox", { name: "Apply" }), null);
+  await view.findByRole("heading", { name: "Connect a Codex workspace" });
+  assert.match(view.container.textContent ?? "", /myskills codex enroll/);
   assert.equal(document.body.textContent?.includes("secret-store-token"), false);
 
+  // Registration replaces the detail controls; act on the refreshed target.
+  await view.findByRole("heading", { name: "Work Codex" });
+  await view.findByText("1 skills · 0 config findings · prompt detected: no");
   fireEvent.click(view.getByRole("button", { name: "Grant consent" }));
   await waitFor(() => assert.deepEqual(consent, ["grant"]));
+  await view.findByText("consent: granted");
   await view.findByRole("button", { name: "Update health" });
   fireEvent.change(view.getByLabelText("Target health status"), { target: { value: "healthy" } });
   fireEvent.click(view.getByRole("button", { name: "Update health" }));

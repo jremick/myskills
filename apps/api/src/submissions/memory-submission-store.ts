@@ -1,3 +1,4 @@
+import { chronologicalKey, compareChronological, type ChronologicalStoreQuery } from "../repositories/chronological-pagination.js";
 import {
   AppError,
   assertValidOrganizationPolicyV1,
@@ -10,7 +11,7 @@ import {
   type SkillLifecycleStatus,
 } from "@myskills-app/core";
 import {
-  loadSkillManifestFromPackageFiles,
+  loadStoredSkillManifestFromPackageFiles,
   PackageManifestFileError,
   type SkillManifest,
 } from "@myskills-app/skill-package";
@@ -288,6 +289,9 @@ export class MemorySubmissionStore implements SubmissionStore {
     if (existing && existing.ownerUserId !== input.actor.id) {
       throw new AppError("Package slug is unavailable.", "PACKAGE_SLUG_UNAVAILABLE", 409);
     }
+    if (existing && existing.visibility !== input.manifest.visibility) {
+      throw new AppError("Package visibility must match the skill's current sharing setting.", "PACKAGE_VISIBILITY_MISMATCH", 409);
+    }
     if (this.submissions.has(key)) {
       throw new AppError("Package version already exists.", "PACKAGE_VERSION_EXISTS", 409);
     }
@@ -407,10 +411,13 @@ export class MemorySubmissionStore implements SubmissionStore {
     return userSubmissionSummary(submission);
   }
 
-  async listReviewSubmissions(): Promise<ReviewSubmissionSummary[]> {
-    return [...this.submissions.values()]
+  async listReviewSubmissions(input?: ChronologicalStoreQuery): Promise<ReviewSubmissionSummary[]> {
+    const rows = [...this.submissions.values()]
       .filter((submission) => isReviewQueueSubmission(submission, this.skillLifecycle.get(submission.skillSlug)))
       .map((submission) => reviewSubmissionSummary(submission, this.skillLifecycle.get(submission.skillSlug)));
+    if (!input) return rows;
+    return rows.filter((row) => !input.before || compareChronological(chronologicalKey(row), input.before) > 0)
+      .sort((a, b) => compareChronological(chronologicalKey(a), chronologicalKey(b))).slice(0, input.limit);
   }
 
   async getReviewSubmissionBundle(input: { submissionId: string; platform?: string }): Promise<ReviewSubmissionBundle | null> {
@@ -1242,7 +1249,7 @@ function assertArtifactManifestMatchesSubmission(submission: StoredSubmission): 
 
 function manifestFromArtifactPayload(input: StoredSubmission["artifact"]["payload"]): SkillManifest {
   try {
-    return loadSkillManifestFromPackageFiles(input.files);
+    return loadStoredSkillManifestFromPackageFiles(input.files);
   } catch (error) {
     if (error instanceof PackageManifestFileError) {
       throw new AppError(error.message, error.code, 422);

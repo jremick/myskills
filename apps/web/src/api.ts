@@ -21,6 +21,7 @@ import type {
   SharingSettings,
   SkillUpdateEvaluation,
   SkillUpgradePolicyV1,
+  SkillUpgradePolicyConstraint,
   TargetSkillOperation,
   SkillSharingDetails,
   TeamSharedSkillGroup,
@@ -297,11 +298,22 @@ export interface TargetSkillUpdates {
   targetId: string;
   observedAt: string | null;
   policy: {
+    /** @deprecated Requested-policy projection only; use constraints for the enforced ceiling. */
     policy: SkillUpgradePolicyV1;
-    source: "target" | "organization" | "default";
+    /** @deprecated Source of the requested-policy projection. */
+    source: SkillUpgradePolicyConstraint["source"];
+    /** @deprecated Revision of the requested-policy projection. */
     revision: SkillUpgradePolicyRevisionRecord | null;
+    /** Older API responses expose only the deprecated projection fields. */
+    constraints?: Array<SkillUpgradePolicyConstraint & { revision: SkillUpgradePolicyRevisionRecord | null }>;
   } | null;
   items: Array<{ slug: string; platform: string; evaluation: SkillUpdateEvaluation }>;
+}
+
+/** Display compatibility only. The API remains responsible for enforcing current policies. */
+export function targetSkillUpgradePolicyConstraints(resolved: TargetSkillUpdates["policy"] | undefined): Array<SkillUpgradePolicyConstraint & { revision: SkillUpgradePolicyRevisionRecord | null }> {
+  if (!resolved) return [];
+  return resolved.constraints ?? [{ policy: resolved.policy, source: resolved.source, revision: resolved.revision }];
 }
 
 /**
@@ -807,11 +819,13 @@ export interface RegistryClient {
   listAdminProviders(token?: string): Promise<AdminProviderConfig[]>;
   upsertAdminProvider(key: string, input: UpsertAdminProviderInput, token?: string): Promise<AdminProviderConfig>;
   listAdminAudit(limit?: number, token?: string): Promise<AdminAuditEvent[]>;
+  listAdminAuditPage?(input?: { limit?: number; cursor?: string }, token?: string): Promise<{ events: AdminAuditEvent[]; nextCursor: string | null }>;
   submitArchive(input: SubmitArchiveInput, token?: string): Promise<SubmitSkillResult>;
   listUserSubmissions(token?: string): Promise<UserSubmissionSummary[]>;
   exportUserSubmission(submissionId: string, token?: string): Promise<SkillPackageBundle>;
   performSubmissionAction(submissionId: string, action: SubmissionOwnerActionName, reason?: string, token?: string): Promise<UserSubmissionSummary>;
   listReviewSubmissions(token?: string): Promise<ReviewSubmissionSummary[]>;
+  listReviewSubmissionPage?(input?: { limit?: number; cursor?: string }, token?: string): Promise<{ submissions: ReviewSubmissionSummary[]; nextCursor: string | null }>;
   getReviewSubmissionBundle(submissionId: string, platform?: string, token?: string): Promise<ReviewSubmissionBundle>;
   performReviewAction(input: { submissionId: string; action: ReviewActionName; reason?: string; artifactSha256?: string }, token?: string): Promise<ReviewActionResult>;
   listSkillReleases(slug: string, token?: string): Promise<SkillReleaseSummary[]>;
@@ -1222,6 +1236,12 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
       );
       return body.provider;
     },
+    async listAdminAuditPage(input = {}, overrideToken) {
+      const params = new URLSearchParams({ limit: String(input.limit ?? 25) });
+      if (input.cursor) params.set("cursor", input.cursor);
+      const body = await requestJson<{ events: AdminAuditEvent[]; nextCursor?: string | null }>(fetchImpl, `${root}/v1/admin/audit?${params}`, { token: overrideToken ?? token });
+      return { events: body.events, nextCursor: body.nextCursor ?? null };
+    },
     async listAdminAudit(limit = 25, overrideToken) {
       const body = await requestJson<{ events: AdminAuditEvent[] }>(
         fetchImpl,
@@ -1269,6 +1289,12 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         },
       );
       return body.submission;
+    },
+    async listReviewSubmissionPage(input = {}, overrideToken) {
+      const params = new URLSearchParams({ limit: String(input.limit ?? 100) });
+      if (input.cursor) params.set("cursor", input.cursor);
+      const body = await requestJson<{ submissions: ReviewSubmissionSummary[]; nextCursor?: string | null }>(fetchImpl, `${root}/v1/review/submissions?${params}`, { token: overrideToken ?? token });
+      return { submissions: body.submissions, nextCursor: body.nextCursor ?? null };
     },
     async listReviewSubmissions(overrideToken) {
       const body = await requestJson<{ submissions: ReviewSubmissionSummary[] }>(

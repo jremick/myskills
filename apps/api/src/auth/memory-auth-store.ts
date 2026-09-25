@@ -1,6 +1,8 @@
+import { chronologicalKey, compareChronological } from "../repositories/chronological-pagination.js";
 import { AppError } from "@myskills-app/core";
 import type { RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
+import { AUTH_NOTIFICATION_BATCH_SIZE, AUTH_NOTIFICATION_LEASE_MS, AUTH_NOTIFICATION_MAX_ATTEMPTS, AUTH_NOTIFICATION_RETENTION_MS, eligibleAuthNotification, type AuthNotificationClaim, type FinishAuthNotificationInput } from "./notification-outbox.js";
 import type {
   AuditEventRecord,
   ApiTokenRecord,
@@ -128,6 +130,18 @@ interface MemoryAuthActionToken {
   createdAt: Date;
 }
 
+interface MemoryAuthNotification {
+  id: string;
+  tokenHash: string;
+  payloadCiphertext: string | null;
+  status: string;
+  attempts: number;
+  availableAt: Date;
+  leaseId: string | null;
+  leaseExpiresAt: Date | null;
+  updatedAt: Date;
+}
+
 interface MemoryAuditEvent {
   id: string;
   actorUserId: string | null;
@@ -148,9 +162,11 @@ export class MemoryAuthStore implements AuthStore {
   private mfaRecoveryCodes = new Map<string, MemoryMfaRecoveryCode>();
   private mfaChallenges = new Map<string, MemoryMfaChallenge>();
   private authActionTokens = new Map<string, MemoryAuthActionToken>();
+  private authNotifications = new Map<string, MemoryAuthNotification>();
   private audit = new Map<string, MemoryAuditEvent>();
   private auditSequence = 0;
   private adminMutationTail: Promise<void> = Promise.resolve();
+  private accountActionTails = new Map<string, Promise<void>>();
 
   constructor(private registrationMode: RegistrationMode = "closed") {}
 
@@ -400,75 +416,171 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async changePasswordAndRevokeCredentials(input: ChangePasswordAndRevokeCredentialsInput): Promise<boolean> {
-    const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
-    if (!user || user.passwordHash === null) {
-      return false;
-    }
-    const previousPasswordHash = user.passwordHash;
-    const credentials = this.snapshotCredentialRevocationState(user.id);
-    try {
-      user.passwordHash = input.passwordHash;
-      await this.revokeUserCredentials(user.id);
-      return true;
-    } catch (error) {
-      user.passwordHash = previousPasswordHash;
-      this.restoreCredentialRevocationState(credentials);
-      throw error;
-    }
+    return this.withAccountActionLock(input.userId, async () => {
+      const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
+      if (!user || user.passwordHash === null || user.status !== "active" || !user.emailVerifiedAt ||
+        (input.expectedAccount && (user.email !== input.expectedAccount.email || user.passwordHash !== input.expectedAccount.passwordHash))) {
+        return false;
+      }
+      const previousPasswordHash = user.passwordHash;
+      const tokenStates = this.snapshotSecurityActionTokens(user.id);
+      const credentials = this.snapshotCredentialRevocationState(user.id);
+      try {
+        user.passwordHash = input.passwordHash;
+        this.invalidateSecurityActionTokens(user.id, input.passwordUpdatedAt ?? new Date());
+        await this.revokeUserCredentials(user.id);
+        return true;
+      } catch (error) {
+        user.passwordHash = previousPasswordHash;
+        this.restoreSecurityActionTokens(tokenStates);
+        this.restoreCredentialRevocationState(credentials);
+        throw error;
+      }
+    });
   }
 
   async completePasswordReset(input: CompletePasswordResetInput): Promise<boolean> {
-    const now = input.now ?? new Date();
-    const usedAt = input.usedAt ?? now;
-    const token = this.authActionTokens.get(input.tokenHash);
-    if (!token || token.purpose !== "password_reset" || token.usedAt || token.expiresAt <= now) {
-      return false;
-    }
-    const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
-    if (!user || user.status !== "active" || !user.emailVerifiedAt || user.passwordHash === null) {
-      return false;
-    }
+    const userId = this.authActionTokens.get(input.tokenHash)?.userId;
+    if (!userId) return false;
+    return this.withAccountActionLock(userId, async () => {
+      const now = input.now ?? new Date();
+      const usedAt = input.usedAt ?? now;
+      const token = this.authActionTokens.get(input.tokenHash);
+      if (!token || token.purpose !== "password_reset" || token.usedAt || token.expiresAt <= now) {
+        return false;
+      }
+      const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
+      if (!user || user.status !== "active" || !user.emailVerifiedAt || user.passwordHash === null || token.sentToNormalizedEmail !== user.email) {
+        return false;
+      }
 
-    const previousPasswordHash = user.passwordHash;
-    const resetTokenStates = [...this.authActionTokens.values()]
-      .filter((candidate) => candidate.userId === user.id && candidate.purpose === "password_reset")
-      .map((candidate) => ({ tokenHash: candidate.tokenHash, usedAt: candidate.usedAt }));
-    const credentials = this.snapshotCredentialRevocationState(user.id);
-    try {
-      user.passwordHash = input.passwordHash;
-      for (const candidate of this.authActionTokens.values()) {
-        if (candidate.userId === user.id && candidate.purpose === "password_reset" && !candidate.usedAt) {
-          candidate.usedAt = usedAt;
-        }
+      const previousPasswordHash = user.passwordHash;
+      const tokenStates = this.snapshotSecurityActionTokens(user.id);
+      const credentials = this.snapshotCredentialRevocationState(user.id);
+      try {
+        user.passwordHash = input.passwordHash;
+        this.invalidateSecurityActionTokens(user.id, usedAt);
+        await this.revokeUserCredentials(user.id);
+        return true;
+      } catch (error) {
+        user.passwordHash = previousPasswordHash;
+        this.restoreSecurityActionTokens(tokenStates);
+        this.restoreCredentialRevocationState(credentials);
+        throw error;
       }
-      await this.revokeUserCredentials(user.id);
-      return true;
-    } catch (error) {
-      user.passwordHash = previousPasswordHash;
-      for (const state of resetTokenStates) {
-        const candidate = this.authActionTokens.get(state.tokenHash);
-        if (candidate) {
-          candidate.usedAt = state.usedAt;
-        }
-      }
-      this.restoreCredentialRevocationState(credentials);
-      throw error;
-    }
+    });
   }
 
-  async createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord> {
-    const token: MemoryAuthActionToken = {
-      id: `auth-action-token-${this.authActionTokens.size + 1}`,
-      userId: input.userId,
-      purpose: input.purpose,
-      tokenHash: input.tokenHash,
-      sentToNormalizedEmail: input.sentToNormalizedEmail,
-      expiresAt: input.expiresAt,
-      usedAt: null,
-      createdAt: new Date(),
-    };
-    this.authActionTokens.set(token.tokenHash, token);
-    return toAuthActionTokenRecord(token);
+  async createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord | null> {
+    return this.withAccountActionLock(input.userId, () => {
+      const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
+      if (!user) return null;
+      if (input.notification) {
+        if (input.purpose !== "password_reset" && input.purpose !== "email_verification") throw new Error("Unsupported queued auth purpose.");
+        if (user.email !== input.sentToNormalizedEmail || !eligibleAuthNotification(toRecord(user), input.purpose, Boolean(user.passwordHash))) return null;
+      }
+      if (input.purpose === "password_reset" || input.purpose === "email_change") {
+        if (user.status !== "active" || !user.emailVerifiedAt || !user.passwordHash ||
+          (input.expectedAccount && (user.email !== input.expectedAccount.email || user.passwordHash !== input.expectedAccount.passwordHash)) ||
+          (input.purpose === "password_reset" && input.sentToNormalizedEmail !== user.email)) {
+          return null;
+        }
+      }
+      const retired: Array<{ job: MemoryAuthNotification; status: string; now: Date }> = [];
+      if (input.notification) {
+        const now = new Date();
+        let existing: MemoryAuthActionToken | undefined;
+        for (const job of this.authNotifications.values()) {
+          const queuedToken = this.authActionTokens.get(job.tokenHash);
+          if (!queuedToken || queuedToken.userId !== input.userId || queuedToken.purpose !== input.purpose ||
+              (job.status !== "pending" && job.status !== "leased")) continue;
+          if (!existing && !queuedToken.usedAt && queuedToken.expiresAt > now && queuedToken.sentToNormalizedEmail === input.sentToNormalizedEmail) {
+            existing = queuedToken;
+          } else {
+            retired.push({ job, status: queuedToken.expiresAt <= now ? "expired" : "invalid", now });
+          }
+        }
+        if (existing) {
+          for (const { job, status, now } of retired) Object.assign(job, { status, payloadCiphertext: null, leaseId: null, leaseExpiresAt: null, updatedAt: now });
+          return toAuthActionTokenRecord(existing);
+        }
+        if (this.authNotifications.has(input.notification.id)) throw new Error("Duplicate auth notification intent.");
+      }
+      if (this.authActionTokens.has(input.tokenHash)) throw new Error("Duplicate auth action token.");
+      for (const { job, status, now } of retired) Object.assign(job, { status, payloadCiphertext: null, leaseId: null, leaseExpiresAt: null, updatedAt: now });
+      const token: MemoryAuthActionToken = {
+        id: `auth-action-token-${this.authActionTokens.size + 1}`,
+        userId: input.userId,
+        purpose: input.purpose,
+        tokenHash: input.tokenHash,
+        sentToNormalizedEmail: input.sentToNormalizedEmail,
+        expiresAt: input.expiresAt,
+        usedAt: null,
+        createdAt: new Date(),
+      };
+      // Only an authenticated email-change request supersedes earlier requests.
+      // Public reset requests must not invalidate links already held by the user.
+      if (input.purpose === "email_change") {
+        this.invalidateSecurityActionTokens(user.id, token.createdAt, "email_change");
+      }
+      if (input.notification) this.authNotifications.set(input.notification.id, {
+        ...input.notification, tokenHash: token.tokenHash, status: "pending", attempts: 0,
+        availableAt: token.createdAt, leaseId: null, leaseExpiresAt: null, updatedAt: token.createdAt,
+      });
+      this.authActionTokens.set(token.tokenHash, token);
+      return toAuthActionTokenRecord(token);
+    });
+  }
+
+  async claimAuthNotifications(input: { now: Date; limit: number; leaseId: string }): Promise<AuthNotificationClaim[]> {
+    const limit = Math.max(1, Math.min(AUTH_NOTIFICATION_BATCH_SIZE, Number.isFinite(input.limit) ? Math.floor(input.limit) : AUTH_NOTIFICATION_BATCH_SIZE));
+    let removed = 0;
+    for (const job of this.authNotifications.values()) {
+      if (!job.payloadCiphertext && job.updatedAt.getTime() <= input.now.getTime() - AUTH_NOTIFICATION_RETENTION_MS && removed < limit) {
+        this.authNotifications.delete(job.id);
+        removed += 1;
+      }
+    }
+    const jobs = [...this.authNotifications.values()].filter((job) =>
+      (job.status === "pending" && job.availableAt <= input.now) ||
+      (job.status === "leased" && job.leaseExpiresAt && job.leaseExpiresAt <= input.now))
+      .sort((a, b) => a.availableAt.getTime() - b.availableAt.getTime()).slice(0, limit);
+    const claims: AuthNotificationClaim[] = [];
+    for (const job of jobs) {
+      const token = this.authActionTokens.get(job.tokenHash);
+      if (!token || token.expiresAt <= input.now || job.attempts >= AUTH_NOTIFICATION_MAX_ATTEMPTS ||
+          (token.purpose !== "email_verification" && token.purpose !== "password_reset")) {
+        Object.assign(job, { status: token && token.expiresAt <= input.now ? "expired" : "failed", payloadCiphertext: null, leaseId: null, leaseExpiresAt: null, updatedAt: input.now });
+        continue;
+      }
+      if (!job.payloadCiphertext) throw new Error("Auth notification intent is unavailable.");
+      Object.assign(job, { status: "leased", leaseId: input.leaseId, leaseExpiresAt: new Date(input.now.getTime() + AUTH_NOTIFICATION_LEASE_MS), attempts: job.attempts + 1, updatedAt: input.now });
+      claims.push({ id: job.id, tokenHash: token.tokenHash, purpose: token.purpose, payloadCiphertext: job.payloadCiphertext, expiresAt: token.expiresAt, attempts: job.attempts, leaseId: input.leaseId, leaseExpiresAt: new Date(input.now.getTime() + AUTH_NOTIFICATION_LEASE_MS) });
+    }
+    return claims;
+  }
+
+  async authNotificationRecipient(claim: AuthNotificationClaim, now: Date): Promise<AuthUserRecord | null> {
+    const job = this.authNotifications.get(claim.id);
+    const token = job && this.authActionTokens.get(job.tokenHash);
+    if (!job || job.status !== "leased" || job.leaseId !== claim.leaseId || !job.leaseExpiresAt || job.leaseExpiresAt <= now ||
+        !token || token.tokenHash !== claim.tokenHash || token.purpose !== claim.purpose || token.usedAt || token.expiresAt <= now) return null;
+    const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
+    return user && token.sentToNormalizedEmail === user.email && eligibleAuthNotification(toRecord(user), claim.purpose, Boolean(user.passwordHash)) ? toRecord(user) : null;
+  }
+
+  async finishAuthNotification(input: FinishAuthNotificationInput): Promise<boolean> {
+    const job = this.authNotifications.get(input.id);
+    const token = job && this.authActionTokens.get(job.tokenHash);
+    if (!job || !token || job.status !== "leased" || job.leaseId !== input.leaseId || !job.leaseExpiresAt || job.leaseExpiresAt <= input.now) return false;
+    const retry = input.outcome === "retry" && job.attempts < AUTH_NOTIFICATION_MAX_ATTEMPTS && input.availableAt && input.availableAt < token.expiresAt && !token.usedAt;
+    Object.assign(job, {
+      status: retry ? "pending" : input.outcome === "retry" ? token.usedAt ? "invalid" : token.expiresAt <= input.now ? "expired" : "failed" : input.outcome,
+      payloadCiphertext: retry ? job.payloadCiphertext : null,
+      availableAt: retry ? input.availableAt : job.availableAt,
+      leaseId: null, leaseExpiresAt: null, updatedAt: input.now,
+    });
+    return true;
   }
 
   async consumeAuthActionToken(input: {
@@ -488,43 +600,47 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async completeEmailChangeAndRevokeCredentials(input: CompleteEmailChangeInput): Promise<CompleteEmailChangeResult | null> {
-    const now = input.now ?? new Date();
-    const usedAt = input.usedAt ?? now;
-    const token = this.authActionTokens.get(input.tokenHash);
-    if (!token || token.purpose !== "email_change" || token.usedAt || token.expiresAt <= now) {
-      return null;
-    }
-    const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
-    if (!user || user.status !== "active" || !user.emailVerifiedAt) {
-      return null;
-    }
-    const nextEmail = token.sentToNormalizedEmail;
-    const existing = this.users.get(nextEmail);
-    if (existing && existing.id !== user.id) {
-      return { outcome: "email_in_use" };
-    }
+    const userId = this.authActionTokens.get(input.tokenHash)?.userId;
+    if (!userId) return null;
+    return this.withAccountActionLock<CompleteEmailChangeResult | null>(userId, async () => {
+      const now = input.now ?? new Date();
+      const usedAt = input.usedAt ?? now;
+      const token = this.authActionTokens.get(input.tokenHash);
+      if (!token || token.purpose !== "email_change" || token.usedAt || token.expiresAt <= now) {
+        return null;
+      }
+      const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
+      if (!user || user.status !== "active" || !user.emailVerifiedAt) {
+        return null;
+      }
+      const nextEmail = token.sentToNormalizedEmail;
+      const existing = this.users.get(nextEmail);
+      if (existing && existing.id !== user.id) {
+        return { outcome: "email_in_use" };
+      }
 
-    const previousEmail = user.email;
-    const previousEmailVerifiedAt = user.emailVerifiedAt;
-    const previousTokenUsedAt = token.usedAt;
-    const credentials = this.snapshotCredentialRevocationState(user.id);
-    try {
-      this.users.delete(previousEmail);
-      user.email = nextEmail;
-      user.emailVerifiedAt = usedAt;
-      this.users.set(nextEmail, user);
-      token.usedAt = usedAt;
-      await this.revokeUserCredentials(user.id);
-      return { outcome: "changed", user: toRecord(user), previousEmail };
-    } catch (error) {
-      this.users.delete(nextEmail);
-      user.email = previousEmail;
-      user.emailVerifiedAt = previousEmailVerifiedAt;
-      this.users.set(previousEmail, user);
-      token.usedAt = previousTokenUsedAt;
-      this.restoreCredentialRevocationState(credentials);
-      throw error;
-    }
+      const previousEmail = user.email;
+      const previousEmailVerifiedAt = user.emailVerifiedAt;
+      const tokenStates = this.snapshotSecurityActionTokens(user.id);
+      const credentials = this.snapshotCredentialRevocationState(user.id);
+      try {
+        this.users.delete(previousEmail);
+        user.email = nextEmail;
+        user.emailVerifiedAt = usedAt;
+        this.users.set(nextEmail, user);
+        this.invalidateSecurityActionTokens(user.id, usedAt);
+        await this.revokeUserCredentials(user.id);
+        return { outcome: "changed", user: toRecord(user), previousEmail };
+      } catch (error) {
+        this.users.delete(nextEmail);
+        user.email = previousEmail;
+        user.emailVerifiedAt = previousEmailVerifiedAt;
+        this.users.set(previousEmail, user);
+        this.restoreSecurityActionTokens(tokenStates);
+        this.restoreCredentialRevocationState(credentials);
+        throw error;
+      }
+    });
   }
 
   async countActiveOwnersExcluding(userId: string): Promise<number> {
@@ -932,9 +1048,47 @@ export class MemoryAuthStore implements AuthStore {
     }
   }
 
+  private async withAccountActionLock<T>(userId: string, action: () => T | Promise<T>): Promise<T> {
+    const previous = this.accountActionTails.get(userId);
+    let release!: () => void;
+    const tail = new Promise<void>((resolve) => { release = resolve; });
+    this.accountActionTails.set(userId, tail);
+    await previous;
+    try {
+      return await action();
+    } finally {
+      release();
+      if (this.accountActionTails.get(userId) === tail) this.accountActionTails.delete(userId);
+    }
+  }
+
+  private snapshotSecurityActionTokens(userId: string): Array<{ tokenHash: string; usedAt: Date | null }> {
+    return [...this.authActionTokens.values()]
+      .filter((token) => token.userId === userId && (token.purpose === "password_reset" || token.purpose === "email_change"))
+      .map((token) => ({ tokenHash: token.tokenHash, usedAt: token.usedAt }));
+  }
+
+  private invalidateSecurityActionTokens(userId: string, usedAt: Date, purpose?: "email_change"): void {
+    for (const token of this.authActionTokens.values()) {
+      if (token.userId === userId && !token.usedAt &&
+        (purpose ? token.purpose === purpose : token.purpose === "password_reset" || token.purpose === "email_change")) {
+        token.usedAt = usedAt;
+      }
+    }
+  }
+
+  private restoreSecurityActionTokens(states: Array<{ tokenHash: string; usedAt: Date | null }>): void {
+    for (const state of states) {
+      const token = this.authActionTokens.get(state.tokenHash);
+      if (token) token.usedAt = state.usedAt;
+    }
+  }
+
   async listAuditEvents(input: ListAuditEventsInput): Promise<AuditEventRecord[]> {
     return [...this.audit.values()]
+      .filter((row) => !input.before || compareChronological(chronologicalKey(row), input.before) > 0)
       .sort((a, b) => {
+        if (input.stableOrder) return compareChronological(chronologicalKey(a), chronologicalKey(b));
         const time = b.createdAt.getTime() - a.createdAt.getTime();
         return time === 0 ? Number(b.id.slice(6)) - Number(a.id.slice(6)) : time;
       })

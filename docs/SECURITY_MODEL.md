@@ -174,7 +174,7 @@ passing production-deployment gate result.
 - Deprecated releases remain visible for install/export continuity. Unpublished, revoked, archived, and deleted releases are hidden from public search, detail, metadata, and bundle delivery.
 - Reject archive traversal, absolute paths, symlinks, encrypted archives, unsupported compression, excessive size, and excessive file count.
 - The prerelease scanner blocks known credential/private-key patterns, destructive shell snippets, common encoded shell execution, unsafe prompt-instruction and exfiltration patterns, and unsafe archive structures, and warns on dependency install hooks. Broader fixture-backed scanning for uncommon secrets, generated binaries, and semantic package review remains business-safe production hardening.
-- Require maintainer artifact inspection, hash-attested approval, and an explicit publish action before publication.
+- Require an authorized reviewer to inspect the artifact, attest its hash, and explicitly publish it. Owner, admin, and maintainer authors may review and publish their own submissions after satisfying the same MFA, scope, scan, inspection, and approval checks. This supports single-owner instances; the application does not enforce separation of author and reviewer. Operators that need independent review must assign a different reviewer and verify the audit record.
 - Lifecycle actions change server-owned release or skill state only; they do not rewrite immutable artifact hashes or package payloads.
 - Store immutable artifact hashes.
 

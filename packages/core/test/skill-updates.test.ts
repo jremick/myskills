@@ -6,6 +6,7 @@ import {
   isPrereleaseVersion,
   parseSemanticVersion,
   parseSkillReleaseMetadata,
+  selectDefaultSkillRelease,
   skillReleaseUpdateBlockers,
   skillReleaseUpgradeRange,
   type SkillReleaseUpdateCandidate,
@@ -14,6 +15,7 @@ import {
 test("semantic version parsing and precedence follow SemVer 2", () => {
   assert.equal(parseSemanticVersion("1.0.0-01"), null);
   assert.equal(parseSemanticVersion("01.0.0"), null);
+  assert.equal(parseSemanticVersion("1.0.0\n"), null);
   assert.equal(isPrereleaseVersion("1.0.0-rc.1"), true);
   assert.equal(compareSemanticVersions("1.0.0+build.1", "1.0.0+build.2"), 0);
   const ordered = [
@@ -82,6 +84,25 @@ test("update evaluation selects the newest compatible approved release and inclu
   assert.equal(evaluation.status, "update-available");
   assert.equal(evaluation.candidate?.version, "1.2.0");
   assert.deepEqual(evaluation.includedReleases.map((item) => item.version), ["1.1.0", "1.2.0"]);
+});
+
+test("installed artifact identity distinguishes builds with equal SemVer precedence", () => {
+  const builds = [release("1.0.0+one"), release("1.0.0+two")];
+  for (const installed of builds) {
+    for (const releases of [[...builds, release("1.1.0")], [release("1.1.0"), ...builds.toReversed()]]) {
+      const evaluation = evaluateSkillUpdate({
+        installed: { version: installed.version, platform: "codex", artifactSha256: installed.artifact.sha256 },
+        releases,
+      });
+      assert.equal(evaluation.status, "update-available");
+      assert.equal(evaluation.currentRelease, installed);
+      assert.equal(evaluation.candidate?.version, "1.1.0");
+    }
+  }
+  assert.equal(evaluateSkillUpdate({
+    installed: { version: builds[0].version, platform: "codex", artifactSha256: builds[1].artifact.sha256 },
+    releases: builds,
+  }).status, "drifted", "a changed artifact for the exact installed release still fails closed");
 });
 
 test("release metadata parsing applies safe defaults and rejects malformed compatibility", () => {
@@ -263,6 +284,7 @@ test("range policy covers releases with equal SemVer precedence and ignores late
   const blocked = evaluateSkillUpdate({ installed, releases: [fix, breaking], policy: { allowedChangeKinds: ["fix"], pinnedVersion: fix.version } });
   assert.equal(blocked.status, "no-compatible-release");
   assert.deepEqual(blocked.includedReleases, [fix, breaking]);
+  assert.deepEqual(blocked.blockers, ["change-kind-not-allowed"]);
   const allowed = evaluateSkillUpdate({ installed, releases: [fix, { ...breaking, version: "2.0.0" }], policy: { allowedChangeKinds: ["fix"], pinnedVersion: fix.version } });
   assert.equal(allowed.status, "update-available");
   assert.equal(allowed.candidate?.version, fix.version);
@@ -354,3 +376,42 @@ function release(
 function digest(value: string): string {
   return value.padEnd(64, "0").slice(0, 64);
 }
+
+test("default discovery ignores backport creation order, prereleases, deprecated and legacy invalid versions", () => {
+  const releases = [
+    release("1.9.9"),
+    { ...release("4.0.0"), lifecycleStatus: "deprecated" as const },
+    release("3.0.0-rc.1"),
+    release("05.0.0"),
+    release("2.0.0+newer-build"),
+    release("2.0.0+older-build"),
+  ];
+  assert.equal(selectDefaultSkillRelease(releases)?.version, "2.0.0+newer-build");
+  assert.equal(selectDefaultSkillRelease(releases.slice(1, 4)), undefined);
+});
+
+test("update evaluation enforces all policy constraints without widening conflicts", () => {
+  const input = { installed: { version: "1.0.0", platform: "codex" }, releases: [release("1.0.0"),
+    { ...release("1.1.0"), changeKind: "breaking" as const }, { ...release("1.1.1"), changeKind: "fix" as const }, release("2.0.0-rc.1")] };
+  const range = evaluateSkillUpdate({ ...input, policyConstraints: [{ allowedChangeKinds: ["fix"] }, { includePrerelease: true }] });
+  assert.equal(range.status, "no-compatible-release");
+  assert.ok(range.blockers.includes("change-kind-not-allowed"));
+  assert.ok(range.blockers.includes("prerelease-not-selected"));
+  const pins = evaluateSkillUpdate({ ...input, policyConstraints: [{ pinnedVersion: "1.1.0" }, { pinnedVersion: "1.1.1" }] });
+  assert.equal(pins.candidate, undefined);
+  assert.deepEqual(pins.blockers, ["policy-pin-conflict"]);
+  const disjoint = evaluateSkillUpdate({ ...input, policyConstraints: [{ allowedChangeKinds: ["fix"] }, { allowedChangeKinds: ["feature"] }] });
+  assert.equal(disjoint.candidate, undefined);
+  assert.ok(disjoint.blockers.includes("change-kind-not-allowed"));
+  const matching = evaluateSkillUpdate({ ...input, releases: [release("1.0.0"), release("1.1.1")], policyConstraints: [{ pinnedVersion: "1.1.1" }, { pinnedVersion: "1.1.1" }] });
+  assert.equal(matching.candidate?.version, "1.1.1");
+});
+
+test("update candidates preserve newest-first order for equal-precedence build identities", () => {
+  const releases = [release("2.0.0+newer"), release("2.0.0+older")];
+  assert.equal(evaluateSkillUpdate({ installed: { version: "1.0.0", platform: "codex" }, releases }).candidate?.version, "2.0.0+newer");
+  const installed = evaluateSkillUpdate({ installed: { version: "2.0.0+older", platform: "codex" }, releases });
+  assert.equal(installed.currentRelease?.version, "2.0.0+older");
+  assert.equal(installed.status, "current");
+  assert.equal(installed.candidate, undefined);
+});

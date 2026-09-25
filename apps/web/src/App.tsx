@@ -42,7 +42,7 @@ import {
   Workflow,
   X,
 } from "lucide-react";
-import type { PublicSkill, SkillSharingDetails, TeamSharedSkillGroup, VisibilityScope } from "@myskills-app/core";
+import { parseSemanticVersion, type PublicSkill, type SkillSharingDetails, type TeamSharedSkillGroup, type VisibilityScope } from "@myskills-app/core";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -94,6 +94,8 @@ import {
   type UserSubmissionSummary,
   type WebAuthUser,
 } from "./api.js";
+
+import { canQueueWorkspaceOperation } from "./components/target/workspace-target.js";
 
 interface RegistryAppProps {
   client?: RegistryClient;
@@ -401,8 +403,12 @@ export function RegistryApp({ client }: RegistryAppProps) {
         setSession(nextSession);
         writeStoredSession(nextSession);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!active) {
+          return;
+        }
+        if (!error || typeof error !== "object" || !("status" in error) || error.status !== 401) {
+          setAuthMessage("Your account could not be refreshed. Try again shortly.");
           return;
         }
         setSession(null);
@@ -541,8 +547,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
     if (activeView !== "browse" || !selectedSlug || !selectedSkill || selectedSkill.slug !== selectedSlug
       || (historyState !== "ready" && historyState !== "error")) return;
     let active = true;
-    const latestVisible = visibleReleases.find((item) => item.version === selectedSkill.latestVersion) ?? visibleReleases[0];
-    const exactVersion = selectedVersion ?? latestVisible?.version ?? selectedSkill.latestVersion;
+    const exactVersion = selectedVersion ?? selectedSkill.latestVersion;
     setRelease(null);
     setDetailMessage(null);
     if (selectedVersion === null && !exactVersion) {
@@ -601,7 +606,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const selectedCommand = useMemo(() => (
     selectedSkill && release && supportedDetailPlatform ? exportCommand(selectedSkill.slug, release.version, supportedDetailPlatform) : ""
   ), [release, selectedSkill, supportedDetailPlatform]);
-  const latestVisibleRelease = visibleReleases.find((item) => item.version === selectedSkill?.latestVersion) ?? visibleReleases[0] ?? null;
+  const latestVisibleRelease = visibleReleases.find((item) => item.version === selectedSkill?.latestVersion) ?? null;
   const historyControls = selectedSkill?.slug === selectedSlug ? (
     <ReleaseHistoryControls
       historyState={historyState}
@@ -1101,14 +1106,15 @@ export function RegistryApp({ client }: RegistryAppProps) {
                     selectedSkill={selectedSkill}
                     session={session}
                     setPlatform={updatePlatform}
+                    onChanged={() => setRefreshKey((value) => value + 1)}
                   />
                 )}
                 {detailState === "ready" && selectedSkill && !release && !detailMessage && (
                   <CardContent className="registry-state-content">
                     <div className="empty-detail">
                       <FileCode2 size={42} aria-hidden="true" />
-                      <h2>No published release</h2>
-                      <p>No published release is available for this skill.</p>
+                      <h2>No default stable release</h2>
+                      <p>Choose an exact version from release history when no approved stable release is available.</p>
                     </div>
                   </CardContent>
                 )}
@@ -1843,11 +1849,24 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
   );
 }
 
+function appendUniqueById<T extends { id: string }>(current: T[], incoming: T[]): T[] {
+  const seen = new Set(current.map((row) => row.id));
+  return [...current, ...incoming.filter((row) => {
+    if (seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  })];
+}
+
 function ReviewDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
   const [state, setState] = useState<LoadState>("loading");
   const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submissions, setSubmissions] = useState<ReviewSubmissionSummary[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const listEpoch = useRef(0);
+  const morePending = useRef(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [confirmation, setConfirmation] = useState<ConfirmationRequest | null>(null);
@@ -1870,12 +1889,25 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
           : "Inspect or download the review artifact before approving so the approval records its exact hash."
     : "";
 
+  async function readReviewPage(cursor?: string) {
+    return client.listReviewSubmissionPage ? client.listReviewSubmissionPage({ limit: 100, cursor })
+      : { submissions: await client.listReviewSubmissions(), nextCursor: null };
+  }
+
   async function refreshReview() {
+    const epoch = ++listEpoch.current;
+    morePending.current = false;
+    setLoadingMore(false);
+    setNextCursor(null);
+    setSubmissions([]);
     setState("loading");
     setMessage(null);
     setNotice(null);
     try {
-      const nextSubmissions = await client.listReviewSubmissions();
+      const page = await readReviewPage();
+      if (epoch !== listEpoch.current) return;
+      const nextSubmissions = page.submissions;
+      setNextCursor(page.nextCursor);
       setSubmissions(nextSubmissions);
       setSelectedId((current) => (
         current && nextSubmissions.some((submission) => submission.id === current)
@@ -1884,6 +1916,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
       ));
       setState("ready");
     } catch (error) {
+      if (epoch !== listEpoch.current) return;
       setMessage(safeReviewErrorMessage(error));
       setState("error");
     }
@@ -1891,11 +1924,31 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
 
   useEffect(() => {
     void refreshReview();
-  }, [client]);
+    return () => { listEpoch.current += 1; };
+  }, [client, session.user.id, session.expiresAt]);
+
+  async function loadMoreReview() {
+    if (!nextCursor || morePending.current || !client.listReviewSubmissionPage) return;
+    const epoch = listEpoch.current;
+    morePending.current = true;
+    setLoadingMore(true);
+    setMessage(null);
+    try {
+      const page = await readReviewPage(nextCursor);
+      if (epoch !== listEpoch.current) return;
+      setSubmissions((current) => appendUniqueById(current, page.submissions));
+      setNextCursor(page.nextCursor);
+    } catch (error) {
+      if (epoch === listEpoch.current) setMessage(safeReviewErrorMessage(error));
+    } finally {
+      if (epoch === listEpoch.current) { morePending.current = false; setLoadingMore(false); }
+    }
+  }
 
   async function commitReviewAction(submission: ReviewSubmissionSummary, action: ReviewActionName, confirmedReason: string) {
     setMessage(null);
     setNotice(null);
+    const epoch = listEpoch.current;
     try {
       if (action === "approve" && !selectedArtifactHash) {
         setMessage("Download the review artifact before approving this submission.");
@@ -1907,9 +1960,9 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
         reason: confirmedReason || undefined,
         ...(action === "approve" && selectedArtifactHash ? { artifactSha256: selectedArtifactHash } : {}),
       });
-      const nextSubmissions = await client.listReviewSubmissions();
-      setSubmissions(nextSubmissions);
-      setSelectedId(result.publishedAt ? nextSubmissions[0]?.id ?? null : result.id);
+      if (epoch !== listEpoch.current) return;
+      await refreshReview();
+      if (!result.publishedAt) setSelectedId(result.id);
       setReason("");
       const actionLabel = action === "request-changes"
         ? "was returned for changes"
@@ -2029,6 +2082,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
                   <Badge className="shadcn-finding-badge review-registry-finding" variant="secondary">{submission.findingCount} findings</Badge>
                 </button>
               ))}
+              {state === "ready" && nextCursor && <Button type="button" size="sm" variant="outline" disabled={loadingMore} onClick={() => void loadMoreReview()}>{loadingMore ? "Loading more submissions…" : "Load more submissions"}</Button>}
               {state === "ready" && submissions.length === 0 && (
                 <div className="empty-state">
                   <ShieldCheck size={22} aria-hidden="true" />
@@ -2534,6 +2588,12 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
   const [apiTokens, setApiTokens] = useState<AdminApiToken[]>([]);
   const [providers, setProviders] = useState<AdminProviderConfig[]>([]);
   const [auditEvents, setAuditEvents] = useState<AdminAuditEvent[]>([]);
+  const [auditCursor, setAuditCursor] = useState<string | null>(null);
+  const [loadingAudit, setLoadingAudit] = useState(false);
+  const auditScope = useMemo(() => ({ active: true }), [client, session.user.id, session.expiresAt]);
+  const auditEpoch = useRef(0);
+  const auditPending = useRef(false);
+  const adminEpoch = useRef(0);
   const [draft, setDraft] = useState<ProviderDraft>(() => emptyProviderDraft());
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
@@ -2543,33 +2603,74 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
   const sessionCanEditPrivilegedRoles = session.user.roles.includes("owner");
   const adminInitialLoading = state === "loading" && users.length === 0 && apiTokens.length === 0 && providers.length === 0 && auditEvents.length === 0;
 
+  async function refreshAudit() {
+    if (!auditScope.active) return;
+    const epoch = ++auditEpoch.current;
+    auditPending.current = false;
+    setAuditCursor(null);
+    setAuditEvents([]);
+    setLoadingAudit(true);
+    try {
+      const page = client.listAdminAuditPage ? await client.listAdminAuditPage({ limit: 25 })
+        : { events: await client.listAdminAudit(25), nextCursor: null };
+      if (!auditScope.active || epoch !== auditEpoch.current) return;
+      setAuditEvents(page.events);
+      setAuditCursor(page.nextCursor);
+    } finally {
+      if (auditScope.active && epoch === auditEpoch.current) setLoadingAudit(false);
+    }
+  }
+
+  async function loadMoreAudit() {
+    if (!auditCursor || auditPending.current || !client.listAdminAuditPage) return;
+    const epoch = auditEpoch.current;
+    auditPending.current = true;
+    setLoadingAudit(true);
+    setMessage(null);
+    try {
+      const page = await client.listAdminAuditPage({ limit: 25, cursor: auditCursor });
+      if (epoch !== auditEpoch.current) return;
+      setAuditEvents((current) => appendUniqueById(current, page.events));
+      setAuditCursor(page.nextCursor);
+    } catch (error) {
+      if (epoch === auditEpoch.current) setMessage(safeAdminErrorMessage(error));
+    } finally {
+      if (epoch === auditEpoch.current) { auditPending.current = false; setLoadingAudit(false); }
+    }
+  }
+
   async function refreshAdmin() {
+    const epoch = ++adminEpoch.current;
     setState("loading");
     setMessage(null);
     try {
-      const [registration, nextUsers, nextApiTokens, nextProviders, nextAuditEvents] = await Promise.all([
+      const [registration, nextUsers, nextApiTokens, nextProviders] = await Promise.all([
         client.getAdminRegistration(),
         client.listAdminUsers(),
         client.listAdminApiTokens(),
         client.listAdminProviders(),
-        client.listAdminAudit(25),
+        refreshAudit(),
       ]);
+      if (epoch !== adminEpoch.current) return;
       setRegistrationMode(registration.mode);
       setUsers(nextUsers);
       setApiTokens(nextApiTokens);
       setProviders(nextProviders);
-      setAuditEvents(nextAuditEvents);
       setDraft((current) => current.key ? current : providerToDraft(nextProviders[0]));
       setState("ready");
     } catch (error) {
+      if (epoch !== adminEpoch.current) return;
       setMessage(safeAdminErrorMessage(error));
       setState("error");
     }
   }
 
   useEffect(() => {
+    auditScope.active = true;
+    setAuditEvents([]);
     void refreshAdmin();
-  }, [client]);
+    return () => { auditScope.active = false; auditEpoch.current += 1; adminEpoch.current += 1; };
+  }, [client, session.user.id, session.expiresAt, auditScope]);
 
   async function updateRegistration(mode: AdminRegistrationMode) {
     setMessage(null);
@@ -2594,7 +2695,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
     try {
       const registration = await client.updateAdminRegistration(mode);
       setRegistrationMode(registration.mode);
-      setAuditEvents(await client.listAdminAudit(25));
+      await refreshAudit();
     } catch (error) {
       const safeMessage = safeAdminErrorMessage(error);
       setMessage(safeMessage);
@@ -2615,7 +2716,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
       setInviteEmail("");
       setInviteName("");
       setInviteState("ready");
-      setAuditEvents(await client.listAdminAudit(25));
+      await refreshAudit();
     } catch (error) {
       setInviteState("error");
       setInviteMessage(safeAdminErrorMessage(error));
@@ -2650,7 +2751,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
     try {
       const updated = await client.performAdminUserAction(userId, action, reason);
       setUsers((current) => current.map((user) => user.id === updated.id ? updated : user));
-      setAuditEvents(await client.listAdminAudit(25));
+      await refreshAudit();
     } catch (error) {
       const safeMessage = safeAdminErrorMessage(error);
       setMessage(safeMessage);
@@ -2676,7 +2777,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
     try {
       const updated = await client.updateAdminUserRoles(userId, roles, reason);
       setUsers((current) => current.map((user) => user.id === updated.id ? updated : user));
-      setAuditEvents(await client.listAdminAudit(25));
+      await refreshAudit();
     } catch (error) {
       const safeMessage = safeAdminErrorMessage(error);
       setMessage(safeMessage);
@@ -2701,7 +2802,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
     try {
       const token = await client.revokeAdminApiToken(tokenId);
       setApiTokens((current) => current.map((item) => item.id === token.id ? token : item));
-      setAuditEvents(await client.listAdminAudit(25));
+      await refreshAudit();
     } catch (error) {
       const safeMessage = safeAdminErrorMessage(error);
       setMessage(safeMessage);
@@ -2722,7 +2823,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
       });
       setProviders((current) => upsertProvider(current, provider));
       setDraft(providerToDraft(provider));
-      setAuditEvents(await client.listAdminAudit(25));
+      await refreshAudit();
     } catch (error) {
       setMessage(safeAdminErrorMessage(error));
     }
@@ -3040,7 +3141,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
         <AdminPanel
           icon={<ShieldCheck size={18} aria-hidden="true" />}
           title="Audit"
-          meta={`${auditEvents.length} latest`}
+          meta={`${auditEvents.length} loaded`}
         >
           <div className="audit-list">
             {adminInitialLoading && <LoadingRows />}
@@ -3056,6 +3157,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
                 <time dateTime={event.createdAt}>{formatDate(event.createdAt)}</time>
               </div>
             ))}
+            {auditCursor && <Button type="button" size="sm" variant="outline" disabled={loadingAudit} onClick={() => void loadMoreAudit()}>{loadingAudit ? "Loading more events…" : "Load more audit events"}</Button>}
             {state === "ready" && auditEvents.length === 0 && <div className="empty-state">No audit events.</div>}
           </div>
         </AdminPanel>
@@ -4430,6 +4532,7 @@ function ReleaseHistoryControls({
         <label>
           <span>Release version</span>
           <select value={selectedVersion ?? latestVersion ?? ""} onChange={(event) => onSelect(event.target.value)}>
+            {selectedVersion === null && latestVersion === null && <option value="" disabled>Choose an exact release</option>}
             {selectedVersion !== null && missingPin && <option value={selectedVersion} disabled>Unavailable exact version</option>}
             {releases.map((item) => (
               <option key={item.version} value={item.version}>
@@ -4452,6 +4555,7 @@ function SkillDetail({
   selectedSkill,
   session,
   setPlatform,
+  onChanged,
 }: {
   command: string;
   client: RegistryClient;
@@ -4460,6 +4564,7 @@ function SkillDetail({
   selectedSkill: PublicSkill;
   session: WebSession | null;
   setPlatform: (platform: string) => void;
+  onChanged: () => void;
 }) {
   const supportedPlatforms = release.platforms.filter((item) => item.status === "supported");
   const hasSupportedPlatform = supportedPlatforms.length > 0;
@@ -4548,6 +4653,7 @@ function SkillDetail({
             release={release}
             selectedSkill={selectedSkill}
             session={session}
+            onChanged={onChanged}
           />
         )}
 
@@ -4599,15 +4705,9 @@ function ReleaseInstallPanel({
     }
     void client.listArchitectureTargets().then((records) => {
       if (!active) return;
-      const eligible = records.filter((target) => (
-        target.status !== "revoked"
-        && target.consent.status === "granted"
-        && target.adapter.contractVersion === 2
-        && target.capabilities.apply === true
-        && target.capabilities["sync.write"] === true
-      ));
+      const eligible = records.filter((target) => canQueueWorkspaceOperation(target, platform, "install"));
       setTargets(eligible);
-      setSelectedTargetId((current) => current || eligible[0]?.id || "");
+      setSelectedTargetId((current) => eligible.some((target) => target.id === current) ? current : eligible[0]?.id ?? "");
       setState("ready");
     }).catch((error: unknown) => {
       if (!active) return;
@@ -4615,10 +4715,11 @@ function ReleaseInstallPanel({
       setMessage(safeArchitectureTargetErrorMessage(error));
     });
     return () => { active = false; };
-  }, [client]);
+  }, [client, platform]);
 
   async function install() {
-    if (!selectedTargetId || !client.scheduleTargetSkillOperation) return;
+    const target = targets.find((item) => item.id === selectedTargetId);
+    if (!target || !canQueueWorkspaceOperation(target, platform, "install") || !client.scheduleTargetSkillOperation) return;
     setState("queueing");
     setMessage(null);
     try {
@@ -4645,7 +4746,7 @@ function ReleaseInstallPanel({
         <PackageOpen size={20} aria-hidden="true" />
       </div>
       {state === "loading" && <p className="control-plane-muted" role="status">Loading eligible targets…</p>}
-      {state !== "loading" && targets.length === 0 && <p className="control-plane-muted">No consented contract-v2 target can accept installs. Register or update a target in Connected targets first.</p>}
+      {state !== "loading" && targets.length === 0 && <p className="control-plane-muted">Browser installs require a consented personal Codex workspace and a Codex release. Use Connect a Codex workspace in Connected targets to enroll with the CLI.</p>}
       {targets.length > 0 && <div className="release-install-controls"><label><span>Target</span><select value={selectedTargetId} onChange={(event) => { setSelectedTargetId(event.target.value); setReviewing(false); }} disabled={state === "queueing"}>{targets.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}</select></label>{reviewing ? <div className="release-install-review"><p><strong>{selectedSkill.slug} {release.version}</strong> for {targets.find((target) => target.id === selectedTargetId)?.name}</p><p>{release.releaseNotes || "No release notes were supplied."}</p><small>{platform} · SHA-256 {release.artifact.sha256.slice(0, 12)}… · {release.artifact.byteSize.toLocaleString()} bytes</small>{release.requiresUserAction && <div className="control-plane-inline-message"><CircleAlert size={16} aria-hidden="true" />This release requires a user action after installation.</div>}<div className="target-action-row"><Button type="button" disabled={state === "queueing"} onClick={() => void install()}><ShieldCheck size={15} aria-hidden="true" />{state === "queueing" ? "Queueing…" : "Confirm exact install"}</Button><Button type="button" variant="outline" disabled={state === "queueing"} onClick={() => setReviewing(false)}>Back</Button></div></div> : <Button size="sm" type="button" variant="outline" onClick={() => setReviewing(true)}>Review install</Button>}</div>}
       {message && <div className="control-plane-inline-message" role="status">{message}</div>}
     </section>
@@ -4670,11 +4771,13 @@ function LifecyclePanel({
   release,
   selectedSkill,
   session,
+  onChanged,
 }: {
   client: RegistryClient;
   release: ReleaseMetadata;
   selectedSkill: PublicSkill;
   session: WebSession;
+  onChanged: () => void;
 }) {
   const [state, setState] = useState<LoadState>("loading");
   const [message, setMessage] = useState<string | null>(null);
@@ -4712,6 +4815,7 @@ function LifecyclePanel({
       });
       setMessage("Skill metadata saved.");
       setReason("");
+      onChanged();
     } catch (error) {
       setMessage(safeReviewErrorMessage(error));
     }
@@ -4746,7 +4850,7 @@ function LifecyclePanel({
       await client.performSkillAction(selectedSkill.slug, action, confirmedReason || undefined);
       setMessage(`Skill ${formatStatusLabel(action).toLowerCase()} complete.`);
       setReason("");
-      await refresh();
+      onChanged();
     } catch (error) {
       const safeMessage = safeReviewErrorMessage(error);
       setMessage(safeMessage);
@@ -4773,7 +4877,7 @@ function LifecyclePanel({
       await client.performReleaseAction(selectedSkill.slug, release.version, action, confirmedReason || undefined, undefined);
       setMessage(`Release ${formatStatusLabel(action).toLowerCase()} complete.`);
       setReason("");
-      await refresh();
+      onChanged();
     } catch (error) {
       const safeMessage = safeReviewErrorMessage(error);
       setMessage(safeMessage);
@@ -5126,7 +5230,7 @@ function releasePlatform(platforms: Array<{ name: string; status: string }>, cur
 }
 
 function isExactReleaseVersion(version: string): boolean {
-  return /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version);
+  return parseSemanticVersion(version) !== null || /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version);
 }
 
 function isPublishedRelease(release: Pick<SkillReleaseSummary, "lifecycleStatus" | "reviewStatus" | "securityStatus" | "publishedAt">): boolean {

@@ -77,8 +77,8 @@ The fixture then allows all change kinds and pins exactly `0.1.2` while `0.2.0`
 remains available. Preview and scheduling must bind the pinned version and its
 artifact, without including the later release. After cancellation, it restores
 and reads back the original policy values before normal updates resume. This
-creates a target policy override with those values; it does not remove that
-override or restore inheritance from the default policy source.
+creates a target policy revision with those values; it does not remove that
+revision or restore the default policy source. Any organization ceiling still applies.
 
 Service and Postgres regressions separately cover formerly published versions
 that become unpublished, revoked, deleted, or unsafe. Their change kinds still

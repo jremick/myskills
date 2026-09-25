@@ -1,3 +1,4 @@
+import { chronologicalKey, chronologicalPagePosition, chronologicalPageResult } from "../repositories/chronological-pagination.js";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { AppError } from "@myskills-app/core";
 import {
@@ -20,6 +21,7 @@ import {
   type Role,
   type UserStatus,
 } from "@myskills-app/auth";
+import { encryptAuthNotification } from "./notification-outbox.js";
 import type { AuthRateLimiter } from "./rate-limit.js";
 import {
   apiTokenScopes,
@@ -29,9 +31,11 @@ import {
   type AdminApiTokenRecord,
   type ApiTokenScope,
   type AuthActionTokenPurpose,
+  type AuthActionAccountSnapshot,
   type AuthResponseUser,
   type AuthStore,
   type AuthUserRecord,
+  type AuthUserWithPassword,
   type MfaTotpFactorRecord,
   providerTypes,
   type ProviderConfigRecord,
@@ -126,6 +130,8 @@ export interface ConfirmEmailChangeInput {
 }
 
 export interface AuthActionNotification {
+  signal?: AbortSignal;
+  idempotencyKey?: string;
   user: AuthUserRecord;
   email: string;
   token: string;
@@ -282,6 +288,7 @@ export interface SafeAuditEvent {
 
 export interface ListAdminAuditEventsInput {
   limit?: number;
+  cursor?: string;
 }
 
 export type McpSessionCredentialKind = "none" | "session" | "api";
@@ -354,7 +361,7 @@ export class AuthService {
       passwordHash,
     });
     if (created.user) {
-      await this.sendAuthActionToken(created.user, "email_verification");
+      await this.sendAuthActionToken(created.user, "email_verification", { enqueue: true });
     }
     return { status: "pending" };
   }
@@ -496,7 +503,7 @@ export class AuthService {
     await assertAllowed(this.options.emailVerificationLimiter, rateLimitKeys("email-verification", email, input.ip));
     const user = await this.store.findUserByEmailWithPassword(email);
     if (user && shouldIssueEmailVerification(user)) {
-      await this.sendAuthActionToken(user, "email_verification");
+      await this.sendAuthActionToken(user, "email_verification", { enqueue: true });
     }
     return { status: "pending" };
   }
@@ -532,7 +539,10 @@ export class AuthService {
     await assertAllowed(this.options.passwordResetLimiter, rateLimitKeys("password-reset", email, input.ip));
     const user = await this.store.findUserByEmailWithPassword(email);
     if (user?.passwordHash && isUsableAuthenticatedAccount(user)) {
-      await this.sendAuthActionToken(user, "password_reset");
+      await this.sendAuthActionToken(user, "password_reset", {
+        enqueue: true,
+        expectedAccount: { email: normalizeEmail(user.email), passwordHash: user.passwordHash },
+      });
     }
     return { status: "pending" };
   }
@@ -558,12 +568,13 @@ export class AuthService {
 
   async changePassword(actor: AuthResponseUser, input: ChangePasswordInput): Promise<{ status: "changed" }> {
     await assertAllowed(this.options.passwordResetLimiter, rateLimitKeys("password-change", actor.email, input.ip));
-    await this.assertCanManageAccount(actor, input.currentPassword);
+    const account = await this.assertCanManageAccount(actor, input.currentPassword);
     const passwordHash = await this.hashNewPassword(input.password);
     const updated = await this.store.changePasswordAndRevokeCredentials({
       userId: actor.id,
       passwordHash,
       passwordUpdatedAt: new Date(),
+      expectedAccount: { email: normalizeEmail(account.email), passwordHash: account.passwordHash },
     });
     if (!updated) {
       throw new AppError("Password credential not found.", "PASSWORD_CREDENTIAL_NOT_FOUND", 404);
@@ -584,15 +595,18 @@ export class AuthService {
   async requestEmailChange(actor: AuthResponseUser, input: RequestEmailChangeInput): Promise<{ status: "pending" }> {
     const email = normalizeEmail(input.email);
     await assertAllowed(this.options.emailVerificationLimiter, rateLimitKeys("email-change", email, input.ip));
-    await this.assertCanManageAccount(actor, input.password);
-    if (email === actor.email) {
+    const account = await this.assertCanManageAccount(actor, input.password);
+    if (email === normalizeEmail(actor.email)) {
       throw new AppError("New email address must be different.", "EMAIL_UNCHANGED", 400);
     }
     const existing = await this.store.findUserByEmailWithPassword(email);
     if (existing && existing.id !== actor.id) {
       throw new AppError("Email address is already in use.", "EMAIL_ALREADY_IN_USE", 409);
     }
-    await this.sendAuthActionToken(asAuthUserRecord(actor), "email_change", { emailOverride: email });
+    await this.sendAuthActionToken(asAuthUserRecord(actor), "email_change", {
+      emailOverride: email,
+      expectedAccount: { email: normalizeEmail(account.email), passwordHash: account.passwordHash },
+    });
     await this.store.recordAuditEvent({
       actorUserId: actor.id,
       action: "account.email_change.request",
@@ -689,6 +703,9 @@ export class AuthService {
     if (!challenge || !isUsableAuthenticatedAccount(challenge.user)) {
       throw invalidMfaCode();
     }
+    // Only a valid password-authenticated challenge can charge this account.
+    // Rotating both challenge tokens and source IPs must not reset its budget.
+    await assertAllowed(this.options.mfaLimiter, [`mfa:account:${challenge.user.id}`]);
     const verifiedAt = new Date();
     const valid = input.recoveryCode
       ? await this.verifyRecoveryCode(challenge.user.id, input.recoveryCode)
@@ -1062,6 +1079,14 @@ export class AuthService {
     return events.map(safeAuditEvent);
   }
 
+  async listAdminAuditPage(actor: AuthResponseUser, input: ListAdminAuditEventsInput = {}) {
+    assertAdmin(actor);
+    const position = chronologicalPagePosition({ ...input, limit: normalizeAuditLimit(input.limit) }, `audit:${actor.id}`);
+    const rows = await this.store.listAuditEvents({ limit: position.limit + 1, before: position.before, stableOrder: true });
+    const page = chronologicalPageResult(rows, position, (row) => chronologicalKey({ id: row.id, createdAt: row.cursorCreatedAt ?? row.createdAt }));
+    return { events: page.items.map(safeAuditEvent), nextCursor: page.nextCursor };
+  }
+
   async recordMcpSessionDecision(input: RecordMcpSessionDecisionInput): Promise<void> {
     await this.store.recordAuditEvent({
       actorUserId: input.context?.user.id ?? null,
@@ -1085,12 +1110,13 @@ export class AuthService {
     await this.assertCanManageAccount(actor, password);
   }
 
-  private async assertCanManageAccount(actor: AuthResponseUser, password: string): Promise<void> {
+  private async assertCanManageAccount(actor: AuthResponseUser, password: string): Promise<AuthUserWithPassword & { passwordHash: string }> {
     await this.assertCanUseMfaManagementSession(actor);
-    const user = await this.store.findUserByEmailWithPassword(actor.email);
-    if (!user?.passwordHash || !(await verifyPassword(user.passwordHash, password))) {
+    const user = await this.store.findUserByEmailWithPassword(normalizeEmail(actor.email));
+    if (!user?.passwordHash || user.id !== actor.id || !isUsableAuthenticatedAccount(user) || !(await verifyPassword(user.passwordHash, password))) {
       throw new AppError("Invalid email or password.", "INVALID_CREDENTIALS", 401);
     }
+    return { ...user, passwordHash: user.passwordHash };
   }
 
   private async assertCanUseMfaManagementSession(actor: AuthResponseUser): Promise<void> {
@@ -1140,7 +1166,7 @@ export class AuthService {
   private async sendAuthActionToken(
     user: AuthUserRecord,
     purpose: AuthActionTokenPurpose,
-    options: { emailOverride?: string; requireSink?: boolean; swallowDeliveryErrors?: boolean } = {},
+    options: { enqueue?: boolean; emailOverride?: string; requireSink?: boolean; swallowDeliveryErrors?: boolean; expectedAccount?: AuthActionAccountSnapshot } = {},
   ): Promise<{ expiresAt: Date } | null> {
     const sink = this.options.notificationSink;
     if (!sink) {
@@ -1151,14 +1177,24 @@ export class AuthService {
     }
     const token = createSessionToken();
     const expiresAt = new Date(Date.now() + this.authActionTokenTtlMs(purpose));
-    const email = options.emailOverride ?? user.email;
-    await this.store.createAuthActionToken({
+    const email = normalizeEmail(options.emailOverride ?? user.email);
+    const created = await this.store.createAuthActionToken({
       userId: user.id,
       purpose,
       tokenHash: hashSessionToken(token),
       sentToNormalizedEmail: email,
       expiresAt,
+      expectedAccount: options.expectedAccount,
+      notification: options.enqueue && (purpose === "password_reset" || purpose === "email_verification")
+        ? encryptAuthNotification(this.mfaSecretKey(), { token, email, purpose }) : undefined,
     });
+    if (!created) {
+      if (purpose === "email_change") {
+        throw new AppError("Account changed. Sign in and try again.", "INVALID_CREDENTIALS", 401);
+      }
+      return null;
+    }
+    if (options.enqueue) return { expiresAt: created.expiresAt };
     const notification = {
       user,
       email,

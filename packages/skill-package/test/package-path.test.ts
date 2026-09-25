@@ -9,6 +9,8 @@ import {
   SKILL_PACKAGE_MANIFEST_CONTRACT_ID,
   SKILL_PACKAGE_SCANNER_CONTRACT_ID,
   loadSkillManifestFromPackageFiles,
+  loadStoredSkillManifestFromPackageFiles,
+  validatePortableFilePaths,
   normalizePackageFilePath,
   loadSkillManifestFromPath,
   readPackageFilesFromZipBuffer,
@@ -317,3 +319,36 @@ function manifestJson(overrides: Partial<{
     platforms: [{ name: "codex", install_target: "codex-skill" }],
   });
 }
+
+test("new package intake uses the same portable filename contract as installation", async (t) => {
+  const invalidPaths = [
+    ["README.md", "readme.md"], ["café.txt", "cafe\u0301.txt"],
+    ["Docs/a.txt", "docs/b.txt"], ["CON.txt"], ["docs/AUX"], ["LPT1.md"], ["COM¹.txt"],
+    ["name?.txt"], ["dir/bad\u0001.txt"], ["bad\u007f.txt"], ["bad\u0085.txt"],
+    ["trailing."], ["trailing "], ["folder/"], ["file", "file/child.txt"], ["File", "file/child.txt"],
+  ];
+  const dir = await makeTempPackage();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const archive = path.join(dir, "portable.zip");
+  for (const paths of invalidPaths) {
+    const files = paths.map((path) => ({ path, content: "plain text" }));
+    assert.throws(() => validatePortableFilePaths(files), /collid|collision|non-portable/, JSON.stringify(paths));
+    assert.throws(() => scanPackageFiles(files), /collid|collision|non-portable/, JSON.stringify(paths));
+    if (paths.some((path) => path.endsWith("/"))) continue;
+    await writeStoredZip(archive, files);
+    await assert.rejects(readPackageFilesFromZipBuffer(await readFile(archive)), /collid|collision|non-portable/);
+  }
+  const valid = [{ path: "docs/README.md", content: "text" }, { path: "docs/example.txt", content: "text" }];
+  assert.doesNotThrow(() => validatePortableFilePaths(valid));
+  assert.doesNotThrow(() => scanPackageFiles(valid));
+});
+
+test("historical manifest decoding does not apply new version or portable intake restrictions", () => {
+  const files = [
+    { path: "skill.json", content: manifestJson({ version: "01.0.0" }) },
+    { path: "CON.txt", content: "historical file" },
+  ];
+  assert.throws(() => loadSkillManifestFromPackageFiles(files), /invalid/);
+  assert.equal(loadStoredSkillManifestFromPackageFiles(files).version, "01.0.0");
+  assert.equal(normalizePackageFilePath("CON.txt"), "CON.txt");
+});

@@ -355,3 +355,19 @@ test("session and API-token-shaped actors resolve the same organization policy",
   const token = await store.getArchitecture({ id: organizationMember, roles: ["owner"] }, architecture.id);
   assert.deepEqual(token?.access, session?.access);
 });
+
+test("memory team owner access follows the external-membership policy and fails closed on lifecycle changes", async () => {
+  const policy = { ...defaultOrganizationPolicyV1, teams: { ...defaultOrganizationPolicyV1.teams, requireOrganizationMembershipForTeamMembers: false } };
+  const store = new MemoryArchitectureStore({
+    organizations: [organization("org-external", policy)],
+    teamMemberships: [{ userId: architectureOwner, teamId, role: "owner", organizationId: "org-external" }],
+  });
+  const architecture = await store.createArchitecture({ actor: architectureOwner, owner: { type: "team", id: teamId }, name: "External owner", description: "", patternId: "flat" });
+  assert.equal((await store.getArchitecture(architectureOwner, architecture.id))?.access.canManage, true);
+  store.setOrganizationPolicy("org-external", defaultOrganizationPolicyV1);
+  assert.equal(await store.getArchitecture(architectureOwner, architecture.id), null);
+  store.setOrganizationPolicy("org-external", policy);
+  assert.equal((await store.getArchitecture(architectureOwner, architecture.id))?.access.canAppend, true);
+  store.setOrganizationStatus("org-external", "suspended");
+  assert.equal(await store.getArchitecture(architectureOwner, architecture.id), null);
+});

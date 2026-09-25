@@ -285,6 +285,24 @@ and registry instance ID. Legacy records without that identity are not adopted
 automatically: keep their files as a backup, review the source, and install into
 a new root. A registry change requires a separate root.
 
+New installation and snapshot records declare
+`contentDigestAlgorithm: "sha256-json-ordinal-v1"`; transaction journals use
+`targetContentDigestAlgorithm` for the candidate. This scheme normalizes paths,
+sorts them by JavaScript string ordinal order (UTF-16 code units), then hashes
+the UTF-8 JSON array of `{path, content}` entries with SHA-256. It does not
+depend on the process locale. Readers reject unknown algorithm identifiers.
+
+A missing algorithm field identifies the legacy `localeCompare` scheme.
+The CLI verifies these records with the current process's legacy comparison
+rules. It does not retry with a different algorithm. If a locale change makes
+legacy bytes unverifiable, return to the original verification locale and
+compatible Node/ICU environment before a trusted migration. Preserve the files
+and recovery copies if their identity still cannot be proved. Never add an
+algorithm field to an old hash by hand. After verification, an install or
+update records the held bytes with an ordinal digest in the new journal and
+snapshot; rollback does the same for its verified source snapshot. Untouched
+legacy history and journals retain their original verification rules.
+
 Local package intake, install, export, and rollback support macOS and Linux.
 No-follow payload reads and writes, private staging directories, and drift
 checks protect these operations. They do not isolate the workspace from a

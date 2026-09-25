@@ -243,6 +243,31 @@ test("migration and compiler share deny-first overlay decisions regardless of bi
   );
 });
 
+test("migration preserves child opt-in beneath an unbound or differently profiled ancestor", () => {
+  for (const separateProfile of [false, true]) {
+    for (const targetPatternId of ["flat", "domain-router", "multi-level-router"] as const) {
+      const source = sourceFor("flat");
+      const parent = source.environments[0];
+      const parentProfile = source.profiles[0];
+      const profile = separateProfile ? { ...structuredClone(parentProfile), id: "child-profile", name: "Child profile", bindings: [] } : parentProfile;
+      if (separateProfile) source.profiles.push(profile);
+      const child = { id: "child-environment", name: "Child", kind: "work" as const, profileId: profile.id, parentId: parent.id };
+      source.environments.push(child);
+      const leafId = "leaf-release-notes";
+      parentProfile.bindings = parentProfile.bindings.filter((binding) => binding.nodeId !== leafId);
+      profile.bindings.push({ nodeId: leafId, environmentIds: [child.id], enabled: true, runtimeExposure: "leaf" });
+      const result = deriveArchitecturePatternMigration({ source, targetPatternId });
+      assert.notEqual(result.mappingStatus, "blocked", `${targetPatternId}; separate profile: ${separateProfile}`);
+      if (result.mappingStatus === "blocked") continue;
+      for (const environment of source.environments) {
+        const before = compileArchitecture(source, { registry: registryFor(source), environmentId: environment.id });
+        const after = compileArchitecture(result.target.spec, { registry: registryFor(result.target.spec), environmentId: environment.id });
+        assert.deepEqual(after.nodes.filter((node) => node.kind === "leaf").map((node) => node.id).sort(), before.nodes.filter((node) => node.kind === "leaf").map((node) => node.id).sort());
+      }
+    }
+  }
+});
+
 test("invalid mapping and strict unknown fields return a blocked result", () => {
   const source = sourceFor("flat");
   const unknown = validateArchitecturePatternMigrationInput({ source, targetPatternId: "domain-router", mapping: { extra: true } });

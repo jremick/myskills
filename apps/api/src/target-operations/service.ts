@@ -8,7 +8,7 @@ import {
   skillReleaseChangeKinds,
   type SkillUpgradePolicyV1,
   isPrereleaseVersion,
-  isWithinSkillUpgradeMaintenanceWindow,
+  skillUpgradePoliciesAllowExecution,
   parseSemanticVersion,
   targetSkillOperationActions,
   targetSkillOperationPlanDigest,
@@ -76,10 +76,10 @@ export class TargetSkillOperationService {
     if (!platform) throw new AppError("The requested release has no supported target platform.", "TARGET_OPERATION_PLATFORM_UNSUPPORTED", 409);
     const resolvedPolicy = await this.options.upgradePolicies?.resolveForTarget(target);
     if (resolvedPolicy) {
-      const pin = resolvedPolicy.policy.pins[slug];
-      if (pin && version !== pin) throw new AppError("The requested version conflicts with the active upgrade pin.", "TARGET_OPERATION_POLICY_PIN_CONFLICT", 409);
-      if (!resolvedPolicy.policy.includePrerelease && isPrereleaseVersion(version)) throw new AppError("Prerelease upgrades are disabled by policy.", "TARGET_OPERATION_POLICY_PRERELEASE_BLOCKED", 409);
-      if (!await this.changeKindsAllowed(actorId, slug, fromVersion, release, resolvedPolicy.policy)) throw new AppError("The upgrade range contains a release change kind blocked by policy.", "TARGET_OPERATION_POLICY_CHANGE_KIND_BLOCKED", 409);
+      const policies = resolvedPolicy.constraints.map(({ policy }) => policy);
+      if (policies.some((policy) => Object.hasOwn(policy.pins, slug) && version !== policy.pins[slug])) throw new AppError("The requested version conflicts with the active upgrade pin.", "TARGET_OPERATION_POLICY_PIN_CONFLICT", 409);
+      if (policies.some((policy) => !policy.includePrerelease) && isPrereleaseVersion(version)) throw new AppError("Prerelease upgrades are disabled by policy.", "TARGET_OPERATION_POLICY_PRERELEASE_BLOCKED", 409);
+      if (!await this.changeKindsAllowed(actorId, slug, fromVersion, release, policies)) throw new AppError("The upgrade range contains a release change kind blocked by policy.", "TARGET_OPERATION_POLICY_CHANGE_KIND_BLOCKED", 409);
     }
     const blockers = skillReleaseUpdateBlockers(release, {
       installed: { version: fromVersion ?? "0.0.0", platform: platform.name },
@@ -147,7 +147,9 @@ export class TargetSkillOperationService {
       if (skill.managed === false || !skill.version || !parseSemanticVersion(skill.version)) continue;
       const receipt = await this.store.latestSuccess(targetId, target.generation, skill.slug);
       const receiptVersion = receipt && receipt.updatedAt > observation.observedAt ? receipt.result?.installedVersion : undefined;
-      const installedVersion = receiptVersion && parseSemanticVersion(receiptVersion) ? receiptVersion : skill.version;
+      const newerReceipt = receiptVersion && parseSemanticVersion(receiptVersion) ? receipt?.result : undefined;
+      const installedVersion = newerReceipt?.installedVersion ?? skill.version;
+      const installedDigest = newerReceipt ? newerReceipt.artifactSha256 : skill.digest;
       if (!await this.canReadRelease(actorId, { targetId, skillSlug: skill.slug, toVersion: installedVersion })) continue;
       const platform = target.adapter.kind.startsWith("codex") ? "codex" : target.adapter.kind;
       const releases = (await this.submissions.listSkillReleases({ slug: skill.slug, actor }))
@@ -162,15 +164,15 @@ export class TargetSkillOperationService {
           installed: {
             version: installedVersion,
             platform,
-            ...(skill.digest && /^[a-f0-9]{64}$/.test(skill.digest) ? { artifactSha256: skill.digest } : {}),
+            ...(installedDigest && /^[a-f0-9]{64}$/.test(installedDigest) ? { artifactSha256: installedDigest } : {}),
           },
           releases,
           changeHistory,
-          policy: {
-            includePrerelease: policy?.policy.includePrerelease ?? false,
-            ...(policy ? { allowedChangeKinds: policy.policy.allowedChangeKinds } : {}),
-            ...(policy?.policy.pins[skill.slug] ? { pinnedVersion: policy.policy.pins[skill.slug] } : {}),
-          },
+          policyConstraints: policy?.constraints.map(({ policy: constraint }) => ({
+            includePrerelease: constraint.includePrerelease,
+            allowedChangeKinds: constraint.allowedChangeKinds,
+            ...(Object.hasOwn(constraint.pins, skill.slug) ? { pinnedVersion: constraint.pins[skill.slug] } : {}),
+          })),
           client: {
             adapterContractVersion: target.adapter.contractVersion,
             ...(typeof target.metadata?.myskillsVersion === "string" ? { myskillsVersion: target.metadata.myskillsVersion } : {}),
@@ -218,10 +220,13 @@ export class TargetSkillOperationService {
       const release = await this.submissions.getPublicRelease({ slug: candidate.skillSlug, version: candidate.toVersion, actorId });
       if (!release || !await this.canReadRelease(actorId, candidate)) continue;
       const policy = await this.options.upgradePolicies?.resolveForTarget(target);
-      if (policy && ((policy.policy.pins[candidate.skillSlug] && policy.policy.pins[candidate.skillSlug] !== candidate.toVersion)
-        || (!policy.policy.includePrerelease && isPrereleaseVersion(candidate.toVersion)))) continue;
-      if (policy && !await this.changeKindsAllowed(actorId, candidate.skillSlug, candidate.fromVersion, release, policy.policy)) continue;
-      if (policy?.policy.mode === "maintenance-window" && !isWithinSkillUpgradeMaintenanceWindow(policy.policy, new Date(now))) continue;
+      if (policy) {
+        const policies = policy.constraints.map(({ policy }) => policy);
+        if (policies.some((constraint) => (Object.hasOwn(constraint.pins, candidate.skillSlug) && constraint.pins[candidate.skillSlug] !== candidate.toVersion)
+          || (!constraint.includePrerelease && isPrereleaseVersion(candidate.toVersion)))) continue;
+        if (!await this.changeKindsAllowed(actorId, candidate.skillSlug, candidate.fromVersion, release, policies)) continue;
+        if (!skillUpgradePoliciesAllowExecution(policy.constraints, new Date(now))) continue;
+      }
       if (candidate.targetGeneration !== input.targetGeneration) continue;
       const claimToken = randomBytes(32).toString("base64url");
       const claimed = await this.store.claim({
@@ -260,7 +265,7 @@ export class TargetSkillOperationService {
     const operation = await this.requireOperation(input.operationId);
     const actorId = identifier(input.actorId, "actorId");
     const target = await this.targets.authorizeCompanionOperation(actorId, operation.targetId, operation.action);
-    await this.assertCurrentRangePolicy(actorId, operation, target);
+    await this.assertCurrentPolicy(actorId, operation, target);
     const now = this.now();
     const advanced = await this.store.advance({
       actorId: identifier(input.actorId, "actorId"),
@@ -288,7 +293,7 @@ export class TargetSkillOperationService {
     const actorId = identifier(input.actorId, "actorId");
     const target = await this.targets.authorizeCompanionOperation(actorId, operation.targetId, operation.action);
     const result = normalizeResult(input.result, this.now());
-    if (result.status === "succeeded") await this.assertCurrentRangePolicy(actorId, operation, target);
+    if (result.status === "succeeded") await this.assertCurrentPolicy(actorId, operation, target);
     if (!targetSkillOperationResultMatchesPlan(operation, result)) throw new AppError("Success requires verification of the exact planned release.", "TARGET_OPERATION_RECEIPT_MISMATCH", 409);
     const completed = await this.store.complete({
       actorId: identifier(input.actorId, "actorId"),
@@ -304,20 +309,27 @@ export class TargetSkillOperationService {
   }
 
   private async changeKindsAllowed(actorId: string, slug: string, fromVersion: string | undefined,
-    release: PublicReleaseMetadata, policy: SkillUpgradePolicyV1): Promise<boolean> {
-    if (!policy.allowedChangeKinds.includes(release.changeKind)) return false;
+    release: PublicReleaseMetadata, policies: readonly SkillUpgradePolicyV1[]): Promise<boolean> {
+    const allowed = (kind: PublicReleaseMetadata["changeKind"]) => policies.every((policy) => policy.allowedChangeKinds.includes(kind));
+    if (!allowed(release.changeKind)) return false;
     if (!fromVersion || compareSemanticVersions(fromVersion, release.version) >= 0
-      || skillReleaseChangeKinds.every((kind) => policy.allowedChangeKinds.includes(kind))) return true;
+      || skillReleaseChangeKinds.every(allowed)) return true;
     const history = await this.submissions.listSkillReleaseChangeHistory({ slug, actorId });
-    return skillReleaseUpgradeRange(history, fromVersion, release.version).every((item) => policy.allowedChangeKinds.includes(item.changeKind));
+    return skillReleaseUpgradeRange(history, fromVersion, release.version).every((item) => allowed(item.changeKind));
   }
 
-  private async assertCurrentRangePolicy(actorId: string, operation: TargetSkillOperation, target: ArchitectureTargetRecord): Promise<void> {
+  private async assertCurrentPolicy(actorId: string, operation: TargetSkillOperation, target: ArchitectureTargetRecord): Promise<void> {
     const policy = await this.options.upgradePolicies?.resolveForTarget(target);
     if (!policy) return;
     const release = await this.submissions.getPublicRelease({ actorId, slug: operation.skillSlug, version: operation.toVersion });
-    if (!release || !await this.changeKindsAllowed(actorId, operation.skillSlug, operation.fromVersion, release, policy.policy)) {
-      throw new AppError("The upgrade range no longer meets the target policy.", "TARGET_OPERATION_POLICY_CHANGED", 409);
+    const policies = policy.constraints.map(({ policy }) => policy);
+    if (!release || policies.some((constraint) => (Object.hasOwn(constraint.pins, operation.skillSlug) && constraint.pins[operation.skillSlug] !== operation.toVersion)
+      || (!constraint.includePrerelease && isPrereleaseVersion(operation.toVersion)))
+      || !await this.changeKindsAllowed(actorId, operation.skillSlug, operation.fromVersion, release, policies)) {
+      throw new AppError("The operation no longer meets every applicable upgrade policy.", "TARGET_OPERATION_POLICY_CHANGED", 409);
+    }
+    if (!skillUpgradePoliciesAllowExecution(policy.constraints, new Date(this.now()))) {
+      throw new AppError("The operation is outside an applicable maintenance window.", "TARGET_OPERATION_OUTSIDE_MAINTENANCE_WINDOW", 409);
     }
   }
 

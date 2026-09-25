@@ -12,6 +12,7 @@ import {
   skills,
   skillVersions,
   skillArtifacts,
+  skillPlatformVariants,
   artifactWriteIntents,
   teamMemberships,
   teams,
@@ -858,3 +859,89 @@ async function applyMigration(pool: ReturnType<typeof createPgPool>, id: string)
     throw error;
   }
 }
+
+test("Postgres defaults use stable SemVer while exact legacy releases remain exportable", { timeout: 60_000 }, async (t) => {
+  assert.ok(databaseUrl);
+  assertSafeTestDatabaseUrl(databaseUrl);
+  const pool = createPgPool(databaseUrl);
+  t.after(() => pool.end());
+  await resetDatabase(pool);
+  await applyMigrations(pool);
+  const db = createDb(pool);
+  const author = await insertUser(db, "semver-author@example.com", "Author");
+  const definitions = [
+    { slug: "mixed", versions: ["2.0.0+older", "2.0.0+newer", "1.9.9", "3.0.0-rc.1", "4.0.0", "05.0.0"] },
+    { slug: "legacy", versions: ["01.0.0"] },
+    { slug: "preview", versions: ["1.0.0-beta.1"] },
+    { slug: "deprecated", versions: ["4.0.0"] },
+  ];
+  for (const definition of definitions) {
+    const [skill] = await db.insert(skills).values({
+      slug: definition.slug, title: definition.slug, summary: "Release selection fixture.",
+      lifecycleStatus: "approved", visibility: "public", ownerUserId: author.id,
+    }).returning();
+    assert.ok(skill);
+    for (const [index, version] of definition.versions.entries()) {
+      const [release] = await db.insert(skillVersions).values({
+        skillId: skill.id, version, lifecycleStatus: version === "4.0.0" ? "deprecated" : "approved",
+        reviewStatus: "approved", securityStatus: "passed",
+        createdAt: new Date(Date.UTC(2026, 0, index + 1)), publishedAt: new Date(Date.UTC(2026, 0, index + 1)),
+      }).returning();
+      assert.ok(release);
+      await db.insert(skillPlatformVariants).values({
+        skillVersionId: release.id, name: "codex", installTarget: version === "2.0.0+newer" ? "chosen-target" : "other-target", status: "supported",
+      });
+      const payload = { files: [
+        { path: "skill.json", content: JSON.stringify({ ...cleanPackageInput().manifest, name: definition.slug, version }) },
+        { path: "CON.txt", content: "Historical file remains downloadable." },
+      ] };
+      await db.insert(skillArtifacts).values({
+        skillVersionId: release.id, storageKey: `fixture/${release.id}`, sha256: artifactPayloadSha256(payload),
+        byteSize: Buffer.byteLength(JSON.stringify(payload)), contentType: "application/vnd.myskills-app.package+json", payload,
+      });
+    }
+  }
+  const repository = new PostgresSkillRepository(db);
+  const mixed = await repository.getVisibleSkillBySlug("mixed");
+  assert.equal(mixed?.latestVersion, "2.0.0+newer");
+  assert.deepEqual(mixed?.platforms, [{ name: "codex", installTarget: "chosen-target", status: "supported" }]);
+  for (const slug of ["legacy", "preview", "deprecated"]) {
+    const skill = await repository.getVisibleSkillBySlug(slug);
+    assert.ok(skill, "historical skills remain discoverable");
+    assert.equal(skill.latestVersion, null);
+    assert.deepEqual(skill.platforms, []);
+  }
+  const service = new SubmissionService(new PostgresSubmissionStore(db));
+  const bundle = await service.getPublicBundle({ slug: "legacy", version: "01.0.0" });
+  assert.equal(bundle?.version, "01.0.0");
+  assert.equal(bundle?.payload.files[1]?.path, "CON.txt");
+});
+
+test("Postgres concurrent duplicate submission returns one success and one conflict", { timeout: 60_000 }, async (t) => {
+  assert.ok(databaseUrl);
+  assertSafeTestDatabaseUrl(databaseUrl);
+  const pool = createPgPool(databaseUrl);
+  t.after(() => pool.end());
+  await resetDatabase(pool);
+  await applyMigrations(pool);
+  const db = createDb(pool);
+  const author = { ...await insertUser(db, "duplicate-author@example.com", "Author"), roles: ["author" as const] };
+  const service = new SubmissionService(new PostgresSubmissionStore(db));
+  const firstInput = cleanPackageInput();
+  for (const version of ["0.1.0", "0.2.0"]) {
+    const manifest = { ...firstInput.manifest, version };
+    const input = { actor: author, manifest, files: [{ path: "skill.json", content: JSON.stringify(manifest) }] };
+    const results = await Promise.allSettled([service.createSubmission(input), service.createSubmission(input)]);
+    assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+    const rejected = results.find((result) => result.status === "rejected");
+    assert.ok(rejected?.status === "rejected");
+    assert.ok(rejected.reason instanceof AppError);
+    assert.equal(rejected.reason.code, "PACKAGE_VERSION_EXISTS");
+    assert.equal(rejected.reason.statusCode, 409);
+  }
+  const manifest = { ...firstInput.manifest, version: "0.3.0", visibility: "private" as const };
+  await assert.rejects(service.createSubmission({
+    actor: author, manifest, files: [{ path: "skill.json", content: JSON.stringify(manifest) }],
+  }), (error) => error instanceof AppError && error.code === "PACKAGE_VISIBILITY_MISMATCH" && error.statusCode === 409);
+  assert.equal((await db.select().from(skillVersions)).length, 2);
+});

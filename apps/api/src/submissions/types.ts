@@ -1,3 +1,4 @@
+import type { ChronologicalStoreQuery } from "../repositories/chronological-pagination.js";
 import { AppError } from "@myskills-app/core";
 import type { Role } from "@myskills-app/auth";
 import type { SkillManifest, PackageInputFile, ScanFinding } from "@myskills-app/skill-package";
@@ -245,7 +246,7 @@ export interface SubmissionStore {
   getUserSubmissionDetail(input: { userId: string; submissionId: string }): Promise<UserSubmissionDetail | null>;
   getUserSubmissionBundle(input: { userId: string; submissionId: string; platform?: string }): Promise<UserSubmissionBundle | null>;
   performSubmissionOwnerAction(input: { actorId: string; submissionId: string; action: SubmissionOwnerAction; reason?: string }): Promise<UserSubmissionSummary>;
-  listReviewSubmissions(): Promise<ReviewSubmissionSummary[]>;
+  listReviewSubmissions(input?: ChronologicalStoreQuery): Promise<ReviewSubmissionSummary[]>;
   getReviewSubmissionDetail(submissionId: string): Promise<ReviewSubmissionDetail | null>;
   getReviewSubmissionBundle(input: { submissionId: string; platform?: string }): Promise<ReviewSubmissionBundle | null>;
   approveSubmission(input: { actorId: string; submissionId: string; artifactSha256: string; reason?: string }): Promise<ReviewActionResult>;

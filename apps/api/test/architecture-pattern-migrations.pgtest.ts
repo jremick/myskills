@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { readdirSync, readFileSync } from "node:fs";
 import test, { type TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
+import { validateDiff } from "../src/architectures/postgres-pattern-migration-records.js";
 import { createPgPool } from "../src/db/client.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -212,6 +213,76 @@ test("mapping, pattern, version, and digest constraints reject unsafe lineage re
       (error) => isConstraintError(error, constraint),
     );
   }
+});
+
+const validDiff = {
+  addedEdgeCount: 2, removedEdgeCount: 0, rewrittenBindingCount: 4,
+  addedRouterNodeIds: ["root-router"], droppedRouterNodeIds: [],
+  preservedLeafNodeIds: ["leaf-a"], preservedSkillRefIds: ["skill-a"],
+};
+
+test("migration 0030 checks diff shape against the application reader", { timeout: 60_000 }, async (t) => {
+  const pool = await freshPool(t);
+  await insertUser(pool);
+  await insertArchitecture(pool, sourceArchitectureId, "Source", "flat");
+  await insertArchitecture(pool, targetArchitectureId, "Target", "multi-level-router");
+  await insertRevision(pool, sourceRevisionId, sourceArchitectureId, "flat");
+  await insertRevision(pool, targetRevisionId, targetArchitectureId, "multi-level-router");
+  await pool.query(readFileSync(join(migrationsDir, "0030_architecture_pattern_migration_diff_shape.sql"), "utf8"));
+  const { addedRouterNodeIds: _omitted, ...missingArray } = validDiff;
+  const { addedEdgeCount: _omittedCount, ...missingCount } = validDiff;
+  for (const diff of [
+    {}, missingArray, missingCount, { ...validDiff, extra: true },
+    { ...validDiff, addedRouterNodeIds: null }, { ...validDiff, addedRouterNodeIds: "root-router" },
+    { ...validDiff, addedRouterNodeIds: [null] }, { ...validDiff, preservedSkillRefIds: ["bad id"] },
+    { ...validDiff, droppedRouterNodeIds: ["x".repeat(129)] },
+    { ...validDiff, addedEdgeCount: -1 }, { ...validDiff, removedEdgeCount: 0.5 },
+    { ...validDiff, rewrittenBindingCount: "4" }, { ...validDiff, addedEdgeCount: null },
+    { ...validDiff, addedEdgeCount: Number.MAX_SAFE_INTEGER + 1 },
+  ]) {
+    assert.throws(() => validateDiff(diff));
+    await assert.rejects(insertLineage(pool, { diff }), (error) => isConstraintError(error, "skill_architecture_pattern_migrations_diff_shape_check"));
+  }
+  for (const diff of [validDiff, { ...validDiff, addedEdgeCount: Number.MAX_SAFE_INTEGER, addedRouterNodeIds: [] }]) {
+    validateDiff(diff);
+    assert.equal((await pool.query("SELECT architecture_pattern_migration_diff_has_valid_shape($1::jsonb) AS valid", [JSON.stringify(diff)])).rows[0].valid, true);
+  }
+  await insertLineage(pool, { diff: validDiff });
+  assert.deepEqual((await pool.query("SELECT diff FROM skill_architecture_pattern_migrations WHERE id = $1", [lineageId])).rows[0].diff, validDiff);
+});
+
+test("migration 0030 validates compatible retained lineage without changing it", { timeout: 60_000 }, async (t) => {
+  const pool = await freshPool(t);
+  await insertUser(pool);
+  await insertArchitecture(pool, sourceArchitectureId, "Source", "flat");
+  await insertArchitecture(pool, targetArchitectureId, "Target", "multi-level-router");
+  await insertRevision(pool, sourceRevisionId, sourceArchitectureId, "flat");
+  await insertRevision(pool, targetRevisionId, targetArchitectureId, "multi-level-router");
+  await insertLineage(pool, { diff: validDiff });
+  const before = (await pool.query("SELECT to_jsonb(m) AS row FROM skill_architecture_pattern_migrations m")).rows;
+  await pool.query(readFileSync(join(migrationsDir, "0030_architecture_pattern_migration_diff_shape.sql"), "utf8"));
+  assert.deepEqual((await pool.query("SELECT to_jsonb(m) AS row FROM skill_architecture_pattern_migrations m")).rows, before);
+  assert.equal((await pool.query("SELECT convalidated FROM pg_constraint WHERE conname = 'skill_architecture_pattern_migrations_diff_shape_check'")).rows[0].convalidated, true);
+});
+
+test("migration 0030 refuses unreadable retained lineage without rewriting it", { timeout: 60_000 }, async (t) => {
+  const pool = await freshPool(t);
+  await insertUser(pool);
+  await insertArchitecture(pool, sourceArchitectureId, "Source", "flat");
+  await insertArchitecture(pool, targetArchitectureId, "Target", "multi-level-router");
+  await insertRevision(pool, sourceRevisionId, sourceArchitectureId, "flat");
+  await insertRevision(pool, targetRevisionId, targetArchitectureId, "multi-level-router");
+  await insertLineage(pool); // Legacy SQL allowed the required identifier arrays to be absent.
+  const before = (await pool.query("SELECT to_jsonb(m) AS row FROM skill_architecture_pattern_migrations m")).rows;
+  await pool.query("BEGIN");
+  try {
+    await assert.rejects(pool.query(readFileSync(join(migrationsDir, "0030_architecture_pattern_migration_diff_shape.sql"), "utf8")),
+      (error) => isConstraintError(error, "skill_architecture_pattern_migrations_diff_shape_check"));
+  } finally {
+    await pool.query("ROLLBACK");
+  }
+  assert.deepEqual((await pool.query("SELECT to_jsonb(m) AS row FROM skill_architecture_pattern_migrations m")).rows, before);
+  assert.equal((await pool.query("SELECT count(*)::int AS count FROM pg_constraint WHERE conname = 'skill_architecture_pattern_migrations_diff_shape_check'")).rows[0].count, 0);
 });
 
 type LineageOverrides = Partial<{

@@ -1,7 +1,8 @@
+import type { ChronologicalStoreQuery } from "../repositories/chronological-pagination.js";
 import { and, eq, ilike, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { AppError, type SharingSettings, type SkillLifecycleStatus } from "@myskills-app/core";
 import {
-  loadSkillManifestFromPackageFiles,
+  loadStoredSkillManifestFromPackageFiles,
   PackageManifestFileError,
 } from "@myskills-app/skill-package";
 import { assertArtifactBodyMatchesMetadata, parseArtifactPayload, readArtifactPayload } from "../artifacts/package-payload.js";
@@ -99,6 +100,8 @@ export class PostgresSubmissionStore implements SubmissionStore {
       if (input.manifest.visibility === "organization" && !sharing.organizationVisibilityEnabled) {
         throw new AppError("Organization sharing is disabled for this instance.", "ORGANIZATION_SHARING_DISABLED", 403);
       }
+      // Serialize both first submissions and later versions before duplicate lookup.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`submission:${input.manifest.name}`}, 0))`);
       const [existingSkill] = await tx
         .select()
         .from(skills)
@@ -107,6 +110,10 @@ export class PostgresSubmissionStore implements SubmissionStore {
 
       if (existingSkill?.ownerUserId && existingSkill.ownerUserId !== input.actor.id) {
         throw new AppError("Package slug is unavailable.", "PACKAGE_SLUG_UNAVAILABLE", 409);
+      }
+
+      if (existingSkill && existingSkill.visibility !== input.manifest.visibility) {
+        throw new AppError("Package visibility must match the skill's current sharing setting.", "PACKAGE_VISIBILITY_MISMATCH", 409);
       }
 
       const skill = existingSkill ?? (await tx
@@ -410,7 +417,8 @@ export class PostgresSubmissionStore implements SubmissionStore {
     return userSubmissionSummary(updatedRow);
   }
 
-  async listReviewSubmissions(): Promise<ReviewSubmissionSummary[]> {
+  async listReviewSubmissions(input?: ChronologicalStoreQuery): Promise<ReviewSubmissionSummary[]> {
+    if (input?.before && !isUuid(input.before.id)) throw new AppError("Invalid cursor for this list.", "INVALID_PAGE_CURSOR", 400);
     const rows = await this.db
       .select({
         id: skillVersions.id,
@@ -438,6 +446,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
         `,
         findingCount: sql<number>`count(distinct ${scanFindings.id})::int`,
         createdAt: skillVersions.createdAt,
+        cursorCreatedAt: sql<string>`to_char(${skillVersions.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
       })
       .from(skillVersions)
       .innerJoin(skills, eq(skillVersions.skillId, skills.id))
@@ -446,6 +455,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
       .leftJoin(scanRuns, eq(scanRuns.skillVersionId, skillVersions.id))
       .leftJoin(scanFindings, eq(scanFindings.scanRunId, scanRuns.id))
       .where(and(
+        input?.before ? sql`(${skillVersions.createdAt}, ${skillVersions.id}) < (${input.before.createdAt}::timestamptz, ${input.before.id}::uuid)` : undefined,
         isNull(skillVersions.deletedAt),
         ne(skillVersions.lifecycleStatus, "archived"),
         ne(skills.lifecycleStatus, "archived"),
@@ -468,12 +478,12 @@ export class PostgresSubmissionStore implements SubmissionStore {
         skillVersions.deletedAt,
         skillVersions.createdAt,
       )
-      .orderBy(sql`${skillVersions.createdAt} desc`)
-      .limit(100);
+      .orderBy(sql`${skillVersions.createdAt} desc`, sql`${skillVersions.id} desc`)
+      .limit(input?.limit ?? 100);
 
-    return rows.map((row) => ({
+    return rows.map(({ cursorCreatedAt, ...row }) => ({
       ...row,
-      createdAt: row.createdAt.toISOString(),
+      createdAt: input ? cursorCreatedAt : row.createdAt.toISOString(),
       allowedActions: reviewAllowedActions(row),
     }));
   }
@@ -2315,7 +2325,7 @@ function publicRelease(row: PublicReleaseRow): PublicReleaseMetadata {
 function manifestFromPayload(input: unknown) {
   const payload = parseArtifactPayload(input);
   try {
-    return loadSkillManifestFromPackageFiles(payload.files);
+    return loadStoredSkillManifestFromPackageFiles(payload.files);
   } catch (error) {
     if (error instanceof PackageManifestFileError) {
       throw new AppError(error.message, error.code, 422);

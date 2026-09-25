@@ -104,6 +104,26 @@ test("install instructions never fetch or expose bundle package contents", async
   assert.equal(text.includes("secret package text"), false);
 });
 
+test("install instructions explain prerelease opt-in and separate user-action acceptance", async () => {
+  const version = "0.2.0-rc.1+test";
+  const client = createRegistryApiClient({
+    token: "aiss_test_secret",
+    fetchImpl: async (url) => {
+      if (url.endsWith("/v1/mcp/session")) return jsonResponse(200, mcpSession());
+      if (url.endsWith("/v1/skills/release-notes-helper")) return jsonResponse(200, { skill: publicSkill() });
+      return jsonResponse(200, { release: { ...publicRelease(), version, requiresUserAction: true, releaseNotes: "Review the changed configuration." } });
+    },
+  });
+  const result = await createAiSkillsMcpHandlers(client).getInstallInstructions({ slug: "release-notes-helper", version, platform: "codex" });
+  assert.equal(result.isError, undefined);
+  const instructions = result.structuredContent?.install as Record<string, unknown>;
+  assert.match(String(instructions.cliInstallCommand), / --include-prerelease$/);
+  assert.doesNotMatch(String(instructions.cliInstallCommand), /accept-user-action/);
+  assert.equal(instructions.cliInstallAfterReviewCommand, `${instructions.cliInstallCommand} --accept-user-action`);
+  assert.match(String(instructions.userAction), /Read the release notes/);
+  assert.equal((result.structuredContent?.release as Record<string, unknown>).releaseNotes, "Review the changed configuration.");
+});
+
 test("install instructions only select supported platforms", async () => {
   const client = createRegistryApiClient({
     token: "aiss_test_secret",

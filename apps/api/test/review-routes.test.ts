@@ -1,3 +1,4 @@
+import { parseSkillManifest } from "@myskills-app/skill-package";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -825,6 +826,47 @@ test("invalid review actions are rejected before state changes", async (t) => {
 
   assert.equal(response.statusCode, 400);
   assert.equal(response.json().error.code, "INVALID_REVIEW_ACTION");
+});
+
+test("review pages reach more than 100 equal-timestamp submissions and enforce scope", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildReviewApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const token = await addAndLoginWithMfa(app, authStore, "pages-reviewer@example.com", ["maintainer"]);
+  const other = await addAndLoginWithMfa(app, authStore, "pages-other@example.com", ["maintainer"]);
+  const author = await addAndLoginWithMfa(app, authStore, "pages-author@example.com", ["author"]);
+  const service = new SubmissionService(submissionStore);
+  const ids: string[] = [];
+  for (let index = 0; index < 121; index += 1) {
+    const input = cleanSubmissionPayload({ version: `1.0.${index}` });
+    const submission = await service.createSubmission({ actor: { id: "fixture-author", roles: ["author"] }, manifest: parseSkillManifest(input.manifest), files: input.files });
+    submission.createdAt = "2026-09-25T00:00:00.123Z";
+    ids.push(submission.id);
+  }
+  const seen: string[] = [];
+  let cursor: string | null = null;
+  let firstCursor = "";
+  for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
+    const response = await app.inject({ method: "GET", url: `/v1/review/submissions?limit=37${cursor ? `&cursor=${cursor}` : ""}`, headers: { authorization: `Bearer ${token}` } });
+    assert.equal(response.statusCode, 200);
+    const body = response.json();
+    assert.ok(Array.isArray(body.submissions));
+    seen.push(...body.submissions.map((row: { id: string }) => row.id));
+    cursor = body.nextCursor;
+    firstCursor ||= cursor ?? "";
+    if (!cursor) break;
+  }
+  assert.deepEqual(seen, ids.sort().reverse());
+  assert.equal(new Set(seen).size, 121);
+  const legacy = await app.inject({ method: "GET", url: "/v1/review/submissions", headers: { authorization: `Bearer ${token}` } });
+  assert.equal(legacy.json().submissions.length, 100);
+  assert.equal(typeof legacy.json().nextCursor, "string");
+  for (const [suffix, bearer, status] of [["cursor=invalid", token, 400], ["limit=101", token, 400], [`cursor=${firstCursor}`, other, 400], [`cursor=${firstCursor}`, author, 403]] as const) {
+    const response = await app.inject({ method: "GET", url: `/v1/review/submissions?${suffix}`, headers: { authorization: `Bearer ${bearer}` } });
+    assert.equal(response.statusCode, status);
+    assert.equal(response.json().submissions, undefined);
+  }
 });
 
 function buildReviewApp(options: {

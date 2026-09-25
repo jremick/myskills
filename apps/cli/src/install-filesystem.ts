@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { constants } from "node:fs";
+import { constants, type Stats } from "node:fs";
 import { lstat, mkdir, open, readdir, realpath, rename, rm, rmdir, type FileHandle } from "node:fs/promises";
 import path from "node:path";
-import { normalizePackageFilePath } from "@myskills-app/skill-package";
+import { normalizePackageFilePath, validatePortableFilePaths } from "@myskills-app/skill-package";
+export { validatePortableFilePaths } from "@myskills-app/skill-package";
 
 interface LockOwner { pid: number; token: string }
 const activeLocks = new Set<string>();
@@ -22,15 +23,39 @@ export async function withInstallRootLock<T>(inputRoot: string, work: (root: str
   for (;;) {
     try {
       await mkdir(lockPath, { mode: 0o700 });
-      const handle = await openWithoutSymlinks(path.join(lockPath, "owner.json"), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
-      try { await handle.writeFile(JSON.stringify(owner), "utf8"); }
-      finally { await handle.close(); }
-      break;
     } catch (error) {
       if (errorCode(error) !== "EEXIST") throw error;
       await reclaimDeadLock(lockPath);
       if (Date.now() >= deadline) throw new Error("The installation root is busy or has an ambiguous lock. Retry after the other command exits; preserve an ambiguous lock for operator recovery.");
       await new Promise((resolve) => setTimeout(resolve, 25));
+      continue;
+    }
+    const directoryIdentity = await lstat(lockPath);
+    let ownerIdentity: Pick<Stats, "ino" | "dev"> | undefined;
+    try {
+      const handle = await openWithoutSymlinks(path.join(lockPath, "owner.json"), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
+      try {
+        ownerIdentity = await handle.stat();
+        await handle.writeFile(JSON.stringify(owner), "utf8");
+      } finally { await handle.close(); }
+      break;
+    } catch (error) {
+      // Remove only the directory and owner file created by this attempt.
+      // Unknown entries or substituted inodes remain for operator recovery.
+      try {
+        const current = await lstat(lockPath);
+        if (current.isDirectory() && !current.isSymbolicLink()
+          && current.ino === directoryIdentity.ino && current.dev === directoryIdentity.dev) {
+          if (ownerIdentity) {
+            const ownerPath = path.join(lockPath, "owner.json");
+            const currentOwner = await lstat(ownerPath);
+            if (currentOwner.isFile() && !currentOwner.isSymbolicLink()
+              && currentOwner.ino === ownerIdentity.ino && currentOwner.dev === ownerIdentity.dev) await rm(ownerPath);
+          }
+          await rmdir(lockPath); // An unknown entry makes this fail closed.
+        }
+      } catch { /* Preserve the acquisition failure and any ambiguous lock. */ }
+      throw error;
     }
   }
   activeLocks.add(root);
@@ -151,27 +176,6 @@ export async function atomicPrivateWrite(root: string, filePath: string, content
     await ensureSafeDirectory(root, path.dirname(filePath));
     await rename(temporary, filePath);
   } finally { await rm(temporary, { force: true }); }
-}
-
-export function validatePortableFilePaths(files: readonly { path: string; content: string }[]): void {
-  const paths = new Set<string>();
-  for (const file of files) {
-    const normalized = normalizePackageFilePath(file.path);
-    const folded = normalized.normalize("NFC").toLowerCase();
-    if (paths.has(folded)) throw new Error("Package has paths that collide on a supported filesystem.");
-    for (const component of normalized.split("/")) {
-      if (/[<>:"|?*\u0000-\u001f]/u.test(component) || /[. ]$/.test(component)
-        || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(component)) throw new Error("Package contains a non-portable filename.");
-    }
-    paths.add(folded);
-  }
-  for (const file of paths) {
-    const components = file.split("/");
-    while (components.length > 1) {
-      components.pop();
-      if (paths.has(components.join("/"))) throw new Error("Package contains a file/directory collision.");
-    }
-  }
 }
 
 export async function writeNewPackageTree(root: string, directory: string, files: readonly { path: string; content: string }[]): Promise<void> {

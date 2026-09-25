@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { SkillUpdateBlockerCode } from "@myskills-app/core";
+import type { SkillUpdateBlockerCode, SkillUpgradeMaintenanceWindow } from "@myskills-app/core";
 import { Check, CircleAlert, Clock3, PackageCheck, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,8 @@ import type {
   TargetSkillOperationRecord,
   TargetSkillUpdates,
 } from "../../api.js";
-import { safeArchitectureTargetErrorMessage } from "../../api.js";
+import { safeArchitectureTargetErrorMessage, targetSkillUpgradePolicyConstraints } from "../../api.js";
+import { canQueueWorkspaceOperation } from "../target/workspace-target.js";
 import { UpgradePolicyEditor } from "./UpgradePolicyEditor.js";
 
 interface UpdateSession { user: { email: string } }
@@ -27,37 +28,68 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
   const [architectureReviewTarget, setArchitectureReviewTarget] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  const load = useCallback(async (quiet = false) => {
+  const refresh = useMemo(() => ({
+    active: false,
+    pending: false,
+    inFlight: null as Promise<void> | null,
+  }), [client, session.user.email]);
+
+  const load = useCallback((quiet = false, afterMutation = false): Promise<void> => {
+    if (!refresh.active) return Promise.resolve();
+    if (refresh.inFlight) {
+      // Serialize refreshes, including those requested after a mutation. Skip
+      // publishing an older snapshot when a newer refresh is already pending.
+      if (!quiet || afterMutation) refresh.pending = true;
+      return refresh.inFlight;
+    }
     if (!client.listArchitectureTargets || !client.listTargetSkillUpdates || !client.listTargetSkillOperations) {
       setState("error");
       setMessage("The system update centre is not available in this workspace.");
-      return;
+      return Promise.resolve();
     }
     if (!quiet) setState("loading");
-    try {
-      const targets = await client.listArchitectureTargets();
-      const next = await Promise.all(targets.map(async (target): Promise<TargetUpdateState> => {
+    refresh.inFlight = (async () => {
+      do {
+        refresh.pending = false;
         try {
-          const [updates, operations] = await Promise.all([
-            client.listTargetSkillUpdates!(target.id),
-            client.listTargetSkillOperations!(target.id),
-          ]);
-          return { target, updates, operations };
+          const targets = await client.listArchitectureTargets!();
+          if (!refresh.active) return;
+          const next = await Promise.all(targets.map(async (target): Promise<TargetUpdateState> => {
+            try {
+              const [updates, operations] = await Promise.all([
+                client.listTargetSkillUpdates!(target.id),
+                client.listTargetSkillOperations!(target.id),
+              ]);
+              return { target, updates, operations };
+            } catch (error) {
+              return { target, updates: null, operations: [], error: safeArchitectureTargetErrorMessage(error) };
+            }
+          }));
+          if (!refresh.active) return;
+          if (refresh.pending) continue;
+          setRows(next);
+          setSelected((current) => current.filter((item) => candidateFor(next, item)));
+          setState("ready");
+          setMessage(null);
         } catch (error) {
-          return { target, updates: null, operations: [], error: safeArchitectureTargetErrorMessage(error) };
+          if (!refresh.active) return;
+          if (refresh.pending) continue;
+          setState("error");
+          setMessage(safeArchitectureTargetErrorMessage(error));
         }
-      }));
-      setRows(next);
-      setSelected((current) => current.filter((item) => candidateFor(next, item)));
-      setState("ready");
-      setMessage(null);
-    } catch (error) {
-      setState("error");
-      setMessage(safeArchitectureTargetErrorMessage(error));
-    }
-  }, [client]);
+      } while (refresh.active && refresh.pending);
+    })().finally(() => { refresh.inFlight = null; });
+    return refresh.inFlight;
+  }, [client, refresh]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    refresh.active = true;
+    setRows([]);
+    setSelected([]);
+    setReview(null);
+    void load();
+    return () => { refresh.active = false; };
+  }, [load, refresh]);
   const hasActive = rows.some((row) => row.operations.some((operation) => ["queued", "claimed", "applying", "verifying"].includes(operation.state)));
   useEffect(() => {
     if (!hasActive) return;
@@ -68,7 +100,7 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
   const availableCount = rows.reduce((count, row) => count + (row.updates?.items.filter((item) => item.evaluation.status === "update-available").length ?? 0), 0);
   const activeCount = rows.reduce((count, row) => count + row.operations.filter((operation) => ["queued", "claimed", "applying", "verifying"].includes(operation.state)).length, 0);
   const reviewed = review ? reviewFor(rows, review) : null;
-  const reviewedPin = review ? rows.find((row) => row.target.id === review.targetId)?.updates?.policy?.policy.pins[review.slug] : undefined;
+  const reviewedPin = review ? policyPin(rows.find((row) => row.target.id === review.targetId)?.updates?.policy, review.slug) : undefined;
 
   async function queueOne(selection: SelectedUpdate) {
     const candidate = candidateFor(rows, selection);
@@ -84,7 +116,7 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
         idempotencyKey: operationKey("update"),
       });
       setReview(null);
-      await load(true);
+      await load(true, true);
     } catch (error) {
       setMessage(safeArchitectureTargetErrorMessage(error));
     } finally {
@@ -111,7 +143,7 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
       await client.scheduleTargetSkillOperationBatch(operations);
       setSelected([]);
       setBatchReview(false);
-      await load(true);
+      await load(true, true);
     } catch (error) {
       setMessage(safeArchitectureTargetErrorMessage(error));
     } finally {
@@ -124,7 +156,7 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
     setBusy(`cancel:${operation.id}`);
     try {
       await client.cancelTargetSkillOperation(operation.id);
-      await load(true);
+      await load(true, true);
     } catch (error) {
       setMessage(safeArchitectureTargetErrorMessage(error));
     } finally {
@@ -133,7 +165,8 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
   }
 
   async function rollback(operation: TargetSkillOperationRecord) {
-    if (!client.scheduleTargetSkillOperation || !operation.fromVersion) return;
+    const target = rows.find((row) => row.target.id === operation.targetId)?.target;
+    if (!target || !canQueueWorkspaceOperation(target, operation.platform, "rollback") || !client.scheduleTargetSkillOperation || !operation.fromVersion) return;
     setBusy(`rollback:${operation.id}`);
     try {
       await client.scheduleTargetSkillOperation(operation.targetId, {
@@ -143,7 +176,7 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
         platform: operation.platform,
         idempotencyKey: operationKey("rollback"),
       });
-      await load(true);
+      await load(true, true);
     } catch (error) {
       setMessage(safeArchitectureTargetErrorMessage(error));
     } finally {
@@ -188,8 +221,8 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
     {state === "error" && <div className="safe-message control-plane-message" role="alert"><CircleAlert size={20} aria-hidden="true" />{message}</div>}
     {state === "ready" && rows.length === 0 && <Card className="control-plane-card"><CardContent className="control-plane-empty-state"><PackageCheck size={28} aria-hidden="true" /><strong>No installed targets</strong><span>Register a target and submit its bounded inventory before checking for updates.</span></CardContent></Card>}
     {state === "ready" && selected.length > 0 && <Card className="control-plane-card update-batch-card"><CardHeader><CardTitle>{selected.length} selected updates</CardTitle><CardDescription>Batch execution creates one separately fenced and recoverable operation per target and skill.</CardDescription></CardHeader><CardContent><div className="target-action-row">{batchReview ? <><Button disabled={busy === "batch"} onClick={() => void queueBatch()}><Check size={15} />{busy === "batch" ? "Queueing…" : "Confirm batch"}</Button><Button variant="outline" onClick={() => setBatchReview(false)}>Back</Button></> : <Button onClick={() => setBatchReview(true)}>Review batch</Button>}<Button variant="outline" onClick={() => setSelected([])}>Clear</Button></div>{batchReview && <ul>{selected.map((item) => { const candidate = candidateFor(rows, item); return <li key={`${item.targetId}:${item.slug}`}>{item.slug} → {candidate?.evaluation.candidate?.version} on {rows.find((row) => row.target.id === item.targetId)?.target.name}</li>; })}</ul>}</CardContent></Card>}
-    <div className="update-centre-grid">{rows.map((row) => <TargetUpdateCard key={row.target.id} row={row} selected={selected} busy={busy} architectureReview={architectureReviewTarget === row.target.id} onSelect={(selection, checked) => setSelected((current) => checked ? [...current.filter((item) => item.targetId !== selection.targetId || item.slug !== selection.slug), selection] : current.filter((item) => item.targetId !== selection.targetId || item.slug !== selection.slug))} onReview={setReview} onArchitectureReview={() => setArchitectureReviewTarget((current) => current === row.target.id ? null : row.target.id)} onPromoteArchitecture={() => void promoteArchitecture(row.target.id)} onCancel={(operation) => void cancel(operation)} onRollback={(operation) => void rollback(operation)} client={client} onPolicySaved={() => void load(true)} />)}</div>
-    {reviewed && review && <Card className="control-plane-card update-review-card" aria-label="Update review"><CardHeader><CardTitle>{reviewed.evaluation.candidate ? `Review ${review.slug} ${reviewed.evaluation.installedVersion} → ${reviewed.evaluation.candidate.version}` : `Review blocked update for ${review.slug}`}</CardTitle><CardDescription>Review every included release before queueing the exact artifact.</CardDescription></CardHeader><CardContent>{reviewed.evaluation.blockers.length > 0 && <p>{reviewed.evaluation.blockers.map((blocker) => updateBlockerText(blocker, reviewedPin)).join(" ")}</p>}<div className="release-review-list">{reviewed.evaluation.includedReleases.map((release) => <article key={release.version}><div><strong>{release.version}</strong> <Badge variant="outline">{release.changeKind}</Badge>{release.requiresUserAction && <Badge variant="destructive">User action required</Badge>}</div><p>{release.releaseNotes || "No release notes were supplied."}</p><small>SHA-256 {release.artifact.sha256.slice(0, 12)}… · {release.artifact.byteSize.toLocaleString()} bytes</small></article>)}</div><div className="target-action-row"><Button disabled={reviewed.evaluation.status !== "update-available" || busy?.startsWith("queue:")} onClick={() => void queueOne(review)}><ShieldCheck size={15} />Queue exact update</Button><Button variant="outline" onClick={() => setReview(null)}>Close</Button></div></CardContent></Card>}
+    <div className="update-centre-grid">{rows.map((row) => <TargetUpdateCard key={row.target.id} row={row} selected={selected} busy={busy} architectureReview={architectureReviewTarget === row.target.id} onSelect={(selection, checked) => { if (checked && !candidateFor(rows, selection)) return; setSelected((current) => checked ? [...current.filter((item) => item.targetId !== selection.targetId || item.slug !== selection.slug), selection] : current.filter((item) => item.targetId !== selection.targetId || item.slug !== selection.slug)); }} onReview={setReview} onArchitectureReview={() => setArchitectureReviewTarget((current) => current === row.target.id ? null : row.target.id)} onPromoteArchitecture={() => void promoteArchitecture(row.target.id)} onCancel={(operation) => void cancel(operation)} onRollback={(operation) => void rollback(operation)} client={client} onPolicySaved={() => void load(true, true)} />)}</div>
+    {reviewed && review && <Card className="control-plane-card update-review-card" aria-label="Update review"><CardHeader><CardTitle>{reviewed.evaluation.candidate ? `Review ${review.slug} ${reviewed.evaluation.installedVersion} → ${reviewed.evaluation.candidate.version}` : `Review blocked update for ${review.slug}`}</CardTitle><CardDescription>Review every included release before queueing the exact artifact.</CardDescription></CardHeader><CardContent>{reviewed.evaluation.blockers.length > 0 && <p>{reviewed.evaluation.blockers.map((blocker) => updateBlockerText(blocker, reviewedPin)).join(" ")}</p>}<div className="release-review-list">{reviewed.evaluation.includedReleases.map((release) => <article key={release.version}><div><strong>{release.version}</strong> <Badge variant="outline">{release.changeKind}</Badge>{release.requiresUserAction && <Badge variant="destructive">User action required</Badge>}</div><p>{release.releaseNotes || "No release notes were supplied."}</p><small>SHA-256 {release.artifact.sha256.slice(0, 12)}… · {release.artifact.byteSize.toLocaleString()} bytes</small></article>)}</div><div className="target-action-row"><Button disabled={!candidateFor(rows, review) || busy?.startsWith("queue:")} onClick={() => void queueOne(review)}><ShieldCheck size={15} />Queue exact update</Button><Button variant="outline" onClick={() => setReview(null)}>Close</Button></div></CardContent></Card>}
   </main>;
 }
 
@@ -208,25 +241,42 @@ function TargetUpdateCard({ row, selected, busy, architectureReview, onSelect, o
   onPolicySaved: () => void;
 }) {
   const candidates = row.updates?.items.filter((item) => item.evaluation.status === "update-available") ?? [];
+  const constraints = targetSkillUpgradePolicyConstraints(row.updates?.policy);
   return <Card className="control-plane-card target-update-card"><CardHeader><div><CardTitle>{row.target.name}</CardTitle><CardDescription>{row.target.adapter.kind} · generation {row.target.generation} · observed {formatDate(row.updates?.observedAt)}</CardDescription></div><Badge variant={candidates.length ? "secondary" : "outline"}>{candidates.length} updates</Badge></CardHeader><CardContent>
+    {!canQueueWorkspaceOperation(row.target, "codex", "update") && <p className="control-plane-muted">Browser execution requires a consented personal Codex workspace enrolled with the CLI. Update details and operation history remain available.</p>}
     {row.error && <div className="control-plane-inline-message" role="alert">{row.error}</div>}
-    {row.updates && <><div className="target-update-policy-summary"><span>Policy: {row.updates.policy?.source ?? "default"}</span><span>Channel: {row.updates.policy?.policy.includePrerelease ? "prerelease" : "stable"}</span><span>Mode: {row.updates.policy?.policy.mode ?? "manual"}</span></div><div className="target-update-list">{row.updates.items.map((item) => {
+    {row.updates && <><div className="target-update-policy-summary"><span>Policies: {constraints.map(({ source, revision }) => `${source}${revision ? ` r${revision.revisionNumber}` : ""}`).join(" + ") || "default"}</span><span>Channel: {(constraints.length > 0 && constraints.every(({ policy }) => policy.includePrerelease)) ? "prerelease" : "stable"}</span><span>{constraints.some(({ policy }) => policy.mode === "maintenance-window") ? "Queued work requires every maintenance window to be open" : "Manually queued"}</span>{constraints.map(({ source, policy }) => policy.mode === "maintenance-window" && policy.maintenanceWindow
+      ? <span key={source}>{source} window: {windowSummary(policy.maintenanceWindow)}</span> : null)}</div><div className="target-update-list">{row.updates.items.map((item) => {
       const selection = { targetId: row.target.id, slug: item.slug };
       const checked = selected.some((candidate) => candidate.targetId === selection.targetId && candidate.slug === selection.slug);
-      return <div className="target-update-row" key={item.slug}><label><input type="checkbox" disabled={item.evaluation.status !== "update-available"} checked={checked} onChange={(event) => onSelect(selection, event.target.checked)} /><span><strong>{item.slug}</strong><small>{item.evaluation.installedVersion} {item.evaluation.candidate ? `→ ${item.evaluation.candidate.version}` : ""}</small>{item.evaluation.blockers.length > 0 && <small className="block">{item.evaluation.blockers.map((blocker) => updateBlockerText(blocker, row.updates?.policy?.policy.pins[item.slug])).join(" ")}</small>}</span></label><Badge variant={item.evaluation.status === "update-available" ? "secondary" : item.evaluation.status === "drifted" ? "destructive" : "outline"}>{item.evaluation.status}</Badge>{(item.evaluation.status === "update-available" || (item.evaluation.blockers.length > 0 && item.evaluation.includedReleases.length > 0)) && <Button size="sm" variant="outline" onClick={() => onReview(selection)}>Review</Button>}</div>;
+      return <div className="target-update-row" key={item.slug}><label><input type="checkbox" disabled={item.evaluation.status !== "update-available" || !canQueueWorkspaceOperation(row.target, item.platform, "update")} checked={checked} onChange={(event) => onSelect(selection, event.target.checked)} /><span><strong>{item.slug}</strong><small>{item.evaluation.installedVersion} {item.evaluation.candidate ? `→ ${item.evaluation.candidate.version}` : ""}</small>{item.evaluation.blockers.length > 0 && <small className="block">{item.evaluation.blockers.map((blocker) => updateBlockerText(blocker, policyPin(row.updates?.policy, item.slug))).join(" ")}</small>}</span></label><Badge variant={item.evaluation.status === "update-available" ? "secondary" : item.evaluation.status === "drifted" ? "destructive" : "outline"}>{item.evaluation.status}</Badge>{(item.evaluation.status === "update-available" || (item.evaluation.blockers.length > 0 && item.evaluation.includedReleases.length > 0)) && <Button size="sm" variant="outline" onClick={() => onReview(selection)}>Review</Button>}</div>;
     })}</div>{row.updates.items.length === 0 && <p className="control-plane-muted">No managed installed skills were present in the latest observation.</p>}
     <div className="target-action-row"><Button disabled={!candidates.length} size="sm" variant="outline" onClick={onArchitectureReview}>Review architecture revision</Button>{architectureReview && <Button disabled={busy === `architecture:${row.target.id}`} size="sm" onClick={onPromoteArchitecture}>{busy === `architecture:${row.target.id}` ? "Creating…" : `Confirm ${candidates.length} pinned versions`}</Button>}</div>
     <UpgradePolicyEditor client={client} target={row.target} resolved={row.updates.policy} onSaved={onPolicySaved} /></>}
-    <section className="target-operation-history" aria-label={`Operation history for ${row.target.name}`}><h3>Operations and recovery</h3>{row.operations.map((operation) => <div className="target-operation-row" key={operation.id}><Clock3 size={15} aria-hidden="true" /><span><strong>{operation.action} {operation.skillSlug}</strong><small>{operation.fromVersion ?? "not installed"} → {operation.toVersion} · {operation.result?.code ?? operation.state}</small></span><Badge variant={operation.state === "succeeded" ? "secondary" : operation.state === "failed" ? "destructive" : "outline"}>{operation.state}</Badge>{operation.state === "queued" && <Button size="sm" variant="outline" disabled={busy === `cancel:${operation.id}`} onClick={() => onCancel(operation)}>Cancel</Button>}{operation.state === "succeeded" && operation.action !== "rollback" && operation.fromVersion && <Button size="sm" variant="outline" disabled={busy === `rollback:${operation.id}`} onClick={() => onRollback(operation)}><RotateCcw size={14} />Rollback</Button>}</div>)}{row.operations.length === 0 && <p className="control-plane-muted">No update or rollback operations yet.</p>}</section>
+    <section className="target-operation-history" aria-label={`Operation history for ${row.target.name}`}><h3>Operations and recovery</h3>{row.operations.map((operation) => <div className="target-operation-row" key={operation.id}><Clock3 size={15} aria-hidden="true" /><span><strong>{operation.action} {operation.skillSlug}</strong><small>{operation.fromVersion ?? "not installed"} → {operation.toVersion} · {operation.result?.code ?? operation.state}</small></span><Badge variant={operation.state === "succeeded" ? "secondary" : operation.state === "failed" ? "destructive" : "outline"}>{operation.state}</Badge>{operation.state === "queued" && <Button size="sm" variant="outline" disabled={busy === `cancel:${operation.id}`} onClick={() => onCancel(operation)}>Cancel</Button>}{operation.state === "succeeded" && operation.action !== "rollback" && operation.fromVersion && <Button size="sm" variant="outline" disabled={busy === `rollback:${operation.id}` || !canQueueWorkspaceOperation(row.target, operation.platform, "rollback")} onClick={() => onRollback(operation)}><RotateCcw size={14} />Rollback</Button>}</div>)}{row.operations.length === 0 && <p className="control-plane-muted">No update or rollback operations yet.</p>}</section>
   </CardContent></Card>;
 }
 
 function candidateFor(rows: TargetUpdateState[], selection: SelectedUpdate) {
-  return rows.find((row) => row.target.id === selection.targetId)?.updates?.items.find((item) => item.slug === selection.slug && item.evaluation.status === "update-available") ?? null;
+  const row = rows.find((candidate) => candidate.target.id === selection.targetId);
+  return row?.updates?.items.find((item) => item.slug === selection.slug
+    && item.evaluation.status === "update-available"
+    && canQueueWorkspaceOperation(row.target, item.platform, "update")) ?? null;
 }
 
 function reviewFor(rows: TargetUpdateState[], selection: SelectedUpdate) {
   return rows.find((row) => row.target.id === selection.targetId)?.updates?.items.find((item) => item.slug === selection.slug && (item.evaluation.candidate || item.evaluation.includedReleases.length > 0)) ?? null;
+}
+
+function windowSummary(window: SkillUpgradeMaintenanceWindow): string {
+  const clock = (minute: number) => `${Math.floor(minute / 60).toString().padStart(2, "0")}:${(minute % 60).toString().padStart(2, "0")}`;
+  const days = window.daysOfWeek.map((day) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day]).join(", ");
+  return `${days} ${clock(window.startMinute)}–${clock(window.startMinute + window.durationMinutes)} (${window.timeZone})`;
+}
+
+function policyPin(resolved: TargetSkillUpdates["policy"] | undefined, slug: string): string | undefined {
+  const pins = [...new Set(targetSkillUpgradePolicyConstraints(resolved).flatMap(({ policy }) => Object.hasOwn(policy.pins, slug) ? [policy.pins[slug]] : []))];
+  return pins.length === 1 ? pins[0] : undefined;
 }
 
 function updateBlockerText(blocker: SkillUpdateBlockerCode, pinnedVersion?: string): string {
@@ -239,9 +289,10 @@ function updateBlockerText(blocker: SkillUpdateBlockerCode, pinnedVersion?: stri
     "minimum-adapter-contract-version": "This release requires a newer adapter contract.",
     "minimum-source-version": "Install the required intermediate release first.",
     "pinned-release-unavailable": "The pinned release is unavailable.",
+    "policy-pin-conflict": "Organization and target pins conflict. Update the target pin to match the organization ceiling.",
     "change-kind-not-allowed": "The upgrade crosses a release change kind that your policy does not allow.",
   };
-  return messages[blocker];
+  return Object.hasOwn(messages, blocker) ? messages[blocker] : "This update is blocked by a release or policy requirement. Refresh for current details.";
 }
 
 function operationKey(action: string): string {

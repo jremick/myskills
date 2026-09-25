@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { parseSkillManifest } from "@myskills-app/skill-package";
 import { generateTotpCode, hashPassword } from "@myskills-app/auth";
 import { buildApp } from "../src/app.js";
 import { AuthService } from "../src/auth/service.js";
@@ -818,3 +819,66 @@ async function archiveSubmissionPayload(t: TestContext, entries: ZipFixtureEntry
 function manifestJson(): string {
   return JSON.stringify(cleanManifest());
 }
+
+test("submission rejects non-portable filenames before creating registry state", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const token = await addAndLogin(app, authStore, ["author"]);
+  for (const extraPaths of [["readme.md"], ["CON.txt"], ["bad\u0001.txt"], ["trailing."], ["docs", "docs/file.txt"]]) {
+    const payload = cleanSubmissionPayload();
+    payload.files.push(...extraPaths.map((path) => ({ path, content: "Plain text." })));
+    const response = await app.inject({
+      method: "POST", url: "/v1/submissions",
+      headers: { authorization: `Bearer ${token}` }, payload,
+    });
+    assert.equal(response.statusCode, 400, JSON.stringify(extraPaths));
+    assert.equal(response.json().error.code, "INVALID_PACKAGE_PAYLOAD");
+  }
+  assert.equal(submissionStore.count(), 0);
+});
+
+test("new versions must use the existing skill's visibility at submission", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildSubmissionApp({ authStore, submissionStore });
+  t.after(() => app.close());
+  const token = await addAndLogin(app, authStore, ["author"]);
+  const headers = { authorization: `Bearer ${token}` };
+  const first = await app.inject({ method: "POST", url: "/v1/submissions", headers, payload: cleanSubmissionPayload() });
+  assert.equal(first.statusCode, 202);
+  const manifest = { ...cleanManifest(), version: "0.2.0", visibility: "public" };
+  const response = await app.inject({
+    method: "POST", url: "/v1/submissions", headers,
+    payload: { manifest, files: [{ path: "skill.json", content: JSON.stringify(manifest) }] },
+  });
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error.code, "PACKAGE_VISIBILITY_MISMATCH");
+  assert.equal(submissionStore.count(), 1);
+});
+
+test("release routes address canonical prerelease plus build versions and retain legacy IDs", async (t) => {
+  const submissionStore = new MemorySubmissionStore();
+  const service = new SubmissionService(submissionStore);
+  const manifest = parseSkillManifest({ ...cleanManifest(), version: "1.0.0-rc.1+build.2", visibility: "public" });
+  const submitted = await service.createSubmission({
+    actor: { id: "author", roles: ["author"] }, manifest,
+    files: [{ path: "skill.json", content: JSON.stringify(manifest) }],
+  });
+  const actor = { id: "reviewer", roles: ["maintainer" as const] };
+  await service.performReviewAction({ actor, submissionId: submitted.id, action: "approve", artifactSha256: submitted.artifact.sha256 });
+  await service.performReviewAction({ actor, submissionId: submitted.id, action: "publish" });
+  const app = buildSubmissionApp({ submissionStore });
+  t.after(() => app.close());
+  const path = `/v1/skills/${manifest.name}/releases/${encodeURIComponent(manifest.version)}`;
+  const release = await app.inject({ method: "GET", url: path });
+  const bundle = await app.inject({ method: "GET", url: `${path}/bundle` });
+  assert.equal(release.statusCode, 200);
+  assert.equal(bundle.statusCode, 200);
+  assert.equal(JSON.parse(bundle.json().files[0].content).version, manifest.version);
+  const legacy = await app.inject({ method: "GET", url: `/v1/skills/${manifest.name}/releases/01.0.0` });
+  assert.equal(legacy.statusCode, 404, "legacy version syntax must reach exact lookup");
+  const invalid = await app.inject({ method: "GET", url: `/v1/skills/${manifest.name}/releases/invalid` });
+  assert.equal(invalid.statusCode, 400);
+});

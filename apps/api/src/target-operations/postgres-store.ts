@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
-import { AppError, isWithinSkillUpgradeMaintenanceWindow, targetSkillOperationResultMatchesPlan, type TargetSkillOperation } from "@myskills-app/core";
+import { AppError, skillUpgradePoliciesAllowExecution, targetSkillOperationResultMatchesPlan, type TargetSkillOperation } from "@myskills-app/core";
 import type { Database } from "../db/client.js";
 import { auditEvents, skillArchitectureTargets, skillArchitectureSyncTargetLeases, targetSkillOperations, targetSkillOperationClaimCursors } from "../db/schema.js";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
@@ -168,6 +168,7 @@ export class PostgresTargetSkillOperationStore implements TargetSkillOperationSt
       if (input.result.status === "succeeded") await assertOperationEligibility(tx, input.actorId, operation, target, { source: true, now: input.now });
       const currentTime = await databaseTime(tx);
       input = { ...input, now: currentTime, result: { ...input.result, recordedAt: currentTime } };
+      if (input.result.status === "succeeded") await assertCurrentWindow(tx, target, currentTime);
       if (!currentClaim(operation, input) || input.fencingToken !== await targetFence(tx, operation.targetId)) return null;
       const [row] = await tx.update(targetSkillOperations).set({ state: input.result.status, result: input.result,
         holderId: null, claimTokenHash: null, leaseExpiresAt: null, updatedAt: new Date(input.now),
@@ -319,7 +320,7 @@ async function targetFence(db: OperationDatabase, targetId: string): Promise<num
 }
 async function assertCurrentWindow(db: OperationDatabase, target: Awaited<ReturnType<typeof lockOperationTarget>>, now: string): Promise<void> {
   const policy = await resolveLockedUpgradePolicy(db, target);
-  if (policy.mode === "maintenance-window" && !isWithinSkillUpgradeMaintenanceWindow(policy, new Date(now))) throw operationDenied("TARGET_OPERATION_OUTSIDE_MAINTENANCE_WINDOW");
+  if (!skillUpgradePoliciesAllowExecution(policy, new Date(now))) throw operationDenied("TARGET_OPERATION_OUTSIDE_MAINTENANCE_WINDOW");
 }
 function databaseErrorCode(error: unknown): string | undefined {
   if (!error || typeof error !== "object") return undefined;

@@ -1,4 +1,4 @@
-import type { PublicSkill } from "@myskills-app/core";
+import { parseSemanticVersion, type PublicSkill } from "@myskills-app/core";
 import { RegistryApiError, type McpSession, type RegistryApiClient, type ReleaseMetadata } from "./api-client.js";
 
 export interface McpToolResult {
@@ -104,13 +104,19 @@ export function createAiSkillsMcpHandlers(client: RegistryApiClient): AiSkillsMc
         const versionArg = shellArg(release.version);
         const platformArg = shellArg(selectedPlatform.name);
         const outputDirArg = shellArg(outputDir);
+        const includePrerelease = release.version.split("+", 1)[0].includes("-");
+        const installCommand = `myskills install ${slugArg} --version ${versionArg} --platform ${platformArg}${includePrerelease ? " --include-prerelease" : ""}`;
         return {
           skill: safeSkill(skill),
           release: safeRelease(release),
           install: {
             platform: selectedPlatform.name,
             installTarget: selectedPlatform.installTarget,
-            cliInstallCommand: `myskills install ${slugArg} --version ${versionArg} --platform ${platformArg}`,
+            cliInstallCommand: installCommand,
+            ...(release.requiresUserAction === true ? {
+              userAction: "Read the release notes and complete the required action before accepting this release.",
+              cliInstallAfterReviewCommand: `${installCommand} --accept-user-action`,
+            } : {}),
             cliExportCommand: `myskills export ${slugArg} --version ${versionArg} --platform ${platformArg} --output ${outputDirArg}`,
             authentication: client.hasToken
               ? "This MCP server will forward its configured bearer token to the API."
@@ -206,6 +212,8 @@ function safeRelease(release: ReleaseMetadata): ReleaseMetadata {
     reviewStatus: safeText(release.reviewStatus) as ReleaseMetadata["reviewStatus"],
     securityStatus: safeText(release.securityStatus) as ReleaseMetadata["securityStatus"],
     publishedAt: safeText(release.publishedAt),
+    ...(typeof release.releaseNotes === "string" ? { releaseNotes: safeText(release.releaseNotes) } : {}),
+    ...(typeof release.requiresUserAction === "boolean" ? { requiresUserAction: release.requiresUserAction } : {}),
     platforms: release.platforms.map((platform) => ({
       name: safeText(platform.name),
       installTarget: safeText(platform.installTarget),
@@ -744,7 +752,7 @@ function parseSlug(value: string): string {
 }
 
 function parseVersion(value: string): string {
-  if (typeof value !== "string" || !VERSION_PATTERN.test(value)) {
+  if (typeof value !== "string" || (!parseSemanticVersion(value) && !VERSION_PATTERN.test(value))) {
     throw new ToolInputError("Version is invalid.");
   }
   return value;

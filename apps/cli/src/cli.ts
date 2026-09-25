@@ -4,12 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import {
   hasBlockingFindings,
-  loadSkillManifestFromPackageFiles,
+  loadStoredSkillManifestFromPackageFiles,
   loadSkillManifestFromPath,
   normalizePackageFilePath,
+  readPackageFilesFromPath,
   readPackageSnapshot,
   scanPackagePath,
   type PackageScanResult,
+  type PackageSnapshot,
 } from "@myskills-app/skill-package";
 import {
   assertValidArchitectureTargetAdapterContext,
@@ -22,6 +24,7 @@ import {
   evaluateSkillUpdate,
   parseSemanticVersion,
   parseSkillReleaseMetadata,
+  skillLifecycleStatuses,
   targetSkillOperationPlanDigest,
   validateArchitectureTargetHealth,
   type ArchitectureTargetAdapterContext,
@@ -182,6 +185,9 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
     return parseError.exitCode;
   }
   try {
+    if (parsed.command === "update" && parsed.options.version !== undefined && !parsed.args[0]) {
+      throw new CliError("--version requires a skill slug. Use myskills update <skill-slug> --version <version>.", 2);
+    }
     if (["install", "list", "update", "updates", "rollback", "companion", "codex", "doctor"].includes(parsed.command)) {
       if (parsed.options.workspace && parsed.options.dir) throw new CliError("Choose --workspace or --dir, not both.", 2);
       const workspace = optionalStringOption(parsed, "workspace");
@@ -213,12 +219,12 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
   } catch (error) {
     if (error instanceof CliError) {
       if (parsed.options.json) runtime.io.stderr(JSON.stringify({ error: error.toJSON() }, null, 2));
-      else runtime.io.stderr(error.message);
+      else runtime.io.stderr(terminalSafeText(error.message));
       return error.exitCode;
     }
     const message = error instanceof Error ? error.message : "Unexpected CLI failure.";
     if (parsed.options.json) runtime.io.stderr(JSON.stringify({ error: { code: "UNEXPECTED_CLI_FAILURE", message } }, null, 2));
-    else runtime.io.stderr(message);
+    else runtime.io.stderr(terminalSafeText(message));
     return 1;
   }
 }
@@ -307,7 +313,7 @@ async function validateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
   if (parsed.options.json) {
     runtime.io.stdout(JSON.stringify({ manifest }, null, 2));
   } else {
-    runtime.io.stdout(`valid ${manifest.name}@${manifest.version}`);
+    runtime.io.stdout(terminalText`valid ${manifest.name}@${manifest.version}`);
   }
   return 0;
 }
@@ -355,11 +361,11 @@ async function initCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
   if (parsed.options.json) {
     runtime.io.stdout(JSON.stringify({ output: result.outputPath, manifest: result.manifest, next }, null, 2));
   } else {
-    runtime.io.stdout(`created ${result.outputPath}`);
-    runtime.io.stdout(`edit: ${next.edit}`);
-    runtime.io.stdout(`validate: ${next.validate}`);
-    runtime.io.stdout(`scan: ${next.scan}`);
-    runtime.io.stdout(`submit: ${next.submit}`);
+    runtime.io.stdout(terminalText`created ${result.outputPath}`);
+    runtime.io.stdout(terminalText`edit: ${next.edit}`);
+    runtime.io.stdout(terminalText`validate: ${next.validate}`);
+    runtime.io.stdout(terminalText`scan: ${next.scan}`);
+    runtime.io.stdout(terminalText`submit: ${next.submit}`);
   }
   return 0;
 }
@@ -390,7 +396,7 @@ async function searchCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
       runtime.io.stdout("No skills found.");
     } else {
       for (const skill of skills) {
-        runtime.io.stdout(`${skill.slug}\t${skill.latestVersion ?? "-"}\t${skill.title}`);
+        runtime.io.stdout(terminalText`${skill.slug}\t${skill.latestVersion ?? "-"}\t${skill.title}`);
       }
     }
   }
@@ -419,11 +425,11 @@ async function infoCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
       platforms: Array<{ name: string; installTarget: string; status: string }>;
       tags: string[];
     };
-    runtime.io.stdout(`${skill.title} (${skill.slug})`);
-    runtime.io.stdout(`version: ${skill.latestVersion ?? "-"}`);
-    runtime.io.stdout(`platforms: ${skill.platforms.map((platform) => platform.name).join(", ") || "-"}`);
-    runtime.io.stdout(`tags: ${skill.tags.join(", ") || "-"}`);
-    runtime.io.stdout(skill.summary);
+    runtime.io.stdout(terminalText`${skill.title} (${skill.slug})`);
+    runtime.io.stdout(terminalText`version: ${skill.latestVersion ?? "-"}`);
+    runtime.io.stdout(terminalText`platforms: ${skill.platforms.map((platform) => platform.name).join(", ") || "-"}`);
+    runtime.io.stdout(terminalText`tags: ${skill.tags.join(", ") || "-"}`);
+    runtime.io.stdout(terminalSafeText(skill.summary));
   }
   return 0;
 }
@@ -457,7 +463,7 @@ async function loginWithPassword(parsed: ParsedArgs, runtime: CliRuntime, apiUrl
     expiresAt: session.expiresAt,
   });
   await runtime.configStore?.setApiUrl(apiUrl);
-  runtime.io.stdout(`${session.email ?? email.trim()}\tlogged-in\texpires=${session.expiresAt}`);
+  runtime.io.stdout(terminalText`${session.email ?? email.trim()}\tlogged-in\texpires=${session.expiresAt}`);
   return 0;
 }
 
@@ -471,7 +477,7 @@ async function loginWithApiKey(parsed: ParsedArgs, runtime: CliRuntime, apiUrl: 
     email: user.email,
   });
   await runtime.configStore?.setApiUrl(apiUrl);
-  runtime.io.stdout(`${user.email ?? "api-key"}\tapi-key-stored`);
+  runtime.io.stdout(terminalText`${user.email ?? "api-key"}\tapi-key-stored`);
   return 0;
 }
 
@@ -533,7 +539,7 @@ async function whoamiCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     runtime.io.stdout(JSON.stringify(response, null, 2));
   } else {
     const user = response.user as { email: string; roles: string[]; mfaVerified: boolean };
-    runtime.io.stdout(`${user.email}\troles=${user.roles.join(",")}\tmfa=${user.mfaVerified ? "verified" : "not-verified"}`);
+    runtime.io.stdout(terminalText`${user.email}\troles=${user.roles.join(",")}\tmfa=${user.mfaVerified ? "verified" : "not-verified"}`);
   }
   return 0;
 }
@@ -560,9 +566,9 @@ async function authStatusCommand(parsed: ParsedArgs, runtime: CliRuntime): Promi
     if (parsed.options.json) {
       runtime.io.stdout(JSON.stringify(status, null, 2));
     } else {
-      runtime.io.stdout(`API URL: ${status.apiUrl} (${status.apiUrlSource})`);
+      runtime.io.stdout(terminalText`API URL: ${status.apiUrl} (${status.apiUrlSource})`);
       runtime.io.stdout("Status: not logged in");
-      runtime.io.stdout(`Token store: ${status.tokenStore.backend}`);
+      runtime.io.stdout(terminalText`Token store: ${status.tokenStore.backend}`);
     }
     return 0;
   }
@@ -586,13 +592,13 @@ async function authStatusCommand(parsed: ParsedArgs, runtime: CliRuntime): Promi
   if (parsed.options.json) {
     runtime.io.stdout(JSON.stringify(status, null, 2));
   } else {
-    runtime.io.stdout(`API URL: ${status.apiUrl} (${status.apiUrlSource})`);
-    runtime.io.stdout(`Status: logged in (${status.tokenKind}, ${status.tokenSource})`);
-    runtime.io.stdout(`User: ${user.email}`);
-    runtime.io.stdout(`Roles: ${user.roles.join(",") || "-"}`);
-    runtime.io.stdout(`MFA: ${user.mfaVerified ? "verified" : "not-verified"}`);
-    runtime.io.stdout(`Expires: ${status.expiresAt ?? "-"}`);
-    runtime.io.stdout(`Token store: ${status.tokenStore.backend}`);
+    runtime.io.stdout(terminalText`API URL: ${status.apiUrl} (${status.apiUrlSource})`);
+    runtime.io.stdout(terminalText`Status: logged in (${status.tokenKind}, ${status.tokenSource})`);
+    runtime.io.stdout(terminalText`User: ${user.email}`);
+    runtime.io.stdout(terminalText`Roles: ${user.roles.join(",") || "-"}`);
+    runtime.io.stdout(terminalText`MFA: ${user.mfaVerified ? "verified" : "not-verified"}`);
+    runtime.io.stdout(terminalText`Expires: ${status.expiresAt ?? "-"}`);
+    runtime.io.stdout(terminalText`Token store: ${status.tokenStore.backend}`);
   }
   return 0;
 }
@@ -621,7 +627,7 @@ async function configCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     if (parsed.options.json) {
       runtime.io.stdout(JSON.stringify({ apiUrl: normalizeApiUrlOption(apiUrl) }, null, 2));
     } else {
-      runtime.io.stdout(`api-url=${normalizeApiUrlOption(apiUrl)}`);
+      runtime.io.stdout(terminalText`api-url=${normalizeApiUrlOption(apiUrl)}`);
     }
     return 0;
   }
@@ -640,8 +646,8 @@ async function configCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     if (parsed.options.json) {
       runtime.io.stdout(JSON.stringify({ apiUrl: saved, resolvedApiUrl: resolved.url, resolvedApiUrlSource: resolved.source }, null, 2));
     } else {
-      runtime.io.stdout(`api-url=${saved ?? "unset"}`);
-      runtime.io.stdout(`resolved-api-url=${resolved.url}\tsource=${resolved.source}`);
+      runtime.io.stdout(terminalText`api-url=${saved ?? "unset"}`);
+      runtime.io.stdout(terminalText`resolved-api-url=${resolved.url}\tsource=${resolved.source}`);
     }
     return 0;
   }
@@ -673,10 +679,10 @@ async function doctorCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   if (parsed.options.json) {
     runtime.io.stdout(JSON.stringify(result, null, 2));
   } else {
-    runtime.io.stdout(`MySkills CLI ${CLI_VERSION}`);
+    runtime.io.stdout(terminalText`MySkills CLI ${CLI_VERSION}`);
     runtime.io.stdout("");
     for (const check of checks) {
-      runtime.io.stdout(`${check.ok ? "ok" : "fail"}\t${check.name}\t${check.message}`);
+      runtime.io.stdout(terminalText`${check.ok ? "ok" : "fail"}\t${check.name}\t${check.message}`);
     }
   }
   return failed.length === 0 ? 0 : 1;
@@ -710,8 +716,8 @@ async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
         scopes: string[];
         expiresAt: string;
       };
-      runtime.io.stdout(`${created.name}\t${created.tokenPrefix}\t${created.scopes.join(",")}\texpires=${created.expiresAt}`);
-      runtime.io.stdout(`token: ${created.token}`);
+      runtime.io.stdout(terminalText`${created.name}\t${created.tokenPrefix}\t${created.scopes.join(",")}\texpires=${created.expiresAt}`);
+      runtime.io.stdout(terminalText`token: ${created.token}`);
     }
     return 0;
   }
@@ -732,7 +738,7 @@ async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
         runtime.io.stdout("No API tokens.");
       } else {
         for (const apiToken of tokens) {
-          runtime.io.stdout(`${apiToken.id}\t${apiToken.name}\t${apiToken.tokenPrefix}\t${apiToken.scopes.join(",")}\texpires=${apiToken.expiresAt}\trevoked=${apiToken.revokedAt ?? "-"}`);
+          runtime.io.stdout(terminalText`${apiToken.id}\t${apiToken.name}\t${apiToken.tokenPrefix}\t${apiToken.scopes.join(",")}\texpires=${apiToken.expiresAt}\trevoked=${apiToken.revokedAt ?? "-"}`);
         }
       }
     }
@@ -748,7 +754,7 @@ async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
       runtime.io.stdout(JSON.stringify(response, null, 2));
     } else {
       const revoked = response.token as { id: string; name: string; revokedAt: string | null };
-      runtime.io.stdout(`${revoked.id}\t${revoked.name}\trevoked=${revoked.revokedAt ?? "-"}`);
+      runtime.io.stdout(terminalText`${revoked.id}\t${revoked.name}\trevoked=${revoked.revokedAt ?? "-"}`);
     }
     return 0;
   }
@@ -778,7 +784,7 @@ async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
         runtime.io.stdout("No submissions awaiting review.");
       } else {
         for (const submission of submissions) {
-          runtime.io.stdout(`${submission.id}\t${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tfindings=${submission.findingCount}`);
+          runtime.io.stdout(terminalText`${submission.id}\t${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tfindings=${submission.findingCount}`);
         }
       }
     }
@@ -813,7 +819,7 @@ async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
         securityStatus: string;
         publishedAt: string | null;
       };
-      runtime.io.stdout(`${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tpublished=${submission.publishedAt ?? "-"}`);
+      runtime.io.stdout(terminalText`${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tpublished=${submission.publishedAt ?? "-"}`);
     }
     return 0;
   }
@@ -841,7 +847,7 @@ async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
         payload: parseJsonResponse(`/v1/review/submissions/${submissionId}/bundle`, apiBaseUrl(parsed, runtime), response.text),
       }, null, 2));
     } else {
-      runtime.io.stdout(`artifactSha256=${artifactSha256}${outputPath ? `\toutput=${path.resolve(outputPath)}` : ""}`);
+      runtime.io.stdout([`artifactSha256=${artifactSha256}`, ...(outputPath ? [`output=${path.resolve(outputPath)}`] : [])].map((field) => terminalSafeText(field)).join("\t"));
     }
     return 0;
   }
@@ -868,7 +874,7 @@ async function submissionsCommand(parsed: ParsedArgs, runtime: CliRuntime): Prom
             optionalRecordString(submission, "reviewStatus") ?? "-",
             optionalRecordString(submission, "lifecycleStatus") ?? "-",
             optionalRecordString(submission, "securityStatus") ?? "-",
-          ].join("\t"));
+          ].map((field) => terminalSafeText(field)).join("\t"));
         }
       }
     }
@@ -972,7 +978,7 @@ async function releasesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
             optionalRecordString(release, "reviewStatus") ?? "-",
             optionalRecordString(release, "securityStatus") ?? "-",
             `published=${optionalRecordString(release, "publishedAt") ?? "-"}`,
-          ].join("\t"));
+          ].map((field) => terminalSafeText(String(field))).join("\t"));
         }
       }
     }
@@ -1018,7 +1024,7 @@ async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
       runtime.io.stdout(JSON.stringify(response, null, 2));
     } else {
       const team = teamFromResponse(response);
-      runtime.io.stdout(`${team.id}\t${team.name}\tcreated\trole=${team.role}`);
+      runtime.io.stdout(terminalText`${team.id}\t${team.name}\tcreated\trole=${team.role}`);
     }
     return 0;
   }
@@ -1033,7 +1039,7 @@ async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
       runtime.io.stdout(JSON.stringify(response, null, 2));
     } else {
       const invitation = invitationFromResponse(response);
-      runtime.io.stdout(`${invitation.id}\t${invitation.email}\tinvited\tteam=${invitation.teamName}\tstatus=${invitation.status}`);
+      runtime.io.stdout(terminalText`${invitation.id}\t${invitation.email}\tinvited\tteam=${invitation.teamName}\tstatus=${invitation.status}`);
     }
     return 0;
   }
@@ -1047,7 +1053,7 @@ async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
       runtime.io.stdout(JSON.stringify(response, null, 2));
     } else {
       const invitation = invitationFromResponse(response);
-      runtime.io.stdout(`${invitation.id}\t${invitation.teamName}\taccepted\tstatus=${invitation.status}`);
+      runtime.io.stdout(terminalText`${invitation.id}\t${invitation.teamName}\taccepted\tstatus=${invitation.status}`);
     }
     return 0;
   }
@@ -1418,7 +1424,7 @@ function printCodexTargetObservation(observation: ArchitectureTargetObservation,
     ].join("\t"));
   }
   for (const finding of observation.configFindings) {
-    io.stdout(`finding\t${terminalSafeText(finding.code)}\t${terminalSafeText(finding.severity)}\tcount=${finding.count}`);
+    io.stdout(terminalText`finding\t${terminalSafeText(finding.code)}\t${terminalSafeText(finding.severity)}\tcount=${finding.count}`);
   }
 }
 
@@ -1491,7 +1497,7 @@ async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
       securityStatus: string;
     };
     const responseScan = response.scan as { findingCount: number };
-    runtime.io.stdout(`${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tfindings=${responseScan.findingCount}`);
+    runtime.io.stdout(terminalText`${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tfindings=${responseScan.findingCount}`);
   }
   return 0;
 }
@@ -1630,7 +1636,7 @@ async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   const bundle = await downloadVerifiedBundle({ slug, version, platform }, parsed, runtime, token);
   const outputRoot = path.resolve(outputDir);
   await exportPackageTree(bundle.files, outputRoot);
-  runtime.io.stdout(`${slug}@${version}\texported\tfiles=${bundle.files.length}\t${outputRoot}`);
+  runtime.io.stdout(terminalText`${slug}@${version}\texported\tfiles=${bundle.files.length}\t${outputRoot}`);
   return 0;
 }
 
@@ -1657,7 +1663,7 @@ async function installCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<
     token,
     provenance,
   });
-  runtime.io.stdout(`${installed.slug}@${installed.version}\tinstalled\tplatform=${installed.platform}\t${installed.path}`);
+  runtime.io.stdout(terminalText`${installed.slug}@${installed.version}\tinstalled\tplatform=${installed.platform}\t${installed.path}`);
   return 0;
 }
 
@@ -1674,7 +1680,7 @@ async function listInstalledCommand(parsed: ParsedArgs, runtime: CliRuntime): Pr
     return 0;
   }
   for (const installed of installations) {
-    runtime.io.stdout(`${installed.slug}\t${installed.version}\t${installed.platform}\t${installed.path}`);
+    runtime.io.stdout(terminalText`${installed.slug}\t${installed.version}\t${installed.platform}\t${installed.path}`);
   }
   return 0;
 }
@@ -1705,7 +1711,7 @@ async function updateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     }
     assertMatchingProvenance(existing, provenance);
     const platform = explicitPlatform ?? existing.platform;
-    if (!existing.contentDigest || !await directoryMatchesDigest(existing.path, existing.contentDigest)) {
+    if (!existing.contentDigest || !await directoryMatchesDigest(existing.path, existing.contentDigest, existing.contentDigestAlgorithm)) {
       const evaluation = localDriftEvaluation(existing.version);
       results.push({ slug, platform, evaluation });
       printUpdateEvaluation(slug, platform, evaluation, parsed, runtime);
@@ -1754,7 +1760,7 @@ async function updateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
       provenance,
     });
     result.appliedVersion = updated.version;
-    if (!parsed.options.json) runtime.io.stdout(`${updated.slug}@${updated.version}\tapplied\tplatform=${updated.platform}\tprevious=${existing.version}`);
+    if (!parsed.options.json) runtime.io.stdout(terminalText`${updated.slug}@${updated.version}\tapplied\tplatform=${updated.platform}\tprevious=${existing.version}`);
   }
   if (parsed.options.json) runtime.io.stdout(JSON.stringify({ updates: results }, null, 2));
   return blocked && !dryRun ? 1 : 0;
@@ -1778,7 +1784,7 @@ async function updatesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<
     const installed = registry.installations[slug];
     if (!installed) throw new CliError(`${slug} is not installed. Run myskills install ${slug}.`, 1);
     assertMatchingProvenance(installed, provenance);
-    if (!installed.contentDigest || !await directoryMatchesDigest(installed.path, installed.contentDigest)) {
+    if (!installed.contentDigest || !await directoryMatchesDigest(installed.path, installed.contentDigest, installed.contentDigestAlgorithm)) {
       const evaluation = localDriftEvaluation(installed.version);
       results.push({ slug, platform: installed.platform, evaluation });
       if (!parsed.options.json) printUpdateEvaluation(slug, installed.platform, evaluation, parsed, runtime);
@@ -1812,7 +1818,23 @@ async function releaseCandidatesForSkill(
   if (!Array.isArray(response.releases)) {
     throw new CliError("API release list response is missing releases.", 1);
   }
-  return response.releases.map((release, index) => parseReleaseCandidate(release, index));
+  return response.releases.flatMap((release, index) => {
+    if (!release || typeof release !== "object" || Array.isArray(release)) {
+      throw new CliError(`API release list entry ${index + 1} is invalid.`, 1);
+    }
+    const record = release as Record<string, unknown>;
+    if (!skillLifecycleStatuses.some((status) => status === record.lifecycleStatus)) {
+      throw new CliError(`API release list entry ${index + 1} has an invalid lifecycle status.`, 1);
+    }
+    if (typeof record.version !== "string" || record.version.length === 0) {
+      throw new CliError(`API release list entry ${index + 1} has an invalid version.`, 1);
+    }
+    // Managers can see unpublished rows without artifacts, and legacy versions
+    // can predate SemVer validation. Neither can become an install candidate.
+    if ((record.lifecycleStatus !== "approved" && record.lifecycleStatus !== "deprecated")
+      || !parseSemanticVersion(record.version)) return [];
+    return [parseReleaseCandidate(record, index)];
+  });
 }
 
 function parseReleaseCandidate(input: unknown, index: number): SkillReleaseUpdateCandidate {
@@ -1879,7 +1901,7 @@ function printUpdateEvaluation(
   if (parsed.options.json) return;
   const candidate = evaluation.candidate ? `\tcandidate=${evaluation.candidate.version}` : "";
   const blockers = evaluation.blockers.length > 0 ? `\tblockers=${evaluation.blockers.join(",")}` : "";
-  runtime.io.stdout(`${slug}@${evaluation.installedVersion}\t${evaluation.status}\tplatform=${platform}${candidate}${blockers}`);
+  runtime.io.stdout(`${terminalSafeText(slug)}@${evaluation.installedVersion}\t${evaluation.status}\tplatform=${terminalSafeText(platform)}${candidate}${blockers}`);
   for (const release of evaluation.includedReleases) {
     runtime.io.stdout(
       `changes\t${release.version}\t${release.changeKind}\taction=${release.requiresUserAction ? "required" : "none"}\t${terminalSafeText(release.releaseNotes)}`,
@@ -1904,7 +1926,7 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
   const slug = parseInstallSlug(requestedSlug);
   const root = installRoot(parsed, runtime);
   const registry = await readInstallRegistry(root);
-  const existing = registry.installations[slug];
+  let existing = registry.installations[slug];
   const previous = existing?.history.at(-1);
   if (!existing || !previous) {
     throw new CliError(`${slug} has no rollback snapshot.`, 1);
@@ -1924,16 +1946,16 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
   const transactionId = randomUUID();
   const stageRoot = installStagePath(root, transactionId);
   const recoverySnapshotPath = historySnapshotPath(root, slug, existing.version, transactionId);
-  await assertInstalledBytes(existing);
+  existing = await assertInstalledBytes(existing);
   if (!existing.provenance || !previous.provenance) throw new CliError("Rollback requires a snapshot with verified registry provenance.", 1);
   assertMatchingProvenance(previous, existing.provenance);
   if (!previous.contentDigest) throw new CliError("Rollback snapshot has no verified byte identity.", 1);
-  const snapshot = await readPackageSnapshot(sourceSnapshotPath);
+  const snapshot = await readStoredPackageSnapshot(sourceSnapshotPath);
   if (parsed.options.workspace || runtime.beforeInstallPromotion) validateCodexSkill(snapshot.files, slug);
-  const targetContentDigest = contentDigestForFiles(snapshot.files);
-  if (targetContentDigest !== previous.contentDigest) throw new CliError("Rollback snapshot was modified. The current installation is unchanged.", 1);
+  if (contentDigestForFiles(snapshot.files, previous.contentDigestAlgorithm) !== previous.contentDigest) throw new CliError("Rollback snapshot was modified. The current installation is unchanged.", 1);
+  const targetContentDigest = contentDigestForFiles(snapshot.files, CONTENT_DIGEST_ALGORITHM);
   await writeNewPackageTree(root, stageRoot, snapshot.files);
-  if (!await directoryMatchesDigest(stageRoot, targetContentDigest)) throw new CliError("Rollback staging failed byte verification.", 1);
+  if (!await directoryMatchesDigest(stageRoot, targetContentDigest, CONTENT_DIGEST_ALGORITHM)) throw new CliError("Rollback staging failed byte verification.", 1);
   let transaction: InstallTransaction = {
     version: 1,
     id: transactionId,
@@ -1944,6 +1966,7 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
     targetPlatform: previous.platform,
     targetArtifact: previous.artifact,
     targetContentDigest,
+    targetContentDigestAlgorithm: CONTENT_DIGEST_ALGORITHM,
     previous: existing,
     snapshotCreated: true,
     sourceSnapshotPath,
@@ -1957,12 +1980,12 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
   transaction = { ...transaction, state: "previous-staged" };
   await writeInstallTransaction(root, transaction);
   await runtime.installFault?.("previous-staged");
-  await runtime.beforeInstallPromotion?.();
+  await checkpointInstallPromotion(root, runtime);
   await rename(stageRoot, outputRoot);
   transaction = { ...transaction, state: "installed" };
   await writeInstallTransaction(root, transaction);
   await runtime.installFault?.("installed");
-  if (!await directoryMatchesDigest(outputRoot, targetContentDigest)) throw new CliError("Rollback verification failed. Recovery copies are retained.", 1);
+  if (!await directoryMatchesDigest(outputRoot, targetContentDigest, CONTENT_DIGEST_ALGORITHM)) throw new CliError("Rollback verification failed. Recovery copies are retained.", 1);
   registry.installations[slug] = {
     slug,
     version: previous.version,
@@ -1971,6 +1994,7 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
     installedAt: new Date().toISOString(),
     artifact: previous.artifact,
     contentDigest: targetContentDigest,
+    contentDigestAlgorithm: CONTENT_DIGEST_ALGORITHM,
     history: existing.history.slice(0, -1),
     provenance: previous.provenance,
   };
@@ -1981,7 +2005,7 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
   await rm(recoverySnapshotPath, { recursive: true, force: true });
   await rm(sourceSnapshotPath, { recursive: true, force: true });
   await rm(installTransactionPath(root, transactionId), { force: true });
-  runtime.io.stdout(`${slug}@${previous.version}\trolled-back\tplatform=${previous.platform}\t${outputRoot}`);
+  runtime.io.stdout(terminalText`${slug}@${previous.version}\trolled-back\tplatform=${previous.platform}\t${outputRoot}`);
   return 0;
 }
 
@@ -2089,9 +2113,9 @@ async function observeWorkspace(root: string, binding: WorkspaceBinding): Promis
   for (const installed of Object.values(registry.installations)) {
     assertMatchingProvenance(installed, binding.provenance);
     try {
-      const snapshot = await readPackageSnapshot(installed.path);
+      const snapshot = await readStoredPackageSnapshot(installed.path);
       validateCodexSkill(snapshot.files, installed.slug);
-      if (contentDigestForFiles(snapshot.files) !== installed.contentDigest) throw new Error("drift");
+      if (contentDigestForFiles(snapshot.files, installed.contentDigestAlgorithm) !== installed.contentDigest) throw new Error("drift");
       skills.push({ slug: installed.slug, version: installed.version, digest: installed.artifact.sha256,
         kind: "leaf", enabled: true, runtimeExposure: "leaf", configured: true, managed: true, supported: true,
         metadata: { platform: "codex", verification: "filesystem" } });
@@ -2175,7 +2199,7 @@ async function companionCommand(parsed: ParsedArgs, runtime: CliRuntime): Promis
       || current.version !== operation.toVersion
       || current.artifact.sha256 !== operation.artifact.sha256
       || !current.contentDigest
-      || !await directoryMatchesDigest(current.path, current.contentDigest)
+      || !await directoryMatchesDigest(current.path, current.contentDigest, current.contentDigestAlgorithm)
     ) {
       throw new CliError("Target operation readback does not match the claimed plan.", 1);
     }
@@ -2192,7 +2216,7 @@ async function companionCommand(parsed: ParsedArgs, runtime: CliRuntime): Promis
         contentDigest: current.contentDigest,
       },
     }, parsed, runtime, token);
-    runtime.io.stdout(`${operation.id}\tsucceeded\t${installed.slug}@${installed.version}\t${operation.action}`);
+    runtime.io.stdout(terminalText`${operation.id}\tsucceeded\t${installed.slug}@${installed.version}\t${operation.action}`);
     return 0;
   } catch (error) {
     try {
@@ -2228,7 +2252,7 @@ async function executeTargetOperation(
     && existing.version === operation.toVersion
     && existing.artifact.sha256 === operation.artifact.sha256
     && existing.contentDigest
-    && await directoryMatchesDigest(existing.path, existing.contentDigest)
+    && await directoryMatchesDigest(existing.path, existing.contentDigest, existing.contentDigestAlgorithm)
   ) return existing;
   if (operation.action === "install" && existing) {
     throw new CliError("Target install state changed after the operation was planned.", 1);
@@ -2236,7 +2260,7 @@ async function executeTargetOperation(
   if (operation.action !== "install" && (!existing || existing.version !== operation.fromVersion)) {
     throw new CliError("Target source version changed after the operation was planned.", 1);
   }
-  if (existing?.contentDigest && !await directoryMatchesDigest(existing.path, existing.contentDigest)) {
+  if (existing?.contentDigest && !await directoryMatchesDigest(existing.path, existing.contentDigest, existing.contentDigestAlgorithm)) {
     throw new CliError("Target skill has local drift and cannot be changed automatically.", 1);
   }
   if (operation.action === "rollback") {
@@ -2338,8 +2362,9 @@ async function latestCompatibleVersionForSkill(slug: string, existing: Installed
       assertReleaseEligibility(release, existing, parsed, false);
       return true;
     } catch { return false; }
-  }).sort((left, right) => compareSemanticVersions(left.version, right.version));
-  const selected = compatible.at(-1);
+  }).sort((left, right) => compareSemanticVersions(right.version, left.version));
+  // Stable sort preserves the registry order for equal-precedence builds.
+  const selected = compatible[0];
   if (!selected) throw new CliError(`${slug} has no compatible release. Inspect its releases and compatibility requirements.`, 1);
   return selected.version;
 }
@@ -2370,8 +2395,9 @@ function assertMatchingProvenance(installed: { provenance?: RegistryProvenance }
 }
 
 function assertReleaseEligibility(release: SkillReleaseMetadata & { version: string }, existing: InstalledSkillRecord | undefined, parsed: ParsedArgs, requireAction = true): void {
-  if (!parseSemanticVersion(release.version)) throw new CliError("Release version is invalid.", 1);
-  if (parseSemanticVersion(release.version)!.prerelease.length > 0 && parsed.options["include-prerelease"] !== true) throw new CliError("A prerelease requires --include-prerelease.", 1);
+  const version = parseSemanticVersion(release.version);
+  if (!version) throw new CliError("Release version is invalid.", 1);
+  if (version.prerelease.length > 0 && parsed.options["include-prerelease"] !== true) throw new CliError("A prerelease requires --include-prerelease.", 1);
   if (existing && compareSemanticVersions(release.version, existing.version) < 0) throw new CliError("Use rollback to restore a verified earlier snapshot; install cannot downgrade an existing package.", 1);
   const compatibility = release.compatibility;
   if (compatibility.minimumMyskillsVersion && compareSemanticVersions(CLI_VERSION, compatibility.minimumMyskillsVersion) < 0) throw new CliError("Release requires a newer MySkills CLI.", 1);
@@ -2396,11 +2422,9 @@ async function installSkillVersion(input: {
   const outputRoot = skillInstallPath(input.root, slug);
   const provenance = input.provenance ?? await registryProvenance(input.parsed, input.runtime, input.token);
   await assertWorkspaceBinding(input.parsed, input.runtime, provenance);
-  const existing = input.registry.installations[slug];
-  if (existing) {
-    assertMatchingProvenance(existing, provenance);
-    await assertInstalledBytes(existing);
-  }
+  const recorded = input.registry.installations[slug];
+  if (recorded) assertMatchingProvenance(recorded, provenance);
+  const existing = recorded ? await assertInstalledBytes(recorded) : undefined;
   const bundle = await downloadVerifiedBundle({
     slug,
     version: input.version,
@@ -2430,9 +2454,9 @@ async function installSkillVersion(input: {
   const snapshotPath = existing && await pathExists(outputRoot)
     ? historySnapshotPath(input.root, slug, existing.version, transactionId)
     : null;
-  const contentDigest = contentDigestForFiles(bundle.files);
+  const contentDigest = contentDigestForFiles(bundle.files, CONTENT_DIGEST_ALGORITHM);
   await writeNewPackageTree(input.root, stageRoot, bundle.files);
-  if (!await directoryMatchesDigest(stageRoot, contentDigest)) throw new CliError("Staged package does not match its verified bytes.", 1);
+  if (!await directoryMatchesDigest(stageRoot, contentDigest, CONTENT_DIGEST_ALGORITHM)) throw new CliError("Staged package does not match its verified bytes.", 1);
   let transaction: InstallTransaction = {
     version: 1,
     id: transactionId,
@@ -2443,6 +2467,7 @@ async function installSkillVersion(input: {
     targetPlatform: bundle.platform.name,
     targetArtifact: bundle.artifact,
     targetContentDigest: contentDigest,
+    targetContentDigestAlgorithm: CONTENT_DIGEST_ALGORITHM,
     previous: existing ?? null,
     snapshotCreated: snapshotPath !== null,
   };
@@ -2458,7 +2483,7 @@ async function installSkillVersion(input: {
   if (existing) await assertInstalledBytes(existing);
   else if (await pathExists(outputRoot)) throw new CliError("Installation appeared after planning.", 1);
 
-  if (snapshotPath) {
+  if (snapshotPath && existing) {
     await ensureSafeDirectory(input.root, path.dirname(snapshotPath));
     await rename(outputRoot, snapshotPath);
     history.push({
@@ -2467,6 +2492,7 @@ async function installSkillVersion(input: {
       installedAt: existing.installedAt,
       artifact: existing.artifact,
       contentDigest: existing.contentDigest,
+      contentDigestAlgorithm: existing.contentDigestAlgorithm,
       provenance,
       snapshotPath,
     });
@@ -2475,13 +2501,13 @@ async function installSkillVersion(input: {
     await input.runtime.installFault?.("previous-staged");
   }
 
-  await input.runtime.beforeInstallPromotion?.();
+  await checkpointInstallPromotion(input.root, input.runtime);
   await ensureSafeDirectory(input.root, path.dirname(outputRoot));
   await rename(stageRoot, outputRoot);
   transaction = { ...transaction, state: "installed" };
   await writeInstallTransaction(input.root, transaction);
   await input.runtime.installFault?.("installed");
-  if (!await directoryMatchesDigest(outputRoot, contentDigest)) throw new CliError("Promoted installation failed byte verification. Recovery is retained.", 1);
+  if (!await directoryMatchesDigest(outputRoot, contentDigest, CONTENT_DIGEST_ALGORITHM)) throw new CliError("Promoted installation failed byte verification. Recovery is retained.", 1);
   const installed: InstalledSkillRecord = {
     slug,
     version: bundle.version,
@@ -2490,6 +2516,7 @@ async function installSkillVersion(input: {
     installedAt: new Date().toISOString(),
     artifact: bundle.artifact,
     contentDigest,
+    contentDigestAlgorithm: CONTENT_DIGEST_ALGORITHM,
     provenance,
     history,
   };
@@ -2536,7 +2563,7 @@ async function downloadVerifiedBundle(input: {
   }
   let manifest;
   try {
-    manifest = loadSkillManifestFromPackageFiles(files);
+    manifest = loadStoredSkillManifestFromPackageFiles(files);
   } catch {
     throw new CliError("Downloaded bundle has an invalid package manifest.", 1);
   }
@@ -2587,6 +2614,9 @@ interface InstallRegistry {
   installations: Record<string, InstalledSkillRecord>;
 }
 
+const CONTENT_DIGEST_ALGORITHM = "sha256-json-ordinal-v1";
+type ContentDigestAlgorithm = typeof CONTENT_DIGEST_ALGORITHM;
+
 interface InstalledSkillRecord {
   slug: string;
   version: string;
@@ -2595,6 +2625,7 @@ interface InstalledSkillRecord {
   installedAt: string;
   artifact: ReleaseArtifact;
   contentDigest: string;
+  contentDigestAlgorithm?: ContentDigestAlgorithm;
   history: InstalledSkillSnapshot[];
   provenance?: RegistryProvenance;
 }
@@ -2605,6 +2636,7 @@ interface InstalledSkillSnapshot {
   installedAt: string;
   artifact: ReleaseArtifact;
   contentDigest: string;
+  contentDigestAlgorithm?: ContentDigestAlgorithm;
   snapshotPath: string;
   provenance?: RegistryProvenance;
 }
@@ -2619,6 +2651,7 @@ interface InstallTransaction {
   targetPlatform: string;
   targetArtifact: ReleaseArtifact;
   targetContentDigest: string;
+  targetContentDigestAlgorithm?: ContentDigestAlgorithm;
   previous: InstalledSkillRecord | null;
   snapshotCreated: boolean;
   sourceSnapshotPath?: string;
@@ -2823,6 +2856,7 @@ function parseInstalledSkillRecord(slug: string, input: unknown, root: string): 
     contentDigest: typeof record.contentDigest === "string" && /^[a-f0-9]{64}$/.test(record.contentDigest)
       ? record.contentDigest
       : "",
+    contentDigestAlgorithm: parseContentDigestAlgorithm(record.contentDigestAlgorithm),
     history: parseInstallHistory(record.history, root),
     provenance: parseProvenance(record.provenance),
   };
@@ -2850,6 +2884,7 @@ function parseInstallHistory(input: unknown, root: string): InstalledSkillSnapsh
       contentDigest: typeof record.contentDigest === "string" && /^[a-f0-9]{64}$/.test(record.contentDigest)
         ? record.contentDigest
         : "",
+      contentDigestAlgorithm: parseContentDigestAlgorithm(record.contentDigestAlgorithm),
       snapshotPath,
       provenance: parseProvenance(record.provenance),
     }];
@@ -2875,10 +2910,10 @@ function printTeamDashboard(response: Record<string, unknown>, io: CliIo): void 
     return;
   }
   for (const team of teams) {
-    io.stdout(`team\t${team.id}\t${team.name}\trole=${team.role}\tmembers=${team.members.length}\tpending=${team.invitations.length}`);
+    io.stdout(terminalText`team\t${team.id}\t${team.name}\trole=${team.role}\tmembers=${team.members.length}\tpending=${team.invitations.length}`);
   }
   for (const invitation of invitations) {
-    io.stdout(`invitation\t${invitation.id}\t${invitation.teamName}\t${invitation.email}\tstatus=${invitation.status}`);
+    io.stdout(terminalText`invitation\t${invitation.id}\t${invitation.teamName}\t${invitation.email}\tstatus=${invitation.status}`);
   }
 }
 
@@ -2893,12 +2928,12 @@ function printTeamSharedSkills(response: Record<string, unknown>, io: CliIo): vo
     const team = teamSummaryFromRecord(group.team);
     const sharingWithTeam = arrayField(group, "sharingWithTeam").map(skillRowFromRecord);
     const sharedWithMe = arrayField(group, "sharedWithMe").map(skillRowFromRecord);
-    io.stdout(`team\t${team.id}\t${team.name}\trole=${team.role}\tsharing-out=${sharingWithTeam.length}\tshared-in=${sharedWithMe.length}`);
+    io.stdout(terminalText`team\t${team.id}\t${team.name}\trole=${team.role}\tsharing-out=${sharingWithTeam.length}\tshared-in=${sharedWithMe.length}`);
     for (const skill of sharingWithTeam) {
-      io.stdout(`sharing-out\t${team.id}\t${skill.slug}\t${skill.latestVersion ?? "-"}\t${skill.title}`);
+      io.stdout(terminalText`sharing-out\t${team.id}\t${skill.slug}\t${skill.latestVersion ?? "-"}\t${skill.title}`);
     }
     for (const skill of sharedWithMe) {
-      io.stdout(`shared-in\t${team.id}\t${skill.slug}\t${skill.latestVersion ?? "-"}\t${skill.title}`);
+      io.stdout(terminalText`shared-in\t${team.id}\t${skill.slug}\t${skill.latestVersion ?? "-"}\t${skill.title}`);
     }
   }
 }
@@ -2909,9 +2944,9 @@ function printSkillSharing(response: Record<string, unknown>, io: CliIo): void {
   const users = sharing.userGrants.map((user) => user.email).join(",") || "-";
   const organizations = sharing.organizationGrants.map((organization) => `${organization.name}(${organization.id})`).join(",") || "-";
   const organizationField = sharing.organizationGrants.length > 0 || sharing.availableOrganizations.length > 0
-    ? `\torganizations=${organizations}`
+    ? `\torganizations=${terminalSafeText(organizations)}`
     : "";
-  io.stdout(`${sharing.slug}\tvisibility=${sharing.visibility}\tteams=${teams}\tusers=${users}${organizationField}`);
+  io.stdout(terminalText`${sharing.slug}\tvisibility=${sharing.visibility}\tteams=${teams}\tusers=${users}` + organizationField);
 }
 
 /**
@@ -3714,6 +3749,11 @@ function hasControlCharacter(value: string): boolean {
   return CONTROL_CHARACTER_PATTERN.test(value);
 }
 
+/** Escape values before adding trusted human-output delimiters. JSON bypasses this helper. */
+function terminalText(parts: TemplateStringsArray, ...values: unknown[]): string {
+  return parts.reduce((text, part, index) => text + part + (index < values.length ? terminalSafeText(String(values[index])) : ""), "");
+}
+
 function terminalSafeText(value: string, multiline = false): string {
   return value.replace(CONTROL_CHARACTER_GLOBAL_PATTERN, (character) => multiline && character === "\n" ? "\n" : " ");
 }
@@ -3921,7 +3961,7 @@ function recordField(input: unknown, label: string): Record<string, unknown> {
 
 function printNamedRecord(response: Record<string, unknown>, key: string, io: CliIo, fields: string[]): void {
   const record = recordField(response[key], key);
-  io.stdout(fields.map((field) => optionalRecordString(record, field) ?? "-").join("\t"));
+  io.stdout(fields.map((field) => terminalSafeText(optionalRecordString(record, field) ?? "-")).join("\t"));
 }
 
 function reasonPayload(parsed: ParsedArgs): Record<string, string> {
@@ -4006,6 +4046,20 @@ async function writeInstallTransaction(root: string, transaction: InstallTransac
   );
 }
 
+async function checkpointInstallPromotion(root: string, runtime: CliRuntime): Promise<void> {
+  try {
+    await runtime.beforeInstallPromotion?.();
+  } catch (error) {
+    // This checkpoint follows the move of the old tree. Restore it while the
+    // root lock is still held; recovery never promotes the staged candidate.
+    try { await recoverInstallTransactions(root); }
+    catch {
+      runtime.io.stderr("Installation recovery could not finish. Preserve the transaction and recovery copies for operator recovery.");
+    }
+    throw error;
+  }
+}
+
 async function recoverInstallTransactions(root: string): Promise<void> {
   assertInstallRootLocked(root);
   let entries;
@@ -4039,8 +4093,9 @@ async function recoverInstallTransactions(root: string): Promise<void> {
       && installed.platform === transaction.targetPlatform
       && installed.artifact.sha256 === transaction.targetArtifact.sha256
       && installed.contentDigest === transaction.targetContentDigest
+      && installed.contentDigestAlgorithm === transaction.targetContentDigestAlgorithm
       && await pathExists(outputRoot)
-      && await directoryMatchesDigest(outputRoot, transaction.targetContentDigest),
+      && await directoryMatchesDigest(outputRoot, transaction.targetContentDigest, transaction.targetContentDigestAlgorithm),
     );
     if (candidateCommitted) {
       await rm(stageRoot, { recursive: true, force: true });
@@ -4055,13 +4110,13 @@ async function recoverInstallTransactions(root: string): Promise<void> {
     }
 
     const previousAtOutput = Boolean(transaction.previous?.contentDigest
-      && await directoryMatchesDigest(outputRoot, transaction.previous.contentDigest));
-    if (await pathExists(outputRoot) && !previousAtOutput && !await directoryMatchesDigest(outputRoot, transaction.targetContentDigest)) {
+      && await directoryMatchesDigest(outputRoot, transaction.previous.contentDigest, transaction.previous.contentDigestAlgorithm));
+    if (await pathExists(outputRoot) && !previousAtOutput && !await directoryMatchesDigest(outputRoot, transaction.targetContentDigest, transaction.targetContentDigestAlgorithm)) {
       throw new CliError("Recovery found active files that match neither the previous nor staged package. Preserve the active files and recovery copies for operator recovery.", 1);
     }
 
     if (snapshotPath && await pathExists(snapshotPath)) {
-      if (!transaction.previous?.contentDigest || !await directoryMatchesDigest(snapshotPath, transaction.previous.contentDigest)) {
+      if (!transaction.previous?.contentDigest || !await directoryMatchesDigest(snapshotPath, transaction.previous.contentDigest, transaction.previous.contentDigestAlgorithm)) {
         throw new CliError("Recovery snapshot does not match its verified bytes. Preserve both copies for operator recovery.", 1);
       }
       if (!previousAtOutput) {
@@ -4072,7 +4127,7 @@ async function recoverInstallTransactions(root: string): Promise<void> {
     } else if (transaction.snapshotCreated) {
       // A previous recovery may have restored the directory before it could
       // persist the registry. Accept only that exact verified previous tree.
-      if (!transaction.previous?.contentDigest || !await directoryMatchesDigest(outputRoot, transaction.previous.contentDigest)) {
+      if (!transaction.previous?.contentDigest || !await directoryMatchesDigest(outputRoot, transaction.previous.contentDigest, transaction.previous.contentDigestAlgorithm)) {
         throw new CliError(`Install recovery for ${transaction.slug} requires manual intervention; its rollback snapshot is missing.`, 1);
       }
     } else if (!transaction.previous || transaction.state !== "prepared") {
@@ -4150,35 +4205,57 @@ function parseInstallTransaction(raw: string, filename: string, root: string): I
     targetPlatform: record.targetPlatform,
     targetArtifact,
     targetContentDigest: record.targetContentDigest,
+    targetContentDigestAlgorithm: parseContentDigestAlgorithm(record.targetContentDigestAlgorithm),
     previous,
     snapshotCreated: record.snapshotCreated,
     ...(sourceSnapshotPath ? { sourceSnapshotPath } : {}),
   };
 }
 
-function contentDigestForFiles(files: Array<{ path: string; content: string }>): string {
+function parseContentDigestAlgorithm(input: unknown): ContentDigestAlgorithm | undefined {
+  // Missing metadata belongs to the original locale-dependent scheme. Never
+  // infer a newer scheme from a digest or retry verification with another one.
+  if (input === undefined) return undefined;
+  if (input !== CONTENT_DIGEST_ALGORITHM) throw new CliError("Unsupported content digest algorithm. Preserve the installation and recovery copies.", 1);
+  return input;
+}
+
+function contentDigestForFiles(files: Array<{ path: string; content: string }>, algorithm: ContentDigestAlgorithm | undefined): string {
   const normalized = files
     .map((file) => ({ path: safeBundlePath(file.path), content: file.content }))
-    .sort((left, right) => left.path.localeCompare(right.path));
+    .sort((left, right) => algorithm === CONTENT_DIGEST_ALGORITHM
+      ? left.path < right.path ? -1 : left.path > right.path ? 1 : 0
+      : left.path.localeCompare(right.path));
   return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
 }
 
-async function directoryMatchesDigest(root: string, expected: string): Promise<boolean> {
+async function readStoredPackageSnapshot(inputPath: string): Promise<Pick<PackageSnapshot, "manifest" | "files">> {
+  const files = await readPackageFilesFromPath(inputPath);
+  // Validate immutable history with the stored-artifact grammar. Keep original
+  // file contents for byte verification; new submissions use readPackageSnapshot.
+  return { files, manifest: loadStoredSkillManifestFromPackageFiles(files) };
+}
+
+async function directoryMatchesDigest(root: string, expected: string, algorithm: ContentDigestAlgorithm | undefined): Promise<boolean> {
   try {
-    return await directoryContentDigest(root) === expected;
+    return contentDigestForFiles((await readStoredPackageSnapshot(root)).files, algorithm) === expected;
   } catch {
     return false;
   }
 }
 
-async function directoryContentDigest(root: string): Promise<string> {
-  return contentDigestForFiles((await readPackageSnapshot(root)).files);
-}
-
-async function assertInstalledBytes(existing: InstalledSkillRecord): Promise<void> {
-  if (!existing.contentDigest || !await directoryMatchesDigest(existing.path, existing.contentDigest)) {
+async function assertInstalledBytes(existing: InstalledSkillRecord): Promise<InstalledSkillRecord> {
+  const snapshot = await readStoredPackageSnapshot(existing.path).catch(() => null);
+  if (!snapshot || !existing.contentDigest || contentDigestForFiles(snapshot.files, existing.contentDigestAlgorithm) !== existing.contentDigest) {
     throw new CliError("Installed skill has local drift or no verified byte identity. Its files were not replaced.", 1, "INSTALL_LOCAL_DRIFT");
   }
+  // Migrate only bytes held by the same snapshot that passed the recorded
+  // scheme. Callers persist this identity with the next mutation's journal.
+  return {
+    ...existing,
+    contentDigest: contentDigestForFiles(snapshot.files, CONTENT_DIGEST_ALGORITHM),
+    contentDigestAlgorithm: CONTENT_DIGEST_ALGORITHM,
+  };
 }
 
 function parseInstallSlug(slug: string): string {
@@ -4471,12 +4548,14 @@ interface DoctorCheck {
 
 function nodeVersionCheck(): DoctorCheck {
   const version = process.versions.node;
-  const major = Number.parseInt(version.split(".")[0] ?? "0", 10);
+  const [major, minor] = version.split(".").map(Number);
+  const engine = ">=22.13 <23 || >=24 <25";
+  const supported = major === 24 || (major === 22 && minor !== undefined && minor >= 13);
   return {
     name: "node",
-    ok: major >= 20,
-    message: `v${version} (${major >= 20 ? "satisfies >=20" : "requires >=20"})`,
-    details: { version, engine: ">=20" },
+    ok: supported,
+    message: `v${version} (${supported ? "satisfies" : "requires"} ${engine})`,
+    details: { version, engine },
   };
 }
 
@@ -4631,11 +4710,11 @@ function firstLine(message: string): string {
 
 function printScanResult(result: PackageScanResult, io: CliIo): void {
   if (result.findings.length === 0) {
-    io.stdout(`clean files=${result.filesScanned} bytes=${result.bytesScanned}`);
+    io.stdout(terminalText`clean files=${result.filesScanned} bytes=${result.bytesScanned}`);
     return;
   }
   for (const finding of result.findings) {
-    io.stdout(`${finding.severity}\t${finding.category}\t${finding.path ?? "-"}\t${finding.message}`);
+    io.stdout(terminalText`${finding.severity}\t${finding.category}\t${finding.path ?? "-"}\t${finding.message}`);
   }
 }
 

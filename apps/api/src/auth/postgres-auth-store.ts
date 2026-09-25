@@ -1,10 +1,12 @@
-import { and, desc, eq, gt, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { getTableColumns, and, asc, desc, eq, gt, lte, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { AppError } from "@myskills-app/core";
 import { roles as authRoles, type RegistrationMode, type Role, type UserStatus } from "@myskills-app/auth";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
+import { AUTH_NOTIFICATION_BATCH_SIZE, AUTH_NOTIFICATION_LEASE_MS, AUTH_NOTIFICATION_MAX_ATTEMPTS, AUTH_NOTIFICATION_RETENTION_MS, eligibleAuthNotification, type AuthNotificationClaim, type FinishAuthNotificationInput } from "./notification-outbox.js";
 import type { Database } from "../db/client.js";
 import {
   authActionTokens,
+  authNotificationOutbox,
   apiTokens,
   authSessions,
   auditEvents,
@@ -487,17 +489,26 @@ export class PostgresAuthStore implements AuthStore {
   async changePasswordAndRevokeCredentials(input: ChangePasswordAndRevokeCredentialsInput): Promise<boolean> {
     const changedAt = input.passwordUpdatedAt ?? new Date();
     return this.db.transaction(async (tx) => {
+      const user = await lockAccountForAction(tx, input.userId);
+      if (!user || user.status !== "active" || !user.emailVerifiedAt ||
+        (input.expectedAccount && user.normalizedEmail !== input.expectedAccount.email)) {
+        return false;
+      }
       const [credential] = await tx
         .update(passwordCredentials)
         .set({
           passwordHash: input.passwordHash,
           passwordUpdatedAt: changedAt,
         })
-        .where(eq(passwordCredentials.userId, input.userId))
+        .where(and(
+          eq(passwordCredentials.userId, input.userId),
+          input.expectedAccount ? eq(passwordCredentials.passwordHash, input.expectedAccount.passwordHash) : undefined,
+        ))
         .returning({ userId: passwordCredentials.userId });
       if (!credential) {
         return false;
       }
+      await invalidateSecurityActionTokens(tx, input.userId, changedAt);
       await revokeCredentials(tx, input.userId, changedAt);
       return true;
     });
@@ -507,6 +518,7 @@ export class PostgresAuthStore implements AuthStore {
     const now = input.now ?? new Date();
     const usedAt = input.usedAt ?? now;
     return this.db.transaction(async (tx) => {
+      if (!await lockActionTokenAccount(tx, input.tokenHash)) return false;
       const [row] = await tx
         .select({ user: users, credentialUserId: passwordCredentials.userId })
         .from(authActionTokens)
@@ -515,12 +527,13 @@ export class PostgresAuthStore implements AuthStore {
         .where(and(
           eq(authActionTokens.tokenHash, input.tokenHash),
           eq(authActionTokens.purpose, "password_reset"),
+          eq(authActionTokens.sentToNormalizedEmail, users.normalizedEmail),
           isNull(authActionTokens.usedAt),
           gt(authActionTokens.expiresAt, now),
           eq(users.status, "active"),
           isNotNull(users.emailVerifiedAt),
         ))
-        .for("update", { of: [authActionTokens, users, passwordCredentials] })
+        .for("update", { of: [authActionTokens, passwordCredentials] })
         .limit(1);
       if (!row) {
         return false;
@@ -535,25 +548,121 @@ export class PostgresAuthStore implements AuthStore {
         throw new Error("Password reset credential update failed.");
       }
 
-      await tx.update(authActionTokens).set({ usedAt }).where(and(
-        eq(authActionTokens.userId, row.user.id),
-        eq(authActionTokens.purpose, "password_reset"),
-        isNull(authActionTokens.usedAt),
-      ));
+      await invalidateSecurityActionTokens(tx, row.user.id, usedAt);
       await revokeCredentials(tx, row.user.id, usedAt);
       return true;
     });
   }
 
-  async createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord> {
-    const [token] = await this.db
-      .insert(authActionTokens)
-      .values(input)
-      .returning();
-    if (!token) {
-      throw new Error("Auth action token insert failed.");
-    }
-    return toAuthActionTokenRecord(token);
+  async createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord | null> {
+    return this.db.transaction(async (tx) => {
+      const user = await lockAccountForAction(tx, input.userId);
+      if (!user) return null;
+      const { expectedAccount, notification, ...tokenInput } = input;
+      if (notification && (input.purpose !== "password_reset" && input.purpose !== "email_verification")) throw new Error("Unsupported queued auth purpose.");
+      if (notification && (user.normalizedEmail !== input.sentToNormalizedEmail ||
+          (input.purpose === "email_verification" && (user.emailVerifiedAt || user.status === "disabled" || user.status === "deleted")))) return null;
+      if (input.purpose === "password_reset" || input.purpose === "email_change") {
+        const [credential] = await tx.select().from(passwordCredentials)
+          .where(eq(passwordCredentials.userId, user.id)).limit(1);
+        if (user.status !== "active" || !user.emailVerifiedAt || !credential ||
+          (expectedAccount && (user.normalizedEmail !== expectedAccount.email || credential.passwordHash !== expectedAccount.passwordHash)) ||
+          (input.purpose === "password_reset" && input.sentToNormalizedEmail !== user.normalizedEmail)) {
+          return null;
+        }
+      }
+      if (notification) {
+        // The account lock serializes admission across replicas. Retire stale or
+        // duplicate legacy intents without invalidating links already delivered.
+        const now = new Date();
+        const active = await tx.select({ job: authNotificationOutbox, token: authActionTokens })
+          .from(authNotificationOutbox).innerJoin(authActionTokens, eq(authActionTokens.id, authNotificationOutbox.actionTokenId))
+          .where(and(eq(authActionTokens.userId, user.id), eq(authActionTokens.purpose, input.purpose),
+            or(eq(authNotificationOutbox.status, "pending"), eq(authNotificationOutbox.status, "leased"))))
+          .orderBy(asc(authNotificationOutbox.createdAt), asc(authNotificationOutbox.id))
+          .for("update", { of: authNotificationOutbox });
+        let existing: AuthActionTokenRecord | undefined;
+        for (const { job, token } of active) {
+          if (!existing && !token.usedAt && token.expiresAt > now && token.sentToNormalizedEmail === input.sentToNormalizedEmail) {
+            existing = toAuthActionTokenRecord(token);
+          } else {
+            await tx.update(authNotificationOutbox).set({ status: token.expiresAt <= now ? "expired" : "invalid", payloadCiphertext: null,
+              leaseId: null, leaseExpiresAt: null, updatedAt: now }).where(eq(authNotificationOutbox.id, job.id));
+          }
+        }
+        if (existing) return existing;
+      }
+      // Public reset requests preserve existing links. Only a password-authenticated
+      // email-change request supersedes previous email-change requests.
+      if (input.purpose === "email_change") {
+        await invalidateSecurityActionTokens(tx, user.id, new Date(), "email_change");
+      }
+      const [token] = await tx.insert(authActionTokens).values(tokenInput).returning();
+      if (!token) throw new Error("Auth action token insert failed.");
+      if (notification) await tx.insert(authNotificationOutbox).values({ ...notification, actionTokenId: token.id });
+      return toAuthActionTokenRecord(token);
+    });
+  }
+
+  async claimAuthNotifications(input: { now: Date; limit: number; leaseId: string }): Promise<AuthNotificationClaim[]> {
+    const limit = Math.max(1, Math.min(AUTH_NOTIFICATION_BATCH_SIZE, Number.isFinite(input.limit) ? Math.floor(input.limit) : AUTH_NOTIFICATION_BATCH_SIZE));
+    return this.db.transaction(async (tx) => {
+      const retained = await tx.select({ id: authNotificationOutbox.id }).from(authNotificationOutbox)
+        .where(and(isNull(authNotificationOutbox.payloadCiphertext), lte(authNotificationOutbox.updatedAt, new Date(input.now.getTime() - AUTH_NOTIFICATION_RETENTION_MS))))
+        .limit(limit).for("update", { skipLocked: true });
+      for (const row of retained) await tx.delete(authNotificationOutbox).where(eq(authNotificationOutbox.id, row.id));
+      const rows = await tx.select({ job: authNotificationOutbox, token: authActionTokens })
+        .from(authNotificationOutbox).innerJoin(authActionTokens, eq(authActionTokens.id, authNotificationOutbox.actionTokenId))
+        .where(or(
+          and(eq(authNotificationOutbox.status, "pending"), lte(authNotificationOutbox.availableAt, input.now)),
+          and(eq(authNotificationOutbox.status, "leased"), lte(authNotificationOutbox.leaseExpiresAt, input.now)),
+        )).orderBy(asc(authNotificationOutbox.availableAt)).limit(limit).for("update", { of: authNotificationOutbox, skipLocked: true });
+      const claims: AuthNotificationClaim[] = [];
+      for (const { job, token } of rows) {
+        if (token.expiresAt <= input.now || job.attempts >= AUTH_NOTIFICATION_MAX_ATTEMPTS ||
+            (token.purpose !== "email_verification" && token.purpose !== "password_reset")) {
+          await tx.update(authNotificationOutbox).set({ status: token.expiresAt <= input.now ? "expired" : "failed", payloadCiphertext: null, leaseId: null, leaseExpiresAt: null, updatedAt: input.now }).where(eq(authNotificationOutbox.id, job.id));
+          continue;
+        }
+        if (!job.payloadCiphertext) throw new Error("Auth notification intent is unavailable.");
+        await tx.update(authNotificationOutbox).set({ status: "leased", leaseId: input.leaseId, leaseExpiresAt: new Date(input.now.getTime() + AUTH_NOTIFICATION_LEASE_MS), attempts: job.attempts + 1, updatedAt: input.now }).where(eq(authNotificationOutbox.id, job.id));
+        claims.push({ id: job.id, tokenHash: token.tokenHash, purpose: token.purpose, payloadCiphertext: job.payloadCiphertext, expiresAt: token.expiresAt, attempts: job.attempts + 1, leaseId: input.leaseId, leaseExpiresAt: new Date(input.now.getTime() + AUTH_NOTIFICATION_LEASE_MS) });
+      }
+      return claims;
+    });
+  }
+
+  async authNotificationRecipient(claim: AuthNotificationClaim, now: Date): Promise<AuthUserRecord | null> {
+    const [row] = await this.db.select({ user: users, hasPassword: sql<boolean>`${passwordCredentials.userId} IS NOT NULL` })
+      .from(authNotificationOutbox).innerJoin(authActionTokens, eq(authActionTokens.id, authNotificationOutbox.actionTokenId))
+      .innerJoin(users, eq(users.id, authActionTokens.userId)).leftJoin(passwordCredentials, eq(passwordCredentials.userId, users.id))
+      .where(and(eq(authNotificationOutbox.id, claim.id), eq(authNotificationOutbox.status, "leased"),
+        eq(authNotificationOutbox.leaseId, claim.leaseId), gt(authNotificationOutbox.leaseExpiresAt, now),
+        eq(authActionTokens.tokenHash, claim.tokenHash), eq(authActionTokens.purpose, claim.purpose),
+        isNull(authActionTokens.usedAt), gt(authActionTokens.expiresAt, now),
+        eq(authActionTokens.sentToNormalizedEmail, users.normalizedEmail))).limit(1);
+    if (!row) return null;
+    const user = { ...toRecord(row.user), roles: [] };
+    return eligibleAuthNotification(user, claim.purpose, row.hasPassword) ? user : null;
+  }
+
+  async finishAuthNotification(input: FinishAuthNotificationInput): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      const [job] = await tx.select({ job: authNotificationOutbox, token: authActionTokens }).from(authNotificationOutbox)
+        .innerJoin(authActionTokens, eq(authActionTokens.id, authNotificationOutbox.actionTokenId))
+        .where(and(eq(authNotificationOutbox.id, input.id), eq(authNotificationOutbox.status, "leased"),
+          eq(authNotificationOutbox.leaseId, input.leaseId), gt(authNotificationOutbox.leaseExpiresAt, input.now)))
+        .for("update", { of: authNotificationOutbox }).limit(1);
+      if (!job) return false;
+      const retry = input.outcome === "retry" && job.job.attempts < AUTH_NOTIFICATION_MAX_ATTEMPTS &&
+        input.availableAt && input.availableAt < job.token.expiresAt && !job.token.usedAt;
+      const status = retry ? "pending" : input.outcome === "retry"
+        ? job.token.usedAt ? "invalid" : job.token.expiresAt <= input.now ? "expired" : "failed" : input.outcome;
+      await tx.update(authNotificationOutbox).set({ status, payloadCiphertext: retry ? job.job.payloadCiphertext : null,
+        availableAt: retry ? input.availableAt : job.job.availableAt, leaseId: null, leaseExpiresAt: null, updatedAt: input.now })
+        .where(eq(authNotificationOutbox.id, input.id));
+      return true;
+    });
   }
 
   async consumeAuthActionToken(input: {
@@ -584,6 +693,7 @@ export class PostgresAuthStore implements AuthStore {
     const now = input.now ?? new Date();
     const usedAt = input.usedAt ?? now;
     return this.db.transaction(async (tx) => {
+      if (!await lockActionTokenAccount(tx, input.tokenHash)) return null;
       const [row] = await tx
         .select({ token: authActionTokens, user: users })
         .from(authActionTokens)
@@ -596,7 +706,7 @@ export class PostgresAuthStore implements AuthStore {
           eq(users.status, "active"),
           isNotNull(users.emailVerifiedAt),
         ))
-        .for("update", { of: [authActionTokens, users] })
+        .for("update", { of: authActionTokens })
         .limit(1);
       if (!row) {
         return null;
@@ -625,14 +735,7 @@ export class PostgresAuthStore implements AuthStore {
       if (!updated) {
         throw new Error("Email change user update failed.");
       }
-      const [consumed] = await tx
-        .update(authActionTokens)
-        .set({ usedAt })
-        .where(and(eq(authActionTokens.id, row.token.id), isNull(authActionTokens.usedAt)))
-        .returning({ id: authActionTokens.id });
-      if (!consumed) {
-        throw new Error("Email change token consumption failed.");
-      }
+      await invalidateSecurityActionTokens(tx, row.user.id, usedAt);
       await revokeCredentials(tx, row.user.id, usedAt);
       return {
         outcome: "changed",
@@ -1097,12 +1200,14 @@ export class PostgresAuthStore implements AuthStore {
   }
 
   async listAuditEvents(input: ListAuditEventsInput): Promise<AuditEventRecord[]> {
+    if (input?.before && !isUuid(input.before.id)) throw new AppError("Invalid cursor for this list.", "INVALID_PAGE_CURSOR", 400);
     const rows = await this.db
-      .select()
+      .select({ ...getTableColumns(auditEvents), cursorCreatedAt: sql<string>`to_char(${auditEvents.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` })
       .from(auditEvents)
+      .where(input.before ? sql`(${auditEvents.createdAt}, ${auditEvents.id}) < (${input.before.createdAt}::timestamptz, ${input.before.id}::uuid)` : undefined)
       .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id))
       .limit(input.limit);
-    return rows.map(toAuditEventRecord);
+    return rows.map((row) => ({ ...toAuditEventRecord(row), ...(input.stableOrder ? { cursorCreatedAt: row.cursorCreatedAt } : {}) }));
   }
 
   private async rolesForUser(userId: string): Promise<Role[]> {
@@ -1129,6 +1234,30 @@ export class PostgresAuthStore implements AuthStore {
 }
 
 type DbLike = Database | Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+// Always lock the account before its actions/credentials. Issuance and completion
+// then share one ordering, including when they start from different action tokens.
+async function lockAccountForAction(db: DbLike, userId: string) {
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).for("update").limit(1);
+  return user;
+}
+
+async function lockActionTokenAccount(db: DbLike, tokenHash: string) {
+  const [token] = await db.select({ userId: authActionTokens.userId }).from(authActionTokens)
+    .where(eq(authActionTokens.tokenHash, tokenHash)).limit(1);
+  return token ? lockAccountForAction(db, token.userId) : undefined;
+}
+
+async function invalidateSecurityActionTokens(db: DbLike, userId: string, usedAt: Date, purpose?: "email_change"): Promise<void> {
+  await db.update(authActionTokens).set({ usedAt }).where(and(
+    eq(authActionTokens.userId, userId),
+    isNull(authActionTokens.usedAt),
+    purpose ? eq(authActionTokens.purpose, purpose) : or(
+      eq(authActionTokens.purpose, "password_reset"),
+      eq(authActionTokens.purpose, "email_change"),
+    ),
+  ));
+}
 
 async function recordAuditEvent(db: DbLike, input: CreateAuditEventInput): Promise<void> {
   await db.insert(auditEvents).values({

@@ -14,8 +14,10 @@ remain separate evidence.
 Prefer three people with separate accounts. With two people, the reviewer may
 also perform the consumer tasks through a separate ordinary-user account and
 browser profile. Record that overlap; it is two participants, not three.
-The author must not review their own submission. The builder observes and
-records interventions, without acting as a participant.
+For this independent-user pilot, the author must not review their own
+submission. This is a pilot requirement: the application permits an authorized
+owner, admin, or maintainer to review their own work on a single-owner instance.
+The builder observes and records interventions, without acting as a participant.
 
 | Role | Participant | Required access |
 | --- | --- | --- |

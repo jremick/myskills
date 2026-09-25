@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateTotpCode, hashPassword } from "@myskills-app/auth";
+import { generateTotpCode, hashPassword, hashSessionToken } from "@myskills-app/auth";
 import { buildApp } from "../src/app.js";
 import { MemoryAuthRateLimiter } from "../src/auth/rate-limit.js";
+import { AuthNotificationWorker } from "../src/auth/notification-outbox.js";
 import { AuthService, type AuthNotificationSink } from "../src/auth/service.js";
 import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
 import type { CompletePasswordResetInput } from "../src/auth/types.js";
@@ -79,6 +80,8 @@ test("registration queues email verification without activating request-mode acc
 
   assert.equal(response.statusCode, 202);
   assert.deepEqual(response.json(), { status: "pending" });
+  assert.equal(outbox.emailVerifications.length, 0);
+  await drainAuthNotifications(authStore, outbox.sink);
   assert.equal(outbox.emailVerifications.length, 1);
   assert.equal(outbox.emailVerifications[0].email, "new@example.com");
   assertNoSensitiveAuthMaterial(response.json());
@@ -131,11 +134,13 @@ test("email verification requests are generic and active unverified users can ve
     url: "/v1/auth/email-verification/request",
     payload: { email: "ACTIVE-UNVERIFIED@example.com" },
   });
+  await drainAuthNotifications(authStore, outbox.sink);
   const unknown = await app.inject({
     method: "POST",
     url: "/v1/auth/email-verification/request",
     payload: { email: "unknown@example.com" },
   });
+  await drainAuthNotifications(authStore, outbox.sink);
   assert.equal(request.statusCode, 202);
   assert.deepEqual(request.json(), { status: "pending" });
   assert.equal(unknown.statusCode, 202);
@@ -462,16 +467,19 @@ test("password reset requests are generic and successful reset revokes existing 
     url: "/v1/auth/password-reset/request",
     payload: { email: "RESET@example.com" },
   });
+  await drainAuthNotifications(authStore, outbox.sink);
   const siblingRequest = await app.inject({
     method: "POST",
     url: "/v1/auth/password-reset/request",
     payload: { email: "reset@example.com" },
   });
+  await drainAuthNotifications(authStore, outbox.sink);
   const unknown = await app.inject({
     method: "POST",
     url: "/v1/auth/password-reset/request",
     payload: { email: "unknown@example.com" },
   });
+  await drainAuthNotifications(authStore, outbox.sink);
   assert.equal(request.statusCode, 202);
   assert.equal(siblingRequest.statusCode, 202);
   assert.deepEqual(request.json(), { status: "pending" });
@@ -578,6 +586,7 @@ test("password reset failure does not consume the token or partially change the 
     url: "/v1/auth/password-reset/request",
     payload: { email: "reset-failure@example.com" },
   });
+  await drainAuthNotifications(authStore, outbox.sink);
   const failed = await app.inject({
     method: "POST",
     url: "/v1/auth/password-reset/confirm",
@@ -632,12 +641,14 @@ test("password reset does not issue tokens for unusable accounts and invalid tok
     remoteAddress: "203.0.113.21",
     payload: { email: "pending@example.com" },
   });
+  await drainAuthNotifications(authStore, outbox.sink);
   const second = await app.inject({
     method: "POST",
     url: "/v1/auth/password-reset/request",
     remoteAddress: "203.0.113.21",
     payload: { email: "pending@example.com" },
   });
+  await drainAuthNotifications(authStore, outbox.sink);
   const malformed = await app.inject({
     method: "POST",
     url: "/v1/auth/password-reset/confirm",
@@ -733,6 +744,7 @@ test("password reset preserves enabled MFA state", async (t) => {
     url: "/v1/auth/password-reset/request",
     payload: { email: "reset-mfa@example.com" },
   });
+  await drainAuthNotifications(authStore, outbox.sink);
   assert.equal(request.statusCode, 202);
   assert.equal(outbox.passwordResets.length, 1);
 
@@ -960,24 +972,36 @@ test("expired email verification and password reset tokens are denied", async (t
     url: "/v1/auth/email-verification/request",
     payload: { email: "expired@example.com" },
   });
+  await drainAuthNotifications(authStore, outbox.sink);
   const resetRequest = await app.inject({
     method: "POST",
     url: "/v1/auth/password-reset/request",
     payload: { email: "expired-reset@example.com" },
   });
+  await drainAuthNotifications(authStore, outbox.sink);
   assert.equal(verificationRequest.statusCode, 202);
   assert.equal(resetRequest.statusCode, 202);
 
+  assert.equal(outbox.emailVerifications.length, 0);
+  assert.equal(outbox.passwordResets.length, 0);
+  for (const [email, purpose, token] of [
+    ["expired@example.com", "email_verification", "v".repeat(43)],
+    ["expired-reset@example.com", "password_reset", "r".repeat(43)],
+  ] as const) {
+    const user = await authStore.findUserByEmailWithPassword(email);
+    assert.ok(user);
+    await authStore.createAuthActionToken({ userId: user.id, purpose, tokenHash: hashSessionToken(token), sentToNormalizedEmail: email, expiresAt: new Date(Date.now() - 1000) });
+  }
   const verification = await app.inject({
     method: "POST",
     url: "/v1/auth/email-verification/confirm",
-    payload: { token: outbox.emailVerifications[0].token },
+    payload: { token: "v".repeat(43) },
   });
   const reset = await app.inject({
     method: "POST",
     url: "/v1/auth/password-reset/confirm",
     payload: {
-      token: outbox.passwordResets[0].token,
+      token: "r".repeat(43),
       password: "new correct horse battery staple",
     },
   });
@@ -1563,4 +1587,8 @@ class FailingPasswordResetStore extends MemoryAuthStore {
     }
     return super.completePasswordReset(input);
   }
+}
+
+async function drainAuthNotifications(store: MemoryAuthStore, sink: AuthNotificationSink): Promise<void> {
+  await new AuthNotificationWorker(store, sink, { secret: "dev-only-myskills-app-auth-secret-change-before-production" }).runOnce();
 }
