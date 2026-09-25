@@ -51,6 +51,12 @@ import {
   type CodexBootstrapSourceTrustCompartment,
   type CodexBootstrapTargetTrustCompartment,
 } from "./codex-bootstrap.js";
+import {
+  initSkillPackage,
+  SkillInitDestinationError,
+  SkillInitInputError,
+  type InitSkillPackageOptions,
+} from "./author-init.js";
 
 const DEFAULT_API_URL = "http://localhost:3001";
 const CLI_VERSION = process.env.MYSKILLS_CLI_VERSION ?? "0.0.0-dev";
@@ -232,6 +238,8 @@ async function dispatchCli(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
         return 0;
       case "validate":
         return await validateCommand(parsed, runtime);
+      case "init":
+        return await initCommand(parsed, runtime);
       case "scan":
         return await scanCommand(parsed, runtime);
       case "search":
@@ -300,6 +308,58 @@ async function validateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
     runtime.io.stdout(JSON.stringify({ manifest }, null, 2));
   } else {
     runtime.io.stdout(`valid ${manifest.name}@${manifest.version}`);
+  }
+  return 0;
+}
+
+async function initCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  if (parsed.args.length !== 1) {
+    throw new CliError("Usage: myskills init <name> [--output <dir>] [--title <text>] [--summary <text>] [--license <text>] [--json]", 2, "USAGE_ERROR");
+  }
+  const allowedOptions = new Set(["output", "title", "summary", "license", "json"]);
+  for (const key of Object.keys(parsed.options)) {
+    if (!allowedOptions.has(key)) throw new CliError(`Unknown init option: --${key}.`, 2, "CLI_ARGUMENTS_INVALID");
+  }
+  if (parsed.options.json !== undefined && parsed.options.json !== true) {
+    throw new CliError("--json must be a flag.", 2, "CLI_ARGUMENTS_INVALID");
+  }
+
+  const output = initStringOption(parsed, "output");
+  const title = initStringOption(parsed, "title");
+  const summary = initStringOption(parsed, "summary");
+  const license = initStringOption(parsed, "license");
+  const options: InitSkillPackageOptions = {
+    name: parsed.args[0]!,
+    ...(output !== undefined ? { output } : {}),
+    ...(title !== undefined ? { title } : {}),
+    ...(summary !== undefined ? { summary } : {}),
+    ...(license !== undefined ? { license } : {}),
+  };
+
+  let result: Awaited<ReturnType<typeof initSkillPackage>>;
+  try {
+    result = await initSkillPackage(options);
+  } catch (error) {
+    if (error instanceof SkillInitInputError) throw new CliError(error.message, 2, "INIT_INPUT_INVALID");
+    if (error instanceof SkillInitDestinationError) throw new CliError(error.message, 1, "INIT_DESTINATION_INVALID");
+    throw error;
+  }
+
+  const quotedPath = displayCliPath(result.outputPath);
+  const next = {
+    edit: displayCliPath(path.join(result.outputPath, "SKILL.md")),
+    validate: `myskills validate --path ${quotedPath}`,
+    scan: `myskills scan --path ${quotedPath}`,
+    submit: `myskills submit --path ${quotedPath}`,
+  };
+  if (parsed.options.json) {
+    runtime.io.stdout(JSON.stringify({ output: result.outputPath, manifest: result.manifest, next }, null, 2));
+  } else {
+    runtime.io.stdout(`created ${result.outputPath}`);
+    runtime.io.stdout(`edit: ${next.edit}`);
+    runtime.io.stdout(`validate: ${next.validate}`);
+    runtime.io.stdout(`scan: ${next.scan}`);
+    runtime.io.stdout(`submit: ${next.submit}`);
   }
   return 0;
 }
@@ -4780,6 +4840,17 @@ function optionalStringOption(parsed: ParsedArgs, key: string): string | undefin
   return typeof value === "string" && value ? value : undefined;
 }
 
+function initStringOption(parsed: ParsedArgs, key: string): string | undefined {
+  const value = parsed.options[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !value) throw new CliError(`--${key} accepts one non-empty value.`, 2, "CLI_ARGUMENTS_INVALID");
+  return value;
+}
+
+function displayCliPath(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 function isArtifactSha256(value: string | undefined): value is string {
   return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 }
@@ -4906,6 +4977,7 @@ function helpText(): string {
     "",
     "Commands:",
     "  version",
+    "  init <name> [--output <dir>] [--title <text>] [--summary <text>] [--license <text>] [--json]",
     "  validate --path <file-directory-or-zip>",
     "  scan --path <file-directory-or-zip>",
     "  search [query] [--api-url <url>]",

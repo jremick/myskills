@@ -267,7 +267,11 @@ capability-gated API clients. They are not a published beta.2 artifact. Target
 apply, rollback, live adapter registration, and target credential management
 are deferred.
 
-[CLI App](../apps/cli/README.md) is the command-level source of truth. Browser/device login, package init/archive creation, and platform-specific install adapters are planned and should not appear as implemented commands.
+[CLI App](../apps/cli/README.md) is the command-level source of truth. The
+local `myskills init` command now creates a minimal private Codex package with
+`skill.json` and `SKILL.md`; it is local-only, refuses an existing destination,
+and does not publish or authenticate. Browser/device login, package archive
+creation, and platform-specific install adapters remain planned.
 
 The CLI build bundles `packages/skill-package` into `dist/index.js`. The published manifest has no runtime dependency on private `@myskills-app/*` workspaces. `npm run smoke:cli-package` verifies the exact tarball file allowlist, clean temporary install with public dependencies resolved from npm, version output, and example validate/scan behavior.
 
