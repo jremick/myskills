@@ -2,6 +2,56 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
+## 0.1.0-beta.7 - 2026-09-25
+
+Target release: `v0.1.0-beta.7`.
+
+This adoption-focused prerelease extends beta.6 with deterministic authoring,
+native MCP Skills delivery, release-history navigation, and reviewed registry
+and deployment hardening. It remains prerelease software; native host
+activation, imports, browser drafts, and guided self-hosting setup remain open.
+
+### Added
+
+- Added `myskills init <name>` for a minimal private Codex skill scaffold and
+  `myskills package --path <directory> --output <file.zip>` for deterministic,
+  validated, scanned ZIP archives that preserve authored text bytes.
+- Added authorized native MCP `skills/list`, `skills/get`, and
+  `resources/read` delivery for extension-aware clients, with immutable
+  manifest and artifact verification, bounded responses, and legacy metadata
+  tools retained for existing clients.
+- Added public release-history browsing with stable exact-version links and
+  expanded the roadmap and self-hosting investigation around authoring,
+  imports, deployment, and operations.
+
+### Changed
+
+- Modern MCP transports now negotiate the native Skills extension while
+  preserving the existing stdio and stateless HTTP tool contracts.
+- Registry, CLI, web, and MCP workspaces now share the beta.7 version metadata;
+  package and release checks keep the public CLI bundle free of private runtime
+  workspace dependencies.
+- Dependency layers and production Compose/image paths were reconciled for
+  repeatable CI and self-hosting verification.
+
+### Security
+
+- Hardened authentication action delivery, governance quotas and organization
+  policy ceilings, package scanning and release selection, artifact integrity,
+  interrupted CLI replacement recovery, audit pagination, and auth notification
+  outbox handling.
+- Native MCP operations perform fresh scoped authorization and full manifest,
+  digest, size, path, and text-content checks; method context records declared
+  authorization intent and is not proof of host activation or execution.
+
+### Compatibility and release limits
+
+- Native Skills clients must declare the Skills extension during protocol
+  negotiation; clients using the existing metadata tools remain supported.
+- Beta.7 includes source and migration changes that require the normal
+  release gate and same-commit API/web deployment sequence. It does not itself
+  claim a production deployment, npm publication, or model-selected activation.
+
 ## 0.1.0-beta.6 - 2026-09-05
 
 Target release: `v0.1.0-beta.6`.

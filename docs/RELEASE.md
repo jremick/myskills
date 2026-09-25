@@ -1,11 +1,30 @@
 # Release Process
 
-Version: 0.1.0-beta.6
-Last updated: 2026-09-05
+Version: 0.1.0-beta.7
+Last updated: 2026-09-25
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
+
+## Beta.7 Candidate Acceptance Record
+
+Target release: `v0.1.0-beta.7`.
+
+The candidate extends beta.6 with deterministic local package authoring,
+authorized native MCP Skills delivery, public release-history navigation, and
+the reviewed auth, package-integrity, governance, dependency, and self-hosting
+repairs merged through `origin/main` at `7f21e4bf1e60a105ada93445f4ee1e2955c69b8e`.
+It does not claim model-selected native host activation, folder/ZIP imports,
+browser drafts, or guided self-hosting setup; those remain roadmap work.
+
+Acceptance is recorded against the final immutable candidate commit. Before
+tagging or publishing, the release owner must read back the clean canonical
+gate, required GitHub checks, staging and production API/web identity and
+readiness, exact npm package bytes and `beta` selector, and unchanged `latest`
+and `alpha` selectors. The final record must name the candidate SHA, evidence
+links, deployment IDs, and any remaining beta limitations. This preparation
+record does not by itself claim that those gates passed.
 
 ## Canonical Candidate Gate
 
@@ -79,7 +98,7 @@ Draft public release text in a file and use `--notes-file` or the GitHub UI if a
 
 ## CLI Package Candidate
 
-The source version `0.1.0-beta.6` and `publishConfig.tag=beta` are coherent. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle.
+The source version `0.1.0-beta.7` and `publishConfig.tag=beta` are coherent. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle.
 
 The canonical gate proves:
 
