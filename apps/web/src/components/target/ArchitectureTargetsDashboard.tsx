@@ -267,7 +267,7 @@ export function ArchitectureTargetsDashboard({ client, session }: { client: Regi
     try {
       const nextTargets = await client.listArchitectureTargets();
       if (requestEpoch !== listEpoch.current) return;
-      setTargets(nextTargets);
+      setTargets([...nextTargets]);
       setSelectedId((current) => current && nextTargets.some((item) => item.id === current) ? current : nextTargets[0]?.id ?? null);
       setState("ready");
     } catch (error) {
@@ -332,7 +332,9 @@ export function ArchitectureTargetsDashboard({ client, session }: { client: Regi
       return;
     }
     void refreshDetail(selectedId);
-  }, [refreshDetail, selectedId, state]);
+  // A fast list refresh can batch loading and ready into one render. The
+  // new list identity still reloads detail when the selected ID is unchanged.
+  }, [refreshDetail, selectedId, state, targets]);
 
   return <main className="control-plane-workspace target-workspace" aria-label="Connected targets">
     <section className="control-plane-hero" aria-labelledby="targets-heading">

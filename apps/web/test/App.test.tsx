@@ -685,7 +685,9 @@ test("skill deletion clears the parent detail and its stale export actions", asy
   client.performSkillAction = async () => { deleted = true; return { ...skill, lifecycleStatus: "deleted", allowedActions: [] }; };
   const view = render(<RegistryApp client={client} />);
   await view.findByRole("region", { name: "Skill lifecycle controls" });
-  fireEvent.click(view.getByRole("button", { name: "Delete skill" }));
+  const deleteButton = view.getByRole("button", { name: "Delete skill" }) as HTMLButtonElement;
+  await waitFor(() => assert.equal(deleteButton.disabled, false));
+  fireEvent.click(deleteButton);
   const dialog = await view.findByRole("dialog");
   fireEvent.input(dialog.querySelector("textarea")!, { target: { value: "Remove obsolete skill" } });
   fireEvent.click(Array.from(dialog.querySelectorAll("button")).find((button) => button.textContent === "Delete skill")!);
