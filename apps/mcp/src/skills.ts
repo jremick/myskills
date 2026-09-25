@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { parseSemanticVersion } from "@myskills-app/core";
 import {
-  loadStoredSkillManifestFromPackageFiles, MAX_PACKAGE_FILES, MAX_PACKAGE_TEXT_BYTES,
-  normalizePackageFilePath, scanPackageFiles, skillSlugSchema, validatePortableFilePaths,
+  loadStoredSkillManifestFromPackageFiles, MAX_PACKAGE_FILES,
+  normalizePackageFilePath, skillSlugSchema, validatePackageFiles,
 } from "@myskills-app/skill-package";
 import { ProtocolError } from "@modelcontextprotocol/server";
 import { isScalar, parseDocument, visit } from "yaml";
@@ -75,11 +75,9 @@ export function createNativeSkillsHandlers(options: RegistryApiClientOptions) {
       for (const file of files) {
         if (normalizePackageFilePath(file.path) !== file.path) throw new Error();
       }
-      validatePortableFilePaths(files);
-      // Reuse the package reader's UTF-8, collision, count and byte checks. New
-      // scanner findings do not override the API's reviewed artifact decision.
-      const scan = scanPackageFiles(files);
-      if (scan.bytesScanned > MAX_PACKAGE_TEXT_BYTES || scan.filesScanned !== files.length) throw new Error();
+      // Validate the immutable payload without repeating content-risk scans;
+      // the API owns the reviewed artifact's security decision.
+      validatePackageFiles(files);
       const manifest = loadStoredSkillManifestFromPackageFiles(files);
       if (manifest.name !== slug || manifest.version !== version || !manifest.platforms.some((item) =>
         item.name === platform.name && item.status === "supported" && item.install_target === platform.installTarget)) throw new Error();
@@ -209,7 +207,7 @@ function readFrontmatter(content: string): NativeSkill["frontmatter"] {
     throw new IncompatibleSkill();
   };
   check(parsed, 0);
-  // Validate the required fields without rebuilding the mapping: every authored
+  // Validate the known fields without rebuilding the mapping: every authored
   // field, including unusual JSON property names, must remain identical.
   z.object({
     name: skillSlugSchema,
@@ -225,7 +223,7 @@ function readFrontmatter(content: string): NativeSkill["frontmatter"] {
 async function safe<T>(run: () => Promise<T>): Promise<T> {
   try { return await run(); }
   catch (error) {
-    if (error instanceof RegistryApiError && error.status >= 500) throw new ProtocolError(-32603, "Skill delivery is temporarily unavailable.");
+    if (error instanceof RegistryApiError && (error.status >= 500 || error.status === 408 || error.status === 429)) throw new ProtocolError(-32603, "Skill delivery is temporarily unavailable.");
     // No URI, upstream parser excerpt, token, body or existence distinction.
     throw new ProtocolError(-32602, "Skill or resource is unavailable for this request.");
   }

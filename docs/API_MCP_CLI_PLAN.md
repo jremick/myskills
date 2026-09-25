@@ -269,8 +269,9 @@ The optional `resources/directory/read` capability is not implemented. See
 [MCP App](../apps/mcp/README.md) for negotiation, limits, resource identities, and
 audit boundaries.
 
-Runtime verification is pending for the current proof targets: the official
-SEP-2640 Skills server conformance scenarios and the released fast-agent importer.
+The official SEP-2640 Skills scenario checks passed with an explicitly configured
+client; the stock CLI omits the required extension declaration. The released
+fast-agent 0.10.33 importer also passed. See [verification details](AUTHOR_MCP_DELIVERY.md).
 The importer downloads a complete local copy under its draft-compatible contract;
 it does not prove current-spec model-selected, on-demand activation. That host
 acceptance remains open under [MCP-1](ROADMAP.md#native-mcp-skill-delivery-mcp-1).
@@ -304,7 +305,8 @@ and does not publish or authenticate. The source candidate adds
 and scans one checked snapshot, preserves exact UTF-8 bytes, and writes a
 deterministic ZIP to a new destination outside the source tree. The result reports
 SHA-256, byte size, warnings, and separate submission guidance. It performs no
-network call or publication; integrated runtime verification remains pending.
+network call or publication. A disposable init/package/submit/review/publish
+fixture and installed CLI tarball smoke passed on Windows-hosted Linux.
 Browser drafts, held-byte folder/ZIP import previews, and commit-pinned public
 GitHub imports remain subsequent AUTHOR-1 slices. Browser/device login and
 additional platform-specific install adapters remain planned. Versioned

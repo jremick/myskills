@@ -17,6 +17,10 @@ Implemented:
 
 ## Protocol compatibility
 
+HTTP requests must contain one JSON-RPC message. Arrays are rejected before
+dispatch, including through the legacy transport. Resource and template listing
+return empty lists; native discovery uses `skills/list`.
+
 The stdio entrypoint uses `serveStdio` to select the protocol for each connection.
 The HTTP entrypoint uses `createMcpHandler` for modern requests and the SDK's
 request classifier to preserve legacy stateless JSON responses. Both paths expose

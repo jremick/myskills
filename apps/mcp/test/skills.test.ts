@@ -290,10 +290,12 @@ test("Native body deadline honors caller abort even when an upstream read never 
   assert.equal(cancelled, true);
 });
 
-test("Native list never turns upstream outage into a successful empty listing", async () => {
-  const fixture = nativeFixture();
-  const fetchImpl: FetchLike = (url, init) => url.includes("/releases/") ? Promise.resolve(json(503, { internal: "private detail" })) : fixture.fetchImpl(url, init);
-  await assert.rejects(createNativeSkillsHandlers({ token, fetchImpl }).list(), { code: -32603 });
+test("Native list reports upstream outages and throttling as unavailable instead of an empty catalog", async () => {
+  for (const status of [408, 429, 503]) {
+    const fixture = nativeFixture();
+    const fetchImpl: FetchLike = (url, init) => url.includes("/releases/") ? Promise.resolve(json(status, { internal: "private detail" })) : fixture.fetchImpl(url, init);
+    await assert.rejects(createNativeSkillsHandlers({ token, fetchImpl }).list(), { code: -32603 });
+  }
 });
 
 test("Native fetch and response-stream failures are unavailable errors without upstream details", async () => {

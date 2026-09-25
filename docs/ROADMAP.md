@@ -39,9 +39,9 @@ released, or deployed feature.
 | Roadmap and hosting investigation | This revision records the adoption workstreams, merged foundations, and verified setup gaps. | Prioritize the remaining delivery slices after the full review. |
 | HOST-1 build caching | [PR #77](https://github.com/jremick/myskills/pull/77) merged after required CI passed. Six Windows image targets, source and build-argument cache reuse, and runtime smokes were verified. | Release images, setup and operations remain later slices. Deployment-time improvement is unmeasured. |
 | AUTHOR-1 CLI scaffold | [PR #78](https://github.com/jremick/myskills/pull/78) merged private Codex skill scaffolding after required CI passed. Windows CLI tests, package smoke, lint, shell-guidance tests, and source review passed. | Archive creation is implemented in the source candidate below. Browser drafts and imports remain subsequent slices. |
-| AUTHOR-1 CLI archive | The source candidate adds `myskills package --path <directory> --output <file.zip>` with a checked text snapshot, validation and scan gates, deterministic ZIP bytes, and exclusive output creation. | Integrated validation and delivery remain pending; this is not a published CLI release. |
+| AUTHOR-1 CLI archive | [PR #83](https://github.com/jremick/myskills/pull/83) adds `myskills package --path <directory> --output <file.zip>` with a checked text snapshot, validation and scan gates, deterministic ZIP bytes, and exclusive output creation. Windows-hosted authoring and submission checks passed. | CLI release publication remains separate; browser drafts and imports remain open. |
 | MCP-1 protocol prerequisite | [PR #79](https://github.com/jremick/myskills/pull/79) merged modern protocol entrypoints and legacy compatibility after required CI passed. Windows MCP tests, repository checks, image smoke, and security review support the adapter change. | Native Skills handlers are implemented in the source candidate below. Conformance and host activation remain separate gates. |
-| MCP-1 native delivery | The source candidate adds `skills/list`, `skills/get`, and verified `resources/read` over authorized immutable API bundles. Existing metadata tools remain unchanged. | Official SEP-2640 server scenarios and the released fast-agent importer are the current proof targets; runtime verification is pending. Full on-demand host activation remains open. |
+| MCP-1 native delivery | [PR #83](https://github.com/jremick/myskills/pull/83) adds `skills/list`, `skills/get`, and verified `resources/read` over authorized immutable API bundles. Official scenario checks with a configured client and the released fast-agent importer passed. | Stock conformance CLI omits the required client declaration. Full on-demand host activation remains open; see [verification details](AUTHOR_MCP_DELIVERY.md). |
 | Public release history | [PR #80](https://github.com/jremick/myskills/pull/80) merged public history browsing and exact-version links after required CI, including browser tests, passed. | Version comparison and further history usability improvements remain open. |
 | Review remediation | [PR #82](https://github.com/jremick/myskills/pull/82) merged auth/token delivery, bounded scanning, CLI integrity and recovery, exact release identity, governance and history constraints, review/audit pagination, and UI refresh fixes after Opus review, Windows regression checks and required CI. | Merged source; no release or production deployment is claimed. |
 | HOST-1 startup repair | [PR #82](https://github.com/jremick/myskills/pull/82) merged the repairs after Windows storage builds/execution on amd64/arm64, object persistence/restore checks, and a fresh production Compose bootstrap/restart proof at `5de0ced`. | Release images, guided setup, public TLS/email configuration, a complete application restore drill, and elapsed-time measurements remain open. See [repair evidence](SELF_HOSTING_INVESTIGATION.md#verified-startup-gaps-and-repairs). |
@@ -206,8 +206,8 @@ Acceptance:
 Current status: `init`, validation, scanning, submission, and the user install
 lifecycle are implemented. The source candidate adds deterministic `package`
 archive creation under [AUTHOR-1](#authoring-and-imports-author-1). The complete
-create/package/submit journey still requires integrated verification; source
-implementation does not establish a published CLI release.
+create/package/submit/review/publish fixture passed on Windows-hosted Linux.
+Source implementation does not establish a published CLI release.
 
 ## Milestone 5: Web App MVP
 
@@ -625,10 +625,10 @@ Delivery sequence:
 2. Implemented in the source candidate: bounded Skills handlers and verified
    resources over the existing authorized bundle API, with required client
    extension negotiation and unchanged legacy metadata tools.
-3. Current proof targets, with runtime verification pending: the official
-   SEP-2640 server conformance scenarios and the released fast-agent importer.
-   Verify manifests, digests, pagination, invalid paths, authorization changes,
-   and complete local-copy import. fast-agent's draft-compatible importer
+3. Verified in Windows-hosted Linux: official SEP-2640 scenario checks with a
+   configured client, and fast-agent 0.10.33 local-copy import with altered-byte
+   and altered-manifest rejection. Focused tests cover pagination, invalid paths,
+   authorization changes and boundary failures. See [verification details](AUTHOR_MCP_DELIVERY.md). fast-agent's draft-compatible importer
    downloads the complete manifest; it does not establish current-spec on-demand
    skill activation.
 4. Keep MCP-1 open until a supported host proves model-selected, on-demand loading
@@ -655,8 +655,8 @@ It validates and scans one held snapshot, preserves exact UTF-8 text bytes,
 creates deterministic ZIP entries, and reports the archive SHA-256, byte size,
 warnings, and a separate submit command. The destination must be new and outside
 the source tree. Neither command contacts the registry or bypasses review.
-Integrated archive validation and delivery are pending; browser drafts and
-imports remain subsequent slices.
+The integrated authoring and submission fixture passed; CLI publication,
+browser drafts and imports remain separate steps.
 
 Planned scope:
 
@@ -759,9 +759,7 @@ needed; do not schedule already-delivered work again.
 
 Recommended next order:
 
-1. Resolve validated security, install consistency, and operator startup findings
-   from the post-merge review, with focused regression evidence. Keep unresolved
-   security details in the private review record until remediation is ready.
+1. Completed: review remediation merged in [PR #82](https://github.com/jremick/myskills/pull/82) after required checks.
 2. Completed: grouped dependency updates merged in [PR #81](https://github.com/jremick/myskills/pull/81) and [PR #71](https://github.com/jremick/myskills/pull/71). Major runtime and email-library upgrades remain separate.
 3. Verify and deliver the current native MCP server and CLI archive source
    candidates. Keep full MCP-1 host activation open. Then add held-byte folder/ZIP
