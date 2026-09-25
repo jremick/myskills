@@ -12,7 +12,7 @@ const defaultPolicy: SkillUpgradePolicyV1 = {
   pins: {},
 };
 
-// A new target adds no restrictions; current organization rules still apply independently.
+// Where an organization ceiling exists, a new target adds no restrictions.
 const newTargetPolicy: SkillUpgradePolicyV1 = { ...defaultPolicy, includePrerelease: true };
 
 export function UpgradePolicyEditor({ client, target, resolved, onSaved }: {
@@ -30,6 +30,8 @@ export function UpgradePolicyEditor({ client, target, resolved, onSaved }: {
   const organizationConstraint = targetSkillUpgradePolicyConstraints(resolved).find((constraint) => constraint.source === "organization");
   const epoch = useRef(0);
   const organizationId = target.owner.type === "organization" ? target.owner.id : null;
+  const hasOrganizationCeiling = useRef(false);
+  hasOrganizationCeiling.current = Boolean(organizationId && organizationConstraint?.revision);
 
   useEffect(() => {
     epoch.current += 1;
@@ -50,7 +52,7 @@ export function UpgradePolicyEditor({ client, target, resolved, onSaved }: {
       if (!active) return;
       setRevision(record);
       // Each scope edits only its own revision; a new target must not freeze organization rules.
-      const source = record?.policy ?? (scope === "target" ? newTargetPolicy : defaultPolicy);
+      const source = record?.policy ?? (scope === "target" && hasOrganizationCeiling.current ? newTargetPolicy : defaultPolicy);
       setPolicy(structuredClone(source));
       setState("ready");
     }).catch((error: unknown) => {
@@ -102,7 +104,7 @@ export function UpgradePolicyEditor({ client, target, resolved, onSaved }: {
           <p>{organizationConstraint.policy.mode === "maintenance-window" && organizationConstraint.policy.maintenanceWindow
             ? `Organization window: days ${organizationConstraint.policy.maintenanceWindow.daysOfWeek.join(", ")} (0 is Sunday), starting ${minuteLabel(organizationConstraint.policy.maintenanceWindow.startMinute)} for ${organizationConstraint.policy.maintenanceWindow.durationMinutes} minutes in ${organizationConstraint.policy.maintenanceWindow.timeZone}.`
             : "Organization execution: manually queued, without a clock restriction."}</p>
-        </> : <p>No organization ceiling was included in this response. The server enforces current organization rules when work is queued or executed.</p>}
+        </> : <p>No organization ceiling was included in this response. Any organization rules configured before execution will also apply.</p>}
       </section>}
       <label className="control-plane-checkbox"><input type="checkbox" disabled={!editable} checked={policy.includePrerelease} onChange={(event) => setPolicy({ ...policy, includePrerelease: event.target.checked })} /><span><strong>Prerelease channel</strong><small>Include compatible prerelease versions.</small></span></label>
       <label><span>Execution mode</span><select disabled={!editable} value={policy.mode} onChange={(event) => setPolicy(event.target.value === "manual" ? { ...policy, mode: "manual", maintenanceWindow: undefined } : { ...policy, mode: "maintenance-window", maintenanceWindow: policy.maintenanceWindow ?? { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, daysOfWeek: [1, 2, 3, 4, 5], startMinute: 120, durationMinutes: 120 } })}><option value="manual">Manual</option><option value="maintenance-window">Maintenance window</option></select></label>

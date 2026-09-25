@@ -139,6 +139,39 @@ test("a first target policy adds no restrictions and displays the legacy organiz
     allowedChangeKinds: ["breaking", "feature", "fix", "maintenance", "security"], pins: {} });
 });
 
+for (const ownerType of ["user", "organization"] as const) {
+  test(`a first ${ownerType} target policy without an organization ceiling preserves the stable channel`, async () => {
+    const saves: Array<{ policy: SkillUpgradePolicyV1 }> = [];
+    const stable: SkillUpgradePolicyV1 = { schemaVersion: 1, mode: "manual", includePrerelease: false,
+      allowedChangeKinds: ["breaking", "feature", "fix", "maintenance", "security"], pins: {} };
+    const client = {
+      async getTargetSkillUpgradePolicy() { return null; },
+      async updateTargetSkillUpgradePolicy(_id: string, input: { policy: SkillUpgradePolicyV1 }) {
+        saves.push(input);
+        return { created: true, revision: policyRevision("target", saves.length, input.policy) };
+      },
+    } as unknown as RegistryClient;
+    const target = { id: "target-1", owner: { type: ownerType, id: "owner-1" } } as ArchitectureTargetRecord;
+    const view = render(<UpgradePolicyEditor client={client} target={target}
+      resolved={{ policy: stable, source: "default", revision: null, constraints: [{ policy: stable, source: "default", revision: null }] }}
+      onSaved={() => undefined} />);
+    const details = view.container.querySelector("details")!;
+    details.open = true;
+    fireEvent(details, new window.Event("toggle"));
+    await view.findByText(/Saving creates the first policy/);
+    assert.equal((view.getByRole("checkbox") as HTMLInputElement).checked, false);
+    fireEvent.change(view.getByRole("combobox", { name: "Execution mode" }), { target: { value: "maintenance-window" } });
+    fireEvent.click(view.getByRole("button", { name: "Save immutable policy revision" }));
+    await waitFor(() => assert.equal(saves.length, 1));
+    assert.equal(saves[0]!.policy.includePrerelease, false, "adding a window must not enable prereleases");
+    await view.findByText("Saved target policy revision 1.");
+    fireEvent.click(view.getByRole("checkbox"));
+    fireEvent.click(view.getByRole("button", { name: "Save immutable policy revision" }));
+    await waitFor(() => assert.equal(saves.length, 2));
+    assert.equal(saves[1]!.policy.includePrerelease, true, "explicit channel selection remains available");
+  });
+}
+
 function release(version: string, lifecycleStatus: string, allowedActions: SkillReleaseSummary["allowedActions"]): SkillReleaseSummary {
   return { id: version, slug: "archived-helper", version, lifecycleStatus, reviewStatus: "approved", securityStatus: "passed", publishedAt: null, platforms: [], findingCount: 0, allowedActions };
 }
