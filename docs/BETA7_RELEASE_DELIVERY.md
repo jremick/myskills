@@ -54,11 +54,15 @@ version `0.1.0-beta.7` and candidate revision
 same-origin identity responses. Readiness and health passed; HTML returned
 `no-cache` and version responses returned `no-store`.
 
-Four native production browser readbacks passed: the existing signed-in owner
-session survived reload, private exact-version selection showed the literal file
-bundle, anonymous public version selection and files were available, and private
-exact-version denial did not fall back. The browser checks did not download
-files; the export platform button only selects a platform. Production audit
+Native production browser checks passed: the existing signed-in owner
+session survived reload, private exact-version selection showed literal package
+files, anonymous public version selection and files were available, and private
+exact-version denial did not fall back. A separate authenticated Export action
+from My submitted skills downloaded the existing private release as a JSON
+bundle. The saved 17,300-byte bundle contained four files; its manifest matched
+the selected name, version, and private visibility. Its SHA-256 was recorded in
+the private evidence. The browser download-event wait timed out, so completion
+was verified from the native saved file. Production audit
 checks for migrations, error logs, and CLI also passed. The production
 verification report recorded API `SUCCESS`/`RUNNING` on schema 32 with
 migrations `0029`-`0031` applied, 43 runtime log lines, and zero error lines.
@@ -68,6 +72,7 @@ two files totaling 428 bytes with no findings. Anonymous MCP session access
 returned `401 AUTHENTICATION_REQUIRED`.
 The maintainer reports are `.private/production-live-readback.json`,
 `.private/production-browser-readback.json`,
+`.private/production-authenticated-export.json`,
 `.private/production-verification.json`, and
 `.private/staging-acceptance/production-cli-readback.json`.
 
