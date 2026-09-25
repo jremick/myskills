@@ -1,35 +1,70 @@
 # Roadmap
 
 Version: 0.1.0-beta.6
-Document revision: 0.2.0-draft
-Last updated: 2026-09-01
+Document revision: 0.3.0
+Last updated: 2026-09-25
 
 ## Release Tracks
 
 - **Responsible public alpha (`v0.1.0-alpha.0`)**: archived release track for the first public repository and reproducible source artifact gate.
 - **Public beta (`v0.1.0-beta.1`)**: superseded external trial release that established owner-controlled hosted access and documented self-hosting boundaries.
 - **Beta follow-up (`v0.1.0-beta.2`)**: released 2026-07-13 with local onboarding, artifact/review safety, public CLI packaging, static quality gates, release discipline, and reconciled docs. See [BETA_RELEASE_GOAL.md](BETA_RELEASE_GOAL.md).
-- **Hosted beta baseline**: The beta.2 Railway deployment is the documented hosted baseline; confirm the current commit and health by live read-back before describing `myskills.sh` as running it.
+- **Operational beta (`v0.1.0-beta.5`)**: released with the governed Codex workspace install/update/rollback path and recorded staging and production verification. See [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
+- **CLI follow-up (`v0.1.0-beta.6`)**: released with the dry-run-only work/team Codex bootstrap planner. This CLI release did not promote Railway.
+- **Hosted beta baseline**: the operational beta.5 application is the latest documented deployment baseline. Confirm the current commit and health by live read-back; historical acceptance is not a current runtime check.
 - **Business-safe production release**: harden the beta into an operator-ready release with stronger audit, background scanning, skill evals, provider lifecycle, artifact delivery, trusted publishing, deploy/ops guidance, and upgrade policy. See [BUSINESS_SAFE_RELEASE_GOAL.md](BUSINESS_SAFE_RELEASE_GOAL.md).
 
 ## Current Focus
 
-- Keep the documented Phase 1 beta.2 Railway baseline separate from this local
-  Phase 2 branch. Any current hosted claim requires a live read-back; a local
-  migration or test is not hosted evidence.
-- Complete the supported-runtime, disposable-Postgres, browser/UAT, security,
-  and review gates for the local Phase 2 branch before considering a hosted
-  trial.
-- Verify and review the current Skill Architecture Control Plane slices that let
-  users choose topology patterns, manage immutable revisions, understand
-  diagrams, manage organization sharing, and inspect connected-target metadata
-  without leaking private skill content.
-- Preserve the API/Postgres registry as the canonical trust boundary. Connected
-  state must enter as consented, reviewable, metadata-only evidence before any
-  future write path is considered.
-- Keep live adapters, target mutation, public sync routes, package install,
-  and live apply/rollback clearly blocked until their authorization and
-  verification gates are complete.
+- Reconcile the merged foundation batch below, then prioritize review findings
+  and the remaining backlog before assigning later release scope, owners, or dates.
+- Make first use easier: native MCP skill delivery, better authoring and imports,
+  optional task-aware recommendations, and simpler self-hosting and deployment.
+- Preserve the API/Postgres registry, immutable reviewed releases, authorization,
+  and audit as the shared foundation for each new surface.
+- Keep the proven workspace-scoped Codex companion separate from broader
+  cross-tool sync and full architecture execution, which remain future work.
+- Use the operational acceptance ledger and current source to reconcile older
+  milestone status lists. Earlier branch and
+  beta.2 labels below are historical; they do not supersede the release tracks.
+
+## Current Delivery Batch
+
+Status checked on 2026-09-25. A reviewed or tested candidate is not a merged,
+released, or deployed feature.
+
+| Slice | Evidence | Remaining gate |
+| --- | --- | --- |
+| Maintenance baseline | [PR #75](https://github.com/jremick/myskills/pull/75) merged bootstrap-directory revalidation, Hono remediation, and the MinIO CI image fix after required CI passed. Duplicate Hono PR #69 is closed. | Reconcile grouped dependency updates after the MCP SDK migration; major runtime updates need a compatibility decision. |
+| Roadmap and hosting investigation | This revision records the adoption workstreams, merged foundations, and verified setup gaps. | Prioritize the remaining delivery slices after the full review. |
+| HOST-1 build caching | [PR #77](https://github.com/jremick/myskills/pull/77) merged after required CI passed. Six Windows image targets, source and build-argument cache reuse, and runtime smokes were verified. | Release images, setup and operations remain later slices. Deployment-time improvement is unmeasured. |
+| AUTHOR-1 CLI scaffold | [PR #78](https://github.com/jremick/myskills/pull/78) merged private Codex skill scaffolding after required CI passed. Windows CLI tests, package smoke, lint, shell-guidance tests, and source review passed. | Archive creation, browser drafts, and imports remain separate slices. |
+| MCP-1 protocol prerequisite | [PR #79](https://github.com/jremick/myskills/pull/79) merged modern protocol entrypoints and legacy compatibility after required CI passed. Windows MCP tests, repository checks, image smoke, and security review support the adapter change. | Native Skills content handlers, conformance and real-host loading remain a following slice. |
+| Public release history | [PR #80](https://github.com/jremick/myskills/pull/80) merged public history browsing and exact-version links after required CI, including browser tests, passed. | Version comparison and further history usability improvements remain open. |
+
+Container and other resource-heavy verification must be reproducible on a Linux
+Docker engine with the repository's supported Node/npm versions. The linked PRs
+record the batch evidence and required CI results. Candidate verification does
+not establish production deployment or native host activation.
+
+## Adoption Features For Delivery Review
+
+Status: the first code batch is merged; the full workstream scopes and
+later release order remain subject to review. IDs identify workstreams, not
+priority. These extend existing milestones
+and do not create separate registries or release systems.
+
+| ID | Outcome | Existing milestone | Detail |
+| --- | --- | --- | --- |
+| MCP-1 | Agents discover and load authorized skills through native MCP Skills. | 7 | [Native MCP skill delivery](#native-mcp-skill-delivery-mcp-1) |
+| AUTHOR-1 | Authors create, edit, import, and submit skills without manually rebuilding packages. | 3, 4, 5 | [Authoring and imports](#authoring-and-imports-author-1) |
+| REC-1 | Users and agents find relevant skills from a task description. | 1, 6, 7 | [Task-aware recommendations](#task-aware-recommendations-rec-1) |
+| HOST-1 | Operators reach a usable, maintainable instance with fewer steps and less build work. | 8, 9, 10 | [Self-hosting and deployment](#self-hosting-and-deployment-host-1) |
+
+The [self-hosting investigation](SELF_HOSTING_INVESTIGATION.md) records current
+friction, options, dependencies, and proposed verification. It recommends release
+images and a setup helper as the first delivery candidate; prioritization remains
+open until the full roadmap review.
 
 ## Roadmap Shape
 
@@ -83,6 +118,9 @@ Done:
 - Read-only MCP stdio and stateless Streamable HTTP discovery servers.
 - CLI workflows for validation, scanning, login/logout, auth status, API URL selection/config, doctor diagnostics, keyring-first credential storage, search/info, submission, author withdrawal, review actions, skill metadata/lifecycle controls, release lifecycle controls, team/sharing commands, verified export, local install/list/update/rollback, and API-token management.
 - First-pass production container packaging, opt-in web analytics support, and deployment preflight checks.
+- Version-history data and browser navigation for managed and public skills,
+  including exact-version links.
+- Registry backup/restore scripts and operator runbooks. Current scheduled-job execution, backup freshness, and alert delivery require live verification.
 
 Remaining:
 
@@ -92,14 +130,12 @@ Remaining:
 - Provider login/linking and external identity lifecycle.
 - Signed or direct object delivery that preserves authorization and integrity.
 - Platform-specific install adapters.
-- Skill backup jobs.
-- Version-history browsing.
 - Background scan jobs.
-- Release automation.
+- Release publication and provenance automation beyond the existing verification and artifact gates.
 
-Blocking next release:
+Release acceptance:
 
-- Beta.2 acceptance is tracked in [BETA_RELEASE_GOAL.md](BETA_RELEASE_GOAL.md). Remaining production items above stay in Milestone 9 unless they close an accepted beta risk.
+- Use [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md) for the accepted operational baseline and define acceptance for each new delivery slice. [BETA_RELEASE_GOAL.md](BETA_RELEASE_GOAL.md) records the historical beta.2 gate; it does not block the next release.
 
 ## Milestone 2: Auth And User Management Foundation
 
@@ -163,6 +199,11 @@ Acceptance:
 - A new user can login, search, install, list, update, and rollback.
 - An author can create, validate, scan, package, and submit a draft.
 
+Current status: `init`, validation, scanning, submission, and the user install
+lifecycle are implemented. `package` remains planned under
+[AUTHOR-1](#authoring-and-imports-author-1); the full author acceptance above is
+not yet met.
+
 ## Milestone 5: Web App MVP
 
 Goal: make the registry useful without the CLI.
@@ -189,6 +230,7 @@ Done:
 - Public browse/search, skill detail, release metadata, and export-guidance views.
 - Email/password login/logout, password reset, account settings, MFA challenge/setup/reset/removal, current-user refresh, and session-aware API calls.
 - Authenticated author `.zip` package submission and author submitted-version export.
+- Managed and public skill version-history browsing with exact-version links.
 - Maintainer review dashboard workflows for approval, requested changes, rejection, and publication.
 - Owner/admin lifecycle controls for skill metadata, skill archive/restore/delete, and release deprecate/unpublish/revoke/restore/delete.
 - User API-key management.
@@ -199,9 +241,8 @@ Remaining:
 
 - Broader color, typography, surface, and component refresh from the identity guidelines.
 - Private draft management.
-- Version-history polish.
-- Backup/restore workflows.
-- Remaining instance settings administration.
+- Version-history comparison and usability polish.
+- Guided operator backup/restore workflows and recovery verification beyond the existing scripts and runbooks; a browser administration surface is not yet implemented.
 
 ## Milestone 6: Skill Evals
 
@@ -231,6 +272,10 @@ Current status: planned.
 
 Goal: expose safe agent-facing registry discovery.
 
+MCP-1 extends this existing read-only surface with authorized content delivery.
+The current tool contract remains unchanged until that extension is implemented
+and its compatibility and authorization checks pass.
+
 Depends on: Milestones 1, 2, and 4.
 
 Deliverables:
@@ -251,7 +296,7 @@ Current status:
 
 Done:
 
-- First stdio and stateless Streamable HTTP MCP servers exist with `search_skills`, `get_skill_info`, and `get_install_instructions`.
+- Stdio and stateless Streamable HTTP MCP servers expose registry discovery and architecture metadata tools. SDK v2.1 entrypoints support both legacy clients and protocol `2026-07-28`; required CI and protocol tests passed in PR #79.
 - The API-owned MCP session check accepts an API token with either `skills:read` or `architectures:read`; registry tools require `skills:read`, architecture projection tools require `architectures:read`, session tokens are rejected, sanitized API-owned `mcp.session` audit events record allow/deny decisions, and bundle payload retrieval is avoided.
 
 Remaining:
@@ -330,6 +375,11 @@ Deferred:
 Goal: represent physical target bindings and consented observations separately
 from logical environments, with a strict privacy boundary.
 
+Historical Phase 2 foundation below. The later operational beta adds a separate
+contract-v2 Codex workspace companion with guarded installation and update
+operations; see [Upgrade Policy](UPGRADE_POLICY.md). Deferred items below concern
+broader adapters and management parity beyond that supported path.
+
 Branch foundations present (fresh verification pending):
 
 - 0018 target and append-only observation schema, owner/binding/status/consent,
@@ -345,14 +395,19 @@ Branch foundations present (fresh verification pending):
 
 Deferred:
 
-- Live adapter invocation, automatic home/profile discovery, provider/API
-  connectors, target writes, package installation, and credential handling.
+- Broader provider/API connectors and adapter invocation beyond the supported
+  Codex workspace companion. Automatic home/profile discovery is not enabled.
 - CLI/MCP target management parity and live provider readback.
 
 ## Milestone 7D: Sync control, recovery, and fencing
 
 Goal: make reconciliation reviewable and recoverable before any target write
 is considered.
+
+This milestone describes the general architecture sync service and fixture
+executor. It does not describe the later per-skill target-operation queue and
+Codex companion. Full architecture graph execution remains outside the
+[operational beta's proven scope](OPERATIONAL_BETA_DELIVERY.md).
 
 Branch foundations present (fresh verification pending):
 
@@ -512,6 +567,195 @@ Acceptance:
 - Website content does not duplicate stale docs; it links to canonical repo docs where appropriate.
 - The site can be deployed independently from the app services.
 
+## Native MCP Skill Delivery (MCP-1)
+
+Goal: let compatible agents discover and load authorized reviewed skills and
+supporting files through the existing MCP connection.
+
+Planned scope:
+
+- Implement the official `io.modelcontextprotocol/skills` extension with
+  `skills/list`, `skills/get`, and verified `resources/read` responses.
+- Project canonical released packages into complete manifests with stable origin
+  identity, frontmatter, byte sizes, and digests. Resolve the mapping between
+  stable skill identity and immutable MySkills release identity explicitly.
+- Reuse API-owned token, visibility, lifecycle, and artifact decisions on every
+  read. Add bounded pagination and content delivery with sanitized per-tool and
+  resource audit evidence.
+- Preserve existing discovery tools and CLI/API delivery for older clients.
+  Expose native delivery only where server and host compatibility are verified.
+- Provide connection and first-load guidance with actionable compatibility errors.
+
+Acceptance:
+
+- A supported host discovers a permitted release and loads only the required
+  instructions and supporting files through its verified skill-loading path.
+- Revoked access, hidden releases, changed digests, malformed paths, and oversized
+  packages fail without leaking content. Cached metadata never grants access.
+- Existing MCP and CLI clients retain their documented behavior. Reading content
+  does not execute code or bypass host approval.
+
+Planning decisions: initial host matrix, package/frontmatter compatibility,
+supported file types, release-selection behavior, and audit retention. This work
+does not include agent write tools or automatic skill execution.
+
+Delivery sequence:
+
+1. Completed in [PR #79](https://github.com/jremick/myskills/pull/79): the SDK v2.1
+   adapter supports legacy clients and protocol `2026-07-28` while preserving HTTP
+   authorization and limits. This protocol foundation does not yet serve native
+   Skills content.
+2. Add bounded Skills handlers over the existing authorized bundle API. Use
+   version-pinned resource URIs whose final skill-directory segment matches the
+   frontmatter name. Reauthorize every resource read and exclude packages without
+   valid root `SKILL.md` frontmatter from native discovery.
+3. Verify digests, complete manifests, pagination, invalid paths, revocation, and
+   client loading with the official conformance tooling. Keep bearer-authorized
+   caches private. Confirm method-level audit coverage before closing MCP-1.
+
+The released TypeScript SDK does not yet include native Skills helpers. Custom
+handlers over the stable protocol are the current implementation path; adopt
+upstream helpers only after release and compatibility verification. See the
+[official protocol migration guide](https://github.com/modelcontextprotocol/typescript-sdk/blob/main/docs/migration/support-2026-07-28.md).
+
+Reference: [official MCP Skills extension](https://modelcontextprotocol.io/extensions/skills/overview).
+Host support must be checked at delivery time.
+
+## Authoring And Imports (AUTHOR-1)
+
+Goal: make a skill easy to create, improve, and bring into the registry while
+preserving the existing submission and review process.
+
+Delivered foundation: [PR #78](https://github.com/jremick/myskills/pull/78) adds
+local `myskills init` for a private Codex package with safe destination checks.
+Archive creation and the browser workflow remain open.
+
+Planned scope:
+
+- Private draft workspaces with a Markdown/supporting-file editor, preview,
+  frontmatter and manifest assistance, validation, and scan feedback before
+  submission. Start from a new template or a permitted existing release.
+- Draft history, diffs, stale-edit conflicts, and recovery of unsaved work.
+  Published artifacts remain immutable; edits become a draft for a new version.
+- Guided folder and ZIP imports through supported browser and CLI paths. Preview
+  selected files, exclusions, package metadata, and compatibility adjustments.
+- Public GitHub repository, subdirectory, and `SKILL.md` URL imports. Resolve and
+  pin a commit during preview, let users choose from collections, and record
+  repository/commit/path provenance when submitting the held or reverified bytes.
+- Help users correct requested changes and resubmit a new immutable package
+  snapshot. Preserve attribution and license information when present.
+- Reuse package intake, scan, ownership, visibility, version-conflict, and review
+  rules for every entry path. Keep source content untrusted and never run imports.
+
+Acceptance:
+
+- An author creates a multi-file draft, reloads it, corrects a validation error,
+  submits it, receives review feedback, and submits a corrected version.
+- Folder, ZIP, and GitHub imports show an accurate preview and preserve approved
+  bytes and source metadata. A changed branch cannot replace previewed content.
+- Concurrent edits, version collisions, traversal, symlinks, unsafe URLs, secrets,
+  and resource limits produce clear outcomes; imports cannot bypass review or
+  widen visibility. Partial failures do not publish incomplete packages.
+
+Planning decisions: first editor slice, autosave/draft retention, binary-file
+support, native frontmatter mapping, and API/CLI parity. Private GitHub access,
+continuous repository sync, and AI-generated drafts are separate future choices.
+
+Reference: [SkillBox's GitHub preview/import flow](https://github.com/kitze/skillbox#import-from-github).
+It is comparison evidence, not an implementation dependency.
+
+## Task-Aware Recommendations (REC-1)
+
+Goal: find relevant authorized skills from a task description, with useful search
+available when model recommendations are disabled or unavailable.
+
+Planned scope:
+
+- A task-based discovery endpoint with web and MCP entry points; evaluate Jev as
+  an optional recommendation engine using a user-supplied provider key.
+- Compare ranking quality, latency, and reported cost against deterministic search
+  on a fixed representative task set, including tasks with no useful match.
+- Filter by current authorization and lifecycle before any provider call. Recheck
+  results after evaluation and on cache use; return exact release identities.
+- Show recommendation method, fallback, and uncertainty. Separate relevance from
+  trust, quality, execution authority, and probability of task success.
+- Require explicit provider/data-egress configuration, safe credential storage,
+  request/cost bounds, and no automatic model calls for basic library use.
+
+Acceptance:
+
+- A measured quality benefit over search justifies the chosen first provider.
+- Missing keys, timeouts, provider errors, and capacity limits preserve useful
+  search with explicit fallback status; no unauthorized descriptions leave the API.
+- Results never activate, install, or execute skills. Provider access can be
+  disabled without impairing core registry use.
+
+Planning decisions: credential ownership, provider choice, evaluation rubric,
+catalog limits, cost budget, and cache/retention policy. The bounded ranking
+experiment need not wait for delivery of the full durable skill-eval platform.
+Paid experiments require a separately approved budget.
+
+## Self-Hosting And Deployment (HOST-1)
+
+Goal: reduce operator effort and elapsed time from a fresh machine to a usable
+instance, then make upgrades and recovery equally clear.
+
+Planned scope:
+
+- Repair the current Compose startup path: verify anonymously accessible storage
+  artifacts and normal restart after bootstrap credentials are removed. See the
+  [verified startup gaps](SELF_HOSTING_INVESTIGATION.md#verified-startup-gaps).
+- Publish verified, versioned container images and a matching Compose release
+  bundle so operators can install without a host Node/npm toolchain or source build.
+- Provide a small setup/operations helper with guided inputs, generated protected
+  configuration, preflight, first-owner bootstrap, startup, status, and diagnostics.
+- Distinguish a disposable local evaluation path from persistent self-hosting.
+  Production keeps its auth, email, TLS, storage, and recovery requirements.
+- Reuse migration locking, readiness, build identity, coordinated backup, and
+  isolated restore tooling. Make updates deliberate and preserve existing data.
+- Reduce repeated build work and duplicated deployment configuration. Evaluate a
+  Railway template using the same release artifacts and explicit service settings.
+- Verify amd64/arm64 support, public image availability, first use, update, and
+  recovery before advertising platform support or setup-time claims.
+
+Acceptance and decisions are detailed in the
+[self-hosting investigation](SELF_HOSTING_INVESTIGATION.md). No stack rewrite,
+combined application image, new storage backend, or new hosting provider is
+selected by adding this workstream to the roadmap.
+
+## Next Roadmap Review
+
+Review existing work and the four additions together. Reconcile older status
+lists against current source, release records, and fresh runtime evidence where
+needed; do not schedule already-delivered work again.
+
+Recommended next order:
+
+1. Resolve validated security, install consistency, and operator startup findings
+   from the post-merge review, with focused regression evidence. Keep unresolved
+   security details in the private review record until remediation is ready.
+2. Reconcile grouped dependency updates against the SDK v2.1 baseline. Keep major
+   runtime and email-library upgrades separate until compatibility is verified.
+3. Deliver native MCP content loading and the next authoring/import slice as
+   separate workstreams over the existing registry and review contracts.
+4. Build the HOST-1 release bundle and guided setup on the repaired Compose path;
+   measure fresh install, update, and recovery before making speed claims.
+5. Review the recommendation experiment and broader connected management against
+   the resulting user evidence and remaining production requirements.
+
+| Review group | Existing work to reconcile | Decision needed |
+| --- | --- | --- |
+| Adoption and author workflow | Private drafts, package intake, history, author feedback, docs/site onboarding | First AUTHOR-1 and HOST-1 slices; supported user and operator journeys |
+| Agent use | MCP audit/compatibility, architecture projections, platform adapters | First MCP-1 host and delivery contract; relation to connected management |
+| Quality and discovery | Evals, scan jobs, search, review evidence | REC-1 experiment versus durable eval and scanning priorities |
+| Identity and governance | Provider lifecycle, CLI device login, organization controls | Remaining business self-hosting requirements and their release gates |
+| Operations and distribution | Container publishing, backups, recovery, monitoring, release automation | HOST-1 packaging choice, support matrix, and fresh-install proof |
+| Broader connected management | Cross-tool sync, full architecture execution, optional telemetry | Keep, defer, or narrow based on demand and current Codex evidence |
+
+For each selected slice, agree the user outcome, dependencies, smallest deliverable,
+acceptance evidence, owner, effort range, release target, and explicit deferrals.
+Dates and implementation commitments follow that review.
+
 ## Future Product Expansion
 
 These items are intentionally downstream from the public beta and production-hardening work. They are strategic product directions, not public-beta blockers.
@@ -521,9 +765,9 @@ These items are intentionally downstream from the public beta and production-har
 Goal: let users connect their AI tools and systems to MySkills for clean, user-controlled, bi-directional skills management across apps, machines, and projects.
 
 Depends on: Milestones 4, 5, 7, 7A-7E, and the platform-install-adapter work
-in Milestone 9. Phase 2 currently provides target metadata, consent,
-read-only observation, and fixture sync-control foundations; it does not make
-this connected-management goal available.
+in Milestone 9. The operational beta adds a governed Codex workspace companion
+to the Phase 2 foundations. Broader bi-directional, multi-tool management and full
+architecture execution are not established by that single supported path.
 
 Deliverables:
 
