@@ -1098,7 +1098,7 @@ export class AuthService {
       details: {
         endpoint: "/v1/mcp/session",
         // Keep requiredScope for beta.2 audit consumers. requiredScopes
-        // records the current OR gate without exposing bearer material.
+        // records the legacy OR gate or the narrower native content gate.
         requiredScope: "skills:read",
         requiredScopes: input.method ? ["skills:read"] : [...MCP_SESSION_REQUIRED_SCOPES],
         credentialKind: input.credentialKind,

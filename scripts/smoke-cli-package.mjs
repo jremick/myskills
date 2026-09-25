@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
@@ -48,9 +49,25 @@ try {
   run(executable, ["validate", "--path", copiedExample], { cwd: installRoot });
   run(executable, ["scan", "--path", copiedExample], { cwd: installRoot });
 
+  const authored = join(installRoot, "authored-skill");
+  run(executable, ["init", "authored-skill", "--output", authored], { cwd: installRoot });
+  const archives = [join(installRoot, "first.zip"), join(installRoot, "second.zip")];
+  const outputs = [];
+  for (const archive of archives) {
+    const metadata = JSON.parse(run(executable, ["package", "--path", authored, "--output", archive, "--json"], { cwd: installRoot, capture: true }).stdout);
+    const bytes = await readFile(archive);
+    if (metadata.sha256 !== createHash("sha256").update(bytes).digest("hex") || metadata.size !== bytes.length) {
+      fail("Packed CLI archive metadata does not match the written bytes.");
+    }
+    outputs.push(bytes);
+  }
+  if (!outputs[0].equals(outputs[1])) fail("Packed CLI did not produce reproducible archives.");
+  run(executable, ["validate", "--path", archives[0]], { cwd: installRoot });
+  run(executable, ["scan", "--path", archives[0]], { cwd: installRoot });
+
   console.log(`CLI package smoke passed for ${basename(tarball)}.`);
   console.log(`Tarball files: ${actualFiles.join(", ")}`);
-  console.log(`Clean temporary install and validate/scan passed for ${cliPackage.version}.`);
+  console.log(`Clean temporary install, validate/scan, and init/package roundtrip passed for ${cliPackage.version}.`);
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true });
 }
