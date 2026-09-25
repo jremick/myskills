@@ -1,7 +1,7 @@
 # Deployment
 
-Version: 0.1.0-beta.4
-Last updated: 2026-07-13
+Version: 0.1.0-beta.6
+Last updated: 2026-09-25
 
 MySkills is a Node/Postgres application with object storage for package artifacts. The production path is container-first:
 
