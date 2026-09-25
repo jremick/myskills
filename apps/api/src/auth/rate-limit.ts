@@ -9,13 +9,27 @@ export interface AuthRateLimiter {
 
 export class MemoryAuthRateLimiter implements AuthRateLimiter {
   private buckets = new Map<string, { count: number; resetAt: number }>();
+  private cleanupCursor = this.buckets.entries();
 
-  constructor(private readonly options: { maxAttempts: number; windowMs: number }) {}
+  constructor(private readonly options: { maxAttempts: number; windowMs: number; maxBuckets?: number }) {}
 
   consume(key: string, now = new Date()): RateLimitResult {
     const currentTime = now.getTime();
+    // Bound both cleanup work and retained identities. Never evict a live
+    // bucket: rotating keys must not reset an existing caller's attempt limit.
+    for (let visited = 0; visited < 16; visited += 1) {
+      const entry = this.cleanupCursor.next();
+      if (entry.done) {
+        this.cleanupCursor = this.buckets.entries();
+        break;
+      }
+      if (entry.value[1].resetAt <= currentTime) this.buckets.delete(entry.value[0]);
+    }
     const existing = this.buckets.get(key);
     if (!existing || existing.resetAt <= currentTime) {
+      if (!existing && this.buckets.size >= (this.options.maxBuckets ?? 100_000)) {
+        return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(this.options.windowMs / 1000)) };
+      }
       this.buckets.set(key, {
         count: 1,
         resetAt: currentTime + this.options.windowMs,
