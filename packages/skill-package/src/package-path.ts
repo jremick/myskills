@@ -27,6 +27,11 @@ export interface PackageScanResult {
   findings: ScanFinding[];
 }
 
+export interface PackageFileValidationResult {
+  filesScanned: number;
+  bytesScanned: number;
+}
+
 export interface PackageInputFile {
   path: string;
   content: string;
@@ -63,6 +68,16 @@ export async function readPackageSnapshot(inputPath: string): Promise<PackageSna
   };
 }
 
+/** Require a directory at the checked open, without the single-file manifest shortcut. */
+export async function readPackageDirectorySnapshot(inputPath: string): Promise<PackageSnapshot> {
+  const files = await readPackageFilesOfKind(inputPath, true);
+  return {
+    manifest: loadSkillManifestFromPackageFiles(files),
+    files,
+    scan: { ...scanPackageFiles(files), rootPath: path.resolve(inputPath) },
+  };
+}
+
 export async function loadSkillManifestFromPath(inputPath: string): Promise<SkillManifest> {
   const files = await readPackageFilesFromPath(inputPath);
   return manifestForInput(files, inputPath);
@@ -92,9 +107,14 @@ export async function scanPackagePath(inputPath: string): Promise<PackageScanRes
 }
 
 export async function readPackageFilesFromPath(inputPath: string): Promise<PackageInputFile[]> {
+  return readPackageFilesOfKind(inputPath, false);
+}
+
+async function readPackageFilesOfKind(inputPath: string, directoryOnly: boolean): Promise<PackageInputFile[]> {
   assertSafePackagePlatform();
   const { rootPath, expected, handle } = await openPackageRoot(path.resolve(inputPath));
   try {
+    if (directoryOnly && !expected.isDirectory()) throw new Error("Package input must be a directory.");
     if (expected.isFile()) {
       if (path.extname(rootPath).toLowerCase() === ".zip") {
         // Handle parser rejection before asynchronous cleanup can yield.
@@ -286,11 +306,41 @@ export async function readPackageFilesFromZipBuffer(buffer: Buffer): Promise<Pac
 }
 
 export function scanPackageFiles(files: PackageInputFile[]): PackageScanResult {
+  const findings: ScanFinding[] = [];
+  let validated: PackageFileValidationResult;
+  try {
+    validated = inspectPackageFiles(files, (file, relativePath) => {
+      for (const finding of scanTextForPackageRisks(file.content)) {
+        findings.push({ ...finding, path: relativePath });
+      }
+    });
+  } catch (error) {
+    if (!(error instanceof PackageTextLimitError)) throw error;
+    // Keep the scanner's existing partial-risk results and blocking size finding,
+    // while still checking all paths even after text inspection stops.
+    validatePortableFilePaths(files);
+    findings.push({ category: "package-structure", severity: "blocking", message: error.message, path: error.relativePath });
+    validated = { filesScanned: files.length, bytesScanned: error.bytesScanned };
+  }
+  return { rootPath: "package-payload", ...validated, findings };
+}
+
+/**
+ * Validate held payload paths, collisions, UTF-8/NUL rules and file/byte bounds.
+ * Throws on invalid input; does not parse a manifest or decide content safety.
+ */
+export function validatePackageFiles(files: readonly PackageInputFile[]): PackageFileValidationResult {
+  return inspectPackageFiles(files);
+}
+
+function inspectPackageFiles(
+  files: readonly PackageInputFile[],
+  onFile?: (file: PackageInputFile, relativePath: string) => void,
+): PackageFileValidationResult {
   if (files.length > MAX_PACKAGE_FILES) {
     throw new Error(`Package contains more than ${MAX_PACKAGE_FILES} files.`);
   }
 
-  const findings: ScanFinding[] = [];
   const seen = new Set<string>();
   let bytesScanned = 0;
 
@@ -307,29 +357,16 @@ export function scanPackageFiles(files: PackageInputFile[]): PackageScanResult {
     const byteLength = Buffer.byteLength(file.content);
     bytesScanned += byteLength;
     if (bytesScanned > MAX_PACKAGE_TEXT_BYTES) {
-      findings.push({
-        category: "package-structure",
-        severity: "blocking",
-        message: `Package text exceeds ${MAX_PACKAGE_TEXT_BYTES} bytes.`,
-        path: relativePath,
-      });
-      break;
+      throw new PackageTextLimitError(relativePath, bytesScanned);
     }
     if (decodePackageText(Buffer.from(file.content, "utf8"), relativePath) !== file.content) {
       throw new Error(`Package file must be valid UTF-8 text: ${relativePath}`);
     }
-    for (const finding of scanTextForPackageRisks(file.content)) {
-      findings.push({ ...finding, path: relativePath });
-    }
+    onFile?.(file, relativePath);
   }
 
   validatePortableFilePaths(files);
-  return {
-    rootPath: "package-payload",
-    filesScanned: files.length,
-    bytesScanned,
-    findings,
-  };
+  return { filesScanned: files.length, bytesScanned };
 }
 
 export function loadSkillManifestFromPackageFiles(files: PackageInputFile[]): SkillManifest {

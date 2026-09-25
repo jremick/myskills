@@ -1973,9 +1973,15 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     if (!options.authService) {
       throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
     }
+    // Accept only bounded operation names. Never copy arbitrary header content
+    // into the audit record or use this declaration to widen token authority.
+    const declaredMethod = request.headers["x-myskills-mcp-method"];
+    const method = declaredMethod === "skills/list" || declaredMethod === "skills/get" || declaredMethod === "resources/read"
+      ? declaredMethod : undefined;
     const context = await options.authService.authenticateRequest(requestAuthorization(request));
     if (!context) {
       await options.authService.recordMcpSessionDecision({
+        method,
         context: null,
         credentialKind: "none",
         decision: "deny",
@@ -1990,6 +1996,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     }
     if (context.credential.kind !== "api_token") {
       await options.authService.recordMcpSessionDecision({
+        method,
         context,
         credentialKind: "session",
         decision: "deny",
@@ -2002,8 +2009,12 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         },
       });
     }
-    if (!MCP_SESSION_REQUIRED_SCOPES.some((scope) => context.credential.scopes.includes(scope))) {
+    const hasRequiredScope = method
+      ? context.credential.scopes.includes("skills:read")
+      : MCP_SESSION_REQUIRED_SCOPES.some((scope) => context.credential.scopes.includes(scope));
+    if (!hasRequiredScope) {
       await options.authService.recordMcpSessionDecision({
+        method,
         context,
         credentialKind: "api",
         decision: "deny",
@@ -2021,6 +2032,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       });
     }
     await options.authService.recordMcpSessionDecision({
+      method,
       context,
       credentialKind: "api",
       decision: "allow",

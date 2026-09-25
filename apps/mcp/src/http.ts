@@ -187,6 +187,13 @@ async function handleHttpRequest(
     return;
   }
 
+  // A single rate-limited POST must not fan out into concurrent artifact reads.
+  // SDK legacy transports accept arrays even though current MCP does not.
+  if (Array.isArray(parsedBody)) {
+    sendJsonRpcError(response, 400, -32600, "MCP HTTP transport does not accept batch requests.");
+    return;
+  }
+
   let closing = false;
   const createServer = () => {
     if (closing) {

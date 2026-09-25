@@ -20,6 +20,8 @@
     "@modelcontextprotocol/node": "2.1.0",
     "@modelcontextprotocol/server": "2.1.0",
     "@myskills-app/core": "0.1.0-beta.6",
+    "@myskills-app/skill-package": "0.1.0-beta.6",
+    "yaml": "2.9.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {

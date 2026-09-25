@@ -1,8 +1,8 @@
 # API, MCP, And CLI
 
 Version: 0.1.0-beta.6
-Document revision: 0.2.0-draft
-Last updated: 2026-09-01
+Document revision: 0.2.1-draft
+Last updated: 2026-09-25
 
 ## Shared Rule
 
@@ -78,7 +78,11 @@ the API URL or bearer token: configure the CLI with `myskills config set
 api-url ...` or `MYSKILLS_API_URL`, then authenticate it separately. Bearer
 credentials remain in request headers.
 
-The repository version is `0.1.0-beta.3`. Hosted deployment state must be read
+The current source candidate also provides native Skills resources for
+extension-aware MCP clients. That separate authenticated content path does not
+change `get_install_instructions` or add bundle URLs to its response.
+
+The repository version is `0.1.0-beta.6`. Hosted deployment state must be read
 back separately and must not be inferred from the repository version.
 
 ## Skill Architecture Control Plane (Phase 2 draft)
@@ -231,7 +235,9 @@ The current branch's official TypeScript MCP SDK integration backs:
 - `get_skill_info`;
 - `get_install_instructions`;
 - `list_architecture_patterns`, `list_architectures`, and
-  `get_architecture_projection` (read-only architecture projections).
+  `get_architecture_projection` (read-only architecture projections);
+- native `skills/list`, `skills/get`, and verified `resources/read` in the source
+  candidate for clients declaring `io.modelcontextprotocol/skills`.
 
 The API-owned MCP session check accepts an API token with either `skills:read`
 or `architectures:read`. Registry tools require `skills:read`; architecture
@@ -247,13 +253,37 @@ credentials, query strings, or fragments, and bearer tokens remain in headers.
 Generated CLI commands do not embed either value; configure the CLI API URL and
 credentials separately before running them.
 
-Planned MCP work is limited to role-gated maintainer/admin reads, authoritative per-tool audit events, and broader client compatibility evidence. Write tools remain deferred.
+Native Skills handlers require `skills:read` and use current API authorization
+for each list/get/read. Discovery lists latest stable approved defaults with
+bounded pagination and valid root `SKILL.md` frontmatter; direct lookup supports
+an exact approved release. Resource URIs bind the registry origin, exact version,
+artifact SHA-256, and frontmatter name. Complete manifests include file sizes and
+digests, and reads verify the bounded immutable bundle before returning exact
+UTF-8 text bytes. Resources have zero cache lifetime and private responses;
+content is not returned by the existing metadata tools.
+
+Extension-aware HTTP clients should use protocol `2026-07-28` and declare client
+capabilities on each request. Legacy stdio clients declare the extension during
+initialization. Stateless legacy HTTP does not retain initialization capabilities.
+The optional `resources/directory/read` capability is not implemented. See
+[MCP App](../apps/mcp/README.md) for negotiation, limits, resource identities, and
+audit boundaries.
+
+The official SEP-2640 Skills scenario checks passed with an explicitly configured
+client; the stock CLI omits the required extension declaration. The released
+fast-agent 0.10.33 importer also passed. See [verification details](AUTHOR_MCP_DELIVERY.md).
+The importer downloads a complete local copy under its draft-compatible contract;
+it does not prove current-spec model-selected, on-demand activation. That host
+acceptance remains open under [MCP-1](ROADMAP.md#native-mcp-skill-delivery-mcp-1).
+Source implementation does not establish publication or deployment. Further MCP
+work includes role-gated maintainer/admin reads, authoritative per-tool audit
+events, and broader client compatibility evidence. Write tools remain deferred.
 
 ## CLI Surface In The Current Branch
 
 The current Phase 2 branch's `@jarel/myskills` bundle supports:
 
-- version, local validate, and local scan;
+- version, local init, validate, scan, and source-candidate package archive creation;
 - local-first API URL config, password/API-key login, MFA completion, logout, auth status, and doctor diagnostics;
 - search, info, verified export, local install/list/update/rollback;
 - directory or `.zip` submission, owned-submission list/withdrawal;
@@ -270,8 +300,17 @@ are deferred.
 [CLI App](../apps/cli/README.md) is the command-level source of truth. The
 local `myskills init` command now creates a minimal private Codex package with
 `skill.json` and `SKILL.md`; it is local-only, refuses an existing destination,
-and does not publish or authenticate. Browser/device login, package archive
-creation, and platform-specific install adapters remain planned.
+and does not publish or authenticate. The source candidate adds
+`myskills package --path <directory> --output <file.zip> [--json]`: it validates
+and scans one checked snapshot, preserves exact UTF-8 bytes, and writes a
+deterministic ZIP to a new destination outside the source tree. The result reports
+SHA-256, byte size, warnings, and separate submission guidance. It performs no
+network call or publication. A disposable init/package/submit/review/publish
+fixture and installed CLI tarball smoke passed on Windows-hosted Linux.
+Browser drafts, held-byte folder/ZIP import previews, and commit-pinned public
+GitHub imports remain subsequent AUTHOR-1 slices. Browser/device login and
+additional platform-specific install adapters remain planned. Versioned
+self-hosting distribution and guided setup remain separate HOST-1 slices.
 
 The CLI build bundles `packages/skill-package` into `dist/index.js`. The published manifest has no runtime dependency on private `@myskills-app/*` workspaces. `npm run smoke:cli-package` verifies the exact tarball file allowlist, clean temporary install with public dependencies resolved from npm, version output, and example validate/scan behavior.
 

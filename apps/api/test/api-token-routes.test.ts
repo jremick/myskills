@@ -507,6 +507,55 @@ test("architecture-only MCP sessions do not grant registry reads and audit safe 
   assert.equal(serialized.includes("Bearer"), false);
 });
 
+test("native MCP operation context tightens scope and records only bounded method names", async (t) => {
+  const authStore = new MemoryAuthStore("closed");
+  const app = buildTokenApp(authStore);
+  t.after(() => app.close());
+  const session = await addAndLogin(app, authStore, {
+    id: "native-reader", email: "native-reader@example.com", roles: ["user"],
+  });
+  const reader = await createApiToken(app, session, ["skills:read"]);
+  const architecture = await createApiToken(app, session, ["architectures:read"]);
+  for (const method of ["skills/list", "skills/get", "resources/read"]) {
+    const allowed = await app.inject({
+      method: "GET", url: "/v1/mcp/session",
+      headers: { authorization: `Bearer ${reader.token}`, "x-myskills-mcp-method": method },
+    });
+    assert.equal(allowed.statusCode, 200);
+    const denied = await app.inject({
+      method: "GET", url: "/v1/mcp/session",
+      headers: { authorization: `Bearer ${architecture.token}`, "x-myskills-mcp-method": method },
+    });
+    assert.equal(denied.statusCode, 403);
+    assert.equal(denied.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
+  }
+  const missing = await app.inject({
+    method: "GET", url: "/v1/mcp/session", headers: { "x-myskills-mcp-method": "resources/read" },
+  });
+  assert.equal(missing.statusCode, 401);
+  const arbitraryHeader = "arbitrary-sensitive-resource-name";
+  const legacy = await app.inject({
+    method: "GET", url: "/v1/mcp/session",
+    headers: { authorization: `Bearer ${architecture.token}`, "x-myskills-mcp-method": arbitraryHeader },
+  });
+  assert.equal(legacy.statusCode, 200);
+  const events = (await authStore.listAuditEvents({ limit: 50 })).filter((event) => event.action === "mcp.session");
+  assert.equal(events.length, 8);
+  for (const method of ["skills/list", "skills/get", "resources/read"]) {
+    const scoped = events.filter((event) => event.details.method === method);
+    assert.equal(scoped.filter((event) => event.decision === "allow").length, 1);
+    assert.equal(scoped.filter((event) => event.details.reason === "missing_scope").length, 1);
+    assert.ok(scoped.every((event) => JSON.stringify(event.details.requiredScopes) === '["skills:read"]'));
+  }
+  const unscoped = events.filter((event) => event.details.method === undefined);
+  assert.equal(unscoped.length, 1);
+  assert.deepEqual(unscoped[0].details.requiredScopes, ["skills:read", "architectures:read"]);
+  const serialized = JSON.stringify(events);
+  for (const excluded of [arbitraryHeader, reader.token, architecture.token, session]) {
+    assert.equal(serialized.includes(excluded), false);
+  }
+});
+
 test("MCP session writes sanitized audit events for allow and deny decisions", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const app = buildTokenApp(authStore);

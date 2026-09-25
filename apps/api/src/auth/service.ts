@@ -304,6 +304,7 @@ export interface RecordMcpSessionDecisionInput {
   credentialKind: McpSessionCredentialKind;
   decision: AuditDecision;
   reason: McpSessionAuditReason;
+  method?: "skills/list" | "skills/get" | "resources/read";
 }
 
 export interface AuthContext {
@@ -1097,11 +1098,14 @@ export class AuthService {
       details: {
         endpoint: "/v1/mcp/session",
         // Keep requiredScope for beta.2 audit consumers. requiredScopes
-        // records the current OR gate without exposing bearer material.
+        // records the legacy OR gate or the narrower native content gate.
         requiredScope: "skills:read",
-        requiredScopes: [...MCP_SESSION_REQUIRED_SCOPES],
+        requiredScopes: input.method ? ["skills:read"] : [...MCP_SESSION_REQUIRED_SCOPES],
         credentialKind: input.credentialKind,
         reason: input.reason,
+        // Caller-declared operation context, never resource authorization or
+        // proof that the subsequent content read completed.
+        ...(input.method ? { method: input.method } : {}),
       },
     });
   }

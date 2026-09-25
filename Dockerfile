@@ -32,6 +32,7 @@ RUN npm prune --omit=dev
 
 FROM deps AS mcp-build
 RUN npm run build -w @myskills-app/core \
+  && npm run build -w @myskills-app/skill-package \
   && npm run build -w @myskills-app/mcp
 RUN npm prune --omit=dev
 
