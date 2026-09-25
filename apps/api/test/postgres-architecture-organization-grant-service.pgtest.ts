@@ -479,7 +479,7 @@ test("architecture sharing readers coexist while a settings writer waits for com
   const finish = deferred();
   const firstStore = new PostgresArchitectureStore(fixture.db, { beforeAuditInsert: async () => { firstEntered.resolve(); await finish.promise; } });
   const secondStore = new PostgresArchitectureStore(fixture.db, { beforeAuditInsert: async () => { secondEntered.resolve(); await finish.promise; } });
-  const source = await new PostgresArchitectureStore(fixture.db).createArchitecture({ actor: memberId, name: "Independent owner", description: "", patternId: "flat" });
+  const source = await new PostgresArchitectureStore(fixture.db).createArchitecture({ actor: memberId, ownerUserId: memberId, name: "Independent owner", description: "", patternId: "flat" });
   const independentSkillId = randomUUID();
   const independentVersionId = randomUUID();
   await fixture.pool.query("INSERT INTO skills (id, slug, title, summary, lifecycle_status, visibility, owner_user_id) VALUES ($1, 'independent-release', 'Independent release', 'Fixture', 'approved', 'public', $2)", [independentSkillId, memberId]);

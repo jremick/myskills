@@ -132,7 +132,7 @@ test("Postgres pattern migration shares the owner quota with creation and replay
 
 test("concurrent migrations from different sources admit only one shell at owner quota 24", { timeout: 60_000, skip: !databaseUrl }, async (t) => {
   const fixture = await createFixture(t);
-  const secondSource = await fixture.architectureStore.createArchitecture({ actor: ownerId, name: "Second source", description: "", patternId: "flat" });
+  const secondSource = await fixture.architectureStore.createArchitecture({ actor: ownerId, ownerUserId: ownerId, name: "Second source", description: "", patternId: "flat" });
   const secondRevision = await fixture.architectureStore.createRevision({ actor: ownerId, architectureId: secondSource.id,
     expectedCurrentRevisionId: null, message: "Initial", spec: { ...fixture.sourceRevision.spec, id: secondSource.id } });
   assert.ok(secondRevision);
