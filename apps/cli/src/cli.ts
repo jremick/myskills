@@ -1709,7 +1709,7 @@ async function updateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     }
     assertMatchingProvenance(existing, provenance);
     const platform = explicitPlatform ?? existing.platform;
-    if (!existing.contentDigest || !await directoryMatchesDigest(existing.path, existing.contentDigest)) {
+    if (!existing.contentDigest || !await directoryMatchesDigest(existing.path, existing.contentDigest, existing.contentDigestAlgorithm)) {
       const evaluation = localDriftEvaluation(existing.version);
       results.push({ slug, platform, evaluation });
       printUpdateEvaluation(slug, platform, evaluation, parsed, runtime);
@@ -1782,7 +1782,7 @@ async function updatesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<
     const installed = registry.installations[slug];
     if (!installed) throw new CliError(`${slug} is not installed. Run myskills install ${slug}.`, 1);
     assertMatchingProvenance(installed, provenance);
-    if (!installed.contentDigest || !await directoryMatchesDigest(installed.path, installed.contentDigest)) {
+    if (!installed.contentDigest || !await directoryMatchesDigest(installed.path, installed.contentDigest, installed.contentDigestAlgorithm)) {
       const evaluation = localDriftEvaluation(installed.version);
       results.push({ slug, platform: installed.platform, evaluation });
       if (!parsed.options.json) printUpdateEvaluation(slug, installed.platform, evaluation, parsed, runtime);
@@ -1924,7 +1924,7 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
   const slug = parseInstallSlug(requestedSlug);
   const root = installRoot(parsed, runtime);
   const registry = await readInstallRegistry(root);
-  const existing = registry.installations[slug];
+  let existing = registry.installations[slug];
   const previous = existing?.history.at(-1);
   if (!existing || !previous) {
     throw new CliError(`${slug} has no rollback snapshot.`, 1);
@@ -1944,16 +1944,16 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
   const transactionId = randomUUID();
   const stageRoot = installStagePath(root, transactionId);
   const recoverySnapshotPath = historySnapshotPath(root, slug, existing.version, transactionId);
-  await assertInstalledBytes(existing);
+  existing = await assertInstalledBytes(existing);
   if (!existing.provenance || !previous.provenance) throw new CliError("Rollback requires a snapshot with verified registry provenance.", 1);
   assertMatchingProvenance(previous, existing.provenance);
   if (!previous.contentDigest) throw new CliError("Rollback snapshot has no verified byte identity.", 1);
   const snapshot = await readPackageSnapshot(sourceSnapshotPath);
   if (parsed.options.workspace || runtime.beforeInstallPromotion) validateCodexSkill(snapshot.files, slug);
-  const targetContentDigest = contentDigestForFiles(snapshot.files);
-  if (targetContentDigest !== previous.contentDigest) throw new CliError("Rollback snapshot was modified. The current installation is unchanged.", 1);
+  if (contentDigestForFiles(snapshot.files, previous.contentDigestAlgorithm) !== previous.contentDigest) throw new CliError("Rollback snapshot was modified. The current installation is unchanged.", 1);
+  const targetContentDigest = contentDigestForFiles(snapshot.files, CONTENT_DIGEST_ALGORITHM);
   await writeNewPackageTree(root, stageRoot, snapshot.files);
-  if (!await directoryMatchesDigest(stageRoot, targetContentDigest)) throw new CliError("Rollback staging failed byte verification.", 1);
+  if (!await directoryMatchesDigest(stageRoot, targetContentDigest, CONTENT_DIGEST_ALGORITHM)) throw new CliError("Rollback staging failed byte verification.", 1);
   let transaction: InstallTransaction = {
     version: 1,
     id: transactionId,
@@ -1964,6 +1964,7 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
     targetPlatform: previous.platform,
     targetArtifact: previous.artifact,
     targetContentDigest,
+    targetContentDigestAlgorithm: CONTENT_DIGEST_ALGORITHM,
     previous: existing,
     snapshotCreated: true,
     sourceSnapshotPath,
@@ -1982,7 +1983,7 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
   transaction = { ...transaction, state: "installed" };
   await writeInstallTransaction(root, transaction);
   await runtime.installFault?.("installed");
-  if (!await directoryMatchesDigest(outputRoot, targetContentDigest)) throw new CliError("Rollback verification failed. Recovery copies are retained.", 1);
+  if (!await directoryMatchesDigest(outputRoot, targetContentDigest, CONTENT_DIGEST_ALGORITHM)) throw new CliError("Rollback verification failed. Recovery copies are retained.", 1);
   registry.installations[slug] = {
     slug,
     version: previous.version,
@@ -1991,6 +1992,7 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
     installedAt: new Date().toISOString(),
     artifact: previous.artifact,
     contentDigest: targetContentDigest,
+    contentDigestAlgorithm: CONTENT_DIGEST_ALGORITHM,
     history: existing.history.slice(0, -1),
     provenance: previous.provenance,
   };
@@ -2111,7 +2113,7 @@ async function observeWorkspace(root: string, binding: WorkspaceBinding): Promis
     try {
       const snapshot = await readPackageSnapshot(installed.path);
       validateCodexSkill(snapshot.files, installed.slug);
-      if (contentDigestForFiles(snapshot.files) !== installed.contentDigest) throw new Error("drift");
+      if (contentDigestForFiles(snapshot.files, installed.contentDigestAlgorithm) !== installed.contentDigest) throw new Error("drift");
       skills.push({ slug: installed.slug, version: installed.version, digest: installed.artifact.sha256,
         kind: "leaf", enabled: true, runtimeExposure: "leaf", configured: true, managed: true, supported: true,
         metadata: { platform: "codex", verification: "filesystem" } });
@@ -2195,7 +2197,7 @@ async function companionCommand(parsed: ParsedArgs, runtime: CliRuntime): Promis
       || current.version !== operation.toVersion
       || current.artifact.sha256 !== operation.artifact.sha256
       || !current.contentDigest
-      || !await directoryMatchesDigest(current.path, current.contentDigest)
+      || !await directoryMatchesDigest(current.path, current.contentDigest, current.contentDigestAlgorithm)
     ) {
       throw new CliError("Target operation readback does not match the claimed plan.", 1);
     }
@@ -2248,7 +2250,7 @@ async function executeTargetOperation(
     && existing.version === operation.toVersion
     && existing.artifact.sha256 === operation.artifact.sha256
     && existing.contentDigest
-    && await directoryMatchesDigest(existing.path, existing.contentDigest)
+    && await directoryMatchesDigest(existing.path, existing.contentDigest, existing.contentDigestAlgorithm)
   ) return existing;
   if (operation.action === "install" && existing) {
     throw new CliError("Target install state changed after the operation was planned.", 1);
@@ -2256,7 +2258,7 @@ async function executeTargetOperation(
   if (operation.action !== "install" && (!existing || existing.version !== operation.fromVersion)) {
     throw new CliError("Target source version changed after the operation was planned.", 1);
   }
-  if (existing?.contentDigest && !await directoryMatchesDigest(existing.path, existing.contentDigest)) {
+  if (existing?.contentDigest && !await directoryMatchesDigest(existing.path, existing.contentDigest, existing.contentDigestAlgorithm)) {
     throw new CliError("Target skill has local drift and cannot be changed automatically.", 1);
   }
   if (operation.action === "rollback") {
@@ -2416,11 +2418,9 @@ async function installSkillVersion(input: {
   const outputRoot = skillInstallPath(input.root, slug);
   const provenance = input.provenance ?? await registryProvenance(input.parsed, input.runtime, input.token);
   await assertWorkspaceBinding(input.parsed, input.runtime, provenance);
-  const existing = input.registry.installations[slug];
-  if (existing) {
-    assertMatchingProvenance(existing, provenance);
-    await assertInstalledBytes(existing);
-  }
+  const recorded = input.registry.installations[slug];
+  if (recorded) assertMatchingProvenance(recorded, provenance);
+  const existing = recorded ? await assertInstalledBytes(recorded) : undefined;
   const bundle = await downloadVerifiedBundle({
     slug,
     version: input.version,
@@ -2450,9 +2450,9 @@ async function installSkillVersion(input: {
   const snapshotPath = existing && await pathExists(outputRoot)
     ? historySnapshotPath(input.root, slug, existing.version, transactionId)
     : null;
-  const contentDigest = contentDigestForFiles(bundle.files);
+  const contentDigest = contentDigestForFiles(bundle.files, CONTENT_DIGEST_ALGORITHM);
   await writeNewPackageTree(input.root, stageRoot, bundle.files);
-  if (!await directoryMatchesDigest(stageRoot, contentDigest)) throw new CliError("Staged package does not match its verified bytes.", 1);
+  if (!await directoryMatchesDigest(stageRoot, contentDigest, CONTENT_DIGEST_ALGORITHM)) throw new CliError("Staged package does not match its verified bytes.", 1);
   let transaction: InstallTransaction = {
     version: 1,
     id: transactionId,
@@ -2463,6 +2463,7 @@ async function installSkillVersion(input: {
     targetPlatform: bundle.platform.name,
     targetArtifact: bundle.artifact,
     targetContentDigest: contentDigest,
+    targetContentDigestAlgorithm: CONTENT_DIGEST_ALGORITHM,
     previous: existing ?? null,
     snapshotCreated: snapshotPath !== null,
   };
@@ -2478,7 +2479,7 @@ async function installSkillVersion(input: {
   if (existing) await assertInstalledBytes(existing);
   else if (await pathExists(outputRoot)) throw new CliError("Installation appeared after planning.", 1);
 
-  if (snapshotPath) {
+  if (snapshotPath && existing) {
     await ensureSafeDirectory(input.root, path.dirname(snapshotPath));
     await rename(outputRoot, snapshotPath);
     history.push({
@@ -2487,6 +2488,7 @@ async function installSkillVersion(input: {
       installedAt: existing.installedAt,
       artifact: existing.artifact,
       contentDigest: existing.contentDigest,
+      contentDigestAlgorithm: existing.contentDigestAlgorithm,
       provenance,
       snapshotPath,
     });
@@ -2501,7 +2503,7 @@ async function installSkillVersion(input: {
   transaction = { ...transaction, state: "installed" };
   await writeInstallTransaction(input.root, transaction);
   await input.runtime.installFault?.("installed");
-  if (!await directoryMatchesDigest(outputRoot, contentDigest)) throw new CliError("Promoted installation failed byte verification. Recovery is retained.", 1);
+  if (!await directoryMatchesDigest(outputRoot, contentDigest, CONTENT_DIGEST_ALGORITHM)) throw new CliError("Promoted installation failed byte verification. Recovery is retained.", 1);
   const installed: InstalledSkillRecord = {
     slug,
     version: bundle.version,
@@ -2510,6 +2512,7 @@ async function installSkillVersion(input: {
     installedAt: new Date().toISOString(),
     artifact: bundle.artifact,
     contentDigest,
+    contentDigestAlgorithm: CONTENT_DIGEST_ALGORITHM,
     provenance,
     history,
   };
@@ -2607,6 +2610,9 @@ interface InstallRegistry {
   installations: Record<string, InstalledSkillRecord>;
 }
 
+const CONTENT_DIGEST_ALGORITHM = "sha256-json-ordinal-v1";
+type ContentDigestAlgorithm = typeof CONTENT_DIGEST_ALGORITHM;
+
 interface InstalledSkillRecord {
   slug: string;
   version: string;
@@ -2615,6 +2621,7 @@ interface InstalledSkillRecord {
   installedAt: string;
   artifact: ReleaseArtifact;
   contentDigest: string;
+  contentDigestAlgorithm?: ContentDigestAlgorithm;
   history: InstalledSkillSnapshot[];
   provenance?: RegistryProvenance;
 }
@@ -2625,6 +2632,7 @@ interface InstalledSkillSnapshot {
   installedAt: string;
   artifact: ReleaseArtifact;
   contentDigest: string;
+  contentDigestAlgorithm?: ContentDigestAlgorithm;
   snapshotPath: string;
   provenance?: RegistryProvenance;
 }
@@ -2639,6 +2647,7 @@ interface InstallTransaction {
   targetPlatform: string;
   targetArtifact: ReleaseArtifact;
   targetContentDigest: string;
+  targetContentDigestAlgorithm?: ContentDigestAlgorithm;
   previous: InstalledSkillRecord | null;
   snapshotCreated: boolean;
   sourceSnapshotPath?: string;
@@ -2843,6 +2852,7 @@ function parseInstalledSkillRecord(slug: string, input: unknown, root: string): 
     contentDigest: typeof record.contentDigest === "string" && /^[a-f0-9]{64}$/.test(record.contentDigest)
       ? record.contentDigest
       : "",
+    contentDigestAlgorithm: parseContentDigestAlgorithm(record.contentDigestAlgorithm),
     history: parseInstallHistory(record.history, root),
     provenance: parseProvenance(record.provenance),
   };
@@ -2870,6 +2880,7 @@ function parseInstallHistory(input: unknown, root: string): InstalledSkillSnapsh
       contentDigest: typeof record.contentDigest === "string" && /^[a-f0-9]{64}$/.test(record.contentDigest)
         ? record.contentDigest
         : "",
+      contentDigestAlgorithm: parseContentDigestAlgorithm(record.contentDigestAlgorithm),
       snapshotPath,
       provenance: parseProvenance(record.provenance),
     }];
@@ -4078,8 +4089,9 @@ async function recoverInstallTransactions(root: string): Promise<void> {
       && installed.platform === transaction.targetPlatform
       && installed.artifact.sha256 === transaction.targetArtifact.sha256
       && installed.contentDigest === transaction.targetContentDigest
+      && installed.contentDigestAlgorithm === transaction.targetContentDigestAlgorithm
       && await pathExists(outputRoot)
-      && await directoryMatchesDigest(outputRoot, transaction.targetContentDigest),
+      && await directoryMatchesDigest(outputRoot, transaction.targetContentDigest, transaction.targetContentDigestAlgorithm),
     );
     if (candidateCommitted) {
       await rm(stageRoot, { recursive: true, force: true });
@@ -4094,13 +4106,13 @@ async function recoverInstallTransactions(root: string): Promise<void> {
     }
 
     const previousAtOutput = Boolean(transaction.previous?.contentDigest
-      && await directoryMatchesDigest(outputRoot, transaction.previous.contentDigest));
-    if (await pathExists(outputRoot) && !previousAtOutput && !await directoryMatchesDigest(outputRoot, transaction.targetContentDigest)) {
+      && await directoryMatchesDigest(outputRoot, transaction.previous.contentDigest, transaction.previous.contentDigestAlgorithm));
+    if (await pathExists(outputRoot) && !previousAtOutput && !await directoryMatchesDigest(outputRoot, transaction.targetContentDigest, transaction.targetContentDigestAlgorithm)) {
       throw new CliError("Recovery found active files that match neither the previous nor staged package. Preserve the active files and recovery copies for operator recovery.", 1);
     }
 
     if (snapshotPath && await pathExists(snapshotPath)) {
-      if (!transaction.previous?.contentDigest || !await directoryMatchesDigest(snapshotPath, transaction.previous.contentDigest)) {
+      if (!transaction.previous?.contentDigest || !await directoryMatchesDigest(snapshotPath, transaction.previous.contentDigest, transaction.previous.contentDigestAlgorithm)) {
         throw new CliError("Recovery snapshot does not match its verified bytes. Preserve both copies for operator recovery.", 1);
       }
       if (!previousAtOutput) {
@@ -4111,7 +4123,7 @@ async function recoverInstallTransactions(root: string): Promise<void> {
     } else if (transaction.snapshotCreated) {
       // A previous recovery may have restored the directory before it could
       // persist the registry. Accept only that exact verified previous tree.
-      if (!transaction.previous?.contentDigest || !await directoryMatchesDigest(outputRoot, transaction.previous.contentDigest)) {
+      if (!transaction.previous?.contentDigest || !await directoryMatchesDigest(outputRoot, transaction.previous.contentDigest, transaction.previous.contentDigestAlgorithm)) {
         throw new CliError(`Install recovery for ${transaction.slug} requires manual intervention; its rollback snapshot is missing.`, 1);
       }
     } else if (!transaction.previous || transaction.state !== "prepared") {
@@ -4189,35 +4201,50 @@ function parseInstallTransaction(raw: string, filename: string, root: string): I
     targetPlatform: record.targetPlatform,
     targetArtifact,
     targetContentDigest: record.targetContentDigest,
+    targetContentDigestAlgorithm: parseContentDigestAlgorithm(record.targetContentDigestAlgorithm),
     previous,
     snapshotCreated: record.snapshotCreated,
     ...(sourceSnapshotPath ? { sourceSnapshotPath } : {}),
   };
 }
 
-function contentDigestForFiles(files: Array<{ path: string; content: string }>): string {
+function parseContentDigestAlgorithm(input: unknown): ContentDigestAlgorithm | undefined {
+  // Missing metadata belongs to the original locale-dependent scheme. Never
+  // infer a newer scheme from a digest or retry verification with another one.
+  if (input === undefined) return undefined;
+  if (input !== CONTENT_DIGEST_ALGORITHM) throw new CliError("Unsupported content digest algorithm. Preserve the installation and recovery copies.", 1);
+  return input;
+}
+
+function contentDigestForFiles(files: Array<{ path: string; content: string }>, algorithm: ContentDigestAlgorithm | undefined): string {
   const normalized = files
     .map((file) => ({ path: safeBundlePath(file.path), content: file.content }))
-    .sort((left, right) => left.path.localeCompare(right.path));
+    .sort((left, right) => algorithm === CONTENT_DIGEST_ALGORITHM
+      ? left.path < right.path ? -1 : left.path > right.path ? 1 : 0
+      : left.path.localeCompare(right.path));
   return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
 }
 
-async function directoryMatchesDigest(root: string, expected: string): Promise<boolean> {
+async function directoryMatchesDigest(root: string, expected: string, algorithm: ContentDigestAlgorithm | undefined): Promise<boolean> {
   try {
-    return await directoryContentDigest(root) === expected;
+    return contentDigestForFiles((await readPackageSnapshot(root)).files, algorithm) === expected;
   } catch {
     return false;
   }
 }
 
-async function directoryContentDigest(root: string): Promise<string> {
-  return contentDigestForFiles((await readPackageSnapshot(root)).files);
-}
-
-async function assertInstalledBytes(existing: InstalledSkillRecord): Promise<void> {
-  if (!existing.contentDigest || !await directoryMatchesDigest(existing.path, existing.contentDigest)) {
+async function assertInstalledBytes(existing: InstalledSkillRecord): Promise<InstalledSkillRecord> {
+  const snapshot = await readPackageSnapshot(existing.path).catch(() => null);
+  if (!snapshot || !existing.contentDigest || contentDigestForFiles(snapshot.files, existing.contentDigestAlgorithm) !== existing.contentDigest) {
     throw new CliError("Installed skill has local drift or no verified byte identity. Its files were not replaced.", 1, "INSTALL_LOCAL_DRIFT");
   }
+  // Migrate only bytes held by the same snapshot that passed the recorded
+  // scheme. Callers persist this identity with the next mutation's journal.
+  return {
+    ...existing,
+    contentDigest: contentDigestForFiles(snapshot.files, CONTENT_DIGEST_ALGORITHM),
+    contentDigestAlgorithm: CONTENT_DIGEST_ALGORITHM,
+  };
 }
 
 function parseInstallSlug(slug: string): string {
