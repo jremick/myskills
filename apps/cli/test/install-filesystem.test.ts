@@ -88,3 +88,47 @@ test("an ancestor swapped during file creation cannot receive exported package b
     assert.deepEqual(await readdir(outside), []);
   } finally { fs.open = originalOpen; syncBuiltinESMExports(); }
 });
+
+test("a failed lock-owner write removes only this attempt's files and preserves the original error", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "myskills-lock-owner-failure-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const originalOpen = fs.open;
+  const failure = new Error("synthetic owner write failed");
+  fs.open = (async (filePath, flags, mode) => {
+    const handle = await originalOpen(filePath, flags, mode);
+    if (String(filePath).endsWith("/owner.json")) {
+      const originalWrite = handle.writeFile.bind(handle);
+      handle.writeFile = async () => { await originalWrite("partial", "utf8"); throw failure; };
+    }
+    return handle;
+  }) as typeof fs.open;
+  syncBuiltinESMExports();
+  try {
+    await assert.rejects(withInstallRootLock(root, async () => assert.fail("must not enter")), (error) => error === failure);
+    assert.deepEqual(await readdir(path.join(root, ".myskills-app")), []);
+  } finally { fs.open = originalOpen; syncBuiltinESMExports(); }
+  let entered = false;
+  await withInstallRootLock(root, async () => { entered = true; });
+  assert.equal(entered, true);
+});
+
+test("failed lock acquisition preserves an owner file that this attempt did not open", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "myskills-lock-unknown-owner-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const originalOpen = fs.open;
+  const failure = new Error("synthetic owner open failed");
+  fs.open = (async (filePath, flags, mode) => {
+    const handle = await originalOpen(filePath, flags, mode);
+    if (String(filePath).endsWith("/owner.json")) {
+      await handle.writeFile("unknown owner", "utf8");
+      await handle.close();
+      throw failure;
+    }
+    return handle;
+  }) as typeof fs.open;
+  syncBuiltinESMExports();
+  try {
+    await assert.rejects(withInstallRootLock(root, async () => assert.fail("must not enter")), (error) => error === failure);
+    assert.equal(await readFile(path.join(root, ".myskills-app", "write.lock", "owner.json"), "utf8"), "unknown owner");
+  } finally { fs.open = originalOpen; syncBuiltinESMExports(); }
+});

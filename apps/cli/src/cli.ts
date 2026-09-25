@@ -22,6 +22,7 @@ import {
   evaluateSkillUpdate,
   parseSemanticVersion,
   parseSkillReleaseMetadata,
+  skillLifecycleStatuses,
   targetSkillOperationPlanDigest,
   validateArchitectureTargetHealth,
   type ArchitectureTargetAdapterContext,
@@ -182,6 +183,9 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
     return parseError.exitCode;
   }
   try {
+    if (parsed.command === "update" && parsed.options.version !== undefined && !parsed.args[0]) {
+      throw new CliError("--version requires a skill slug. Use myskills update <skill-slug> --version <version>.", 2);
+    }
     if (["install", "list", "update", "updates", "rollback", "companion", "codex", "doctor"].includes(parsed.command)) {
       if (parsed.options.workspace && parsed.options.dir) throw new CliError("Choose --workspace or --dir, not both.", 2);
       const workspace = optionalStringOption(parsed, "workspace");
@@ -213,12 +217,12 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
   } catch (error) {
     if (error instanceof CliError) {
       if (parsed.options.json) runtime.io.stderr(JSON.stringify({ error: error.toJSON() }, null, 2));
-      else runtime.io.stderr(error.message);
+      else runtime.io.stderr(terminalSafeText(error.message));
       return error.exitCode;
     }
     const message = error instanceof Error ? error.message : "Unexpected CLI failure.";
     if (parsed.options.json) runtime.io.stderr(JSON.stringify({ error: { code: "UNEXPECTED_CLI_FAILURE", message } }, null, 2));
-    else runtime.io.stderr(message);
+    else runtime.io.stderr(terminalSafeText(message));
     return 1;
   }
 }
@@ -307,7 +311,7 @@ async function validateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
   if (parsed.options.json) {
     runtime.io.stdout(JSON.stringify({ manifest }, null, 2));
   } else {
-    runtime.io.stdout(`valid ${manifest.name}@${manifest.version}`);
+    runtime.io.stdout(terminalText`valid ${manifest.name}@${manifest.version}`);
   }
   return 0;
 }
@@ -355,11 +359,11 @@ async function initCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
   if (parsed.options.json) {
     runtime.io.stdout(JSON.stringify({ output: result.outputPath, manifest: result.manifest, next }, null, 2));
   } else {
-    runtime.io.stdout(`created ${result.outputPath}`);
-    runtime.io.stdout(`edit: ${next.edit}`);
-    runtime.io.stdout(`validate: ${next.validate}`);
-    runtime.io.stdout(`scan: ${next.scan}`);
-    runtime.io.stdout(`submit: ${next.submit}`);
+    runtime.io.stdout(terminalText`created ${result.outputPath}`);
+    runtime.io.stdout(terminalText`edit: ${next.edit}`);
+    runtime.io.stdout(terminalText`validate: ${next.validate}`);
+    runtime.io.stdout(terminalText`scan: ${next.scan}`);
+    runtime.io.stdout(terminalText`submit: ${next.submit}`);
   }
   return 0;
 }
@@ -390,7 +394,7 @@ async function searchCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
       runtime.io.stdout("No skills found.");
     } else {
       for (const skill of skills) {
-        runtime.io.stdout(`${skill.slug}\t${skill.latestVersion ?? "-"}\t${skill.title}`);
+        runtime.io.stdout(terminalText`${skill.slug}\t${skill.latestVersion ?? "-"}\t${skill.title}`);
       }
     }
   }
@@ -419,11 +423,11 @@ async function infoCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
       platforms: Array<{ name: string; installTarget: string; status: string }>;
       tags: string[];
     };
-    runtime.io.stdout(`${skill.title} (${skill.slug})`);
-    runtime.io.stdout(`version: ${skill.latestVersion ?? "-"}`);
-    runtime.io.stdout(`platforms: ${skill.platforms.map((platform) => platform.name).join(", ") || "-"}`);
-    runtime.io.stdout(`tags: ${skill.tags.join(", ") || "-"}`);
-    runtime.io.stdout(skill.summary);
+    runtime.io.stdout(terminalText`${skill.title} (${skill.slug})`);
+    runtime.io.stdout(terminalText`version: ${skill.latestVersion ?? "-"}`);
+    runtime.io.stdout(terminalText`platforms: ${skill.platforms.map((platform) => platform.name).join(", ") || "-"}`);
+    runtime.io.stdout(terminalText`tags: ${skill.tags.join(", ") || "-"}`);
+    runtime.io.stdout(terminalSafeText(skill.summary));
   }
   return 0;
 }
@@ -457,7 +461,7 @@ async function loginWithPassword(parsed: ParsedArgs, runtime: CliRuntime, apiUrl
     expiresAt: session.expiresAt,
   });
   await runtime.configStore?.setApiUrl(apiUrl);
-  runtime.io.stdout(`${session.email ?? email.trim()}\tlogged-in\texpires=${session.expiresAt}`);
+  runtime.io.stdout(terminalText`${session.email ?? email.trim()}\tlogged-in\texpires=${session.expiresAt}`);
   return 0;
 }
 
@@ -471,7 +475,7 @@ async function loginWithApiKey(parsed: ParsedArgs, runtime: CliRuntime, apiUrl: 
     email: user.email,
   });
   await runtime.configStore?.setApiUrl(apiUrl);
-  runtime.io.stdout(`${user.email ?? "api-key"}\tapi-key-stored`);
+  runtime.io.stdout(terminalText`${user.email ?? "api-key"}\tapi-key-stored`);
   return 0;
 }
 
@@ -533,7 +537,7 @@ async function whoamiCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     runtime.io.stdout(JSON.stringify(response, null, 2));
   } else {
     const user = response.user as { email: string; roles: string[]; mfaVerified: boolean };
-    runtime.io.stdout(`${user.email}\troles=${user.roles.join(",")}\tmfa=${user.mfaVerified ? "verified" : "not-verified"}`);
+    runtime.io.stdout(terminalText`${user.email}\troles=${user.roles.join(",")}\tmfa=${user.mfaVerified ? "verified" : "not-verified"}`);
   }
   return 0;
 }
@@ -560,9 +564,9 @@ async function authStatusCommand(parsed: ParsedArgs, runtime: CliRuntime): Promi
     if (parsed.options.json) {
       runtime.io.stdout(JSON.stringify(status, null, 2));
     } else {
-      runtime.io.stdout(`API URL: ${status.apiUrl} (${status.apiUrlSource})`);
+      runtime.io.stdout(terminalText`API URL: ${status.apiUrl} (${status.apiUrlSource})`);
       runtime.io.stdout("Status: not logged in");
-      runtime.io.stdout(`Token store: ${status.tokenStore.backend}`);
+      runtime.io.stdout(terminalText`Token store: ${status.tokenStore.backend}`);
     }
     return 0;
   }
@@ -586,13 +590,13 @@ async function authStatusCommand(parsed: ParsedArgs, runtime: CliRuntime): Promi
   if (parsed.options.json) {
     runtime.io.stdout(JSON.stringify(status, null, 2));
   } else {
-    runtime.io.stdout(`API URL: ${status.apiUrl} (${status.apiUrlSource})`);
-    runtime.io.stdout(`Status: logged in (${status.tokenKind}, ${status.tokenSource})`);
-    runtime.io.stdout(`User: ${user.email}`);
-    runtime.io.stdout(`Roles: ${user.roles.join(",") || "-"}`);
-    runtime.io.stdout(`MFA: ${user.mfaVerified ? "verified" : "not-verified"}`);
-    runtime.io.stdout(`Expires: ${status.expiresAt ?? "-"}`);
-    runtime.io.stdout(`Token store: ${status.tokenStore.backend}`);
+    runtime.io.stdout(terminalText`API URL: ${status.apiUrl} (${status.apiUrlSource})`);
+    runtime.io.stdout(terminalText`Status: logged in (${status.tokenKind}, ${status.tokenSource})`);
+    runtime.io.stdout(terminalText`User: ${user.email}`);
+    runtime.io.stdout(terminalText`Roles: ${user.roles.join(",") || "-"}`);
+    runtime.io.stdout(terminalText`MFA: ${user.mfaVerified ? "verified" : "not-verified"}`);
+    runtime.io.stdout(terminalText`Expires: ${status.expiresAt ?? "-"}`);
+    runtime.io.stdout(terminalText`Token store: ${status.tokenStore.backend}`);
   }
   return 0;
 }
@@ -621,7 +625,7 @@ async function configCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     if (parsed.options.json) {
       runtime.io.stdout(JSON.stringify({ apiUrl: normalizeApiUrlOption(apiUrl) }, null, 2));
     } else {
-      runtime.io.stdout(`api-url=${normalizeApiUrlOption(apiUrl)}`);
+      runtime.io.stdout(terminalText`api-url=${normalizeApiUrlOption(apiUrl)}`);
     }
     return 0;
   }
@@ -640,8 +644,8 @@ async function configCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     if (parsed.options.json) {
       runtime.io.stdout(JSON.stringify({ apiUrl: saved, resolvedApiUrl: resolved.url, resolvedApiUrlSource: resolved.source }, null, 2));
     } else {
-      runtime.io.stdout(`api-url=${saved ?? "unset"}`);
-      runtime.io.stdout(`resolved-api-url=${resolved.url}\tsource=${resolved.source}`);
+      runtime.io.stdout(terminalText`api-url=${saved ?? "unset"}`);
+      runtime.io.stdout(terminalText`resolved-api-url=${resolved.url}\tsource=${resolved.source}`);
     }
     return 0;
   }
@@ -673,10 +677,10 @@ async function doctorCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   if (parsed.options.json) {
     runtime.io.stdout(JSON.stringify(result, null, 2));
   } else {
-    runtime.io.stdout(`MySkills CLI ${CLI_VERSION}`);
+    runtime.io.stdout(terminalText`MySkills CLI ${CLI_VERSION}`);
     runtime.io.stdout("");
     for (const check of checks) {
-      runtime.io.stdout(`${check.ok ? "ok" : "fail"}\t${check.name}\t${check.message}`);
+      runtime.io.stdout(terminalText`${check.ok ? "ok" : "fail"}\t${check.name}\t${check.message}`);
     }
   }
   return failed.length === 0 ? 0 : 1;
@@ -710,8 +714,8 @@ async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
         scopes: string[];
         expiresAt: string;
       };
-      runtime.io.stdout(`${created.name}\t${created.tokenPrefix}\t${created.scopes.join(",")}\texpires=${created.expiresAt}`);
-      runtime.io.stdout(`token: ${created.token}`);
+      runtime.io.stdout(terminalText`${created.name}\t${created.tokenPrefix}\t${created.scopes.join(",")}\texpires=${created.expiresAt}`);
+      runtime.io.stdout(terminalText`token: ${created.token}`);
     }
     return 0;
   }
@@ -732,7 +736,7 @@ async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
         runtime.io.stdout("No API tokens.");
       } else {
         for (const apiToken of tokens) {
-          runtime.io.stdout(`${apiToken.id}\t${apiToken.name}\t${apiToken.tokenPrefix}\t${apiToken.scopes.join(",")}\texpires=${apiToken.expiresAt}\trevoked=${apiToken.revokedAt ?? "-"}`);
+          runtime.io.stdout(terminalText`${apiToken.id}\t${apiToken.name}\t${apiToken.tokenPrefix}\t${apiToken.scopes.join(",")}\texpires=${apiToken.expiresAt}\trevoked=${apiToken.revokedAt ?? "-"}`);
         }
       }
     }
@@ -748,7 +752,7 @@ async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
       runtime.io.stdout(JSON.stringify(response, null, 2));
     } else {
       const revoked = response.token as { id: string; name: string; revokedAt: string | null };
-      runtime.io.stdout(`${revoked.id}\t${revoked.name}\trevoked=${revoked.revokedAt ?? "-"}`);
+      runtime.io.stdout(terminalText`${revoked.id}\t${revoked.name}\trevoked=${revoked.revokedAt ?? "-"}`);
     }
     return 0;
   }
@@ -778,7 +782,7 @@ async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
         runtime.io.stdout("No submissions awaiting review.");
       } else {
         for (const submission of submissions) {
-          runtime.io.stdout(`${submission.id}\t${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tfindings=${submission.findingCount}`);
+          runtime.io.stdout(terminalText`${submission.id}\t${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tfindings=${submission.findingCount}`);
         }
       }
     }
@@ -813,7 +817,7 @@ async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
         securityStatus: string;
         publishedAt: string | null;
       };
-      runtime.io.stdout(`${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tpublished=${submission.publishedAt ?? "-"}`);
+      runtime.io.stdout(terminalText`${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tpublished=${submission.publishedAt ?? "-"}`);
     }
     return 0;
   }
@@ -841,7 +845,7 @@ async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
         payload: parseJsonResponse(`/v1/review/submissions/${submissionId}/bundle`, apiBaseUrl(parsed, runtime), response.text),
       }, null, 2));
     } else {
-      runtime.io.stdout(`artifactSha256=${artifactSha256}${outputPath ? `\toutput=${path.resolve(outputPath)}` : ""}`);
+      runtime.io.stdout([`artifactSha256=${artifactSha256}`, ...(outputPath ? [`output=${path.resolve(outputPath)}`] : [])].map((field) => terminalSafeText(field)).join("\t"));
     }
     return 0;
   }
@@ -868,7 +872,7 @@ async function submissionsCommand(parsed: ParsedArgs, runtime: CliRuntime): Prom
             optionalRecordString(submission, "reviewStatus") ?? "-",
             optionalRecordString(submission, "lifecycleStatus") ?? "-",
             optionalRecordString(submission, "securityStatus") ?? "-",
-          ].join("\t"));
+          ].map((field) => terminalSafeText(field)).join("\t"));
         }
       }
     }
@@ -972,7 +976,7 @@ async function releasesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
             optionalRecordString(release, "reviewStatus") ?? "-",
             optionalRecordString(release, "securityStatus") ?? "-",
             `published=${optionalRecordString(release, "publishedAt") ?? "-"}`,
-          ].join("\t"));
+          ].map((field) => terminalSafeText(String(field))).join("\t"));
         }
       }
     }
@@ -1018,7 +1022,7 @@ async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
       runtime.io.stdout(JSON.stringify(response, null, 2));
     } else {
       const team = teamFromResponse(response);
-      runtime.io.stdout(`${team.id}\t${team.name}\tcreated\trole=${team.role}`);
+      runtime.io.stdout(terminalText`${team.id}\t${team.name}\tcreated\trole=${team.role}`);
     }
     return 0;
   }
@@ -1033,7 +1037,7 @@ async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
       runtime.io.stdout(JSON.stringify(response, null, 2));
     } else {
       const invitation = invitationFromResponse(response);
-      runtime.io.stdout(`${invitation.id}\t${invitation.email}\tinvited\tteam=${invitation.teamName}\tstatus=${invitation.status}`);
+      runtime.io.stdout(terminalText`${invitation.id}\t${invitation.email}\tinvited\tteam=${invitation.teamName}\tstatus=${invitation.status}`);
     }
     return 0;
   }
@@ -1047,7 +1051,7 @@ async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
       runtime.io.stdout(JSON.stringify(response, null, 2));
     } else {
       const invitation = invitationFromResponse(response);
-      runtime.io.stdout(`${invitation.id}\t${invitation.teamName}\taccepted\tstatus=${invitation.status}`);
+      runtime.io.stdout(terminalText`${invitation.id}\t${invitation.teamName}\taccepted\tstatus=${invitation.status}`);
     }
     return 0;
   }
@@ -1418,7 +1422,7 @@ function printCodexTargetObservation(observation: ArchitectureTargetObservation,
     ].join("\t"));
   }
   for (const finding of observation.configFindings) {
-    io.stdout(`finding\t${terminalSafeText(finding.code)}\t${terminalSafeText(finding.severity)}\tcount=${finding.count}`);
+    io.stdout(terminalText`finding\t${terminalSafeText(finding.code)}\t${terminalSafeText(finding.severity)}\tcount=${finding.count}`);
   }
 }
 
@@ -1491,7 +1495,7 @@ async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
       securityStatus: string;
     };
     const responseScan = response.scan as { findingCount: number };
-    runtime.io.stdout(`${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tfindings=${responseScan.findingCount}`);
+    runtime.io.stdout(terminalText`${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tfindings=${responseScan.findingCount}`);
   }
   return 0;
 }
@@ -1630,7 +1634,7 @@ async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   const bundle = await downloadVerifiedBundle({ slug, version, platform }, parsed, runtime, token);
   const outputRoot = path.resolve(outputDir);
   await exportPackageTree(bundle.files, outputRoot);
-  runtime.io.stdout(`${slug}@${version}\texported\tfiles=${bundle.files.length}\t${outputRoot}`);
+  runtime.io.stdout(terminalText`${slug}@${version}\texported\tfiles=${bundle.files.length}\t${outputRoot}`);
   return 0;
 }
 
@@ -1657,7 +1661,7 @@ async function installCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<
     token,
     provenance,
   });
-  runtime.io.stdout(`${installed.slug}@${installed.version}\tinstalled\tplatform=${installed.platform}\t${installed.path}`);
+  runtime.io.stdout(terminalText`${installed.slug}@${installed.version}\tinstalled\tplatform=${installed.platform}\t${installed.path}`);
   return 0;
 }
 
@@ -1674,7 +1678,7 @@ async function listInstalledCommand(parsed: ParsedArgs, runtime: CliRuntime): Pr
     return 0;
   }
   for (const installed of installations) {
-    runtime.io.stdout(`${installed.slug}\t${installed.version}\t${installed.platform}\t${installed.path}`);
+    runtime.io.stdout(terminalText`${installed.slug}\t${installed.version}\t${installed.platform}\t${installed.path}`);
   }
   return 0;
 }
@@ -1754,7 +1758,7 @@ async function updateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
       provenance,
     });
     result.appliedVersion = updated.version;
-    if (!parsed.options.json) runtime.io.stdout(`${updated.slug}@${updated.version}\tapplied\tplatform=${updated.platform}\tprevious=${existing.version}`);
+    if (!parsed.options.json) runtime.io.stdout(terminalText`${updated.slug}@${updated.version}\tapplied\tplatform=${updated.platform}\tprevious=${existing.version}`);
   }
   if (parsed.options.json) runtime.io.stdout(JSON.stringify({ updates: results }, null, 2));
   return blocked && !dryRun ? 1 : 0;
@@ -1812,7 +1816,23 @@ async function releaseCandidatesForSkill(
   if (!Array.isArray(response.releases)) {
     throw new CliError("API release list response is missing releases.", 1);
   }
-  return response.releases.map((release, index) => parseReleaseCandidate(release, index));
+  return response.releases.flatMap((release, index) => {
+    if (!release || typeof release !== "object" || Array.isArray(release)) {
+      throw new CliError(`API release list entry ${index + 1} is invalid.`, 1);
+    }
+    const record = release as Record<string, unknown>;
+    if (!skillLifecycleStatuses.some((status) => status === record.lifecycleStatus)) {
+      throw new CliError(`API release list entry ${index + 1} has an invalid lifecycle status.`, 1);
+    }
+    if (typeof record.version !== "string" || record.version.length === 0) {
+      throw new CliError(`API release list entry ${index + 1} has an invalid version.`, 1);
+    }
+    // Managers can see unpublished rows without artifacts, and legacy versions
+    // can predate SemVer validation. Neither can become an install candidate.
+    if ((record.lifecycleStatus !== "approved" && record.lifecycleStatus !== "deprecated")
+      || !parseSemanticVersion(record.version)) return [];
+    return [parseReleaseCandidate(record, index)];
+  });
 }
 
 function parseReleaseCandidate(input: unknown, index: number): SkillReleaseUpdateCandidate {
@@ -1879,7 +1899,7 @@ function printUpdateEvaluation(
   if (parsed.options.json) return;
   const candidate = evaluation.candidate ? `\tcandidate=${evaluation.candidate.version}` : "";
   const blockers = evaluation.blockers.length > 0 ? `\tblockers=${evaluation.blockers.join(",")}` : "";
-  runtime.io.stdout(`${slug}@${evaluation.installedVersion}\t${evaluation.status}\tplatform=${platform}${candidate}${blockers}`);
+  runtime.io.stdout(`${terminalSafeText(slug)}@${evaluation.installedVersion}\t${evaluation.status}\tplatform=${terminalSafeText(platform)}${candidate}${blockers}`);
   for (const release of evaluation.includedReleases) {
     runtime.io.stdout(
       `changes\t${release.version}\t${release.changeKind}\taction=${release.requiresUserAction ? "required" : "none"}\t${terminalSafeText(release.releaseNotes)}`,
@@ -1957,7 +1977,7 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
   transaction = { ...transaction, state: "previous-staged" };
   await writeInstallTransaction(root, transaction);
   await runtime.installFault?.("previous-staged");
-  await runtime.beforeInstallPromotion?.();
+  await checkpointInstallPromotion(root, runtime);
   await rename(stageRoot, outputRoot);
   transaction = { ...transaction, state: "installed" };
   await writeInstallTransaction(root, transaction);
@@ -1981,7 +2001,7 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
   await rm(recoverySnapshotPath, { recursive: true, force: true });
   await rm(sourceSnapshotPath, { recursive: true, force: true });
   await rm(installTransactionPath(root, transactionId), { force: true });
-  runtime.io.stdout(`${slug}@${previous.version}\trolled-back\tplatform=${previous.platform}\t${outputRoot}`);
+  runtime.io.stdout(terminalText`${slug}@${previous.version}\trolled-back\tplatform=${previous.platform}\t${outputRoot}`);
   return 0;
 }
 
@@ -2192,7 +2212,7 @@ async function companionCommand(parsed: ParsedArgs, runtime: CliRuntime): Promis
         contentDigest: current.contentDigest,
       },
     }, parsed, runtime, token);
-    runtime.io.stdout(`${operation.id}\tsucceeded\t${installed.slug}@${installed.version}\t${operation.action}`);
+    runtime.io.stdout(terminalText`${operation.id}\tsucceeded\t${installed.slug}@${installed.version}\t${operation.action}`);
     return 0;
   } catch (error) {
     try {
@@ -2475,7 +2495,7 @@ async function installSkillVersion(input: {
     await input.runtime.installFault?.("previous-staged");
   }
 
-  await input.runtime.beforeInstallPromotion?.();
+  await checkpointInstallPromotion(input.root, input.runtime);
   await ensureSafeDirectory(input.root, path.dirname(outputRoot));
   await rename(stageRoot, outputRoot);
   transaction = { ...transaction, state: "installed" };
@@ -2875,10 +2895,10 @@ function printTeamDashboard(response: Record<string, unknown>, io: CliIo): void 
     return;
   }
   for (const team of teams) {
-    io.stdout(`team\t${team.id}\t${team.name}\trole=${team.role}\tmembers=${team.members.length}\tpending=${team.invitations.length}`);
+    io.stdout(terminalText`team\t${team.id}\t${team.name}\trole=${team.role}\tmembers=${team.members.length}\tpending=${team.invitations.length}`);
   }
   for (const invitation of invitations) {
-    io.stdout(`invitation\t${invitation.id}\t${invitation.teamName}\t${invitation.email}\tstatus=${invitation.status}`);
+    io.stdout(terminalText`invitation\t${invitation.id}\t${invitation.teamName}\t${invitation.email}\tstatus=${invitation.status}`);
   }
 }
 
@@ -2893,12 +2913,12 @@ function printTeamSharedSkills(response: Record<string, unknown>, io: CliIo): vo
     const team = teamSummaryFromRecord(group.team);
     const sharingWithTeam = arrayField(group, "sharingWithTeam").map(skillRowFromRecord);
     const sharedWithMe = arrayField(group, "sharedWithMe").map(skillRowFromRecord);
-    io.stdout(`team\t${team.id}\t${team.name}\trole=${team.role}\tsharing-out=${sharingWithTeam.length}\tshared-in=${sharedWithMe.length}`);
+    io.stdout(terminalText`team\t${team.id}\t${team.name}\trole=${team.role}\tsharing-out=${sharingWithTeam.length}\tshared-in=${sharedWithMe.length}`);
     for (const skill of sharingWithTeam) {
-      io.stdout(`sharing-out\t${team.id}\t${skill.slug}\t${skill.latestVersion ?? "-"}\t${skill.title}`);
+      io.stdout(terminalText`sharing-out\t${team.id}\t${skill.slug}\t${skill.latestVersion ?? "-"}\t${skill.title}`);
     }
     for (const skill of sharedWithMe) {
-      io.stdout(`shared-in\t${team.id}\t${skill.slug}\t${skill.latestVersion ?? "-"}\t${skill.title}`);
+      io.stdout(terminalText`shared-in\t${team.id}\t${skill.slug}\t${skill.latestVersion ?? "-"}\t${skill.title}`);
     }
   }
 }
@@ -2909,9 +2929,9 @@ function printSkillSharing(response: Record<string, unknown>, io: CliIo): void {
   const users = sharing.userGrants.map((user) => user.email).join(",") || "-";
   const organizations = sharing.organizationGrants.map((organization) => `${organization.name}(${organization.id})`).join(",") || "-";
   const organizationField = sharing.organizationGrants.length > 0 || sharing.availableOrganizations.length > 0
-    ? `\torganizations=${organizations}`
+    ? `\torganizations=${terminalSafeText(organizations)}`
     : "";
-  io.stdout(`${sharing.slug}\tvisibility=${sharing.visibility}\tteams=${teams}\tusers=${users}${organizationField}`);
+  io.stdout(terminalText`${sharing.slug}\tvisibility=${sharing.visibility}\tteams=${teams}\tusers=${users}` + organizationField);
 }
 
 /**
@@ -3714,6 +3734,11 @@ function hasControlCharacter(value: string): boolean {
   return CONTROL_CHARACTER_PATTERN.test(value);
 }
 
+/** Escape values before adding trusted human-output delimiters. JSON bypasses this helper. */
+function terminalText(parts: TemplateStringsArray, ...values: unknown[]): string {
+  return parts.reduce((text, part, index) => text + part + (index < values.length ? terminalSafeText(String(values[index])) : ""), "");
+}
+
 function terminalSafeText(value: string, multiline = false): string {
   return value.replace(CONTROL_CHARACTER_GLOBAL_PATTERN, (character) => multiline && character === "\n" ? "\n" : " ");
 }
@@ -3921,7 +3946,7 @@ function recordField(input: unknown, label: string): Record<string, unknown> {
 
 function printNamedRecord(response: Record<string, unknown>, key: string, io: CliIo, fields: string[]): void {
   const record = recordField(response[key], key);
-  io.stdout(fields.map((field) => optionalRecordString(record, field) ?? "-").join("\t"));
+  io.stdout(fields.map((field) => terminalSafeText(optionalRecordString(record, field) ?? "-")).join("\t"));
 }
 
 function reasonPayload(parsed: ParsedArgs): Record<string, string> {
@@ -4004,6 +4029,20 @@ async function writeInstallTransaction(root: string, transaction: InstallTransac
     installTransactionPath(root, transaction.id),
     `${JSON.stringify(transaction, null, 2)}\n`,
   );
+}
+
+async function checkpointInstallPromotion(root: string, runtime: CliRuntime): Promise<void> {
+  try {
+    await runtime.beforeInstallPromotion?.();
+  } catch (error) {
+    // This checkpoint follows the move of the old tree. Restore it while the
+    // root lock is still held; recovery never promotes the staged candidate.
+    try { await recoverInstallTransactions(root); }
+    catch {
+      runtime.io.stderr("Installation recovery could not finish. Preserve the transaction and recovery copies for operator recovery.");
+    }
+    throw error;
+  }
 }
 
 async function recoverInstallTransactions(root: string): Promise<void> {
@@ -4471,12 +4510,14 @@ interface DoctorCheck {
 
 function nodeVersionCheck(): DoctorCheck {
   const version = process.versions.node;
-  const major = Number.parseInt(version.split(".")[0] ?? "0", 10);
+  const [major, minor] = version.split(".").map(Number);
+  const engine = ">=22.13 <23 || >=24 <25";
+  const supported = major === 24 || (major === 22 && minor !== undefined && minor >= 13);
   return {
     name: "node",
-    ok: major >= 20,
-    message: `v${version} (${major >= 20 ? "satisfies >=20" : "requires >=20"})`,
-    details: { version, engine: ">=20" },
+    ok: supported,
+    message: `v${version} (${supported ? "satisfies" : "requires"} ${engine})`,
+    details: { version, engine },
   };
 }
 
@@ -4631,11 +4672,11 @@ function firstLine(message: string): string {
 
 function printScanResult(result: PackageScanResult, io: CliIo): void {
   if (result.findings.length === 0) {
-    io.stdout(`clean files=${result.filesScanned} bytes=${result.bytesScanned}`);
+    io.stdout(terminalText`clean files=${result.filesScanned} bytes=${result.bytesScanned}`);
     return;
   }
   for (const finding of result.findings) {
-    io.stdout(`${finding.severity}\t${finding.category}\t${finding.path ?? "-"}\t${finding.message}`);
+    io.stdout(terminalText`${finding.severity}\t${finding.category}\t${finding.path ?? "-"}\t${finding.message}`);
   }
 }
 
