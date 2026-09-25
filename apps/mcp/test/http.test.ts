@@ -131,6 +131,33 @@ test("HTTP MCP transport rejects declared and streamed oversized bodies before S
   assert.equal(streamed.body.includes("aiss_test_secret"), false);
 });
 
+for (const modern of [false, true]) {
+  test(`HTTP MCP transport rejects batch dispatch before native work (modern=${modern})`, async (t) => {
+    const calls: string[] = [];
+    const server = createAiSkillsMcpHttpServer({
+      fetchImpl: async (url) => {
+        calls.push(url);
+        return jsonResponse(200, mcpSession());
+      },
+    });
+    const url = await listen(t, server);
+    const params = modern ? { _meta: {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientInfo": { name: "batch-probe", version: "1" },
+      "io.modelcontextprotocol/clientCapabilities": { extensions: { "io.modelcontextprotocol/skills": {} } },
+    } } : {};
+    const response = await postBody(url, {
+      authorization: "Bearer aiss_batch_test",
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+      "mcp-protocol-version": modern ? "2026-07-28" : "2025-11-25",
+    }, JSON.stringify([1, 2].map((id) => ({ jsonrpc: "2.0", id, method: "skills/list", params }))));
+    assert.equal(response.status, 400);
+    assert.equal(JSON.parse(response.body).error.code, -32600);
+    assert.deepEqual(calls.map((entry) => new URL(entry).pathname), ["/v1/mcp/session"]);
+  });
+}
+
 test("HTTP MCP transport bounds headers and configures finite socket lifetimes", async (t) => {
   const server = createAiSkillsMcpHttpServer({
     maxHeaderBytes: 512,
