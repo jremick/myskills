@@ -9,8 +9,13 @@ The historical operational beta evidence remains in [Operational Beta Delivery](
 Beta.7 staging API `fabeef83-d999-4c46-aac8-1b026a88e52f` and web
 `af63dfdc-54a0-40fe-ab6c-a48d3f6866ce` both succeeded from candidate
 `6912d3f9490c6f002431f3064e8a9db417df3d7f`; direct, web, and same-origin
-version readbacks matched that revision. Beta.7 has not been promoted to
-production.
+version readbacks matched that revision. The beta.7 candidate was promoted to
+production after a clean beta.5 preflight. Beta.7 production API `0b190296-e8ce-4d55-ac51-b4ea63e7b3b6` and
+web `6478cfac-ca56-4610-8618-e23494dae5a8` both succeeded in API-ready-then-web
+order from the same candidate.
+
+## Historical beta.5 production baseline
+
 Final beta.5 application source is `d8c7179789bdbf0930fe0e496081377f6c63cd20`,
 including the HTML cache fix from [PR #57](https://github.com/jremick/myskills/pull/57).
 Required main CI, final staging deployment, and its complete acceptance journey
@@ -32,9 +37,33 @@ Public catalogue rendering, a version selector showing one visible version,
 literal package text rendering, and Windows CLI `doctor`, `export`, `validate`,
 and `scan` checks passed. Historical-version selection was not tested.
 Anonymous `/v1/mcp/session` returned the expected `401 AUTHENTICATION_REQUIRED`
-response. Owner-authenticated browser acceptance and the staged fixture journey
-remain pending. The beta.5 production deployments and source listed below remain
-the current production baseline.
+response. Owner recovery through normal private Mailpit succeeded, and only the
+replacement Keychain was used. Fresh API password login, native Comet owner
+login, and temporary owner MFA acceptance login and cleanup passed. The final
+Windows API/CLI acceptance passed 20 real checks with zero supplied-session
+cleanup failures. Separate native Comet proof covered owner login,
+temporary-MFA session invalidation, exact release/version notes, literal
+`SKILL.md`, and revoked-version denial. The stale continuation marker means no
+continuous role-browser suite is claimed. The beta.5 production deployments
+and source listed below are historical; the beta.7 production readback follows.
+
+## Beta.7 production status
+
+The readback at `2026-09-25T07:35:45Z` reported version `0.1.0-beta.7` and
+revision `6912d3f9490c6f002431f3064e8a9db417df3d7f` through the API, web, and
+same-origin identity responses. Readiness and health passed; HTML returned
+`no-cache` and version responses returned `no-store`.
+
+Four native production browser readbacks passed: the existing signed-in owner
+session survived reload, private exact-version selection showed the literal file
+bundle, anonymous public version selection and files were available, and private
+exact-version denial did not fall back. The browser checks did not download
+files; the export platform button only selects a platform. Production audit
+checks for migrations, error logs, and CLI also passed. The audit recorded API
+`SUCCESS`/`RUNNING` on schema 32 with migrations `0029`-`0031` applied, 43
+runtime log lines, and zero error lines. The Windows CLI readback verified the
+beta.7 TGZ with `doctor`, exported `release-notes-helper` 0.1.0, and passed
+`validate` and `scan` on two files totaling 428 bytes with no findings.
 
 ## Railway Project
 

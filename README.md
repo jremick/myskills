@@ -18,19 +18,21 @@ MySkills is an open-source beta platform for publishing, reviewing, discovering,
 
 Current target: **v0.1.0-beta.7**.
 
-Published release: **[v0.1.0-beta.6](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.6)**.
+GitHub prerelease: **[v0.1.0-beta.7](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.7)**.
 
-The beta.7 GitHub release is held as a draft pending authenticated staging acceptance.
-
-npm `beta`: **v0.1.0-beta.6**. Hosted production baseline: **beta.5**.
+npm `beta`: **v0.1.0-beta.6**; beta.7 npm publication awaits maintainer passkey authentication.
+Hosted production: **v0.1.0-beta.7** at candidate
+`6912d3f9490c6f002431f3064e8a9db417df3d7f`.
 
 The beta.7 candidate is merged and tagged at
 `6912d3f9490c6f002431f3064e8a9db417df3d7f`. Its Windows canonical gate,
 candidate CI, tagged release workflow, and public staging checks passed.
-Authenticated staging acceptance remains pending sign-in. GitHub republication,
-npm publication, and production promotion remain pending. Native model-selected
-host activation, imports, browser drafts, and guided self-hosting setup remain
-open roadmap work.
+Dedicated staging acceptance passed at `2026-09-25T07:26:28.111262Z` with 20
+real Windows API/CLI checks and zero supplied-session cleanup failures. Separate
+native Comet acceptance passed. Production API/web promotion and readback
+passed. GitHub publication is complete; npm publication is the remaining
+release blocker. Native model-selected host activation, imports, browser drafts,
+and guided self-hosting setup remain open roadmap work.
 
 This beta is intended for real external trial use with documented compatibility, support, and upgrade expectations. It is still prerelease software and not yet the business-safe production release: API contracts, package formats, deployment defaults, and operational guidance may still change before `v1.0`.
 

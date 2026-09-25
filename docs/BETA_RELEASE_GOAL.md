@@ -27,9 +27,15 @@ compatibility reports also passed. The detailed evidence and limits are in
 Tagged release workflow `36100097156` completed successfully. The GitHub
 prerelease was briefly published before authenticated staging acceptance, then
 returned to draft. This is a recorded sequencing deviation, not an acceptance
-waiver. Authenticated staging acceptance, GitHub republication, npm publication,
-and production promotion remain pending. Fix-forward is preferred; legacy
-readiness does not prove a full rollback, and no live rollback was executed.
+waiver. Owner recovery and login/MFA preparation passed. The Windows API/CLI
+acceptance was then accepted at `2026-09-25T07:26:28.111262Z` with 20 real
+checks and zero supplied-session cleanup failures. Separate native Comet proof
+passed owner login, temporary-MFA session invalidation, exact release
+notes/version, literal `SKILL.md`, and revoked-version denial. The stale
+continuation marker means no continuous role-browser suite is claimed. GitHub
+publication and production promotion are complete. npm publication remains
+pending passkey. Fix-forward is preferred; legacy readiness does not prove a
+full rollback, and no live rollback was executed.
 
 Native model-selected host activation remains open. Folder/ZIP imports, browser
 drafts, and guided self-hosting setup remain subsequent roadmap slices.

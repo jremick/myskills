@@ -2,7 +2,7 @@
 
 Version: 0.1.0-beta.7
 Last updated: 2026-09-25
-Status: verified candidate; GitHub release held as draft pending authenticated staging
+Status: staging accepted; beta.7 production deployed; GitHub prerelease published; npm publication pending
 
 This record tracks incomplete beta.7 delivery after [PR #84](https://github.com/jremick/myskills/pull/84). It keeps the beta.5 hosted baseline and the published beta.6 release historical. The current detailed release procedure remains in [Release Process](RELEASE.md).
 
@@ -10,22 +10,66 @@ This record tracks incomplete beta.7 delivery after [PR #84](https://github.com/
 
 - PR #84 is merged. The merge commit on `main` is `e99c0de7c4f400fc2b37dc51b4fd4a58766cc30c`.
 - The immutable tag `v0.1.0-beta.7` resolves to candidate commit `6912d3f9490c6f002431f3064e8a9db417df3d7f`.
-- The GitHub prerelease was published at `2026-09-25T06:00:53Z` and returned to draft later on 25 September after review found the sequencing deviation below. Current readback is `isDraft=true` and `isPrerelease=true`. It retains five verified assets: `myskills-app-0.1.0-beta.7-source.tar`, `release-metadata.json`, `SHA256SUMS`, `jarel-myskills-0.1.0-beta.7.tgz`, and `CLI-SHA256SUMS`.
+- The GitHub prerelease was initially published at `2026-09-25T06:00:53Z`, held as a draft during sequencing review, and republished at `2026-09-25T07:39:35Z`. Current readback is `isDraft=false` and `isPrerelease=true` at [v0.1.0-beta.7](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.7). It retains five verified assets: `myskills-app-0.1.0-beta.7-source.tar`, `release-metadata.json`, `SHA256SUMS`, `jarel-myskills-0.1.0-beta.7.tgz`, and `CLI-SHA256SUMS`.
 - Published-asset digest and size readback matched the local release assets for all five GitHub assets.
-- npm publication remains pending sign-in. The npm `beta` selector remains on `0.1.0-beta.6`; `latest` and `alpha` remain on `0.1.0-alpha.3`. Production remains on the beta.5 hosted baseline.
+- npm publication remains pending passkey. The npm `beta` selector remains on `0.1.0-beta.6`; `latest` and `alpha` remain on `0.1.0-alpha.3`. Beta.7 production deployment and readback are recorded below.
 
 ## Release sequencing deviation
 
-The tag and GitHub prerelease preceded authenticated acceptance in the dedicated
-Railway staging environment. This did not follow [Release Process](RELEASE.md#staging-and-user-test).
-The passing disposable Compose journeys and public staging checks do not replace
-that missing acceptance. No acceptance waiver is claimed.
+The tag and GitHub prerelease preceded completion of authenticated acceptance in
+the dedicated Railway staging environment. This did not follow [Release
+Process](RELEASE.md#staging-and-user-test). Owner recovery through normal
+private Mailpit succeeded, and only the replacement Keychain was used. Fresh
+API password login, native Comet owner login, and temporary owner MFA
+acceptance login and cleanup passed. The dedicated staging acceptance is now
+recorded as accepted; no acceptance waiver is claimed.
 
-The GitHub release was returned to draft. The source tag remains public and
-immutable; no tag or archive was replaced. npm and production stayed unchanged.
-Authenticated staging acceptance must be completed and recorded before GitHub
-republication, npm publication, or production promotion. Those actions are
-already authorized; missing authentication is the remaining dependency.
+The GitHub release was held as a draft during sequencing review and republished
+after staging acceptance and production verification. The source tag remains
+public and immutable; no tag or archive was replaced. npm stayed unchanged.
+Only npm publication remains pending, and it is already authorized.
+
+## Final staging acceptance
+
+The acceptance decision was `accepted` at `2026-09-25T07:26:28.111262Z` for
+candidate `6912d3f9490c6f002431f3064e8a9db417df3d7f`. The real Windows API/CLI
+report passed 20 checks with zero supplied-session cleanup failures. It covered
+destination/readiness, distinct actors, author feedback and scan evidence,
+duplicate-version protection, three publication hash checks, lifecycle,
+installation, policy and queue behavior, update, rollback, and revocation.
+
+Separate native Comet evidence passed owner password login, session invalidation
+after temporary MFA cleanup, exact release/version notes, literal `SKILL.md`
+display, and revoked exact-version denial. The final API/CLI callback saw an old
+continuation marker, so this record makes no claim of one continuous role-browser
+suite. Model-selected runtime recognition remains untested.
+
+## Production promotion readback
+
+Production API deployment `0b190296-e8ce-4d55-ac51-b4ea63e7b3b6` and web
+deployment `6478cfac-ca56-4610-8618-e23494dae5a8` both succeeded in
+API-ready-then-web order. The readback at `2026-09-25T07:35:45Z` reported
+version `0.1.0-beta.7` and candidate revision
+`6912d3f9490c6f002431f3064e8a9db417df3d7f` through all three API, web, and
+same-origin identity responses. Readiness and health passed; HTML returned
+`no-cache` and version responses returned `no-store`.
+
+Four native production browser readbacks passed: the existing signed-in owner
+session survived reload, private exact-version selection showed the literal file
+bundle, anonymous public version selection and files were available, and private
+exact-version denial did not fall back. The browser checks did not download
+files; the export platform button only selects a platform. Production audit
+checks for migrations, error logs, and CLI also passed. The production
+verification report recorded API `SUCCESS`/`RUNNING` on schema 32 with
+migrations `0029`-`0031` applied, 43 runtime log lines, and zero error lines.
+The Windows CLI readback verified the beta.7 TGZ with `doctor`, exported the
+public `release-notes-helper` 0.1.0 package, and passed `validate` and `scan` on
+two files totaling 428 bytes with no findings. Anonymous MCP session access
+returned `401 AUTHENTICATION_REQUIRED`.
+The maintainer reports are `.private/production-live-readback.json`,
+`.private/production-browser-readback.json`,
+`.private/production-verification.json`, and
+`.private/staging-acceptance/production-cli-readback.json`.
 
 ## Completed candidate evidence
 
@@ -39,6 +83,8 @@ The following evidence is recorded against candidate `6912d3f9490c6f002431f3064e
 - The beta.7 staging API deployment `fabeef83-d999-4c46-aac8-1b026a88e52f` and web deployment `af63dfdc-54a0-40fe-ab6c-a48d3f6866ce` both succeeded. API, web, and same-origin version readbacks expose the same candidate revision.
 - Staging public checks rendered the catalogue, a version selector showing one visible version, and package files as literal text. Historical-version selection was not tested. The Windows CLI checks for `doctor`, `export`, `validate`, and `scan` passed.
 - Anonymous staging access to `/v1/mcp/session` returned the expected `401 AUTHENTICATION_REQUIRED` response.
+- Owner staging recovery through normal private Mailpit succeeded, and only the replacement Keychain was used. Fresh API password login, native Comet owner login, and temporary owner MFA acceptance login and cleanup passed. The final staging acceptance decision and separate native Comet evidence are recorded in `.private/staging-acceptance/{acceptance-decision,api-cli-report,browser-report,recovery-report}.json` in the maintainer release worktree.
+- Production preflight was clean against the beta.5 baseline before promotion. The beta.7 production API/web deployments and readbacks are recorded in the production section above.
 
 ## Recovery and compatibility evidence
 
@@ -48,15 +94,15 @@ The maintainer-only release evidence bundle contains these completed reports (`c
 - An isolated restore of that capture passed with the same table, artifact, object-backed artifact, and byte counts, with no source writes. The restore report marks application-runtime restoration as `not-tested`; this is data-restore evidence only.
 - Candidate migration and runtime readiness passed for candidate `6912d3f9490c6f002431f3064e8a9db417df3d7f`. The report found 32 migrations, including `0029_architecture_sync_history_retention`, `0030_architecture_pattern_migration_diff_shape`, and `0031_auth_notification_outbox`; Postgres, artifact storage, and phase-two architecture readiness all reported `ready`.
 - Legacy runtime compatibility readiness passed against the beta.5 production revision `d8c7179789bdbf0930fe0e496081377f6c63cd20`, with HTTP readiness and the Postgres, artifact-storage, and phase-two architecture checks ready. This is compatibility evidence; it is not a completed live rollback.
-- All five task containers, six task image tags, and the task-owned Windows working directory were removed after verification. All four pre-existing containers were preserved.
+- The earlier five task containers, six task image tags, and their task-owned Windows directory were removed after verification. All four pre-existing containers were preserved.
+- The subsequent staging acceptance container is stopped and retained with its task directory for the pending npm install smoke. Its cleanup report confirms the four unrelated container IDs and states are unchanged.
+- The current Windows acceptance container is stopped (`exited`) and retained with its task directory for the pending npm fresh-install smoke. The cleanup-state report records that state and preserves the four unrelated container IDs and states: `.private/staging-acceptance/windows-cleanup-state.json`.
 
 Account-bearing browser reports, recovery contents, and private package identities remain outside the public repository. The public record carries the result summaries only.
 
 ## Pending release gates
 
-- Authenticated staging acceptance remains pending owner sign-in. The staged public checks do not establish the authenticated author, reviewer, consumer, or owner journey.
-- GitHub republication and npm package publication remain pending. npm also requires renewed maintainer authentication. The `beta`, `latest`, and `alpha` selectors remain unchanged.
-- Beta.7 production API/web promotion remains pending. Production remains on the beta.5 hosted baseline until authenticated staging acceptance passes. Production promotion is already authorized.
+- npm package publication remains pending passkey. The npm `beta` selector remains on `0.1.0-beta.6`; `latest` and `alpha` remain on `0.1.0-alpha.3`.
 
 ## Rollback limitation
 
