@@ -16,15 +16,16 @@ MySkills is an open-source beta platform for publishing, reviewing, discovering,
 
 ## Release Status
 
-Current target: **v0.1.0-beta.6**.
+Current target: **v0.1.0-beta.7**.
 
 Published release: **[v0.1.0-beta.6](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.6)**.
 
-The beta.6 release adds a dry-run-only work/team Codex bootstrap planner to
-the beta.5 operational baseline. It does not add an apply or implicit discovery
-path. The hosted beta at [myskills.sh](https://myskills.sh) remains on its
-separately verified operational release; this CLI-only release did not promote
-Railway.
+The beta.7 candidate adds deterministic local package authoring, authorized
+native MCP Skills delivery, release-history navigation, and reviewed registry
+and deployment hardening to the beta.6 baseline. Native model-selected host
+activation, imports, browser drafts, and guided self-hosting setup remain open
+roadmap work. Hosted deployment and publication are recorded only after their
+separate live gates pass.
 
 This beta is intended for real external trial use with documented compatibility, support, and upgrade expectations. It is still prerelease software and not yet the business-safe production release: API contracts, package formats, deployment defaults, and operational guidance may still change before `v1.0`.
 
@@ -130,7 +131,9 @@ node apps/cli/dist/index.js token create --name "Local CLI" --scope profile:read
 node apps/cli/dist/index.js logout
 ```
 
-The `0.1.0-beta.6` CLI uses npm's `beta` dist-tag. The `latest` and `alpha` tags remain on `0.1.0-alpha.3`, so prerelease users must select the beta channel explicitly:
+The published `0.1.0-beta.6` CLI uses npm's `beta` dist-tag while the beta.7
+candidate is verified. The `latest` and `alpha` tags remain on `0.1.0-alpha.3`,
+so prerelease users must select the beta channel explicitly:
 
 ```bash
 npm install -g @jarel/myskills@beta

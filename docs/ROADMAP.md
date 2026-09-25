@@ -1,6 +1,6 @@
 # Roadmap
 
-Version: 0.1.0-beta.6
+Version: 0.1.0-beta.7
 Document revision: 0.3.2
 Last updated: 2026-09-25
 
@@ -11,6 +11,11 @@ Last updated: 2026-09-25
 - **Beta follow-up (`v0.1.0-beta.2`)**: released 2026-07-13 with local onboarding, artifact/review safety, public CLI packaging, static quality gates, release discipline, and reconciled docs. See [BETA_RELEASE_GOAL.md](BETA_RELEASE_GOAL.md).
 - **Operational beta (`v0.1.0-beta.5`)**: released with the governed Codex workspace install/update/rollback path and recorded staging and production verification. See [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
 - **CLI follow-up (`v0.1.0-beta.6`)**: released with the dry-run-only work/team Codex bootstrap planner. This CLI release did not promote Railway.
+- **Adoption follow-up (`v0.1.0-beta.7`)**: candidate with deterministic
+  authoring archives, authorized native MCP Skills delivery, release-history
+  navigation, and reviewed registry and self-hosting hardening. Publication,
+  native host activation, imports, and guided setup remain separate gates or
+  later roadmap slices.
 - **Hosted beta baseline**: the operational beta.5 application is the latest documented deployment baseline. Confirm the current commit and health by live read-back; historical acceptance is not a current runtime check.
 - **Business-safe production release**: harden the beta into an operator-ready release with stronger audit, background scanning, skill evals, provider lifecycle, artifact delivery, trusted publishing, deploy/ops guidance, and upgrade policy. See [BUSINESS_SAFE_RELEASE_GOAL.md](BUSINESS_SAFE_RELEASE_GOAL.md).
 

@@ -1,6 +1,6 @@
 # API, MCP, And CLI
 
-Version: 0.1.0-beta.6
+Version: 0.1.0-beta.7
 Document revision: 0.2.1-draft
 Last updated: 2026-09-25
 
@@ -82,7 +82,7 @@ The current source candidate also provides native Skills resources for
 extension-aware MCP clients. That separate authenticated content path does not
 change `get_install_instructions` or add bundle URLs to its response.
 
-The repository version is `0.1.0-beta.6`. Hosted deployment state must be read
+The repository version is `0.1.0-beta.7`. Hosted deployment state must be read
 back separately and must not be inferred from the repository version.
 
 ## Skill Architecture Control Plane (Phase 2 draft)

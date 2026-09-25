@@ -1,11 +1,29 @@
 # Operational Beta Delivery Brief
 
-Version: 0.1.0-beta.6
-Last updated: 2026-09-05
+Version: 0.1.0-beta.7
+Last updated: 2026-09-25
 
-Target release: `v0.1.0-beta.6`.
+Target release: `v0.1.0-beta.7`.
 
-## Goal
+## Beta.7 Candidate Record
+
+Beta.7 extends the published beta.6 baseline with deterministic local package
+authoring, authorized native MCP Skills delivery, public release-history
+navigation, and reviewed auth, package-integrity, governance, dependency, and
+self-hosting repairs. The candidate source is based on
+`7f21e4bf1e60a105ada93445f4ee1e2955c69b8e`.
+
+This record is a release candidate scope and acceptance plan. It does not claim
+that the canonical gate, package publication, GitHub release, or Railway
+deployment has passed. Record the final candidate SHA, required CI and
+canonical-gate evidence, staging acceptance, and rollback plan before release.
+Add exact npm bytes and selector readbacks after publication, then production
+identity and rendered acceptance after promotion.
+
+Native model-selected host activation remains open. Folder/ZIP imports, browser
+drafts, and guided self-hosting setup remain subsequent roadmap slices.
+
+## Beta.6 Historical Goal
 
 Extend the verified beta.5 operational baseline with one safe, local planning
 path for explicitly approved work/team Codex skill bootstrap. The command must
@@ -17,7 +35,7 @@ verification ledger are in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY
 The beta.5 operational evidence remains the hosted baseline. Beta.6 adds a
 separate CLI/package proof for the new planner.
 
-## Release Outcome
+## Beta.6 Historical Outcome
 
 Beta.6 was published as a CLI-focused npm package and GitHub prerelease on
 5 September 2026. It adds the work/team bootstrap planner and no API, web,
@@ -50,7 +68,7 @@ verification surfaces, not substitute deployment evidence.
 The CLI package includes `LICENSE`, `README.md`, `dist/index.js`, and the npm
 package manifest. The installed license must match the root project license.
 
-## Release Verification
+## Beta.6 Historical Verification
 
 - The complete canonical release gate passed on the clean beta.6 candidate.
 - The CLI tarball contains only `LICENSE`, `README.md`, `dist/index.js`, and
@@ -68,7 +86,7 @@ package manifest. The installed license must match the root project license.
 - npm `beta` resolves to `0.1.0-beta.6`. The `latest` and `alpha` selectors
   remain on `0.1.0-alpha.3`.
 
-## Beta Boundaries
+## Beta.6 Historical Boundaries
 
 - Hosted registration stays owner-controlled.
 - Self-hosting and the supported local runtime path are the product focus.
@@ -77,10 +95,11 @@ package manifest. The installed license must match the root project license.
 - Adoption and support evidence are still required before a stable release.
 - Unverified platform or runtime behavior must be listed as a limitation.
 
-## Stop Rule
+## Beta.7 Stop Rule
 
-Do not publish with failed gates, a mismatched tag or version, incomplete planner
-canary evidence, an unexpected npm selector change, or unverified immutable
-package bytes. Fix the candidate and rerun the affected checks. Do not mutate
-Railway for this CLI-only release. See [Release Process](RELEASE.md) for the
-release and rollback procedures.
+Do not publish with failed gates, a mismatched tag or version, incomplete
+authoring or native-MCP evidence, an unexpected npm selector change, or
+unverified immutable package bytes. Do not promote API or web until the
+candidate has passed staging, migration, backup, readiness, and same-commit
+browser/API readbacks. Fix the candidate and rerun the affected checks. See
+[Release Process](RELEASE.md) for the release and rollback procedures.
