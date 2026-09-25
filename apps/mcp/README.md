@@ -54,6 +54,10 @@ page can be empty while still containing `nextCursor`; continue paging in that
 case. The cursor retains API actor scoping and is bound to the configured registry
 origin. It is not an authorization grant. `skills/get` supports direct lookup of
 an exact approved release, including a known URI omitted from current discovery.
+Native projection bounds versions to 80 characters, platforms to 100, and encoded
+resource URIs to 4,096 characters. An incompatible candidate is skipped without
+discarding compatible neighbors or the next-page cursor. An artifact is excluded
+as a whole if any supporting file would have an unreadable URI.
 
 Each entry includes all parsed YAML frontmatter fields and the complete package
 file manifest with SHA-256 digests and byte lengths. YAML duplicate keys, aliases,

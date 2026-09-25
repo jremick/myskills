@@ -14,6 +14,7 @@ import {
 
 export const SKILLS_EXTENSION = "io.modelcontextprotocol/skills";
 export const NATIVE_SKILL_PAGE_SIZE = 5;
+export const NATIVE_RESOURCE_URI_CHARS = 4096;
 const privateResult = { resultType: "complete" as const, ttlMs: 0, cacheScope: "private" as const };
 const versionSchema = z.string().min(1).max(80).refine((value) => parseSemanticVersion(value) !== null);
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
@@ -24,7 +25,7 @@ const releaseSchema = z.object({
   artifact: z.object({ sha256: sha256Schema, byteSize: z.number().int().positive().max(NATIVE_API_BUNDLE_BYTES), contentType: z.literal("application/vnd.myskills-app.package+json") }),
 });
 const pageSchema = z.object({
-  skills: z.array(z.object({ slug: skillSlugSchema, latestVersion: versionSchema.nullable(), lifecycleStatus: z.string(), reviewStatus: z.string(), securityStatus: z.string() })).max(NATIVE_SKILL_PAGE_SIZE),
+  skills: z.array(z.object({ slug: skillSlugSchema, latestVersion: z.string().nullable(), lifecycleStatus: z.string(), reviewStatus: z.string(), securityStatus: z.string() })).max(NATIVE_SKILL_PAGE_SIZE),
   nextCursor: z.string().max(1024).nullable().optional(),
 });
 const bundleSchema = z.object({ files: z.array(z.object({ path: z.string().min(1).max(1024), content: z.string() }).strict()).min(1).max(MAX_PACKAGE_FILES) }).strict();
@@ -118,7 +119,7 @@ export function createNativeSkillsHandlers(options: RegistryApiClientOptions) {
         const page = pageSchema.parse(await client.json(`/v1/skills?${query}`));
         const skills: NativeSkill[] = [];
         for (const entry of page.skills) {
-          if (entry.lifecycleStatus !== "approved" || entry.reviewStatus !== "approved" || entry.securityStatus !== "passed" || !entry.latestVersion || entry.latestVersion.split("+", 1)[0].includes("-")) continue;
+          if (entry.lifecycleStatus !== "approved" || entry.reviewStatus !== "approved" || entry.securityStatus !== "passed" || !versionSchema.safeParse(entry.latestVersion).success || !entry.latestVersion || entry.latestVersion.split("+", 1)[0].includes("-")) continue;
           try {
             skills.push((await load(client, entry.slug, entry.latestVersion)).skill);
           } catch (error) {
@@ -155,12 +156,14 @@ function digest(value: string | Uint8Array): string {
 }
 
 function resourceUri(origin: string, identity: SkillIdentity): string {
-  return `skill://myskills-${origin}/${[identity.slug, identity.version, identity.digest, identity.name, ...identity.path.split("/")].map(encodeURIComponent).join("/")}`;
+  const uri = `skill://myskills-${origin}/${[identity.slug, identity.version, identity.digest, identity.name, ...identity.path.split("/")].map(encodeURIComponent).join("/")}`;
+  if (uri.length > NATIVE_RESOURCE_URI_CHARS) throw new IncompatibleSkill();
+  return uri;
 }
 
 function parseResourceUri(origin: string, uri: string): SkillIdentity {
   const prefix = `skill://myskills-${origin}/`;
-  if (typeof uri !== "string" || uri.length > 4096 || !uri.startsWith(prefix)) throw new IncompatibleSkill();
+  if (typeof uri !== "string" || uri.length > NATIVE_RESOURCE_URI_CHARS || !uri.startsWith(prefix)) throw new IncompatibleSkill();
   const parts = uri.slice(prefix.length).split("/").map((part) => decodeURIComponent(part));
   if (parts.length < 5) throw new IncompatibleSkill();
   const [slug, version, artifact, name, ...path] = parts;

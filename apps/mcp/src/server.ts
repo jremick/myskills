@@ -2,7 +2,7 @@ import { McpServer, ProtocolError, type ServerContext } from "@modelcontextproto
 import { z } from "zod";
 import { createRegistryApiClient, type RegistryApiClientOptions } from "./api-client.js";
 import { createAiSkillsMcpHandlers } from "./tools.js";
-import { createNativeSkillsHandlers, SKILLS_EXTENSION } from "./skills.js";
+import { createNativeSkillsHandlers, NATIVE_RESOURCE_URI_CHARS, SKILLS_EXTENSION } from "./skills.js";
 
 export interface AiSkillsMcpServerOptions extends RegistryApiClientOptions {
   name?: string;
@@ -37,7 +37,7 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
     return skills.list(input, ctx.mcpReq.signal);
   });
   server.server.setRequestHandler("skills/get", {
-    params: z.object({ uri: z.string().min(1).max(4096) }),
+    params: z.object({ uri: z.string().min(1).max(NATIVE_RESOURCE_URI_CHARS) }),
   }, (input, ctx) => {
     requireSkills(ctx);
     return skills.get(input, ctx.mcpReq.signal);
@@ -46,6 +46,7 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
   // authorized on every read and never activate a skill or execute its files.
   server.server.setRequestHandler("resources/read", (request, ctx) => skills.read(request.params, ctx.mcpReq.signal));
   server.server.setRequestHandler("resources/list", async () => ({ resources: [], ttlMs: 0, cacheScope: "private" as const }));
+  server.server.setRequestHandler("resources/templates/list", async () => ({ resourceTemplates: [], ttlMs: 0, cacheScope: "private" as const }));
 
   server.registerTool(
     "search_skills",

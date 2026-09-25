@@ -125,6 +125,45 @@ test("An incompatible bounded release projection does not discard compatible nei
   assert.equal(incompatible.calls.some((call) => call.url.includes("/bundle?")), false);
 });
 
+test("A long valid registry version is skipped without losing neighbors or pagination", async () => {
+  const incompatible = nativeFixture({ slug: "a-long", version: `1.0.0+${"build".repeat(20)}` });
+  const compatible = nativeFixture({ slug: "z-native" });
+  assert.ok(parseSkillManifest(JSON.parse(incompatible.files[0].content)).version.length > 80);
+  const fetchImpl: FetchLike = (url, init) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === "/v1/skills") {
+      if (parsed.searchParams.has("cursor")) {
+        assert.equal(parsed.searchParams.get("cursor"), "cursor-reader");
+        return Promise.resolve(json(200, { skills: [], nextCursor: null }));
+      }
+      return Promise.resolve(json(200, { skills: [incompatible.skill, compatible.skill], nextCursor: "cursor-reader" }));
+    }
+    if (parsed.pathname.includes("/a-long/")) return incompatible.fetchImpl(url, init);
+    return compatible.fetchImpl(url, init);
+  };
+  const handlers = createNativeSkillsHandlers({ token, fetchImpl });
+  const listed = await handlers.list();
+  assert.equal(listed.skills.length, 1);
+  assert.match(listed.skills[0].uri, /\/z-native\//);
+  assert.ok(listed.nextCursor);
+  assert.equal(incompatible.calls.length, 0);
+  assert.equal((await handlers.list({ cursor: listed.nextCursor })).skills.length, 0);
+});
+
+test("A package with an overlong encoded resource URI is excluded atomically", async () => {
+  const path = `${Array.from({ length: 6 }, () => "界".repeat(80)).join("/")}/file.md`;
+  assert.ok(path.length < 1024);
+  assert.ok(encodeURIComponent(path).length > 4096);
+  const fixture = nativeFixture({ extra: [{ path, content: "Supporting text" }] });
+  fixture.state.nextCursor = "cursor-reader";
+  const handlers = createNativeSkillsHandlers({ token, fetchImpl: fixture.fetchImpl });
+  const listed = await handlers.list();
+  assert.deepEqual(listed.skills, []);
+  assert.ok(listed.nextCursor);
+  const rootUri = `skill://myskills-${hash("http://localhost:3001")}/native-test/${encodeURIComponent(fixture.release.version)}/${fixture.release.artifact.sha256}/author-label/SKILL.md`;
+  await assert.rejects(handlers.get({ uri: rootUri }), unavailable);
+});
+
 for (const [label, instructions] of [
   ["missing", "No frontmatter"],
   ["missing name", "---\ndescription: A description\n---\n"],
@@ -255,4 +294,35 @@ test("Native list never turns upstream outage into a successful empty listing", 
   const fixture = nativeFixture();
   const fetchImpl: FetchLike = (url, init) => url.includes("/releases/") ? Promise.resolve(json(503, { internal: "private detail" })) : fixture.fetchImpl(url, init);
   await assert.rejects(createNativeSkillsHandlers({ token, fetchImpl }).list(), { code: -32603 });
+});
+
+test("Native fetch and response-stream failures are unavailable errors without upstream details", async () => {
+  const upstreamDetail = "private upstream credentials and response details";
+  const failures: FetchLike[] = [
+    async () => { throw new TypeError(upstreamDetail); },
+    async () => new Response(new ReadableStream({ start(controller) { controller.error(new Error(upstreamDetail)); } })),
+  ];
+  for (const fetchImpl of failures) {
+    await assert.rejects(createNativeSkillsHandlers({ token, fetchImpl }).list(), (error) => {
+      assert.equal((error as { code: number }).code, -32603);
+      assert.equal(String(error).includes(upstreamDetail), false);
+      return true;
+    });
+  }
+});
+
+test("An already aborted native operation is unavailable and makes no upstream request", async () => {
+  const abort = new AbortController();
+  abort.abort();
+  let calls = 0;
+  const fetchImpl: FetchLike = async () => { calls += 1; return json(200, {}); };
+  await assert.rejects(createNativeSkillsHandlers({ token, fetchImpl }).list({}, abort.signal), { code: -32603 });
+  assert.equal(calls, 0);
+});
+
+test("Native upstream authorization and missing-resource statuses retain sanitized invalid-parameter handling", async () => {
+  for (const status of [401, 403, 404]) {
+    const fetchImpl: FetchLike = async () => json(status, { detail: "must stay private" });
+    await assert.rejects(createNativeSkillsHandlers({ token, fetchImpl }).list(), unavailable);
+  }
 });

@@ -30,6 +30,7 @@ for (const declared of [false, true]) {
       const caps = client.getDiscoverResult()?.capabilities;
       assert.deepEqual(caps?.extensions?.[SKILLS_EXTENSION], {});
       assert.ok(caps?.resources);
+      assert.deepEqual((await client.listResourceTemplates()).resourceTemplates, []);
       assert.equal((await client.listTools()).tools.length, 6);
       if (!declared) {
         await assert.rejects(client.request({ method: "skills/list", params: {} }, listResult), /Declare the io.modelcontextprotocol\/skills/);
@@ -85,6 +86,7 @@ for (const era of ["legacy", "modern"] as const) {
       try {
         await client.connect(transport);
         assert.equal(client.getProtocolEra(), era);
+        assert.deepEqual((await client.listResourceTemplates()).resourceTemplates, []);
         if (!declared) {
           await assert.rejects(client.request({ method: "skills/list", params: {} }, listResult), /Declare the io.modelcontextprotocol\/skills/);
           return;

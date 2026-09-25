@@ -105,42 +105,49 @@ async function nativeRequestBytes(
   // The timeout covers headers AND body. This also bounds stdio clients and is
   // composed with the HTTP adapter's upstream timeout and cancellation policy.
   const requestSignal = AbortSignal.any([AbortSignal.timeout(10_000), ...(signal ? [signal] : [])]);
-  requestSignal.throwIfAborted();
-  const response = await abortable(fetchImpl(url, {
-    method: "GET",
-    redirect: "error",
-    headers: { accept: "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}), ...extraHeaders },
-    signal: requestSignal,
-  }), requestSignal);
-  if (!response.ok) {
-    void response.body?.cancel().catch(() => {});
-    throw new RegistryApiError(response.status);
-  }
-  const length = response.headers?.get("content-length");
-  if (length !== null && length !== undefined && (!/^\d+$/.test(length) || Number(length) > maxBytes)) {
-    void response.body?.cancel().catch(() => {});
-    throw new RegistryApiError(502, "API_RESPONSE_TOO_LARGE");
-  }
-  // Native delivery requires a stream even for injected fetch adapters: an
-  // unbounded text() fallback would defeat the byte limit before validation.
-  if (!response.body) throw new RegistryApiError(502, "API_RESPONSE_BODY_REQUIRED");
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
   try {
-    while (true) {
-      const chunk = await abortable(reader.read(), requestSignal);
-      if (chunk.done) break;
-      total += chunk.value.byteLength;
-      if (total > maxBytes) throw new RegistryApiError(502, "API_RESPONSE_TOO_LARGE");
-      chunks.push(chunk.value);
-    }
     requestSignal.throwIfAborted();
-    return Buffer.concat(chunks, total);
-  } finally {
-    // Do not wait for an uncooperative upstream's cancel() promise.
-    void reader.cancel().catch(() => {});
-    reader.releaseLock();
+    const response = await abortable(fetchImpl(url, {
+      method: "GET",
+      redirect: "error",
+      headers: { accept: "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}), ...extraHeaders },
+      signal: requestSignal,
+    }), requestSignal);
+    if (!response.ok) {
+      void response.body?.cancel().catch(() => {});
+      throw new RegistryApiError(response.status);
+    }
+    const length = response.headers?.get("content-length");
+    if (length !== null && length !== undefined && (!/^\d+$/.test(length) || Number(length) > maxBytes)) {
+      void response.body?.cancel().catch(() => {});
+      throw new RegistryApiError(502, "API_RESPONSE_TOO_LARGE");
+    }
+    // Native delivery requires a stream even for injected fetch adapters: an
+    // unbounded text() fallback would defeat the byte limit before validation.
+    if (!response.body) throw new RegistryApiError(502, "API_RESPONSE_BODY_REQUIRED");
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    try {
+      while (true) {
+        const chunk = await abortable(reader.read(), requestSignal);
+        if (chunk.done) break;
+        total += chunk.value.byteLength;
+        if (total > maxBytes) throw new RegistryApiError(502, "API_RESPONSE_TOO_LARGE");
+        chunks.push(chunk.value);
+      }
+      requestSignal.throwIfAborted();
+      return Buffer.concat(chunks, total);
+    } finally {
+      // Do not wait for an uncooperative upstream's cancel() promise.
+      void reader.cancel().catch(() => {});
+      reader.releaseLock();
+    }
+  } catch (error) {
+    if (error instanceof RegistryApiError) throw error;
+    throw requestSignal.aborted
+      ? new RegistryApiError(504, "API_REQUEST_ABORTED")
+      : new RegistryApiError(503, "API_UNAVAILABLE");
   }
 }
 
