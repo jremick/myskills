@@ -1,5 +1,5 @@
 import nodemailer, { type Transporter } from "nodemailer";
-import { Resend, type CreateEmailOptions, type CreateEmailResponse } from "resend";
+import { Resend, type CreateEmailOptions, type CreateEmailRequestOptions, type CreateEmailResponse } from "resend";
 import type { AuthActionNotification, AuthNotificationSink } from "./service.js";
 
 type AuthNotificationPurpose = "email_verification" | "password_reset" | "registration_invitation" | "email_change";
@@ -13,13 +13,14 @@ export interface SmtpAuthNotificationOptions {
   appBaseUrl: string;
   from: string;
   transporter: Pick<Transporter, "sendMail">;
+  createIsolatedTransporter?: () => Pick<Transporter, "sendMail" | "close">;
 }
 
 export interface ResendAuthNotificationOptions {
   appBaseUrl: string;
   from: string;
   client: {
-    send(payload: CreateEmailOptions): Promise<CreateEmailResponse>;
+    send(payload: CreateEmailOptions, options?: CreateEmailRequestOptions & { signal?: AbortSignal }): Promise<CreateEmailResponse>;
   };
 }
 
@@ -74,15 +75,26 @@ export class SmtpAuthNotificationSink implements AuthNotificationSink {
 
   private async send(purpose: AuthNotificationPurpose, input: AuthActionNotification): Promise<void> {
     const message = authActionMessage(this.options.appBaseUrl, purpose, input);
-    await this.options.transporter.sendMail({
-      from: this.options.from,
-      to: input.email,
-      subject: message.subject,
-      text: message.text,
-      html: message.html,
-      disableFileAccess: true,
-      disableUrlAccess: true,
-    });
+    // Queued sends own their transport so cancellation cannot close a concurrent
+    // synchronous invitation or another worker's delivery.
+    const isolated = input.signal ? this.options.createIsolatedTransporter?.() : undefined;
+    const abort = () => isolated?.close();
+    input.signal?.addEventListener("abort", abort, { once: true });
+    try {
+      if (input.signal?.aborted) throw new Error("Auth notification delivery cancelled.");
+      await (isolated ?? this.options.transporter).sendMail({
+        from: this.options.from,
+        to: input.email,
+        subject: message.subject,
+        text: message.text,
+        html: message.html,
+        disableFileAccess: true,
+        disableUrlAccess: true,
+      });
+    } finally {
+      input.signal?.removeEventListener("abort", abort);
+      isolated?.close();
+    }
   }
 }
 
@@ -113,7 +125,7 @@ export class ResendAuthNotificationSink implements AuthNotificationSink {
       subject: message.subject,
       text: message.text,
       html: message.html,
-    });
+    }, { signal: input.signal });
     if (response.error) {
       throw new Error(`Resend email delivery failed: ${response.error.name} ${response.error.message}`);
     }
@@ -156,7 +168,7 @@ export function createAuthNotificationSinkFromEnv(
 
   const secure = optionalBoolean(env.SMTP_SECURE);
   const port = optionalPort(env.SMTP_PORT, secure);
-  const transporter = nodemailer.createTransport({
+  const transportOptions = {
     host: requiredString(env.SMTP_HOST, "SMTP_HOST"),
     port,
     secure: secure ?? port === 465,
@@ -165,12 +177,17 @@ export function createAuthNotificationSinkFromEnv(
       rejectUnauthorized: tlsRejectUnauthorized(env.SMTP_TLS_REJECT_UNAUTHORIZED, production),
     },
     auth: optionalSmtpAuth(env.SMTP_USER, env.SMTP_PASSWORD),
-  });
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
+  };
+  const transporter = nodemailer.createTransport(transportOptions);
 
   return new SmtpAuthNotificationSink({
     appBaseUrl,
     from: requiredEmailHeader(env.SMTP_FROM, "SMTP_FROM"),
     transporter,
+    createIsolatedTransporter: () => nodemailer.createTransport(transportOptions),
   });
 }
 

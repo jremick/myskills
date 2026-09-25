@@ -1,6 +1,7 @@
 import { AppError } from "@myskills-app/core";
 import type { RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
+import { AUTH_NOTIFICATION_BATCH_SIZE, AUTH_NOTIFICATION_LEASE_MS, AUTH_NOTIFICATION_MAX_ATTEMPTS, AUTH_NOTIFICATION_RETENTION_MS, eligibleAuthNotification, type AuthNotificationClaim, type FinishAuthNotificationInput } from "./notification-outbox.js";
 import type {
   AuditEventRecord,
   ApiTokenRecord,
@@ -128,6 +129,18 @@ interface MemoryAuthActionToken {
   createdAt: Date;
 }
 
+interface MemoryAuthNotification {
+  id: string;
+  tokenHash: string;
+  payloadCiphertext: string | null;
+  status: string;
+  attempts: number;
+  availableAt: Date;
+  leaseId: string | null;
+  leaseExpiresAt: Date | null;
+  updatedAt: Date;
+}
+
 interface MemoryAuditEvent {
   id: string;
   actorUserId: string | null;
@@ -148,6 +161,7 @@ export class MemoryAuthStore implements AuthStore {
   private mfaRecoveryCodes = new Map<string, MemoryMfaRecoveryCode>();
   private mfaChallenges = new Map<string, MemoryMfaChallenge>();
   private authActionTokens = new Map<string, MemoryAuthActionToken>();
+  private authNotifications = new Map<string, MemoryAuthNotification>();
   private audit = new Map<string, MemoryAuditEvent>();
   private auditSequence = 0;
   private adminMutationTail: Promise<void> = Promise.resolve();
@@ -460,6 +474,12 @@ export class MemoryAuthStore implements AuthStore {
     return this.withAccountActionLock(input.userId, () => {
       const user = [...this.users.values()].find((candidate) => candidate.id === input.userId);
       if (!user) return null;
+      if (input.notification) {
+        if (input.purpose !== "password_reset" && input.purpose !== "email_verification") throw new Error("Unsupported queued auth purpose.");
+        if (user.email !== input.sentToNormalizedEmail || !eligibleAuthNotification(toRecord(user), input.purpose, Boolean(user.passwordHash))) return null;
+        if (this.authNotifications.has(input.notification.id)) throw new Error("Duplicate auth notification intent.");
+      }
+      if (this.authActionTokens.has(input.tokenHash)) throw new Error("Duplicate auth action token.");
       if (input.purpose === "password_reset" || input.purpose === "email_change") {
         if (user.status !== "active" || !user.emailVerifiedAt || !user.passwordHash ||
           (input.expectedAccount && (user.email !== input.expectedAccount.email || user.passwordHash !== input.expectedAccount.passwordHash)) ||
@@ -482,9 +502,64 @@ export class MemoryAuthStore implements AuthStore {
       if (input.purpose === "email_change") {
         this.invalidateSecurityActionTokens(user.id, token.createdAt, "email_change");
       }
+      if (input.notification) this.authNotifications.set(input.notification.id, {
+        ...input.notification, tokenHash: token.tokenHash, status: "pending", attempts: 0,
+        availableAt: token.createdAt, leaseId: null, leaseExpiresAt: null, updatedAt: token.createdAt,
+      });
       this.authActionTokens.set(token.tokenHash, token);
       return toAuthActionTokenRecord(token);
     });
+  }
+
+  async claimAuthNotifications(input: { now: Date; limit: number; leaseId: string }): Promise<AuthNotificationClaim[]> {
+    const limit = Math.max(1, Math.min(AUTH_NOTIFICATION_BATCH_SIZE, Number.isFinite(input.limit) ? Math.floor(input.limit) : AUTH_NOTIFICATION_BATCH_SIZE));
+    let removed = 0;
+    for (const job of this.authNotifications.values()) {
+      if (!job.payloadCiphertext && job.updatedAt.getTime() <= input.now.getTime() - AUTH_NOTIFICATION_RETENTION_MS && removed < limit) {
+        this.authNotifications.delete(job.id);
+        removed += 1;
+      }
+    }
+    const jobs = [...this.authNotifications.values()].filter((job) =>
+      (job.status === "pending" && job.availableAt <= input.now) ||
+      (job.status === "leased" && job.leaseExpiresAt && job.leaseExpiresAt <= input.now))
+      .sort((a, b) => a.availableAt.getTime() - b.availableAt.getTime()).slice(0, limit);
+    const claims: AuthNotificationClaim[] = [];
+    for (const job of jobs) {
+      const token = this.authActionTokens.get(job.tokenHash);
+      if (!token || token.expiresAt <= input.now || job.attempts >= AUTH_NOTIFICATION_MAX_ATTEMPTS ||
+          (token.purpose !== "email_verification" && token.purpose !== "password_reset")) {
+        Object.assign(job, { status: token && token.expiresAt <= input.now ? "expired" : "failed", payloadCiphertext: null, leaseId: null, leaseExpiresAt: null, updatedAt: input.now });
+        continue;
+      }
+      if (!job.payloadCiphertext) throw new Error("Auth notification intent is unavailable.");
+      Object.assign(job, { status: "leased", leaseId: input.leaseId, leaseExpiresAt: new Date(input.now.getTime() + AUTH_NOTIFICATION_LEASE_MS), attempts: job.attempts + 1, updatedAt: input.now });
+      claims.push({ id: job.id, tokenHash: token.tokenHash, purpose: token.purpose, payloadCiphertext: job.payloadCiphertext, expiresAt: token.expiresAt, attempts: job.attempts, leaseId: input.leaseId, leaseExpiresAt: new Date(input.now.getTime() + AUTH_NOTIFICATION_LEASE_MS) });
+    }
+    return claims;
+  }
+
+  async authNotificationRecipient(claim: AuthNotificationClaim, now: Date): Promise<AuthUserRecord | null> {
+    const job = this.authNotifications.get(claim.id);
+    const token = job && this.authActionTokens.get(job.tokenHash);
+    if (!job || job.status !== "leased" || job.leaseId !== claim.leaseId || !job.leaseExpiresAt || job.leaseExpiresAt <= now ||
+        !token || token.tokenHash !== claim.tokenHash || token.purpose !== claim.purpose || token.usedAt || token.expiresAt <= now) return null;
+    const user = [...this.users.values()].find((candidate) => candidate.id === token.userId);
+    return user && token.sentToNormalizedEmail === user.email && eligibleAuthNotification(toRecord(user), claim.purpose, Boolean(user.passwordHash)) ? toRecord(user) : null;
+  }
+
+  async finishAuthNotification(input: FinishAuthNotificationInput): Promise<boolean> {
+    const job = this.authNotifications.get(input.id);
+    const token = job && this.authActionTokens.get(job.tokenHash);
+    if (!job || !token || job.status !== "leased" || job.leaseId !== input.leaseId || !job.leaseExpiresAt || job.leaseExpiresAt <= input.now) return false;
+    const retry = input.outcome === "retry" && job.attempts < AUTH_NOTIFICATION_MAX_ATTEMPTS && input.availableAt && input.availableAt < token.expiresAt && !token.usedAt;
+    Object.assign(job, {
+      status: retry ? "pending" : input.outcome === "retry" ? token.usedAt ? "invalid" : token.expiresAt <= input.now ? "expired" : "failed" : input.outcome,
+      payloadCiphertext: retry ? job.payloadCiphertext : null,
+      availableAt: retry ? input.availableAt : job.availableAt,
+      leaseId: null, leaseExpiresAt: null, updatedAt: input.now,
+    });
+    return true;
   }
 
   async consumeAuthActionToken(input: {

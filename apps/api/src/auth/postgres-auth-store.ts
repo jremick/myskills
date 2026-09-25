@@ -1,10 +1,12 @@
-import { and, desc, eq, gt, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lte, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { AppError } from "@myskills-app/core";
 import { roles as authRoles, type RegistrationMode, type Role, type UserStatus } from "@myskills-app/auth";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
+import { AUTH_NOTIFICATION_BATCH_SIZE, AUTH_NOTIFICATION_LEASE_MS, AUTH_NOTIFICATION_MAX_ATTEMPTS, AUTH_NOTIFICATION_RETENTION_MS, eligibleAuthNotification, type AuthNotificationClaim, type FinishAuthNotificationInput } from "./notification-outbox.js";
 import type { Database } from "../db/client.js";
 import {
   authActionTokens,
+  authNotificationOutbox,
   apiTokens,
   authSessions,
   auditEvents,
@@ -556,7 +558,10 @@ export class PostgresAuthStore implements AuthStore {
     return this.db.transaction(async (tx) => {
       const user = await lockAccountForAction(tx, input.userId);
       if (!user) return null;
-      const { expectedAccount, ...tokenInput } = input;
+      const { expectedAccount, notification, ...tokenInput } = input;
+      if (notification && (input.purpose !== "password_reset" && input.purpose !== "email_verification")) throw new Error("Unsupported queued auth purpose.");
+      if (notification && (user.normalizedEmail !== input.sentToNormalizedEmail ||
+          (input.purpose === "email_verification" && (user.emailVerifiedAt || user.status === "disabled" || user.status === "deleted")))) return null;
       if (input.purpose === "password_reset" || input.purpose === "email_change") {
         const [credential] = await tx.select().from(passwordCredentials)
           .where(eq(passwordCredentials.userId, user.id)).limit(1);
@@ -573,7 +578,69 @@ export class PostgresAuthStore implements AuthStore {
       }
       const [token] = await tx.insert(authActionTokens).values(tokenInput).returning();
       if (!token) throw new Error("Auth action token insert failed.");
+      if (notification) await tx.insert(authNotificationOutbox).values({ ...notification, actionTokenId: token.id });
       return toAuthActionTokenRecord(token);
+    });
+  }
+
+  async claimAuthNotifications(input: { now: Date; limit: number; leaseId: string }): Promise<AuthNotificationClaim[]> {
+    const limit = Math.max(1, Math.min(AUTH_NOTIFICATION_BATCH_SIZE, Number.isFinite(input.limit) ? Math.floor(input.limit) : AUTH_NOTIFICATION_BATCH_SIZE));
+    return this.db.transaction(async (tx) => {
+      const retained = await tx.select({ id: authNotificationOutbox.id }).from(authNotificationOutbox)
+        .where(and(isNull(authNotificationOutbox.payloadCiphertext), lte(authNotificationOutbox.updatedAt, new Date(input.now.getTime() - AUTH_NOTIFICATION_RETENTION_MS))))
+        .limit(limit).for("update", { skipLocked: true });
+      for (const row of retained) await tx.delete(authNotificationOutbox).where(eq(authNotificationOutbox.id, row.id));
+      const rows = await tx.select({ job: authNotificationOutbox, token: authActionTokens })
+        .from(authNotificationOutbox).innerJoin(authActionTokens, eq(authActionTokens.id, authNotificationOutbox.actionTokenId))
+        .where(or(
+          and(eq(authNotificationOutbox.status, "pending"), lte(authNotificationOutbox.availableAt, input.now)),
+          and(eq(authNotificationOutbox.status, "leased"), lte(authNotificationOutbox.leaseExpiresAt, input.now)),
+        )).orderBy(asc(authNotificationOutbox.availableAt)).limit(limit).for("update", { of: authNotificationOutbox, skipLocked: true });
+      const claims: AuthNotificationClaim[] = [];
+      for (const { job, token } of rows) {
+        if (token.expiresAt <= input.now || job.attempts >= AUTH_NOTIFICATION_MAX_ATTEMPTS ||
+            (token.purpose !== "email_verification" && token.purpose !== "password_reset")) {
+          await tx.update(authNotificationOutbox).set({ status: token.expiresAt <= input.now ? "expired" : "failed", payloadCiphertext: null, leaseId: null, leaseExpiresAt: null, updatedAt: input.now }).where(eq(authNotificationOutbox.id, job.id));
+          continue;
+        }
+        if (!job.payloadCiphertext) throw new Error("Auth notification intent is unavailable.");
+        await tx.update(authNotificationOutbox).set({ status: "leased", leaseId: input.leaseId, leaseExpiresAt: new Date(input.now.getTime() + AUTH_NOTIFICATION_LEASE_MS), attempts: job.attempts + 1, updatedAt: input.now }).where(eq(authNotificationOutbox.id, job.id));
+        claims.push({ id: job.id, tokenHash: token.tokenHash, purpose: token.purpose, payloadCiphertext: job.payloadCiphertext, expiresAt: token.expiresAt, attempts: job.attempts + 1, leaseId: input.leaseId, leaseExpiresAt: new Date(input.now.getTime() + AUTH_NOTIFICATION_LEASE_MS) });
+      }
+      return claims;
+    });
+  }
+
+  async authNotificationRecipient(claim: AuthNotificationClaim, now: Date): Promise<AuthUserRecord | null> {
+    const [row] = await this.db.select({ user: users, hasPassword: sql<boolean>`${passwordCredentials.userId} IS NOT NULL` })
+      .from(authNotificationOutbox).innerJoin(authActionTokens, eq(authActionTokens.id, authNotificationOutbox.actionTokenId))
+      .innerJoin(users, eq(users.id, authActionTokens.userId)).leftJoin(passwordCredentials, eq(passwordCredentials.userId, users.id))
+      .where(and(eq(authNotificationOutbox.id, claim.id), eq(authNotificationOutbox.status, "leased"),
+        eq(authNotificationOutbox.leaseId, claim.leaseId), gt(authNotificationOutbox.leaseExpiresAt, now),
+        eq(authActionTokens.tokenHash, claim.tokenHash), eq(authActionTokens.purpose, claim.purpose),
+        isNull(authActionTokens.usedAt), gt(authActionTokens.expiresAt, now),
+        eq(authActionTokens.sentToNormalizedEmail, users.normalizedEmail))).limit(1);
+    if (!row) return null;
+    const user = { ...toRecord(row.user), roles: [] };
+    return eligibleAuthNotification(user, claim.purpose, row.hasPassword) ? user : null;
+  }
+
+  async finishAuthNotification(input: FinishAuthNotificationInput): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      const [job] = await tx.select({ job: authNotificationOutbox, token: authActionTokens }).from(authNotificationOutbox)
+        .innerJoin(authActionTokens, eq(authActionTokens.id, authNotificationOutbox.actionTokenId))
+        .where(and(eq(authNotificationOutbox.id, input.id), eq(authNotificationOutbox.status, "leased"),
+          eq(authNotificationOutbox.leaseId, input.leaseId), gt(authNotificationOutbox.leaseExpiresAt, input.now)))
+        .for("update", { of: authNotificationOutbox }).limit(1);
+      if (!job) return false;
+      const retry = input.outcome === "retry" && job.job.attempts < AUTH_NOTIFICATION_MAX_ATTEMPTS &&
+        input.availableAt && input.availableAt < job.token.expiresAt && !job.token.usedAt;
+      const status = retry ? "pending" : input.outcome === "retry"
+        ? job.token.usedAt ? "invalid" : job.token.expiresAt <= input.now ? "expired" : "failed" : input.outcome;
+      await tx.update(authNotificationOutbox).set({ status, payloadCiphertext: retry ? job.job.payloadCiphertext : null,
+        availableAt: retry ? input.availableAt : job.job.availableAt, leaseId: null, leaseExpiresAt: null, updatedAt: input.now })
+        .where(eq(authNotificationOutbox.id, input.id));
+      return true;
     });
   }
 

@@ -1,3 +1,4 @@
+import type { AuthNotificationClaim, AuthNotificationIntent, FinishAuthNotificationInput } from "./notification-outbox.js";
 import type { AuthenticatedUser, RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 
 export const apiTokenScopes = ["profile:read", "skills:read", "architectures:read", "skills:submit", "review:read", "review:write", "targets:execute"] as const;
@@ -109,6 +110,7 @@ export interface CreateAuthActionTokenInput {
   sentToNormalizedEmail: string;
   expiresAt: Date;
   expectedAccount?: AuthActionAccountSnapshot;
+  notification?: AuthNotificationIntent;
 }
 
 // Recheck the account observed before password verification or token issuance
@@ -286,6 +288,9 @@ export interface AuthStore {
   changePasswordAndRevokeCredentials(input: ChangePasswordAndRevokeCredentialsInput): Promise<boolean>;
   completePasswordReset(input: CompletePasswordResetInput): Promise<boolean>;
   createAuthActionToken(input: CreateAuthActionTokenInput): Promise<AuthActionTokenRecord | null>;
+  claimAuthNotifications(input: { now: Date; limit: number; leaseId: string }): Promise<AuthNotificationClaim[]>;
+  authNotificationRecipient(claim: AuthNotificationClaim, now: Date): Promise<AuthUserRecord | null>;
+  finishAuthNotification(input: FinishAuthNotificationInput): Promise<boolean>;
   consumeAuthActionToken(input: {
     tokenHash: string;
     purpose: AuthActionTokenPurpose;

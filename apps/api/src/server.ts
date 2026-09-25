@@ -3,6 +3,7 @@ import { createDb, createPgPool } from "./db/client.js";
 import { createArtifactObjectStorageFromEnv } from "./artifacts/storage.js";
 import { PostgresAuthRateLimiter } from "./auth/rate-limit.js";
 import { createAuthNotificationSinkFromEnv } from "./auth/notification.js";
+import { AuthNotificationWorker } from "./auth/notification-outbox.js";
 import { AuthService } from "./auth/service.js";
 import { PostgresAuthStore } from "./auth/postgres-auth-store.js";
 import { PostgresSkillRepository } from "./repositories/postgres-skill-repository.js";
@@ -82,11 +83,14 @@ const targetSkillOperationService = new TargetSkillOperationService(
   submissionService,
   { upgradePolicies: skillUpgradePolicyService },
 );
+const authStore = new PostgresAuthStore(db);
+const authSecret = requiredAuthSecret();
+const notificationSink = createAuthNotificationSinkFromEnv(process.env);
 const app = buildApp({
   skillRepository,
   registryInstanceId,
-  authService: new AuthService(new PostgresAuthStore(db), {
-    mfaSecretKey: requiredAuthSecret(),
+  authService: new AuthService(authStore, {
+    mfaSecretKey: authSecret,
     totpIssuer: process.env.TOTP_ISSUER ?? "MySkills",
     loginLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 10, windowMs: 15 * 60 * 1000 }),
     registrationLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
@@ -94,7 +98,7 @@ const app = buildApp({
     emailVerificationLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
     passwordResetLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
     authActionTokenLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 10, windowMs: 15 * 60 * 1000 }),
-    notificationSink: createAuthNotificationSinkFromEnv(process.env),
+    notificationSink,
   }),
   submissionService,
   teamService,
@@ -119,6 +123,10 @@ const app = buildApp({
   },
   logger: process.env.NODE_ENV !== "test",
 });
+const authNotificationWorker = notificationSink ? new AuthNotificationWorker(authStore, notificationSink, {
+  secret: authSecret,
+  onError: () => app.log.error("Auth notification dispatch failed; pending intents will be retried."),
+}) : undefined;
 const artifactReconciliationTimer = artifactStorage
   ? setInterval(() => {
       void submissionStore.reconcilePendingArtifactWrites().then(({ retained }) => {
@@ -134,19 +142,22 @@ artifactReconciliationTimer?.unref();
 
 try {
   await app.listen({ port, host });
+  authNotificationWorker?.start();
 } catch (error) {
   app.log.error(error);
   await pool.end();
   process.exit(1);
 }
 
-const shutdown = async () => {
+let shutdownPromise: Promise<void> | undefined;
+const shutdown = () => shutdownPromise ??= (async () => {
   if (artifactReconciliationTimer) {
     clearInterval(artifactReconciliationTimer);
   }
+  await authNotificationWorker?.stop();
   await app.close();
   await pool.end();
-};
+})();
 
 process.on("SIGINT", () => {
   void shutdown().then(() => process.exit(0));

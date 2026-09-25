@@ -20,6 +20,7 @@ import {
   type Role,
   type UserStatus,
 } from "@myskills-app/auth";
+import { encryptAuthNotification } from "./notification-outbox.js";
 import type { AuthRateLimiter } from "./rate-limit.js";
 import {
   apiTokenScopes,
@@ -128,6 +129,7 @@ export interface ConfirmEmailChangeInput {
 }
 
 export interface AuthActionNotification {
+  signal?: AbortSignal;
   user: AuthUserRecord;
   email: string;
   token: string;
@@ -498,7 +500,7 @@ export class AuthService {
     await assertAllowed(this.options.emailVerificationLimiter, rateLimitKeys("email-verification", email, input.ip));
     const user = await this.store.findUserByEmailWithPassword(email);
     if (user && shouldIssueEmailVerification(user)) {
-      await this.sendAuthActionToken(user, "email_verification");
+      await this.sendAuthActionToken(user, "email_verification", { enqueue: true });
     }
     return { status: "pending" };
   }
@@ -535,7 +537,8 @@ export class AuthService {
     const user = await this.store.findUserByEmailWithPassword(email);
     if (user?.passwordHash && isUsableAuthenticatedAccount(user)) {
       await this.sendAuthActionToken(user, "password_reset", {
-        expectedAccount: { email: user.email, passwordHash: user.passwordHash },
+        enqueue: true,
+        expectedAccount: { email: normalizeEmail(user.email), passwordHash: user.passwordHash },
       });
     }
     return { status: "pending" };
@@ -568,7 +571,7 @@ export class AuthService {
       userId: actor.id,
       passwordHash,
       passwordUpdatedAt: new Date(),
-      expectedAccount: { email: account.email, passwordHash: account.passwordHash },
+      expectedAccount: { email: normalizeEmail(account.email), passwordHash: account.passwordHash },
     });
     if (!updated) {
       throw new AppError("Password credential not found.", "PASSWORD_CREDENTIAL_NOT_FOUND", 404);
@@ -590,7 +593,7 @@ export class AuthService {
     const email = normalizeEmail(input.email);
     await assertAllowed(this.options.emailVerificationLimiter, rateLimitKeys("email-change", email, input.ip));
     const account = await this.assertCanManageAccount(actor, input.password);
-    if (email === actor.email) {
+    if (email === normalizeEmail(actor.email)) {
       throw new AppError("New email address must be different.", "EMAIL_UNCHANGED", 400);
     }
     const existing = await this.store.findUserByEmailWithPassword(email);
@@ -599,7 +602,7 @@ export class AuthService {
     }
     await this.sendAuthActionToken(asAuthUserRecord(actor), "email_change", {
       emailOverride: email,
-      expectedAccount: { email: account.email, passwordHash: account.passwordHash },
+      expectedAccount: { email: normalizeEmail(account.email), passwordHash: account.passwordHash },
     });
     await this.store.recordAuditEvent({
       actorUserId: actor.id,
@@ -1098,7 +1101,7 @@ export class AuthService {
 
   private async assertCanManageAccount(actor: AuthResponseUser, password: string): Promise<AuthUserWithPassword & { passwordHash: string }> {
     await this.assertCanUseMfaManagementSession(actor);
-    const user = await this.store.findUserByEmailWithPassword(actor.email);
+    const user = await this.store.findUserByEmailWithPassword(normalizeEmail(actor.email));
     if (!user?.passwordHash || user.id !== actor.id || !isUsableAuthenticatedAccount(user) || !(await verifyPassword(user.passwordHash, password))) {
       throw new AppError("Invalid email or password.", "INVALID_CREDENTIALS", 401);
     }
@@ -1152,7 +1155,7 @@ export class AuthService {
   private async sendAuthActionToken(
     user: AuthUserRecord,
     purpose: AuthActionTokenPurpose,
-    options: { emailOverride?: string; requireSink?: boolean; swallowDeliveryErrors?: boolean; expectedAccount?: AuthActionAccountSnapshot } = {},
+    options: { enqueue?: boolean; emailOverride?: string; requireSink?: boolean; swallowDeliveryErrors?: boolean; expectedAccount?: AuthActionAccountSnapshot } = {},
   ): Promise<{ expiresAt: Date } | null> {
     const sink = this.options.notificationSink;
     if (!sink) {
@@ -1163,7 +1166,7 @@ export class AuthService {
     }
     const token = createSessionToken();
     const expiresAt = new Date(Date.now() + this.authActionTokenTtlMs(purpose));
-    const email = options.emailOverride ?? user.email;
+    const email = normalizeEmail(options.emailOverride ?? user.email);
     const created = await this.store.createAuthActionToken({
       userId: user.id,
       purpose,
@@ -1171,6 +1174,8 @@ export class AuthService {
       sentToNormalizedEmail: email,
       expiresAt,
       expectedAccount: options.expectedAccount,
+      notification: options.enqueue && (purpose === "password_reset" || purpose === "email_verification")
+        ? encryptAuthNotification(this.mfaSecretKey(), { token, email, purpose }) : undefined,
     });
     if (!created) {
       if (purpose === "email_change") {
@@ -1178,6 +1183,7 @@ export class AuthService {
       }
       return null;
     }
+    if (options.enqueue) return { expiresAt };
     const notification = {
       user,
       email,

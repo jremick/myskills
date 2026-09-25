@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import type { TestContext } from "node:test";
 import { hashPassword, hashSessionToken, verifyPassword } from "@myskills-app/auth";
+import { AuthNotificationWorker } from "../src/auth/notification-outbox.js";
 import { AuthService, type AuthActionNotification } from "../src/auth/service.js";
 import type { AuthStore, AuthResponseUser, AuthActionTokenPurpose } from "../src/auth/types.js";
 
@@ -23,18 +24,20 @@ export async function authActionLifecycleCases(t: TestContext, store: AuthStore)
     const resets: AuthActionNotification[] = [];
     const changes: AuthActionNotification[] = [];
     const failures = { reset: false, email: false };
-    const service = new AuthService(store, { notificationSink: {
+    const sink = {
       sendEmailVerification() {},
       sendRegistrationInvitation() {},
-      sendPasswordReset(value) {
+      sendPasswordReset(value: AuthActionNotification) {
         if (failures.reset) throw new Error("Injected delivery failure");
         resets.push(value);
       },
-      sendEmailChangeVerification(value) {
+      sendEmailChangeVerification(value: AuthActionNotification) {
         if (failures.email) throw new Error("Injected delivery failure");
         changes.push(value);
       },
-    } });
+    };
+    const service = new AuthService(store, { notificationSink: sink });
+    const worker = new AuthNotificationWorker(store, sink, { secret: "dev-only-myskills-app-auth-secret-change-before-production" });
     const expectedAccount = { email, passwordHash };
     async function createAction(purpose: AuthActionTokenPurpose, destination = email) {
       const tokenHash = hashSessionToken(`fixture-${++sequence}-${purpose}`);
@@ -45,7 +48,7 @@ export async function authActionLifecycleCases(t: TestContext, store: AuthStore)
       assert.ok(token);
       return tokenHash;
     }
-    return { user, actor, service, resets, changes, failures, expectedAccount, createAction };
+    return { user, actor, service, worker, resets, changes, failures, expectedAccount, createAction };
   }
 
   await t.test("newest email-change request supersedes older links before and after confirmation", async () => {
@@ -64,12 +67,15 @@ export async function authActionLifecycleCases(t: TestContext, store: AuthStore)
   await t.test("email completion invalidates old resets and fresh reset links still work", async () => {
     const f = await fixture();
     await f.service.requestPasswordReset({ email: f.user.email });
+    await f.worker.runOnce();
     await f.service.requestEmailChange(f.actor, { email: `new-${f.user.email}`, password: PASSWORD });
     await f.service.confirmEmailChange({ token: f.changes[0].token });
     await assert.rejects(f.service.confirmPasswordReset({ token: f.resets[0].token, password: NEXT_PASSWORD }), INVALID_RESET);
     await f.service.requestPasswordReset({ email: f.user.email });
+    await f.worker.runOnce();
     assert.equal(f.resets.length, 1);
     await f.service.requestPasswordReset({ email: `new-${f.user.email}` });
+    await f.worker.runOnce();
     assert.deepEqual(await f.service.confirmPasswordReset({ token: f.resets[1].token, password: NEXT_PASSWORD }), { status: "reset" });
     await assert.rejects(f.service.confirmPasswordReset({ token: f.resets[1].token, password: PASSWORD }), INVALID_RESET);
     assert.equal((await f.service.login({ email: `new-${f.user.email}`, password: NEXT_PASSWORD })).mfaRequired, false);
@@ -78,6 +84,7 @@ export async function authActionLifecycleCases(t: TestContext, store: AuthStore)
   await t.test("authenticated password change invalidates pending reset and email-change links", async () => {
     const f = await fixture();
     await f.service.requestPasswordReset({ email: f.user.email });
+    await f.worker.runOnce();
     await f.service.requestEmailChange(f.actor, { email: `pending-${f.user.email}`, password: PASSWORD });
     assert.deepEqual(await f.service.changePassword(f.actor, { currentPassword: PASSWORD, password: NEXT_PASSWORD }), { status: "changed" });
     await assert.rejects(f.service.confirmPasswordReset({ token: f.resets[0].token, password: PASSWORD }), INVALID_RESET);
@@ -85,6 +92,7 @@ export async function authActionLifecycleCases(t: TestContext, store: AuthStore)
     assert.equal((await store.findUserById(f.user.id))?.email, f.user.email);
     assert.equal((await f.service.login({ email: f.user.email, password: NEXT_PASSWORD })).mfaRequired, false);
     await f.service.requestPasswordReset({ email: f.user.email });
+    await f.worker.runOnce();
     assert.deepEqual(await f.service.confirmPasswordReset({ token: f.resets[1].token, password: PASSWORD }), { status: "reset" });
   });
 
@@ -92,7 +100,9 @@ export async function authActionLifecycleCases(t: TestContext, store: AuthStore)
     const f = await fixture();
     await f.service.requestEmailChange(f.actor, { email: `pending-${f.user.email}`, password: PASSWORD });
     await f.service.requestPasswordReset({ email: f.user.email });
+    await f.worker.runOnce();
     await f.service.requestPasswordReset({ email: f.user.email });
+    await f.worker.runOnce();
     await assert.rejects(f.service.confirmPasswordReset({ token: "invalid-reset-token".repeat(3), password: NEXT_PASSWORD }), INVALID_RESET);
     assert.deepEqual(await f.service.confirmPasswordReset({ token: f.resets[0].token, password: NEXT_PASSWORD }), { status: "reset" });
     for (const reset of f.resets) {
@@ -103,6 +113,7 @@ export async function authActionLifecycleCases(t: TestContext, store: AuthStore)
     const other = await fixture();
     await other.service.requestEmailChange(other.actor, { email: `valid-${other.user.email}`, password: PASSWORD });
     await other.service.requestPasswordReset({ email: other.user.email });
+    await other.worker.runOnce();
     assert.deepEqual(await other.service.confirmEmailChange({ token: other.changes[0].token }), { status: "changed" });
   });
 
@@ -222,8 +233,10 @@ export async function authActionLifecycleCases(t: TestContext, store: AuthStore)
 
     const other = await fixture();
     await other.service.requestPasswordReset({ email: other.user.email });
+    await other.worker.runOnce();
     other.failures.reset = true;
     assert.deepEqual(await other.service.requestPasswordReset({ email: other.user.email }), { status: "pending" });
+    await other.worker.runOnce();
     assert.deepEqual(await other.service.confirmPasswordReset({ token: other.resets[0].token, password: NEXT_PASSWORD }), { status: "reset" });
     assert.equal(await verifyPassword((await store.findUserByEmailWithPassword(other.user.email))?.passwordHash ?? "", NEXT_PASSWORD), true);
   });

@@ -315,3 +315,38 @@ function notification(token: string, email = "user@example.com"): AuthActionNoti
     expiresAt: new Date("2026-01-01T01:00:00.000Z"),
   };
 }
+
+test("queued SMTP cancellation closes only its isolated transport", async () => {
+  const controller = new AbortController();
+  let isolatedClosed = 0;
+  let synchronousSends = 0;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  const sink = new SmtpAuthNotificationSink({
+    appBaseUrl: "https://skills.example",
+    from: "noreply@example.test",
+    transporter: { async sendMail() { synchronousSends += 1; return { messageId: "sync" }; } },
+    createIsolatedTransporter: () => ({
+      async sendMail() { await held; return { messageId: "queued" }; },
+      close() { isolatedClosed += 1; },
+    }),
+  });
+  const running = sink.sendPasswordReset({ ...notification("queued-token"), signal: controller.signal });
+  controller.abort();
+  assert.equal(isolatedClosed, 1);
+  await sink.sendRegistrationInvitation(notification("invitation-token"));
+  assert.equal(synchronousSends, 1);
+  release(); await running;
+  assert.equal(isolatedClosed, 2);
+});
+
+test("Resend forwards queued delivery cancellation", async () => {
+  const controller = new AbortController();
+  let signal: AbortSignal | undefined;
+  const sink = new ResendAuthNotificationSink({
+    appBaseUrl: "https://skills.example", from: "noreply@example.test",
+    client: { async send(_message, options) { signal = options?.signal; return { data: { id: "queued" }, error: null, headers: null }; } },
+  });
+  await sink.sendPasswordReset({ ...notification("queued-token"), signal: controller.signal });
+  assert.equal(signal, controller.signal);
+});
