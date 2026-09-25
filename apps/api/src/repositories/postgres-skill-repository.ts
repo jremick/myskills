@@ -3,6 +3,7 @@ import {
   AppError,
   assertValidOrganizationPolicyV1,
   evaluateOrganizationShare,
+  selectDefaultSkillRelease,
   type OrganizationMembershipRole,
   type OrganizationPolicyV1,
   type OrganizationStatus,
@@ -330,21 +331,8 @@ export class PostgresSkillRepository implements SkillRepository {
         lifecycleStatus: skills.lifecycleStatus,
         visibility: skills.visibility,
         ownerUserId: skills.ownerUserId,
-        latestVersion: skillVersions.version,
         reviewStatus: skillVersions.reviewStatus,
         securityStatus: skillVersions.securityStatus,
-        platforms: sql<SkillPlatformVariant[]>`
-          coalesce(
-            json_agg(
-              json_build_object(
-                'name', ${skillPlatformVariants.name},
-                'installTarget', ${skillPlatformVariants.installTarget},
-                'status', ${skillPlatformVariants.status}
-              )
-            ) filter (where ${skillPlatformVariants.id} is not null),
-            '[]'::json
-          )
-        `,
         tags: sql<string[]>`
           coalesce(
             array_agg(distinct ${skillTags.tag}) filter (where ${skillTags.tag} is not null),
@@ -369,7 +357,6 @@ export class PostgresSkillRepository implements SkillRepository {
       .from(skills)
       .innerJoin(skillVersions, eq(skillVersions.skillId, skills.id))
       .innerJoin(skillArtifacts, eq(skillArtifacts.skillVersionId, skillVersions.id))
-      .leftJoin(skillPlatformVariants, eq(skillPlatformVariants.skillVersionId, skillVersions.id))
       .leftJoin(skillTags, eq(skillTags.skillId, skills.id))
       .where(where)
       .groupBy(
@@ -389,16 +376,45 @@ export class PostgresSkillRepository implements SkillRepository {
       .orderBy(sql`${skills.slug} collate "C"`, sql`${skillVersions.createdAt} desc`, sql`${skillVersions.id} desc`)
       .limit(limit);
 
-    return rows.map((row) => ({
+    if (rows.length === 0) return [];
+    // Page skills before reading their release histories so a prolific skill
+    // cannot consume the page. Visibility is rechecked in the second query.
+    const releases = await this.db.select({
+      id: skillVersions.id,
+      skillId: skillVersions.skillId,
+      version: skillVersions.version,
+      lifecycleStatus: skillVersions.lifecycleStatus,
+    }).from(skills)
+      .innerJoin(skillVersions, eq(skillVersions.skillId, skills.id))
+      .innerJoin(skillArtifacts, eq(skillArtifacts.skillVersionId, skillVersions.id))
+      .where(and(where, inArray(skills.id, rows.map((row) => row.id))))
+      .orderBy(sql`${skillVersions.createdAt} desc`, sql`${skillVersions.id} desc`);
+    const releasesBySkill = new Map<string, typeof releases>();
+    for (const release of releases) {
+      const history = releasesBySkill.get(release.skillId) ?? [];
+      history.push(release);
+      releasesBySkill.set(release.skillId, history);
+    }
+    const defaults = new Map(rows.map((row) => [row.id, selectDefaultSkillRelease(releasesBySkill.get(row.id) ?? [])]));
+    const defaultIds = [...defaults.values()].flatMap((release) => release ? [release.id] : []);
+    const platforms = defaultIds.length === 0 ? [] : await this.db.select({
+      skillVersionId: skillPlatformVariants.skillVersionId,
+      name: skillPlatformVariants.name,
+      installTarget: skillPlatformVariants.installTarget,
+      status: skillPlatformVariants.status,
+    }).from(skillPlatformVariants).where(inArray(skillPlatformVariants.skillVersionId, defaultIds));
+
+    return rows.filter((row) => releasesBySkill.has(row.id)).map((row) => ({
       slug: row.slug,
       title: row.title,
       summary: row.summary,
       lifecycleStatus: row.lifecycleStatus,
       visibility: row.visibility,
-      latestVersion: row.latestVersion,
+      latestVersion: defaults.get(row.id)?.version ?? null,
       reviewStatus: row.reviewStatus,
       securityStatus: row.securityStatus,
-      platforms: dedupePlatforms(row.platforms),
+      platforms: dedupePlatforms(platforms.filter((platform) => platform.skillVersionId === defaults.get(row.id)?.id)
+        .map(({ name, installTarget, status }) => ({ name, installTarget, status }))),
       tags: row.tags,
       access: actorId
         ? {

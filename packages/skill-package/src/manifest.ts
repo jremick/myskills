@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseSemanticVersion } from "@myskills-app/core";
 
 export const skillSlugSchema = z
   .string()
@@ -23,7 +24,7 @@ export const skillManifestSchema = z.object({
   name: skillSlugSchema,
   title: z.string().min(1).max(120),
   summary: z.string().min(1).max(500),
-  version: z.string().regex(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/, "Use semantic versioning."),
+  version: z.string().refine((value) => parseSemanticVersion(value) !== null, "Use semantic versioning."),
   license: z.string().min(1).max(80),
   visibility: z.enum(["public", "authenticated", "organization", "team", "private", "explicit-users"]).default("private"),
   platforms: z.array(platformVariantSchema).min(1),
@@ -34,4 +35,15 @@ export type SkillManifest = z.infer<typeof skillManifestSchema>;
 
 export function parseSkillManifest(input: unknown): SkillManifest {
   return skillManifestSchema.parse(input);
+}
+
+// Decode immutable artifacts created before canonical SemVer intake was enforced.
+// This reader must not be used to validate a new submission.
+const storedSkillManifestSchema = skillManifestSchema.extend({
+  version: z.string().refine((value) => parseSemanticVersion(value) !== null
+    || /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(value), "Use semantic versioning."),
+});
+
+export function parseStoredSkillManifest(input: unknown): SkillManifest {
+  return storedSkillManifestSchema.parse(input);
 }

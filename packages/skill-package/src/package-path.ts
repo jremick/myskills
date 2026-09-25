@@ -3,7 +3,7 @@ import { lstat, open, opendir, realpath, type FileHandle } from "node:fs/promise
 import path from "node:path";
 import { TextDecoder } from "node:util";
 import yauzl, { type Entry, type ZipFile } from "yauzl";
-import { parseSkillManifest, type SkillManifest } from "./manifest.js";
+import { parseSkillManifest, parseStoredSkillManifest, type SkillManifest } from "./manifest.js";
 import { scanTextForPackageRisks, type ScanFinding } from "./scan.js";
 
 export const DEFAULT_MANIFEST_NAMES = ["skill.json", "skill-manifest.json", "ai-skill.json"] as const;
@@ -101,12 +101,14 @@ export async function readPackageFilesFromPath(inputPath: string): Promise<Packa
         return await readZipPackageFiles(await readBoundedFile(handle, expected, MAX_PACKAGE_ARCHIVE_BYTES, path.basename(rootPath), true));
       }
       const relativePath = normalizePackageFilePath(path.basename(rootPath));
+      validatePortableFilePaths([{ path: relativePath }]);
       const raw = await readBoundedFile(handle, expected, MAX_PACKAGE_TEXT_BYTES, relativePath);
       return [{ path: relativePath, content: decodePackageText(raw, relativePath) }];
     }
     const files: PackageInputFile[] = [];
     const budget = { entries: 0, bytes: 0 };
     await readDirectorySnapshot(rootPath, "", handle, expected, files, budget);
+    validatePortableFilePaths(files);
     return files.sort((a, b) => a.path.localeCompare(b.path));
   } finally {
     await handle.close();
@@ -321,6 +323,7 @@ export function scanPackageFiles(files: PackageInputFile[]): PackageScanResult {
     }
   }
 
+  validatePortableFilePaths(files);
   return {
     rootPath: "package-payload",
     filesScanned: files.length,
@@ -330,6 +333,18 @@ export function scanPackageFiles(files: PackageInputFile[]): PackageScanResult {
 }
 
 export function loadSkillManifestFromPackageFiles(files: PackageInputFile[]): SkillManifest {
+  return manifestFromPackageFiles(files, parseSkillManifest);
+}
+
+/** Read already-stored artifacts without imposing new-submission version rules. */
+export function loadStoredSkillManifestFromPackageFiles(files: PackageInputFile[]): SkillManifest {
+  return manifestFromPackageFiles(files, parseStoredSkillManifest);
+}
+
+function manifestFromPackageFiles(
+  files: PackageInputFile[],
+  parseManifest: (input: unknown) => SkillManifest,
+): SkillManifest {
   const manifests: Array<{ path: string; manifest: SkillManifest }> = [];
   const seen = new Set<string>();
 
@@ -348,7 +363,7 @@ export function loadSkillManifestFromPackageFiles(files: PackageInputFile[]): Sk
     try {
       manifests.push({
         path: relativePath,
-        manifest: parseSkillManifest(JSON.parse(file.content)),
+        manifest: parseManifest(JSON.parse(file.content)),
       });
     } catch {
       throw new PackageManifestFileError("INVALID_PACKAGE_MANIFEST", `Package manifest file is invalid: ${relativePath}`);
@@ -368,6 +383,39 @@ export function loadSkillManifestFromPackageFiles(files: PackageInputFile[]): Sk
     );
   }
   return manifests[0].manifest;
+}
+
+/** Supported install filesystems share case-insensitive, Unicode-normalized names. */
+export function validatePortableFilePaths(files: readonly { path: string }[]): void {
+  const paths = new Set<string>();
+  const spellings = new Map<string, string>();
+  for (const file of files) {
+    const normalized = normalizePackageFilePath(file.path);
+    const folded = normalized.normalize("NFC").toLowerCase();
+    if (paths.has(folded)) throw new Error("Package has paths that collide on a supported filesystem.");
+    const components = normalized.split("/");
+    for (let index = 0; index < components.length; index += 1) {
+      const component = components[index];
+      if (!component || /[<>:"|?*\u0000-\u001f\u007f-\u009f]/u.test(component) || /[. ]$/.test(component)
+        || /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(component)) {
+        throw new Error("Package contains a non-portable filename.");
+      }
+      const prefix = components.slice(0, index + 1).join("/");
+      const key = prefix.normalize("NFC").toLowerCase();
+      if (spellings.has(key) && spellings.get(key) !== prefix) {
+        throw new Error("Package has paths that collide on a supported filesystem.");
+      }
+      spellings.set(key, prefix);
+    }
+    paths.add(folded);
+  }
+  for (const file of paths) {
+    const components = file.split("/");
+    while (components.length > 1) {
+      components.pop();
+      if (paths.has(components.join("/"))) throw new Error("Package contains a file/directory collision.");
+    }
+  }
 }
 
 export function normalizePackageFilePath(inputPath: string): string {
@@ -420,6 +468,7 @@ async function readZipPackageFiles(zipInput: Buffer): Promise<PackageInputFile[]
     });
   });
 
+  validatePortableFilePaths(files);
   return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 

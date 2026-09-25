@@ -105,7 +105,7 @@ export interface SkillUpdateEvaluation {
 
 export function parseSemanticVersion(input: string): SemanticVersion | null {
   const match = semanticVersionPattern.exec(input);
-  if (!match) return null;
+  if (!match || match[0].length !== input.length) return null;
   const prerelease = match[4]?.split(".") ?? [];
   if (prerelease.some((identifier) => /^\d+$/.test(identifier) && identifier.length > 1 && identifier.startsWith("0"))) {
     return null;
@@ -168,6 +168,23 @@ export function skillReleaseUpgradeRange<T extends { version: string }>(
     && compareSemanticVersions(release.version, fromVersion) > 0
     && compareSemanticVersions(release.version, toVersion) <= 0)
     .sort((left, right) => compareSemanticVersions(left.version, right.version));
+}
+
+/**
+ * Default discovery selects the highest approved stable SemVer. Invalid legacy
+ * identities remain available by exact address. Equal-precedence build variants
+ * retain the caller's order (the registry supplies newest-created first).
+ */
+export function selectDefaultSkillRelease<T extends { version: string; lifecycleStatus: SkillLifecycleStatus }>(
+  releases: readonly T[],
+): T | undefined {
+  let selected: T | undefined;
+  for (const release of releases) {
+    const version = parseSemanticVersion(release.version);
+    if (release.lifecycleStatus !== "approved" || !version || version.prerelease.length > 0) continue;
+    if (!selected || compareSemanticVersions(release.version, selected.version) > 0) selected = release;
+  }
+  return selected;
 }
 
 export function isPrereleaseVersion(input: string): boolean {

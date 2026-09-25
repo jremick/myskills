@@ -32,3 +32,16 @@ Planned contents:
 - package archive creation
 - checksums
 - install/export bundle metadata
+
+New submissions use the core SemVer 2 parser. It accepts prerelease plus build
+metadata and rejects leading zeros in numeric version and prerelease identifiers.
+`loadStoredSkillManifestFromPackageFiles` retains the previous version grammar
+only for reading immutable historical artifacts; do not use it for new intake.
+
+`validatePortableFilePaths` is the shared intake/install filename contract. Local
+reads, ZIP uploads, and text-package scans reject case-folded or Unicode-normalized
+collisions, inconsistent directory spelling, Windows-reserved names, control
+characters, trailing dots/spaces, and file/directory conflicts. The path normalizer
+continues to enforce traversal safety separately. Historical API bundle downloads
+retain their original bytes and filenames; filesystem extraction still requires
+portable paths. No filename, release identity, or artifact hash is rewritten.

@@ -6,6 +6,7 @@ import {
   isPrereleaseVersion,
   parseSemanticVersion,
   parseSkillReleaseMetadata,
+  selectDefaultSkillRelease,
   skillReleaseUpdateBlockers,
   skillReleaseUpgradeRange,
   type SkillReleaseUpdateCandidate,
@@ -14,6 +15,7 @@ import {
 test("semantic version parsing and precedence follow SemVer 2", () => {
   assert.equal(parseSemanticVersion("1.0.0-01"), null);
   assert.equal(parseSemanticVersion("01.0.0"), null);
+  assert.equal(parseSemanticVersion("1.0.0\n"), null);
   assert.equal(isPrereleaseVersion("1.0.0-rc.1"), true);
   assert.equal(compareSemanticVersions("1.0.0+build.1", "1.0.0+build.2"), 0);
   const ordered = [
@@ -373,3 +375,16 @@ function release(
 function digest(value: string): string {
   return value.padEnd(64, "0").slice(0, 64);
 }
+
+test("default discovery ignores backport creation order, prereleases, deprecated and legacy invalid versions", () => {
+  const releases = [
+    release("1.9.9"),
+    { ...release("4.0.0"), lifecycleStatus: "deprecated" as const },
+    release("3.0.0-rc.1"),
+    release("05.0.0"),
+    release("2.0.0+newer-build"),
+    release("2.0.0+older-build"),
+  ];
+  assert.equal(selectDefaultSkillRelease(releases)?.version, "2.0.0+newer-build");
+  assert.equal(selectDefaultSkillRelease(releases.slice(1, 4)), undefined);
+});

@@ -1,7 +1,7 @@
 import { and, eq, ilike, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { AppError, type SharingSettings, type SkillLifecycleStatus } from "@myskills-app/core";
 import {
-  loadSkillManifestFromPackageFiles,
+  loadStoredSkillManifestFromPackageFiles,
   PackageManifestFileError,
 } from "@myskills-app/skill-package";
 import { assertArtifactBodyMatchesMetadata, parseArtifactPayload, readArtifactPayload } from "../artifacts/package-payload.js";
@@ -99,6 +99,8 @@ export class PostgresSubmissionStore implements SubmissionStore {
       if (input.manifest.visibility === "organization" && !sharing.organizationVisibilityEnabled) {
         throw new AppError("Organization sharing is disabled for this instance.", "ORGANIZATION_SHARING_DISABLED", 403);
       }
+      // Serialize both first submissions and later versions before duplicate lookup.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`submission:${input.manifest.name}`}, 0))`);
       const [existingSkill] = await tx
         .select()
         .from(skills)
@@ -107,6 +109,10 @@ export class PostgresSubmissionStore implements SubmissionStore {
 
       if (existingSkill?.ownerUserId && existingSkill.ownerUserId !== input.actor.id) {
         throw new AppError("Package slug is unavailable.", "PACKAGE_SLUG_UNAVAILABLE", 409);
+      }
+
+      if (existingSkill && existingSkill.visibility !== input.manifest.visibility) {
+        throw new AppError("Package visibility must match the skill's current sharing setting.", "PACKAGE_VISIBILITY_MISMATCH", 409);
       }
 
       const skill = existingSkill ?? (await tx
@@ -2315,7 +2321,7 @@ function publicRelease(row: PublicReleaseRow): PublicReleaseMetadata {
 function manifestFromPayload(input: unknown) {
   const payload = parseArtifactPayload(input);
   try {
-    return loadSkillManifestFromPackageFiles(payload.files);
+    return loadStoredSkillManifestFromPackageFiles(payload.files);
   } catch (error) {
     if (error instanceof PackageManifestFileError) {
       throw new AppError(error.message, error.code, 422);

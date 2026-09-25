@@ -1,6 +1,6 @@
 import { parseSkillPageQuery, searchVisibleSkillPage } from "./repositories/skill-pagination.js";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyServerOptions } from "fastify";
-import { AppError, createArchitectureDiagramArtifact, parseSkillReleaseMetadata, type ArchitecturePatternMigrationMapping, type ArchitectureSpecV1, type SharingSettings, type SkillReleaseMetadata, type SkillRepository, type VisibilityScope } from "@myskills-app/core";
+import { AppError, createArchitectureDiagramArtifact, parseSemanticVersion, parseSkillReleaseMetadata, type ArchitecturePatternMigrationMapping, type ArchitectureSpecV1, type SharingSettings, type SkillReleaseMetadata, type SkillRepository, type VisibilityScope } from "@myskills-app/core";
 import {
   MAX_PACKAGE_ARCHIVE_BYTES,
   MAX_PACKAGE_FILES,
@@ -4107,7 +4107,7 @@ function parseReleaseParams(input: unknown): { slug: string; version: string } {
   const params = input && typeof input === "object" ? input as Record<string, unknown> : {};
   const slug = parseSlugParam(params);
   const version = requiredString(params.version, "version");
-  if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)) {
+  if (!parseSemanticVersion(version) && !/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)) {
     throw new AppError("Valid release version is required.", "INVALID_RELEASE_VERSION", 400);
   }
   return { slug, version };

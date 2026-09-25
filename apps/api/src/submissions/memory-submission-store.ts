@@ -10,7 +10,7 @@ import {
   type SkillLifecycleStatus,
 } from "@myskills-app/core";
 import {
-  loadSkillManifestFromPackageFiles,
+  loadStoredSkillManifestFromPackageFiles,
   PackageManifestFileError,
   type SkillManifest,
 } from "@myskills-app/skill-package";
@@ -287,6 +287,9 @@ export class MemorySubmissionStore implements SubmissionStore {
     const existing = this.findSubmissionsBySlug(input.manifest.name)[0];
     if (existing && existing.ownerUserId !== input.actor.id) {
       throw new AppError("Package slug is unavailable.", "PACKAGE_SLUG_UNAVAILABLE", 409);
+    }
+    if (existing && existing.visibility !== input.manifest.visibility) {
+      throw new AppError("Package visibility must match the skill's current sharing setting.", "PACKAGE_VISIBILITY_MISMATCH", 409);
     }
     if (this.submissions.has(key)) {
       throw new AppError("Package version already exists.", "PACKAGE_VERSION_EXISTS", 409);
@@ -1242,7 +1245,7 @@ function assertArtifactManifestMatchesSubmission(submission: StoredSubmission): 
 
 function manifestFromArtifactPayload(input: StoredSubmission["artifact"]["payload"]): SkillManifest {
   try {
-    return loadSkillManifestFromPackageFiles(input.files);
+    return loadStoredSkillManifestFromPackageFiles(input.files);
   } catch (error) {
     if (error instanceof PackageManifestFileError) {
       throw new AppError(error.message, error.code, 422);
