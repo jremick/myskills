@@ -6,7 +6,7 @@ export function nativeFixture(input: { instructions?: string; version?: string; 
   const version = input.version ?? "1.0.0+build.4";
   const files = [
     { path: "skill.json", content: JSON.stringify({ name: "native-test", title: "Native test", summary: "Test native delivery", version, license: "MIT", platforms: [{ name: "codex", install_target: "codex-skill", status: "supported" }] }) },
-    { path: "SKILL.md", content: input.instructions ?? "\uFEFF---\nname: author-label\ndescription: Read café notes\nlicense: MIT\nmetadata:\n  count: 2\n  enabled: true\n---\nRead references/café.md only when needed.\n" },
+    { path: "SKILL.md", content: input.instructions ?? "\uFEFF---\nname: author-label\ndescription: Read café notes\nlicense: MIT\nmetadata:\n  count: '2'\n  enabled: 'true'\n---\nRead references/café.md only when needed.\n" },
     { path: "references/café.md", content: "Résumé — 你好\n" },
     ...(input.extra ?? []),
   ];

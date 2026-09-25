@@ -206,7 +206,14 @@ function readFrontmatter(content: string): NativeSkill["frontmatter"] {
   check(parsed, 0);
   // Validate the required fields without rebuilding the mapping: every authored
   // field, including unusual JSON property names, must remain identical.
-  z.object({ name: skillSlugSchema, description: z.string().min(1).max(1024).refine((value) => value.trim().length > 0) }).parse(parsed);
+  z.object({
+    name: skillSlugSchema,
+    description: z.string().min(1).max(1024).refine((value) => value.trim().length > 0),
+    license: z.string().optional(),
+    compatibility: z.string().min(1).max(500).optional(),
+    metadata: z.record(z.string(), z.string()).optional(),
+    "allowed-tools": z.string().optional(),
+  }).parse(parsed);
   return parsed as NativeSkill["frontmatter"];
 }
 

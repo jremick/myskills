@@ -58,7 +58,12 @@ an exact approved release, including a known URI omitted from current discovery.
 Each entry includes all parsed YAML frontmatter fields and the complete package
 file manifest with SHA-256 digests and byte lengths. YAML duplicate keys, aliases,
 custom tags, complex keys and non-JSON values fail closed. Frontmatter is limited
-to 32 KiB, 20 levels and 4,096 values. Package limits retain the registry's 500
+to 32 KiB, 20 levels and 4,096 values. Known optional fields follow the Agent Skills
+format: metadata maps string keys to string values, compatibility is a 1–500
+character string, and license and allowed-tools are strings. Unknown reserved
+`io.modelcontextprotocol/` metadata is preserved without interpretation; the
+current official conformance tool reports it as an advisory warning. The adapter
+does not grant permissions from allowed-tools. Package limits retain the registry's 500
 text files and 1 MiB total UTF-8 content; native delivery currently supports text
 packages only. BOM and non-ASCII bytes remain unchanged in resources and digests.
 

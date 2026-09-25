@@ -21,7 +21,7 @@ test("Skills return complete private manifests and preserve BOM, YAML fields and
   assert.equal(list.ttlMs, 0);
   assert.equal(list.skills.length, 1);
   const skill = list.skills[0];
-  assert.deepEqual(skill.frontmatter, { name: "author-label", description: "Read café notes", license: "MIT", metadata: { count: 2, enabled: true } });
+  assert.deepEqual(skill.frontmatter, { name: "author-label", description: "Read café notes", license: "MIT", metadata: { count: "2", enabled: "true" } });
   assert.match(skill.uri, /\/native-test\/1\.0\.0%2Bbuild\.4\/[a-f0-9]{64}\/author-label\/SKILL.md$/);
   assert.equal(skill.resources.length, fixture.files.length);
   assert.equal(fixture.calls.filter((call) => call.url.endsWith("/bundle?platform=codex")).length, 1);
@@ -63,6 +63,16 @@ test("Frontmatter preserves authored JSON property names without granting protot
   assert.deepEqual(JSON.parse(JSON.stringify(skill.frontmatter)), JSON.parse('{"name":"native-test","description":"Test","__proto__":{"injected":true},"constructor":"authored-label"}'));
 });
 
+test("Valid optional frontmatter is preserved, including reserved metadata with no adapter semantics", async () => {
+  const fixture = nativeFixture({ instructions: "---\nname: native-test\ndescription: Test\nlicense: MIT\ncompatibility: Requires Node.js\nallowed-tools: Read Bash(git:*)\nmetadata:\n  io.modelcontextprotocol/future: ignored\n  author: Example\ncustom-field:\n  enabled: true\n---\nInstructions\n" });
+  const skill = (await createNativeSkillsHandlers({ token, fetchImpl: fixture.fetchImpl }).list()).skills[0];
+  assert.deepEqual(skill.frontmatter, {
+    name: "native-test", description: "Test", license: "MIT", compatibility: "Requires Node.js",
+    "allowed-tools": "Read Bash(git:*)", metadata: { "io.modelcontextprotocol/future": "ignored", author: "Example" },
+    "custom-field": { enabled: true },
+  });
+});
+
 test("Registry origins isolate identical immutable packages", async () => {
   const fixture = nativeFixture();
   const first = createNativeSkillsHandlers({ token, fetchImpl: fixture.fetchImpl });
@@ -93,6 +103,13 @@ for (const [label, instructions] of [
   ["invalid name", "---\nname: ../outside\ndescription: A description\n---\n"],
   ["nonfinite", "---\nname: native-test\ndescription: Description\nmetadata:\n  bad: .inf\n---\n"],
   ["oversized frontmatter", `---\nname: native-test\ndescription: Short\nmetadata:\n  text: ${"x".repeat(33 * 1024)}\n---\n`],
+  ["numeric metadata", "---\nname: native-test\ndescription: Test\nmetadata:\n  version: 2\n---\n"],
+  ["nested metadata", "---\nname: native-test\ndescription: Test\nmetadata:\n  nested: { enabled: 'true' }\n---\n"],
+  ["metadata array", "---\nname: native-test\ndescription: Test\nmetadata: [one, two]\n---\n"],
+  ["nonstring license", "---\nname: native-test\ndescription: Test\nlicense: 2\n---\n"],
+  ["empty compatibility", "---\nname: native-test\ndescription: Test\ncompatibility: ''\n---\n"],
+  ["oversized compatibility", `---\nname: native-test\ndescription: Test\ncompatibility: ${"x".repeat(501)}\n---\n`],
+  ["allowed tools array", "---\nname: native-test\ndescription: Test\nallowed-tools: [Read, Write]\n---\n"],
 ] as const) {
   test(`Native discovery excludes ${label} frontmatter`, async () => {
     const fixture = nativeFixture({ instructions });
