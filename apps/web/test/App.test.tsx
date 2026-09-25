@@ -608,7 +608,7 @@ for (const releaseKind of ["prerelease", "deprecated"] as const) {
     const fixture = releaseHistoryFixture();
     const exact: ReleaseMetadata = releaseKind === "deprecated"
       ? fixture.older
-      : { ...fixture.latest, version: "1.0.0-beta.1" };
+      : { ...fixture.latest, version: "1.0.0-rc.1+build.2" };
     const skill: PublicSkill = { ...fixture.skill, latestVersion: null, platforms: [] };
     const client = mockClient({
       skills: [skill],
@@ -621,6 +621,7 @@ for (const releaseKind of ["prerelease", "deprecated"] as const) {
     fireEvent.change(view.getByRole("combobox", { name: "Release version" }), { target: { value: exact.version } });
     await view.findByText(exact.releaseNotes!);
     assert.deepEqual(client.releaseCalls, [`${skill.slug}@${exact.version}`]);
+    assert.ok(document.querySelector(".command-panel")?.textContent?.includes(`--version ${exact.version}`));
   });
 }
 

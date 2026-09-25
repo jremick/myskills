@@ -381,7 +381,7 @@ async function insertLineage(pool: ReturnType<typeof createPgPool>): Promise<voi
        target_architecture_id, target_revision_id, target_pattern_id, target_revision_digest,
        mapping_status, mapping, diff, migration_digest, diff_digest, actor_user_id, idempotency_key
      ) VALUES ($1, $2, $3, 'flat', $4, $5, $6, 'domain-router', $7,
-       'fallback', '{}'::jsonb, '{"addedEdgeCount":1,"removedEdgeCount":0,"rewrittenBindingCount":0}'::jsonb,
+       'fallback', '{}'::jsonb, '{"preservedSkillRefIds":[],"preservedLeafNodeIds":[],"addedRouterNodeIds":[],"droppedRouterNodeIds":[],"addedEdgeCount":1,"removedEdgeCount":0,"rewrittenBindingCount":0}'::jsonb,
        $8, $9, $10, 'upgrade-lineage')`,
     [lineageId, architectureId, revisionId, digestA, teamArchitectureId, teamRevisionId, digestB, digestC, digestD, ownerId],
   );
