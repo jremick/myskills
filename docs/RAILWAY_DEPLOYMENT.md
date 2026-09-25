@@ -4,7 +4,13 @@ Version: 0.1.0-beta.7
 Last updated: 2026-09-25
 
 This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.
-The operational beta candidate is tracked in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
+The current beta.7 candidate is tracked in [Beta.7 Release Delivery](BETA7_RELEASE_DELIVERY.md).
+The historical operational beta evidence remains in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
+Beta.7 staging API `fabeef83-d999-4c46-aac8-1b026a88e52f` and web
+`af63dfdc-54a0-40fe-ab6c-a48d3f6866ce` both succeeded from candidate
+`6912d3f9490c6f002431f3064e8a9db417df3d7f`; direct, web, and same-origin
+version readbacks matched that revision. Beta.7 has not been promoted to
+production.
 Final beta.5 application source is `d8c7179789bdbf0930fe0e496081377f6c63cd20`,
 including the HTML cache fix from [PR #57](https://github.com/jremick/myskills/pull/57).
 Required main CI, final staging deployment, and its complete acceptance journey
@@ -13,6 +19,22 @@ behavior, and log review passed. The operational beta is live with the limits
 recorded in the delivery ledger.
 A later documentation-only commit does not change the deployed application's
 embedded source revision.
+
+## Beta.7 staging status
+
+The beta.7 staging readback on 25 September 2026 returned HTTP 200 for API
+readiness, API and web version identity, web health, same-origin readiness,
+capabilities, and the public root and registry pages. The API, web, and
+same-origin version responses all reported version `0.1.0-beta.7` and revision
+`6912d3f9490c6f002431f3064e8a9db417df3d7f`.
+
+Public catalogue rendering, a version selector showing one visible version,
+literal package text rendering, and Windows CLI `doctor`, `export`, `validate`,
+and `scan` checks passed. Historical-version selection was not tested.
+Anonymous `/v1/mcp/session` returned the expected `401 AUTHENTICATION_REQUIRED`
+response. Owner-authenticated browser acceptance and the staged fixture journey
+remain pending. The beta.5 production deployments and source listed below remain
+the current production baseline.
 
 ## Railway Project
 
