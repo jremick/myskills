@@ -1,7 +1,7 @@
 # Roadmap
 
 Version: 0.1.0-beta.6
-Document revision: 0.3.0
+Document revision: 0.3.1
 Last updated: 2026-09-25
 
 ## Release Tracks
@@ -41,6 +41,8 @@ released, or deployed feature.
 | AUTHOR-1 CLI scaffold | [PR #78](https://github.com/jremick/myskills/pull/78) merged private Codex skill scaffolding after required CI passed. Windows CLI tests, package smoke, lint, shell-guidance tests, and source review passed. | Archive creation, browser drafts, and imports remain separate slices. |
 | MCP-1 protocol prerequisite | [PR #79](https://github.com/jremick/myskills/pull/79) merged modern protocol entrypoints and legacy compatibility after required CI passed. Windows MCP tests, repository checks, image smoke, and security review support the adapter change. | Native Skills content handlers, conformance and real-host loading remain a following slice. |
 | Public release history | [PR #80](https://github.com/jremick/myskills/pull/80) merged public history browsing and exact-version links after required CI, including browser tests, passed. | Version comparison and further history usability improvements remain open. |
+| Review remediation | Candidate changes cover auth/token delivery, bounded scanning, CLI integrity and recovery, exact release identity, governance and history constraints, review/audit pagination, and UI refresh behavior. Independent Opus review and Windows regression checks are recorded with the delivery evidence. | Complete integrated checks and required GitHub CI before merge. This row does not claim a release or deployment. |
+| HOST-1 startup repair | The candidate passed Windows storage builds/execution on amd64/arm64, object persistence/restore checks, and a fresh production Compose bootstrap/restart proof at `5de0ced`. | Release images, guided setup, public TLS/email configuration, a complete application restore drill, and elapsed-time measurements remain open. See [repair evidence](SELF_HOSTING_INVESTIGATION.md#verified-startup-gaps-and-repairs). |
 
 Container and other resource-heavy verification must be reproducible on a Linux
 Docker engine with the repository's supported Node/npm versions. The linked PRs
@@ -702,9 +704,9 @@ instance, then make upgrades and recovery equally clear.
 
 Planned scope:
 
-- Repair the current Compose startup path: verify anonymously accessible storage
-  artifacts and normal restart after bootstrap credentials are removed. See the
-  [verified startup gaps](SELF_HOSTING_INVESTIGATION.md#verified-startup-gaps).
+- Land the verified Compose startup repairs: anonymously accessible storage
+  builds and normal restart after bootstrap credentials are removed. See the
+  [startup repairs](SELF_HOSTING_INVESTIGATION.md#verified-startup-gaps-and-repairs).
 - Publish verified, versioned container images and a matching Compose release
   bundle so operators can install without a host Node/npm toolchain or source build.
 - Provide a small setup/operations helper with guided inputs, generated protected
