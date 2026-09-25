@@ -221,8 +221,12 @@ test("target registry guides the owner and current architecture context and neve
   assert.match(view.container.textContent ?? "", /myskills codex enroll/);
   assert.equal(document.body.textContent?.includes("secret-store-token"), false);
 
-  fireEvent.click(await view.findByRole("button", { name: "Grant consent" }));
+  // Registration replaces the detail controls; act on the refreshed target.
+  await view.findByRole("heading", { name: "Work Codex" });
+  await view.findByText("1 skills · 0 config findings · prompt detected: no");
+  fireEvent.click(view.getByRole("button", { name: "Grant consent" }));
   await waitFor(() => assert.deepEqual(consent, ["grant"]));
+  await view.findByText("consent: granted");
   await view.findByRole("button", { name: "Update health" });
   fireEvent.change(view.getByLabelText("Target health status"), { target: { value: "healthy" } });
   fireEvent.click(view.getByRole("button", { name: "Update health" }));
