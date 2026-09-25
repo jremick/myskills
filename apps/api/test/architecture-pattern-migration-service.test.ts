@@ -499,3 +499,26 @@ test("source pattern identity remains immutable across a migration request", asy
     /Domain-router patterns contain one router/,
   );
 });
+
+for (const ownerType of ["user", "team"] as const) {
+  test(`memory migrations share the ${ownerType} architecture quota and replay at the limit`, async () => {
+    const actor = { id: ownerType === "team" ? teamOwnerId : ownerId };
+    const owner = { type: ownerType, id: ownerType === "team" ? teamId : ownerId };
+    const fixtureValue = await fixture({ owner, actor });
+    for (let index = 1; index < 24; index += 1) {
+      await fixtureValue.architectureStore.createArchitecture({ actor, owner, name: `Existing ${index}`, patternId: "flat", description: "" });
+    }
+    const input = createInput(fixtureValue, { actor });
+    const results = await Promise.allSettled([
+      fixtureValue.service.create(input),
+      fixtureValue.service.create({ ...input, idempotencyKey: "quota-racer" }),
+    ]);
+    assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+    const rejected = results.find((result) => result.status === "rejected");
+    assert.ok(rejected && rejected.status === "rejected" && errorWithCode("ARCHITECTURE_QUOTA_EXCEEDED")(rejected.reason));
+    const successfulInput = results[0].status === "fulfilled" ? input : { ...input, idempotencyKey: "quota-racer" };
+    assert.equal((await fixtureValue.service.create(successfulInput)).replayed, true);
+    assert.equal(fixtureValue.migrationStore.migrationCount, 1);
+    await assert.rejects(fixtureValue.architectureStore.createArchitecture({ actor, owner, name: "Over quota", patternId: "flat", description: "" }), errorWithCode("ARCHITECTURE_QUOTA_EXCEEDED"));
+  });
+}

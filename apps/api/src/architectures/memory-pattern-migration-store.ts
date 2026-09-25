@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { memoryCreationQuota } from "./memory-creation-quota.js";
 import {
   AppError,
   architectureDigest,
@@ -169,6 +170,7 @@ export class MemoryPatternMigrationStore implements ArchitecturePatternMigration
       lineage: structuredClone(authoritativeInput.lineage),
       intentDigest: authoritativeInput.intentDigest,
     };
+    memoryCreationQuota(this.sourceStore).claim(stored.targetArchitecture.owner, stored.targetArchitecture.id);
     this.migrations.set(stored.lineage.targetArchitectureId, stored);
     this.byIdempotency.set(key, stored);
     this.targetRevisions.set(stored.lineage.targetArchitectureId, [structuredClone(stored.targetRevision)]);
@@ -366,6 +368,8 @@ export const MemoryArchitecturePatternMigrationStore = MemoryPatternMigrationSto
 export class MemoryPatternMigrationArchitectureAggregate implements ArchitecturePatternMigrationArchitectureAggregate {
   readonly kind: ArchitectureStore["kind"];
   readonly patternMigrationStore: ArchitecturePatternMigrationStore;
+
+  get creationQuota() { return memoryCreationQuota(this.sourceStore); }
 
   constructor(
     private readonly sourceStore: ArchitectureStore,
