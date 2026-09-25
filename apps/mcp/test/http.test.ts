@@ -2,9 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { request as httpRequest } from "node:http";
 import { connect as connectSocket } from "node:net";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { McpServer } from "@modelcontextprotocol/server";
 import { createAiSkillsMcpHttpServer, withRequestTimeout } from "../src/http.js";
 import type { FetchLike } from "../src/api-client.js";
 
@@ -246,6 +245,8 @@ test("HTTP MCP transport awaits per-request MCP server cleanup", async (t) => {
   }));
 
   assert.equal(response.status, 200);
+  assert.match(response.headers["content-type"] ?? "", /^application\/json/);
+  assert.equal(JSON.parse(response.body).result.protocolVersion, "2025-03-26");
   assert.equal(closeCount, 1);
 });
 
@@ -377,6 +378,115 @@ test("HTTP MCP transport forwards architecture organization context end to end",
   }
 });
 
+test("HTTP MCP transport negotiates modern discovery and preserves the six tools", async (t) => {
+  const server = createAiSkillsMcpHttpServer({
+    fetchImpl: async (url, init) => {
+      assert.equal(init?.headers?.authorization, "Bearer aiss_modern_test");
+      return url.endsWith("/v1/mcp/session")
+        ? jsonResponse(200, mcpSession())
+        : jsonResponse(200, { skills: [publicSkill()] });
+    },
+  });
+  const url = await listen(t, server);
+  const client = new Client({ name: "modern-http-test", version: "1.0.0" }, {
+    versionNegotiation: { mode: { pin: "2026-07-28" } },
+  });
+  const transport = new StreamableHTTPClientTransport(new URL(url), {
+    requestInit: { headers: { authorization: "Bearer aiss_modern_test" } },
+  });
+
+  try {
+    await client.connect(transport);
+    assert.equal(client.getProtocolEra(), "modern");
+    assert.equal(client.getNegotiatedProtocolVersion(), "2026-07-28");
+    assert.equal(client.getServerVersion()?.name, "myskills-app");
+    assert.ok(client.getDiscoverResult());
+    const tools = await client.listTools();
+    assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
+      "get_architecture_projection", "get_install_instructions", "get_skill_info",
+      "list_architecture_patterns", "list_architectures", "search_skills",
+    ]);
+    assert.equal(tools.tools.every((tool) => tool.annotations?.readOnlyHint === true), true);
+    const result = await client.callTool({ name: "search_skills", arguments: { query: "release" } });
+    assert.equal(result.isError, undefined);
+    assert.match(JSON.stringify(result), /release-notes-helper/);
+    assert.equal(JSON.stringify(result).includes("aiss_modern_test"), false);
+  } finally {
+    await client.close();
+  }
+
+  const response = await postModern(url, "tools/list", "aiss_modern_test");
+  assert.equal(response.status, 200);
+  assert.match(response.headers["content-type"] ?? "", /^application\/json/);
+  const body = JSON.parse(response.body);
+  assert.equal(body.result.resultType, "complete");
+  assert.equal(body.result._meta["io.modelcontextprotocol/serverInfo"].name, "myskills-app");
+});
+
+test("HTTP MCP transport rejects malformed modern metadata without legacy fallback", async (t) => {
+  const calls: string[] = [];
+  const server = createAiSkillsMcpHttpServer({
+    fetchImpl: async (url) => {
+      calls.push(url);
+      return jsonResponse(200, mcpSession());
+    },
+  });
+  const url = await listen(t, server);
+  const response = await postModern(url, "tools/list", "aiss_modern_test", {}, {
+    "io.modelcontextprotocol/protocolVersion": 20260728,
+  });
+  const body = JSON.parse(response.body);
+
+  assert.equal(response.status, 400);
+  assert.ok(body.error);
+  assert.equal(body.result, undefined);
+  assert.equal(response.body.includes("aiss_modern_test"), false);
+  assert.deepEqual(calls, ["http://localhost:3001/v1/mcp/session"]);
+});
+
+test("HTTP MCP transport authenticates every modern request and isolates simultaneous tokens", async (t) => {
+  const calls: Array<{ url: string; authorization?: string }> = [];
+  const server = createAiSkillsMcpHttpServer({
+    fetchImpl: async (url, init) => {
+      const authorization = init?.headers?.authorization;
+      calls.push({ url, authorization });
+      if (authorization === "Bearer aiss_revoked_test") {
+        return jsonResponse(403, { error: { code: "FORBIDDEN", message: "aiss_revoked_test" } });
+      }
+      if (url.endsWith("/v1/mcp/session")) {
+        return jsonResponse(200, mcpSession());
+      }
+      const query = new URL(url).searchParams.get("q");
+      assert.equal(authorization, `Bearer aiss_${query}_test`);
+      // Overlap upstream work so a shared mutable credential would affect the other request.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      return jsonResponse(200, { skills: [{ ...publicSkill(), slug: `${query}-skill` }] });
+    },
+  });
+  const url = await listen(t, server);
+  const responses = await Promise.all(["first", "second"].map((name) =>
+    postModern(url, "tools/call", `aiss_${name}_test`, {
+      name: "search_skills", arguments: { query: name },
+    }),
+  ));
+  for (const [index, response] of responses.entries()) {
+    const expected = index === 0 ? "first" : "second";
+    const other = index === 0 ? "second" : "first";
+    assert.equal(response.status, 200);
+    assert.match(response.body, new RegExp(`${expected}-skill`));
+    assert.equal(response.body.includes(`${other}-skill`), false);
+    assert.equal(response.body.includes("aiss_"), false);
+  }
+  const denied = await postModern(url, "server/discover", "aiss_revoked_test");
+  assert.equal(denied.status, 403);
+  assert.equal(denied.body.includes("aiss_revoked_test"), false);
+  assert.equal(calls.filter((call) => call.authorization === "Bearer aiss_revoked_test").length, 1);
+  for (const name of ["first", "second"]) {
+    assert.equal(calls.filter((call) => call.authorization === `Bearer aiss_${name}_test`
+      && call.url.endsWith("/v1/mcp/session")).length, 2);
+  }
+});
+
 test("HTTP MCP transport returns health and rejects non-POST MCP methods", async (t) => {
   const server = createAiSkillsMcpHttpServer();
   const url = await listen(t, server);
@@ -389,6 +499,8 @@ test("HTTP MCP transport returns health and rejects non-POST MCP methods", async
   assert.equal(getMcp.status, 405);
   assert.equal(getMcp.headers.get("connection"), "close");
   assert.match(await getMcp.text(), /Method not allowed/);
+  const optionsMcp = await fetch(url, { method: "OPTIONS" });
+  assert.equal(optionsMcp.status, 405);
 });
 
 test("HTTP MCP transport rejects untrusted Host and Origin before registry calls", async (t) => {
@@ -440,6 +552,34 @@ async function postRaw(url: string, headers: Record<string, string>): Promise<{
 }> {
   const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
   return postBody(url, headers, body);
+}
+
+function postModern(
+  url: string,
+  method: string,
+  token: string,
+  params: Record<string, unknown> = {},
+  meta: Record<string, unknown> = {},
+): ReturnType<typeof postRaw> {
+  return postBody(url, {
+    accept: "application/json, text/event-stream",
+    authorization: `Bearer ${token}`,
+    "content-type": "application/json",
+    "mcp-protocol-version": "2026-07-28",
+    "mcp-method": method,
+    ...(typeof params.name === "string" ? { "mcp-name": params.name } : {}),
+  }, JSON.stringify({
+    jsonrpc: "2.0", id: 1, method,
+    params: {
+      ...params,
+      _meta: {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientInfo": { name: "modern-wire-test", version: "1.0.0" },
+        "io.modelcontextprotocol/clientCapabilities": {},
+        ...meta,
+      },
+    },
+  }));
 }
 
 async function postBody(url: string, headers: Record<string, string>, body: string): ReturnType<typeof postRaw> {

@@ -1,8 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
-import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { Client, type JSONRPCMessage, type Transport } from "@modelcontextprotocol/client";
 import { createAiSkillsMcpServer } from "../src/server.js";
 import type { FetchLike } from "../src/api-client.js";
 
