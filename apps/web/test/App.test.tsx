@@ -621,7 +621,7 @@ for (const releaseKind of ["prerelease", "deprecated"] as const) {
     fireEvent.change(view.getByRole("combobox", { name: "Release version" }), { target: { value: exact.version } });
     await view.findByText(exact.releaseNotes!);
     assert.deepEqual(client.releaseCalls, [`${skill.slug}@${exact.version}`]);
-    assert.ok(document.querySelector(".command-panel")?.textContent?.includes(`--version ${exact.version}`));
+    assert.ok(document.querySelector(".command-panel")?.textContent?.includes(`--version '${exact.version}'`));
   });
 }
 
