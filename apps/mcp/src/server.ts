@@ -44,7 +44,7 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
   });
   // Resources are ordinary base-protocol data for older clients too. They are
   // authorized on every read and never activate a skill or execute its files.
-  server.server.setRequestHandler("resources/read", (input, ctx) => skills.read(input, ctx.mcpReq.signal));
+  server.server.setRequestHandler("resources/read", (request, ctx) => skills.read(request.params, ctx.mcpReq.signal));
   server.server.setRequestHandler("resources/list", async () => ({ resources: [], ttlMs: 0, cacheScope: "private" as const }));
 
   server.registerTool(
