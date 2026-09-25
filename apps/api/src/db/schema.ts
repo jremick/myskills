@@ -660,6 +660,10 @@ export const skillArchitecturePatternMigrations = pgTable("skill_architecture_pa
     sql`architecture_pattern_migration_diff_is_safe(${table.diff})`,
   ),
   check(
+    "skill_architecture_pattern_migrations_diff_shape_check",
+    sql`architecture_pattern_migration_diff_has_valid_shape(${table.diff})`,
+  ),
+  check(
     "skill_architecture_pattern_migrations_source_digest_check",
     sql`${table.sourceRevisionDigest} ~ '^[0-9a-f]{64}$'`,
   ),

@@ -3,11 +3,13 @@ import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { architectureTargetCapabilitiesDigest, assertValidArchitectureTargetObservation, defaultSkillUpgradePolicyV1, defaultOrganizationPolicyV1, organizationPolicyDigest, skillUpgradePolicyDigest, targetSkillOperationPlanDigest } from "@myskills-app/core";
+import { architectureSyncPlanDigest, architectureTargetCapabilitiesDigest, assertValidArchitectureTargetObservation, defaultSkillUpgradePolicyV1, defaultOrganizationPolicyV1, organizationPolicyDigest, skillUpgradePolicyDigest, targetSkillOperationPlanDigest } from "@myskills-app/core";
 import { createDb, createPgPool } from "../src/db/client.js";
 import { PostgresTargetSkillOperationStore } from "../src/target-operations/postgres-store.js";
 import { SkillUpgradePolicyService } from "../src/upgrade-policies/service.js";
 import { PostgresSkillUpgradePolicyStore } from "../src/upgrade-policies/postgres-store.js";
+import { ArchitectureSyncService } from "../src/architecture-sync/service.js";
+import { MemoryArchitectureSyncFixtureExecutor } from "../src/architecture-sync/fixture-executor.js";
 import { PostgresArchitectureSyncStore } from "../src/architecture-sync/postgres-store.js";
 import { TargetSkillOperationService } from "../src/target-operations/service.js";
 import { ArchitectureTargetService } from "../src/targets/service.js";
@@ -324,42 +326,90 @@ test("organization upgrade policy requires a current owner at the store and serv
 });
 
 test("companion and architecture sync share a target mutex and monotonic fences in both directions", { timeout: 60_000 }, async (t) => {
+  for (const boundary of ["acquireLease", "claimApply"] as const) await t.test(boundary, async (sub) => {
+    const { pool, db } = await fixture(sub);
+    const runId = randomUUID();
+    await insertSyncRun(pool, runId, boundary === "claimApply" ? architectureSyncPlanDigest([]) : hash);
+    const sync = new PostgresArchitectureSyncStore(db);
+    if (boundary === "claimApply") await syncService(sync).approve({ actor: owner, runId });
+    const acquire = async (input: Parameters<PostgresArchitectureSyncStore["acquireLease"]>[0]) => {
+      if (boundary === "acquireLease") return sync.acquireLease(input);
+      const claim = await sync.claimApply(input);
+      assert.equal(claim.decision, "claimed");
+      assert.ok(claim.run.lease);
+      return claim.run.lease;
+    };
+    const op = operation();
+    const store = new PostgresTargetSkillOperationStore(db);
+    await store.create({ operation: op });
+    const entered = deferred();
+    const gate = deferred();
+    const delayed = new PostgresTargetSkillOperationStore(db, { beforeAuditInsert: async () => { entered.resolve(); await gate.promise; } });
+    const queueClaim = delayed.claim(claim(op));
+    await entered.promise;
+    const syncInput = { runId, targetId: target, targetGeneration: 1, holderId: "sync-worker", now: new Date().toISOString(), leaseSeconds: 60 };
+    const syncAttempt = acquire(syncInput);
+    const rejected = assert.rejects(syncAttempt, code("ARCHITECTURE_SYNC_LEASE_CONFLICT"));
+    gate.resolve();
+    assert.equal((await queueClaim)?.fencingToken, 1);
+    await rejected;
+    // Force the reverse interleaving: sync owns target and waits on its run row.
+    await pool.query("UPDATE target_skill_operations SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE id = $1", [op.id]);
+    const blocker = await pool.connect();
+    await blocker.query("BEGIN");
+    await blocker.query("SELECT id FROM skill_architecture_sync_runs WHERE id = $1 FOR UPDATE", [runId]);
+    const syncPending = acquire({ ...syncInput, now: new Date().toISOString() });
+    try {
+      await waitForTargetLock(pool);
+      const queuePending = store.claim({ ...claim(op), now: later, leaseExpiresAt: new Date(Date.parse(later) + 60_000).toISOString() });
+      await blocker.query("COMMIT");
+      assert.equal((await syncPending).fencingToken, 2);
+      assert.equal(await queuePending, null);
+    } finally { await blocker.query("ROLLBACK"); blocker.release(); }
+    await sync.releaseLease({ runId, targetId: target, fencingToken: 2 });
+    const renewed = await store.claim({ ...claim(op), now: later, leaseExpiresAt: new Date(Date.parse(later) + 60_000).toISOString() });
+    assert.equal(renewed?.fencingToken, 3);
+    assert.equal(await store.advance({ ...claim(op), fencingToken: 1, state: "applying", now: later }), null, "expired fence cannot promote");
+  });
+});
+
+test("sync recovery excludes a concurrent companion claim and advances past its expired fence", { timeout: 60_000 }, async (t) => {
   const { pool, db } = await fixture(t);
   const runId = randomUUID();
-  await insertSyncRun(pool, runId);
+  await insertSyncRun(pool, runId, architectureSyncPlanDigest([]));
   const sync = new PostgresArchitectureSyncStore(db);
+  const service = syncService(sync);
+  await service.approve({ actor: owner, runId });
+  const claimed = await sync.claimApply({ runId, targetId: target, targetGeneration: 1, holderId: "sync-worker", now: new Date().toISOString(), leaseSeconds: 60 });
+  assert.ok(claimed.run.lease);
+  await sync.releaseLease({ runId, targetId: target, fencingToken: claimed.run.lease.fencingToken });
   const op = operation();
   const store = new PostgresTargetSkillOperationStore(db);
   await store.create({ operation: op });
-  const entered = deferred();
-  const gate = deferred();
+  const entered = deferred(); const gate = deferred();
   const delayed = new PostgresTargetSkillOperationStore(db, { beforeAuditInsert: async () => { entered.resolve(); await gate.promise; } });
-  const queueClaim = delayed.claim(claim(op));
+  const pending = delayed.claim(claim(op));
   await entered.promise;
-  const syncInput = { runId, targetId: target, targetGeneration: 1, holderId: "sync-worker", now, leaseSeconds: 60 };
-  const syncAttempt = sync.acquireLease(syncInput);
-  const rejected = assert.rejects(syncAttempt, code("ARCHITECTURE_SYNC_LEASE_CONFLICT"));
+  const recovery = assert.rejects(service.recover({ actor: owner, runId }), code("ARCHITECTURE_SYNC_LEASE_CONFLICT"));
   gate.resolve();
-  assert.equal((await queueClaim)?.fencingToken, 1);
-  await rejected;
-  // Force the reverse interleaving: sync owns target and waits on its run row.
+  assert.equal((await pending)?.fencingToken, 2);
+  await recovery;
+  assert.deepEqual(await sync.getRun(runId), claimed.run);
   await pool.query("UPDATE target_skill_operations SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE id = $1", [op.id]);
-  const blocker = await pool.connect();
-  await blocker.query("BEGIN");
-  await blocker.query("SELECT id FROM skill_architecture_sync_runs WHERE id = $1 FOR UPDATE", [runId]);
-  const syncPending = sync.acquireLease({ ...syncInput, now: new Date().toISOString() });
-  try {
-    await waitForTargetLock(pool);
-    const queuePending = store.claim({ ...claim(op), now: later, leaseExpiresAt: new Date(Date.parse(later) + 60_000).toISOString() });
-    await blocker.query("COMMIT");
-    assert.equal((await syncPending).fencingToken, 2);
-    assert.equal(await queuePending, null);
-  } finally { await blocker.query("ROLLBACK"); blocker.release(); }
-  await sync.releaseLease({ runId, targetId: target, fencingToken: 2 });
-  const renewed = await store.claim({ ...claim(op), now: later, leaseExpiresAt: new Date(Date.parse(later) + 60_000).toISOString() });
-  assert.equal(renewed?.fencingToken, 3);
-  assert.equal(await store.advance({ ...claim(op), fencingToken: 1, state: "applying", now: later }), null, "expired fence cannot promote");
+  const recovered = await service.recover({ actor: owner, runId });
+  assert.equal(recovered.run.state, "queued");
+  assert.equal(recovered.run.lease?.fencingToken, 3);
+  assert.equal(await sync.getCurrentLease(target), null);
 });
+
+function syncService(store: PostgresArchitectureSyncStore) {
+  return new ArchitectureSyncService(store, new MemoryArchitectureSyncFixtureExecutor(), {
+    authorization: { authorize: async () => ({ allowed: true }) },
+    mfa: { verify: async () => ({ allowed: true }) },
+    consent: { check: async () => ({ allowed: true }) },
+    recovery: { read: async () => ({ sourceState: "revalidating", condition: "no-mutation", decision: "retry", nextRunState: "queued", evidenceDigest: hash }) },
+  });
+}
 
 
 test("bounded queue polling reaches work behind more than 100 temporary blockers and wraps", { timeout: 60_000 }, async (t) => {
@@ -569,9 +619,9 @@ async function insertRangeRelease(pool: ReturnType<typeof createPgPool>, version
   await pool.query("INSERT INTO skill_artifacts (skill_version_id,storage_key,sha256,byte_size,content_type) VALUES ($1,$3,$2,123,'application/json')", [release.rows[0].id, hash, `fixture/${version}`]);
   await pool.query("INSERT INTO skill_platform_variants (skill_version_id,name,install_target,status) VALUES ($1,'codex','codex-skill','supported')", [release.rows[0].id]);
 }
-async function insertSyncRun(pool: ReturnType<typeof createPgPool>, id: string) {
+async function insertSyncRun(pool: ReturnType<typeof createPgPool>, id: string, planDigest = hash) {
   await pool.query(`INSERT INTO skill_architecture_sync_runs (id,architecture_id,revision_id,target_id,target_generation,observed_snapshot_id,profile_id,environment_id,actor_user_id,run_kind,request_key,idempotency_key,desired_digest,compiled_digest,observed_digest,plan_digest,created_at,updated_at,status_updated_at)
-    VALUES ($1,$2,$3,$4,1,$5,'default','personal',$6,'sync',($1::uuid)::text,($1::uuid)::text,$7,$7,$7,$7,$8,$8,$8)`, [id, architecture, revision, target, observation, owner, hash, now]);
+    VALUES ($1,$2,$3,$4,1,$5,'default','personal',$6,'sync',($1::uuid)::text,($1::uuid)::text,$7,$7,$7,$9,$8,$8,$8)`, [id, architecture, revision, target, observation, owner, hash, now, planDigest]);
 }
 
 async function waitForTargetLock(pool: ReturnType<typeof createPgPool>) {

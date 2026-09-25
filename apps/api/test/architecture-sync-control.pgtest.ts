@@ -349,6 +349,29 @@ test("baselines, receipts, and recovery evidence are append-only and indexed", {
   }
 });
 
+test("migration 0029 retains sync runs and steps while allowing valid state updates", { timeout: 60_000 }, async (t) => {
+  const pool = await freshPool(t);
+  await seedFixture(pool);
+  await insertRun(pool);
+  await insertStep(pool);
+  const before = (await pool.query("SELECT to_jsonb(r) AS row FROM skill_architecture_sync_runs r WHERE id = $1", [runId])).rows;
+  await pool.query(readFileSync(join(migrationsDir, "0029_architecture_sync_history_retention.sql"), "utf8"));
+  assert.deepEqual((await pool.query("SELECT to_jsonb(r) AS row FROM skill_architecture_sync_runs r WHERE id = $1", [runId])).rows, before);
+  const guards = (await pool.query(`SELECT tgname FROM pg_trigger
+    WHERE NOT tgisinternal AND tgfoid = 'prevent_skill_architecture_sync_history_removal'::regproc ORDER BY tgname`)).rows.map((row) => row.tgname);
+  assert.deepEqual(guards, ["skill_architecture_sync_runs_no_delete", "skill_architecture_sync_runs_no_truncate",
+    "skill_architecture_sync_steps_no_delete", "skill_architecture_sync_steps_no_truncate"]);
+  for (const table of ["skill_architecture_sync_runs", "skill_architecture_sync_steps"]) {
+    await assert.rejects(pool.query(`DELETE FROM ${table}`), (error: unknown) => error instanceof Error && "code" in error && error.code === "55000");
+    await assert.rejects(pool.query(`TRUNCATE ${table} CASCADE`), (error: unknown) => error instanceof Error && "code" in error && error.code === "55000");
+    assert.equal((await pool.query(`SELECT count(*)::int AS count FROM ${table}`)).rows[0].count, 1);
+  }
+  await pool.query("UPDATE skill_architecture_sync_runs SET status = 'awaiting_approval' WHERE id = $1", [runId]);
+  await pool.query("UPDATE skill_architecture_sync_steps SET status = 'prepared' WHERE id = $1", [stepId]);
+  assert.equal((await pool.query("SELECT status FROM skill_architecture_sync_runs WHERE id = $1", [runId])).rows[0].status, "awaiting_approval");
+  assert.equal((await pool.query("SELECT status FROM skill_architecture_sync_steps WHERE id = $1", [stepId])).rows[0].status, "prepared");
+});
+
 test("sync records reject unsafe metadata and retain no live credential or apply flag", { timeout: 60_000 }, async (t) => {
   const pool = await freshPool(t);
   await seedFixture(pool);

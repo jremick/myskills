@@ -294,7 +294,7 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
           holderId,
           now,
           leaseSeconds: input.leaseSeconds,
-        }, Number(current?.fencingToken ?? 0));
+        }, Math.max(Number(current?.fencingToken ?? 0), await this.companionFence(tx, dbTargetId, new Date(now))));
         let claimed = run;
         if (claimed.state === "approved") claimed = transitionRunState(claimed, "queued");
         claimed = transitionRunState(claimed, "lease_acquiring");
@@ -397,7 +397,7 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
           holderId,
           now,
           leaseSeconds: input.leaseSeconds,
-        }, Number(current?.fencingToken ?? 0));
+        }, Math.max(Number(current?.fencingToken ?? 0), await this.companionFence(tx, ids.targetId, nowDate)));
         await this.insertLeaseForRun(tx, lease);
         this.onRecoveryPhase?.("after-claim");
 
@@ -516,63 +516,9 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
         if (current && (nowDate.getTime() < current.acquiredAt.getTime() || nowDate.getTime() < current.updatedAt.getTime())) {
           throw new AppError("Sync lease acquisition time must move forward.", "ARCHITECTURE_SYNC_TIMESTAMP_INVALID", 409);
         }
-        // The target row is the shared mutex for both execution systems. Older
-        // control-only schemas predate the companion queue; migrations add it.
-        let operationFence = 0;
-        const installed = await tx.execute(sql`SELECT to_regclass(current_schema() || '.target_skill_operations') AS queue`);
-        if (installed.rows[0]?.queue) {
-          const [operations] = await tx.select({
-            fence: sql<number>`coalesce(max(${targetSkillOperations.fencingToken}), 0)`,
-            busy: sql<boolean>`coalesce(bool_or(${targetSkillOperations.state} IN ('claimed', 'applying', 'verifying') AND ${targetSkillOperations.leaseExpiresAt} > ${nowDate}), false)`,
-          }).from(targetSkillOperations).where(eq(targetSkillOperations.targetId, dbTargetId));
-          if (operations?.busy) throw new AppError("The target is leased by a companion operation.", "ARCHITECTURE_SYNC_LEASE_CONFLICT", 409);
-          operationFence = Number(operations?.fence ?? 0);
-        }
-        const fencingToken = Math.max(Number(current?.fencingToken ?? 0), operationFence) + 1;
-        if (fencingToken > architectureSyncControlLimits.fencingTokenMaximum) {
-          throw new AppError("Sync fencing token limit was reached.", "ARCHITECTURE_SYNC_LEASE_INVALID", 409);
-        }
-        const lease: ArchitectureSyncLease = assertValidArchitectureSyncLease({
-          schemaVersion: 1,
-          leaseId: `lease-${this.idFactory()}`,
-          runId,
-          targetId,
-          targetGeneration,
-          holderId,
-          fencingToken,
-          acquiredAt: now,
-          expiresAt: new Date(nowDate.getTime() + input.leaseSeconds * 1_000).toISOString(),
-        }, {
-          targetId,
-          targetGeneration,
-          fencingToken,
-          runId,
-        });
-        const metadata = metadataWithPublicId(undefined, lease.leaseId, "leaseId");
-        const values = {
-          id: dbUuid(lease.leaseId, "leaseId"),
-          schemaVersion: 1,
-          targetId: dbTargetId,
-          runId: dbRunId,
-          targetGeneration,
-          holderId,
-          fencingToken,
-          status: "active" as const,
-          acquiredAt: nowDate,
-          expiresAt: new Date(lease.expiresAt),
-          releasedAt: null,
-          metadata: leaseMetadata(metadata, lease),
-          createdAt: current?.createdAt ?? nowDate,
-          updatedAt: nowDate,
-        };
-        if (current) {
-          await tx
-            .update(skillArchitectureSyncTargetLeases)
-            .set(values)
-            .where(eq(skillArchitectureSyncTargetLeases.targetId, dbTargetId));
-        } else {
-          await tx.insert(skillArchitectureSyncTargetLeases).values(values);
-        }
+        const lease = this.buildLease({ runId, targetId, targetGeneration, holderId, now, leaseSeconds: input.leaseSeconds },
+          Math.max(Number(current?.fencingToken ?? 0), await this.companionFence(tx, dbTargetId, nowDate)));
+        await this.insertLeaseForRun(tx, lease);
         return lease;
       });
     } catch (error) {
@@ -855,6 +801,19 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
     });
   }
 
+  /** Call only while holding the target row lock shared with companion claims. */
+  private async companionFence(tx: DbLike, targetId: string, now: Date): Promise<number> {
+    // Control-only schemas predate the companion queue.
+    const installed = await tx.execute(sql`SELECT to_regclass(current_schema() || '.target_skill_operations') AS queue`);
+    if (!installed.rows[0]?.queue) return 0;
+    const [operations] = await tx.select({
+      fence: sql<number>`coalesce(max(${targetSkillOperations.fencingToken}), 0)`,
+      busy: sql<boolean>`coalesce(bool_or(${targetSkillOperations.state} IN ('claimed', 'applying', 'verifying') AND ${targetSkillOperations.leaseExpiresAt} > ${now}), false)`,
+    }).from(targetSkillOperations).where(eq(targetSkillOperations.targetId, targetId));
+    if (operations?.busy) throw new AppError("The target is leased by a companion operation.", "ARCHITECTURE_SYNC_LEASE_CONFLICT", 409);
+    return Number(operations?.fence ?? 0);
+  }
+
   private async insertLeaseForRun(tx: DbLike, lease: ArchitectureSyncLease): Promise<void> {
     const targetId = dbUuid(lease.targetId, "targetId");
     const runId = dbUuid(lease.runId, "runId");
@@ -865,7 +824,8 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
     if (current && (Date.parse(lease.acquiredAt) < current.acquiredAt.getTime() || Date.parse(lease.acquiredAt) < current.updatedAt.getTime())) {
       throw new AppError("Sync lease acquisition time must move forward.", "ARCHITECTURE_SYNC_TIMESTAMP_INVALID", 409);
     }
-    if (current && lease.fencingToken <= Number(current.fencingToken)) {
+    const companionFence = await this.companionFence(tx, targetId, new Date(lease.acquiredAt));
+    if (lease.fencingToken <= Math.max(Number(current?.fencingToken ?? 0), companionFence)) {
       throw new AppError("Sync lease fencing token is stale.", "ARCHITECTURE_SYNC_FENCE_STALE", 409);
     }
     const metadata = leaseMetadata(metadataWithPublicId(undefined, lease.leaseId, "leaseId"), lease);

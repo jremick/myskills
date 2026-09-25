@@ -32,6 +32,7 @@ import {
   assertNoReservedArchitectureSyncMetadata,
   sanitizeArchitectureSyncMetadata,
 } from "./metadata.js";
+import { MemoryTargetLeaseCoordinator } from "./memory-target-lease-coordinator.js";
 
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SAFE_CODE_PATTERN = /^[a-z][a-z0-9._:-]{0,95}$/;
@@ -42,6 +43,7 @@ interface StoredLease {
 }
 
 interface MemoryArchitectureSyncStoreOptions {
+  readonly targetLeases?: MemoryTargetLeaseCoordinator;
   readonly now?: () => Date;
   readonly idFactory?: () => string;
   /** Test-only fault injection; production callers leave this unset. */
@@ -75,11 +77,20 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
   private readonly idFactory: () => string;
   private readonly onRecoveryPhase?: (phase: ArchitectureSyncRecoveryAtomicPhase) => void;
   private nextAuditNumber = 1;
+  private readonly targetLeases: MemoryTargetLeaseCoordinator;
 
   constructor(options: MemoryArchitectureSyncStoreOptions = {}) {
     this.now = options.now ?? (() => new Date());
     this.idFactory = options.idFactory ?? randomUUID;
     this.onRecoveryPhase = options.onRecoveryPhase;
+    this.targetLeases = options.targetLeases ?? new MemoryTargetLeaseCoordinator();
+    this.targetLeases.register((targetId, now) => {
+      const current = this.leases.get(targetId);
+      return {
+        fencingToken: current?.lease.fencingToken ?? 0,
+        busy: current?.active === true && Date.parse(current.lease.expiresAt) > Date.parse(now),
+      };
+    });
   }
 
   async createRun(input: ArchitectureSyncCreateRunStoreInput): Promise<ArchitectureSyncCreateRunStoreResult> {
@@ -166,7 +177,7 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
       holderId,
       now,
       leaseSeconds: input.leaseSeconds,
-    }, currentLease?.lease.fencingToken ?? 0, `lease-${this.idFactory()}`);
+    }, this.availableFence(targetId, now), `lease-${this.idFactory()}`);
     let run = cloneRun(currentRun);
     if (run.state === "approved") run = transitionRun(run, "queued");
     run = transitionRun(run, "lease_acquiring");
@@ -262,7 +273,7 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
         holderId,
         now,
         leaseSeconds: input.leaseSeconds,
-      }, currentLease?.lease.fencingToken ?? 0, `lease-${this.idFactory()}`);
+      }, this.availableFence(targetId, now), `lease-${this.idFactory()}`);
       this.leases.set(targetId, { lease, active: true });
       this.onRecoveryPhase?.("after-claim");
 
@@ -371,29 +382,16 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
     if (current && nowMs < Date.parse(current.lease.acquiredAt)) {
       throw new AppError("Sync lease acquisition time must move forward.", "ARCHITECTURE_SYNC_TIMESTAMP_INVALID", 409);
     }
-    const fencingToken = (current?.lease.fencingToken ?? 0) + 1;
-    if (fencingToken > architectureSyncControlLimits.fencingTokenMaximum) {
-      throw new AppError("Sync fencing token limit was reached.", "ARCHITECTURE_SYNC_LEASE_INVALID", 409);
-    }
-    const lease: ArchitectureSyncLease = {
-      schemaVersion: 1,
-      leaseId: `lease-${this.idFactory()}`,
-      runId,
-      targetId,
-      targetGeneration,
-      holderId,
-      fencingToken,
-      acquiredAt: now,
-      expiresAt: new Date(Date.parse(now) + input.leaseSeconds * 1_000).toISOString(),
-    };
-    assertValidArchitectureSyncLease(lease, {
-      targetId,
-      targetGeneration,
-      fencingToken,
-      runId,
-    });
+    const lease = buildLease({ runId, targetId, targetGeneration, holderId, now, leaseSeconds: input.leaseSeconds },
+      this.availableFence(targetId, now), `lease-${this.idFactory()}`);
     this.leases.set(targetId, { lease, active: true });
     return structuredClone(lease);
+  }
+
+  private availableFence(targetId: string, now: string): number {
+    const current = this.targetLeases.read(targetId, now);
+    if (current.busy) throw new AppError("The target is leased by another execution.", "ARCHITECTURE_SYNC_LEASE_CONFLICT", 409);
+    return current.fencingToken;
   }
 
   async getCurrentLease(targetIdInput: string): Promise<ArchitectureSyncLease | null> {

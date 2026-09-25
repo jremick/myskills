@@ -1,10 +1,22 @@
 import { targetSkillOperationResultMatchesPlan, type TargetSkillOperation, type TargetSkillOperationResult } from "@myskills-app/core";
+import { MemoryTargetLeaseCoordinator } from "../architecture-sync/memory-target-lease-coordinator.js";
 import type { CreateTargetSkillOperationInput, StoredTargetSkillOperation, TargetSkillOperationStore } from "./types.js";
 
 export class MemoryTargetSkillOperationStore implements TargetSkillOperationStore {
   readonly kind = "memory" as const;
   private claimCursors = new Map<string, { createdAt: string; id: string }>();
   private operations = new Map<string, StoredTargetSkillOperation>();
+
+  constructor(private readonly targetLeases = new MemoryTargetLeaseCoordinator()) {
+    this.targetLeases.register((targetId, now) => {
+      const operations = [...this.operations.values()].filter((operation) => operation.targetId === targetId);
+      return {
+        fencingToken: Math.max(0, ...operations.map((operation) => operation.fencingToken)),
+        busy: operations.some((operation) => ["claimed", "applying", "verifying"].includes(operation.state)
+          && Date.parse(operation.leaseExpiresAt ?? "") > Date.parse(now)),
+      };
+    });
+  }
 
   async create(input: CreateTargetSkillOperationInput): Promise<{ operation: TargetSkillOperation; replayed: boolean }> {
     return (await this.createBatch([input]))[0]!;
@@ -84,10 +96,11 @@ export class MemoryTargetSkillOperationStore implements TargetSkillOperationStor
       && Boolean(operation.leaseExpiresAt)
       && Date.parse(operation.leaseExpiresAt ?? "") <= Date.parse(input.now);
     if (!operation || (operation.state !== "queued" && !reclaimable) || operation.targetGeneration !== input.targetGeneration) return null;
-    if ([...this.operations.values()].some((item) => item.targetId === operation.targetId && item.id !== operation.id
-      && ["claimed", "applying", "verifying"].includes(item.state) && Date.parse(item.leaseExpiresAt ?? "") > Date.parse(input.now))) return null;
+    const lease = this.targetLeases.read(operation.targetId, input.now);
+    if (lease.busy) return null;
+    if (lease.fencingToken >= 1_000_000_000) throw Object.assign(new Error("Target operation fencing token limit was reached."), { code: "TARGET_OPERATION_FENCE_EXHAUSTED" });
     operation.state = "claimed";
-    operation.fencingToken = Math.max(0, ...[...this.operations.values()].filter((item) => item.targetId === operation.targetId).map((item) => item.fencingToken)) + 1;
+    operation.fencingToken = lease.fencingToken + 1;
     operation.holderId = input.holderId;
     operation.claimTokenHash = input.claimTokenHash;
     operation.leaseExpiresAt = input.leaseExpiresAt;
@@ -149,6 +162,7 @@ export class MemoryTargetSkillOperationStore implements TargetSkillOperationStor
       || operation.holderId !== input.holderId
       || operation.claimTokenHash !== input.claimTokenHash
       || operation.fencingToken !== input.fencingToken
+      || operation.fencingToken !== this.targetLeases.read(operation.targetId, input.now).fencingToken
       || !operation.leaseExpiresAt
       || Date.parse(operation.leaseExpiresAt) <= Date.parse(input.now)
     ) return null;
