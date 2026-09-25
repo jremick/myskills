@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { createAiSkillsMcpServer } from "./server.js";
 
-const server = createAiSkillsMcpServer({
-  apiBaseUrl: process.env.MYSKILLS_API_URL,
-  token: process.env.MYSKILLS_TOKEN,
-});
-
 try {
-  await server.connect(new StdioServerTransport());
+  serveStdio(() => createAiSkillsMcpServer({
+    apiBaseUrl: process.env.MYSKILLS_API_URL,
+    token: process.env.MYSKILLS_TOKEN,
+  }), {
+    onerror: () => console.error("MySkills MCP transport error."),
+  });
 } catch {
   console.error("MySkills MCP server failed to start.");
   process.exit(1);

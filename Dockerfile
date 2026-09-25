@@ -7,11 +7,19 @@ FROM node:${NODE_VERSION} AS deps
 ARG NPM_VERSION
 WORKDIR /app
 RUN npm install -g npm@${NPM_VERSION}
-COPY package.json package-lock.json tsconfig.base.json ./
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/cli/package.json ./apps/cli/package.json
+COPY apps/mcp/package.json ./apps/mcp/package.json
+COPY apps/web/package.json ./apps/web/package.json
+COPY packages/auth/package.json ./packages/auth/package.json
+COPY packages/core/package.json ./packages/core/package.json
+COPY packages/skill-package/package.json ./packages/skill-package/package.json
+RUN npm ci
+COPY tsconfig.base.json ./
 COPY packages ./packages
 COPY apps ./apps
 COPY scripts ./scripts
-RUN npm ci
 
 FROM deps AS api-build
 ARG MYSKILLS_BUILD_REVISION
