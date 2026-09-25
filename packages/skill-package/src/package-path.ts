@@ -63,6 +63,16 @@ export async function readPackageSnapshot(inputPath: string): Promise<PackageSna
   };
 }
 
+/** Require a directory at the checked open, without the single-file manifest shortcut. */
+export async function readPackageDirectorySnapshot(inputPath: string): Promise<PackageSnapshot> {
+  const files = await readPackageFilesOfKind(inputPath, true);
+  return {
+    manifest: loadSkillManifestFromPackageFiles(files),
+    files,
+    scan: { ...scanPackageFiles(files), rootPath: path.resolve(inputPath) },
+  };
+}
+
 export async function loadSkillManifestFromPath(inputPath: string): Promise<SkillManifest> {
   const files = await readPackageFilesFromPath(inputPath);
   return manifestForInput(files, inputPath);
@@ -92,9 +102,14 @@ export async function scanPackagePath(inputPath: string): Promise<PackageScanRes
 }
 
 export async function readPackageFilesFromPath(inputPath: string): Promise<PackageInputFile[]> {
+  return readPackageFilesOfKind(inputPath, false);
+}
+
+async function readPackageFilesOfKind(inputPath: string, directoryOnly: boolean): Promise<PackageInputFile[]> {
   assertSafePackagePlatform();
   const { rootPath, expected, handle } = await openPackageRoot(path.resolve(inputPath));
   try {
+    if (directoryOnly && !expected.isDirectory()) throw new Error("Package input must be a directory.");
     if (expected.isFile()) {
       if (path.extname(rootPath).toLowerCase() === ".zip") {
         // Handle parser rejection before asynchronous cleanup can yield.

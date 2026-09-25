@@ -9,6 +9,7 @@ import {
   normalizePackageFilePath,
   readPackageFilesFromPath,
   readPackageSnapshot,
+  PackageArchiveScanError,
   scanPackagePath,
   type PackageScanResult,
   type PackageSnapshot,
@@ -60,6 +61,7 @@ import {
   SkillInitInputError,
   type InitSkillPackageOptions,
 } from "./author-init.js";
+import { packageSkill, SkillPackageDestinationError } from "./author-package.js";
 
 const DEFAULT_API_URL = "http://localhost:3001";
 const CLI_VERSION = process.env.MYSKILLS_CLI_VERSION ?? "0.0.0-dev";
@@ -246,6 +248,8 @@ async function dispatchCli(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
         return await validateCommand(parsed, runtime);
       case "init":
         return await initCommand(parsed, runtime);
+      case "package":
+        return await packageCommand(parsed, runtime);
       case "scan":
         return await scanCommand(parsed, runtime);
       case "search":
@@ -378,6 +382,37 @@ async function scanCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
     printScanResult(result, runtime.io);
   }
   return hasBlockingFindings(result.findings) ? 1 : 0;
+}
+
+async function packageCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const allowed = new Set(["path", "output", "json"]);
+  if (parsed.args.length > 0 || Object.keys(parsed.options).some((key) => !allowed.has(key))) {
+    throw new CliError("Usage: myskills package --path <directory> --output <file.zip> [--json]", 2, "CLI_ARGUMENTS_INVALID");
+  }
+  if (parsed.options.json !== undefined && parsed.options.json !== true) throw new CliError("--json must be a flag.", 2, "CLI_ARGUMENTS_INVALID");
+  const input = initStringOption(parsed, "path");
+  const output = initStringOption(parsed, "output");
+  if (!input || !output) throw new CliError("Package requires --path <directory> and --output <file.zip>.", 2, "CLI_ARGUMENTS_INVALID");
+  try {
+    const result = await packageSkill({ path: input, output });
+    const next = { submit: `myskills submit --path ${displayCliPath(result.output)}` };
+    if (parsed.options.json) runtime.io.stdout(JSON.stringify({ ...result, next }, null, 2));
+    else {
+      runtime.io.stdout(terminalText`packaged ${result.manifest.name}@${result.manifest.version} ${result.output}`);
+      runtime.io.stdout(terminalText`sha256=${result.sha256} bytes=${result.size}`);
+      printScanResult(result.scan, runtime.io);
+      runtime.io.stdout(terminalText`submit for review: ${next.submit}`);
+    }
+  } catch (error) {
+    if (error instanceof PackageArchiveScanError) {
+      if (parsed.options.json) runtime.io.stderr(JSON.stringify({ error: { code: "PACKAGE_SCAN_BLOCKED", message: error.message }, scan: error.scan }, null, 2));
+      else { printScanResult(error.scan, runtime.io); runtime.io.stderr(error.message); }
+      return 1;
+    }
+    if (error instanceof SkillPackageDestinationError) throw new CliError(error.message, 1, "PACKAGE_DESTINATION_INVALID");
+    throw error;
+  }
+  return 0;
 }
 
 async function searchCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
@@ -5059,6 +5094,7 @@ function helpText(): string {
     "  init <name> [--output <dir>] [--title <text>] [--summary <text>] [--license <text>] [--json]",
     "  validate --path <file-directory-or-zip>",
     "  scan --path <file-directory-or-zip>",
+    "  package --path <directory> --output <file.zip> [--json]",
     "  search [query] [--api-url <url>]",
     "  info <skill-slug> [--api-url <url>]",
     "  login [--api-url <url>] [--method <password|api-key>] [--email <email>]",

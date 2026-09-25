@@ -73,6 +73,7 @@ myskills --version
 myskills init <name> [--output <dir>] [--title <text>] [--summary <text>] [--license <text>] [--json]
 myskills validate --path <file-directory-or-zip>
 myskills scan --path <file-directory-or-zip>
+myskills package --path <directory> --output <file.zip> [--json]
 myskills search [query] [--api-url <url>]
 myskills info <skill-slug> [--api-url <url>]
 myskills login [--api-url <url>] [--method <password|api-key>] [--email <email>]
@@ -134,6 +135,35 @@ version `0.1.0`, `UNLICENSED`, and the `codex-skill` platform target. It does
 not authenticate, call the network, or overwrite an existing file, directory,
 or symlink. Edit the generated `SKILL.md`, then run `myskills validate --path`
 and `myskills scan --path` before any separate authenticated submission.
+
+`myskills package --path ./my-skill --output ./my-skill.zip` creates a
+deterministic ZIP from one checked snapshot of a local package directory.
+It validates the root manifest, portable paths, and bounded UTF-8 text, then
+blocks credential and other blocking scan findings before creating output.
+Warnings remain visible for review. The output reports the archive SHA-256,
+byte size, and a separate `myskills submit --path ...` command. `--json` returns
+the manifest, scan findings, output path, checksum, size, and next command.
+Packaging does not contact the registry or bypass submission and review.
+
+The output must end in `.zip` and have an existing parent directory outside
+the source tree. Existing files, directories, symlinks, and symlink ancestors
+are refused. All regular source files are included; there is no ignore file.
+Keep credentials and unrelated files outside the source directory. The package
+limits are 500 files, 1 MiB of text, 1,000 filesystem entries, and a 10 MiB
+archive. Binary files,
+symlinks, and special files are rejected. Text bytes, including BOMs and line
+endings, are preserved. Entries use ordinal UTF-8 path order, fixed timestamps
+and permissions, and uncompressed ZIP storage, so source mtimes and locale do
+not change the archive checksum. Empty directories and executable bits are not
+preserved. The archive checksum identifies the ZIP bytes, not the registry's
+package-content digest.
+
+Local authoring requires macOS or Linux. The archive is created with private
+file permissions and exclusive creation; it never overwrites a destination
+that appears during the command. A disk or write failure can leave a partial
+output, which the error asks you to inspect before removal. Work in directories
+owned by your user; this does not isolate writes from a hostile process running
+as the same operating-system user.
 
 The API-backed architecture preview includes the compiled graph, escaped
 Mermaid, and a versioned diagram artifact with a plain-text accessible outline.
