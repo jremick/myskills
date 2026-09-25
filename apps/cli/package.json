@@ -45,8 +45,8 @@
     "@myskills-app/core": "0.1.0-beta.6",
     "@myskills-app/skill-package": "0.1.0-beta.6",
     "esbuild": "^0.28.2",
-    "tsx": "^4.23.12",
-    "yaml": "2.9.0"
+    "tsx": "^4.23.15",
+    "yaml": "2.9.1"
   },
   "dependencies": {
     "@napi-rs/keyring": "2.1.0"
