@@ -697,6 +697,9 @@ export class AuthService {
     if (!challenge || !isUsableAuthenticatedAccount(challenge.user)) {
       throw invalidMfaCode();
     }
+    // Only a valid password-authenticated challenge can charge this account.
+    // Rotating both challenge tokens and source IPs must not reset its budget.
+    await assertAllowed(this.options.mfaLimiter, [`mfa:account:${challenge.user.id}`]);
     const verifiedAt = new Date();
     const valid = input.recoveryCode
       ? await this.verifyRecoveryCode(challenge.user.id, input.recoveryCode)
