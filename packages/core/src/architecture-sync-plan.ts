@@ -167,9 +167,11 @@ function syncItemForNode(compiled: CompiledArchitecture, node: CompiledArchitect
       return { action: "configure-router", nodeId: allNode.id, kind: allNode.kind, reason: "Router configuration is absent on the target.", desired, observed };
     }
     const desiredRouter = compiled.routers.find((candidate) => candidate.nodeId === allNode.id);
-    if (router.configured === false || (desiredRouter && router.configurationDigest !== desiredRouter.digest)) {
+    if (router.configured === false || router.enabled === false
+      || (router.runtimeExposure !== undefined && router.runtimeExposure !== node?.runtimeExposure)
+      || (desiredRouter && router.configurationDigest !== desiredRouter.digest)) {
       if (router.managed !== true) return { action: "unsupported", nodeId: allNode.id, kind: allNode.kind, reason: "Target router is not explicitly managed by MySkills.", desired, observed };
-      return { action: "configure-router", nodeId: allNode.id, kind: allNode.kind, reason: "Router configuration differs from the desired topology.", desired, observed };
+      return { action: "configure-router", nodeId: allNode.id, kind: allNode.kind, reason: "Router configuration, enabled state, or runtime exposure differs from the desired topology.", desired, observed };
     }
     return { action: "noop", nodeId: allNode.id, kind: allNode.kind, reason: "Router configuration matches the desired topology.", desired, observed };
   }

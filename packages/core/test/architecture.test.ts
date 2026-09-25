@@ -933,6 +933,23 @@ test("router-only observed state receives configure-router when topology is miss
   assert.equal(wrongKind.items.find((item) => item.nodeId === "router-root")?.action, "unsupported");
 });
 
+test("matching router topology does not hide disabled state or exposure drift", () => {
+  const spec = createMultiLevelRouterArchitecture(factoryInput);
+  const compiled = compileArchitecture(spec, registryFor(spec));
+  const rootRouter = compiled.routers.find((router) => router.nodeId === "router-root");
+  assert.ok(rootRouter);
+  const observed = { nodeId: "router-root", configured: true, enabled: true, runtimeExposure: "router" as const, managed: true, configurationDigest: rootRouter.digest };
+  for (const drift of [{ enabled: false }, { runtimeExposure: "disabled" as const }]) {
+    const plan = planArchitectureSync(compiled, { targetId: "router-state", routers: [{ ...observed, ...drift }] });
+    assert.equal(plan.items.find((item) => item.nodeId === "router-root")?.action, "configure-router");
+    assert.equal(plan.canApply, false);
+    const unmanaged = planArchitectureSync(compiled, { targetId: "router-state", routers: [{ ...observed, ...drift, managed: false }] });
+    assert.equal(unmanaged.items.find((item) => item.nodeId === "router-root")?.action, "unsupported");
+  }
+  const matching = planArchitectureSync(compiled, { targetId: "router-state", routers: [observed] });
+  assert.equal(matching.items.find((item) => item.nodeId === "router-root")?.action, "noop");
+});
+
 test("skill-backed routers reconcile package lifecycle and router configuration together", () => {
   const spec = createArchitectureFromPattern("domain-router", {
     id: "skill-backed-router",
