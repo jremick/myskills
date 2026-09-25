@@ -665,8 +665,8 @@ test("metadata saves refresh the parent registry detail", async () => {
   };
   const view = render(<RegistryApp client={client} />);
   await view.findByRole("region", { name: "Skill lifecycle controls" });
-  fireEvent.input(view.getByRole("textbox", { name: "Title", exact: true }), { target: { value: "Updated registry title" } });
-  fireEvent.input(view.getByRole("textbox", { name: "Summary", exact: true }), { target: { value: "Updated registry summary" } });
+  fireEvent.input(view.getByRole("textbox", { name: "Title" }), { target: { value: "Updated registry title" } });
+  fireEvent.input(view.getByRole("textbox", { name: "Summary" }), { target: { value: "Updated registry summary" } });
   fireEvent.click(view.getByRole("button", { name: "Save metadata" }));
   await view.findByRole("heading", { name: "Updated registry title" });
   await view.findByText("Updated registry summary");
