@@ -141,17 +141,17 @@ for (const modern of [false, true]) {
       },
     });
     const url = await listen(t, server);
-    const params = modern ? { _meta: {
+    const params = { uri: "skill://batch-probe/example/SKILL.md", ...(modern ? { _meta: {
       "io.modelcontextprotocol/protocolVersion": "2026-07-28",
       "io.modelcontextprotocol/clientInfo": { name: "batch-probe", version: "1" },
       "io.modelcontextprotocol/clientCapabilities": { extensions: { "io.modelcontextprotocol/skills": {} } },
-    } } : {};
+    } } : {}) };
     const response = await postBody(url, {
       authorization: "Bearer aiss_batch_test",
       "content-type": "application/json",
       accept: "application/json, text/event-stream",
       "mcp-protocol-version": modern ? "2026-07-28" : "2025-11-25",
-    }, JSON.stringify([1, 2].map((id) => ({ jsonrpc: "2.0", id, method: "skills/list", params }))));
+    }, JSON.stringify([1, 2].map((id) => ({ jsonrpc: "2.0", id, method: "resources/read", params }))));
     assert.equal(response.status, 400);
     assert.equal(JSON.parse(response.body).error.code, -32600);
     assert.deepEqual(calls.map((entry) => new URL(entry).pathname), ["/v1/mcp/session"]);
