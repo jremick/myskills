@@ -18,7 +18,7 @@ services:
     platform: linux/amd64
     build:
       context: .
-      dockerfile: Dockerfile.minio-e2e
+      dockerfile: Dockerfile.minio
     command: server /data
     environment:
       MINIO_ROOT_USER: ${MYSKILLS_E2E_MINIO_ROOT_USER:?MYSKILLS_E2E_MINIO_ROOT_USER is required}
@@ -36,11 +36,11 @@ services:
     platform: linux/amd64
     build:
       context: .
-      dockerfile: Dockerfile.minio-e2e
+      dockerfile: Dockerfile.minio
     depends_on:
       minio:
         condition: service_healthy
-    entrypoint: ["/bin/sh", "-c"]
+    entrypoint: ["/bin/sh", "-ec"]
     command:
       - |
         mc alias set -- e2e http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"

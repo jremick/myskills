@@ -29,6 +29,8 @@ Then run `npm run dev:api` and `npm run dev:web` in separate terminals. That flo
 
 The production example builds app images from this repo and runs API, web, Postgres, MinIO, migrations, and optional MCP HTTP.
 
+Development, production, and E2E Compose build storage from `Dockerfile.minio`. It downloads the official MinIO and mc release binaries with pinned SHA-256 checksums for Linux amd64 or arm64. No MinIO registry login is needed; the first build requires anonymous access to GitHub release assets and the pinned Debian base image. Existing `/data` volumes keep the same storage format. This repairs image availability and does not upgrade the storage engine. The [upstream MinIO repository](https://github.com/minio/minio) is archived; choosing a maintained storage replacement is a separate deployment decision.
+
 ```bash
 cp .env.production.example .env.production
 # Edit .env.production. Replace every example domain and secret.
@@ -41,7 +43,7 @@ docker compose --env-file .env.production -f docker-compose.production.example.y
 
 Use `docker compose --env-file .env.production -f docker-compose.production.example.yml config` after editing the env file to validate Compose interpolation before building images.
 
-After the first successful owner bootstrap, rotate the owner password from the application and remove `SEED_OWNER_PASSWORD` from the production env file or secret store. Do not keep bootstrap credentials around as an operational login path.
+After the first successful owner bootstrap, rotate the owner password from the application and remove `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` from the production env file or secret store. Do not keep bootstrap credentials around as an operational login path. Normal restarts do not require them; the seed service rejects missing bootstrap values when explicitly run.
 
 To run the optional HTTP MCP adapter:
 
