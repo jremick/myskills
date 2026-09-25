@@ -213,6 +213,12 @@ test("target registry guides the owner and current architecture context and neve
   assert.equal(registered[0]?.environmentId, "personal-laptop");
   assert.equal(registered[0]?.profileId, "personal");
   assert.equal(registered[0]?.credentialReference, "secret-store-token");
+  assert.deepEqual(registered[0]?.adapter, { kind: "codex-readonly", version: "1", contractVersion: 1 });
+  assert.deepEqual(registered[0]?.capabilities, { "inventory.read": true, "health.read": true, "plan.read": true });
+  assert.deepEqual(Array.from((view.getByLabelText("Target adapter") as HTMLSelectElement).options).map((option) => option.value), ["codex-readonly"]);
+  assert.equal(view.queryByRole("checkbox", { name: "Apply" }), null);
+  await view.findByRole("heading", { name: "Connect a Codex workspace" });
+  assert.match(view.container.textContent ?? "", /myskills codex enroll/);
   assert.equal(document.body.textContent?.includes("secret-store-token"), false);
 
   fireEvent.click(view.getByRole("button", { name: "Grant consent" }));
