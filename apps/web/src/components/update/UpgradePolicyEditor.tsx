@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SkillUpgradePolicyV1 } from "@myskills-app/core";
 import { Button } from "@/components/ui/button";
 import type { ArchitectureTargetRecord, RegistryClient, SkillUpgradePolicyRevisionRecord, TargetSkillUpdates } from "../../api.js";
-import { safeArchitectureTargetErrorMessage } from "../../api.js";
+import { safeArchitectureTargetErrorMessage, targetSkillUpgradePolicyConstraints } from "../../api.js";
 
 const defaultPolicy: SkillUpgradePolicyV1 = {
   schemaVersion: 1,
@@ -11,6 +11,9 @@ const defaultPolicy: SkillUpgradePolicyV1 = {
   allowedChangeKinds: ["breaking", "feature", "fix", "maintenance", "security"],
   pins: {},
 };
+
+// A new target adds no restrictions; current organization rules still apply independently.
+const newTargetPolicy: SkillUpgradePolicyV1 = { ...defaultPolicy, includePrerelease: true };
 
 export function UpgradePolicyEditor({ client, target, resolved, onSaved }: {
   client: RegistryClient;
@@ -24,10 +27,8 @@ export function UpgradePolicyEditor({ client, target, resolved, onSaved }: {
   const [policy, setPolicy] = useState<SkillUpgradePolicyV1>(defaultPolicy);
   const [state, setState] = useState<"idle" | "loading" | "ready" | "saving" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
-  const inherited = resolved?.constraints.find((constraint) => constraint.source === "organization")?.policy;
-  const inheritedPolicy = useRef(inherited);
+  const organizationConstraint = targetSkillUpgradePolicyConstraints(resolved).find((constraint) => constraint.source === "organization");
   const epoch = useRef(0);
-  inheritedPolicy.current = inherited;
   const organizationId = target.owner.type === "organization" ? target.owner.id : null;
 
   useEffect(() => {
@@ -48,8 +49,8 @@ export function UpgradePolicyEditor({ client, target, resolved, onSaved }: {
     void request.then((record) => {
       if (!active) return;
       setRevision(record);
-      // Organization edits must never inherit a single target's constraints.
-      const source = record?.policy ?? (scope === "target" ? inheritedPolicy.current : undefined) ?? defaultPolicy;
+      // Each scope edits only its own revision; a new target must not freeze organization rules.
+      const source = record?.policy ?? (scope === "target" ? newTargetPolicy : defaultPolicy);
       setPolicy(structuredClone(source));
       setState("ready");
     }).catch((error: unknown) => {
@@ -94,6 +95,15 @@ export function UpgradePolicyEditor({ client, target, resolved, onSaved }: {
       {state === "loading" && <p role="status">Loading {scope} policy…</p>}
       {editable && <p className="control-plane-muted">Editing {scope === "organization" ? "the organization ceiling for its targets" : "this target only"}. {revision ? `Revision ${revision.revisionNumber}.` : "Saving creates the first policy for this scope."}</p>}
       {organizationId && <p className="control-plane-muted">Organization and target rules both apply. Target settings can add restrictions but cannot relax the organization ceiling. Every maintenance window must be open; all work still requires an explicit queue request.</p>}
+      {organizationId && scope === "target" && <section aria-label="Organization ceiling" className="control-plane-muted">
+        {organizationConstraint ? <>
+          <p>Organization ceiling{organizationConstraint.revision ? `, revision ${organizationConstraint.revision.revisionNumber}` : ""} (read-only): prereleases {organizationConstraint.policy.includePrerelease ? "allowed" : "disabled"}. Allowed changes: {organizationConstraint.policy.allowedChangeKinds.join(", ")}.</p>
+          <p>Organization pins: {Object.entries(organizationConstraint.policy.pins).map(([slug, version]) => `${slug} ${version}`).join(", ") || "none"}.</p>
+          <p>{organizationConstraint.policy.mode === "maintenance-window" && organizationConstraint.policy.maintenanceWindow
+            ? `Organization window: days ${organizationConstraint.policy.maintenanceWindow.daysOfWeek.join(", ")} (0 is Sunday), starting ${minuteLabel(organizationConstraint.policy.maintenanceWindow.startMinute)} for ${organizationConstraint.policy.maintenanceWindow.durationMinutes} minutes in ${organizationConstraint.policy.maintenanceWindow.timeZone}.`
+            : "Organization execution: manually queued, without a clock restriction."}</p>
+        </> : <p>No organization ceiling was included in this response. The server enforces current organization rules when work is queued or executed.</p>}
+      </section>}
       <label className="control-plane-checkbox"><input type="checkbox" disabled={!editable} checked={policy.includePrerelease} onChange={(event) => setPolicy({ ...policy, includePrerelease: event.target.checked })} /><span><strong>Prerelease channel</strong><small>Include compatible prerelease versions.</small></span></label>
       <label><span>Execution mode</span><select disabled={!editable} value={policy.mode} onChange={(event) => setPolicy(event.target.value === "manual" ? { ...policy, mode: "manual", maintenanceWindow: undefined } : { ...policy, mode: "maintenance-window", maintenanceWindow: policy.maintenanceWindow ?? { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, daysOfWeek: [1, 2, 3, 4, 5], startMinute: 120, durationMinutes: 120 } })}><option value="manual">Manual</option><option value="maintenance-window">Maintenance window</option></select></label>
       {policy.mode === "maintenance-window" && policy.maintenanceWindow && <p className="control-plane-muted">Window: days {policy.maintenanceWindow.daysOfWeek.join(", ")} (0 is Sunday), starting {minuteLabel(policy.maintenanceWindow.startMinute)} for {policy.maintenanceWindow.durationMinutes} minutes in {policy.maintenanceWindow.timeZone}. The companion cannot claim queued work outside this window.</p>}

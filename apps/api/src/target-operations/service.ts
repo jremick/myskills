@@ -77,7 +77,7 @@ export class TargetSkillOperationService {
     const resolvedPolicy = await this.options.upgradePolicies?.resolveForTarget(target);
     if (resolvedPolicy) {
       const policies = resolvedPolicy.constraints.map(({ policy }) => policy);
-      if (policies.some((policy) => policy.pins[slug] && version !== policy.pins[slug])) throw new AppError("The requested version conflicts with the active upgrade pin.", "TARGET_OPERATION_POLICY_PIN_CONFLICT", 409);
+      if (policies.some((policy) => Object.hasOwn(policy.pins, slug) && version !== policy.pins[slug])) throw new AppError("The requested version conflicts with the active upgrade pin.", "TARGET_OPERATION_POLICY_PIN_CONFLICT", 409);
       if (policies.some((policy) => !policy.includePrerelease) && isPrereleaseVersion(version)) throw new AppError("Prerelease upgrades are disabled by policy.", "TARGET_OPERATION_POLICY_PRERELEASE_BLOCKED", 409);
       if (!await this.changeKindsAllowed(actorId, slug, fromVersion, release, policies)) throw new AppError("The upgrade range contains a release change kind blocked by policy.", "TARGET_OPERATION_POLICY_CHANGE_KIND_BLOCKED", 409);
     }
@@ -171,7 +171,7 @@ export class TargetSkillOperationService {
           policyConstraints: policy?.constraints.map(({ policy: constraint }) => ({
             includePrerelease: constraint.includePrerelease,
             allowedChangeKinds: constraint.allowedChangeKinds,
-            ...(constraint.pins[skill.slug] ? { pinnedVersion: constraint.pins[skill.slug] } : {}),
+            ...(Object.hasOwn(constraint.pins, skill.slug) ? { pinnedVersion: constraint.pins[skill.slug] } : {}),
           })),
           client: {
             adapterContractVersion: target.adapter.contractVersion,
@@ -222,7 +222,7 @@ export class TargetSkillOperationService {
       const policy = await this.options.upgradePolicies?.resolveForTarget(target);
       if (policy) {
         const policies = policy.constraints.map(({ policy }) => policy);
-        if (policies.some((constraint) => (constraint.pins[candidate.skillSlug] && constraint.pins[candidate.skillSlug] !== candidate.toVersion)
+        if (policies.some((constraint) => (Object.hasOwn(constraint.pins, candidate.skillSlug) && constraint.pins[candidate.skillSlug] !== candidate.toVersion)
           || (!constraint.includePrerelease && isPrereleaseVersion(candidate.toVersion)))) continue;
         if (!await this.changeKindsAllowed(actorId, candidate.skillSlug, candidate.fromVersion, release, policies)) continue;
         if (!skillUpgradePoliciesAllowExecution(policy.constraints, new Date(now))) continue;
@@ -323,7 +323,7 @@ export class TargetSkillOperationService {
     if (!policy) return;
     const release = await this.submissions.getPublicRelease({ actorId, slug: operation.skillSlug, version: operation.toVersion });
     const policies = policy.constraints.map(({ policy }) => policy);
-    if (!release || policies.some((constraint) => (constraint.pins[operation.skillSlug] && constraint.pins[operation.skillSlug] !== operation.toVersion)
+    if (!release || policies.some((constraint) => (Object.hasOwn(constraint.pins, operation.skillSlug) && constraint.pins[operation.skillSlug] !== operation.toVersion)
       || (!constraint.includePrerelease && isPrereleaseVersion(operation.toVersion)))
       || !await this.changeKindsAllowed(actorId, operation.skillSlug, operation.fromVersion, release, policies)) {
       throw new AppError("The operation no longer meets every applicable upgrade policy.", "TARGET_OPERATION_POLICY_CHANGED", 409);

@@ -90,7 +90,7 @@ export async function assertOperationEligibility(db: OperationDatabase, actorId:
   const constraints = await resolveLockedUpgradePolicy(db, target);
   const policies = constraints.map(({ policy }) => policy);
   const changeKindAllowed = (kind: (typeof skillReleaseChangeKinds)[number]) => policies.every((policy) => policy.allowedChangeKinds.includes(kind));
-  if (policies.some((policy) => (policy.pins[operation.skillSlug] && policy.pins[operation.skillSlug] !== operation.toVersion)
+  if (policies.some((policy) => (Object.hasOwn(policy.pins, operation.skillSlug) && policy.pins[operation.skillSlug] !== operation.toVersion)
     || (!policy.includePrerelease && isPrereleaseVersion(operation.toVersion))
     || !policy.allowedChangeKinds.includes(release.changeKind))) throw operationDenied("TARGET_OPERATION_POLICY_CHANGED");
   if (operation.action === "update" && operation.fromVersion

@@ -80,8 +80,10 @@ test("organization policy editing loads its own revision and preserves its pins"
   const targetPolicy: SkillUpgradePolicyV1 = { schemaVersion: 1, mode: "manual", includePrerelease: true, allowedChangeKinds: ["feature"], pins: { "target-only": "2.0.0" } };
   const organizationPolicy: SkillUpgradePolicyV1 = { schemaVersion: 1, mode: "maintenance-window", includePrerelease: false, allowedChangeKinds: ["security", "fix"], pins: { "org-required": "1.0.0" }, maintenanceWindow: { timeZone: "UTC", daysOfWeek: [0], startMinute: 300, durationMinutes: 60 } };
   const saves: Array<{ policy: SkillUpgradePolicyV1; expectedRevisionNumber: number }> = [];
+  const targetSaves: typeof saves = [];
   const client = {
     async getTargetSkillUpgradePolicy() { return policyRevision("target", 3, targetPolicy); },
+    async updateTargetSkillUpgradePolicy(_id: string, input: { policy: SkillUpgradePolicyV1; expectedRevisionNumber: number }) { targetSaves.push(input); return { created: true, revision: policyRevision("target", 4, input.policy) }; },
     async getOrganizationSkillUpgradePolicy() { return policyRevision("organization", 7, organizationPolicy); },
     async updateOrganizationSkillUpgradePolicy(_id: string, input: { policy: SkillUpgradePolicyV1; expectedRevisionNumber: number }) { saves.push(input); return { created: true, revision: policyRevision("organization", 8, input.policy) }; },
   } as unknown as RegistryClient;
@@ -91,6 +93,11 @@ test("organization policy editing loads its own revision and preserves its pins"
   details.open = true;
   fireEvent(details, new window.Event("toggle"));
   await view.findByText(/target-only 2.0.0/);
+  fireEvent.click(view.getByRole("button", { name: "Save immutable policy revision" }));
+  await waitFor(() => assert.equal(targetSaves.length, 1));
+  assert.equal(targetSaves[0]!.expectedRevisionNumber, 3);
+  assert.deepEqual(targetSaves[0]!.policy, targetPolicy, "existing target edits preserve only target rules");
+  await view.findByText("Saved target policy revision 4.");
   fireEvent.change(view.getByLabelText("Upgrade policy scope"), { target: { value: "organization" } });
   await view.findByText(/org-required 1.0.0/);
   assert.equal((view.getByRole("checkbox") as HTMLInputElement).checked, false);
@@ -103,6 +110,33 @@ test("organization policy editing loads its own revision and preserves its pins"
   assert.deepEqual(saves[0]!.policy.pins, organizationPolicy.pins);
   assert.deepEqual(saves[0]!.policy.allowedChangeKinds, organizationPolicy.allowedChangeKinds);
   assert.deepEqual(saves[0]!.policy.maintenanceWindow, organizationPolicy.maintenanceWindow);
+});
+
+test("a first target policy adds no restrictions and displays the legacy organization ceiling read-only", async () => {
+  const organizationPolicy: SkillUpgradePolicyV1 = { schemaVersion: 1, mode: "maintenance-window", includePrerelease: false, allowedChangeKinds: ["security"], pins: { "org-required": "1.0.0" }, maintenanceWindow: { timeZone: "UTC", daysOfWeek: [0], startMinute: 300, durationMinutes: 60 } };
+  const saves: Array<{ policy: SkillUpgradePolicyV1; expectedRevisionNumber: number }> = [];
+  const client = {
+    async getTargetSkillUpgradePolicy() { return null; },
+    async updateTargetSkillUpgradePolicy(_id: string, input: { policy: SkillUpgradePolicyV1; expectedRevisionNumber: number }) { saves.push(input); return { created: true, revision: policyRevision("target", 1, input.policy) }; },
+  } as unknown as RegistryClient;
+  const target = { id: "target-1", owner: { type: "organization", id: "org-1" } } as ArchitectureTargetRecord;
+  // An older API provides this single projection without constraints[].
+  const view = render(<UpgradePolicyEditor client={client} target={target} resolved={{ policy: organizationPolicy, source: "organization", revision: policyRevision("organization", 7, organizationPolicy) }} onSaved={() => undefined} />);
+  const details = view.container.querySelector("details")!;
+  details.open = true;
+  fireEvent(details, new window.Event("toggle"));
+  await view.findByText(/Saving creates the first policy/);
+  assert.equal((view.getByRole("checkbox") as HTMLInputElement).checked, true);
+  const ceiling = view.getByRole("region", { name: "Organization ceiling" });
+  assert.match(ceiling.textContent ?? "", /prereleases disabled/);
+  assert.match(ceiling.textContent ?? "", /org-required 1.0.0/);
+  assert.match(ceiling.textContent ?? "", /05:00/);
+  assert.equal(ceiling.querySelector("input, select, button"), null);
+  fireEvent.click(view.getByRole("button", { name: "Save immutable policy revision" }));
+  await waitFor(() => assert.equal(saves.length, 1));
+  assert.equal(saves[0]!.expectedRevisionNumber, 0);
+  assert.deepEqual(saves[0]!.policy, { schemaVersion: 1, mode: "manual", includePrerelease: true,
+    allowedChangeKinds: ["breaking", "feature", "fix", "maintenance", "security"], pins: {} });
 });
 
 function release(version: string, lifecycleStatus: string, allowedActions: SkillReleaseSummary["allowedActions"]): SkillReleaseSummary {

@@ -304,9 +304,16 @@ export interface TargetSkillUpdates {
     source: SkillUpgradePolicyConstraint["source"];
     /** @deprecated Revision of the requested-policy projection. */
     revision: SkillUpgradePolicyRevisionRecord | null;
-    constraints: Array<SkillUpgradePolicyConstraint & { revision: SkillUpgradePolicyRevisionRecord | null }>;
+    /** Older API responses expose only the deprecated projection fields. */
+    constraints?: Array<SkillUpgradePolicyConstraint & { revision: SkillUpgradePolicyRevisionRecord | null }>;
   } | null;
   items: Array<{ slug: string; platform: string; evaluation: SkillUpdateEvaluation }>;
+}
+
+/** Display compatibility only. The API remains responsible for enforcing current policies. */
+export function targetSkillUpgradePolicyConstraints(resolved: TargetSkillUpdates["policy"] | undefined): Array<SkillUpgradePolicyConstraint & { revision: SkillUpgradePolicyRevisionRecord | null }> {
+  if (!resolved) return [];
+  return resolved.constraints ?? [{ policy: resolved.policy, source: resolved.source, revision: resolved.revision }];
 }
 
 /**

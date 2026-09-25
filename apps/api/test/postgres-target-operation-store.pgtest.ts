@@ -244,28 +244,75 @@ test("a queued target override cannot bypass an organization policy committed be
   assert.equal((await store.get(op.id))?.fencingToken, 0);
 });
 
-test("organization maintenance windows constrain manual targets at claim and success receipt", { timeout: 60_000 }, async (t) => {
-  for (const boundary of ["claim", "complete"] as const) await t.test(boundary, async (sub) => {
+test("organization maintenance windows constrain manual targets at every execution boundary", { timeout: 60_000 }, async (t) => {
+  for (const boundary of ["claim", "apply", "renew", "verify", "complete"] as const) await t.test(boundary, async (sub) => {
     const { pool, db, organizationId } = await organizationFixture(sub);
     const policies = new PostgresSkillUpgradePolicyStore(db);
     await policies.append(policyInput(0));
     const store = new PostgresTargetSkillOperationStore(db);
     const op = operation();
     await store.create({ operation: op });
-    const leased = boundary === "complete" ? await store.claim(claim(op)) : null;
+    const leased = boundary === "claim" ? null : await store.claim(claim(op));
+    if (boundary !== "claim") assert.ok(leased);
     const binding = { ...claim(op), fencingToken: leased?.fencingToken ?? 0 };
-    if (boundary === "complete") {
-      await store.advance({ ...binding, state: "applying" });
-      await store.advance({ ...binding, state: "verifying" });
-    }
+    if (["renew", "verify", "complete"].includes(boundary)) await store.advance({ ...binding, state: "applying" });
+    if (boundary === "complete") await store.advance({ ...binding, state: "verifying" });
+    const before = await store.get(op.id);
     const databaseNow = new Date((await pool.query("SELECT clock_timestamp() AS now")).rows[0].now);
+    // Three days away stays closed across midnight within this test's bounded timeout.
     const closedPolicy = { ...defaultSkillUpgradePolicyV1, mode: "maintenance-window" as const, maintenanceWindow: {
-      timeZone: "UTC", daysOfWeek: [(databaseNow.getUTCDay() + 1) % 7], startMinute: 0, durationMinutes: 1440,
+      timeZone: "UTC", daysOfWeek: [(databaseNow.getUTCDay() + 3) % 7], startMinute: 0, durationMinutes: 1440,
     } };
     await policies.append({ ...policyInput(0, closedPolicy), scopeType: "organization", scopeId: organizationId });
-    await assert.rejects(boundary === "claim" ? store.claim(claim(op)) : store.complete({ ...binding, result: result() }), code("TARGET_OPERATION_OUTSIDE_MAINTENANCE_WINDOW"));
+    await assert.rejects(boundary === "claim" ? store.claim(claim(op))
+      : boundary === "complete" ? store.complete({ ...binding, result: result() })
+        : store.advance({ ...binding, state: boundary === "verify" ? "verifying" : "applying" }), code("TARGET_OPERATION_OUTSIDE_MAINTENANCE_WINDOW"));
+    assert.deepEqual(await store.get(op.id), before, "rejected windows leave state, lease, fence and receipt unchanged");
     if (boundary === "complete") assert.equal((await store.complete({ ...binding, result: { status: "failed", code: "operation.window-closed", recordedAt: now } }))?.state, "failed");
   });
+});
+
+test("Postgres claims require both maintenance windows across different time zones", { timeout: 60_000 }, async (t) => {
+  const { pool, db, organizationId } = await organizationFixture(t);
+  const policies = new PostgresSkillUpgradePolicyStore(db);
+  const allDays = [0, 1, 2, 3, 4, 5, 6];
+  const organizationPolicy = { ...defaultSkillUpgradePolicyV1, mode: "maintenance-window" as const,
+    maintenanceWindow: { timeZone: "Australia/Melbourne", daysOfWeek: allDays, startMinute: 0, durationMinutes: 1440 } };
+  const targetPolicy = { ...organizationPolicy, maintenanceWindow: { ...organizationPolicy.maintenanceWindow, timeZone: "America/New_York" } };
+  await policies.append({ ...policyInput(0, organizationPolicy), scopeType: "organization", scopeId: organizationId });
+  await policies.append(policyInput(0, targetPolicy));
+  const store = new PostgresTargetSkillOperationStore(db);
+  const op = operation();
+  await store.create({ operation: op });
+  const leased = await store.claim(claim(op));
+  assert.ok(leased, "overlapping windows in both zones permit a claim");
+  const binding = { ...claim(op), fencingToken: leased.fencingToken };
+  await store.advance({ ...binding, state: "applying" });
+  const databaseNow = new Date((await pool.query("SELECT clock_timestamp() AS now")).rows[0].now);
+  const localDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short" }).format(databaseNow));
+  // Three days away remains closed even if this test crosses local midnight.
+  await policies.append(policyInput(1, { ...targetPolicy, maintenanceWindow: { ...targetPolicy.maintenanceWindow, daysOfWeek: [(localDay + 3) % 7] } }));
+  const before = await store.get(op.id);
+  await assert.rejects(store.advance({ ...binding, state: "verifying" }), code("TARGET_OPERATION_OUTSIDE_MAINTENANCE_WINDOW"));
+  assert.deepEqual(await store.get(op.id), before, "an open organization window cannot bypass the target window");
+});
+
+test("Postgres treats constructor as unpinned but enforces an explicit constructor pin", { timeout: 60_000 }, async (t) => {
+  const { db } = await fixture(t, false, "constructor");
+  const policies = new PostgresSkillUpgradePolicyStore(db);
+  await policies.append(policyInput(0));
+  const store = new PostgresTargetSkillOperationStore(db);
+  const op = operation({ skillSlug: "constructor" });
+  await store.create({ operation: op });
+  const leased = await store.claim(claim(op));
+  assert.ok(leased);
+  const binding = { ...claim(op), fencingToken: leased.fencingToken };
+  await store.advance({ ...binding, state: "applying" });
+  await store.advance({ ...binding, state: "applying" });
+  await store.advance({ ...binding, state: "verifying" });
+  assert.equal((await store.complete({ ...binding, result: result() }))?.state, "succeeded");
+  await policies.append(policyInput(1, { ...defaultSkillUpgradePolicyV1, pins: { constructor: "1.1.0" } }));
+  await assert.rejects(store.create({ operation: operation({ skillSlug: "constructor", action: "rollback", fromVersion: "1.1.0", toVersion: "1.0.0" }) }), code("TARGET_OPERATION_POLICY_CHANGED"));
 });
 
 test("withdrawn and unsafe intermediate releases remain policy evidence without exposing their metadata", { timeout: 60_000 }, async (t) => {
@@ -667,7 +714,7 @@ function serviceFor(db: ReturnType<typeof createDb>, store: PostgresTargetSkillO
     listSkillReleaseChangeHistory: (input: Parameters<PostgresSubmissionStore["listSkillReleaseChangeHistory"]>[0]) => submissions.listSkillReleaseChangeHistory(input),
   } as SubmissionService, { now: () => new Date(), upgradePolicies: new SkillUpgradePolicyService(new PostgresSkillUpgradePolicyStore(db)) });
 }
-async function fixture(t: test.TestContext, teamOwned = false) {
+async function fixture(t: test.TestContext, teamOwned = false, skillSlug = "release-helper") {
   const connection = process.env.TEST_DATABASE_URL;
   assert.ok(connection, "TEST_DATABASE_URL is required");
   assert.match(new URL(connection).pathname, /(test|ci)/i);
@@ -688,8 +735,8 @@ async function fixture(t: test.TestContext, teamOwned = false) {
   await pool.query("INSERT INTO skill_architecture_revisions (id, architecture_id, revision_number, spec, created_by_user_id) VALUES ($1, $2, 1, '{\"schemaVersion\":1}', $3)", [revision, architecture, owner]);
   await pool.query(`INSERT INTO skill_architecture_targets (id, architecture_id, owner_user_id, owner_team_id, name, adapter_kind, adapter_contract_version, adapter_version, environment_id, profile_id, status, consent_status, consent_requested_at, consent_granted_at, capabilities, capabilities_digest, identity_digest, generation, created_by_user_id, created_at, updated_at)
     VALUES ($1,$2,$3,$4,'Companion','codex-workspace',2,'1.0.0','personal','default','connected','granted',$5,$5,$6,$7,$8,1,$9,$5,$5)`, [target, architecture, teamOwned ? null : owner, teamOwned ? team : null, now, capabilities, capabilitiesDigest, "d".repeat(64), owner]);
-  await insertObservation(pool, observation, "1.0.0", now);
-  const skill = await pool.query("INSERT INTO skills (slug,title,summary,lifecycle_status,visibility,owner_user_id) VALUES ('release-helper','Release helper','Fixture','approved','public',$1) RETURNING id", [owner]);
+  await insertObservation(pool, observation, "1.0.0", now, target, skillSlug);
+  const skill = await pool.query("INSERT INTO skills (slug,title,summary,lifecycle_status,visibility,owner_user_id) VALUES ($2,'Release helper','Fixture','approved','public',$1) RETURNING id", [owner, skillSlug]);
   for (const version of ["1.0.0", "1.1.0"]) {
     const release = await pool.query("INSERT INTO skill_versions (skill_id,version,lifecycle_status,review_status,security_status,published_at,change_kind) VALUES ($1,$2,'approved','approved','passed',$3,'feature') RETURNING id", [skill.rows[0].id, version, now]);
     await pool.query("INSERT INTO skill_artifacts (skill_version_id,storage_key,sha256,byte_size,content_type) VALUES ($1,$2,$3,123,'application/json')", [release.rows[0].id, `fixture/${version}`, hash]);
@@ -709,10 +756,10 @@ async function organizationFixture(t: test.TestContext) {
   return { ...existing, organizationId };
 }
 
-async function insertObservation(pool: ReturnType<typeof createPgPool>, id: string, version: string, captured: string, targetId = target) {
+async function insertObservation(pool: ReturnType<typeof createPgPool>, id: string, version: string, captured: string, targetId = target, skillSlug = "release-helper") {
   const record = assertValidArchitectureTargetObservation({ schemaVersion: 1, id, targetId, targetGeneration: 1,
     adapterDigest: "e".repeat(64), capabilitiesDigest, observedAt: captured,
-    skills: [{ slug: "release-helper", version, digest: hash, managed: true }], configFindings: [], promptAwareness: { detected: false, count: 0 } });
+    skills: [{ slug: skillSlug, version, digest: hash, managed: true }], configFindings: [], promptAwareness: { detected: false, count: 0 } });
   await pool.query(`INSERT INTO skill_architecture_observations (id,target_id,generation,adapter_kind,adapter_contract_version,adapter_version,adapter_digest,capabilities_digest,observed_digest,observed_state,captured_at)
     VALUES ($1,$2,1,'codex-workspace',2,'1.0.0',$3,$4,$5,$6,$7)`, [id, targetId, "e".repeat(64), capabilitiesDigest, record.observedDigest, record, captured]);
 }

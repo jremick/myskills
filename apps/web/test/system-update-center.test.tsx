@@ -86,7 +86,7 @@ test("a blocked upgrade keeps intermediate release notes readable without allowi
 
 test("an unavailable pin explains the exact version without offering another update", async () => {
   const updates = sampleUpdates();
-  updates.policy!.constraints[0]!.policy.pins["release-notes-helper"] = "1.5.0";
+  updates.policy!.constraints![0]!.policy.pins["release-notes-helper"] = "1.5.0";
   updates.items[0]!.evaluation = { status: "no-compatible-release", installedVersion: "1.0.0", includedReleases: [], blockers: ["pinned-release-unavailable"] };
   const client = {
     async listArchitectureTargets() { return [workspaceTarget()]; },
@@ -278,7 +278,7 @@ function deferred<T>() {
 
 test("update centre shows both policy revisions and their windows when pins conflict", async () => {
   const updates = sampleUpdates();
-  const base = updates.policy!.constraints[0]!.policy;
+  const base = updates.policy!.constraints![0]!.policy;
   const organizationPolicy = { ...base, pins: { "release-notes-helper": "1.1.0" }, mode: "maintenance-window" as const,
     maintenanceWindow: { timeZone: "UTC", daysOfWeek: [3], startMinute: 0, durationMinutes: 60 } };
   const targetPolicy = { ...base, pins: { "release-notes-helper": "1.2.0" }, mode: "maintenance-window" as const,
@@ -297,6 +297,28 @@ test("update centre shows both policy revisions and their windows when pins conf
   await view.findByText("organization window: Wed 00:00–01:00 (UTC)");
   await view.findByText("target window: Wed 10:00–11:00 (Australia/Melbourne)");
   await view.findByText("Organization and target pins conflict. Update the target pin to match the organization ceiling.");
+});
+
+test("the update centre renders legacy policy responses and explains unknown blockers", async () => {
+  const updates = sampleUpdates();
+  delete updates.policy!.constraints;
+  updates.policy!.policy.pins["release-notes-helper"] = "1.5.0";
+  updates.items[0]!.evaluation = { status: "no-compatible-release", installedVersion: "1.0.0", includedReleases: [], blockers: ["pinned-release-unavailable"] };
+  const unknown = "constructor" as TargetSkillUpdates["items"][number]["evaluation"]["blockers"][number];
+  updates.items.push({ slug: "constructor", platform: "codex", evaluation: { status: "no-compatible-release", installedVersion: "1.0.0", includedReleases: [], blockers: ["pinned-release-unavailable", unknown] } });
+  const client = { async listArchitectureTargets() { return [workspaceTarget()]; }, async listTargetSkillUpdates() { return updates; },
+    async listTargetSkillOperations() { return []; }, async getTargetSkillUpgradePolicy() { return null; } } as unknown as RegistryClient;
+  const view = render(<SystemUpdateCenter client={client} session={{ user: { email: "owner@example.com" } }} />);
+  await view.findByText("Policies: default");
+  await view.findByText("Channel: stable");
+  await view.findByText("Pinned release 1.5.0 is unavailable. Choose an available version in the upgrade policy.");
+  await view.findByText("The pinned release is unavailable. This update is blocked by a release or policy requirement. Refresh for current details.");
+  assert.equal(view.container.textContent?.includes("function Object"), false, "an unpinned constructor slug must not read the prototype");
+  assert.equal((view.getByRole("checkbox", { name: /constructor/ }) as HTMLInputElement).disabled, true);
+  const details = view.container.querySelector("details")!;
+  details.open = true;
+  fireEvent(details, new window.Event("toggle"));
+  await view.findByText(/Saving creates the first policy/);
 });
 
 function sampleUpdates(): TargetSkillUpdates {

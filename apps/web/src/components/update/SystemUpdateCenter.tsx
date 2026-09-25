@@ -10,7 +10,7 @@ import type {
   TargetSkillOperationRecord,
   TargetSkillUpdates,
 } from "../../api.js";
-import { safeArchitectureTargetErrorMessage } from "../../api.js";
+import { safeArchitectureTargetErrorMessage, targetSkillUpgradePolicyConstraints } from "../../api.js";
 import { canQueueWorkspaceOperation } from "../target/workspace-target.js";
 import { UpgradePolicyEditor } from "./UpgradePolicyEditor.js";
 
@@ -241,10 +241,11 @@ function TargetUpdateCard({ row, selected, busy, architectureReview, onSelect, o
   onPolicySaved: () => void;
 }) {
   const candidates = row.updates?.items.filter((item) => item.evaluation.status === "update-available") ?? [];
+  const constraints = targetSkillUpgradePolicyConstraints(row.updates?.policy);
   return <Card className="control-plane-card target-update-card"><CardHeader><div><CardTitle>{row.target.name}</CardTitle><CardDescription>{row.target.adapter.kind} · generation {row.target.generation} · observed {formatDate(row.updates?.observedAt)}</CardDescription></div><Badge variant={candidates.length ? "secondary" : "outline"}>{candidates.length} updates</Badge></CardHeader><CardContent>
     {!canQueueWorkspaceOperation(row.target, "codex", "update") && <p className="control-plane-muted">Browser execution requires a consented personal Codex workspace enrolled with the CLI. Update details and operation history remain available.</p>}
     {row.error && <div className="control-plane-inline-message" role="alert">{row.error}</div>}
-    {row.updates && <><div className="target-update-policy-summary"><span>Policies: {row.updates.policy?.constraints.map(({ source, revision }) => `${source}${revision ? ` r${revision.revisionNumber}` : ""}`).join(" + ") ?? "default"}</span><span>Channel: {row.updates.policy?.constraints.every(({ policy }) => policy.includePrerelease) ? "prerelease" : "stable"}</span><span>{row.updates.policy?.constraints.some(({ policy }) => policy.mode === "maintenance-window") ? "Queued work requires every maintenance window to be open" : "Manually queued"}</span>{row.updates.policy?.constraints.map(({ source, policy }) => policy.mode === "maintenance-window" && policy.maintenanceWindow
+    {row.updates && <><div className="target-update-policy-summary"><span>Policies: {constraints.map(({ source, revision }) => `${source}${revision ? ` r${revision.revisionNumber}` : ""}`).join(" + ") || "default"}</span><span>Channel: {(constraints.length > 0 && constraints.every(({ policy }) => policy.includePrerelease)) ? "prerelease" : "stable"}</span><span>{constraints.some(({ policy }) => policy.mode === "maintenance-window") ? "Queued work requires every maintenance window to be open" : "Manually queued"}</span>{constraints.map(({ source, policy }) => policy.mode === "maintenance-window" && policy.maintenanceWindow
       ? <span key={source}>{source} window: {windowSummary(policy.maintenanceWindow)}</span> : null)}</div><div className="target-update-list">{row.updates.items.map((item) => {
       const selection = { targetId: row.target.id, slug: item.slug };
       const checked = selected.some((candidate) => candidate.targetId === selection.targetId && candidate.slug === selection.slug);
@@ -274,7 +275,7 @@ function windowSummary(window: SkillUpgradeMaintenanceWindow): string {
 }
 
 function policyPin(resolved: TargetSkillUpdates["policy"] | undefined, slug: string): string | undefined {
-  const pins = [...new Set(resolved?.constraints.flatMap(({ policy }) => policy.pins[slug] ? [policy.pins[slug]] : []) ?? [])];
+  const pins = [...new Set(targetSkillUpgradePolicyConstraints(resolved).flatMap(({ policy }) => Object.hasOwn(policy.pins, slug) ? [policy.pins[slug]] : []))];
   return pins.length === 1 ? pins[0] : undefined;
 }
 
@@ -291,7 +292,7 @@ function updateBlockerText(blocker: SkillUpdateBlockerCode, pinnedVersion?: stri
     "policy-pin-conflict": "Organization and target pins conflict. Update the target pin to match the organization ceiling.",
     "change-kind-not-allowed": "The upgrade crosses a release change kind that your policy does not allow.",
   };
-  return messages[blocker];
+  return Object.hasOwn(messages, blocker) ? messages[blocker] : "This update is blocked by a release or policy requirement. Refresh for current details.";
 }
 
 function operationKey(action: string): string {

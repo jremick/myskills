@@ -284,6 +284,7 @@ test("range policy covers releases with equal SemVer precedence and ignores late
   const blocked = evaluateSkillUpdate({ installed, releases: [fix, breaking], policy: { allowedChangeKinds: ["fix"], pinnedVersion: fix.version } });
   assert.equal(blocked.status, "no-compatible-release");
   assert.deepEqual(blocked.includedReleases, [fix, breaking]);
+  assert.deepEqual(blocked.blockers, ["change-kind-not-allowed"]);
   const allowed = evaluateSkillUpdate({ installed, releases: [fix, { ...breaking, version: "2.0.0" }], policy: { allowedChangeKinds: ["fix"], pinnedVersion: fix.version } });
   assert.equal(allowed.status, "update-available");
   assert.equal(allowed.candidate?.version, fix.version);

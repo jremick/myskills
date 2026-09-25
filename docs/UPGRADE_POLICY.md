@@ -87,13 +87,19 @@ Upgrade policies are immutable revisions with optimistic concurrency. For organi
 
 Prereleases must be allowed by both scopes. Each release in the upgrade range must have a change kind allowed by both. Exact version pins are checked independently; conflicting pins leave no eligible version and the update preview reports `policy-pin-conflict`.
 
+A first target policy in the editor starts without extra restrictions: prereleases allowed, all change kinds allowed, no pins, and manual mode without a maintenance window. The organization ceiling is shown read-only and remains independently enforced. Editing an existing target preserves its own settings. Organization rules are not copied into target revisions, so later organization pin or window changes do not leave a stale copy on the target.
+
+The upgrade change range uses SemVer precedence conservatively. Every known release after the installed source through the destination precedence contributes policy evidence, including other builds at the destination precedence. A pin still selects an exact build, but cannot hide a disallowed change at that same precedence. Installing another build of the already installed precedence is not offered as an upgrade.
+
 Manual mode means an explicitly queued operation with no clock restriction; it does not enable automatic scheduling. Every configured maintenance window must permit the same instant. Windows retain their own time zones and are never flattened into one interval. Disjoint windows therefore prevent claims and successful execution transitions until policy changes allow an overlap. Planning and queueing may occur outside a window; claims, renewal, promotion, verification, and success receipts recheck the current windows. Failure receipts remain recordable after a policy restriction.
 
 The API returns the applied policies in `policy.constraints`, with each scope and immutable revision. This list is the authoritative conjunction: every constraint must permit the operation.
 
-For compatibility with shipped clients, `policy.policy`, `policy.source`, and `policy.revision` remain as deprecated fields. They project the requested target policy when present, otherwise the organization policy, otherwise the default. This legacy projection is not the effective ceiling or permission to execute. A broader preview from a cached client is still rejected by the server when any current constraint blocks it.
+For compatibility with shipped clients, `policy.policy`, `policy.source`, and `policy.revision` remain as deprecated fields. They project the requested target policy when present, otherwise the organization policy, otherwise the default. This legacy projection is not the effective ceiling or permission to execute. A broader preview from a cached client is still rejected by the server when any current constraint blocks it. New web clients can display an older API response without `constraints` using these legacy fields; that display does not infer an organization ceiling the response omitted. Unknown blocker codes show a generic restriction message and remain blocked.
 
 Planning, scheduling, claims, execution transitions, and success receipts enforce the current constraints. PostgreSQL checks both streams under the existing target and organization locks, so a queued target policy cannot bypass a later organization restriction.
+
+Invalid stored policies fail closed during resolution. If a stored pin uses a malformed version accepted by an older validator, read the scope revision and append a corrected immutable revision through the policy API using its current revision number. Confirm the intended exact release first; do not trim or rewrite historical policy records.
 
 Organization policy changes require an MFA-verified organization owner. Target policy changes require an MFA-verified target manager and a write-capable, consented target.
 
