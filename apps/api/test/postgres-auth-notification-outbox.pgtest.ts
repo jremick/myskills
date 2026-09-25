@@ -16,7 +16,9 @@ test("Postgres auth notification outbox", { timeout: 120_000 }, async (t) => {
   await runMigrations(pool);
   await pool.query(`CREATE FUNCTION fail_auth_notification_intent() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected outbox insertion failure'; END $$`);
   await authNotificationOutboxCases(t, async () => {
-    await pool.query("TRUNCATE users CASCADE");
+    // This fixture creates auth rows only. Avoid TRUNCATE CASCADE, which also
+    // invokes immutable architecture-history guards even when those tables are empty.
+    await pool.query("DELETE FROM users");
     return {
       store: new PostgresAuthStore(createDb(pool)),
       setDisplayEmail: async (userId, email) => { await pool.query("UPDATE users SET email = $2 WHERE id = $1", [userId, email]); },
