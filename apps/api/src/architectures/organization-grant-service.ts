@@ -300,6 +300,7 @@ export class ArchitectureOrganizationGrantService {
       const normalized = toGrantReadError(error);
       await this.recordAuditSafe({
         actorUserId,
+        decision: "deny",
         action: "architecture.organization-grants.list",
         resourceType: "architecture",
         resourceId: architectureId,
@@ -459,6 +460,7 @@ export class ArchitectureOrganizationGrantService {
       const normalized = toGrantError(error);
       await this.recordAuditSafe({
         actorUserId,
+        decision: "deny",
         action: "architecture.organization-grants.replace",
         resourceType: "architecture",
         resourceId: architectureId,

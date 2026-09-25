@@ -159,7 +159,14 @@ test("user-owned architecture grants require the architecture owner and org owne
     replaceGrants(fixtureState, { actor: outsider, architectureId: fixtureState.architectureId, organizationIds: [organization.id] }),
     (error: unknown) => error instanceof AppError && error.code === "ARCHITECTURE_NOT_FOUND",
   );
-
+  await assert.rejects(
+    fixtureState.service.listOrganizationGrants({ actor: outsider, architectureId: fixtureState.architectureId }),
+    (error: unknown) => error instanceof AppError && error.code === "ARCHITECTURE_NOT_FOUND",
+  );
+  const audit = await fixtureState.architectureStore.listAuditEvents();
+  assert.equal(audit.filter((event) => event.action === "architecture.organization-grants.replace" && event.decision === "deny").length, 2);
+  assert.equal(audit.filter((event) => event.action === "architecture.organization-grants.list" && event.decision === "deny").length, 1);
+  assert.equal(audit.filter((event) => event.action === "architecture.organization-grants.replace" && event.decision === "allow").length, 1);
 });
 
 test("team owners need explicit parent policy, while unrelated organizations require org owner/admin", async () => {
@@ -443,4 +450,6 @@ test("allow-audit failure leaves the memory grant replacement unchanged", async 
   assert.deepEqual(await fixtureState.grantStore.listGrants(fixtureState.architectureId), before);
   const audits = await fixtureState.architectureStore.listAuditEvents();
   assert.equal((audits[0]?.details as { code?: string } | undefined)?.code, "ARCHITECTURE_ORGANIZATION_GRANT_FAILED");
+  assert.equal(audits[0]?.decision, "deny");
+  assert.equal(audits.filter((event) => event.action === "architecture.organization-grants.replace" && event.decision === "allow").length, 1);
 });

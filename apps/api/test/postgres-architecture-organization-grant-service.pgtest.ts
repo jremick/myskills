@@ -588,8 +588,8 @@ test("Postgres allow-audit failure rolls back the grant replacement", { timeout:
       .map((grant) => grant.organizationId),
     [firstOrganizationId],
   );
-  const denialAudit = await fixture.pool.query<{ code: string | null }>(`
-    SELECT details->>'code' AS code
+  const denialAudit = await fixture.pool.query<{ code: string | null; decision: string }>(`
+    SELECT details->>'code' AS code, decision
     FROM audit_events
     WHERE action = 'architecture.organization-grants.replace'
       AND resource_id = $1
@@ -598,6 +598,7 @@ test("Postgres allow-audit failure rolls back the grant replacement", { timeout:
     LIMIT 1
   `, [architectureId]);
   assert.equal(denialAudit.rows[0]?.code, "ARCHITECTURE_ORGANIZATION_GRANT_PERSISTENCE_FAILED");
+  assert.equal(denialAudit.rows[0]?.decision, "deny");
 });
 
 async function createFixture(

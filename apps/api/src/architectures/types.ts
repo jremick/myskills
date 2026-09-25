@@ -177,6 +177,7 @@ export interface ArchitectureAuditEvent {
 export interface ArchitectureAuditInput {
   actorUserId: string;
   action: string;
+  decision?: "allow" | "deny";
   resourceType: string;
   resourceId?: string | null;
   details?: Record<string, unknown>;

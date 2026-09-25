@@ -484,7 +484,7 @@ export class MemoryArchitectureStore implements ArchitectureStore {
       id: `architecture-audit-${this.auditEvents.length + 1}`,
       actorUserId: input.actorUserId,
       action: input.action,
-      decision: "allow",
+      decision: input.decision ?? "allow",
       resourceType: input.resourceType,
       resourceId: input.resourceId ?? null,
       details: sanitizeAuditDetails(input.details ?? {}),

@@ -718,7 +718,7 @@ export class PostgresArchitectureStore implements ArchitectureStore {
     await this.db.insert(auditEvents).values({
       actorUserId: input.actorUserId,
       action: input.action,
-      decision: "allow",
+      decision: input.decision ?? "allow",
       resourceType: input.resourceType,
       resourceId: input.resourceId ?? null,
       details: sanitizeAuditDetails(input.details ?? {}),
