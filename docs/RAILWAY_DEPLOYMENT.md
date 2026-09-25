@@ -1,7 +1,7 @@
 # Railway Deployment
 
 Version: 0.1.0-beta.6
-Last updated: 2026-09-05
+Last updated: 2026-09-25
 
 This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.
 The operational beta candidate is tracked in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
@@ -37,7 +37,7 @@ Do not deploy this project into any team or work Railway workspace.
 
 The optional HTTP MCP service is not part of the maintained live beta service set.
 
-`Dockerfile.api` and `Dockerfile.web` are the current Railway image sources. CI and release verification build those exact files in addition to the root multi-target `Dockerfile` used by the production Compose example. All three build app workspaces with Node 22 LTS; production starts use injected variables and do not copy the local `.env` into images.
+`Dockerfile.api` and `Dockerfile.web` are the current Railway image sources. CI and release verification build those exact files in addition to the root multi-target `Dockerfile` used by the production Compose example. The root, API, and web Dockerfiles default to Node 22; the backup Dockerfile pins Node 24. CI verifies both supported Node lines. Production starts use injected variables and do not copy the local `.env` into images. These source defaults do not establish the runtime version of an earlier deployment.
 
 ## Deployment and Recovery Readback
 

@@ -1,7 +1,7 @@
 # Roadmap
 
 Version: 0.1.0-beta.6
-Document revision: 0.3.0-draft
+Document revision: 0.3.0
 Last updated: 2026-09-25
 
 ## Release Tracks
@@ -16,8 +16,8 @@ Last updated: 2026-09-25
 
 ## Current Focus
 
-- Deliver the first bounded batch below, then review the remaining backlog
-  before assigning later release scope, owners, or dates.
+- Reconcile the merged foundation batch below, then prioritize review findings
+  and the remaining backlog before assigning later release scope, owners, or dates.
 - Make first use easier: native MCP skill delivery, better authoring and imports,
   optional task-aware recommendations, and simpler self-hosting and deployment.
 - Preserve the API/Postgres registry, immutable reviewed releases, authorization,
@@ -35,11 +35,12 @@ released, or deployed feature.
 
 | Slice | Evidence | Remaining gate |
 | --- | --- | --- |
-| Maintenance baseline | [PR #75](https://github.com/jremick/myskills/pull/75) combines bootstrap-directory revalidation, Hono remediation, and the MinIO CI image fix. Required CI checks and source review pass. | Merge approval; then close the duplicate Hono PR #69 and reassess grouped dependency updates. |
-| Roadmap and hosting investigation | [PR #76](https://github.com/jremick/myskills/pull/76) records the adoption workstreams and reconciles shipped foundations. | Review and merge. |
-| HOST-1 build caching | [PR #77](https://github.com/jremick/myskills/pull/77) preserves dependency layers. Six image targets, source and build-argument cache reuse, and runtime smokes passed on a Windows-hosted Linux engine. | Integration checks and merge; no deployment-time improvement is claimed. |
-| AUTHOR-1 CLI scaffold | [PR #78](https://github.com/jremick/myskills/pull/78) creates private Codex skill packages and refuses existing destinations. Windows CLI tests (167), package smoke, lint, and source review passed; the final shell-guidance test also passed. | Integration checks and merge. Archive creation, browser drafts, and imports remain separate slices. |
-| MCP-1 protocol prerequisite | [PR #79](https://github.com/jremick/myskills/pull/79) preserves the six metadata tools while adding modern protocol entrypoints and legacy compatibility. Windows MCP tests (36), remaining repository check stages, image smoke, and security review passed. | Resolve the inherited Hono audit gate through the maintenance baseline, then integrate. Native Skills content handlers remain a following slice. |
+| Maintenance baseline | [PR #75](https://github.com/jremick/myskills/pull/75) merged bootstrap-directory revalidation, Hono remediation, and the MinIO CI image fix after required CI passed. Duplicate Hono PR #69 is closed. | Reconcile grouped dependency updates after the MCP SDK migration; major runtime updates need a compatibility decision. |
+| Roadmap and hosting investigation | This revision records the adoption workstreams, merged foundations, and verified setup gaps. | Prioritize the remaining delivery slices after the full review. |
+| HOST-1 build caching | [PR #77](https://github.com/jremick/myskills/pull/77) merged after required CI passed. Six Windows image targets, source and build-argument cache reuse, and runtime smokes were verified. | Release images, setup and operations remain later slices. Deployment-time improvement is unmeasured. |
+| AUTHOR-1 CLI scaffold | [PR #78](https://github.com/jremick/myskills/pull/78) merged private Codex skill scaffolding after required CI passed. Windows CLI tests, package smoke, lint, shell-guidance tests, and source review passed. | Archive creation, browser drafts, and imports remain separate slices. |
+| MCP-1 protocol prerequisite | [PR #79](https://github.com/jremick/myskills/pull/79) merged modern protocol entrypoints and legacy compatibility after required CI passed. Windows MCP tests, repository checks, image smoke, and security review support the adapter change. | Native Skills content handlers, conformance and real-host loading remain a following slice. |
+| Public release history | [PR #80](https://github.com/jremick/myskills/pull/80) merged public history browsing and exact-version links after required CI, including browser tests, passed. | Version comparison and further history usability improvements remain open. |
 
 Container and other resource-heavy verification for this batch runs on the
 Windows PC. Candidate verification does not establish production deployment or
@@ -47,7 +48,7 @@ native host activation.
 
 ## Adoption Features For Delivery Review
 
-Status: the first delivery batch is in progress; the full workstream scopes and
+Status: the first code batch is merged; the full workstream scopes and
 later release order remain subject to review. IDs identify workstreams, not
 priority. These extend existing milestones
 and do not create separate registries or release systems.
@@ -116,7 +117,8 @@ Done:
 - Read-only MCP stdio and stateless Streamable HTTP discovery servers.
 - CLI workflows for validation, scanning, login/logout, auth status, API URL selection/config, doctor diagnostics, keyring-first credential storage, search/info, submission, author withdrawal, review actions, skill metadata/lifecycle controls, release lifecycle controls, team/sharing commands, verified export, local install/list/update/rollback, and API-token management.
 - First-pass production container packaging, opt-in web analytics support, and deployment preflight checks.
-- Version-history data and browser navigation for managed skills.
+- Version-history data and browser navigation for managed and public skills,
+  including exact-version links.
 - Registry backup/restore scripts and operator runbooks. Current scheduled-job execution, backup freshness, and alert delivery require live verification.
 
 Remaining:
@@ -196,8 +198,8 @@ Acceptance:
 - A new user can login, search, install, list, update, and rollback.
 - An author can create, validate, scan, package, and submit a draft.
 
-Current status: validation, scanning, submission, and the user install lifecycle
-are implemented. `init` and `package` remain planned and belong to
+Current status: `init`, validation, scanning, submission, and the user install
+lifecycle are implemented. `package` remains planned under
 [AUTHOR-1](#authoring-and-imports-author-1); the full author acceptance above is
 not yet met.
 
@@ -227,7 +229,7 @@ Done:
 - Public browse/search, skill detail, release metadata, and export-guidance views.
 - Email/password login/logout, password reset, account settings, MFA challenge/setup/reset/removal, current-user refresh, and session-aware API calls.
 - Authenticated author `.zip` package submission and author submitted-version export.
-- Managed-skill version-history browsing.
+- Managed and public skill version-history browsing with exact-version links.
 - Maintainer review dashboard workflows for approval, requested changes, rejection, and publication.
 - Owner/admin lifecycle controls for skill metadata, skill archive/restore/delete, and release deprecate/unpublish/revoke/restore/delete.
 - User API-key management.
@@ -293,7 +295,7 @@ Current status:
 
 Done:
 
-- First stdio and stateless Streamable HTTP MCP servers exist with `search_skills`, `get_skill_info`, and `get_install_instructions`.
+- Stdio and stateless Streamable HTTP MCP servers expose registry discovery and architecture metadata tools. SDK v2.1 entrypoints support both legacy clients and protocol `2026-07-28`; required CI and protocol tests passed in PR #79.
 - The API-owned MCP session check accepts an API token with either `skills:read` or `architectures:read`; registry tools require `skills:read`, architecture projection tools require `architectures:read`, session tokens are rejected, sanitized API-owned `mcp.session` audit events record allow/deny decisions, and bundle payload retrieval is avoided.
 
 Remaining:
@@ -598,9 +600,10 @@ does not include agent write tools or automatic skill execution.
 
 Delivery sequence:
 
-1. Migrate the adapter to the released SDK v2.1 entrypoints and verify both legacy
-   clients and protocol `2026-07-28`. A dependency update alone does not enable
-   the modern protocol. Preserve the existing HTTP authorization and limits.
+1. Completed in [PR #79](https://github.com/jremick/myskills/pull/79): the SDK v2.1
+   adapter supports legacy clients and protocol `2026-07-28` while preserving HTTP
+   authorization and limits. This protocol foundation does not yet serve native
+   Skills content.
 2. Add bounded Skills handlers over the existing authorized bundle API. Use
    version-pinned resource URIs whose final skill-directory segment matches the
    frontmatter name. Reauthorize every resource read and exclude packages without
@@ -621,6 +624,10 @@ Host support must be checked at delivery time.
 
 Goal: make a skill easy to create, improve, and bring into the registry while
 preserving the existing submission and review process.
+
+Delivered foundation: [PR #78](https://github.com/jremick/myskills/pull/78) adds
+local `myskills init` for a private Codex package with safe destination checks.
+Archive creation and the browser workflow remain open.
 
 Planned scope:
 
@@ -694,6 +701,9 @@ instance, then make upgrades and recovery equally clear.
 
 Planned scope:
 
+- Repair the current Compose startup path: verify anonymously accessible storage
+  artifacts and normal restart after bootstrap credentials are removed. See the
+  [verified startup gaps](SELF_HOSTING_INVESTIGATION.md#verified-startup-gaps).
 - Publish verified, versioned container images and a matching Compose release
   bundle so operators can install without a host Node/npm toolchain or source build.
 - Provide a small setup/operations helper with guided inputs, generated protected
@@ -717,6 +727,20 @@ selected by adding this workstream to the roadmap.
 Review existing work and the four additions together. Reconcile older status
 lists against current source, release records, and fresh runtime evidence where
 needed; do not schedule already-delivered work again.
+
+Recommended next order:
+
+1. Resolve validated security, install consistency, and operator startup findings
+   from the post-merge review, with focused regression evidence. Keep unresolved
+   security details in the private review record until remediation is ready.
+2. Reconcile grouped dependency updates against the SDK v2.1 baseline. Keep major
+   runtime and email-library upgrades separate until compatibility is verified.
+3. Deliver native MCP content loading and the next authoring/import slice as
+   separate workstreams over the existing registry and review contracts.
+4. Build the HOST-1 release bundle and guided setup on the repaired Compose path;
+   measure fresh install, update, and recovery before making speed claims.
+5. Review the recommendation experiment and broader connected management against
+   the resulting user evidence and remaining production requirements.
 
 | Review group | Existing work to reconcile | Decision needed |
 | --- | --- | --- |

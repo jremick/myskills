@@ -1,7 +1,7 @@
 # Self-Hosting And Deployment Investigation
 
 Date: 2026-09-25
-Status: source investigation and delivery candidates; no implementation selected.
+Status: build-cache improvement merged; setup, image publication and operations remain delivery candidates.
 Roadmap: [HOST-1](ROADMAP.md#self-hosting-and-deployment-host-1).
 
 ## Recommendation For Review
@@ -29,10 +29,15 @@ and Railway documentation was checked on the date above. The earlier
 [SkillBox comparison](https://github.com/kitze/skillbox/tree/cda64ad3310abe690c6d497352791da4cfeb9a0a)
 informed the onboarding questions.
 
-This investigation did not start containers, provision services, call production,
+The original investigation did not start containers, provision services, call production,
 run paid models, publish images, or measure install/build performance. The
 [operational beta ledger](OPERATIONAL_BETA_DELIVERY.md) records earlier runtime
 evidence; it is not a fresh verification of the current hosted instance.
+
+Build-cache follow-up: [PR #77](https://github.com/jremick/myskills/pull/77) was
+merged on 2026-09-25 after required CI and Windows-hosted image/cache checks.
+This validates dependency-layer reuse; it does not establish faster end-to-end
+deployment or a supported release-image installation path.
 
 ## Current Friction And Reusable Foundations
 
@@ -41,7 +46,7 @@ evidence; it is not a fresh verification of the current hosted instance.
 | The default first-run guide is a developer workflow: host Node/npm, dependency installation, migrations, seed, and two application terminals. | [Getting Started](GETTING_STARTED.md) | Give evaluators and operators their own container-first entry path; preserve this contributor workflow. |
 | Production Compose requires source builds and separate preflight, migration, bootstrap, and startup commands. | [Deployment](DEPLOYMENT.md), [Compose](../docker-compose.production.example.yml) | A release bundle and helper can remove repeated flags and build prerequisites. |
 | The tag workflow verifies images but does not publish them. | [Release workflow](../.github/workflows/release.yml), [Release policy](RELEASE.md) | Public image publication and anonymous pull verification are prerequisites, not an existing download capability. |
-| App Dockerfiles copy workspace source before `npm ci`. | [Root Dockerfile](../Dockerfile), [API Dockerfile](../Dockerfile.api), [web Dockerfile](../Dockerfile.web) | Source changes invalidate dependency-install layers. Separate workspace manifests/lockfile from source and measure cache reuse. |
+| App Dockerfiles now copy workspace manifests and the lockfile before `npm ci`. | [PR #77](https://github.com/jremick/myskills/pull/77), [Root Dockerfile](../Dockerfile), [API Dockerfile](../Dockerfile.api), [web Dockerfile](../Dockerfile.web) | Source and web build-argument edits reuse dependency layers. Six image targets and runtime smokes passed on Windows; setup and deployment timings remain unmeasured. |
 | Deployment values overlap: public origin, allowed origins, browser API path, proxy target, storage references, and bootstrap settings. | [Production preflight](../scripts/check-production-env.mjs), [Compose](../docker-compose.production.example.yml) | Derive topology-specific defaults from a few operator choices; validate the resolved configuration without printing secrets. |
 | The preflight script is not copied into the final API image. | [API runtime stage](../Dockerfile.api) | Container-only setup needs a deliberately packaged operations command/image; a shell wrapper alone cannot remove the Node prerequisite. |
 | Compose uses a migration job; the Railway API start script runs migration and optionally seed at startup. Migration already has a PostgreSQL advisory lock. | [Start script](../deploy/start-api.sh), [migrator](../apps/api/src/db/migrate.ts) | Reuse the lock and migration ledger. Define one owner for migration execution in each deployment path. |
@@ -49,6 +54,26 @@ evidence; it is not a fresh verification of the current hosted instance.
 | Production requires S3 artifact storage and SMTP/Resend auth delivery. Database-backed artifacts are rejected in production. | [Storage implementation](../apps/api/src/artifacts/storage.ts), [preflight](../scripts/check-production-env.mjs) | Removing MinIO or email configuration is not currently a safe configuration toggle. Offer existing external S3 explicitly or design a new mode separately. |
 | Readiness and dependency ordering already exist. | [Compose](../docker-compose.production.example.yml), [Deployment](DEPLOYMENT.md) | Preserve API `/ready` and web health checks; add a bounded operator-facing completion result. |
 | Coordinated database/artifact capture, status, and isolated restore helpers already exist. | [Backups](BACKUPS.md), [backup image](../Dockerfile.backup) | Package the existing recovery path rather than introduce an unrelated backup format. |
+
+## Verified Startup Gaps
+
+A follow-up on 2026-09-25 found two gaps in the existing Compose path:
+
+- Development and production still reference
+  `minio/minio:RELEASE.2025-09-07T16-13-09Z`. Anonymous manifest access failed with
+  `denied` / `insufficient_scope`; tag absence was not established. The E2E image
+  fix in PR #75 does not repair those two operator paths. Select and verify a
+  distributable storage image or supported build for each advertised architecture.
+- Production Compose requires `SEED_OWNER_PASSWORD` during interpolation even
+  when the bootstrap profile is disabled. Following the deployment guide and
+  removing that password makes `compose config --quiet` fail. The same synthetic
+  configuration with a password passes. Move bootstrap-only requirements out of
+  the normal startup path and verify restart without bootstrap credentials.
+
+The Compose checks ran on Docker Engine 28.3.0 and Compose 2.38.1 on a Windows
+Linux engine with synthetic values. They created no application containers and
+establish configuration behavior, not runtime health. Repair these paths before
+advertising the guided self-hosting journey.
 
 ## Candidate Delivery Slices
 
