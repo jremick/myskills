@@ -11,6 +11,7 @@ import {
   loadSkillManifestFromPackageFiles,
   loadStoredSkillManifestFromPackageFiles,
   validatePortableFilePaths,
+  validatePackageFiles,
   normalizePackageFilePath,
   loadSkillManifestFromPath,
   readPackageFilesFromZipBuffer,
@@ -257,6 +258,63 @@ test("scans in-memory package files", () => {
   assert.equal(result.filesScanned, 2);
   assert.equal(hasBlockingFindings(result.findings), true);
   assert.equal(result.findings[0]?.path, "README.md");
+});
+
+test("validation-only payload checks preserve UTF-8 bytes and skip content-risk expressions", (t) => {
+  const content = `\ufeffCafé 🐈\r\ntoken: ATATT${"a".repeat(30)}\n{"postinstall":"echo review"}`;
+  const files = [{ path: "SKILL.md", content }, { path: "docs/empty.txt", content: "" }];
+  const originalTest = RegExp.prototype.test;
+  const riskExpressionGuard = t.mock.method(RegExp.prototype, "test", function (this: RegExp, value: string) {
+    assert.notEqual(value, content, "validation must not evaluate content-risk expressions");
+    return originalTest.call(this, value);
+  });
+  assert.deepEqual(validatePackageFiles(files), { filesScanned: 2, bytesScanned: Buffer.byteLength(content, "utf8") });
+  assert.equal(files[0].content, content);
+  riskExpressionGuard.mock.restore();
+  const scan = scanPackageFiles(files);
+  assert.equal(scan.filesScanned, 2);
+  assert.equal(scan.bytesScanned, Buffer.byteLength(content, "utf8"));
+  assert.deepEqual(scan.findings, [
+    { category: "secret", severity: "blocking", message: "Potential credential or private key detected.", path: "SKILL.md" },
+    { category: "install-hook", severity: "warning", message: "Dependency install hook requires maintainer review.", path: "SKILL.md" },
+  ]);
+});
+
+test("validation-only payload checks reject malformed paths, text and collisions", () => {
+  const badPaths = ["../escape", "/absolute", "C:/absolute", "bad\\name", "https://example.test/file", "CON.txt", "trailing.", "bad\0name", `${"dir/".repeat(32)}file`];
+  for (const filePath of badPaths) assert.throws(() => validatePackageFiles([{ path: filePath, content: "text" }]), undefined, filePath);
+  for (const paths of [["readme.md", "./readme.md"], ["README.md", "readme.md"], ["café.txt", "cafe\u0301.txt"], ["file", "file/child"], ["File", "file/child"], ["Docs/a", "docs/b"]]) {
+    assert.throws(() => validatePackageFiles(paths.map((filePath) => ({ path: filePath, content: "text" }))), /duplicate|collid|collision/);
+  }
+  assert.throws(() => validatePackageFiles([{ path: "invalid.txt", content: "\ud800" }]), /valid UTF-8/);
+  assert.throws(() => validatePackageFiles([{ path: "invalid.txt", content: "text\0" }]), /without NUL/);
+  assert.throws(() => validatePackageFiles([{ path: "invalid.txt", content: null as unknown as string }]), /must be text/);
+});
+
+test("validation-only payload checks enforce aggregate UTF-8 bytes and file count", () => {
+  const content = "é".repeat(MAX_PACKAGE_TEXT_BYTES / 2);
+  assert.deepEqual(validatePackageFiles([{ path: "text.txt", content }]), { filesScanned: 1, bytesScanned: MAX_PACKAGE_TEXT_BYTES });
+  assert.throws(() => validatePackageFiles([{ path: "text.txt", content }, { path: "extra.txt", content: "a" }]), /Package text exceeds/);
+  const files = Array.from({ length: MAX_PACKAGE_FILES }, (_, index) => ({ path: `file-${index}`, content: "" }));
+  assert.deepEqual(validatePackageFiles(files), { filesScanned: MAX_PACKAGE_FILES, bytesScanned: 0 });
+  assert.throws(() => validatePackageFiles([...files, { path: "extra.txt", content: "" }]), /more than/);
+});
+
+test("full scan retains partial findings, limit stats and trailing-path checks", () => {
+  const token = `ATATT${"a".repeat(30)}`;
+  const files = [
+    { path: "first.txt", content: token },
+    { path: "large.txt", content: "x".repeat(MAX_PACKAGE_TEXT_BYTES) },
+    { path: "later.txt", content: null as unknown as string },
+  ];
+  assert.deepEqual(scanPackageFiles(files), {
+    rootPath: "package-payload", filesScanned: 3, bytesScanned: MAX_PACKAGE_TEXT_BYTES + Buffer.byteLength(token),
+    findings: [
+      { category: "secret", severity: "blocking", message: "Potential credential or private key detected.", path: "first.txt" },
+      { category: "package-structure", severity: "blocking", message: `Package text exceeds ${MAX_PACKAGE_TEXT_BYTES} bytes.`, path: "large.txt" },
+    ],
+  });
+  assert.throws(() => scanPackageFiles([...files, { path: "CON.txt", content: "text" }]), /non-portable/);
 });
 
 test("loads a skill manifest from normalized package file entries", () => {
