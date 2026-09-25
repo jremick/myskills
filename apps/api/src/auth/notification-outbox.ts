@@ -40,7 +40,7 @@ export function encryptAuthNotification(
 ): AuthNotificationIntent {
   const id = randomUUID();
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key(secret), iv);
+  const cipher = createCipheriv("aes-256-gcm", key(secret), iv, { authTagLength: 16 });
   cipher.setAAD(aad(id, hashSessionToken(input.token), input.purpose));
   // Explicit fields only: callers can contain a password hash behind AuthUserRecord.
   const ciphertext = Buffer.concat([cipher.update(JSON.stringify({ token: input.token, email: input.email }), "utf8"), cipher.final()]);
@@ -49,9 +49,13 @@ export function encryptAuthNotification(
 export function decryptAuthNotification(secret: string, claim: AuthNotificationClaim): { token: string; email: string } {
   const [version, iv, tag, ciphertext, extra] = claim.payloadCiphertext.split(".");
   if (version !== "v1" || !iv || !tag || !ciphertext || extra !== undefined) throw new Error("Invalid auth notification payload.");
-  const decipher = createDecipheriv("aes-256-gcm", key(secret), Buffer.from(iv, "base64url"));
+  const decodedIv = Buffer.from(iv, "base64url");
+  const decodedTag = Buffer.from(tag, "base64url");
+  if (decodedIv.length !== 12 || decodedTag.length !== 16 ||
+      decodedIv.toString("base64url") !== iv || decodedTag.toString("base64url") !== tag) throw new Error("Invalid auth notification payload.");
+  const decipher = createDecipheriv("aes-256-gcm", key(secret), decodedIv, { authTagLength: 16 });
   decipher.setAAD(aad(claim.id, claim.tokenHash, claim.purpose));
-  decipher.setAuthTag(Buffer.from(tag, "base64url"));
+  decipher.setAuthTag(decodedTag);
   const value: unknown = JSON.parse(Buffer.concat([decipher.update(Buffer.from(ciphertext, "base64url")), decipher.final()]).toString("utf8"));
   if (!value || typeof value !== "object" || !("token" in value) || !("email" in value) ||
       typeof value.token !== "string" || typeof value.email !== "string" ||
@@ -69,6 +73,8 @@ export class AuthNotificationWorker {
   private current: Promise<void> | undefined;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private stopped = false;
+  private outcomesClosed = false;
+  private stopPromise: Promise<void> | undefined;
   private readonly cancellation = new AbortController();
   constructor(private readonly store: AuthStore, private readonly sink: AuthNotificationSink, private readonly options: {
     secret: string;
@@ -96,15 +102,31 @@ export class AuthNotificationWorker {
     this.timer = setTimeout(() => { void poll(); }, 0);
     this.timer.unref();
   }
-  async stop(drainMs = 20_000): Promise<void> {
+  stop(drainMs = 20_000): Promise<void> {
+    if (this.stopPromise) return this.stopPromise;
     this.stopped = true;
     if (this.timer) clearTimeout(this.timer);
-    // Stop waiting for hung provider promises and prohibit any subsequent DB work.
-    this.cancellation.abort();
-    if (!this.current) return;
+    this.stopPromise = this.drain(drainMs);
+    return this.stopPromise;
+  }
+  private async drain(drainMs: number): Promise<void> {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([this.current.catch(() => {}), new Promise<void>((resolve) => { timer = setTimeout(resolve, drainMs); })]);
-    if (timer) clearTimeout(timer);
+    try {
+      // In-flight delivery can still finish and persist its outcome during drain.
+      // The deadline closes outcome writes before it cancels unresolved sends.
+      await Promise.race([
+        this.current?.catch(() => {}),
+        new Promise<void>((resolve) => { timer = setTimeout(() => {
+          this.outcomesClosed = true;
+          this.cancellation.abort();
+          resolve();
+        }, Math.max(0, Math.min(drainMs, 20_000))); }),
+      ]);
+    } finally {
+      this.outcomesClosed = true;
+      this.cancellation.abort();
+      if (timer) clearTimeout(timer);
+    }
   }
   private now(): Date { return this.options.now?.() ?? new Date(); }
   private async dispatch(): Promise<void> {
@@ -123,7 +145,7 @@ export class AuthNotificationWorker {
     catch { await this.finish(claim, "invalid"); return; }
     if (payload.email !== user.email.trim().toLowerCase()) { await this.finish(claim, "invalid"); return; }
     const controller = new AbortController();
-    const notification: AuthActionNotification = { user, ...payload, expiresAt: claim.expiresAt, signal: controller.signal };
+    const notification: AuthActionNotification = { user, ...payload, expiresAt: claim.expiresAt, signal: controller.signal, idempotencyKey: `auth-notification/${claim.id}` };
     let timer: ReturnType<typeof setTimeout> | undefined;
     let cancel: (() => void) | undefined;
     try {
@@ -150,7 +172,7 @@ export class AuthNotificationWorker {
     }
   }
   private async finish(claim: AuthNotificationClaim, outcome: AuthNotificationOutcome | "retry"): Promise<void> {
-    if (this.stopped) return;
+    if (this.outcomesClosed) return;
     const now = this.now();
     const availableAt = new Date(now.getTime() + Math.min(15 * 60_000, 30_000 * 2 ** (claim.attempts - 1)));
     await this.store.finishAuthNotification({ id: claim.id, leaseId: claim.leaseId, now, outcome, availableAt });

@@ -125,7 +125,7 @@ export class ResendAuthNotificationSink implements AuthNotificationSink {
       subject: message.subject,
       text: message.text,
       html: message.html,
-    }, { signal: input.signal });
+    }, { signal: input.signal, idempotencyKey: input.idempotencyKey });
     if (response.error) {
       throw new Error(`Resend email delivery failed: ${response.error.name} ${response.error.message}`);
     }

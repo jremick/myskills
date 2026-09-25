@@ -131,6 +131,7 @@ export interface ConfirmEmailChangeInput {
 
 export interface AuthActionNotification {
   signal?: AbortSignal;
+  idempotencyKey?: string;
   user: AuthUserRecord;
   email: string;
   token: string;
@@ -360,7 +361,7 @@ export class AuthService {
       passwordHash,
     });
     if (created.user) {
-      await this.sendAuthActionToken(created.user, "email_verification");
+      await this.sendAuthActionToken(created.user, "email_verification", { enqueue: true });
     }
     return { status: "pending" };
   }
@@ -1193,7 +1194,7 @@ export class AuthService {
       }
       return null;
     }
-    if (options.enqueue) return { expiresAt };
+    if (options.enqueue) return { expiresAt: created.expiresAt };
     const notification = {
       user,
       email,

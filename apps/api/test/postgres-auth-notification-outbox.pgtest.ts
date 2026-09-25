@@ -21,6 +21,7 @@ test("Postgres auth notification outbox", { timeout: 120_000 }, async (t) => {
     await pool.query("DELETE FROM users");
     return {
       store: new PostgresAuthStore(createDb(pool)),
+      expireToken: async (tokenHash) => { await pool.query("UPDATE auth_action_tokens SET expires_at = now() - interval '1 second' WHERE token_hash = $1", [tokenHash]); },
       setDisplayEmail: async (userId, email) => { await pool.query("UPDATE users SET email = $2 WHERE id = $1", [userId, email]); },
       rows: async () => (await pool.query('SELECT payload_ciphertext AS "payloadCiphertext", status, attempts FROM auth_notification_outbox ORDER BY created_at, id')).rows,
       counts: async () => {

@@ -80,6 +80,8 @@ test("registration queues email verification without activating request-mode acc
 
   assert.equal(response.statusCode, 202);
   assert.deepEqual(response.json(), { status: "pending" });
+  assert.equal(outbox.emailVerifications.length, 0);
+  await drainAuthNotifications(authStore, outbox.sink);
   assert.equal(outbox.emailVerifications.length, 1);
   assert.equal(outbox.emailVerifications[0].email, "new@example.com");
   assertNoSensitiveAuthMaterial(response.json());

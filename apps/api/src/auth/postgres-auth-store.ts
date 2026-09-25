@@ -571,6 +571,27 @@ export class PostgresAuthStore implements AuthStore {
           return null;
         }
       }
+      if (notification) {
+        // The account lock serializes admission across replicas. Retire stale or
+        // duplicate legacy intents without invalidating links already delivered.
+        const now = new Date();
+        const active = await tx.select({ job: authNotificationOutbox, token: authActionTokens })
+          .from(authNotificationOutbox).innerJoin(authActionTokens, eq(authActionTokens.id, authNotificationOutbox.actionTokenId))
+          .where(and(eq(authActionTokens.userId, user.id), eq(authActionTokens.purpose, input.purpose),
+            or(eq(authNotificationOutbox.status, "pending"), eq(authNotificationOutbox.status, "leased"))))
+          .orderBy(asc(authNotificationOutbox.createdAt), asc(authNotificationOutbox.id))
+          .for("update", { of: authNotificationOutbox });
+        let existing: AuthActionTokenRecord | undefined;
+        for (const { job, token } of active) {
+          if (!existing && !token.usedAt && token.expiresAt > now && token.sentToNormalizedEmail === input.sentToNormalizedEmail) {
+            existing = toAuthActionTokenRecord(token);
+          } else {
+            await tx.update(authNotificationOutbox).set({ status: token.expiresAt <= now ? "expired" : "invalid", payloadCiphertext: null,
+              leaseId: null, leaseExpiresAt: null, updatedAt: now }).where(eq(authNotificationOutbox.id, job.id));
+          }
+        }
+        if (existing) return existing;
+      }
       // Public reset requests preserve existing links. Only a password-authenticated
       // email-change request supersedes previous email-change requests.
       if (input.purpose === "email_change") {

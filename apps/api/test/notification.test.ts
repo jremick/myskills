@@ -340,13 +340,15 @@ test("queued SMTP cancellation closes only its isolated transport", async () => 
   assert.equal(isolatedClosed, 2);
 });
 
-test("Resend forwards queued delivery cancellation", async () => {
+test("Resend forwards queued delivery cancellation and stable idempotency keys", async () => {
   const controller = new AbortController();
   let signal: AbortSignal | undefined;
+  const keys: Array<string | undefined> = [];
   const sink = new ResendAuthNotificationSink({
     appBaseUrl: "https://skills.example", from: "noreply@example.test",
-    client: { async send(_message, options) { signal = options?.signal; return { data: { id: "queued" }, error: null, headers: null }; } },
+    client: { async send(_message, options) { signal = options?.signal; keys.push(options?.idempotencyKey); return { data: { id: "queued" }, error: null, headers: null }; } },
   });
-  await sink.sendPasswordReset({ ...notification("queued-token"), signal: controller.signal });
+  for (let retry = 0; retry < 2; retry += 1) await sink.sendPasswordReset({ ...notification("queued-token"), signal: controller.signal, idempotencyKey: "auth-notification/stable-row" });
   assert.equal(signal, controller.signal);
+  assert.deepEqual(keys, ["auth-notification/stable-row", "auth-notification/stable-row"]);
 });

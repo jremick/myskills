@@ -478,9 +478,7 @@ export class MemoryAuthStore implements AuthStore {
       if (input.notification) {
         if (input.purpose !== "password_reset" && input.purpose !== "email_verification") throw new Error("Unsupported queued auth purpose.");
         if (user.email !== input.sentToNormalizedEmail || !eligibleAuthNotification(toRecord(user), input.purpose, Boolean(user.passwordHash))) return null;
-        if (this.authNotifications.has(input.notification.id)) throw new Error("Duplicate auth notification intent.");
       }
-      if (this.authActionTokens.has(input.tokenHash)) throw new Error("Duplicate auth action token.");
       if (input.purpose === "password_reset" || input.purpose === "email_change") {
         if (user.status !== "active" || !user.emailVerifiedAt || !user.passwordHash ||
           (input.expectedAccount && (user.email !== input.expectedAccount.email || user.passwordHash !== input.expectedAccount.passwordHash)) ||
@@ -488,6 +486,28 @@ export class MemoryAuthStore implements AuthStore {
           return null;
         }
       }
+      const retired: Array<{ job: MemoryAuthNotification; status: string; now: Date }> = [];
+      if (input.notification) {
+        const now = new Date();
+        let existing: MemoryAuthActionToken | undefined;
+        for (const job of this.authNotifications.values()) {
+          const queuedToken = this.authActionTokens.get(job.tokenHash);
+          if (!queuedToken || queuedToken.userId !== input.userId || queuedToken.purpose !== input.purpose ||
+              (job.status !== "pending" && job.status !== "leased")) continue;
+          if (!existing && !queuedToken.usedAt && queuedToken.expiresAt > now && queuedToken.sentToNormalizedEmail === input.sentToNormalizedEmail) {
+            existing = queuedToken;
+          } else {
+            retired.push({ job, status: queuedToken.expiresAt <= now ? "expired" : "invalid", now });
+          }
+        }
+        if (existing) {
+          for (const { job, status, now } of retired) Object.assign(job, { status, payloadCiphertext: null, leaseId: null, leaseExpiresAt: null, updatedAt: now });
+          return toAuthActionTokenRecord(existing);
+        }
+        if (this.authNotifications.has(input.notification.id)) throw new Error("Duplicate auth notification intent.");
+      }
+      if (this.authActionTokens.has(input.tokenHash)) throw new Error("Duplicate auth action token.");
+      for (const { job, status, now } of retired) Object.assign(job, { status, payloadCiphertext: null, leaseId: null, leaseExpiresAt: null, updatedAt: now });
       const token: MemoryAuthActionToken = {
         id: `auth-action-token-${this.authActionTokens.size + 1}`,
         userId: input.userId,
