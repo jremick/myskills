@@ -18,10 +18,14 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
   const skills = createNativeSkillsHandlers(options);
   server.server.registerCapabilities({ resources: {}, extensions: { [SKILLS_EXTENSION]: {} } });
   const requireSkills = (ctx: ServerContext) => {
-    const capabilities = ctx.mcpReq.envelope
-      ? ctx.mcpReq.envelope.clientCapabilities
+    // SDK 2.1 deliberately hides wire-only envelope keys from public types.
+    // Read the reserved key explicitly and validate the extension map locally.
+    const envelope = ctx.mcpReq.envelope as Record<string, unknown> | undefined;
+    const capabilities = envelope
+      ? envelope["io.modelcontextprotocol/clientCapabilities"]
       : server.server.getClientCapabilities();
-    const extension = capabilities?.extensions?.[SKILLS_EXTENSION];
+    const parsed = z.object({ extensions: z.record(z.string(), z.unknown()).optional() }).safeParse(capabilities);
+    const extension = parsed.success ? parsed.data.extensions?.[SKILLS_EXTENSION] : undefined;
     if (!extension || typeof extension !== "object" || Array.isArray(extension)) {
       throw new ProtocolError(-32602, "Declare the io.modelcontextprotocol/skills client extension before using Skills methods.");
     }
