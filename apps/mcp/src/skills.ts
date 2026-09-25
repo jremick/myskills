@@ -56,8 +56,10 @@ export function createNativeSkillsHandlers(options: RegistryApiClientOptions) {
 
   async function load(client: NativeClient, slug: string, version: string) {
     const prefix = `/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}`;
-    const body = await client.json<{ release: unknown }>(prefix);
-    const release = releaseSchema.parse(body.release);
+    const body = await client.json<unknown>(prefix);
+    const projection = z.object({ release: releaseSchema }).safeParse(body);
+    if (!projection.success) throw new IncompatibleSkill();
+    const release = projection.data.release;
     if (release.slug !== slug || release.version !== version) throw new IncompatibleSkill();
     const platform = release.platforms.filter((item) => item.status === "supported")
       .sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)[0];

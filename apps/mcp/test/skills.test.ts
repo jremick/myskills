@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { parseSkillManifest } from "@myskills-app/skill-package";
 import { createNativeSkillsHandlers } from "../src/skills.js";
 import { NATIVE_API_METADATA_BYTES, type FetchLike } from "../src/api-client.js";
 import { nativeFixture, hash, json } from "./native-fixture.js";
@@ -92,6 +93,36 @@ test("Native discovery lists stable approved defaults and excludes hidden or pre
   }
   const fixture = nativeFixture({ version: "1.1.0-rc.1" });
   assert.deepEqual((await createNativeSkillsHandlers({ token, fetchImpl: fixture.fetchImpl }).list()).skills, []);
+});
+
+test("An incompatible bounded release projection does not discard compatible neighbors", async () => {
+  const before = nativeFixture({ slug: "a-native" });
+  const incompatible = nativeFixture({ slug: "m-native" });
+  const after = nativeFixture({ slug: "z-native" });
+  incompatible.release.platforms = Array.from({ length: 101 }, (_, index) => ({
+    name: `platform-${index}`, installTarget: "codex-skill", status: "supported",
+  }));
+  // This is valid registry input: the package contract has no platform-count
+  // maximum. Native delivery's narrower projection must skip only this entry.
+  const manifest = parseSkillManifest({
+    ...JSON.parse(incompatible.files[0].content),
+    platforms: incompatible.release.platforms.map((platform) => ({
+      name: platform.name, install_target: platform.installTarget, status: platform.status,
+    })),
+  });
+  assert.equal(manifest.platforms.length, 101);
+  const fixtures = [before, incompatible, after];
+  const fetchImpl: FetchLike = (url, init) => {
+    const path = new URL(url).pathname;
+    if (path === "/v1/skills") return Promise.resolve(json(200, { skills: fixtures.map((fixture) => fixture.skill), nextCursor: null }));
+    const fixture = fixtures.find((candidate) => path.includes(`/skills/${candidate.skill.slug}/`)) ?? before;
+    return fixture.fetchImpl(url, init);
+  };
+  const listed = await createNativeSkillsHandlers({ token, fetchImpl }).list();
+  assert.equal(listed.skills.length, 2);
+  assert.match(listed.skills[0].uri, /\/a-native\//);
+  assert.match(listed.skills[1].uri, /\/z-native\//);
+  assert.equal(incompatible.calls.some((call) => call.url.includes("/bundle?")), false);
 });
 
 for (const [label, instructions] of [

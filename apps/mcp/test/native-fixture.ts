@@ -2,17 +2,18 @@ import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import type { FetchLike } from "../src/api-client.js";
 
-export function nativeFixture(input: { instructions?: string; version?: string; extra?: Array<{ path: string; content: string }> } = {}) {
+export function nativeFixture(input: { slug?: string; instructions?: string; version?: string; extra?: Array<{ path: string; content: string }> } = {}) {
+  const slug = input.slug ?? "native-test";
   const version = input.version ?? "1.0.0+build.4";
   const files = [
-    { path: "skill.json", content: JSON.stringify({ name: "native-test", title: "Native test", summary: "Test native delivery", version, license: "MIT", platforms: [{ name: "codex", install_target: "codex-skill", status: "supported" }] }) },
+    { path: "skill.json", content: JSON.stringify({ name: slug, title: "Native test", summary: "Test native delivery", version, license: "MIT", platforms: [{ name: "codex", install_target: "codex-skill", status: "supported" }] }) },
     { path: "SKILL.md", content: input.instructions ?? "\uFEFF---\nname: author-label\ndescription: Read café notes\nlicense: MIT\nmetadata:\n  count: '2'\n  enabled: 'true'\n---\nRead references/café.md only when needed.\n" },
     { path: "references/café.md", content: "Résumé — 你好\n" },
     ...(input.extra ?? []),
   ];
   const body = JSON.stringify({ files });
   const release = {
-    slug: "native-test", title: "Native test", summary: "Test native delivery", version,
+    slug, title: "Native test", summary: "Test native delivery", version,
     reviewStatus: "approved", securityStatus: "passed", publishedAt: "2026-09-25T00:00:00.000Z",
     platforms: [{ name: "codex", installTarget: "codex-skill", status: "supported" }],
     artifact: { sha256: hash(body), byteSize: Buffer.byteLength(body), contentType: "application/vnd.myskills-app.package+json" },
@@ -34,7 +35,7 @@ export function nativeFixture(input: { instructions?: string; version?: string; 
       if (parsed.searchParams.get("cursor") && parsed.searchParams.get("cursor") !== `cursor-${state.actor}`) return json(400, { error: { code: "INVALID_SKILL_CURSOR" } });
       return json(200, { skills: state.hidden || parsed.searchParams.has("cursor") ? [] : [skill], nextCursor: parsed.searchParams.has("cursor") ? null : state.nextCursor });
     }
-    const prefix = `/v1/skills/native-test/releases/${encodeURIComponent(version)}`;
+    const prefix = `/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}`;
     if (state.hidden) return json(404, { error: { code: "RELEASE_NOT_FOUND" } });
     if (parsed.pathname === prefix) return json(200, { release });
     if (parsed.pathname === `${prefix}/bundle`) {
