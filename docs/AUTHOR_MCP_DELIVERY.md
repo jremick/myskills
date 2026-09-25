@@ -4,8 +4,10 @@ Date: 2026-09-25
 Delivery: [PR #83](https://github.com/jremick/myskills/pull/83)
 Baseline: `04d80fc70ae56cce43d73faaac4fb74a99558e8c`
 
-This record covers source delivery. CLI and image publication, production
-deployment, and native model activation are separate steps.
+This record covers source delivery. The beta.7 release status is tracked in
+[Beta.7 Release Delivery](BETA7_RELEASE_DELIVERY.md). The GitHub release is held
+as a draft pending authenticated staging acceptance. npm publication, production
+deployment, and native model activation remain separate, incomplete steps.
 
 ## Delivered behavior
 

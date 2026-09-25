@@ -33,13 +33,16 @@ CLI tokens should be stored in the platform secret store where possible.
 
 ## Current Slice
 
-This document describes the beta.7 CLI candidate. It remains compatible with
-the beta.6 hosted registry for the existing CLI workflows and adds local
-authoring and deterministic package creation. Native MCP Skills delivery is
-documented separately in the MCP guide. The beta.2 visibility compatibility
-shims remain available for existing clients. Source versions and npm
-publication are separate from hosted deployment; the API and web expose their
-deployed version and commit at `/version.json`.
+This document describes the verified beta.7 CLI candidate. Its GitHub release
+is held as a draft pending authenticated staging acceptance. It
+remains compatible with existing registry workflows against the beta.5 hosted
+production baseline and adds local authoring and deterministic package
+creation. Native MCP Skills delivery is documented separately in the MCP
+guide. The beta.2 visibility compatibility shims remain available for existing
+clients. Source versions and npm publication are separate from hosted
+deployment; see [Beta.7 release, publication, and staging evidence](../../docs/BETA7_RELEASE_DELIVERY.md)
+for current status. The API and web expose their deployed version and commit
+at `/version.json`.
 
 ### Beta.3 breaking security changes
 
@@ -218,10 +221,12 @@ myskills --version
 myskills login
 ```
 
-The published beta channel currently resolves to `0.1.0-beta.6`. The beta.7
-candidate adds deterministic local package authoring and the native MCP delivery
-work described in the repository release notes. To test repository changes before
-a later release,
+The beta.7 GitHub release and verified CLI assets are held as a draft pending
+authenticated staging acceptance. The npm `beta`
+channel currently resolves to `0.1.0-beta.6`, while hosted production remains
+on the beta.5 application baseline. Beta.7 adds deterministic local package
+authoring and the native MCP delivery work described in the repository release
+notes. To test repository changes before a later npm publication,
 build and run them locally:
 
 ```bash

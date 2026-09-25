@@ -5,20 +5,31 @@ Last updated: 2026-09-25
 
 Target release: `v0.1.0-beta.7`.
 
-## Beta.7 Candidate Record
+## Beta.7 Release Record
 
 Beta.7 extends the published beta.6 baseline with deterministic local package
 authoring, authorized native MCP Skills delivery, public release-history
 navigation, and reviewed auth, package-integrity, governance, dependency, and
-self-hosting repairs. The candidate source is based on
-`7f21e4bf1e60a105ada93445f4ee1e2955c69b8e`.
+self-hosting repairs. [PR #84](https://github.com/jremick/myskills/pull/84) is
+merged, and the immutable `v0.1.0-beta.7` tag resolves to
+`6912d3f9490c6f002431f3064e8a9db417df3d7f`.
 
-This record is a release candidate scope and acceptance plan. It does not claim
-that the canonical gate, package publication, GitHub release, or Railway
-deployment has passed. Record the final candidate SHA, required CI and
-canonical-gate evidence, staging acceptance, and rollback plan before release.
-Add exact npm bytes and selector readbacks after publication, then production
-identity and rendered acceptance after promotion.
+The candidate has 12 successful GitHub checks, a passing Windows-hosted Linux
+canonical gate, successful same-revision beta.7 staging API and web deployments,
+public rendered catalogue/version-selector/package
+checks, and passing Windows CLI `doctor`, `export`, `validate`, and `scan` checks.
+The visible staging selector contained one version; historical-version selection
+was not tested. Fresh coordinated
+capture/restore, candidate migration/runtime readiness, and legacy runtime
+compatibility reports also passed. The detailed evidence and limits are in
+[Beta.7 Release Delivery](BETA7_RELEASE_DELIVERY.md).
+
+Tagged release workflow `36100097156` completed successfully. The GitHub
+prerelease was briefly published before authenticated staging acceptance, then
+returned to draft. This is a recorded sequencing deviation, not an acceptance
+waiver. Authenticated staging acceptance, GitHub republication, npm publication,
+and production promotion remain pending. Fix-forward is preferred; legacy
+readiness does not prove a full rollback, and no live rollback was executed.
 
 Native model-selected host activation remains open. Folder/ZIP imports, browser
 drafts, and guided self-hosting setup remain subsequent roadmap slices.
