@@ -17,7 +17,7 @@
  */
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -432,7 +432,7 @@ test("postgres improvement journey persists declarations, policies, runs, eviden
   }
   const auditText = audits.rows.map((row) => row.details as string).join("\n");
   assert.equal(auditText.includes(FINDING_TEXT), false);
-  assert.equal(auditText.includes(GUIDANCE_URL), false);
+  assert.equal(Buffer.from(auditText).includes(Buffer.from(GUIDANCE_URL)), false);
 
   journal.write("postgres");
 });
@@ -528,9 +528,10 @@ function recorder(journey: string) {
       steps.push({ step, value });
     },
     write(backend: "memory" | "postgres") {
-      const directory = process.env.MYSKILLS_JOURNEY_EVIDENCE_DIR ?? join(tmpdir(), "myskills-journey-evidence");
-      mkdirSync(directory, { recursive: true });
-      writeFileSync(join(directory, `skill-improvement-${journey}.${backend}.json`), `${JSON.stringify({ schemaVersion: 1, journey, backend, steps }, null, 2)}\n`);
+      const parent = process.env.MYSKILLS_JOURNEY_EVIDENCE_DIR ?? tmpdir();
+      if (process.env.MYSKILLS_JOURNEY_EVIDENCE_DIR) mkdirSync(parent, { recursive: true, mode: 0o700 });
+      const directory = mkdtempSync(join(parent, "myskills-journey-evidence-"));
+      writeFileSync(join(directory, `skill-improvement-${journey}.${backend}.json`), `${JSON.stringify({ schemaVersion: 1, journey, backend, steps }, null, 2)}\n`, { flag: "wx", mode: 0o600 });
     },
   };
 }

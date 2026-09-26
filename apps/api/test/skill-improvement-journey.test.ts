@@ -59,7 +59,7 @@
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -752,7 +752,7 @@ test("a member completes a local improvement run and a release manager accepts t
   // E6: audits carry identifiers and codes only.
   const audits = JSON.stringify(fx.improvementStore.auditEvents());
   assert.equal(audits.includes(FINDING_TEXT), false);
-  assert.equal(audits.includes(GUIDANCE_URL), false);
+  assert.equal(Buffer.from(audits).includes(Buffer.from(GUIDANCE_URL)), false);
   for (const action of ["improvement.plan.create", "improvement.run.create", "improvement.run.event", "improvement.evidence.share", "improvement.evidence.accept"]) {
     assert.ok(fx.improvementStore.auditEvents().some((event) => event.action === action && event.decision === "allow"), action);
   }
@@ -1206,11 +1206,13 @@ function recorder(journey: string) {
       steps.push({ step, value });
     },
     write(backend: "memory" | "postgres") {
-      const directory = process.env.MYSKILLS_JOURNEY_EVIDENCE_DIR ?? join(tmpdir(), "myskills-journey-evidence");
-      mkdirSync(directory, { recursive: true });
+      const parent = process.env.MYSKILLS_JOURNEY_EVIDENCE_DIR ?? tmpdir();
+      if (process.env.MYSKILLS_JOURNEY_EVIDENCE_DIR) mkdirSync(parent, { recursive: true, mode: 0o700 });
+      const directory = mkdtempSync(join(parent, "myskills-journey-evidence-"));
       writeFileSync(
         join(directory, `skill-improvement-${journey}.${backend}.json`),
         `${JSON.stringify({ schemaVersion: 1, journey, backend, steps }, null, 2)}\n`,
+        { flag: "wx", mode: 0o600 },
       );
     },
   };

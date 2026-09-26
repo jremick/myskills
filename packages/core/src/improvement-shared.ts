@@ -10,7 +10,20 @@ export const improvementIdentifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127
 export const improvementSha256Pattern = /^[0-9a-f]{64}$/;
 const slugPattern = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const controlCharacterPattern = /[\u0000-\u001f\u007f]/;
-const urlPattern = /[A-Za-z][A-Za-z0-9+.-]*:\/\//;
+// One pass avoids retrying an unanchored scheme match at every letter.
+function containsUrl(text: string): boolean {
+  let scheme = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) scheme = true;
+    else if ((code >= 48 && code <= 57) || code === 43 || code === 45 || code === 46) continue;
+    else {
+      if (scheme && code === 58 && text[index + 1] === "/" && text[index + 2] === "/") return true;
+      scheme = false;
+    }
+  }
+  return false;
+}
 const absolutePathPattern = /(^|[\s("'=])(\/[A-Za-z0-9._~-]|~\/|[A-Za-z]:[\\/]|\\\\)/;
 
 export function improvementDigest(value: unknown): string {
@@ -61,7 +74,7 @@ export function safeText(value: unknown, field: string, maxLength: number, optio
   if (!options.allowEmpty && text.length === 0) fail(`${field} is required.`);
   if (text.length > maxLength) fail(`${field} exceeds ${maxLength} characters.`);
   if (controlCharacterPattern.test(text)) fail(`${field} contains control characters.`);
-  if (urlPattern.test(text)) fail(`${field} must not contain URLs.`);
+  if (containsUrl(text)) fail(`${field} must not contain URLs.`);
   if (absolutePathPattern.test(text)) fail(`${field} must not contain absolute paths.`);
   return text;
 }

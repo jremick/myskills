@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { safeText } from "../src/improvement-shared.js";
 import {
   composeImprovementPolicies,
   defaultImprovementPolicyLimitsV1,
@@ -475,4 +476,16 @@ test("absent dimensions do not restrict and existing dimensions still apply toge
   assert.equal(optimizationTargetMatchesProfile(tuple, profileTarget(matching)), true);
   assert.equal(optimizationTargetMatchesProfile(tuple, profileTarget(matching, { provider: "anthropic", id: "gpt-5.5" })), false);
   assert.equal(optimizationTargetMatchesProfile(tuple, profileTarget({ ...matching, os: ["linux", "windows"] })), false);
+});
+
+// Failure cases for bounded human text: mixed-case/custom URI schemes must not
+// enter shared records; long scheme-like prose must be scanned without backtracking.
+test("shared improvement text rejects URL schemes and accepts bounded scheme-like prose", () => {
+  for (const value of ["Read HTTPS://example.test", "prefix custom+v1.2://host", "9abc://host", "Read a://host"]) {
+    assert.throws(() => safeText(value, "summary", 8000), /URLs/);
+  }
+  for (const value of ["a".repeat(7999), "a+.-9".repeat(1500), "12://", "notes: prose", "a:b"]) {
+    assert.equal(safeText(value, "summary", 8000), value);
+  }
+  assert.throws(() => safeText("a".repeat(7990) + "://host", "summary", 8000), /URLs/);
 });
