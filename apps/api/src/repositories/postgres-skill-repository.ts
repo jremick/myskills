@@ -195,6 +195,15 @@ export class PostgresSkillRepository implements SkillRepository {
 
       const teamIds = requestedTeamIds ?? currentTeamRows.map((row) => row.teamId);
       const organizationIds = requestedOrganizationIds ?? currentOrganizationRows.map((row) => row.organizationId);
+      // Owner self-review is private-only evidence. Any widening, by anyone,
+      // needs an instance elevation of every live self-reviewed version.
+      if (input.visibility !== "private" && await hasUnelevatedSelfReviewedRelease(tx, skill.id)) {
+        throw new AppError(
+          "A self-reviewed private release requires instance review before sharing can widen.",
+          "SELF_REVIEWED_RELEASE_REQUIRES_INSTANCE_REVIEW",
+          409,
+        );
+      }
       validateVisibilityEnabled(input.visibility, lockedSettings);
       if (requestedOrganizationIds !== undefined && organizationIds.length > 0 && !lockedSettings.organizationVisibilityEnabled) {
         throw new AppError("Organization sharing is disabled for this instance.", "ORGANIZATION_SHARING_DISABLED", 403);
@@ -742,6 +751,27 @@ function organizationGrantUnavailable(): AppError {
 }
 
 type SkillSharingDb = Pick<Database, "select">;
+
+async function hasUnelevatedSelfReviewedRelease(db: Pick<Database, "execute">, skillId: string): Promise<boolean> {
+  // Tolerate schemas migrated before the libraries release.
+  const installed = await db.execute<{ present: string | null }>(sql`
+    SELECT to_regclass(current_schema() || '.skill_version_review_attestations')::text AS present
+  `);
+  if (!installed.rows[0]?.present) return false;
+  const result = await db.execute<{ blocked: boolean }>(sql`
+    SELECT EXISTS (
+      SELECT 1 FROM skill_versions v
+      JOIN skill_version_review_attestations a ON a.skill_version_id = v.id AND a.kind = 'private-self-review'
+      WHERE v.skill_id = ${skillId}::uuid
+        AND v.deleted_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM skill_version_review_attestations e
+          WHERE e.skill_version_id = v.id AND e.kind = 'instance-elevation'
+        )
+    ) AS blocked
+  `);
+  return result.rows[0]?.blocked === true;
+}
 
 /**
  * Recheck the complete requested team grant set while the replacement

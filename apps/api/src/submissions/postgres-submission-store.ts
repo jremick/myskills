@@ -54,6 +54,9 @@ import type {
   SubmissionFeedback,
   ManagedSkillFilters,
   ReleasePublicationCandidate,
+  PrivateSelfReviewResult,
+  SelfReviewElevationResult,
+  SelfReviewedReleaseSummary,
 } from "./types.js";
 import { assertNoVisibilityMetadataUpdate } from "./types.js";
 import { artifactPayloadSha256 } from "./artifact-hash.js";
@@ -117,13 +120,20 @@ export class PostgresSubmissionStore implements SubmissionStore {
         .where(eq(skills.slug, input.manifest.name))
         .limit(1);
 
-      if (existingSkill?.ownerUserId && existingSkill.ownerUserId !== input.actor.id) {
+      // A null owner is an orphaned lineage, not an unclaimed slug. Never infer
+      // ownership from a matching name; a new revision needs the current owner.
+      if (existingSkill && existingSkill.ownerUserId !== input.actor.id) {
         throw new AppError("Package slug is unavailable.", "PACKAGE_SLUG_UNAVAILABLE", 409);
       }
 
       if (existingSkill && existingSkill.visibility !== input.manifest.visibility) {
         throw new AppError("Package visibility must match the skill's current sharing setting.", "PACKAGE_VISIBILITY_MISMATCH", 409);
       }
+
+      await input.importBinding?.beforeVersionInsert(tx, {
+        skillId: existingSkill?.id ?? null,
+        skillOwnerUserId: existingSkill?.ownerUserId ?? null,
+      });
 
       const skill = existingSkill ?? (await tx
         .insert(skills)
@@ -237,6 +247,12 @@ export class PostgresSubmissionStore implements SubmissionStore {
           findingCount: input.findings.length,
           securityStatus: input.securityStatus,
         },
+      });
+
+      await input.importBinding?.afterVersionInsert(tx, {
+        skillId: skill.id,
+        versionId: version.id,
+        artifactSha256: input.artifact.sha256,
       });
 
       if (recoveryTracked) {
@@ -1157,6 +1173,241 @@ export class PostgresSubmissionStore implements SubmissionStore {
         findingCount: input.findingCount,
       },
     });
+  }
+
+  async selfReviewPrivateImport(input: { actorId: string; submissionId: string; artifactSha256: string; reason?: string }): Promise<PrivateSelfReviewResult> {
+    const action = "review.private_self_review";
+    const prepared = await this.prepareExactArtifact(action, input);
+    return this.withDurableDenyAudit({ action, actorId: input.actorId, submissionId: input.submissionId }, async (tx) => {
+      // Serialize with the admin toggle: a disable that commits first wins.
+      const settings = await tx.execute<{ value: unknown }>(sql`SELECT value FROM instance_settings WHERE key = 'library' FOR SHARE`);
+      if (!privateSelfReviewEnabled(settings.rows[0]?.value)) {
+        throw new AppError("Private self-review is disabled for this instance.", "PRIVATE_SELF_REVIEW_DISABLED", 403);
+      }
+      const row = await selectVersionForReviewRevalidation(tx, input.submissionId, prepared.payloadJson);
+      if (!row) throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+      const scope = await tx.execute<{ owner_user_id: string | null; visibility: string; grant_count: number; provenance_owner: string | null; finding_count: number }>(sql`
+        SELECT s.owner_user_id, s.visibility::text AS visibility,
+          ((SELECT count(*) FROM skill_team_grants g WHERE g.skill_id = s.id)
+            + (SELECT count(*) FROM skill_user_grants g WHERE g.skill_id = s.id)
+            + (SELECT count(*) FROM skill_organization_grants g WHERE g.skill_id = s.id))::int AS grant_count,
+          (SELECT p.owner_user_id FROM skill_release_provenance p WHERE p.skill_version_id = ${input.submissionId}::uuid) AS provenance_owner,
+          (SELECT count(*) FROM scan_findings f JOIN scan_runs r ON r.id = f.scan_run_id
+            WHERE r.skill_version_id = ${input.submissionId}::uuid)::int AS finding_count
+        FROM skills s WHERE s.id = ${row.skillId}::uuid
+      `);
+      const current = scope.rows[0];
+      if (!current || current.owner_user_id !== input.actorId || current.visibility !== "private"
+        || current.grant_count > 0 || current.provenance_owner !== input.actorId) {
+        throw new AppError("Private self-review requires the owner's strictly private source import.", "PRIVATE_SELF_REVIEW_SCOPE_INVALID", 409);
+      }
+      if (!isActiveReviewRow(row) || row.reviewStatus !== "unreviewed" || row.publishedAt) {
+        throw new AppError("Submission is not reviewable.", "SUBMISSION_NOT_REVIEWABLE", 409);
+      }
+      if (row.securityStatus !== "passed" || row.succeededScanCount < 1 || current.finding_count > 0) {
+        throw new AppError("Private self-review requires passed scans with no findings.", "PRIVATE_SELF_REVIEW_SCAN_NOT_CLEAN", 409);
+      }
+      const currentArtifact = reviewArtifactMetadata(row);
+      if (!currentArtifact || !sameReviewArtifact(currentArtifact, prepared.artifact) || !row.artifactPayloadMatches) {
+        throw new AppError("Review artifact hash does not match the current submission artifact.", "ARTIFACT_HASH_MISMATCH", 409);
+      }
+      if (prepared.manifest.name !== row.slug || prepared.manifest.version !== row.version
+        || prepared.manifest.visibility !== "private" || row.visibility !== "private") {
+        throw new AppError("Package manifest does not match the reviewed submission.", "PACKAGE_MANIFEST_MISMATCH", 422);
+      }
+      const now = new Date();
+      const [updatedVersion] = await tx.update(skillVersions).set({
+        reviewStatus: "approved",
+        lifecycleStatus: "approved",
+        approvedArtifactSha256: input.artifactSha256,
+        publishedAt: now,
+        lifecycleReason: input.reason ?? "",
+        lifecycleUpdatedAt: now,
+      }).where(and(
+        eq(skillVersions.id, input.submissionId),
+        eq(skillVersions.reviewStatus, "unreviewed"),
+        eq(skillVersions.securityStatus, "passed"),
+        isNull(skillVersions.publishedAt),
+        isNull(skillVersions.deletedAt),
+      )).returning();
+      if (!updatedVersion?.publishedAt) {
+        throw new AppError("Submission is not reviewable.", "SUBMISSION_NOT_REVIEWABLE", 409);
+      }
+      // Visibility stays private; widening is refused until instance elevation.
+      await tx.update(skills).set({
+        title: prepared.manifest.title,
+        summary: prepared.manifest.summary,
+        lifecycleStatus: "approved",
+        updatedAt: now,
+      }).where(eq(skills.id, row.skillId));
+      await tx.execute(sql`
+        INSERT INTO skill_version_review_attestations (skill_version_id, kind, artifact_sha256, actor_user_id, reason)
+        VALUES (${input.submissionId}::uuid, 'private-self-review', ${input.artifactSha256}, ${input.actorId}::uuid, ${input.reason ?? ""})
+      `);
+      await this.insertReviewAudit(action, "allow", input.actorId, input.submissionId, {
+        slug: row.slug,
+        version: row.version,
+        artifactSha256: input.artifactSha256,
+        attestation: "private-self-reviewed",
+        reason: input.reason,
+      }, tx);
+      return {
+        id: updatedVersion.id,
+        slug: row.slug,
+        version: updatedVersion.version,
+        artifactSha256: input.artifactSha256,
+        publishedAt: updatedVersion.publishedAt.toISOString(),
+        attestation: "private-self-reviewed" as const,
+      };
+    });
+  }
+
+  async requestSelfReviewElevation(input: { actorId: string; submissionId: string }): Promise<{ submissionId: string; requestedAt: string }> {
+    const action = "review.instance_elevation_request";
+    if (!isUuid(input.submissionId)) throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+    return this.withDurableDenyAudit({ action, actorId: input.actorId, submissionId: input.submissionId }, async (tx) => {
+      const state = await tx.execute<{ owner_user_id: string | null; self_reviewed: boolean; elevated: boolean }>(sql`
+        SELECT s.owner_user_id,
+          EXISTS (SELECT 1 FROM skill_version_review_attestations a WHERE a.skill_version_id = v.id AND a.kind = 'private-self-review') AS self_reviewed,
+          EXISTS (SELECT 1 FROM skill_version_review_attestations a WHERE a.skill_version_id = v.id AND a.kind = 'instance-elevation') AS elevated
+        FROM skill_versions v JOIN skills s ON s.id = v.skill_id
+        WHERE v.id = ${input.submissionId}::uuid AND v.deleted_at IS NULL
+        FOR UPDATE OF v
+      `);
+      const row = state.rows[0];
+      if (!row || row.owner_user_id !== input.actorId) throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+      if (!row.self_reviewed || row.elevated) {
+        throw new AppError("Only a self-reviewed release without instance review can request elevation.", "SELF_REVIEW_ELEVATION_NOT_APPLICABLE", 409);
+      }
+      const inserted = await tx.execute<{ requested_at: string | Date }>(sql`
+        INSERT INTO skill_version_elevation_requests (skill_version_id, requested_by_user_id)
+        VALUES (${input.submissionId}::uuid, ${input.actorId}::uuid)
+        ON CONFLICT (skill_version_id) DO UPDATE SET requested_at = skill_version_elevation_requests.requested_at
+        RETURNING requested_at
+      `);
+      await this.insertReviewAudit(action, "allow", input.actorId, input.submissionId, {}, tx);
+      return { submissionId: input.submissionId, requestedAt: new Date(inserted.rows[0]!.requested_at).toISOString() };
+    });
+  }
+
+  async listRequestedSelfReviewedReleases(): Promise<SelfReviewedReleaseSummary[]> {
+    const rows = await this.db.execute<{ id: string; slug: string; version: string; artifact_sha256: string; self_reviewed_at: string | Date; requested_at: string | Date }>(sql`
+      SELECT v.id, s.slug, v.version, a.artifact_sha256, a.created_at AS self_reviewed_at, r.requested_at
+      FROM skill_version_elevation_requests r
+      JOIN skill_versions v ON v.id = r.skill_version_id
+      JOIN skills s ON s.id = v.skill_id
+      JOIN skill_version_review_attestations a ON a.skill_version_id = v.id AND a.kind = 'private-self-review'
+      WHERE v.deleted_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM skill_version_review_attestations e WHERE e.skill_version_id = v.id AND e.kind = 'instance-elevation')
+      ORDER BY r.requested_at, v.id
+      LIMIT 100
+    `);
+    return rows.rows.map((row) => ({
+      submissionId: row.id,
+      slug: row.slug,
+      version: row.version,
+      artifactSha256: row.artifact_sha256,
+      selfReviewedAt: new Date(row.self_reviewed_at).toISOString(),
+      elevationRequestedAt: new Date(row.requested_at).toISOString(),
+    }));
+  }
+
+  async getSelfReviewedReleaseBundle(input: { submissionId: string }) {
+    if (!isUuid(input.submissionId)) return null;
+    const requested = await this.db.execute<{ id: string }>(sql`
+      SELECT r.skill_version_id AS id FROM skill_version_elevation_requests r
+      WHERE r.skill_version_id = ${input.submissionId}::uuid
+        AND EXISTS (SELECT 1 FROM skill_version_review_attestations a WHERE a.skill_version_id = r.skill_version_id AND a.kind = 'private-self-review')
+        AND NOT EXISTS (SELECT 1 FROM skill_version_review_attestations e WHERE e.skill_version_id = r.skill_version_id AND e.kind = 'instance-elevation')
+    `);
+    if (!requested.rows[0]) return null;
+    const row = await selectVersionForReview(this.db, input.submissionId);
+    const artifact = row ? reviewArtifactMetadata(row) : null;
+    if (!row || !artifact || row.deletedAt) return null;
+    const payload = await readArtifactPayload({
+      artifactStorage: this.options.artifactStorage,
+      artifact: { ...artifact, payload: row.artifactPayload },
+    });
+    return {
+      slug: row.slug,
+      version: row.version,
+      artifact: { sha256: artifactPayloadSha256(payload), contentType: artifact.contentType },
+      payload,
+    };
+  }
+
+  async elevateSelfReviewedRelease(input: { actorId: string; submissionId: string; artifactSha256: string; reason?: string }): Promise<SelfReviewElevationResult> {
+    const action = "review.instance_elevation";
+    const prepared = await this.prepareExactArtifact(action, input);
+    return this.withDurableDenyAudit({ action, actorId: input.actorId, submissionId: input.submissionId }, async (tx) => {
+      const row = await selectVersionForReviewRevalidation(tx, input.submissionId, prepared.payloadJson);
+      if (!row) throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+      const attestations = await tx.execute<{ kind: string; artifact_sha256: string }>(sql`
+        SELECT kind, artifact_sha256 FROM skill_version_review_attestations WHERE skill_version_id = ${input.submissionId}::uuid
+      `);
+      const selfReview = attestations.rows.find((attestation) => attestation.kind === "private-self-review");
+      if (!selfReview || attestations.rows.some((attestation) => attestation.kind === "instance-elevation")) {
+        throw new AppError("Only a self-reviewed release without instance review can be elevated.", "SELF_REVIEW_ELEVATION_NOT_APPLICABLE", 409);
+      }
+      const currentArtifact = reviewArtifactMetadata(row);
+      if (row.deletedAt || row.reviewStatus !== "approved" || row.securityStatus !== "passed"
+        || row.approvedArtifactSha256 !== input.artifactSha256 || selfReview.artifact_sha256 !== input.artifactSha256
+        || !currentArtifact || !sameReviewArtifact(currentArtifact, prepared.artifact) || !row.artifactPayloadMatches) {
+        throw new AppError("Review artifact hash does not match the self-reviewed artifact.", "ARTIFACT_HASH_MISMATCH", 409);
+      }
+      await tx.execute(sql`
+        INSERT INTO skill_version_review_attestations (skill_version_id, kind, artifact_sha256, actor_user_id, reason)
+        VALUES (${input.submissionId}::uuid, 'instance-elevation', ${input.artifactSha256}, ${input.actorId}::uuid, ${input.reason ?? ""})
+      `);
+      await this.insertReviewAudit(action, "allow", input.actorId, input.submissionId, {
+        slug: row.slug,
+        version: row.version,
+        artifactSha256: input.artifactSha256,
+        reason: input.reason,
+      }, tx);
+      return {
+        id: input.submissionId,
+        slug: row.slug,
+        version: row.version,
+        artifactSha256: input.artifactSha256,
+        attestation: "instance-reviewed" as const,
+      };
+    });
+  }
+
+  /** Read exact bytes outside a transaction; callers revalidate the stored row under lock. */
+  private async prepareExactArtifact(action: string, input: { actorId: string; submissionId: string; artifactSha256: string }) {
+    if (!isUuid(input.submissionId)) {
+      await this.insertReviewAudit(action, "deny", input.actorId, input.submissionId, { reason: "missing_submission" });
+      throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+    }
+    const row = await selectVersionForReview(this.db, input.submissionId);
+    const artifact = row ? reviewArtifactMetadata(row) : null;
+    if (!row || !artifact) {
+      await this.insertReviewAudit(action, "deny", input.actorId, input.submissionId, { reason: "missing_submission" });
+      throw new AppError("Submission not found.", "SUBMISSION_NOT_FOUND", 404);
+    }
+    try {
+      const payload = await readArtifactPayload({
+        artifactStorage: this.options.artifactStorage,
+        artifact: { ...artifact, payload: row.artifactPayload },
+      });
+      if (artifactPayloadSha256(payload) !== input.artifactSha256) {
+        throw new AppError("Review artifact hash does not match the current submission artifact.", "ARTIFACT_HASH_MISMATCH", 409);
+      }
+      return {
+        artifact,
+        payloadJson: artifactPayloadJsonForRevalidation(row.artifactPayload),
+        manifest: manifestFromPayload(payload),
+      };
+    } catch (error) {
+      await this.insertReviewAudit(action, "deny", input.actorId, input.submissionId, {
+        slug: row.slug,
+        version: row.version,
+        reason: error instanceof AppError ? reviewAuditReason(error) : "invalid_artifact_payload",
+      });
+      throw error;
+    }
   }
 
   private async insertReviewAudit(
@@ -2375,4 +2626,9 @@ function parseSharingSettings(input: unknown): SharingSettings {
 
 function isUuid(input: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input);
+}
+
+function privateSelfReviewEnabled(value: unknown): boolean {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value)
+    && (value as { privateSelfReviewEnabled?: unknown }).privateSelfReviewEnabled === true);
 }

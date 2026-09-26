@@ -1,4 +1,5 @@
 import { createImprovementClient, type ImprovementClient } from "./improvement-api";
+import { createLibraryClient, type LibraryClient } from "./library-api.js";
 import type {
   AccessibleArchitectureOutline,
   ArchitectureTarget,
@@ -21,6 +22,7 @@ import type {
   PublicSkill,
   SharingSettings,
   SkillUpdateEvaluation,
+  LibraryUpdateItemLibraryState,
   SkillUpgradePolicyV1,
   SkillUpgradePolicyConstraint,
   TargetSkillOperation,
@@ -87,7 +89,7 @@ export interface AdminUser {
   mfaEnabled: boolean;
 }
 
-export type ApiTokenScope = "profile:read" | "skills:read" | "architectures:read" | "skills:submit" | "review:read" | "review:write" | "targets:execute" | "improvements:read" | "improvements:configure" | "improvements:run" | "improvements:report";
+export type ApiTokenScope = "profile:read" | "skills:read" | "architectures:read" | "skills:submit" | "review:read" | "review:write" | "targets:execute" | "improvements:read" | "improvements:configure" | "improvements:run" | "improvements:report" | "libraries:read" | "libraries:write";
 
 export interface ApiToken {
   id: string;
@@ -308,7 +310,7 @@ export interface TargetSkillUpdates {
     /** Older API responses expose only the deprecated projection fields. */
     constraints?: Array<SkillUpgradePolicyConstraint & { revision: SkillUpgradePolicyRevisionRecord | null }>;
   } | null;
-  items: Array<{ slug: string; platform: string; evaluation: SkillUpdateEvaluation }>;
+  items: Array<{ slug: string; platform: string; evaluation: SkillUpdateEvaluation; library?: LibraryUpdateItemLibraryState }>;
 }
 
 /** Display compatibility only. The API remains responsible for enforcing current policies. */
@@ -782,6 +784,7 @@ export interface ReviewSubmissionDetail extends ReviewSubmissionSummary, Submiss
 
 export interface RegistryClient {
   improvements?: ImprovementClient;
+  libraries?: LibraryClient;
   searchSkillPage?(input: RegistryPageInput): Promise<RegistryPage<PublicSkill>>;
   listManagedSkills?(input: RegistryPageInput): Promise<RegistryPage<SkillManagementSummary>>;
   getUserSubmissionDetail?(submissionId: string): Promise<UserSubmissionDetail>;
@@ -966,6 +969,7 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
   const cookieSessionHeaders = { "x-myskills-session-response": "cookie" };
   return {
     improvements: createImprovementClient(<T,>(url: string, init?: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown }) => requestJson<T>(fetchImpl, `${root}${url}`, { ...init, token })),
+    libraries: createLibraryClient(root, fetchImpl, token),
     async searchSkillPage(input) {
       const params = registryPageQuery(input);
       return requestJson<RegistryPage<PublicSkill>>(fetchImpl, `${root}/v1/skills${params}`, { token });
@@ -2050,21 +2054,21 @@ export function safeArchitectureTargetErrorMessage(error: unknown): string {
   return "Connected-environment data is not available.";
 }
 
-async function requestJson<T>(fetchImpl: typeof fetch, url: string, options: {
+export async function requestJson<T>(fetchImpl: typeof fetch, url: string, options: {
   body?: unknown;
   headers?: Record<string, string>;
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   token?: string;
 } = {}): Promise<T> {
   return (await requestJsonWithHeaders<T>(fetchImpl, url, options)).body;
 }
 
-async function requestJsonWithHeaders<T>(fetchImpl: typeof fetch, url: string, options: {
+export async function requestJsonWithHeaders<T>(fetchImpl: typeof fetch, url: string, options: {
   body?: unknown;
   headers?: Record<string, string>;
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   token?: string;
-} = {}): Promise<{ body: T; headers: Headers }> {
+} = {}): Promise<{ body: T; headers: Headers; rawText: string }> {
   const headers: Record<string, string> = { accept: "application/json", ...options.headers };
   if (options.body !== undefined) {
     headers["content-type"] = "application/json";
@@ -2086,7 +2090,7 @@ async function requestJsonWithHeaders<T>(fetchImpl: typeof fetch, url: string, o
     error.code = safeResponseCode(body);
     throw error;
   }
-  return { body: body as T, headers: response.headers };
+  return { body: body as T, headers: response.headers, rawText: text };
 }
 
 function safeResponseCode(body: Record<string, unknown>): string {

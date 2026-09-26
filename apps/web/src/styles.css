@@ -1,3 +1,4 @@
+@import "./components/library/libraries.css";
 @import "./components/architecture/editor/architecture-editor.css";
 @import "@xyflow/react/dist/style.css";
 @import "tailwindcss";

@@ -88,6 +88,8 @@ import {
   type ArchitectureResolutionScope,
 } from "./architectures/exact-release-authorizer.js";
 import { freezeArchitectureRevisionAuthorizationSnapshot } from "./architectures/revision-authorization.js";
+import { registerLibraryRoutes } from "./libraries/routes.js";
+import type { LibraryService } from "./libraries/service.js";
 import { API_VERSION, readBuildRevision } from "./version.js";
 
 const SESSION_COOKIE_NAME = "myskills_session";
@@ -120,6 +122,10 @@ export interface BuildAppOptions {
   improvementService?: ImprovementService;
   architectureOrganizationGrantService?: ArchitectureOrganizationGrantService;
   architecturePatternMigrationService?: ArchitecturePatternMigrationService;
+  /** Postgres-backed libraries, source imports and tracking. Routes answer 503 when absent. */
+  libraryService?: LibraryService;
+  /** Per-user bound on provider-backed library source requests. Defaults to an in-memory limiter. */
+  librarySourceLimiter?: AuthRateLimiter;
   architectureProjectionLimiter?: AuthRateLimiter;
   architectureProjectionMaxInFlight?: number;
   allowedOrigins?: string[];
@@ -153,7 +159,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       reply.header("access-control-allow-origin", origin);
       reply.header("access-control-allow-credentials", "true");
       reply.header("vary", "Origin");
-      reply.header("access-control-allow-methods", "GET,POST,PUT,DELETE,OPTIONS");
+      reply.header("access-control-allow-methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
       reply.header("access-control-allow-headers", `authorization,content-type,${COOKIE_SESSION_RESPONSE_HEADER}`);
       reply.header("access-control-expose-headers", REVIEW_ARTIFACT_HASH_HEADER);
     }
@@ -290,6 +296,11 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         architecturePatternMigrations: phase2ArchitectureReady && Boolean(options.authService && options.architecturePatternMigrationService),
         // Opt-in key: absent unless configured, so existing capability consumers see an unchanged shape.
         ...(options.improvementService ? { improvements: Boolean(options.authService) } : {}),
+        // Present only when configured; clients treat an absent flag as false.
+        ...(options.libraryService ? {
+          libraries: Boolean(options.authService && options.submissionService),
+          librarySourceTracking: options.libraryService.isWorkerRunning(),
+        } : {}),
       },
     };
   });
@@ -2290,6 +2301,14 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     requestAuthorization,
   });
 
+  registerLibraryRoutes(app, options, {
+    requestAuthorization,
+    authFailureReply,
+    requireScope,
+    requiresMfaForRole,
+    artifactHashHeader: REVIEW_ARTIFACT_HASH_HEADER,
+  });
+
   return app;
 }
 
@@ -4068,6 +4087,13 @@ function rejectServerManagedSubmissionFields(body: Record<string, unknown>): voi
     "sha256",
     "byteSize",
     "contentType",
+    // Source-import provenance and review attestations are server-managed.
+    "provenance",
+    "sourceImport",
+    "importBinding",
+    "lineageId",
+    "attestation",
+    "selfReview",
   ];
   const present = forbidden.find((field) => field in body);
   if (present) {

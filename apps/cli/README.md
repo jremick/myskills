@@ -365,8 +365,13 @@ team-owned execution targets are outside this adapter's beta scope.
 `codex observe --upload` records verified filesystem state. Confirm separately
 that Codex loaded the skill. To process one browser-queued update, supply a
 separate token with `skills:read` and `targets:execute` through `MYSKILLS_TOKEN`
-and run `companion run-once`. This command checks current authorization, consent,
-policy, lease, and exact release identity. It does not start a background daemon.
+and run `companion run-once`. If the workspace has a skill installed with
+`--library-entry`, the token also needs `libraries:read`: the companion rechecks
+that adoption before it changes files. Without it, the operation fails with
+`API_TOKEN_SCOPE_REQUIRED` and a message that names the scope; files are not
+changed. The CLI never widens a token's scopes. This command checks current
+authorization, consent, policy, lease, and exact release identity. It does not
+start a background daemon.
 Browser/device login and additional provider install adapters remain planned.
 
 To change skill visibility, use the canonical `myskills sharing set
@@ -409,6 +414,47 @@ Common scopes:
 - `skills:submit` for author submissions.
 - `review:read` and `review:write` for maintainer review workflows.
 - `architectures:read` for architecture list, detail, preview, and fixture-plan reads.
+- `libraries:read` for library reads and for install, update, and companion runs of library-bound skills.
+- `libraries:write` for library changes.
+
+## Libraries
+
+`myskills libraries help` lists the source, import, review, tracking, subscription
+and adoption commands. Requests use the [Libraries API contract](../../docs/plans/2026-09-26-library-api-contract.md)
+and reviewed JSON files supplied with `--input`. The [Libraries guide](../../docs/LIBRARIES.md)
+contains a complete workflow and scope requirements.
+
+Bind an installation to an adopted version with
+`myskills install <slug> --library-entry <entry-id>`. If the adopted release
+requires user action, read its notes and add `--accept-user-action`. Updates
+resolve that exact recommendation and recheck it before changing files. A
+deleted or inaccessible entry never falls back to the newest registry release.
+Local drift still stops replacement. Use
+`myskills libraries unbind-local <slug> --dir <root>` to detach that local
+binding explicitly while retaining files and rollback history.
+
+`updates` and `update` report each skill separately. If an entry is deleted,
+access is lost, the adopted release is revoked, or the entry has no adoption,
+that skill shows `curation-unavailable` with the reason (`library.state` and
+`library.reason` in `--json`). Its files and binding stay unchanged, other skills
+are still evaluated and updated, and `update` exits 1. `install` fails closed
+with `LIBRARY_CURATION_UNAVAILABLE`. A malformed or mismatched resolution stops
+the command with `LIBRARY_RESOLUTION_INVALID`.
+
+If a library adopts a version older than the installed one, the skill shows
+`library-adopts-older` (`adoption-older-than-installed` in `--json`). MySkills
+never downgrades automatically. When the last rollback snapshot is exactly the
+adopted release, run `myskills rollback <slug>`; otherwise install the adopted
+version into a new root with `--dir <new-root>`. `libraries unbind-local` keeps
+the installed version instead.
+
+`libraries review-bundle <submission-id>` prints only after the SHA-256 of the
+response body matches `x-myskills-artifact-sha256`. The JSON output labels its
+`payload` as `parsed-for-inspection`. Use `--output <new-file>` to keep the
+exact verified bytes; an existing file is never replaced. Supply
+`--artifact-sha256 <digest-from-review-requests>` to also verify the immutable
+artifact requested for review. Without it, verification covers the response
+header only; `expectedDigestVerified` reports this distinction in JSON output.
 
 ## Skill improvement
 

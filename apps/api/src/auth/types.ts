@@ -14,6 +14,8 @@ export const apiTokenScopes = [
   "improvements:configure",
   "improvements:run",
   "improvements:report",
+  "libraries:read",
+  "libraries:write",
 ] as const;
 export const authActionTokenPurposes = ["email_verification", "password_reset", "registration_invitation", "email_change"] as const;
 export const providerTypes = ["oidc", "saml", "cloudflare_access", "github", "google"] as const;

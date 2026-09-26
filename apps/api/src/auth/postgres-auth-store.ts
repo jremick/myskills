@@ -1435,7 +1435,9 @@ function parseApiTokenScopes(input: unknown): ApiTokenScope[] {
     scope === "improvements:read" ||
     scope === "improvements:configure" ||
     scope === "improvements:run" ||
-    scope === "improvements:report"
+    scope === "improvements:report" ||
+    scope === "libraries:read" ||
+    scope === "libraries:write"
   ));
 }
 
