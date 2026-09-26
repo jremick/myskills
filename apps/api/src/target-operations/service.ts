@@ -15,7 +15,9 @@ import {
   targetSkillOperationResultMatchesPlan,
   type TargetSkillOperation,
   type TargetSkillOperationResult,
+  type LibraryUpdateItemLibraryState,
 } from "@myskills-app/core";
+import type { LibraryAdoptionConstraintSource } from "../libraries/service.js";
 import type { SubmissionService } from "../submissions/service.js";
 import type { PublicReleaseMetadata, SubmissionActor } from "../submissions/types.js";
 import type { ArchitectureTargetRecord } from "../targets/types.js";
@@ -32,7 +34,13 @@ export class TargetSkillOperationService {
     private readonly store: TargetSkillOperationStore,
     private readonly targets: ArchitectureTargetService,
     private readonly submissions: SubmissionService,
-    private readonly options: { now?: () => Date; idFactory?: () => string; upgradePolicies?: SkillUpgradePolicyService } = {},
+    private readonly options: {
+      now?: () => Date;
+      idFactory?: () => string;
+      upgradePolicies?: SkillUpgradePolicyService;
+      /** Dynamic exact-version constraint from explicit library bindings. */
+      libraryAdoptions?: LibraryAdoptionConstraintSource;
+    } = {},
   ) {}
 
   async schedule(input: ScheduleTargetSkillOperationInput): Promise<{ operation: TargetSkillOperation; replayed: boolean }> {
@@ -74,6 +82,8 @@ export class TargetSkillOperationService {
       : release.platforms.find((item) => item.name === "codex" && item.status === "supported")
         ?? release.platforms.find((item) => item.status === "supported");
     if (!platform) throw new AppError("The requested release has no supported target platform.", "TARGET_OPERATION_PLATFORM_UNSUPPORTED", 409);
+    // Rollback stays an explicit local recovery action; install and update follow the adoption.
+    if (input.action !== "rollback") await this.assertLibraryAdoption(actorId, targetId, slug, version, fromVersion);
     const resolvedPolicy = await this.options.upgradePolicies?.resolveForTarget(target);
     if (resolvedPolicy) {
       const policies = resolvedPolicy.constraints.map(({ policy }) => policy);
@@ -133,7 +143,7 @@ export class TargetSkillOperationService {
     targetId: string;
     observedAt: string | null;
     policy: Awaited<ReturnType<SkillUpgradePolicyService["resolveForTarget"]>> | null;
-    items: Array<{ slug: string; platform: string; evaluation: ReturnType<typeof evaluateSkillUpdate> }>;
+    items: Array<{ slug: string; platform: string; evaluation: ReturnType<typeof evaluateSkillUpdate>; library?: LibraryUpdateItemLibraryState }>;
   }> {
     const actorId = identifier(actor.id, "actorId");
     const targetId = identifier(targetIdInput, "targetId");
@@ -157,6 +167,17 @@ export class TargetSkillOperationService {
           && release.reviewStatus === "approved" && release.securityStatus === "passed")
         .map((release) => ({ ...release, lifecycleStatus: release.lifecycleStatus as "approved" | "deprecated", publishedAt: release.publishedAt! }));
       const changeHistory = await this.submissions.listSkillReleaseChangeHistory({ slug: skill.slug, actorId });
+      // A library binding adds exact adopted-version pins. Every existing
+      // constraint still applies, so approved-but-unadopted releases are not offered.
+      const library = await this.options.libraryAdoptions?.resolveTargetConstraints({ actorId, targetId, slug: skill.slug, installedVersion }) ?? null;
+      const policyConstraints = [
+        ...(policy?.constraints.map(({ policy: constraint }) => ({
+          includePrerelease: constraint.includePrerelease,
+          allowedChangeKinds: constraint.allowedChangeKinds,
+          ...(Object.hasOwn(constraint.pins, skill.slug) ? { pinnedVersion: constraint.pins[skill.slug] } : {}),
+        })) ?? []),
+        ...(library?.pins.map((pinnedVersion) => ({ pinnedVersion })) ?? []),
+      ];
       items.push({
         slug: skill.slug,
         platform,
@@ -168,16 +189,13 @@ export class TargetSkillOperationService {
           },
           releases,
           changeHistory,
-          policyConstraints: policy?.constraints.map(({ policy: constraint }) => ({
-            includePrerelease: constraint.includePrerelease,
-            allowedChangeKinds: constraint.allowedChangeKinds,
-            ...(Object.hasOwn(constraint.pins, skill.slug) ? { pinnedVersion: constraint.pins[skill.slug] } : {}),
-          })),
+          policyConstraints: policy || library ? policyConstraints : undefined,
           client: {
             adapterContractVersion: target.adapter.contractVersion,
             ...(typeof target.metadata?.myskillsVersion === "string" ? { myskillsVersion: target.metadata.myskillsVersion } : {}),
           },
         }),
+        ...(library ? { library: { state: library.state, entryIds: library.entryIds, adoptedVersions: library.adoptedVersions } } : {}),
       });
     }
     return { targetId, observedAt: observation?.observedAt ?? null, policy, items };
@@ -227,6 +245,7 @@ export class TargetSkillOperationService {
         if (!await this.changeKindsAllowed(actorId, candidate.skillSlug, candidate.fromVersion, release, policies)) continue;
         if (!skillUpgradePoliciesAllowExecution(policy.constraints, new Date(now))) continue;
       }
+      if (!await this.libraryAllows(actorId, candidate)) continue;
       if (candidate.targetGeneration !== input.targetGeneration) continue;
       const claimToken = randomBytes(32).toString("base64url");
       const claimed = await this.store.claim({
@@ -318,7 +337,39 @@ export class TargetSkillOperationService {
     return skillReleaseUpgradeRange(history, fromVersion, release.version).every((item) => allowed(item.changeKind));
   }
 
+  private async assertLibraryAdoption(actorId: string, targetId: string, slug: string, version: string, installedVersion: string | undefined): Promise<void> {
+    const constraint = await this.options.libraryAdoptions?.resolveTargetConstraints({
+      actorId,
+      targetId,
+      slug,
+      ...(installedVersion ? { installedVersion } : {}),
+    });
+    if (!constraint) return;
+    if (constraint.state === "binding-version-conflict") {
+      throw new AppError("Library bindings select different versions for this skill on the target.", "BINDING_VERSION_CONFLICT", 409, { adoptedVersions: constraint.adoptedVersions });
+    }
+    if (constraint.pins.includes(version)) return;
+    if (constraint.state === "curation-unavailable") {
+      throw new AppError("The bound library entry is unavailable; the target stays on its pinned version.", "TARGET_OPERATION_LIBRARY_CURATION_UNAVAILABLE", 409);
+    }
+    throw new AppError("The requested version is not the library's adopted release.", "TARGET_OPERATION_LIBRARY_ADOPTION_MISMATCH", 409, { adoptedVersions: constraint.adoptedVersions });
+  }
+
+  private async libraryAllows(actorId: string, operation: Pick<TargetSkillOperation, "action" | "targetId" | "skillSlug" | "toVersion" | "fromVersion">): Promise<boolean> {
+    if (operation.action === "rollback" || !this.options.libraryAdoptions) return true;
+    try {
+      await this.assertLibraryAdoption(actorId, operation.targetId, operation.skillSlug, operation.toVersion, operation.fromVersion);
+      return true;
+    } catch (error) {
+      if (error instanceof AppError) return false;
+      throw error;
+    }
+  }
+
   private async assertCurrentPolicy(actorId: string, operation: TargetSkillOperation, target: ArchitectureTargetRecord): Promise<void> {
+    if (!await this.libraryAllows(actorId, operation)) {
+      throw new AppError("The operation no longer matches the bound library adoption.", "TARGET_OPERATION_POLICY_CHANGED", 409);
+    }
     const policy = await this.options.upgradePolicies?.resolveForTarget(target);
     if (!policy) return;
     const release = await this.submissions.getPublicRelease({ actorId, slug: operation.skillSlug, version: operation.toVersion });

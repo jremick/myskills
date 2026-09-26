@@ -1,9 +1,23 @@
 # Operational Beta Delivery Brief
 
-Version: 0.1.0-beta.7
-Last updated: 2026-09-25
+Version: 0.1.0-beta.8
+Last updated: 2026-09-26
 
-Target release: `v0.1.0-beta.7`.
+Target release: `v0.1.0-beta.8`.
+
+## Beta.8 Candidate
+
+The next candidate adds Libraries: saved public GitHub sources, immutable import
+previews and provenance, administrator-controlled private self-review, scheduled
+source checks, an opt-in change inbox, team curation, and explicit adoption that
+constrains local and connected-target updates.
+
+Implementation and focused verification are complete. The acceptance record is
+[Libraries build evidence](plans/2026-09-26-library-build-evidence.md); the full
+feature and later phases are in the [Libraries specification](plans/2026-09-26-library-feature-spec.md).
+Release readiness requires the canonical gate, the persistent multi-actor
+journeys, a populated-data migration rehearsal, and the resolved review findings.
+The beta.7 record below remains historical release evidence.
 
 ## Beta.7 Release Record
 

@@ -1,4 +1,5 @@
 import type { ChronologicalStoreQuery } from "../repositories/chronological-pagination.js";
+import type { DatabaseTransaction } from "../db/client.js";
 import { AppError } from "@myskills-app/core";
 import type { Role } from "@myskills-app/auth";
 import type { SkillManifest, PackageInputFile, ScanFinding } from "@myskills-app/skill-package";
@@ -25,6 +26,46 @@ export interface CreateSubmissionInput {
   manifest: SkillManifest;
   files: PackageInputFile[];
   release?: SkillReleaseMetadata;
+  /**
+   * Server-internal source import binding. HTTP submission input never sets
+   * it; only the library import path supplies provenance this way.
+   */
+  importBinding?: SubmissionImportBinding;
+}
+
+/**
+ * Library imports bind lineage checks and provenance to the same transaction
+ * as the registry version. Both hooks run after the slug advisory lock.
+ */
+export interface SubmissionImportBinding {
+  beforeVersionInsert(tx: DatabaseTransaction, context: { skillId: string | null; skillOwnerUserId: string | null }): Promise<void>;
+  afterVersionInsert(tx: DatabaseTransaction, context: { skillId: string; versionId: string; artifactSha256: string }): Promise<void>;
+}
+
+export interface PrivateSelfReviewResult {
+  id: string;
+  slug: string;
+  version: string;
+  artifactSha256: string;
+  publishedAt: string;
+  attestation: "private-self-reviewed";
+}
+
+export interface SelfReviewElevationResult {
+  id: string;
+  slug: string;
+  version: string;
+  artifactSha256: string;
+  attestation: "instance-reviewed";
+}
+
+export interface SelfReviewedReleaseSummary {
+  submissionId: string;
+  slug: string;
+  version: string;
+  artifactSha256: string;
+  selfReviewedAt: string;
+  elevationRequestedAt: string | null;
 }
 
 export interface StoredSubmission {
@@ -235,6 +276,20 @@ export interface ReviewSubmissionBundle extends ReviewSubmissionSummary {
   payload: ArtifactPayload;
 }
 
+/** The exact release and approved artifact a publication would expose. */
+export interface ReleasePublicationCandidate {
+  releaseId: string;
+  artifactSha256: string;
+}
+
+/**
+ * Optional precondition owned by another domain. The memory store calls it synchronously, with
+ * no intervening await, immediately before the publication write; a thrown AppError blocks it.
+ */
+export interface ReleasePublicationGuard {
+  assertReleasePublishable(release: ReleasePublicationCandidate): void;
+}
+
 export interface SubmissionStore {
   createSubmission(input: CreateSubmissionInput & {
     release: StoredSubmission["release"];
@@ -283,4 +338,10 @@ export interface SubmissionStore {
     reason: string;
     findingCount: number;
   }): Promise<void>;
+  /** Postgres-only. Owner review of a strictly private source import when an admin enabled it. */
+  selfReviewPrivateImport?(input: { actorId: string; submissionId: string; artifactSha256: string; reason?: string }): Promise<PrivateSelfReviewResult>;
+  requestSelfReviewElevation?(input: { actorId: string; submissionId: string }): Promise<{ submissionId: string; requestedAt: string }>;
+  listRequestedSelfReviewedReleases?(): Promise<SelfReviewedReleaseSummary[]>;
+  getSelfReviewedReleaseBundle?(input: { submissionId: string }): Promise<{ artifact: { sha256: string; contentType: string }; payload: ArtifactPayload; slug: string; version: string } | null>;
+  elevateSelfReviewedRelease?(input: { actorId: string; submissionId: string; artifactSha256: string; reason?: string }): Promise<SelfReviewElevationResult>;
 }

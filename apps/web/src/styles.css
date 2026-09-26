@@ -1,3 +1,4 @@
+@import "./components/library/libraries.css";
 @import "./components/architecture/editor/architecture-editor.css";
 @import "@xyflow/react/dist/style.css";
 @import "tailwindcss";
@@ -8714,3 +8715,17 @@ textarea:focus-visible {
 @media (max-width: 768px) {
   .managed-skills-layout { grid-template-columns: minmax(0, 1fr); }
 }
+
+.skill-improvement-panel { min-width: 0; }
+.skill-improvement-panel h3 { margin: 1rem 0 .5rem; font-weight: 650; }
+.improvement-planner, .improvement-editor { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.improvement-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin: 1rem 0; }
+.improvement-planner label, .improvement-editor label { display: grid; gap: .35rem; margin: .6rem 0; font-size: .875rem; }
+.improvement-planner select, .improvement-editor select { max-width: 100%; min-width: 0; padding: .5rem; border: 1px solid var(--border); border-radius: .4rem; background: var(--background); color: inherit; }
+.improvement-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
+.improvement-json { max-height: 20rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; padding: .75rem; }
+.improvement-editor summary { cursor: pointer; font-weight: 600; }
+@media (max-width: 600px) { .improvement-fields { grid-template-columns: minmax(0, 1fr); } }
+
+.improvement-inputs { border: 0; margin: 0; padding: 0; min-width: 0; }
+.improvement-target { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border); border-radius: 0.5rem; min-width: 0; }

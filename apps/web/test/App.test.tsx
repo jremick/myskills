@@ -207,6 +207,9 @@ test("default registry client is stable between renders", async () => {
     if (url.endsWith("/v1/skills/release-notes-helper/releases")) {
       return jsonResponse(200, { releases: [] });
     }
+    if (url.endsWith("/compatibility")) {
+      return jsonResponse(200, { compatibility: { schemaVersion: 1, declaration: { status: "unspecified", revision: null, targets: [] }, attestation: { status: "none", revision: null }, evidence: [] } });
+    }
     if (url.includes("/releases/")) {
       return jsonResponse(200, { release: publicRelease() });
     }
@@ -220,7 +223,7 @@ test("default registry client is stable between renders", async () => {
     const view = render(<RegistryApp />);
 
     await view.findByText("Turns merged changes into concise release notes.");
-    await waitFor(() => assert.equal(calls.length, 6));
+    await waitFor(() => assert.equal(calls.length, 7));
     await delay(25);
     assert.deepEqual([...calls].sort(), [
       "http://localhost:3001/v1/me",
@@ -229,6 +232,7 @@ test("default registry client is stable between renders", async () => {
       "http://localhost:3001/v1/skills/release-notes-helper/releases",
       "http://localhost:3001/v1/skills/release-notes-helper/releases/0.1.0",
       "http://localhost:3001/v1/architecture-targets",
+      "http://localhost:3001/v1/improvements/releases/release-notes-helper/0.1.0/compatibility",
     ].sort());
   } finally {
     globalThis.fetch = previousFetch;

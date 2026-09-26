@@ -52,10 +52,12 @@ import { Frame, FrameDescription, FrameHeader, FramePanel, FrameTitle } from "@/
 import { ArchitecturesDashboard } from "@/components/architecture/ArchitecturesDashboard";
 import { OrganizationsDashboard } from "@/components/organization/OrganizationsDashboard";
 import { ArchitectureTargetsDashboard } from "@/components/target/ArchitectureTargetsDashboard";
+import { LibrariesDashboard } from "@/components/library/LibrariesDashboard";
 import { SystemUpdateCenter } from "@/components/update/SystemUpdateCenter";
 import { PackageFileViewer } from "@/components/registry/PackageFileViewer";
 import { ManagedSkillsDashboard } from "@/components/registry/ManagedSkillsDashboard";
 import { SubmissionEvidencePanel } from "@/components/registry/SubmissionEvidencePanel";
+import { SkillImprovementPanel } from "@/components/registry/SkillImprovementPanel";
 import {
   createRegistryClient,
   exportCommand,
@@ -103,7 +105,7 @@ interface RegistryAppProps {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type AuthState = "idle" | "loading" | "mfa";
-type AppView = "manage" | "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "organizations" | "targets" | "updates" | "admin" | "review" | "submit" | "teams" | "settings" | "not-found";
+type AppView = "libraries" | "manage" | "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "organizations" | "targets" | "updates" | "admin" | "review" | "submit" | "teams" | "settings" | "not-found";
 
 interface AppLocation {
   view: AppView;
@@ -158,9 +160,15 @@ const API_TOKEN_SCOPE_OPTIONS: Array<{ scope: ApiTokenScope; label: string }> = 
   { scope: "skills:read", label: "Read skills" },
   { scope: "architectures:read", label: "Read architectures" },
   { scope: "skills:submit", label: "Submit skills" },
+  { scope: "libraries:read", label: "Read libraries" },
+  { scope: "libraries:write", label: "Manage libraries" },
   { scope: "review:read", label: "Review read" },
   { scope: "review:write", label: "Review write" },
   { scope: "targets:execute", label: "Execute target updates" },
+  { scope: "improvements:read", label: "Read improvement plans and evidence" },
+  { scope: "improvements:configure", label: "Configure improvement policies" },
+  { scope: "improvements:run", label: "Run skill improvements" },
+  { scope: "improvements:report", label: "Share and review improvement evidence" },
 ];
 
 export function RegistryApp({ client }: RegistryAppProps) {
@@ -214,6 +222,8 @@ export function RegistryApp({ client }: RegistryAppProps) {
           ? "review"
         : view === "submit" && canUseSubmit
           ? "submit"
+        : view === "libraries" && session
+          ? "libraries"
         : view === "architectures" && session
           ? "architectures"
         : view === "organizations" && canUseOrganizations
@@ -875,6 +885,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }
 
   const navItems = [
+    { view: "libraries" as const, label: "Libraries", group: "Library" as const, icon: <PackageOpen size={18} aria-hidden="true" />, enabled: Boolean(session && registryClient.libraries) },
     { view: "browse" as const, label: "Registry", group: "Library" as const, icon: <Boxes size={18} aria-hidden="true" />, enabled: true },
     { view: "architectures" as const, label: "Architectures", group: "Build" as const, icon: <Workflow size={18} aria-hidden="true" />, enabled: Boolean(session) },
     { view: "submit" as const, label: "Submit", group: "Build" as const, icon: <Upload size={18} aria-hidden="true" />, enabled: canUseSubmit },
@@ -979,7 +990,9 @@ export function RegistryApp({ client }: RegistryAppProps) {
         )}
 
         <div className="app-content" id="main-content" tabIndex={-1}>
-          {activeView === "manage" && session ? (
+          {activeView === "libraries" && session ? (
+            <LibrariesDashboard client={registryClient} user={session.user} />
+          ) : activeView === "manage" && session ? (
             <ManagedSkillsDashboard client={registryClient} mfaVerified={session.user.mfaVerified} />
           ) : activeView === "review" && session ? (
             <ReviewDashboard client={registryClient} session={session} />
@@ -4617,6 +4630,8 @@ function SkillDetail({
           {release.compatibility && Object.keys(release.compatibility).length > 0 && <dl className="metadata-grid shadcn-metadata-grid registry-metadata-grid"><Metadata label="Minimum MySkills" value={release.compatibility.minimumMyskillsVersion ?? "Any"} /><Metadata label="Minimum adapter contract" value={release.compatibility.minimumAdapterContractVersion?.toString() ?? "Any"} /><Metadata label="Minimum source version" value={release.compatibility.minimumSourceVersion ?? "Any"} /></dl>}
         </section>
 
+        <SkillImprovementPanel key={`${release.slug}:${release.version}`} client={client} release={release} user={session?.user ?? null} canManage={canManageSkill} visibility={selectedSkill.visibility} />
+
         {session && hasSupportedPlatform && (
           <ReleaseInstallPanel
             key={`${selectedSkill.slug}:${release.version}:${platform}`}
@@ -5277,6 +5292,7 @@ function isPublicView(view: AppView): boolean {
 }
 
 function initialViewFromPath(pathname: string): AppView {
+  if (pathname === "/libraries") return "libraries";
   if (pathname === "/manage/skills") return "manage";
   if (pathname === "/") {
     return "landing";

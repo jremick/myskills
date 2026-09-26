@@ -1,8 +1,8 @@
 # Data Model
 
-Version: 0.1.0-beta.7
+Version: 0.1.0-beta.8
 Document revision: 0.2.0-draft
-Last updated: 2026-09-01
+Last updated: 2026-09-26
 
 Postgres is the canonical application store. This document describes the
 current branch schema and separates database foundations from routes, services,
@@ -41,6 +41,30 @@ they are not a deployed Railway schema or live provider integration.
   reconciled with the database.
 - `skill_tags`: searchable taxonomy.
 - `scan_runs`, `scan_findings`: package validation and risk-scan status/evidence.
+
+## Libraries candidate tables
+
+Migration `0032_libraries.sql` adds the beta.8 library records. These are candidate
+schema changes; the build evidence records migration and runtime verification.
+
+- `libraries`, `library_entries`: personal or team collections, source references,
+  registry references, tracking state and the selected adoption.
+- `library_sources`, `library_source_snapshots`: provider identity and immutable
+  commit inventories. Source content is untrusted and is never executed by import.
+- `library_import_lineages`, `library_import_candidates`: owner-specific imported
+  identities, held previews, source changes and explicit review decisions.
+- `skill_release_provenance`: immutable source, file, transformation and digest
+  citations written with the registry submission.
+- `skill_version_review_attestations`, `skill_version_elevation_requests`:
+  separate owner-private attestations from instance approval for shared use.
+- `library_adoptions`, `library_target_bindings`: exact release recommendations
+  and additional constraints on connected-target updates.
+- `library_subscriptions`, `library_events`, `library_inbox_reads`: opt-in events
+  and read state. The API rechecks current access before returning inbox content.
+
+The `library` instance setting starts with private self-review disabled. Library
+membership does not grant registry access or transfer ownership. Existing registry
+release availability, target policy, and authorization remain authoritative.
 
 ## Teams, organizations, and sharing
 

@@ -67,6 +67,10 @@ passing production-deployment gate result.
 - Generic denial responses where existence should not be revealed.
 - Tests for allow and deny paths across API, web, CLI, and MCP.
 
+### Skill improvement
+
+Improvement policies, local-run receipts, and accepted evidence use the API authorization boundary. Local runner capabilities are caller assertions; all API-created evidence remains `local-report`. Review and acceptance bind exact digests and never promote a local claim into independently verified performance. See [Skill improvement](SKILL_IMPROVEMENT.md#api-and-security-boundary) for scopes, consent, disclosure and limits.
+
 ### Visibility migration and compatibility boundary
 
 - Canonical visibility mutations use the authenticated

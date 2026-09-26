@@ -1,7 +1,7 @@
 # Railway Deployment
 
-Version: 0.1.0-beta.7
-Last updated: 2026-09-25
+Version: 0.1.0-beta.8
+Last updated: 2026-09-26
 
 This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.
 The current beta.7 candidate is tracked in [Beta.7 Release Delivery](BETA7_RELEASE_DELIVERY.md).
@@ -307,7 +307,7 @@ The current live project is intentionally manual but can be made easier without 
 
 1. Keep feature work on a branch and require GitHub CI to pass.
 2. Merge or fast-forward the Railway-connected branch after the rendered checks pass. Verify required CI for the exact merged source before promotion, and capture a current database-and-artifact recovery point.
-3. When changing artifact publication or cleanup coordination, remove incompatible API writers and cleanup workers before starting the replacement. Account for the resulting API interruption in the rollout plan.
+3. When changing artifact publication or cleanup coordination, remove incompatible API writers and cleanup workers before starting the replacement. For Libraries beta.8, drain beta.7 API instances and workers before accepting library writes; older code does not enforce private-attestation and library-binding guards. Follow the [Libraries rollback boundary](RELEASE.md#libraries-beta8-compatibility-boundary). Account for the resulting API interruption in the rollout plan.
 4. Deploy `api` from the approved commit and wait for Railway success and direct `/ready` before uploading `web` from the same commit. The web proxy must start after the healthy API so it does not retain an address for a retiring private instance.
 5. Compare direct API, web, and proxy `/version.json` with the approved source. Verify web health and same-origin `/api/health` and `/api/ready`.
 6. Complete staging's real browser/CLI journey before production. After production promotion, verify HTML revalidation in an existing browser cache, existing-session auth, authorized private package delivery, anonymous denial, rendered package text and navigation, and recent logs. Use a fresh context for anonymous checks and preserve existing user sessions during verification. Use read requests for production checks; package access still writes its normal audit events.

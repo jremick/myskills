@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const composeFile = resolve(root, "docker-compose.e2e.yml");
 const projectName = `myskills-beta2-e2e-${process.pid}-${randomBytes(4).toString("hex")}`;
-const webPort = "43100";
-const mailpitPort = "43101";
+const webPort = process.env.MYSKILLS_E2E_WEB_PORT ?? "43100";
+const mailpitPort = process.env.MYSKILLS_E2E_MAILPIT_PORT ?? "43101";
 const baseURL = `http://127.0.0.1:${webPort}`;
 const composeArgs = ["compose", "--project-name", projectName, "--file", composeFile];
 const environment = {

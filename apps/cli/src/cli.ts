@@ -1,3 +1,4 @@
+import { libraryCommandHelp, libraryCommandRequest } from "./library-command.js";
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -190,7 +191,7 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
     if (parsed.command === "update" && parsed.options.version !== undefined && !parsed.args[0]) {
       throw new CliError("--version requires a skill slug. Use myskills update <skill-slug> --version <version>.", 2);
     }
-    if (["install", "list", "update", "updates", "rollback", "companion", "codex", "doctor"].includes(parsed.command)) {
+    if (["install", "list", "update", "updates", "rollback", "companion", "codex", "doctor"].includes(parsed.command) || (["library", "libraries"].includes(parsed.command) && parsed.args[0] === "unbind-local")) {
       if (parsed.options.workspace && parsed.options.dir) throw new CliError("Choose --workspace or --dir, not both.", 2);
       const workspace = optionalStringOption(parsed, "workspace");
       if (workspace) {
@@ -270,6 +271,8 @@ async function dispatchCli(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
         return await doctorCommand(parsed, runtime);
       case "bootstrap":
         return await bootstrapCommand(parsed, runtime);
+      case "improve":
+        return await improvementCommand(parsed, runtime);
       case "submit":
         return await submitCommand(parsed, runtime);
       case "review":
@@ -280,6 +283,9 @@ async function dispatchCli(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
         return await skillsCommand(parsed, runtime);
       case "releases":
         return await releasesCommand(parsed, runtime);
+      case "library":
+      case "libraries":
+        return await libraryCommand(parsed, runtime);
       case "teams":
         return await teamsCommand(parsed, runtime);
       case "sharing":
@@ -320,6 +326,102 @@ async function validateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
     runtime.io.stdout(terminalText`valid ${manifest.name}@${manifest.version}`);
   }
   return 0;
+}
+
+async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const operation = parsed.args[0];
+  const optionsByOperation: Record<string, string[]> = {
+    plan: ["path", "reviewer", "output", "model", "goal", "target-version", "max-calls", "timeout-seconds", "suite", "protect", "claude-path", "json"],
+    run: ["job", "accept-plan", "allow-cloud", "json"],
+    report: ["job", "json"],
+    export: ["job", "output", "json"],
+    fetch: ["plan", "output", "suite", "claude-path", "api-url", "token", "json"],
+    share: ["job", "disclosure", "subject", "release", "api-url", "token", "json"],
+    compatibility: ["release"], declare: ["release", "file"], "review-declaration": ["release", "revision", "file"],
+    policy: ["scope", "owner", "file"], profiles: ["scope", "owner", "id", "file"], suites: ["scope", "owner", "id", "file"],
+    preview: ["file"], prepare: ["file"], status: ["run"], cancel: ["run"], evidence: ["id"], "accept-evidence": ["id", "file"],
+  };
+  if (parsed.args.length !== 1 || !optionsByOperation[operation]) throw new CliError("Usage: myskills improve <operation>. See myskills help for options.", 2);
+  for (const name of Object.keys(parsed.options)) if (!optionsByOperation[operation].includes(name) && !["api-url", "token", "json"].includes(name)) throw new CliError(`Unsupported improve ${operation} option: --${name}`, 2);
+  const { createImprovementJob, runImprovementJob, readImprovementPlan, readImprovementReport, exportImprovementCandidate } = await import("./skill-improvement.js");
+  const { fetchImprovementJob, registryLifecycle, shareImprovementEvidence } = await import("./skill-improvement-registry.js");
+  const required = (name: string) => {
+    const value = optionalStringOption(parsed, name);
+    if (!value) throw new CliError(`--${name} is required.`, 2);
+    return value;
+  };
+  let result: unknown;
+  let exitCode = 0;
+  const registryApi = async () => {
+    const token = await requireToken(parsed, runtime);
+    return { apiUrl: apiBaseUrl(parsed, runtime), get: (url: string) => apiGet(url, parsed, runtime, token), post: (url: string, body: unknown) => apiPost(url, body, parsed, runtime, token), bundle: (pin: { slug: string; version: string }) => downloadVerifiedBundle(pin, parsed, runtime, token) };
+  };
+  if (!["plan", "run", "report", "export", "fetch", "share"].includes(operation)) {
+    const encode = encodeURIComponent;
+    let endpoint = "/v1/improvements"; let method = "GET";
+    const file = optionalStringOption(parsed, "file");
+    let body: Record<string, unknown> = {};
+    if (file) {
+      const value: unknown = JSON.parse(await readRegularText(await realpath(file), 256_000));
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw new CliError("--file must contain a JSON object matching the API request body.", 2);
+      body = value as Record<string, unknown>;
+    }
+    if (["declare", "review-declaration", "preview", "prepare", "accept-evidence"].includes(operation)) required("file");
+    if (["compatibility", "declare", "review-declaration"].includes(operation)) {
+      const release = parseReleaseTarget(required("release"));
+      endpoint += `/releases/${encode(release.slug)}/${encode(release.version)}`;
+      if (operation === "compatibility") endpoint += "/compatibility";
+      else { endpoint += "/declarations"; method = "POST"; if (operation === "review-declaration") endpoint += `/${encode(required("revision"))}/review`; }
+    } else if (operation === "policy" || operation === "profiles" || operation === "suites") {
+      const id = optionalStringOption(parsed, "id");
+      const scope = optionalStringOption(parsed, "scope");
+      if (scope && !["user", "team", "organization"].includes(scope)) throw new CliError("--scope must be user, team, or organization.", 2);
+      if (operation === "policy") { required("scope"); endpoint += `/policies/${scope}/${encode(required("owner"))}`; if (file) method = "PUT"; }
+      else {
+        endpoint += `/${operation}`;
+        if (id) endpoint += `/${encode(id)}`;
+        if (file) method = id ? "PUT" : "POST";
+        else if (!id) endpoint += `?ownerType=${encode(required("scope"))}&ownerId=${encode(required("owner"))}`;
+      }
+    } else if (operation === "preview" || operation === "prepare") { endpoint += `/plans${operation === "preview" ? "/preview" : ""}`; method = "POST"; }
+    else if (operation === "status" || operation === "cancel") { endpoint += `/runs/${encode(required("run"))}${operation === "cancel" ? "/cancel" : ""}`; if (operation === "cancel") method = "POST"; }
+    else { endpoint += `/evidence/${encode(required("id"))}${operation === "accept-evidence" ? "/acceptances" : ""}`; if (operation === "accept-evidence") method = "POST"; }
+    const token = await requireToken(parsed, runtime);
+    result = method === "GET" ? await apiGet(endpoint, parsed, runtime, token) : method === "PUT" ? await apiPut(endpoint, body, parsed, runtime, token) : await apiPost(endpoint, body, parsed, runtime, token);
+  } else if (operation === "fetch") {
+    const suitePath = optionalStringOption(parsed, "suite");
+    result = await fetchImprovementJob(await registryApi(), { planId: required("plan"), outputPath: required("output"), executable: optionalStringOption(parsed, "claude-path"), ...(suitePath ? { suite: JSON.parse(await readRegularText(await realpath(suitePath), 256_000)) } : {}) });
+  } else if (operation === "share") {
+    result = await shareImprovementEvidence(await registryApi(), { jobPath: required("job"), disclosure: required("disclosure"), subject: required("subject"), ...parseReleaseTarget(required("release")) });
+  } else if (operation === "plan") {
+    const suitePath = optionalStringOption(parsed, "suite");
+    result = await createImprovementJob({
+      sourcePath: required("path"), reviewerPaths: stringListOption(parsed, "reviewer"), outputPath: required("output"),
+      model: required("model"), goal: required("goal"), targetVersion: required("target-version"),
+      maxCalls: Number(optionalStringOption(parsed, "max-calls") ?? 21), timeoutSeconds: Number(optionalStringOption(parsed, "timeout-seconds") ?? 120),
+      inference: "cloud", protectedFiles: stringListOption(parsed, "protect"), executable: optionalStringOption(parsed, "claude-path"),
+      ...(suitePath ? { suite: JSON.parse(await readRegularText(await realpath(suitePath), 256_000)) } : {}),
+    });
+  } else if (operation === "run") {
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    process.once("SIGINT", cancel); process.once("SIGTERM", cancel); process.once("SIGHUP", cancel);
+    try {
+      const jobPath = required("job");
+      const { plan } = await readImprovementPlan(jobPath);
+      const lifecycle = plan.registry ? await registryLifecycle(await registryApi(), jobPath, CLI_VERSION) : undefined;
+      const report = await runImprovementJob({ jobPath, acceptPlan: required("accept-plan"), allowCloud: parsed.options["allow-cloud"] === true, signal: controller.signal, lifecycle });
+      result = report;
+      exitCode = report.state === "completed" ? 0 : 1;
+    } finally { process.removeListener("SIGINT", cancel); process.removeListener("SIGTERM", cancel); process.removeListener("SIGHUP", cancel); }
+  } else if (operation === "report") {
+    result = await readImprovementReport(required("job"));
+  } else {
+    await exportImprovementCandidate({ jobPath: required("job"), outputPath: required("output") });
+    result = { exported: true, status: "draft", evaluation: (await readImprovementReport(required("job"))).evaluation?.outcome ?? "unevaluated", next: "Inspect the diff, then use myskills submit for normal review and publication." };
+  }
+  runtime.io.stdout(parsed.options.json ? JSON.stringify(result, null, 2) : terminalSafeText(JSON.stringify(result, null, 2)));
+  return exitCode;
 }
 
 async function initCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
@@ -1675,6 +1777,77 @@ async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   return 0;
 }
 
+async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  if (!parsed.args[0] || parsed.args[0] === "help") { runtime.io.stdout(libraryCommandHelp); return 0; }
+  if (parsed.args[0] === "unbind-local") {
+    if (!parsed.args[1]) throw new CliError("Usage: myskills libraries unbind-local <skill-slug> --dir <install-root>", 2);
+    const slug = parseInstallSlug(parsed.args[1]);
+    const root = installRoot(parsed, runtime);
+    const registry = await readInstallRegistry(root);
+    const installed = registry.installations[slug];
+    if (!installed) throw new CliError("This skill is not installed in the selected root.", 1);
+    delete installed.libraryEntryId;
+    await writeInstallRegistry(root, registry);
+    runtime.io.stdout(JSON.stringify({ slug, version: installed.version, libraryEntryId: null, filesChanged: false }, null, 2));
+    return 0;
+  }
+  const inputPath = optionalStringOption(parsed, "input");
+  let payload: Record<string, unknown> | undefined;
+  if (inputPath) {
+    const fileInfo = await lstat(inputPath);
+    if (!fileInfo.isFile() || fileInfo.size > 65_536) throw new CliError("Library input must be a regular JSON file of at most 64 KiB.", 2, "CLI_ARGUMENTS_INVALID");
+    const text = await readRegularText(await realpath(inputPath));
+    if (Buffer.byteLength(text) > 65_536) throw new CliError("Library input exceeds 64 KiB.", 2, "CLI_ARGUMENTS_INVALID");
+    try { payload = recordField(JSON.parse(text), "library request body"); }
+    catch { throw new CliError("Library input must contain a JSON object.", 2, "CLI_ARGUMENTS_INVALID"); }
+  }
+  let request;
+  try { request = libraryCommandRequest(parsed.args[0], parsed.args[1], parsed.options, payload); }
+  catch (error) { throw new CliError(error instanceof Error ? error.message : "Invalid library command.", 2, "CLI_ARGUMENTS_INVALID"); }
+  const token = await requireToken(parsed, runtime);
+  if (parsed.args[0] === "review-bundle") return await verifiedLibraryReviewBundle(request.pathname, parsed, runtime, token);
+  const response = await apiJsonRequest(request.pathname, parsed, runtime, {
+    method: request.method,
+    headers: { authorization: `Bearer ${token}`, ...(request.payload ? { "content-type": "application/json" } : {}) },
+    ...(request.payload ? { body: JSON.stringify(request.payload) } : {}),
+  });
+  runtime.io.stdout(JSON.stringify(response, null, 2));
+  return 0;
+}
+
+/** Releases a self-reviewed bundle only after the SHA-256 of its UTF-8 body
+ * matches x-myskills-artifact-sha256. --output keeps exactly those verified
+ * bytes; stdout carries a parsed view that is labelled as such. */
+async function verifiedLibraryReviewBundle(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token: string): Promise<number> {
+  const expectedDigest = optionalStringOption(parsed, "artifact-sha256");
+  if (expectedDigest !== undefined && !isArtifactSha256(expectedDigest)) {
+    throw new CliError("--artifact-sha256 must be the 64-character SHA-256 from the review request.", 2, "CLI_ARGUMENTS_INVALID");
+  }
+  const response = await apiGetWithHeaders(pathname, parsed, runtime, token);
+  const artifactSha256 = response.headers["x-myskills-artifact-sha256"] ?? "";
+  if (!isArtifactSha256(artifactSha256)) {
+    throw new CliError("The review bundle response has no valid artifact digest. Nothing was printed or written.", 1, "ARTIFACT_HASH_MISSING");
+  }
+  const bytes = Buffer.from(response.text, "utf8");
+  if (createHash("sha256").update(bytes).digest("hex") !== artifactSha256 || (expectedDigest !== undefined && artifactSha256 !== expectedDigest)) {
+    throw new CliError("The review bundle does not match its artifact digest. Nothing was printed or written; do not elevate this release.", 1, "ARTIFACT_HASH_MISMATCH");
+  }
+  const payload = parseJsonResponse(pathname, apiBaseUrl(parsed, runtime), response.text);
+  if (!Array.isArray(payload.files)) throw new CliError("The review bundle is not an inspectable package.", 1, "ARTIFACT_INVALID");
+  const outputPath = optionalStringOption(parsed, "output");
+  const output = outputPath ? path.resolve(outputPath) : null;
+  if (output) {
+    try {
+      await writeFile(output, bytes, { mode: 0o600, flag: "wx" });
+    } catch (error) {
+      if (isNodeError(error) && error.code === "EEXIST") throw new CliError("The output path already exists. Choose a new file; existing files are not replaced.", 1, "OUTPUT_EXISTS");
+      throw error;
+    }
+  }
+  runtime.io.stdout(JSON.stringify({ artifactSha256, byteSize: bytes.length, digestVerified: true, expectedDigestVerified: expectedDigest !== undefined, output, payloadForm: "parsed-for-inspection", payload }, null, 2));
+  return 0;
+}
+
 async function installCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const slug = parsed.args[0];
   if (!slug) {
@@ -1686,7 +1859,11 @@ async function installCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<
   const provenance = await registryProvenance(parsed, runtime, token);
   await assertWorkspaceBinding(parsed, runtime, provenance);
   if (registry.installations[slug]) assertMatchingProvenance(registry.installations[slug], provenance);
-  const version = optionalStringOption(parsed, "version") ?? await latestCompatibleVersionForSkill(slug, registry.installations[slug], parsed, runtime, token);
+  const libraryResolution = await resolveLibraryInstallation(slug, registry.installations[slug], parsed, runtime, token);
+  const version = optionalStringOption(parsed, "version") ?? libraryResolution?.version ?? await latestCompatibleVersionForSkill(slug, registry.installations[slug], parsed, runtime, token);
+  assertLibraryVersion(libraryResolution, version);
+  const older = libraryResolution && registry.installations[slug] ? olderLibraryAdoption(slug, registry.installations[slug], libraryResolution) : null;
+  if (older) throw new CliError(older.message, 1, "LIBRARY_ADOPTION_OLDER_THAN_INSTALLED");
   const installed = await installSkillVersion({
     slug,
     version,
@@ -1736,7 +1913,7 @@ async function updateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   const dryRun = parsed.options["dry-run"] === true;
   const provenance = await registryProvenance(parsed, runtime, token);
   await assertWorkspaceBinding(parsed, runtime, provenance);
-  const results: Array<{ slug: string; platform: string; evaluation: ReturnType<typeof evaluateSkillUpdate>; appliedVersion?: string }> = [];
+  const results: Array<{ slug: string; platform: string; evaluation: ReturnType<typeof evaluateSkillUpdate>; library?: LibraryUpdateReport; appliedVersion?: string }> = [];
   let blocked = false;
 
   for (const slug of targets) {
@@ -1753,6 +1930,18 @@ async function updateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
       blocked = true;
       continue;
     }
+    let libraryResolution: LibraryInstallResolution | null;
+    try {
+      libraryResolution = await resolveLibraryInstallation(slug, existing, parsed, runtime, token);
+    } catch (error) {
+      if (!(error instanceof LibraryCurationUnavailableError)) throw error;
+      const library = curationUnavailableReport(slug, error);
+      results.push({ slug, platform, evaluation: curationUnavailableEvaluation(existing.version), library });
+      printLibraryUpdateReport(slug, platform, existing.version, library, parsed, runtime);
+      blocked = true;
+      continue;
+    }
+    if (explicitVersion) assertLibraryVersion(libraryResolution, explicitVersion);
     const releases = await releaseCandidatesForSkill(slug, parsed, runtime, token);
     const selectedReleases = explicitVersion
       ? releases.filter((release) => release.version === explicitVersion)
@@ -1767,14 +1956,20 @@ async function updateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
         artifactSha256: existing.artifact.sha256 || undefined,
       },
       releases: selectedReleases,
-      policy: { includePrerelease: parsed.options["include-prerelease"] === true },
+      policy: { includePrerelease: parsed.options["include-prerelease"] === true, ...(libraryResolution ? { pinnedVersion: libraryResolution.version } : {}) },
       client: { myskillsVersion: CLI_VERSION, adapterContractVersion: parsed.options.workspace ? 2 : 1 },
     });
-    const result = { slug, platform, evaluation, appliedVersion: undefined as string | undefined };
+    const library = libraryResolution ? libraryUpdateReport(slug, existing, libraryResolution) : undefined;
+    const result = { slug, platform, evaluation, library, appliedVersion: undefined as string | undefined };
     results.push(result);
+    if (library?.state === "adoption-older-than-installed") {
+      printLibraryUpdateReport(slug, platform, existing.version, library, parsed, runtime);
+      blocked = true;
+      continue;
+    }
     printUpdateEvaluation(slug, platform, evaluation, parsed, runtime);
     if (dryRun || evaluation.status !== "update-available" || !evaluation.candidate) {
-      if (evaluation.status !== "current" && evaluation.status !== "update-available") blocked = true;
+      if (evaluation.status !== "current" && evaluation.status !== "update-available" && !(libraryResolution && evaluation.status === "pinned")) blocked = true;
       continue;
     }
     if (evaluation.candidate.requiresUserAction && parsed.options["accept-user-action"] !== true) {
@@ -1814,7 +2009,7 @@ async function updatesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<
   const token = await tokenOption(parsed, runtime) ?? undefined;
   const provenance = await registryProvenance(parsed, runtime, token);
   await assertWorkspaceBinding(parsed, runtime, provenance);
-  const results: Array<{ slug: string; platform: string; evaluation: ReturnType<typeof evaluateSkillUpdate> }> = [];
+  const results: Array<{ slug: string; platform: string; evaluation: ReturnType<typeof evaluateSkillUpdate>; library?: LibraryUpdateReport }> = [];
   for (const slug of targets) {
     const installed = registry.installations[slug];
     if (!installed) throw new CliError(`${slug} is not installed. Run myskills install ${slug}.`, 1);
@@ -1825,6 +2020,16 @@ async function updatesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<
       if (!parsed.options.json) printUpdateEvaluation(slug, installed.platform, evaluation, parsed, runtime);
       continue;
     }
+    let libraryResolution: LibraryInstallResolution | null;
+    try {
+      libraryResolution = await resolveLibraryInstallation(slug, installed, parsed, runtime, token);
+    } catch (error) {
+      if (!(error instanceof LibraryCurationUnavailableError)) throw error;
+      const library = curationUnavailableReport(slug, error);
+      results.push({ slug, platform: installed.platform, evaluation: curationUnavailableEvaluation(installed.version), library });
+      if (!parsed.options.json) printLibraryUpdateReport(slug, installed.platform, installed.version, library, parsed, runtime);
+      continue;
+    }
     const releases = await releaseCandidatesForSkill(slug, parsed, runtime, token);
     const evaluation = evaluateSkillUpdate({
       installed: {
@@ -1833,11 +2038,14 @@ async function updatesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<
         artifactSha256: installed.artifact.sha256 || undefined,
       },
       releases,
-      policy: { includePrerelease: parsed.options["include-prerelease"] === true },
+      policy: { includePrerelease: parsed.options["include-prerelease"] === true, ...(libraryResolution ? { pinnedVersion: libraryResolution.version } : {}) },
       client: { myskillsVersion: CLI_VERSION, adapterContractVersion: parsed.options.workspace ? 2 : 1 },
     });
-    results.push({ slug, platform: installed.platform, evaluation });
-    if (!parsed.options.json) printUpdateEvaluation(slug, installed.platform, evaluation, parsed, runtime);
+    const library = libraryResolution ? libraryUpdateReport(slug, installed, libraryResolution) : undefined;
+    results.push({ slug, platform: installed.platform, evaluation, library });
+    if (parsed.options.json) continue;
+    if (library?.state === "adoption-older-than-installed") printLibraryUpdateReport(slug, installed.platform, installed.version, library, parsed, runtime);
+    else printUpdateEvaluation(slug, installed.platform, evaluation, parsed, runtime);
   }
   if (parsed.options.json) runtime.io.stdout(JSON.stringify({ updates: results }, null, 2));
   return 0;
@@ -2032,6 +2240,7 @@ async function rollbackCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
     contentDigestAlgorithm: CONTENT_DIGEST_ALGORITHM,
     history: existing.history.slice(0, -1),
     provenance: previous.provenance,
+    ...(existing.libraryEntryId ? { libraryEntryId: existing.libraryEntryId } : {}),
   };
   await writeInstallRegistry(root, registry);
   transaction = { ...transaction, state: "registry-committed" };
@@ -2404,6 +2613,113 @@ async function latestCompatibleVersionForSkill(slug: string, existing: Installed
   return selected.version;
 }
 
+interface LibraryInstallResolution {
+  entryId: string;
+  version: string;
+  artifactSha256: string;
+  adoptionId: string;
+}
+
+function parseLibraryEntryId(value: unknown): string {
+  if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+    throw new CliError("Library entry must be a valid entry ID.", 2, "LIBRARY_ENTRY_INVALID");
+  }
+  return value;
+}
+
+async function resolveLibraryInstallation(slug: string, installed: InstalledSkillRecord | undefined, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<LibraryInstallResolution | null> {
+  const requested = optionalStringOption(parsed, "library-entry");
+  if (requested && installed?.libraryEntryId && requested !== installed.libraryEntryId) {
+    throw new CliError("This installation is bound to a different library entry. Run libraries unbind-local explicitly before choosing another binding, or use a new installation root.", 1, "LIBRARY_BINDING_CONFLICT");
+  }
+  const entryId = requested ?? installed?.libraryEntryId;
+  if (!entryId) return null;
+  parseLibraryEntryId(entryId);
+  let response: Record<string, unknown>;
+  try {
+    response = await apiGet(`/v1/library-entries/${encodeURIComponent(entryId)}/resolution`, parsed, runtime, token);
+  } catch (error) {
+    // A deleted entry and lost access share one generic 404 by contract.
+    if (error instanceof CliError && error.status === 404) throw new LibraryCurationUnavailableError(entryId, error.code);
+    if (error instanceof CliError && error.status === 403 && error.code === "API_TOKEN_SCOPE_REQUIRED") {
+      throw new CliError("This skill follows a library entry, and checking its adoption needs an API token with the libraries:read scope. A companion token needs skills:read, targets:execute and libraries:read. Create a token with those scopes or sign in with a session. Existing files were not changed.", 1, error.code, error.status);
+    }
+    throw error;
+  }
+  const resolution = recordField(response.resolution, "library resolution");
+  if (resolution.entryId !== entryId || resolution.slug !== slug) throw invalidLibraryResolution();
+  // A revoked adopted release or a cleared adoption keeps the installed pin.
+  if (resolution.state === "no-adoption" || resolution.state === "adoption-unavailable") throw new LibraryCurationUnavailableError(entryId, resolution.state);
+  if (resolution.state !== "adopted" || typeof resolution.version !== "string" || !parseSemanticVersion(resolution.version)
+    || typeof resolution.artifactSha256 !== "string" || !/^[a-f0-9]{64}$/.test(resolution.artifactSha256)
+    || typeof resolution.adoptionId !== "string" || !resolution.adoptionId) {
+    throw invalidLibraryResolution();
+  }
+  return { entryId, version: resolution.version, artifactSha256: resolution.artifactSha256, adoptionId: resolution.adoptionId };
+}
+
+function invalidLibraryResolution(): CliError {
+  return new CliError("The library resolution response is invalid. Existing files were not changed.", 1, "LIBRARY_RESOLUTION_INVALID");
+}
+
+function assertLibraryVersion(resolution: LibraryInstallResolution | null, version: string): void {
+  if (resolution && resolution.version !== version) throw new CliError(`This library adopts ${resolution.version}. Adopt the requested version in the library before installing it.`, 1, "LIBRARY_VERSION_MISMATCH");
+}
+
+interface LibraryUpdateReport {
+  state: "adopted" | "curation-unavailable" | "adoption-older-than-installed";
+  entryId: string;
+  adoptedVersion?: string;
+  reason?: string;
+  recovery?: "rollback" | "new-root";
+  message?: string;
+}
+
+function libraryUpdateReport(slug: string, installed: InstalledSkillRecord, resolution: LibraryInstallResolution): LibraryUpdateReport {
+  return olderLibraryAdoption(slug, installed, resolution) ?? { state: "adopted", entryId: resolution.entryId, adoptedVersion: resolution.version };
+}
+
+/** Explains an adoption older than the installed version. Nothing downgrades
+ * automatically; rollback is advised only when it restores the exact adoption. */
+function olderLibraryAdoption(slug: string, installed: InstalledSkillRecord, resolution: LibraryInstallResolution): LibraryUpdateReport & { message: string } | null {
+  if (compareSemanticVersions(resolution.version, installed.version) >= 0) return null;
+  const snapshot = installed.history.at(-1);
+  const recovery = snapshot?.version === resolution.version && snapshot.artifact.sha256 === resolution.artifactSha256 ? "rollback" : "new-root";
+  const next = recovery === "rollback"
+    ? `Run myskills rollback ${slug} to restore the verified ${resolution.version} snapshot`
+    : `Install ${resolution.version} into a new root with myskills install ${slug} --library-entry ${resolution.entryId} --dir <new-root>`;
+  return {
+    state: "adoption-older-than-installed",
+    entryId: resolution.entryId,
+    adoptedVersion: resolution.version,
+    recovery,
+    message: `The library adopts ${resolution.version}, which is older than installed ${installed.version}. MySkills never downgrades an installation, so the files are unchanged. ${next}, or run myskills libraries unbind-local ${slug} to keep ${installed.version}.`,
+  };
+}
+
+function curationUnavailableReport(slug: string, error: LibraryCurationUnavailableError): LibraryUpdateReport {
+  return {
+    state: "curation-unavailable",
+    entryId: error.entryId,
+    reason: error.reason,
+    message: `The library entry has no available authorized adoption (${error.reason}). The files and the library binding are unchanged, and no other release is used. Restore the entry or its adoption, or run myskills libraries unbind-local ${slug} to return to ordinary registry updates.`,
+  };
+}
+
+function curationUnavailableEvaluation(version: string): ReturnType<typeof evaluateSkillUpdate> {
+  // The installed version stays the pin; registry latest is never a fallback.
+  return { status: "pinned", installedVersion: version, includedReleases: [], blockers: [] };
+}
+
+function printLibraryUpdateReport(slug: string, platform: string, installedVersion: string, report: LibraryUpdateReport, parsed: ParsedArgs, runtime: CliRuntime): void {
+  if (parsed.options.json) return;
+  const fields = report.state === "curation-unavailable"
+    ? ["curation-unavailable", `platform=${platform}`, `libraryEntry=${report.entryId}`, `reason=${report.reason ?? "-"}`]
+    : ["library-adopts-older", `platform=${platform}`, `adopted=${report.adoptedVersion ?? "-"}`, `libraryEntry=${report.entryId}`];
+  runtime.io.stdout([`${slug}@${installedVersion}`, ...fields].map((field) => terminalSafeText(field)).join("\t"));
+  if (report.message) runtime.io.stdout(`library\t${terminalSafeText(report.message)}`);
+}
+
 interface RegistryProvenance { origin: string; instanceId: string }
 
 async function registryProvenance(parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<RegistryProvenance> {
@@ -2460,12 +2776,15 @@ async function installSkillVersion(input: {
   const recorded = input.registry.installations[slug];
   if (recorded) assertMatchingProvenance(recorded, provenance);
   const existing = recorded ? await assertInstalledBytes(recorded) : undefined;
+  const libraryResolution = await resolveLibraryInstallation(slug, existing, input.parsed, input.runtime, input.token);
+  assertLibraryVersion(libraryResolution, input.version);
   const bundle = await downloadVerifiedBundle({
     slug,
     version: input.version,
     platform: input.parsed.options.workspace || input.parsed.command === "companion" ? "codex" : input.platform,
   }, input.parsed, input.runtime, input.token);
   assertReleaseEligibility({ ...bundle.release, version: bundle.version }, existing, input.parsed);
+  if (libraryResolution && bundle.artifact.sha256 !== libraryResolution.artifactSha256) throw new CliError("Library adoption and release artifact differ. Refresh the library before installing.", 1, "LIBRARY_ARTIFACT_MISMATCH");
   if (existing && compareSemanticVersions(bundle.version, existing.version) > 0 && input.parsed.options["accept-user-action"] !== true) {
     const releases = await releaseCandidatesForSkill(slug, input.parsed, input.runtime, input.token);
     if (releases.some((release) => release.requiresUserAction && compareSemanticVersions(release.version, existing.version) > 0
@@ -2515,6 +2834,12 @@ async function installSkillVersion(input: {
     if (currentRelease.artifact.sha256 !== bundle.artifact.sha256 || currentRelease.artifact.byteSize !== bundle.artifact.byteSize) throw new CliError("Release identity changed before promotion.", 1);
     assertReleaseEligibility({ ...currentRelease.metadata, version: currentRelease.version }, existing, input.parsed);
   }
+  if (libraryResolution) {
+    const current = await resolveLibraryInstallation(slug, existing, input.parsed, input.runtime, input.token);
+    if (!current || current.adoptionId !== libraryResolution.adoptionId || current.version !== libraryResolution.version || current.artifactSha256 !== libraryResolution.artifactSha256) {
+      throw new CliError("Library adoption changed before installation. The existing files are unchanged; review the new adoption and retry.", 1, "LIBRARY_ADOPTION_CHANGED");
+    }
+  }
   if (existing) await assertInstalledBytes(existing);
   else if (await pathExists(outputRoot)) throw new CliError("Installation appeared after planning.", 1);
 
@@ -2554,6 +2879,7 @@ async function installSkillVersion(input: {
     contentDigestAlgorithm: CONTENT_DIGEST_ALGORITHM,
     provenance,
     history,
+    ...(libraryResolution ? { libraryEntryId: libraryResolution.entryId } : {}),
   };
   input.registry.installations[slug] = installed;
   await writeInstallRegistry(input.root, input.registry);
@@ -2653,6 +2979,8 @@ const CONTENT_DIGEST_ALGORITHM = "sha256-json-ordinal-v1";
 type ContentDigestAlgorithm = typeof CONTENT_DIGEST_ALGORITHM;
 
 interface InstalledSkillRecord {
+  /** Explicit adoption constraint; absence never inferred from registry latest. */
+  libraryEntryId?: string;
   slug: string;
   version: string;
   platform: string;
@@ -2894,6 +3222,7 @@ function parseInstalledSkillRecord(slug: string, input: unknown, root: string): 
     contentDigestAlgorithm: parseContentDigestAlgorithm(record.contentDigestAlgorithm),
     history: parseInstallHistory(record.history, root),
     provenance: parseProvenance(record.provenance),
+    ...(record.libraryEntryId !== undefined ? { libraryEntryId: parseLibraryEntryId(record.libraryEntryId) } : {}),
   };
 }
 
@@ -4437,7 +4766,7 @@ async function apiFetch(
   const baseUrl = apiBaseUrl(parsed, runtime);
   let response: Awaited<ReturnType<FetchLike>>;
   try {
-    response = await runtime.fetch(`${baseUrl}${pathname}`, { ...init, signal: AbortSignal.timeout(30_000) });
+    response = await runtime.fetch(`${baseUrl}${pathname}`, { ...init, signal: AbortSignal.timeout(/^\/v1\/library-entries\/[^/]+\/(?:checks|discoveries|previews)$/.test(pathname) ? 65_000 : 30_000) });
   } catch {
     throw new CliError([
       "Could not reach the MySkills API.",
@@ -5063,6 +5392,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       || key === "include-prerelease"
       || key === "requires-user-action"
       || key === "accept-user-action"
+      || key === "allow-cloud"
     ) {
       options[key] = true;
       continue;
@@ -5090,11 +5420,25 @@ function helpText(): string {
     "myskills <command>",
     "",
     "Commands:",
+    "  libraries <action> [id] [--input <request.json>] [--json] (libraries help for actions)",
     "  version",
     "  init <name> [--output <dir>] [--title <text>] [--summary <text>] [--license <text>] [--json]",
     "  validate --path <file-directory-or-zip>",
     "  scan --path <file-directory-or-zip>",
     "  package --path <directory> --output <file.zip> [--json]",
+    "  improve plan --path <skill-dir> --reviewer <reviewer-dir> --output <new-job-dir> --model <model-id> --goal <text> --target-version <version> [--suite <json>] [--protect <path>] [--max-calls <number>] [--timeout-seconds <number>] [--claude-path <executable>] [--json]",
+    "  improve run --job <dir> --accept-plan <sha256> --allow-cloud [--json]",
+    "  improve report --job <dir> [--json]",
+    "  improve export --job <dir> --output <new-draft-dir> [--json]",
+    "  improve fetch --plan <id> --output <new-job-dir> [--suite <json>] [--claude-path <executable>] [--api-url <url>] [--json]",
+    "  improve share --job <dir> --disclosure summary --subject baseline|candidate --release <slug>@<version> [--api-url <url>] [--json]",
+    "  improve compatibility --release <slug>@<version> [--json]",
+    "  improve declare|review-declaration --release <slug>@<version> [--revision <id>] --file <request.json> [--json]",
+    "  improve policy --scope user|team|organization --owner <id> [--file <request.json>] [--json]",
+    "  improve profiles|suites [--id <id> | --scope user|team|organization --owner <id>] [--file <request.json>] [--json]",
+    "  improve preview|prepare --file <request.json> [--json]",
+    "  improve status|cancel --run <id> [--json]",
+    "  improve evidence|accept-evidence --id <id> [--file <request.json>] [--json]",
     "  search [query] [--api-url <url>]",
     "  info <skill-slug> [--api-url <url>]",
     "  login [--api-url <url>] [--method <password|api-key>] [--email <email>]",
@@ -5134,12 +5478,12 @@ function helpText(): string {
     "  admin sharing get [--api-url <url>] [--token <token>]",
     "  admin sharing set [--public <true|false>] [--authenticated <true|false>] [--teams <true|false>] [--team-visibility <true|false>] [--user-visibility <true|false>] [--organization-visibility <true|false>]",
     "  export <skill-slug> --version <version> --platform <platform> --output <dir>",
-    "  install <skill-slug> [--version <version>] [--platform <platform>] [--dir <install-root>]",
+    "  install <skill-slug> [--version <version>] [--library-entry <entry-id>] [--platform <platform>] [--dir <install-root>]",
     "  list [--dir <install-root>]",
     "  updates [skill-slug] [--include-prerelease] [--dir <install-root>] [--json]",
     "  update [skill-slug] [--version <version>] [--platform <platform>] [--include-prerelease] [--dry-run] [--accept-user-action] [--dir <install-root>]",
     "  rollback <skill-slug> [--dir <install-root>]",
-    "  companion run-once --workspace <absolute-dir> --holder <id> [--api-url <url>] [--token <targets:execute-token>]",
+    "  companion run-once --workspace <absolute-dir> --holder <id> [--api-url <url>] [--token <token>] (token scopes: skills:read, targets:execute; add libraries:read for library-bound skills)",
     "  codex enroll --workspace <absolute-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>] [--api-url <url>]",
     "  codex observe --workspace <absolute-dir> [--upload] [--api-url <url>]",
     "  token create --name <name> --scope <scope> [--scope <scope>]",
@@ -5170,5 +5514,16 @@ class CliError extends Error {
       message: this.message,
       ...(this.status !== undefined ? { status: this.status } : {}),
     };
+  }
+}
+
+/** Expected library outcome: the bound entry supplies no readable adoption.
+ * Install fails closed; update reports it per skill and keeps the pin. */
+class LibraryCurationUnavailableError extends CliError {
+  constructor(
+    public readonly entryId: string,
+    public readonly reason: string,
+  ) {
+    super(`The library entry has no available authorized adoption (${reason}). Nothing was installed or replaced, and no other release is used.`, 1, "LIBRARY_CURATION_UNAVAILABLE");
   }
 }

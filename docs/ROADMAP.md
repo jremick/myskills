@@ -1,8 +1,8 @@
 # Roadmap
 
-Version: 0.1.0-beta.7
-Document revision: 0.3.3
-Last updated: 2026-09-25
+Version: 0.1.0-beta.8
+Document revision: 0.3.5
+Last updated: 2026-09-26
 
 ## Release Tracks
 
@@ -19,6 +19,12 @@ Last updated: 2026-09-25
   remains beta.6. Native host activation, imports, and guided setup remain later
   roadmap slices. See [Beta.7 Release Delivery](BETA7_RELEASE_DELIVERY.md).
 - **Hosted beta baseline**: beta.7 at `6912d3f9490c6f002431f3064e8a9db417df3d7f` is the verified deployment recorded on 25 September 2026. Confirm subsequent runtime state by live readback; beta.5 evidence is historical.
+- **Libraries candidate (`v0.1.0-beta.8`)**: phases 1A–1C are approved for the
+  next release. They cover public GitHub imports, provenance, private self-review
+  under an administrator policy, source checks, subscriptions, team curation and
+  adoption constraints. Implementation and verification remain in progress.
+  See the [full specification](plans/2026-09-26-library-feature-spec.md) and
+  [build evidence](plans/2026-09-26-library-build-evidence.md).
 - **Business-safe production release**: harden the beta into an operator-ready release with stronger audit, background scanning, skill evals, provider lifecycle, artifact delivery, trusted publishing, deploy/ops guidance, and upgrade policy. See [BUSINESS_SAFE_RELEASE_GOAL.md](BUSINESS_SAFE_RELEASE_GOAL.md).
 
 ## Current Focus
@@ -71,6 +77,12 @@ and do not create separate registries or release systems.
 | AUTHOR-1 | Authors create, edit, import, and submit skills without manually rebuilding packages. | 3, 4, 5 | [Authoring and imports](#authoring-and-imports-author-1) |
 | REC-1 | Users and agents find relevant skills from a task description. | 1, 6, 7 | [Task-aware recommendations](#task-aware-recommendations-rec-1) |
 | HOST-1 | Operators reach a usable, maintainable instance with fewer steps and less build work. | 8, 9, 10 | [Self-hosting and deployment](#self-hosting-and-deployment-host-1) |
+| OPT-1 (proposal) | Users, teams, and organizations designate reviewer skills, run improvement locally, and inspect model/app/environment evidence. | 3, 4, 5, 6, 7 | [Skill improvement and optimisation specification](SKILL_IMPROVEMENT_SPEC.md) |
+
+OPT-1 is a proposed feature specification, not a scheduled release. It recommends
+release metadata and an explicit local review/evaluation workflow before enrolled
+event-driven automation. It depends on a minimal Milestone 6 evaluation foundation
+and preserves existing publication and target-adoption gates.
 
 The [self-hosting investigation](SELF_HOSTING_INVESTIGATION.md) records current
 friction, options, dependencies, and proposed verification. It recommends release
@@ -770,8 +782,9 @@ Recommended next order:
 2. Completed: grouped dependency updates merged in [PR #81](https://github.com/jremick/myskills/pull/81) and [PR #71](https://github.com/jremick/myskills/pull/71). Major runtime and email-library upgrades remain separate.
 3. CLI archive creation and native MCP server delivery are covered by
    [PR #83](https://github.com/jremick/myskills/pull/83). Keep full MCP-1 host
-   activation open. Next add held-byte folder/ZIP import previews, followed by
-   commit-pinned public GitHub imports.
+   activation open. The approved beta.8 Libraries slice now prioritizes
+   commit-pinned public GitHub imports and tracking. Folder/ZIP previews remain
+   a subsequent authoring slice.
 4. Build the HOST-1 versioned image and Compose release bundle, then private
    browser drafts and guided setup/operations as subsequent slices. Measure
    fresh install, update, and recovery before making speed claims.

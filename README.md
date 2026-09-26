@@ -16,7 +16,11 @@ MySkills is an open-source beta platform for publishing, reviewing, discovering,
 
 ## Release Status
 
-Current target: **v0.1.0-beta.7**.
+Current target: **v0.1.0-beta.8**.
+
+The beta.8 candidate adds [Libraries](docs/LIBRARIES.md) for saved sources,
+reviewed imports, source tracking and adopted versions. Implementation and
+verification are in progress in the [candidate evidence record](docs/plans/2026-09-26-library-build-evidence.md).
 
 GitHub prerelease: **[v0.1.0-beta.7](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.7)**.
 

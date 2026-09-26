@@ -35,6 +35,9 @@ import type {
   UserSubmissionSummary,
   UserSubmissionDetail,
   ReviewSubmissionDetail,
+  PrivateSelfReviewResult,
+  SelfReviewElevationResult,
+  SelfReviewedReleaseSummary,
 } from "./types.js";
 import { artifactPayloadSha256 } from "./artifact-hash.js";
 import { skillPagePosition, skillPageResult, type SkillPageFilters, type SkillPage } from "../repositories/skill-pagination.js";
@@ -305,6 +308,75 @@ export class SubmissionService {
     });
     return bundle;
   }
+
+  /**
+   * Owner review of a strictly private source import. The store rechecks the
+   * admin setting, ownership, private scope, scans and exact bytes in one
+   * transaction. It records a distinct attestation, not a maintainer approval.
+   */
+  async selfReviewPrivateImport(input: { actor: SubmissionActor; submissionId: string; artifactSha256: string; reason?: string }): Promise<PrivateSelfReviewResult> {
+    if (!this.store.selfReviewPrivateImport) {
+      throw new AppError("Private self-review requires the Postgres registry.", "PRIVATE_SELF_REVIEW_UNAVAILABLE", 503);
+    }
+    return this.store.selfReviewPrivateImport({
+      actorId: input.actor.id,
+      submissionId: input.submissionId,
+      artifactSha256: input.artifactSha256,
+      ...(input.reason ? { reason: input.reason } : {}),
+    });
+  }
+
+  async requestSelfReviewElevation(input: { actor: SubmissionActor; submissionId: string }): Promise<{ submissionId: string; requestedAt: string }> {
+    if (!this.store.requestSelfReviewElevation) {
+      throw new AppError("Private self-review requires the Postgres registry.", "PRIVATE_SELF_REVIEW_UNAVAILABLE", 503);
+    }
+    return this.store.requestSelfReviewElevation({ actorId: input.actor.id, submissionId: input.submissionId });
+  }
+
+  async listRequestedSelfReviewedReleases(actor: SubmissionActor): Promise<SelfReviewedReleaseSummary[]> {
+    await this.requireReviewer(actor, "review.self_reviewed.list");
+    if (!this.store.listRequestedSelfReviewedReleases) return [];
+    return this.store.listRequestedSelfReviewedReleases();
+  }
+
+  async getSelfReviewedReleaseBundle(input: { actor: SubmissionActor; submissionId: string }) {
+    await this.requireReviewer(input.actor, "review.self_reviewed.bundle", input.submissionId);
+    const bundle = this.store.getSelfReviewedReleaseBundle
+      ? await this.store.getSelfReviewedReleaseBundle({ submissionId: input.submissionId })
+      : null;
+    await this.store.recordArtifactAccess({
+      actorId: input.actor.id,
+      slug: bundle?.slug ?? "unknown",
+      version: bundle?.version ?? "unknown",
+      decision: bundle ? "allow" : "deny",
+      reason: bundle ? "self_review_elevation_preview" : "not_requested_or_missing",
+    });
+    return bundle;
+  }
+
+  async elevateSelfReviewedRelease(input: { actor: SubmissionActor; submissionId: string; artifactSha256: string; reason?: string }): Promise<SelfReviewElevationResult> {
+    await this.requireReviewer(input.actor, "review.instance_elevation", input.submissionId);
+    if (!this.store.elevateSelfReviewedRelease) {
+      throw new AppError("Private self-review requires the Postgres registry.", "PRIVATE_SELF_REVIEW_UNAVAILABLE", 503);
+    }
+    return this.store.elevateSelfReviewedRelease({
+      actorId: input.actor.id,
+      submissionId: input.submissionId,
+      artifactSha256: input.artifactSha256,
+      ...(input.reason ? { reason: input.reason } : {}),
+    });
+  }
+
+  private async requireReviewer(actor: SubmissionActor, action: string, submissionId?: string): Promise<void> {
+    if (canReview(actor.roles)) return;
+    await this.store.recordReviewDenied({
+      actorId: actor.id,
+      action,
+      ...(submissionId ? { submissionId } : {}),
+      reason: "review_role_required",
+    });
+    throw new AppError("Review requires maintainer permissions.", "REVIEW_ROLE_REQUIRED", 403);
+  }
 }
 
 function canSubmit(roles: Role[]): boolean {
@@ -361,7 +433,8 @@ function artifactMetadata(files: PackageInputFile[]): StoredSubmission["artifact
   };
 }
 
-function canonicalArtifactPayload(files: PackageInputFile[]): ArtifactPayload {
+/** Shared with library previews so a held preview digest equals the submitted artifact hash. */
+export function canonicalArtifactPayload(files: PackageInputFile[]): ArtifactPayload {
   return {
     files: [...files]
       .map((file) => ({ path: normalizePackageFilePath(file.path), content: file.content }))

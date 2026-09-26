@@ -1431,7 +1431,13 @@ function parseApiTokenScopes(input: unknown): ApiTokenScope[] {
     scope === "skills:submit" ||
     scope === "review:read" ||
     scope === "review:write" ||
-    scope === "targets:execute"
+    scope === "targets:execute" ||
+    scope === "improvements:read" ||
+    scope === "improvements:configure" ||
+    scope === "improvements:run" ||
+    scope === "improvements:report" ||
+    scope === "libraries:read" ||
+    scope === "libraries:write"
   ));
 }
 

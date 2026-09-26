@@ -134,6 +134,7 @@ export class AppError extends Error {
 export * from "./skill-updates.js";
 export * from "./skill-upgrade-policy.js";
 export * from "./target-skill-operations.js";
+export * from "./library-contracts.js";
 
 export function assertNever(value: never): never {
   throw new AppError(`Unhandled value: ${String(value)}`, "UNHANDLED_VALUE", 500);
@@ -145,3 +146,7 @@ export * from "./organization-tenancy.js";
 export * from "./architecture-target.js";
 export * from "./architecture-sync-control.js";
 export * from "./architecture-pattern-migration.js";
+export { ImprovementContractError, improvementDigest } from "./improvement-shared.js";
+export * from "./improvement-declaration.js";
+export * from "./improvement-policy.js";
+export * from "./improvement-run.js";
