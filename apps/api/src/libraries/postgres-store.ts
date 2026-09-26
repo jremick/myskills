@@ -1094,8 +1094,48 @@ export class PostgresLibraryStore {
     reason: string;
   }): Promise<AdoptionRecord> {
     return this.db.transaction(async (tx) => {
+      // Keep the library-before-entry order used by deletion. Authority stays
+      // locked until the adoption, event and audit have committed together.
+      const library = (await tx.execute<{ owner_user_id: string | null; owner_team_id: string | null }>(sql`
+        SELECT owner_user_id, owner_team_id FROM libraries
+        WHERE id = ${input.libraryId}::uuid AND status = 'active' FOR UPDATE
+      `)).rows[0];
+      if (!library) throw notFound("LIBRARY_ENTRY_NOT_FOUND", "Library entry not found.");
+      if (library.owner_team_id) {
+        // Match team mutations: team, parent organization, organization
+        // membership, user, then team membership. Parent locks fence policy
+        // and lifecycle changes as well as membership revocation.
+        const team = (await tx.execute<{ organization_id: string | null }>(sql`
+          SELECT organization_id FROM teams WHERE id = ${library.owner_team_id}::uuid FOR UPDATE
+        `)).rows[0];
+        if (team?.organization_id) {
+          await tx.execute(sql`SELECT id FROM organizations WHERE id = ${team.organization_id}::uuid FOR UPDATE`);
+          await tx.execute(sql`
+            SELECT id FROM organization_memberships
+            WHERE organization_id = ${team.organization_id}::uuid AND user_id = ${input.actorId}::uuid FOR UPDATE
+          `);
+        }
+      }
+      const actor = (await tx.execute<{ status: string }>(sql`
+        SELECT status FROM users WHERE id = ${input.actorId}::uuid FOR UPDATE
+      `)).rows[0];
+      let ownsLibrary = library.owner_user_id === input.actorId;
+      if (library.owner_team_id) {
+        await tx.execute(sql`
+          SELECT id FROM team_memberships
+          WHERE team_id = ${library.owner_team_id}::uuid AND user_id = ${input.actorId}::uuid FOR UPDATE
+        `);
+        const authority = (await tx.execute<{ role: string | null }>(sql`
+          SELECT ${effectiveTeamRole(sql`${library.owner_team_id}::uuid`, input.actorId)} AS role
+        `)).rows[0];
+        ownsLibrary = authority?.role === "owner";
+      }
+      if (!ownsLibrary || actor?.status !== "active") {
+        throw new AppError("Library write access is required.", "LIBRARY_WRITE_FORBIDDEN", 403);
+      }
       const entry = (await tx.execute<{ current_adoption_id: string | null }>(sql`
-        SELECT current_adoption_id FROM library_entries WHERE id = ${input.entryId}::uuid AND status = 'active' AND kind = 'skill' FOR UPDATE
+        SELECT current_adoption_id FROM library_entries WHERE id = ${input.entryId}::uuid AND library_id = ${input.libraryId}::uuid
+          AND skill_slug = ${input.slug} AND status = 'active' AND kind = 'skill' FOR UPDATE
       `)).rows[0];
       if (!entry) throw notFound("LIBRARY_ENTRY_NOT_FOUND", "Library entry not found.");
       if ((entry.current_adoption_id ?? null) !== input.expectedCurrentAdoptionId) {
@@ -1266,8 +1306,8 @@ export class PostgresLibraryStore {
     return row ? { events: stringArray(row.event_kinds) as LibraryEventKind[], createdAt: iso(row.created_at) } : null;
   }
 
-  /** Newest events of subscribed, active libraries. The service authorizes each row before rendering. */
-  async inboxWindow(userId: string, limit: number): Promise<InboxRow[]> {
+  /** One keyset batch; the service filters visibility and continues through hidden rows. */
+  async inboxWindow(userId: string, limit: number, cursor: PageCursor | null = null): Promise<InboxRow[]> {
     const result = await this.db.execute<Row>(sql`
       SELECT e.id, e.library_id, l.name AS library_name, e.entry_id, e.candidate_id, e.kind, e.audience, e.version, e.path, e.created_at,
         ${CURSOR_AT(sql`e.created_at`)} AS cursor_at, r.read_at, s.event_kinds
@@ -1276,6 +1316,7 @@ export class PostgresLibraryStore {
       JOIN library_events e ON e.library_id = s.library_id AND e.created_at >= s.created_at
       LEFT JOIN library_inbox_reads r ON r.event_id = e.id AND r.user_id = s.user_id
       WHERE s.user_id = ${userId}::uuid
+        ${cursor ? sql`AND (e.created_at, e.id) < (${cursor.at}::timestamptz, ${cursor.id}::uuid)` : sql``}
       ORDER BY e.created_at DESC, e.id DESC
       LIMIT ${limit}
     `);

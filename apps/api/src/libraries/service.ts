@@ -111,7 +111,7 @@ interface CheckLease {
 const CHECK_LEASE_MS = 120_000;
 const PREVIEW_TTL_MS = LIBRARY_LIMITS.previewTtlHours * 3_600_000;
 const TRACKING_TTL_MS = LIBRARY_LIMITS.trackingCandidateTtlDays * 86_400_000;
-const INBOX_WINDOW = 200;
+const INBOX_BATCH_SIZE = 200;
 const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
 
 export class LibraryService implements LibraryAdoptionConstraintSource {
@@ -669,50 +669,56 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
   }
 
   async listInbox(actor: LibraryActor, query: { unread: boolean; limit: number; cursor: PageCursor | null }) {
-    const rows = await this.store.inboxWindow(actor.id, INBOX_WINDOW);
     const libraries = new Map<string, LibraryAccess | null>();
     const entries = new Map<string, { title: string } | null>();
-    const visible: Array<LibraryInboxItem & { cursorAt: string }> = [];
-    for (const row of rows) {
-      if (!row.subscribedKinds.includes(row.kind)) continue;
-      if (!libraries.has(row.libraryId)) {
-        const library = await this.store.getLibrary(row.libraryId);
-        libraries.set(row.libraryId, library ? await this.libraryAccess(library, actor) : null);
-      }
-      const access = libraries.get(row.libraryId);
-      if (!access) continue;
-      if (row.audience === "curators" && !access.canWrite) continue;
-      let entryTitle: string | null = null;
-      if (row.entryId) {
-        if (!entries.has(row.entryId)) {
-          const entry = await this.store.getEntry(row.entryId);
-          const readable = entry && entry.libraryId === row.libraryId && (entry.kind !== "skill" || await this.canReadSkillEntry(entry, access, actor));
-          entries.set(row.entryId, readable && entry ? { title: entry.title } : null);
+    const items: Array<LibraryInboxItem & { cursorAt: string }> = [];
+    let unreadCount = 0;
+    let batchCursor: PageCursor | null = null;
+    // Count all currently visible unread events, even outside the requested
+    // page. Retain only the page plus one visible item for nextCursor.
+    for (;;) {
+      const rows = await this.store.inboxWindow(actor.id, INBOX_BATCH_SIZE, batchCursor);
+      for (const row of rows) {
+        if (!row.subscribedKinds.includes(row.kind)) continue;
+        if (!libraries.has(row.libraryId)) {
+          const library = await this.store.getLibrary(row.libraryId);
+          libraries.set(row.libraryId, library ? await this.libraryAccess(library, actor) : null);
         }
-        const entry = entries.get(row.entryId);
-        if (!entry) continue;
-        entryTitle = entry.title;
+        const access = libraries.get(row.libraryId);
+        if (!access) continue;
+        if (row.audience === "curators" && !access.canWrite) continue;
+        let entryTitle: string | null = null;
+        if (row.entryId) {
+          if (!entries.has(row.entryId)) {
+            const entry = await this.store.getEntry(row.entryId);
+            const readable = entry && entry.libraryId === row.libraryId && (entry.kind !== "skill" || await this.canReadSkillEntry(entry, access, actor));
+            entries.set(row.entryId, readable && entry ? { title: entry.title } : null);
+          }
+          const entry = entries.get(row.entryId);
+          if (!entry) continue;
+          entryTitle = entry.title;
+        }
+        if (row.readAt === null) unreadCount += 1;
+        if (items.length > query.limit || (query.unread && row.readAt !== null)) continue;
+        if (query.cursor && (row.cursorAt > query.cursor.at || (row.cursorAt === query.cursor.at && row.id >= query.cursor.id))) continue;
+        items.push({
+          id: row.id,
+          kind: row.kind,
+          libraryId: row.libraryId,
+          libraryName: row.libraryName,
+          entryId: row.entryId,
+          entryTitle,
+          candidateId: row.candidateId,
+          version: row.version,
+          path: row.path,
+          createdAt: row.createdAt,
+          readAt: row.readAt,
+          cursorAt: row.cursorAt,
+        });
       }
-      visible.push({
-        id: row.id,
-        kind: row.kind,
-        libraryId: row.libraryId,
-        libraryName: row.libraryName,
-        entryId: row.entryId,
-        entryTitle,
-        candidateId: row.candidateId,
-        version: row.version,
-        path: row.path,
-        createdAt: row.createdAt,
-        readAt: row.readAt,
-        cursorAt: row.cursorAt,
-      });
-    }
-    const unreadCount = visible.filter((item) => item.readAt === null).length;
-    let items = query.unread ? visible.filter((item) => item.readAt === null) : visible;
-    if (query.cursor) {
-      const cursor = query.cursor;
-      items = items.filter((item) => item.cursorAt < cursor.at || (item.cursorAt === cursor.at && item.id < cursor.id));
+      const lastRow = rows.at(-1);
+      if (rows.length < INBOX_BATCH_SIZE || !lastRow) break;
+      batchCursor = { at: lastRow.cursorAt, id: lastRow.id };
     }
     const page = items.slice(0, query.limit);
     const last = page.at(-1);

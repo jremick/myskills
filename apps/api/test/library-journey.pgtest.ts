@@ -142,6 +142,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { generateTotpCode, hashPassword } from "@myskills-app/auth";
 import {
+  defaultOrganizationPolicyV1,
   architectureTargetAdapterDigest,
   architectureTargetCapabilitiesDigest,
   architectureTargetObservationDigest,
@@ -247,8 +248,9 @@ test("library first-release journey: import, self-review, curation, tracking and
   const skillRepository = new PostgresSkillRepository(db);
   const submissionService = new SubmissionService(new PostgresSubmissionStore(db));
   const architectureTargetService = new ArchitectureTargetService(new PostgresArchitectureTargetStore(db), allowAuthorizer());
+  const libraryStore = new PostgresLibraryStore(db);
   const libraryService = new LibraryService({
-    store: new PostgresLibraryStore(db),
+    store: libraryStore,
     submissions: submissionService,
     skillRepository,
     targets: architectureTargetService,
@@ -625,6 +627,101 @@ test("library first-release journey: import, self-review, curation, tracking and
   expectOk(await call("PUT", `/v1/skills/${cePlanSlug}/sharing`, alice, { visibility: "team", teamIds: [ids.team] }));
   record("S24", { elevatedBy: ids.carol, sharedWithTeam: true });
 
+  // PR #87 regressions, authored before the write-boundary and inbox fixes.
+  // Revoke authority after the complete HTTP preflight, before entering adopt's
+  // transaction. No sleeps: the store-call boundary is the deterministic barrier.
+  for (const [index, revocation] of ["removed", "demoted", "organization-removed"].entries()) {
+    await t.test(`adoption refuses ${revocation} curator after preflight`, async () => {
+      const raceLibrary = expectOk(await call("POST", "/v1/libraries", alice, { name: `Race ${revocation}`, owner: { type: "team", id: ids.team } }), 201).library;
+      const raceEntry = expectOk(await call("POST", `/v1/libraries/${raceLibrary.id}/entries`, alice, { kind: "skill", slug: cePlanSlug }), 201).entry;
+      let organizationId: string | null = null;
+      if (revocation === "organization-removed") {
+        organizationId = (await pool.query("INSERT INTO organizations (name, slug, created_by_user_id) VALUES ('Race organization', 'race-organization', $1) RETURNING id", [ids.alice])).rows[0].id;
+        const policy = JSON.stringify(defaultOrganizationPolicyV1);
+        const revision = (await pool.query("INSERT INTO organization_policy_revisions (organization_id, revision_number, policy, policy_sha256, created_by_user_id) VALUES ($1, 1, $2, $3, $4) RETURNING id", [organizationId, policy, createHash("sha256").update(policy).digest("hex"), ids.alice])).rows[0].id;
+        await pool.query("UPDATE organizations SET status = 'active', current_policy_revision_id = $2 WHERE id = $1", [organizationId, revision]);
+        await pool.query("INSERT INTO organization_memberships (organization_id, user_id, role) VALUES ($1, $2, 'owner')", [organizationId, ids.alice]);
+        await pool.query("UPDATE teams SET organization_id = $2 WHERE id = $1", [ids.team, organizationId]);
+      }
+      const originalAdopt = libraryStore.adopt.bind(libraryStore);
+      let preflightPassed = false;
+      libraryStore.adopt = async (input) => {
+        preflightPassed = true;
+        if (revocation === "removed") await pool.query("DELETE FROM team_memberships WHERE team_id = $1 AND user_id = $2", [ids.team, ids.alice]);
+        if (revocation === "demoted") await pool.query("UPDATE team_memberships SET role = 'member' WHERE team_id = $1 AND user_id = $2", [ids.team, ids.alice]);
+        if (revocation === "organization-removed") await pool.query("UPDATE organization_memberships SET removed_at = now() WHERE organization_id = $1 AND user_id = $2", [organizationId, ids.alice]);
+        return originalAdopt(input);
+      };
+      try {
+        const response = await call("POST", `/v1/library-entries/${raceEntry.id}/adoptions`, alice, { version: "0.0.1", artifactSha256: cePlan.packageDigest, expectedCurrentAdoptionId: null });
+        assert.equal(preflightPassed, true);
+        expectError(response, 403, "LIBRARY_WRITE_FORBIDDEN");
+        const state = (await pool.query(`SELECT current_adoption_id, revision,
+          (SELECT count(*)::int FROM library_adoptions WHERE entry_id = $1) AS adoptions,
+          (SELECT count(*)::int FROM library_events WHERE entry_id = $1 AND kind = 'adoption-changed') AS events,
+          (SELECT count(*)::int FROM audit_events WHERE resource_id = $1::uuid AND action = 'library.entry.adopt') AS audits
+          FROM library_entries WHERE id = $1`, [raceEntry.id])).rows[0];
+        assert.deepEqual(state, { current_adoption_id: null, revision: 1, adoptions: 0, events: 0, audits: 0 });
+        record(`F${42 + index}`, { revocation, preflightPassed, status: response.status, ...state });
+      } finally {
+        libraryStore.adopt = originalAdopt;
+        await pool.query("UPDATE teams SET organization_id = NULL WHERE id = $1", [ids.team]);
+        await pool.query("INSERT INTO team_memberships (team_id, user_id, role) VALUES ($1, $2, 'owner') ON CONFLICT (team_id, user_id) DO UPDATE SET role = 'owner'", [ids.team, ids.alice]);
+      }
+    });
+  }
+
+  // Real HTTP pagination with timestamp ties, microseconds, read events and
+  // more than one raw-event batch. Hidden newest events cannot hide history.
+  for (const [index, hiddenWindow] of [false, true].entries()) {
+    await t.test(`inbox traverses history with ${hiddenWindow ? "hidden" : "visible"} newest window`, async () => {
+      const inboxLibrary = expectOk(await call("POST", "/v1/libraries", alice, { name: `Inbox ${hiddenWindow}`, owner: { type: "team", id: ids.team } }), 201).library;
+      expectOk(await call("PUT", `/v1/libraries/${inboxLibrary.id}/subscription`, bob, { events: ["adoption-changed"] }));
+      await pool.query("UPDATE library_subscriptions SET created_at = '2030-01-01T00:00:00Z' WHERE library_id = $1", [inboxLibrary.id]);
+      const hiddenEntry = (await pool.query("INSERT INTO library_entries (library_id, kind, title, skill_slug, created_by_user_id) VALUES ($1, 'skill', 'Private release', $2, $3) RETURNING id", [inboxLibrary.id, longSlug, ids.alice])).rows[0].id;
+      await pool.query(`INSERT INTO library_events (library_id, kind, audience, semantic_key, created_at)
+        SELECT $1::uuid, 'adoption-changed', 'subscribers', $1::uuid::text || ':visible:' || i,
+          '2030-01-01T00:00:01Z'::timestamptz + (i / 3) * interval '1 microsecond'
+        FROM generate_series(1, 435) i`, [inboxLibrary.id]);
+      await pool.query(`INSERT INTO library_inbox_reads (user_id, event_id)
+        SELECT $1, id FROM library_events WHERE library_id = $2 ORDER BY created_at DESC, id DESC LIMIT 35`, [ids.bob, inboxLibrary.id]);
+      if (hiddenWindow) {
+        await pool.query(`INSERT INTO library_events (library_id, entry_id, kind, audience, semantic_key, created_at)
+          SELECT $1::uuid, CASE WHEN i % 3 = 0 THEN $2::uuid ELSE NULL END,
+            CASE WHEN i % 3 = 2 THEN 'source-health-changed' ELSE 'adoption-changed' END,
+            CASE WHEN i % 3 = 1 THEN 'curators' ELSE 'subscribers' END,
+            $1::uuid::text || ':hidden:' || i, '2030-01-01T00:00:02Z'::timestamptz + i * interval '1 microsecond'
+          FROM generate_series(1, 660) i`, [inboxLibrary.id, hiddenEntry]);
+      }
+      await pool.query(`INSERT INTO library_events (library_id, kind, audience, semantic_key, created_at)
+        VALUES ($1::uuid, 'adoption-changed', 'subscribers', $1::uuid::text || ':before-subscription', '2029-12-31T23:59:59Z')`, [inboxLibrary.id]);
+      const expectedRows = (await pool.query("SELECT id FROM library_events WHERE library_id = $1 AND semantic_key LIKE '%:visible:%' ORDER BY created_at DESC, id DESC", [inboxLibrary.id])).rows;
+      try {
+        const seen: string[] = [];
+        let cursor: string | null = null;
+        let pages = 0;
+        do {
+          const page = expectOk(await call("GET", `/v1/library-inbox?limit=37${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, bob));
+          assert.equal(page.unreadCount, 400, "unread count includes all visible history, independent of cursor");
+          assert.ok(page.items.length > 0 && page.items.length <= 37);
+          assert.equal(page.items.every((item: Json) => item.libraryId === inboxLibrary.id), true);
+          seen.push(...page.items.map((item: Json) => item.id));
+          cursor = page.nextCursor;
+          assert.ok(++pages <= 12, "pagination must terminate without repeating a batch");
+        } while (cursor);
+        assert.deepEqual(seen, expectedRows.map((row) => row.id));
+        const unread = expectOk(await call("GET", "/v1/library-inbox?unread=true&limit=37", bob));
+        assert.equal(unread.unreadCount, 400);
+        assert.deepEqual(unread.items.map((item: Json) => item.id), seen.slice(35, 72));
+        expectOk(await call("POST", "/v1/library-inbox/read", bob, { eventIds: [unread.items[0].id] }));
+        assert.equal(expectOk(await call("GET", "/v1/library-inbox?unread=true&limit=37", bob)).unreadCount, 399);
+        record(`S${45 + index}`, { hiddenWindow, hiddenEvents: hiddenWindow ? 660 : 0, visibleEvents: seen.length, unreadCount: 400, pages, afterMarkRead: 399 });
+      } finally {
+        expectOk(await call("DELETE", `/v1/libraries/${inboxLibrary.id}/subscription`, bob));
+      }
+    });
+  }
+
   // ---- Team library curation.
   const teamCePlan = expectOk(await call("POST", `/v1/libraries/${teamLibrary.id}/entries`, alice, { kind: "skill", slug: cePlanSlug }), 201).entry;
   assert.equal(teamCePlan.skill.ownership.isCaller, true);
@@ -825,7 +922,7 @@ test("library first-release journey: import, self-review, curation, tracking and
   const evidenceTarget = process.env.LIBRARY_JOURNEY_EVIDENCE_PATH;
   const evidenceDirectory = mkdtempSync(join(evidenceTarget ? dirname(evidenceTarget) : tmpdir(), "myskills-library-journey-"));
   const evidencePath = join(evidenceDirectory, evidenceTarget ? basename(evidenceTarget) : "myskills-library-journey-evidence.json");
-  const expected = ["F01", "F02", "F03", "S04", "S05", "F06", "F07", "S08", "S09", "F10", "F11", "F12", "F13", "S14", "F15", "F16", "F17", "S18", "F19", "S20", "F21", "F22", "F23", "S24", "F25", "F26", "F27", "F28", "F29", "S30", "S31", "F32", "S33", "F34", "F35", "F36", "F37", "F38", "S39", "F40", "S41"];
+  const expected = ["F01", "F02", "F03", "S04", "S05", "F06", "F07", "S08", "S09", "F10", "F11", "F12", "F13", "S14", "F15", "F16", "F17", "S18", "F19", "S20", "F21", "F22", "F23", "S24", "F25", "F26", "F27", "F28", "F29", "S30", "S31", "F32", "S33", "F34", "F35", "F36", "F37", "F38", "S39", "F40", "S41", "F42", "F43", "F44", "S45", "S46"];
   assert.deepEqual([...new Set(evidence.map((item) => item.id))].sort(), [...expected].sort());
   writeFileSync(evidencePath, `${JSON.stringify({ schemaVersion: 1, journey: "library-first-release", scenarios: evidence }, null, 2)}\n`, { flag: "wx", mode: 0o600 });
   assert.equal(statSync(dirname(evidencePath)).mode & 0o777, 0o700);

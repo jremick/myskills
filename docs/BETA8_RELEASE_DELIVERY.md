@@ -1,6 +1,6 @@
 # Beta.8 release delivery
 
-Status: combined candidate verification in progress. Not released or deployed.
+Status: combined candidate verification and staging acceptance in progress. Not released; production remains on beta.7.
 
 ## Scope and authority
 
@@ -41,9 +41,13 @@ Beta.7 cannot safely interpret new private attestations or library target constr
 - The populated beta.7 upgrade rehearsal preserved 50 pre-existing tables and 18 seeded rows, applied both full migration IDs exactly once, kept private self-review disabled, and passed replay. This is synthetic migration evidence, not a production restore claim.
 - Production configuration preflight passed. A fresh coordinated recovery set captured 51 tables and 87 artifacts at `2026-09-26T06:58:37.893Z`, with `sourceWrites=false`. Run ID: `2026-09-26T06-58-37.845Z_797679ecafbda4c1`; manifest SHA-256: `bcd9f287f7b5a50c34bd433f922da27dd5521ebe1069cb22ee8b8bd499217fdb`. Railway execution `38c3ebd0-4378-4bba-8e53-59b34b60c598` exited, and the daily 16:00 UTC schedule remains unchanged. Readback verifies the completed set; this capture was not separately restored.
 
-PR review identified two further corrections after the first combined gate. Concurrent same-key run creation now rechecks the runner digest after the store serializes the requests. Evidence acceptance now re-resolves the reporter's current account, plan inputs and policies, plus the destination disclosure policy; rejection stays available. Regression journeys reproduced both failures before the changes, then all eight focused improvement journeys passed, including the persistent mixed-feature journey. A different release manager can still accept another reporter's valid evidence. The clean canonical gate and all 12 GitHub checks passed on `7831502` before these additional corrections; a new candidate run is required.
+PR review identified two further corrections after the first combined gate. Concurrent same-key run creation now rechecks the runner digest after the store serializes the requests. Evidence acceptance now re-resolves the reporter's current account, plan inputs and policies, plus the destination disclosure policy; rejection stays available. Regression journeys reproduced both failures before the changes, then all eight focused improvement journeys passed, including the persistent mixed-feature journey. A different release manager can still accept another reporter's valid evidence. Candidate `f1e0cc5d53e99a7aaf87b5e0187d374fbc940a67` passed the clean Windows canonical gate: 1,186 repository tests, 20 browser journeys, seven full-stack journeys and 235 PostgreSQL tests. All 12 GitHub checks passed. An independent Opus review found no actionable defects in those corrections.
 
-Staging API deployment `ef991060-036d-4e34-aa41-e066fc9f782a` successfully migrated and served `7831502` with all readiness checks passing. Staging web and production remain on beta.7. The earlier staging API is not the final release candidate.
+Two subsequent Libraries review findings are corrected. Adoption locks and rechecks the active actor and effective library ownership inside its transaction, including required organization membership. Inbox traversal uses keyset batches past hidden events and counts all visible unread events. Tests written before the changes reproduced three unauthorized adoptions and two truncated inbox counts. All five regressions then passed on Windows, along with the three Library journeys covering 87 scenarios, lint and API build. The final combined gate, independent review and staging refresh remain required.
+
+Staging API deployment `cf0dfd35-df9d-452e-9856-d8fdc8224659` serves `f1e0cc5` with all readiness checks passing. Production remains on beta.7.
+
+Staging web deployment `5cf3dcd4-ab61-4f39-b478-539f020f9aec` also served `f1e0cc5`. Direct API, web and same-origin version readbacks matched; readiness and cache-header checks passed. All three deployed browser/API/CLI journeys passed on the Windows PC: persistent Libraries, the 20-check operational install/update/rollback flow, and skill improvement through exact candidate publication and evidence acceptance. Separate author, MFA reviewer and consumer accounts were used. Temporary owner MFA and supplied sessions were removed, the scoped MCP token was revoked, and private self-review returned to disabled. This proves that staging candidate, not the later corrected release commit.
 
 The independent reviews used the existing personal Claude subscription. Assistant transcript records identify `claude-opus-5-5`; `xhigh` was configured. Codex ran the cited checks. The declaration/self-review race is not separately covered by the new journey; both writes use the existing release-row lock, and the guard runs inside it.
 
