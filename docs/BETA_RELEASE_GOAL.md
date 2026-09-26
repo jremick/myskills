@@ -3,7 +3,7 @@
 Version: 0.1.0-beta.8
 Last updated: 2026-09-27
 
-Current release: `v0.1.0-beta.8`.
+Target release: `v0.1.0-beta.8`.
 
 ## Beta.8 Release Record
 
