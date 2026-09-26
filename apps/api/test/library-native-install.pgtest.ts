@@ -4,8 +4,9 @@
  * Authored on 2026-09-26 before the packaging change, from the owner-approved rule: the
  * installed SKILL.md name equals the unique registry slug, the exact upstream SKILL.md bytes stay
  * in myskills-source-skill.txt, and both SHA-256 digests are visible. Every scenario below is
- * asserted and recorded in the evidence receipt (`LIBRARY_NATIVE_INSTALL_EVIDENCE_PATH`, default:
- * OS temp dir). The receipt holds ids, exit codes and digests only, never tokens or file bodies.
+ * asserted and recorded in the evidence receipt (`LIBRARY_NATIVE_INSTALL_EVIDENCE_PATH` chooses
+ * the parent directory and filename; a private unique subdirectory is always created, default
+ * parent: OS temp dir). The receipt holds ids, exit codes and digests only, never tokens or file bodies.
  * It claims filesystem verification only; host Codex activation is not observed here.
  *
  * S = must succeed exactly. F = must fail safely.
@@ -63,10 +64,10 @@
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { generateTotpCode, hashPassword } from "@myskills-app/auth";
@@ -595,7 +596,9 @@ test("library native install journey: normalized runtime name, preserved origina
 
   const expected = ["N01", "N02", "N03", "N04", "N05", "N06", "N07", "N08", "N09", "N10", "N11", "N12", "N13", "N14", "N15", "N16", "N17", "N18", "N19", "N20"];
   assert.deepEqual([...new Set(evidence.map((item) => item.id))].sort(), expected);
-  const evidencePath = process.env.LIBRARY_NATIVE_INSTALL_EVIDENCE_PATH ?? join(tmpdir(), "myskills-library-native-install-evidence.json");
+  const evidenceTarget = process.env.LIBRARY_NATIVE_INSTALL_EVIDENCE_PATH;
+  const evidenceDirectory = mkdtempSync(join(evidenceTarget ? dirname(evidenceTarget) : tmpdir(), "myskills-library-native-install-"));
+  const evidencePath = join(evidenceDirectory, evidenceTarget ? basename(evidenceTarget) : "myskills-library-native-install-evidence.json");
   writeFileSync(evidencePath, `${JSON.stringify({
     schemaVersion: 1,
     journey: "library-native-install",
@@ -607,7 +610,10 @@ test("library native install journey: normalized runtime name, preserved origina
     },
     cli: receipts,
     scenarios: evidence,
-  }, null, 2)}\n`);
+  }, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+  assert.equal(statSync(dirname(evidencePath)).mode & 0o777, 0o700);
+  assert.equal(statSync(evidencePath).mode & 0o777, 0o600);
+  assert.throws(() => writeFileSync(evidencePath, "must not replace evidence", { flag: "wx", mode: 0o600 }), { code: "EEXIST" });
   t.diagnostic(`library native install evidence: ${evidencePath}`);
 });
 

@@ -65,6 +65,7 @@ export function libraryError(error: unknown): string {
     PRIVATE_SELF_REVIEW_DISABLED: "Private self-review is disabled. Ask an instance reviewer to review this import.",
     PRIVATE_SELF_REVIEW_SCOPE_INVALID: "Private self-review requires your own private import with no sharing grants.",
     PRIVATE_SELF_REVIEW_SCAN_NOT_CLEAN: "This import needs an instance reviewer because its scan is not clean.",
+    RELEASE_DECLARATION_NOT_APPROVED: "The latest optimisation declaration needs reviewer approval for this exact artifact before private self-review.",
     SELF_REVIEWED_RELEASE_REQUIRES_INSTANCE_REVIEW: "Request instance review before sharing this privately reviewed release.",
     MFA_VERIFICATION_REQUIRED: "Verify MFA in your account before continuing.",
     SUBMISSION_ROLE_REQUIRED: "An author role is required to submit this import.",

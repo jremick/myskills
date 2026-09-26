@@ -3,7 +3,8 @@
  *
  * Authored before the production implementation. Every failure scenario
  * below is asserted in the journey and recorded in the evidence file
- * (`LIBRARY_JOURNEY_EVIDENCE_PATH`, default: OS temp dir). The evidence
+ * (`LIBRARY_JOURNEY_EVIDENCE_PATH` chooses the parent directory and filename;
+ * a private unique subdirectory is always created, default parent: OS temp dir). The evidence
  * contains ids, status codes, error codes and digests only. It never
  * contains session tokens, API tokens, passwords or package bodies.
  *
@@ -128,12 +129,15 @@
  *     exactly one event, and a retry adds no candidate or event.
  * R20 A preview must not reuse a cached licence identifier when the live source reports none.
  *     It requires an explicit reviewed mapping, even if the saved source previously had an identifier.
+ * R21 Source path validation keeps boundary-slash semantics and rejects long interior slash runs
+ *     promptly before provider I/O. Written before the CodeQL ReDoS correction.
+ * Evidence journals must use private directories and owner-only files, without replacing an existing file.
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { generateTotpCode, hashPassword } from "@myskills-app/auth";
@@ -818,10 +822,15 @@ test("library first-release journey: import, self-review, curation, tracking and
   assert.equal((await pool.query("SELECT owner_user_id FROM skills WHERE slug = 'legacy-orphan'")).rows[0].owner_user_id, null);
   record("F40", { status: takeover.status, ownerStillNull: true });
 
-  const evidencePath = process.env.LIBRARY_JOURNEY_EVIDENCE_PATH ?? join(tmpdir(), "myskills-library-journey-evidence.json");
+  const evidenceTarget = process.env.LIBRARY_JOURNEY_EVIDENCE_PATH;
+  const evidenceDirectory = mkdtempSync(join(evidenceTarget ? dirname(evidenceTarget) : tmpdir(), "myskills-library-journey-"));
+  const evidencePath = join(evidenceDirectory, evidenceTarget ? basename(evidenceTarget) : "myskills-library-journey-evidence.json");
   const expected = ["F01", "F02", "F03", "S04", "S05", "F06", "F07", "S08", "S09", "F10", "F11", "F12", "F13", "S14", "F15", "F16", "F17", "S18", "F19", "S20", "F21", "F22", "F23", "S24", "F25", "F26", "F27", "F28", "F29", "S30", "S31", "F32", "S33", "F34", "F35", "F36", "F37", "F38", "S39", "F40", "S41"];
   assert.deepEqual([...new Set(evidence.map((item) => item.id))].sort(), [...expected].sort());
-  writeFileSync(evidencePath, `${JSON.stringify({ schemaVersion: 1, journey: "library-first-release", scenarios: evidence }, null, 2)}\n`);
+  writeFileSync(evidencePath, `${JSON.stringify({ schemaVersion: 1, journey: "library-first-release", scenarios: evidence }, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+  assert.equal(statSync(dirname(evidencePath)).mode & 0o777, 0o700);
+  assert.equal(statSync(evidencePath).mode & 0o777, 0o600);
+  assert.throws(() => writeFileSync(evidencePath, "must not replace evidence", { flag: "wx", mode: 0o600 }), { code: "EEXIST" });
   t.diagnostic(`library journey evidence: ${evidencePath}`);
 });
 
@@ -1436,10 +1445,34 @@ test("library remediation journey: per-entry identity, tracking dedup, leases, s
   assert.deepEqual([explicitLicence.state, explicitLicence.mapping.license], ["ready-for-review", "MIT"]);
   record("R20", { cachedIdentifierIgnored: true, explicitMappingAccepted: true });
 
-  const evidencePath = process.env.LIBRARY_REMEDIATION_EVIDENCE_PATH ?? join(tmpdir(), "myskills-library-remediation-evidence.json");
-  const expected = ["R01", "R02", "R03", "R04", "R05", "R06", "R07", "R08", "R09", "R10", "R11", "R12", "R13", "R14", "R15", "R16", "R17", "R18", "R19", "R20"];
+  // R21: boundary slashes remain valid; interior runs fail promptly without provider I/O.
+  const normalizedPreview = await previewOne(alice, licenceSource.id, licenceSnapshot, "///skills/licence-helper///");
+  assert.equal(normalizedPreview.sourcePath, "skills/licence-helper");
+  const longBoundaryPreview = await previewOne(alice, licenceSource.id, licenceSnapshot, `${"/".repeat(100_000)}skills/licence-helper${"/".repeat(100_000)}`);
+  assert.equal(longBoundaryPreview.sourcePath, "skills/licence-helper");
+  const rootPreview = await previewOne(alice, licenceSource.id, licenceSnapshot, "/".repeat(100_000));
+  assert.equal(rootPreview.sourcePath, "");
+  const providerRequestsBefore = github.requests.length;
+  const hostilePath = `skills/${"/".repeat(200_000)}missing`;
+  const started = performance.now();
+  expectError(await call("POST", `/v1/library-entries/${licenceSource.id}/previews`, alice, { snapshotId: licenceSnapshot, paths: [hostilePath] }), 400, "LIBRARY_PREVIEW_SELECTION_INVALID");
+  const validationMs = performance.now() - started;
+  assert.ok(validationMs < 2_000, `A 200k interior slash run took ${Math.round(validationMs)}ms to reject; validation must not backtrack quadratically.`);
+  for (const path of ["skills//licence-helper", "skills/../licence-helper", "skills/./licence-helper", "skills/\\licence-helper", "skills/\u0000licence-helper", "a".repeat(1025)]) {
+    expectError(await call("POST", `/v1/library-entries/${licenceSource.id}/previews`, alice, { snapshotId: licenceSnapshot, paths: [path] }), 400, "LIBRARY_PREVIEW_SELECTION_INVALID");
+  }
+  assert.equal(github.requests.length, providerRequestsBefore);
+  record("R21", { boundarySlashesTrimmed: true, allSlashesSelectRoot: true, hostilePathLength: hostilePath.length, validationMs: Math.round(validationMs), invalidPathProviderRequests: 0 });
+
+  const evidenceTarget = process.env.LIBRARY_REMEDIATION_EVIDENCE_PATH;
+  const evidenceDirectory = mkdtempSync(join(evidenceTarget ? dirname(evidenceTarget) : tmpdir(), "myskills-library-remediation-"));
+  const evidencePath = join(evidenceDirectory, evidenceTarget ? basename(evidenceTarget) : "myskills-library-remediation-evidence.json");
+  const expected = ["R01", "R02", "R03", "R04", "R05", "R06", "R07", "R08", "R09", "R10", "R11", "R12", "R13", "R14", "R15", "R16", "R17", "R18", "R19", "R20", "R21"];
   assert.deepEqual([...new Set(evidence.map((item) => item.id))].sort(), expected);
-  writeFileSync(evidencePath, `${JSON.stringify({ schemaVersion: 1, journey: "library-remediation", scenarios: evidence }, null, 2)}\n`);
+  writeFileSync(evidencePath, `${JSON.stringify({ schemaVersion: 1, journey: "library-remediation", scenarios: evidence }, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+  assert.equal(statSync(dirname(evidencePath)).mode & 0o777, 0o700);
+  assert.equal(statSync(evidencePath).mode & 0o777, 0o600);
+  assert.throws(() => writeFileSync(evidencePath, "must not replace evidence", { flag: "wx", mode: 0o600 }), { code: "EEXIST" });
   t.diagnostic(`library remediation evidence: ${evidencePath}`);
 });
 

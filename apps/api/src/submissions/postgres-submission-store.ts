@@ -1215,6 +1215,10 @@ export class PostgresSubmissionStore implements SubmissionStore {
         || prepared.manifest.visibility !== "private" || row.visibility !== "private") {
         throw new AppError("Package manifest does not match the reviewed submission.", "PACKAGE_MANIFEST_MISMATCH", 422);
       }
+      await this.options.publicationGuard?.assertReleasePublishable(tx, {
+        releaseId: input.submissionId,
+        artifactSha256: input.artifactSha256,
+      });
       const now = new Date();
       const [updatedVersion] = await tx.update(skillVersions).set({
         reviewStatus: "approved",

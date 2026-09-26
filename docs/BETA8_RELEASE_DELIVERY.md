@@ -33,6 +33,16 @@ Use personal Railway project `myskills-app`, staging `beta2-staging`, then `prod
 
 Beta.7 cannot safely interpret new private attestations or library target constraints. After beta.8 writes, recover with a fix-forward candidate retaining both features' guards. A database restore that loses new data requires a separate explicit recovery decision. Do not drop new tables or point an old API at newer data as a shortcut.
 
+## Integration verification before the final candidate
+
+- Combined commit `e766673fd4f5fb928b0725ef51e560565ebba7a9` passed the clean canonical gate on Windows: 1,186 repository tests, 20 browser journeys, seven full-stack journeys and 234 PostgreSQL tests. The corrections below require a new commit-bound gate.
+- An independent Opus 5.5 review found one medium integration defect: private self-review reached the database publication trigger without the application declaration guard. Publication stayed blocked, but the API returned 500 and omitted a durable deny audit. The combined persistent HTTP journey reproduced that failure before the four-line guard correction, then passed all seven scenarios. The browser now explains the review requirement.
+- Four CodeQL findings were corrected: linear source-path boundary scans replace a quadratic regex, and three test journals use exclusive private files in unique private directories. Regression checks were written first. All three Libraries journeys passed in the integrated Windows checkout, covering 82 scenarios.
+- The populated beta.7 upgrade rehearsal preserved 50 pre-existing tables and 18 seeded rows, applied both full migration IDs exactly once, kept private self-review disabled, and passed replay. This is synthetic migration evidence, not a production restore claim.
+- Production configuration preflight passed. A fresh coordinated recovery set captured 51 tables and 87 artifacts at `2026-09-26T06:58:37.893Z`, with `sourceWrites=false`. Run ID: `2026-09-26T06-58-37.845Z_797679ecafbda4c1`; manifest SHA-256: `bcd9f287f7b5a50c34bd433f922da27dd5521ebe1069cb22ee8b8bd499217fdb`. Railway execution `38c3ebd0-4378-4bba-8e53-59b34b60c598` exited, and the daily 16:00 UTC schedule remains unchanged. Readback verifies the completed set; this capture was not separately restored.
+
+The independent reviews used the existing personal Claude subscription. Assistant transcript records identify `claude-opus-5-5`; `xhigh` was configured. Codex ran the cited checks. The declaration/self-review race is not separately covered by the new journey; both writes use the existing release-row lock, and the guard runs inside it.
+
 ## Evidence to complete
 
 - Combined candidate SHA, independent review and canonical gate artifacts.

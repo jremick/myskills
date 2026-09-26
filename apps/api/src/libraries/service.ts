@@ -1451,7 +1451,11 @@ function normalizeRef(ref: LibrarySourceRef): LibrarySourceRef {
 }
 
 export function normalizeSourcePath(input: string): string {
-  const trimmed = input.replace(/^\/+|\/+$/g, "");
+  let start = 0;
+  let end = input.length;
+  while (start < end && input[start] === "/") start += 1;
+  while (end > start && input[end - 1] === "/") end -= 1;
+  const trimmed = input.slice(start, end);
   if (!trimmed) return "";
   const segments = trimmed.split("/");
   if (trimmed.length > 1024 || segments.some((segment) => !segment || segment === "." || segment === ".." || /[\u0000-\u001f\u007f\\]/.test(segment))) {

@@ -42,6 +42,8 @@ The administrator switch **Allow private import self-review** starts disabled af
 
 When enabled, a user can attest only their own strictly private imported release. This records `private-self-reviewed`, not an instance reviewer's approval. Disabling the switch blocks new private attestations while retaining existing private copies.
 
+Optimisation declarations added before private self-review follow the same publication rules as other releases: the latest declaration must have reviewer approval for the exact declaration and artifact digests. A pending or rejected declaration blocks self-review. If metadata is added after the private release is self-reviewed, it is a separate attestation; it does not change the earlier reviewed artifact.
+
 To share such a release, choose **Request instance review for sharing**. A reviewer opens **Sharing reviews**, inspects the exact artifact and approves it for shared use. Browser inspection checks the response hash and artifact header against the requested digest. Sharing remains subject to ordinary registry grants and policy. A library does not grant access to a private release.
 
 Team libraries curate already-authorized registry releases. Imported content remains owned by its contributor. Removing membership or revoking release access takes effect on subsequent reads, inbox retrieval and delivery checks. Organization-owned imports and private GitHub connections are later phases.

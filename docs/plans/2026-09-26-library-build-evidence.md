@@ -81,7 +81,7 @@ MYSKILLS_E2E_BROWSER_EXECUTABLE="$APPROVED_BROWSER_EXECUTABLE" npm run test:e2e 
 MYSKILLS_E2E_BROWSER_EXECUTABLE="$APPROVED_BROWSER_EXECUTABLE" npm run test:e2e:fullstack
 ```
 
-For a focused persistent rerun, execute `node --import tsx --test apps/api/test/library-journey.pgtest.ts` with the same disposable `TEST_DATABASE_URL`. `LIBRARY_JOURNEY_EVIDENCE_PATH` and `LIBRARY_REMEDIATION_EVIDENCE_PATH` select its two JSON receipt files. The native install journey runs with `node --import tsx --test apps/api/test/library-native-install.pgtest.ts`; `LIBRARY_NATIVE_INSTALL_EVIDENCE_PATH` selects its receipt. The browser runner retains reports, traces and journey attachments in its configured output directory; copy evidence before another run replaces that directory.
+For a focused persistent rerun, execute `node --import tsx --test apps/api/test/library-journey.pgtest.ts` with the same disposable `TEST_DATABASE_URL`. `LIBRARY_JOURNEY_EVIDENCE_PATH` and `LIBRARY_REMEDIATION_EVIDENCE_PATH` select the parent directory and basename for its two JSON receipts. Each run creates a unique private subdirectory and reports the actual path; collectors must use that path or search recursively. The native install journey runs with `node --import tsx --test apps/api/test/library-native-install.pgtest.ts`; `LIBRARY_NATIVE_INSTALL_EVIDENCE_PATH` selects its receipt parent and basename with the same private-subdirectory rule. The browser runner retains reports, traces and journey attachments in its configured output directory; copy evidence before another run replaces that directory.
 
 These focused runs diagnose and verify the implementation. The clean `npm run release:verify` gate in [RELEASE.md](../RELEASE.md) remains required before release preparation is complete.
 
