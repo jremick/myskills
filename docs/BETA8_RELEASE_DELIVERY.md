@@ -1,6 +1,6 @@
 # Beta.8 release delivery
 
-Status: GitHub prerelease published and production promoted on 26 September 2026. npm publication still requires maintainer passkey authentication; its `beta` selector remains on beta.6.
+Status: GitHub prerelease, production deployment and npm publication are complete. npm published beta.8 at 2026-09-26T21:43:20Z (27 September in Melbourne); its `beta` selector resolves to beta.8.
 
 ## Scope and authority
 
@@ -65,8 +65,12 @@ The independent reviews used the existing personal Claude subscription. Assistan
 
 The final Opus review confirmed `claude-opus-5-5` in assistant transcript records, with `xhigh` configured on the personal subscription route. It found no release blocker. Two unconfirmed, low-severity deadlock risks remain when adoption overlaps target binding or entry removal. One transaction may abort and need a retry; no partial commit is expected. These are follow-up findings, not reproduced failures or completed fixes.
 
-## Remaining npm publication
+## npm publication evidence
 
-The final archive passed a publication dry run and a fresh archive install, but `npm whoami` returned 401. The existing browser/passkey route needs maintainer participation. No alternate credential route was created.
+The maintainer completed the existing npm browser/passkey flow as `jarel`. The exact GitHub-attached archive was published with `--tag beta --access public --provenance=false`. Registry processing completed at 2026-09-26T21:43:20.280Z. No alternate credential route was created.
 
-After sign-in, publish the exact attached archive with `--tag beta --access public --provenance=false`, then verify immutable registry integrity, fresh exact-version and fresh `@beta` installs. Readback before publication was `beta=0.1.0-beta.6` and `latest=alpha=0.1.0-alpha.3`; only `beta` may move. GitHub publication, hosted deployment and archive installation do not establish npm publication.
+Registry download bytes matched the verified archive exactly: SHA-256 `bfece33f02cdf5729c1ec9f0879496e81ef63cd81b98aa40ac2847ae5a65927e`, npm SHA-1 `e90bd2d7b2dc8313b06f22004973bae9385c3ea8`, and the expected SHA-512 integrity. Only `beta` moved, from beta.6 to `0.1.0-beta.8`; `latest` and `alpha` remained `0.1.0-alpha.3`.
+
+Independent clean installs of `@jarel/myskills@0.1.0-beta.8` and `@jarel/myskills@beta`, each with a fresh npm cache, reported beta.8 on the Windows-hosted Linux runner (Node 24.20.0, npm 11.12.1). Both CLI help commands passed. The installed CLI's production `doctor` passed health and capability checks, including improvements, libraries and library source tracking. The headless container has no OS keyring, so this anonymous check used an isolated empty file-token store; no token file was created.
+
+Install with `npm install -g @jarel/myskills@beta`, or pin `@jarel/myskills@0.1.0-beta.8`.
