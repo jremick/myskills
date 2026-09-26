@@ -1,10 +1,10 @@
 # Beta.8 release delivery
 
-Status: combined candidate verification and staging acceptance in progress. Not released; production remains on beta.7.
+Status: GitHub prerelease published and production promoted on 26 September 2026. npm publication still requires maintainer passkey authentication; its `beta` selector remains on beta.6.
 
 ## Scope and authority
 
-The owner approved integrating Libraries and skill improvement, completing and pushing the release, and updating the live deployment on 26 September 2026. This chat owns integration, publication and deployment; the Libraries checkout remains unchanged.
+The owner approved integrating Libraries and skill improvement, completing and pushing the release, and updating the live deployment on 26 September 2026. The integration workstream owns publication and deployment; the separate Libraries checkout and its work are preserved.
 
 Inputs:
 
@@ -43,21 +43,30 @@ Beta.7 cannot safely interpret new private attestations or library target constr
 
 PR review identified two further corrections after the first combined gate. Concurrent same-key run creation now rechecks the runner digest after the store serializes the requests. Evidence acceptance now re-resolves the reporter's current account, plan inputs and policies, plus the destination disclosure policy; rejection stays available. Regression journeys reproduced both failures before the changes, then all eight focused improvement journeys passed, including the persistent mixed-feature journey. A different release manager can still accept another reporter's valid evidence. Candidate `f1e0cc5d53e99a7aaf87b5e0187d374fbc940a67` passed the clean Windows canonical gate: 1,186 repository tests, 20 browser journeys, seven full-stack journeys and 235 PostgreSQL tests. All 12 GitHub checks passed. An independent Opus review found no actionable defects in those corrections.
 
-Two subsequent Libraries review findings are corrected. Adoption locks and rechecks the active actor and effective library ownership inside its transaction, including required organization membership. Inbox traversal uses keyset batches past hidden events and counts all visible unread events. Tests written before the changes reproduced three unauthorized adoptions and two truncated inbox counts. All five regressions then passed on Windows, along with the three Library journeys covering 87 scenarios, lint and API build. The final combined gate, independent review and staging refresh remain required.
+Two subsequent Libraries review findings are corrected. Adoption locks and rechecks the active actor and effective library ownership inside its transaction, including required organization membership. Inbox traversal uses keyset batches past hidden events and counts all visible unread events. Tests written before the changes reproduced three unauthorized adoptions and two truncated inbox counts. All five regressions then passed on Windows, along with the three Library journeys covering 87 scenarios, lint and API build. The final combined gate, independent review and staging refresh results follow below.
 
-Staging API deployment `cf0dfd35-df9d-452e-9856-d8fdc8224659` serves `f1e0cc5` with all readiness checks passing. Production remains on beta.7.
+Staging API deployment `cf0dfd35-df9d-452e-9856-d8fdc8224659` served `f1e0cc5` with all readiness checks passing. Production was still on beta.7 at that stage.
 
 Staging web deployment `5cf3dcd4-ab61-4f39-b478-539f020f9aec` also served `f1e0cc5`. Direct API, web and same-origin version readbacks matched; readiness and cache-header checks passed. All three deployed browser/API/CLI journeys passed on the Windows PC: persistent Libraries, the 20-check operational install/update/rollback flow, and skill improvement through exact candidate publication and evidence acceptance. Separate author, MFA reviewer and consumer accounts were used. Temporary owner MFA and supplied sessions were removed, the scoped MCP token was revoked, and private self-review returned to disabled. This proves that staging candidate, not the later corrected release commit.
 
 The independent reviews used the existing personal Claude subscription. Assistant transcript records identify `claude-opus-5-5`; `xhigh` was configured. Codex ran the cited checks. The declaration/self-review race is not separately covered by the new journey; both writes use the existing release-row lock, and the guard runs inside it.
 
-## Evidence to complete
+## Final release evidence
 
-- Combined candidate SHA, independent review and canonical gate artifacts.
-- Populated migration preservation and replay receipt.
-- GitHub required checks and tag workflow.
-- Staging API/web deployment IDs and acceptance receipt.
-- Coordinated recovery set and current readiness.
-- npm exact-version integrity, fresh exact and `beta` installs, unchanged `latest` and `alpha` selectors.
-- GitHub prerelease URL and artifacts.
-- Production API/web deployment IDs, source/version readback, existing-session and anonymous/private-delivery browser checks, and sanitized error-log review.
+- Verified source and tag: `55849876639fbb55167496051bd8d573b5a6a6af`, `v0.1.0-beta.8`. [PR #87](https://github.com/jremick/myskills/pull/87) merged as `8600c38e6bdf953096fae0d86d8941382ad0b49c`; its tree matched the verified candidate and retained both feature histories.
+- The final clean Windows-hosted Linux gate passed 1,186 repository tests, 20 browser journeys, seven full-stack journeys and 240 PostgreSQL tests. All 12 PR checks passed. The [tag workflow](https://github.com/jremick/myskills/actions/runs/36228298147) passed the canonical gate, all application image builds and the backup image entrypoint checks.
+- Final staging API `41e1b59f-ee25-4270-acbf-51f0119c2ebe` and web `70a17c4e-0516-4bd9-9222-d3b8d9897949` served the candidate. All three deployed browser/API/CLI journeys passed again, with zero skips, flaky results or cleanup failures. Both new migration IDs appeared exactly once in the 34-entry migration history.
+- The [GitHub prerelease](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.8) contains five assets. Server-reported hashes matched each uploaded artifact. Source archive SHA-256: `84fc5a0ccd0f776ec608daec932c7a206e14ff81fe09333a90130a91ddb3f4b2`. CLI archive SHA-256: `bfece33f02cdf5729c1ec9f0879496e81ef63cd81b98aa40ac2847ae5a65927e`. The tag-enforced source archive matched the Windows gate archive exactly.
+- Production API `fca21294-e5ee-414f-91b8-cc612e4e6203` replaced the drained beta.7 API. Readiness passed before web `a53c83e5-33e3-45b4-98f2-b8d8828b221a` was deployed. Direct API, web and same-origin identity responses returned beta.8 and the verified SHA. Health and cache-header checks passed.
+- Production database readback confirmed both additive 0032 migrations exactly once, private self-review disabled, and no private self-review attestations or library target bindings at inspection time. The pre-promotion coordinated backup above remained current. Its unchanged backup implementation discovers public tables dynamically, so the new tables do not require an allowlist update.
+- The existing owner session survived a Codex-browser reload. Exact private release selection, four-file inspection, and authenticated export passed. The exported 17,300-byte bundle retained its expected manifest and checksum. The download-event wait timed out; the newly saved native file established completion. Anonymous Comet checks confirmed public release/file access and exact private-release denial without substitution. Libraries and improvement metadata rendered on production.
+- A fresh Windows install of the attached CLI archive reported beta.8. Production `doctor`, public exact export, validation and scan passed. Anonymous MCP session access returned 401; a narrowly scoped authenticated MCP credential was tested and revoked on staging. No production feature-write fixtures were run.
+- Sampled production logs contained no API error-level events and no nginx error-severity messages. Railway labelled nginx startup notices as stderr errors; their nginx severity was `notice`.
+
+The final Opus review confirmed `claude-opus-5-5` in assistant transcript records, with `xhigh` configured on the personal subscription route. It found no release blocker. Two unconfirmed, low-severity deadlock risks remain when adoption overlaps target binding or entry removal. One transaction may abort and need a retry; no partial commit is expected. These are follow-up findings, not reproduced failures or completed fixes.
+
+## Remaining npm publication
+
+The final archive passed a publication dry run and a fresh archive install, but `npm whoami` returned 401. The existing browser/passkey route needs maintainer participation. No alternate credential route was created.
+
+After sign-in, publish the exact attached archive with `--tag beta --access public --provenance=false`, then verify immutable registry integrity, fresh exact-version and fresh `@beta` installs. Readback before publication was `beta=0.1.0-beta.6` and `latest=alpha=0.1.0-alpha.3`; only `beta` may move. GitHub publication, hosted deployment and archive installation do not establish npm publication.

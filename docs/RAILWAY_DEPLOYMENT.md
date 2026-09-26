@@ -4,8 +4,24 @@ Version: 0.1.0-beta.8
 Last updated: 2026-09-26
 
 This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.
-The current beta.7 candidate is tracked in [Beta.7 Release Delivery](BETA7_RELEASE_DELIVERY.md).
+The current beta.8 release is tracked in [Beta.8 Release Delivery](BETA8_RELEASE_DELIVERY.md).
 The historical operational beta evidence remains in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
+
+## Beta.8 production status
+
+On 26 September 2026, production API `fca21294-e5ee-414f-91b8-cc612e4e6203`
+and web `a53c83e5-33e3-45b4-98f2-b8d8828b221a` succeeded from
+`55849876639fbb55167496051bd8d573b5a6a6af` in API-ready-then-web order.
+Direct, web and same-origin version readbacks matched beta.8 and that revision.
+Readiness, both additive 0032 migrations, preserved owner session, private
+export, anonymous access boundaries and fresh CLI archive checks passed.
+Private import self-review remains disabled. Staging passed all three deployed
+browser/API/CLI journeys on the same candidate. See the delivery ledger for
+backup, artifact, test, log and residual-risk evidence. GitHub archives are
+published; npm publication is still awaiting maintainer passkey sign-in.
+
+## Historical beta.7 baseline
+
 Beta.7 staging API `fabeef83-d999-4c46-aac8-1b026a88e52f` and web
 `af63dfdc-54a0-40fe-ab6c-a48d3f6866ce` both succeeded from candidate
 `6912d3f9490c6f002431f3064e8a9db417df3d7f`; direct, web, and same-origin

@@ -7,11 +7,16 @@ MySkills beta releases are verification-first and approval-gated. A passing comm
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
 
-## Beta.8 Candidate Acceptance Record
+## Beta.8 Release Record
 
-Target release: `v0.1.0-beta.8`.
+Released tag: `v0.1.0-beta.8`, source `55849876639fbb55167496051bd8d573b5a6a6af`.
 
-The combined candidate contains source-tracked Libraries and governed skill improvement. The approved scope, failure cases and evidence are recorded in the [beta.8 delivery ledger](BETA8_RELEASE_DELIVERY.md), [Libraries build ledger](plans/2026-09-26-library-build-evidence.md) and [skill improvement ledger](SKILL_IMPROVEMENT_DELIVERY.md).
+The GitHub prerelease and production API/web promotion are verified. npm
+publication remains pending maintainer passkey authentication; use the verified
+CLI archive attached to the GitHub release until the `beta` selector is updated.
+Do not infer npm publication from the source version or hosted deployment.
+
+The release contains source-tracked Libraries and governed skill improvement. The approved scope, failure cases and evidence are recorded in the [beta.8 delivery ledger](BETA8_RELEASE_DELIVERY.md), [Libraries build ledger](plans/2026-09-26-library-build-evidence.md) and [skill improvement ledger](SKILL_IMPROVEMENT_DELIVERY.md).
 Run container tests on the Windows PC when available; remote execution must
 still produce the canonical gate and exact candidate evidence. A local source
 change is not release, npm or production evidence.
