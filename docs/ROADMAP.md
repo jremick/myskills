@@ -1,8 +1,8 @@
 # Roadmap
 
 Version: 0.1.0-beta.7
-Document revision: 0.3.3
-Last updated: 2026-09-25
+Document revision: 0.3.4
+Last updated: 2026-09-26
 
 ## Release Tracks
 
@@ -71,6 +71,12 @@ and do not create separate registries or release systems.
 | AUTHOR-1 | Authors create, edit, import, and submit skills without manually rebuilding packages. | 3, 4, 5 | [Authoring and imports](#authoring-and-imports-author-1) |
 | REC-1 | Users and agents find relevant skills from a task description. | 1, 6, 7 | [Task-aware recommendations](#task-aware-recommendations-rec-1) |
 | HOST-1 | Operators reach a usable, maintainable instance with fewer steps and less build work. | 8, 9, 10 | [Self-hosting and deployment](#self-hosting-and-deployment-host-1) |
+| OPT-1 (proposal) | Users, teams, and organizations designate reviewer skills, run improvement locally, and inspect model/app/environment evidence. | 3, 4, 5, 6, 7 | [Skill improvement and optimisation specification](SKILL_IMPROVEMENT_SPEC.md) |
+
+OPT-1 is a proposed feature specification, not a scheduled release. It recommends
+release metadata and an explicit local review/evaluation workflow before enrolled
+event-driven automation. It depends on a minimal Milestone 6 evaluation foundation
+and preserves existing publication and target-adoption gates.
 
 The [self-hosting investigation](SELF_HOSTING_INVESTIGATION.md) records current
 friction, options, dependencies, and proposed verification. It recommends release

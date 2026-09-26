@@ -235,6 +235,20 @@ export interface ReviewSubmissionBundle extends ReviewSubmissionSummary {
   payload: ArtifactPayload;
 }
 
+/** The exact release and approved artifact a publication would expose. */
+export interface ReleasePublicationCandidate {
+  releaseId: string;
+  artifactSha256: string;
+}
+
+/**
+ * Optional precondition owned by another domain. The memory store calls it synchronously, with
+ * no intervening await, immediately before the publication write; a thrown AppError blocks it.
+ */
+export interface ReleasePublicationGuard {
+  assertReleasePublishable(release: ReleasePublicationCandidate): void;
+}
+
 export interface SubmissionStore {
   createSubmission(input: CreateSubmissionInput & {
     release: StoredSubmission["release"];

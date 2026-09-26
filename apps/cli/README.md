@@ -409,3 +409,7 @@ Common scopes:
 - `skills:submit` for author submissions.
 - `review:read` and `review:write` for maintainer review workflows.
 - `architectures:read` for architecture list, detail, preview, and fixture-plan reads.
+
+## Skill improvement
+
+Prepare local skill reviews with `myskills improve`, inspect the report, export a draft, and submit it through normal review. Registry plans pin source/reviewer versions and apply user, team or organization policy. Execution requires the exact local plan digest and explicit cloud consent. See [the feature guide](../../docs/SKILL_IMPROVEMENT.md) for commands, JSON bodies, evaluation suites and current adapter limits. The implementation candidate still has an open real-runner isolation gate.

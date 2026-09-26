@@ -1,0 +1,19 @@
+{
+  "name": "app-environment-reviewer",
+  "title": "App and Environment Reviewer",
+  "summary": "Review skill assumptions against an explicit app and local environment contract.",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "visibility": "public",
+  "platforms": [
+    {
+      "name": "codex",
+      "install_target": "codex-skill",
+      "status": "supported"
+    }
+  ],
+  "tags": [
+    "review",
+    "optimisation"
+  ]
+}

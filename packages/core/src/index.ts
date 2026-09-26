@@ -145,3 +145,7 @@ export * from "./organization-tenancy.js";
 export * from "./architecture-target.js";
 export * from "./architecture-sync-control.js";
 export * from "./architecture-pattern-migration.js";
+export { ImprovementContractError, improvementDigest } from "./improvement-shared.js";
+export * from "./improvement-declaration.js";
+export * from "./improvement-policy.js";
+export * from "./improvement-run.js";

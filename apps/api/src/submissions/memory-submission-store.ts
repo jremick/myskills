@@ -40,6 +40,7 @@ import type {
   ReviewSubmissionDetail,
   SubmissionFeedback,
   ManagedSkillFilters,
+  ReleasePublicationGuard,
 } from "./types.js";
 import { assertNoVisibilityMetadataUpdate } from "./types.js";
 import { artifactPayloadSha256 } from "./artifact-hash.js";
@@ -100,6 +101,8 @@ export interface MemorySubmissionStoreOptions {
   teamMemberships?: Array<{ userId: string; teamId: string; organizationId?: string | null }>;
   teamGrants?: Array<{ slug: string; teamId: string }>;
   userGrants?: Array<{ slug: string; userId: string }>;
+  /** Checked synchronously immediately before each publication write. */
+  publicationGuard?: ReleasePublicationGuard;
 }
 
 type RequiredSharingSettings = Required<SharingSettings>;
@@ -127,8 +130,10 @@ export class MemorySubmissionStore implements SubmissionStore {
   private denied = 0;
   private audit: AuditRecord[] = [];
   private tags = new Map<string, string[]>();
+  private readonly publicationGuard?: ReleasePublicationGuard;
 
   constructor(options: MemorySubmissionStoreOptions = {}) {
+    this.publicationGuard = options.publicationGuard;
     this.sharingSettings = normalizeSharingSettings(options.sharingSettings);
     for (const team of options.teams ?? []) {
       this.addTeam(team);
@@ -634,6 +639,18 @@ export class MemorySubmissionStore implements SubmissionStore {
       });
       throw error;
     }
+    try {
+      // Synchronous: no other request can change the guarded state before the write below.
+      this.publicationGuard?.assertReleasePublishable({ releaseId: submission.id, artifactSha256: currentArtifactSha256 });
+    } catch (error) {
+      this.recordAudit("release.publish", "deny", input.actorId, {
+        submissionId: submission.id,
+        slug: submission.skillSlug,
+        version: submission.version,
+        reason: error instanceof AppError ? error.code.toLowerCase() : "publication_guard_failed",
+      });
+      throw error;
+    }
     submission.publishedAt = new Date().toISOString();
     submission.lifecycleStatus = "approved";
     this.skillLifecycle.set(submission.skillSlug, "approved");
@@ -847,6 +864,12 @@ export class MemorySubmissionStore implements SubmissionStore {
 
   auditEvents(): AuditRecord[] {
     return this.audit;
+  }
+
+  /** Synchronous publication state for in-process stores whose writes must not race publication. Null when missing. */
+  releasePublished(releaseId: string): boolean | null {
+    const submission = this.findSubmission(releaseId);
+    return submission ? Boolean(submission.publishedAt) : null;
   }
 
   private findSubmission(id: string): StoredSubmission | null {

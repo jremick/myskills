@@ -270,6 +270,8 @@ async function dispatchCli(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
         return await doctorCommand(parsed, runtime);
       case "bootstrap":
         return await bootstrapCommand(parsed, runtime);
+      case "improve":
+        return await improvementCommand(parsed, runtime);
       case "submit":
         return await submitCommand(parsed, runtime);
       case "review":
@@ -320,6 +322,102 @@ async function validateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
     runtime.io.stdout(terminalText`valid ${manifest.name}@${manifest.version}`);
   }
   return 0;
+}
+
+async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const operation = parsed.args[0];
+  const optionsByOperation: Record<string, string[]> = {
+    plan: ["path", "reviewer", "output", "model", "goal", "target-version", "max-calls", "timeout-seconds", "suite", "protect", "codex-path", "json"],
+    run: ["job", "accept-plan", "allow-cloud", "json"],
+    report: ["job", "json"],
+    export: ["job", "output", "json"],
+    fetch: ["plan", "output", "suite", "codex-path", "api-url", "token", "json"],
+    share: ["job", "disclosure", "subject", "release", "api-url", "token", "json"],
+    compatibility: ["release"], declare: ["release", "file"], "review-declaration": ["release", "revision", "file"],
+    policy: ["scope", "owner", "file"], profiles: ["scope", "owner", "id", "file"], suites: ["scope", "owner", "id", "file"],
+    preview: ["file"], prepare: ["file"], status: ["run"], cancel: ["run"], evidence: ["id"], "accept-evidence": ["id", "file"],
+  };
+  if (parsed.args.length !== 1 || !optionsByOperation[operation]) throw new CliError("Usage: myskills improve <operation>. See myskills help for options.", 2);
+  for (const name of Object.keys(parsed.options)) if (!optionsByOperation[operation].includes(name) && !["api-url", "token", "json"].includes(name)) throw new CliError(`Unsupported improve ${operation} option: --${name}`, 2);
+  const { createImprovementJob, runImprovementJob, readImprovementPlan, readImprovementReport, exportImprovementCandidate } = await import("./skill-improvement.js");
+  const { fetchImprovementJob, registryLifecycle, shareImprovementEvidence } = await import("./skill-improvement-registry.js");
+  const required = (name: string) => {
+    const value = optionalStringOption(parsed, name);
+    if (!value) throw new CliError(`--${name} is required.`, 2);
+    return value;
+  };
+  let result: unknown;
+  let exitCode = 0;
+  const registryApi = async () => {
+    const token = await requireToken(parsed, runtime);
+    return { apiUrl: apiBaseUrl(parsed, runtime), get: (url: string) => apiGet(url, parsed, runtime, token), post: (url: string, body: unknown) => apiPost(url, body, parsed, runtime, token), bundle: (pin: { slug: string; version: string }) => downloadVerifiedBundle(pin, parsed, runtime, token) };
+  };
+  if (!["plan", "run", "report", "export", "fetch", "share"].includes(operation)) {
+    const encode = encodeURIComponent;
+    let endpoint = "/v1/improvements"; let method = "GET";
+    const file = optionalStringOption(parsed, "file");
+    let body: Record<string, unknown> = {};
+    if (file) {
+      const value: unknown = JSON.parse(await readRegularText(await realpath(file), 256_000));
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw new CliError("--file must contain a JSON object matching the API request body.", 2);
+      body = value as Record<string, unknown>;
+    }
+    if (["declare", "review-declaration", "preview", "prepare", "accept-evidence"].includes(operation)) required("file");
+    if (["compatibility", "declare", "review-declaration"].includes(operation)) {
+      const release = parseReleaseTarget(required("release"));
+      endpoint += `/releases/${encode(release.slug)}/${encode(release.version)}`;
+      if (operation === "compatibility") endpoint += "/compatibility";
+      else { endpoint += "/declarations"; method = "POST"; if (operation === "review-declaration") endpoint += `/${encode(required("revision"))}/review`; }
+    } else if (operation === "policy" || operation === "profiles" || operation === "suites") {
+      const id = optionalStringOption(parsed, "id");
+      const scope = optionalStringOption(parsed, "scope");
+      if (scope && !["user", "team", "organization"].includes(scope)) throw new CliError("--scope must be user, team, or organization.", 2);
+      if (operation === "policy") { required("scope"); endpoint += `/policies/${scope}/${encode(required("owner"))}`; if (file) method = "PUT"; }
+      else {
+        endpoint += `/${operation}`;
+        if (id) endpoint += `/${encode(id)}`;
+        if (file) method = id ? "PUT" : "POST";
+        else if (!id) endpoint += `?ownerType=${encode(required("scope"))}&ownerId=${encode(required("owner"))}`;
+      }
+    } else if (operation === "preview" || operation === "prepare") { endpoint += `/plans${operation === "preview" ? "/preview" : ""}`; method = "POST"; }
+    else if (operation === "status" || operation === "cancel") { endpoint += `/runs/${encode(required("run"))}${operation === "cancel" ? "/cancel" : ""}`; if (operation === "cancel") method = "POST"; }
+    else { endpoint += `/evidence/${encode(required("id"))}${operation === "accept-evidence" ? "/acceptances" : ""}`; if (operation === "accept-evidence") method = "POST"; }
+    const token = await requireToken(parsed, runtime);
+    result = method === "GET" ? await apiGet(endpoint, parsed, runtime, token) : method === "PUT" ? await apiPut(endpoint, body, parsed, runtime, token) : await apiPost(endpoint, body, parsed, runtime, token);
+  } else if (operation === "fetch") {
+    const suitePath = optionalStringOption(parsed, "suite");
+    result = await fetchImprovementJob(await registryApi(), { planId: required("plan"), outputPath: required("output"), executable: optionalStringOption(parsed, "codex-path"), ...(suitePath ? { suite: JSON.parse(await readRegularText(await realpath(suitePath), 256_000)) } : {}) });
+  } else if (operation === "share") {
+    result = await shareImprovementEvidence(await registryApi(), { jobPath: required("job"), disclosure: required("disclosure"), subject: required("subject"), ...parseReleaseTarget(required("release")) });
+  } else if (operation === "plan") {
+    const suitePath = optionalStringOption(parsed, "suite");
+    result = await createImprovementJob({
+      sourcePath: required("path"), reviewerPaths: stringListOption(parsed, "reviewer"), outputPath: required("output"),
+      model: required("model"), goal: required("goal"), targetVersion: required("target-version"),
+      maxCalls: Number(optionalStringOption(parsed, "max-calls") ?? 21), timeoutSeconds: Number(optionalStringOption(parsed, "timeout-seconds") ?? 120),
+      inference: "cloud", protectedFiles: stringListOption(parsed, "protect"), executable: optionalStringOption(parsed, "codex-path"),
+      ...(suitePath ? { suite: JSON.parse(await readRegularText(await realpath(suitePath), 256_000)) } : {}),
+    });
+  } else if (operation === "run") {
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    process.once("SIGINT", cancel); process.once("SIGTERM", cancel); process.once("SIGHUP", cancel);
+    try {
+      const jobPath = required("job");
+      const { plan } = await readImprovementPlan(jobPath);
+      const lifecycle = plan.registry ? await registryLifecycle(await registryApi(), jobPath, CLI_VERSION) : undefined;
+      const report = await runImprovementJob({ jobPath, acceptPlan: required("accept-plan"), allowCloud: parsed.options["allow-cloud"] === true, signal: controller.signal, lifecycle });
+      result = report;
+      exitCode = report.state === "completed" ? 0 : 1;
+    } finally { process.removeListener("SIGINT", cancel); process.removeListener("SIGTERM", cancel); process.removeListener("SIGHUP", cancel); }
+  } else if (operation === "report") {
+    result = await readImprovementReport(required("job"));
+  } else {
+    await exportImprovementCandidate({ jobPath: required("job"), outputPath: required("output") });
+    result = { exported: true, status: "draft", evaluation: (await readImprovementReport(required("job"))).evaluation?.outcome ?? "unevaluated", next: "Inspect the diff, then use myskills submit for normal review and publication." };
+  }
+  runtime.io.stdout(parsed.options.json ? JSON.stringify(result, null, 2) : terminalSafeText(JSON.stringify(result, null, 2)));
+  return exitCode;
 }
 
 async function initCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
@@ -5063,6 +5161,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       || key === "include-prerelease"
       || key === "requires-user-action"
       || key === "accept-user-action"
+      || key === "allow-cloud"
     ) {
       options[key] = true;
       continue;
@@ -5095,6 +5194,19 @@ function helpText(): string {
     "  validate --path <file-directory-or-zip>",
     "  scan --path <file-directory-or-zip>",
     "  package --path <directory> --output <file.zip> [--json]",
+    "  improve plan --path <skill-dir> --reviewer <reviewer-dir> --output <new-job-dir> --model <model-id> --goal <text> --target-version <version> [--suite <json>] [--protect <path>] [--max-calls <number>] [--timeout-seconds <number>] [--codex-path <executable>] [--json]",
+    "  improve run --job <dir> --accept-plan <sha256> --allow-cloud [--json]",
+    "  improve report --job <dir> [--json]",
+    "  improve export --job <dir> --output <new-draft-dir> [--json]",
+    "  improve fetch --plan <id> --output <new-job-dir> [--suite <json>] [--codex-path <executable>] [--api-url <url>] [--json]",
+    "  improve share --job <dir> --disclosure summary --subject baseline|candidate --release <slug>@<version> [--api-url <url>] [--json]",
+    "  improve compatibility --release <slug>@<version> [--json]",
+    "  improve declare|review-declaration --release <slug>@<version> [--revision <id>] --file <request.json> [--json]",
+    "  improve policy --scope user|team|organization --owner <id> [--file <request.json>] [--json]",
+    "  improve profiles|suites [--id <id> | --scope user|team|organization --owner <id>] [--file <request.json>] [--json]",
+    "  improve preview|prepare --file <request.json> [--json]",
+    "  improve status|cancel --run <id> [--json]",
+    "  improve evidence|accept-evidence --id <id> [--file <request.json>] [--json]",
     "  search [query] [--api-url <url>]",
     "  info <skill-slug> [--api-url <url>]",
     "  login [--api-url <url>] [--method <password|api-key>] [--email <email>]",

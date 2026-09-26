@@ -62,6 +62,8 @@ import type { ArchitectureRecord, ArchitectureStore } from "./architectures/type
 import type { ArchitectureTargetService } from "./targets/service.js";
 import type { TargetSkillOperationService } from "./target-operations/service.js";
 import type { SkillUpgradePolicyService } from "./upgrade-policies/service.js";
+import type { ImprovementService } from "./improvements/service.js";
+import { registerImprovementRoutes } from "./improvements/routes.js";
 import type {
   ArchitectureTargetAdapterDescriptor,
   ArchitectureTargetCapabilities,
@@ -115,6 +117,7 @@ export interface BuildAppOptions {
   architectureTargetService?: ArchitectureTargetService;
   targetSkillOperationService?: TargetSkillOperationService;
   skillUpgradePolicyService?: SkillUpgradePolicyService;
+  improvementService?: ImprovementService;
   architectureOrganizationGrantService?: ArchitectureOrganizationGrantService;
   architecturePatternMigrationService?: ArchitecturePatternMigrationService;
   architectureProjectionLimiter?: AuthRateLimiter;
@@ -285,6 +288,8 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         architectureTargets: phase2ArchitectureReady && Boolean(options.authService && options.architectureTargetService),
         architectureOrganizationGrants: phase2ArchitectureReady && Boolean(options.authService && options.architectureOrganizationGrantService),
         architecturePatternMigrations: phase2ArchitectureReady && Boolean(options.authService && options.architecturePatternMigrationService),
+        // Opt-in key: absent unless configured, so existing capability consumers see an unchanged shape.
+        ...(options.improvementService ? { improvements: Boolean(options.authService) } : {}),
       },
     };
   });
@@ -2277,6 +2282,12 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       ...parseReviewActionInput(request.body),
     });
     return reply.send({ submission: result });
+  });
+
+  registerImprovementRoutes(app, {
+    authService: options.authService,
+    improvementService: options.improvementService,
+    requestAuthorization,
   });
 
   return app;

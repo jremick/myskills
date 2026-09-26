@@ -56,6 +56,7 @@ import { SystemUpdateCenter } from "@/components/update/SystemUpdateCenter";
 import { PackageFileViewer } from "@/components/registry/PackageFileViewer";
 import { ManagedSkillsDashboard } from "@/components/registry/ManagedSkillsDashboard";
 import { SubmissionEvidencePanel } from "@/components/registry/SubmissionEvidencePanel";
+import { SkillImprovementPanel } from "@/components/registry/SkillImprovementPanel";
 import {
   createRegistryClient,
   exportCommand,
@@ -161,6 +162,10 @@ const API_TOKEN_SCOPE_OPTIONS: Array<{ scope: ApiTokenScope; label: string }> = 
   { scope: "review:read", label: "Review read" },
   { scope: "review:write", label: "Review write" },
   { scope: "targets:execute", label: "Execute target updates" },
+  { scope: "improvements:read", label: "Read improvement plans and evidence" },
+  { scope: "improvements:configure", label: "Configure improvement policies" },
+  { scope: "improvements:run", label: "Run skill improvements" },
+  { scope: "improvements:report", label: "Share and review improvement evidence" },
 ];
 
 export function RegistryApp({ client }: RegistryAppProps) {
@@ -4616,6 +4621,8 @@ function SkillDetail({
           {release.requiresUserAction && <p className="control-plane-muted"><CircleAlert size={15} aria-hidden="true" /> This release requires a user action. Review the instructions before updating.</p>}
           {release.compatibility && Object.keys(release.compatibility).length > 0 && <dl className="metadata-grid shadcn-metadata-grid registry-metadata-grid"><Metadata label="Minimum MySkills" value={release.compatibility.minimumMyskillsVersion ?? "Any"} /><Metadata label="Minimum adapter contract" value={release.compatibility.minimumAdapterContractVersion?.toString() ?? "Any"} /><Metadata label="Minimum source version" value={release.compatibility.minimumSourceVersion ?? "Any"} /></dl>}
         </section>
+
+        <SkillImprovementPanel key={`${release.slug}:${release.version}`} client={client} release={release} user={session?.user ?? null} canManage={canManageSkill} visibility={selectedSkill.visibility} />
 
         {session && hasSupportedPlatform && (
           <ReleaseInstallPanel

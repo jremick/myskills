@@ -30,6 +30,8 @@ import { PostgresTargetSkillOperationStore } from "./target-operations/postgres-
 import { TargetSkillOperationService } from "./target-operations/service.js";
 import { PostgresSkillUpgradePolicyStore } from "./upgrade-policies/postgres-store.js";
 import { SkillUpgradePolicyService } from "./upgrade-policies/service.js";
+import { PostgresImprovementStore } from "./improvements/postgres-store.js";
+import { ImprovementService } from "./improvements/service.js";
 
 const port = Number.parseInt(process.env.PORT ?? "3001", 10);
 const host = process.env.HOST ?? "0.0.0.0";
@@ -43,7 +45,9 @@ if (!registryInstanceId || !/^[a-f0-9-]{36}$/.test(registryInstanceId)) {
   throw new Error("Registry instance identity is unavailable. Apply database migrations before starting the API.");
 }
 const artifactStorage = createArtifactObjectStorageFromEnv(process.env);
-const submissionStore = new PostgresSubmissionStore(db, { artifactStorage });
+const improvementStore = new PostgresImprovementStore(db);
+// Publication rechecks the latest release declaration inside its own transaction.
+const submissionStore = new PostgresSubmissionStore(db, { artifactStorage, publicationGuard: improvementStore });
 await submissionStore.reconcilePendingArtifactWrites();
 const teamStore = new PostgresTeamStore(db);
 const teamService = new TeamService(teamStore);
@@ -83,6 +87,11 @@ const targetSkillOperationService = new TargetSkillOperationService(
   submissionService,
   { upgradePolicies: skillUpgradePolicyService },
 );
+const improvementService = new ImprovementService(improvementStore, {
+  submissionService,
+  teamService,
+  organizationService,
+});
 const authStore = new PostgresAuthStore(db);
 const authSecret = requiredAuthSecret();
 const notificationSink = createAuthNotificationSinkFromEnv(process.env);
@@ -109,6 +118,7 @@ const app = buildApp({
   architectureTargetService,
   targetSkillOperationService,
   skillUpgradePolicyService,
+  improvementService,
   allowedOrigins: allowedOrigins(),
   trustProxy: trustProxy(),
   requestLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 600, windowMs: 60_000 }),

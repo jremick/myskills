@@ -53,10 +53,19 @@ import type {
   ReviewSubmissionDetail,
   SubmissionFeedback,
   ManagedSkillFilters,
+  ReleasePublicationCandidate,
 } from "./types.js";
 import { assertNoVisibilityMetadataUpdate } from "./types.js";
 import { artifactPayloadSha256 } from "./artifact-hash.js";
 import { reviewHistoryActions, submissionReviewHistory } from "./feedback.js";
+
+/**
+ * Optional precondition owned by another domain. It runs inside the publication transaction after
+ * the release row is locked FOR UPDATE; a thrown AppError rolls the publication back.
+ */
+export interface PostgresReleasePublicationGuard {
+  assertReleasePublishable(tx: Transaction, release: ReleasePublicationCandidate): Promise<void>;
+}
 
 const DEFAULT_SHARING_SETTINGS: SharingSettings = {
   publicVisibilityEnabled: true,
@@ -70,7 +79,7 @@ const DEFAULT_SHARING_SETTINGS: SharingSettings = {
 export class PostgresSubmissionStore implements SubmissionStore {
   constructor(
     private readonly db: Database,
-    private readonly options: { artifactStorage?: ArtifactObjectStorage } = {},
+    private readonly options: { artifactStorage?: ArtifactObjectStorage; publicationGuard?: PostgresReleasePublicationGuard } = {},
   ) {}
 
   async createSubmission(input: CreateSubmissionInput & {
@@ -806,6 +815,10 @@ export class PostgresSubmissionStore implements SubmissionStore {
         }, tx);
         throw new AppError("Package manifest does not match the reviewed submission.", "PACKAGE_MANIFEST_MISMATCH", 422);
       }
+      await this.options.publicationGuard?.assertReleasePublishable(tx, {
+        releaseId: input.submissionId,
+        artifactSha256: preparedApprovedArtifactSha256,
+      });
       const now = new Date();
       const [updatedVersion] = await tx.update(skillVersions).set({
         publishedAt: now,
@@ -1394,7 +1407,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
   }
 }
 
-type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+export type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type DbLike = Database | Transaction;
 type ReviewVersionRow = NonNullable<Awaited<ReturnType<typeof selectVersionForReview>>>;
 type ReviewStateRow = Pick<

@@ -1,3 +1,4 @@
+import { createImprovementClient, type ImprovementClient } from "./improvement-api";
 import type {
   AccessibleArchitectureOutline,
   ArchitectureTarget,
@@ -86,7 +87,7 @@ export interface AdminUser {
   mfaEnabled: boolean;
 }
 
-export type ApiTokenScope = "profile:read" | "skills:read" | "architectures:read" | "skills:submit" | "review:read" | "review:write" | "targets:execute";
+export type ApiTokenScope = "profile:read" | "skills:read" | "architectures:read" | "skills:submit" | "review:read" | "review:write" | "targets:execute" | "improvements:read" | "improvements:configure" | "improvements:run" | "improvements:report";
 
 export interface ApiToken {
   id: string;
@@ -780,6 +781,7 @@ export interface UserSubmissionDetail extends UserSubmissionSummary, SubmissionE
 export interface ReviewSubmissionDetail extends ReviewSubmissionSummary, SubmissionEvidence {}
 
 export interface RegistryClient {
+  improvements?: ImprovementClient;
   searchSkillPage?(input: RegistryPageInput): Promise<RegistryPage<PublicSkill>>;
   listManagedSkills?(input: RegistryPageInput): Promise<RegistryPage<SkillManagementSummary>>;
   getUserSubmissionDetail?(submissionId: string): Promise<UserSubmissionDetail>;
@@ -963,6 +965,7 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
   const root = baseUrl.replace(/\/+$/, "");
   const cookieSessionHeaders = { "x-myskills-session-response": "cookie" };
   return {
+    improvements: createImprovementClient(<T,>(url: string, init?: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown }) => requestJson<T>(fetchImpl, `${root}${url}`, { ...init, token })),
     async searchSkillPage(input) {
       const params = registryPageQuery(input);
       return requestJson<RegistryPage<PublicSkill>>(fetchImpl, `${root}/v1/skills${params}`, { token });
