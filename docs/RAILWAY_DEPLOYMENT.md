@@ -18,7 +18,8 @@ export, anonymous access boundaries and fresh CLI archive checks passed.
 Private import self-review remains disabled. Staging passed all three deployed
 browser/API/CLI journeys on the same candidate. See the delivery ledger for
 backup, artifact, test, log and residual-risk evidence. GitHub archives are
-published; npm publication is still awaiting maintainer passkey sign-in.
+published. npm beta.8 is also published, with matching archive bytes and fresh
+exact-version and `@beta` installs verified; `latest` and `alpha` are unchanged.
 
 ## Historical beta.7 baseline
 

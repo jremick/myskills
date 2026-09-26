@@ -1,8 +1,8 @@
 # Roadmap
 
 Version: 0.1.0-beta.8
-Document revision: 0.3.5
-Last updated: 2026-09-26
+Document revision: 0.3.6
+Last updated: 2026-09-27
 
 ## Release Tracks
 
@@ -15,15 +15,18 @@ Last updated: 2026-09-26
   hosted API/web deployed after dedicated staging acceptance. It delivers
   deterministic authoring archives, authorized native MCP Skills delivery,
   release-history navigation, and reviewed registry and self-hosting repairs.
-  npm publication awaits maintainer passkey authentication; the `beta` selector
-  remains beta.6. Native host activation, imports, and guided setup remain later
+  At that checkpoint npm publication awaited passkey authentication; the current
+  `beta` selector now resolves to beta.8. Native host activation and guided setup remain later
   roadmap slices. See [Beta.7 Release Delivery](BETA7_RELEASE_DELIVERY.md).
-- **Hosted beta baseline**: beta.7 at `6912d3f9490c6f002431f3064e8a9db417df3d7f` is the verified deployment recorded on 25 September 2026. Confirm subsequent runtime state by live readback; beta.5 evidence is historical.
-- **Libraries candidate (`v0.1.0-beta.8`)**: phases 1A–1C are approved for the
-  next release. They cover public GitHub imports, provenance, private self-review
+- **Hosted beta baseline**: beta.8 at `55849876639fbb55167496051bd8d573b5a6a6af` is the verified deployment recorded on 26 September 2026. Confirm subsequent runtime state by live readback; beta.7 deployment evidence is historical.
+- **Libraries and skill improvement (`v0.1.0-beta.8`)**: GitHub prerelease,
+  hosted API/web and npm publication are complete. Libraries phases 1A–1C cover public GitHub imports, provenance, private self-review
   under an administrator policy, source checks, subscriptions, team curation and
-  adoption constraints. Implementation and verification remain in progress.
-  See the [full specification](plans/2026-09-26-library-feature-spec.md) and
+  adoption constraints. Skill improvement adds declared model/app/environment
+  targets, governed reviewer selection, local Claude Code runs and evaluation evidence.
+  The npm `beta` selector resolves to beta.8; `latest` and `alpha` are unchanged.
+  See the [combined release evidence](BETA8_RELEASE_DELIVERY.md),
+  [Libraries specification](plans/2026-09-26-library-feature-spec.md) and
   [build evidence](plans/2026-09-26-library-build-evidence.md).
 - **Business-safe production release**: harden the beta into an operator-ready release with stronger audit, background scanning, skill evals, provider lifecycle, artifact delivery, trusted publishing, deploy/ops guidance, and upgrade policy. See [BUSINESS_SAFE_RELEASE_GOAL.md](BUSINESS_SAFE_RELEASE_GOAL.md).
 

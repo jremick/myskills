@@ -1,7 +1,7 @@
 # Release Process
 
 Version: 0.1.0-beta.8
-Last updated: 2026-09-26
+Last updated: 2026-09-27
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
 
@@ -11,10 +11,11 @@ The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md
 
 Released tag: `v0.1.0-beta.8`, source `55849876639fbb55167496051bd8d573b5a6a6af`.
 
-The GitHub prerelease and production API/web promotion are verified. npm
-publication remains pending maintainer passkey authentication; use the verified
-CLI archive attached to the GitHub release until the `beta` selector is updated.
-Do not infer npm publication from the source version or hosted deployment.
+The GitHub prerelease, production API/web promotion and npm publication are
+verified. Install with `npm install -g @jarel/myskills@beta`, or pin
+`@jarel/myskills@0.1.0-beta.8`. Registry bytes matched the verified CLI archive;
+fresh exact-version and `@beta` installs passed. The `latest` and `alpha`
+selectors remain `0.1.0-alpha.3`.
 
 The release contains source-tracked Libraries and governed skill improvement. The approved scope, failure cases and evidence are recorded in the [beta.8 delivery ledger](BETA8_RELEASE_DELIVERY.md), [Libraries build ledger](plans/2026-09-26-library-build-evidence.md) and [skill improvement ledger](SKILL_IMPROVEMENT_DELIVERY.md).
 Run container tests on the Windows PC when available; remote execution must

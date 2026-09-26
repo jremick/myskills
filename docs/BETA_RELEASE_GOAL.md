@@ -1,22 +1,30 @@
 # Operational Beta Delivery Brief
 
 Version: 0.1.0-beta.8
-Last updated: 2026-09-26
+Last updated: 2026-09-27
 
 Target release: `v0.1.0-beta.8`.
 
-## Beta.8 Candidate
+## Beta.8 Release Record
 
-The next candidate adds Libraries: saved public GitHub sources, immutable import
+Beta.8 adds Libraries: saved public GitHub sources, immutable import
 previews and provenance, administrator-controlled private self-review, scheduled
 source checks, an opt-in change inbox, team curation, and explicit adoption that
 constrains local and connected-target updates.
 
-Implementation and focused verification are complete. The acceptance record is
+It also adds governed skill improvement: model/app/environment declarations,
+reviewer policies, local Claude Code runs, paired evaluation and reviewed evidence.
+GitHub publication, production promotion and npm publication are complete.
+Install with `npm install -g @jarel/myskills@beta`, or pin
+`@jarel/myskills@0.1.0-beta.8`. Exact registry bytes and fresh installs through both
+selectors passed; `latest` and `alpha` remain `0.1.0-alpha.3`.
+
+The combined acceptance record is [Beta.8 Release Delivery](BETA8_RELEASE_DELIVERY.md).
+The Libraries implementation record is
 [Libraries build evidence](plans/2026-09-26-library-build-evidence.md); the full
 feature and later phases are in the [Libraries specification](plans/2026-09-26-library-feature-spec.md).
-Release readiness requires the canonical gate, the persistent multi-actor
-journeys, a populated-data migration rehearsal, and the resolved review findings.
+The canonical gate, persistent multi-actor journeys, populated-data migration
+rehearsal and blocking review resolutions passed before promotion.
 The beta.7 record below remains historical release evidence.
 
 ## Beta.7 Release Record
@@ -47,8 +55,9 @@ checks and zero supplied-session cleanup failures. Separate native Comet proof
 passed owner login, temporary-MFA session invalidation, exact release
 notes/version, literal `SKILL.md`, and revoked-version denial. The stale
 continuation marker means no continuous role-browser suite is claimed. GitHub
-publication and production promotion are complete. npm publication remains
-pending passkey. Fix-forward is preferred; legacy readiness does not prove a
+publication and production promotion completed. At that historical checkpoint,
+npm publication remained pending passkey; the current beta.8 npm release is
+recorded above. Fix-forward is preferred; legacy readiness does not prove a
 full rollback, and no live rollback was executed.
 
 Native model-selected host activation remains open. Folder/ZIP imports, browser
