@@ -175,10 +175,11 @@ test("library import self-review honours release declarations like maintainer pu
     submissionService,
     { upgradePolicies: skillUpgradePolicyService, libraryAdoptions: libraryService },
   );
-  const improvementService = new ImprovementService(improvementStore, { submissionService, teamService, organizationService });
+  const authStore = new PostgresAuthStore(db);
+  const improvementService = new ImprovementService(improvementStore, { submissionService, teamService, organizationService, authStore });
   const app = buildApp({
     skillRepository,
-    authService: new AuthService(new PostgresAuthStore(db), {}),
+    authService: new AuthService(authStore, {}),
     submissionService,
     teamService,
     organizationService,

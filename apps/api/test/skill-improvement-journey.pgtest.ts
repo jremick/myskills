@@ -14,6 +14,8 @@
  *  G10 publication waiting on an in-flight declaration write to the same release row rechecks after the lock and refuses the pending revision
  *  G11 a declaration write that read the release before a concurrent publication committed waits on the release row and is refused
  *  G12 an approval bound to other bytes blocks publication; the database refuses direct publication without an approval for the approved artifact
+ *  G13 concurrent same-key run creation with different runner digests conflicts; identical runner retries replay exactly one run and audit
+ *  G14 evidence shared before policy, membership, reviewer or reporter revocation cannot be newly accepted; a different manager can accept after current authority is restored
  */
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
@@ -127,7 +129,7 @@ test("postgres improvement journey persists declarations, policies, runs, eviden
   const organizationService = new OrganizationService(new PostgresOrganizationStore(db), teamService);
   const improvementStore = new PostgresImprovementStore(db);
   const submissionService = new SubmissionService(new PostgresSubmissionStore(db, { publicationGuard: improvementStore }));
-  const improvementService = new ImprovementService(improvementStore, { submissionService, teamService, organizationService });
+  const improvementService = new ImprovementService(improvementStore, { submissionService, teamService, organizationService, authStore });
   const app = buildApp({
     skillRepository: new PostgresSkillRepository(db),
     authService: new AuthService(authStore),
@@ -237,6 +239,42 @@ test("postgres improvement journey persists declarations, policies, runs, eviden
   const plan = body(journal.check("create plan", await call(app, "POST", "/v1/improvements/plans", member, { request: onDevice, idempotencyKey: "pg-plan-0001" }), 201)).plan;
   const planReplay = body(journal.check("replay plan", await call(app, "POST", "/v1/improvements/plans", member, { request: onDevice, idempotencyKey: "pg-plan-0001" }), 200)).plan;
   assert.equal(planReplay.id, plan.id);
+  // G13: hold both pre-reads before either store transaction so the race is deterministic.
+  const listRuns = improvementStore.listRunsForPlan.bind(improvementStore);
+  for (const variant of ["different", "identical"] as const) {
+    const racePlan = body(journal.check(`create ${variant} runner plan`, await call(app, "POST", "/v1/improvements/plans", member, {
+      request: onDevice, idempotencyKey: `pg-plan-runner-${variant}`,
+    }), 201)).plan;
+    let arrivals = 0;
+    let releaseReads!: () => void;
+    const bothRead = new Promise<void>((resolve) => { releaseReads = resolve; });
+    improvementStore.listRunsForPlan = async (id) => {
+      const result = await listRuns(id);
+      if (id === racePlan.id) {
+        arrivals += 1;
+        if (arrivals === 2) releaseReads();
+        await bothRead;
+      }
+      return result;
+    };
+    const secondRunner = variant === "different" ? { ...runner, coordinatorVersion: "0.1.0-beta.9" } : runner;
+    let results: ResponseLike[];
+    try {
+      results = await Promise.all([runner, secondRunner].map((requestedRunner) => call(app, "POST", `/v1/improvements/plans/${racePlan.id}/runs`, member, {
+        planSha256: racePlan.planSha256, idempotencyKey: `pg-run-race-${variant}`, runner: requestedRunner,
+      })));
+    } finally { improvementStore.listRunsForPlan = listRuns; }
+    assert.equal(arrivals, 2);
+    assert.deepEqual(results.map((result) => result.statusCode).sort(), variant === "different" ? [201, 409] : [200, 201]);
+    if (variant === "different") assert.equal(body(results.find((result) => result.statusCode === 409)!).error.code, "IMPROVEMENT_IDEMPOTENCY_CONFLICT");
+    else assert.equal(body(results[0]).run.id, body(results[1]).run.id);
+    const storedRuns = await listRuns(racePlan.id);
+    assert.equal(storedRuns.length, 1);
+    const audits = await pool.query("SELECT count(*)::int AS count FROM audit_events WHERE action = 'improvement.run.create' AND resource_id = $1", [storedRuns[0].id]);
+    assert.equal(audits.rows[0].count, 1);
+    journal.note(`concurrent ${variant} runner idempotency`, { statuses: results.map((result) => result.statusCode).sort(), runCount: 1, allowAuditCount: 1 });
+  }
+
   const run = body(journal.check("create run", await call(app, "POST", `/v1/improvements/plans/${plan.id}/runs`, member, { planSha256: plan.planSha256, idempotencyKey: "pg-run-0001", runner }), 201)).run;
   const send = (sequence: number, event: Record<string, unknown>) => call(app, "POST", `/v1/improvements/runs/${run.id}/events`, member, { planSha256: plan.planSha256, sequence, event });
 
@@ -305,6 +343,37 @@ test("postgres improvement journey persists declarations, policies, runs, eviden
     idempotencyKey: "pg-evidence-0001",
   }), 201)).evidence;
   assert.equal(evidence.provenance, "local-report");
+  // G14: sharing precedes each revocation; acceptance must use current reporter authority.
+  const assertAcceptanceDenied = async (label: string) => {
+    journal.check(label, await call(app, "POST", `/v1/improvements/evidence/${evidence.id}/acceptances`, author, {
+      subject: "candidate", slug: "incident-summary", version: "1.1.0", evidenceSha256: evidence.evidenceSha256, decision: "accept",
+    }), 422, "IMPROVEMENT_DISCLOSURE_NOT_ALLOWED");
+    const acceptedRows = await pool.query("SELECT count(*)::int AS count FROM improvement_evidence_acceptances WHERE evidence_id = $1", [evidence.id]);
+    assert.equal(acceptedRows.rows[0].count, 0, "denial must not append an acceptance");
+    const compatibility = body(await call(app, "GET", "/v1/improvements/releases/incident-summary/1.1.0/compatibility", author)).compatibility;
+    assert.deepEqual(compatibility.evidence, []);
+  };
+  const currentPolicy = await improvementStore.getLatestPolicy({ type: "team", id: teamId });
+  assert.ok(currentPolicy);
+  journal.check("disable source policy after sharing", await call(app, "PUT", policyUrl, teamOwner, {
+    policy: { ...currentPolicy.policy, enabled: false }, expectedRevisionNumber: currentPolicy.revisionNumber,
+  }), 201);
+  await assertAcceptanceDenied("disabled current policy blocks acceptance");
+  journal.check("restore source policy", await call(app, "PUT", policyUrl, teamOwner, {
+    policy: currentPolicy.policy, expectedRevisionNumber: currentPolicy.revisionNumber + 1,
+  }), 201);
+  await pool.query("DELETE FROM team_memberships WHERE team_id = $1 AND user_id = $2", [teamId, users.member.id]);
+  await assertAcceptanceDenied("revoked reporter membership blocks acceptance");
+  await pool.query("INSERT INTO team_memberships (team_id, user_id, role) VALUES ($1, $2, 'member')", [teamId, users.member.id]);
+  journal.check("revoke reviewer after sharing", await call(app, "POST", "/v1/skills/model-guidance-reviewer/releases/1.0.0/actions", maintainer, {
+    action: "revoke", reason: "Reproduce reviewer revocation before evidence acceptance.",
+  }), 200);
+  await assertAcceptanceDenied("revoked reviewer blocks acceptance");
+  await pool.query("UPDATE skill_versions SET lifecycle_status = 'approved' WHERE id = $1", [guidance.submissionId]);
+  await authStore.updateUserStatus({ userId: users.member.id, status: "disabled" });
+  await assertAcceptanceDenied("disabled reporter blocks acceptance");
+  await authStore.updateUserStatus({ userId: users.member.id, status: "active" });
+
   journal.check("accept evidence", await call(app, "POST", `/v1/improvements/evidence/${evidence.id}/acceptances`, author, {
     subject: "candidate", slug: "incident-summary", version: "1.1.0", evidenceSha256: evidence.evidenceSha256, decision: "accept",
   }), 201);

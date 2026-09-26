@@ -44,6 +44,7 @@ import {
   type ReleaseCompatibilityRevisionV1,
 } from "@myskills-app/core";
 import type { SubmissionService } from "../submissions/service.js";
+import type { AuthStore } from "../auth/types.js";
 import type { TeamService } from "../teams/service.js";
 import type { OrganizationService } from "../organizations/service.js";
 import {
@@ -69,6 +70,7 @@ import {
 
 export interface ImprovementServiceDependencies {
   submissionService: SubmissionService;
+  authStore: Pick<AuthStore, "findUserById">;
   teamService?: TeamService;
   organizationService?: OrganizationService;
 }
@@ -421,6 +423,7 @@ export class ImprovementService {
       },
       audit: this.audit(actor, "improvement.run.create", "improvement_run", id, { planId: plan.id, attempt, adapter: input.runner.adapter }),
     });
+    if (!result.created && result.run.runnerSha256 !== runnerSha256) throw idempotencyConflict();
     return { run: runView(result.run), created: result.created };
   }
 
@@ -559,13 +562,7 @@ export class ImprovementService {
       }
       // Local sources can have no parent or an unrelated parent. The actual destination's owners
       // must still permit disclosure, independently of the scopes used when planning.
-      for (const { scope } of await this.resourceScopes(release.slug, "subject-resource")) {
-        const destination = await this.store.getLatestPolicy(scope);
-        if (!destination?.policy.enabled
-          || improvementDisclosureRank(input.disclosure) > improvementDisclosureRank(destination.policy.maxDisclosure)) {
-          throw disclosureNotAllowed("A destination owner has not enabled this evidence disclosure.");
-        }
-      }
+      await this.assertDestinationDisclosure(release.slug, input.disclosure);
       if (proposals.some((item) => item.releaseId === release.releaseId && item.subject === proposal.subject)) continue;
       proposals.push({ subject: proposal.subject, releaseId: release.releaseId, slug: release.slug, version: release.version, artifactSha256: release.artifactSha256 });
     }
@@ -647,6 +644,7 @@ export class ImprovementService {
     if (!proposal) throw bindingMismatch("This evidence was not proposed for this release and subject.");
     if (input.evidenceSha256 !== evidence.evidenceSha256) throw bindingMismatch("The evidence digest does not match.");
     if (proposal.artifactSha256 !== release.artifactSha256) throw bindingMismatch("The release artifact no longer matches the tested tree.");
+    if (input.decision === "accept") await this.assertEvidenceStillDisclosable(evidence, release.slug);
     const acceptanceId = this.id();
     const acceptance = await this.store.createAcceptance({
       acceptance: {
@@ -680,6 +678,36 @@ export class ImprovementService {
   }
 
   // ---- Internals ------------------------------------------------------------------------------
+
+  private async assertEvidenceStillDisclosable(evidence: EvidenceRecord, destinationSlug: string): Promise<void> {
+    // Recheck as the reporter using current account roles, not as the deciding manager.
+    // This identity is used only for reads; the authenticated manager remains the audit actor.
+    const user = await this.deps.authStore.findUserById(evidence.reporterUserId);
+    const reporter = user?.status === "active" && user.emailVerifiedAt
+      ? { id: user.id, email: user.email, name: user.name, roles: user.roles, mfaVerified: false }
+      : null;
+    const plan = await this.store.getPlan(evidence.planId);
+    const current = reporter && plan?.actorUserId === reporter.id
+      ? await this.resolvePlanSafely(reporter, plan)
+      : null;
+    // Match the sharing gate. Execution expiry and harmless policy revision changes do not
+    // invalidate a completed report, but current access and disclosure must still permit it.
+    if (!current || current.unavailable || current.effectivePolicy.status !== "allowed"
+      || improvementDisclosureRank(evidence.disclosure) > improvementDisclosureRank(current.effectivePolicy.maxDisclosure)) {
+      throw disclosureNotAllowed("Current permissions or policy do not allow this evidence disclosure.");
+    }
+    await this.assertDestinationDisclosure(destinationSlug, evidence.disclosure);
+  }
+
+  private async assertDestinationDisclosure(slug: string, disclosure: EvidenceRecord["disclosure"]): Promise<void> {
+    for (const { scope } of await this.resourceScopes(slug, "subject-resource")) {
+      const destination = await this.store.getLatestPolicy(scope);
+      if (!destination?.policy.enabled
+        || improvementDisclosureRank(disclosure) > improvementDisclosureRank(destination.policy.maxDisclosure)) {
+        throw disclosureNotAllowed("A destination owner has not enabled this evidence disclosure.");
+      }
+    }
+  }
 
   private async resolvePlan(actor: ImprovementActor, request: ImprovementPlanRequestV1, planId: string): Promise<PlanResolution> {
     const contextRole = await this.scopeRole(actor, request.context);

@@ -1,7 +1,7 @@
 # Libraries
 
 Version: 0.1.0-beta.8
-Status: unreleased candidate. Runtime-name normalization and native installation are verified in focused checks; see the [build evidence](plans/2026-09-26-library-build-evidence.md) for release gates.
+See the [release delivery record](BETA8_RELEASE_DELIVERY.md) and [build evidence](plans/2026-09-26-library-build-evidence.md) for verification and publication status.
 
 Libraries collect source references and reviewed registry releases. They retain source citations, track selected content, and record the exact version a person or team recommends. Saving, checking, importing, reviewing, adopting and installing are separate actions.
 

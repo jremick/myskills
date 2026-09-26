@@ -100,12 +100,13 @@ const targetSkillOperationService = new TargetSkillOperationService(
   submissionService,
   { upgradePolicies: skillUpgradePolicyService, libraryAdoptions: libraryService },
 );
+const authStore = new PostgresAuthStore(db);
 const improvementService = new ImprovementService(improvementStore, {
   submissionService,
+  authStore,
   teamService,
   organizationService,
 });
-const authStore = new PostgresAuthStore(db);
 const authSecret = requiredAuthSecret();
 const notificationSink = createAuthNotificationSinkFromEnv(process.env);
 const app = buildApp({

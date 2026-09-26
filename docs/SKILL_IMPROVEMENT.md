@@ -1,6 +1,6 @@
 # Skill improvement
 
-Status: implementation candidate for the next beta, using Claude Code as the first runner. The adapter has passed its macOS native journey and independent review. Commit-bound release verification remains in progress; this feature is not released.
+Version: 0.1.0-beta.8. See [delivery evidence](BETA8_RELEASE_DELIVERY.md) for verification and publication status.
 
 MySkills keeps optimisation intent, local review plans, and evaluation evidence separate. A release with no declaration shows **unspecified**. A declaration describes what its author designed for. A locally reported result is not independently verified performance evidence.
 
@@ -12,7 +12,7 @@ MySkills keeps optimisation intent, local review plans, and evaluation evidence 
 4. Prepare the plan, then fetch it with the CLI. Fetch verifies package bytes and does not start inference.
 5. Inspect the local plan. Running requires its exact digest and explicit consent to cloud inference. Skill and reviewer content then leaves the device through the selected local agent app.
 6. Inspect the report and candidate diff. Export writes a draft outside active host skill directories. Submit, review, publish, install, and host activation remain separate actions.
-7. Share summary evidence only when the prepared plan permits it. A release manager must accept the exact evidence digest before other release readers can see it.
+7. Share summary evidence only when the prepared plan permits it. A release manager must accept the exact evidence digest before other release readers can see it. Acceptance rechecks the reporter's current access, input policies and destination disclosure policy. An expired execution plan does not invalidate a completed report by itself; a later permission or policy revocation can block acceptance. Rejection remains available.
 
 Team and organization policies can designate exact reviewer versions and roles, constrain inference and disclosure, require checks, and set budgets. Resource-owner policies still apply when the operator selects personal context. A remote policy never supplies local consent. A missing personal policy uses product defaults; missing team or organization policy blocks use. A null token ceiling means no token limit. Any finite ceiling requires a runner that can account for and enforce tokens.
 

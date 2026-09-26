@@ -56,6 +56,7 @@
  *  E7 local/unrelated-parent sources cannot bypass destination disclosure, missing policy or disabled policy
  *  E8 static findings and stale evaluations cannot label a declared target tested
  *  E9 revoked reviewers or newly blocking policies stop subsequent sharing
+ *  E10 a destination disclosure reduction after sharing blocks acceptance, even when the local source has an unrelated parent; rejection remains possible
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -912,6 +913,23 @@ test("local evidence respects destination governance and static findings never m
     if (index < 2) journal.check(`destination ceiling ${index + 1}`, await share(`destination-ceiling-${index}`), 422, "IMPROVEMENT_DISCLOSURE_NOT_ALLOWED");
   }
   const shared = body(journal.check("allowed destination sharing", await share("destination-allowed"), 201)).evidence;
+  // E10: destination policy is separate from the recorded plan's source resource.
+  const rejectionEvidence = body(journal.check("share rejection fixture", await share("destination-rejection-fixture"), 201)).evidence;
+  journal.check("tighten destination after sharing", await call(fx.app, "PUT", policyUrl, orgOwner, {
+    policy: { schemaVersion: 1, maxDisclosure: "local-only", enabled: true }, expectedRevisionNumber: 3,
+  }), 201);
+  journal.check("destination change blocks acceptance", await call(fx.app, "POST", `/v1/improvements/evidence/${shared.id}/acceptances`, author, {
+    ...proposal, evidenceSha256: shared.evidenceSha256, decision: "accept",
+  }), 422, "IMPROVEMENT_DISCLOSURE_NOT_ALLOWED");
+  assert.deepEqual(body(await call(fx.app, "GET", compatUrl("governed-source", "1.0.0"), author)).compatibility.evidence, []);
+  journal.check("rejection allowed after disclosure reduction", await call(fx.app, "POST", `/v1/improvements/evidence/${rejectionEvidence.id}/acceptances`, author, {
+    ...proposal, evidenceSha256: rejectionEvidence.evidenceSha256, decision: "reject",
+  }), 201);
+  journal.check("restore destination disclosure", await call(fx.app, "PUT", policyUrl, orgOwner, {
+    policy: { schemaVersion: 1, maxDisclosure: "summary", enabled: true }, expectedRevisionNumber: 4,
+  }), 201);
+  // A completed report can be reviewed after its execution plan expires.
+  fx.advanceClock(24 * 60 * 60_000);
   journal.check("accept static evidence", await call(fx.app, "POST", `/v1/improvements/evidence/${shared.id}/acceptances`, author, {
     ...proposal, evidenceSha256: shared.evidenceSha256, decision: "accept",
   }), 201);
@@ -1034,6 +1052,7 @@ async function createJourneyFixture() {
     }
   }
   const improvementService = new ImprovementService(improvementStore, {
+    authStore,
     submissionService: new InterleavingSubmissionService(submissionStore),
     teamService,
     organizationService,
