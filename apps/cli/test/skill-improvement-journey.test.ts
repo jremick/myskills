@@ -1,31 +1,51 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, writeFile, rm, symlink } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readdir, readFile, writeFile, rm, symlink } from "node:fs/promises";
 import os from "node:os";
 import { runCli } from "../src/cli.js";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { canonicalizeJson } from "@myskills-app/core";
-import { createImprovementJob, runImprovementJob, exportImprovementCandidate, readImprovementReport } from "../src/skill-improvement.js";
+import { createImprovementJob, runImprovementJob, exportImprovementCandidate, readImprovementPlan, readImprovementReport } from "../src/skill-improvement.js";
+
+const MODEL = "claude-opus-5-5";
 
 // Written before the runner. The real child-process adapter is exercised using a
-// deterministic executable fixture; no model calls or private data leave the test.
-// Failure coverage: consent, tampering, protected files, changed tests, symlinks,
-// bounded output/time/calls, regression, no-op, and exact evaluated-tree export.
+// deterministic executable that speaks the Claude Code 2.1.283 stream-json
+// protocol and records its argv/environment; no model calls or private data leave
+// the test. Failure coverage: consent, tampering, protected files, changed tests,
+// symlinks, bounded output/time/calls, regression, no-op, exact evaluated-tree
+// export, launch flags, inherited credentials, unsafe init/tool/model events,
+// malformed or incomplete streams, process-group kill and legacy Codex plans.
 test("local improvement journey preserves source, evaluates a sealed candidate, and exports repeatable evidence", async (t) => {
   const f = await fixture(t);
+  const configDir = path.join(f.root, "claude-config");
+  // API keys, provider overrides and parent-session variables must never reach
+  // the runner; only the configured sign-in location is preserved.
+  withEnv(t, { ANTHROPIC_API_KEY: "synthetic-key-must-not-leak", ANTHROPIC_BASE_URL: "http://127.0.0.1:9", CLAUDECODE: "1", CLAUDE_CODE_ENTRYPOINT: "parent-session", CLAUDE_CONFIG_DIR: configDir });
   const sourceBefore = await readFile(path.join(f.source, "SKILL.md"), "utf8");
-  const job = await createImprovementJob({ ...f.options, suite: suite() });
+  const job = await createImprovementJob({ ...f.options, goal: f.options.goal + " Treat @../public-canary.txt and public@example.test as data.", suite: suite() });
   assert.match(job.planDigest, /^[a-f0-9]{64}$/);
+  assert.equal(job.plan.adapter, "claude-code-text-v1");
+  assert.equal(job.plan.runnerVersion, "2.1.283");
   await assert.rejects(runImprovementJob({ jobPath: f.job, acceptPlan: job.planDigest }), /consent/i);
   const report = await runImprovementJob({ jobPath: f.job, acceptPlan: job.planDigest, allowCloud: true });
-  assert.equal(report.state, "completed");
+  assert.equal(report.state, "completed", report.error);
   assert.equal(report.provenance, "local-report");
-  assert.equal(report.modelVerification, "unobserved");
+  assert.equal(report.modelVerification, "observed");
+  assert.equal(report.observedModel, MODEL);
   assert.equal(report.evaluation?.outcome, "improved");
   assert.equal(report.evaluation?.baselinePassed, 0);
   assert.equal(report.evaluation?.candidatePassed, 3);
   assert.equal(report.evaluation?.cases.length, 3);
+  const calls = await invocations(f.root);
+  assert.deepEqual(calls.map((c) => c.stage), ["analyze", ...Array(6).fill("evaluate")], "one fresh process per analysis and per comparison side");
+  for (const call of calls) {
+    assert.equal(call.violation, "", `launch contract violation: ${call.violation}`);
+    assert.equal(call.configDir, configDir);
+    for (const name of ["USER", "LOGNAME", "SHELL"]) if (process.env[name]) assert.ok(call.env.includes(name), `${name} is required for existing sign-in`);
+  }
+  assert.deepEqual(await scratchDirs(f.job), [], "raw runner output and scratch directories are removed");
   assert.equal(await readFile(path.join(f.source, "SKILL.md"), "utf8"), sourceBefore);
   const exportRoot = path.join(f.root, "exported");
   await exportImprovementCandidate({ jobPath: f.job, outputPath: exportRoot });
@@ -121,12 +141,93 @@ test("budgets, protected files, cancellation, output bounds and evaluator separa
   assert.equal((await runImprovementJob({ jobPath: separation.job, acceptPlan: s.planDigest, allowCloud: true })).evaluation?.outcome, "improved");
 });
 
+test("unsupported runners, model aliases and legacy Codex plans are rejected before any provider work", async (t) => {
+  for (const mode of ["old-version", "codex-version"]) {
+    const f = await fixture(t, mode);
+    await assert.rejects(createImprovementJob(f.options), /Claude Code version/);
+    assert.equal(await exists(f.job), false);
+  }
+  const f = await fixture(t);
+  await assert.rejects(createImprovementJob({ ...f.options, executable: path.join(f.root, "missing-claude") }), /Claude Code executable/);
+  for (const model of ["opus", "sonnet", "default", "claude-opus-5-5[1m]", "gpt-6-sol"]) {
+    await assert.rejects(createImprovementJob({ ...f.options, model }), /model/i, model);
+  }
+  assert.equal(await exists(f.job), false);
+  const plan = await createImprovementJob(f.options);
+  const legacy = await legacyPlan(f.job);
+  assert.notEqual(legacy, plan.planDigest);
+  await assert.rejects(readImprovementPlan(f.job), /codex-text-v1/);
+  await assert.rejects(runImprovementJob({ jobPath: f.job, acceptPlan: legacy, allowCloud: true }), /codex-text-v1/);
+  assert.equal(await exists(path.join(f.job, "started")), false, "a legacy plan never consumes its one-shot lock");
+  assert.equal(await exists(path.join(f.job, "report.json")), false);
+  assert.deepEqual(await invocations(f.root), [], "no fallback runner is invoked");
+});
+
+// Each deviation from the verified Claude Code 2.1.283 stream contract stops the
+// first call and fails closed without a candidate, observed model or raw output.
+test("Claude stream deviations stop the runner and fail closed", async (t) => {
+  const outside = /outside the text evaluation contract/;
+  const deviations: [string, RegExp][] = [
+    ["init-tool", outside], ["init-mcp", outside], ["init-skill", outside], ["init-plugin", outside], ["init-plugin-spoof", outside], ["init-permission", outside],
+    ["init-version", outside], ["init-model", /model/i], ["assistant-model", /model/i], ["assistant-model-missing", /model/i], ["usage-model", /model/i],
+    ["subagent", outside], ["stray-tool-result", outside], ["permission-denial", outside],
+    ["synthetic-error", /failed turn/], ["tool-result-error", /failed turn/], ["error-result", /failed turn/], ["error-subtype", /failed turn/],
+    ["no-structured", /structured result/], ["no-result", /completed turn/], ["nonzero-exit", /invocation failed/],
+    ["no-init", /invalid event/], ["duplicate-init", /invalid event/], ["duplicate-result", /invalid event/], ["event-after-result", /invalid event/], ["unknown-event", /invalid event/], ["invalid-thinking-progress", /invalid event/], ["malformed", /invalid event/],
+    ["oversized-line", /limit/], ["oversized", /limit/],
+  ];
+  for (const [mode, expected] of deviations) {
+    const f = await fixture(t, mode);
+    const plan = await createImprovementJob(f.options);
+    const report = await runImprovementJob({ jobPath: f.job, acceptPlan: plan.planDigest, allowCloud: true });
+    assert.equal(report.state, "failed", mode);
+    assert.equal(report.calls, 1, mode);
+    assert.match(report.error ?? "", expected, mode);
+    assert.equal(report.modelVerification, "unobserved", mode);
+    assert.equal(report.observedModel, undefined, mode);
+    assert.equal(report.candidateDigest, undefined, mode);
+    assert.equal(await exists(path.join(f.job, "candidate")), false, mode);
+    assert.deepEqual(await scratchDirs(f.job), [], mode);
+    assert.equal((await invocations(f.root))[0]?.violation, "", mode);
+  }
+});
+
+test("a forbidden tool request stops the whole runner process group immediately", async (t) => {
+  const f = await fixture(t, "forbidden-tool");
+  const plan = await createImprovementJob(f.options);
+  const started = Date.now();
+  const report = await runImprovementJob({ jobPath: f.job, acceptPlan: plan.planDigest, allowCloud: true });
+  assert.equal(report.state, "failed");
+  assert.match(report.error ?? "", /outside the text evaluation contract/);
+  assert.ok(Date.now() - started < 5000, "the first unsafe event stops the call well before its time limit");
+  await new Promise((resolve) => setTimeout(resolve, 2500));
+  assert.equal(await exists(path.join(f.root, "survivor")), false, "descendant processes are killed with the runner");
+});
+
+test("an evaluator call that reads back a different model fails without evaluation evidence", async (t) => {
+  const f = await fixture(t, "eval-model-drift");
+  const plan = await createImprovementJob({ ...f.options, suite: suite() });
+  const report = await runImprovementJob({ jobPath: f.job, acceptPlan: plan.planDigest, allowCloud: true });
+  assert.equal(report.state, "failed");
+  assert.equal(report.calls, 2);
+  assert.match(report.error ?? "", /model/i);
+  assert.equal(report.evaluation, undefined);
+});
+
+test("multi-byte structured output split across stream chunks is preserved exactly", async (t) => {
+  const f = await fixture(t, "split-utf8");
+  const plan = await createImprovementJob(f.options);
+  const report = await runImprovementJob({ jobPath: f.job, acceptPlan: plan.planDigest, allowCloud: true });
+  assert.equal(report.state, "completed", report.error);
+  assert.match(await readFile(path.join(f.job, "candidate", "SKILL.md"), "utf8"), /Résumé — preserved\./);
+});
+
 test("CLI plan, consent, run, report and draft export form one local user journey", async (t) => {
   const f = await fixture(t);
   const out: string[] = []; const err: string[] = [];
   const runtime = { env: {}, io: { stdout: (s: string) => out.push(s), stderr: (s: string) => err.push(s) }, fetch: async () => { throw new Error("Local commands must not call the registry."); } };
   const exec = async (args: string[]) => { out.length = 0; err.length = 0; return runCli(["improve", ...args, "--json"], runtime); };
-  assert.equal(await exec(["plan", "--path", f.source, "--reviewer", f.reviewer, "--output", f.job, "--model", f.options.model, "--goal", f.options.goal, "--target-version", "0.2.0", "--codex-path", f.options.executable]), 0, err.join("\n"));
+  assert.equal(await exec(["plan", "--path", f.source, "--reviewer", f.reviewer, "--output", f.job, "--model", f.options.model, "--goal", f.options.goal, "--target-version", "0.2.0", "--claude-path", f.options.executable]), 0, err.join("\n"));
   const plan = JSON.parse(out[0]);
   assert.equal(await exec(["run", "--job", f.job, "--accept-plan", plan.planDigest]), 1);
   assert.match(err.join(""), /consent/i);
@@ -140,8 +241,9 @@ test("CLI plan, consent, run, report and draft export form one local user journe
 });
 
 // Registry handoff failures defined before implementation: digest substitution,
-// changed endpoint, expiry, unsupported profile controls, sharing without consent,
-// policy revocation at a stage boundary, duplicate execution and raw-content leaks.
+// changed endpoint, expiry, unsupported profile controls or adapters, sharing
+// without consent, policy revocation at a stage boundary, duplicate execution,
+// raw-content leaks, unverified model evidence and legacy Codex plans.
 test("CLI registry handoff verifies pinned inputs, rechecks stages and shares only by explicit command", async (t) => {
   const f = await fixture(t);
   const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -151,15 +253,18 @@ test("CLI registry handoff verifies pinned inputs, rechecks stages and shares on
     files.sort((a, b) => a.path.localeCompare(b.path));
     bundles.set(name, JSON.stringify({ files }));
   }
+  const suiteFile = path.join(f.root, "suite.json");
+  await writeFile(suiteFile, JSON.stringify(suite()));
   const plan = {
     schemaVersion: 1, actorUserId: "author", context: { type: "user", id: "author" },
     source: { kind: "release", slug: "release-helper", version: "0.1.0", artifactSha256: hash(bundles.get("release-helper")!) },
     reviewers: [{ slug: "prompt-reviewer", version: "0.1.0", artifactSha256: hash(bundles.get("prompt-reviewer")!), roles: ["analyze", "propose"] }],
-    profile: { profileId: "profile", revisionId: "profile-v1", target: { model: { provider: "openai", id: f.options.model }, app: { id: "codex", version: "0.154.0" } }, settings: {} },
-    suite: null, goals: { objectives: ["task-success"], protectedRequirements: [f.options.goal] }, guidance: [],
+    profile: { profileId: "profile", revisionId: "profile-v1", target: { model: { provider: "anthropic", id: MODEL }, app: { id: "claude-code", version: "2.1.283" } }, settings: {} },
+    suite: { suiteSha256: hash(canonicalizeJson(suite())), caseCount: 3, protectedCaseCount: 1, holdoutCaseCount: 1, repetitions: 1, graders: ["deterministic"], revisionId: "suite-v1" },
+    goals: { objectives: ["task-success"], protectedRequirements: [f.options.goal] }, guidance: [],
     candidate: { maxCandidates: 1, identity: { slug: "release-helper", version: "0.2.0", visibility: "private", derivativeOf: null } },
     budget: { maxModelCalls: 7, maxTokens: null, maxWallMinutes: 5 },
-    dataRoute: { inference: "cloud", provider: "openai", model: f.options.model, contextCategories: ["subject-package", "reviewer-packages", "profile"] },
+    dataRoute: { inference: "cloud", provider: "anthropic", model: MODEL, contextCategories: ["subject-package", "reviewer-packages", "profile", "suite"] },
     resultSharing: "local-only", policy: { requiredChecks: [], protectedRequirements: [] },
     createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
   };
@@ -190,22 +295,28 @@ test("CLI registry handoff verifies pinned inputs, rechecks stages and shares on
   };
   const exec = async (args: string[]) => { out.length = 0; err.length = 0; return runCli(["improve", ...args, "--json"], runtime); };
   const fetched = path.join(f.root, "registry-job");
-  const fetchArgs = ["fetch", "--plan", "plan-1", "--output", fetched, "--codex-path", f.options.executable];
+  const fetchArgsFor = (output: string) => ["fetch", "--plan", "plan-1", "--output", output, "--suite", suiteFile, "--claude-path", f.options.executable];
+  const fetchArgs = fetchArgsFor(fetched);
   const correct = record.planSha256;
   record = { ...record, planSha256: "0".repeat(64) };
   assert.equal(await exec(fetchArgs), 1); assert.match(err.join(""), /digest/i);
   record = { ...record, planSha256: correct };
   const supportedProfile = plan.profile;
-  plan.profile = { ...supportedProfile, settings: { unknownSetting: "must-not-ignore" } };
-  record = { ...record, planSha256: hash(canonicalizeJson(plan)) };
-  assert.equal(await exec(fetchArgs), 1); assert.match(err.join(""), /settings/i);
-  plan.profile = { ...supportedProfile, target: { ...supportedProfile.target, app: { id: "codex", version: "99.0" } } } as typeof supportedProfile;
-  record = { ...record, planSha256: hash(canonicalizeJson(plan)) };
-  assert.equal(await exec(fetchArgs), 1); assert.match(err.join(""), /version/i);
+  const rejectedProfiles: [typeof supportedProfile, RegExp][] = [
+    [{ ...supportedProfile, settings: { unknownSetting: "must-not-ignore" } } as typeof supportedProfile, /settings/i],
+    [{ ...supportedProfile, target: { ...supportedProfile.target, app: { id: "claude-code", version: "99.0" } } }, /version/i],
+    [{ ...supportedProfile, target: { ...supportedProfile.target, app: { id: "codex", version: "0.154.0" } } }, /unsupported/i],
+    [{ ...supportedProfile, target: { ...supportedProfile.target, model: { provider: "openai", id: MODEL } } }, /unsupported/i],
+  ];
+  for (const [profile, expected] of rejectedProfiles) {
+    plan.profile = profile; record = { ...record, planSha256: hash(canonicalizeJson(plan)) };
+    assert.equal(await exec(fetchArgs), 1); assert.match(err.join(""), expected);
+  }
   plan.profile = supportedProfile; record = { ...record, planSha256: correct };
   assert.equal(await exec(fetchArgs), 0, err.join("\n"));
   const accepted = JSON.parse(out[0]).planDigest;
   assert.equal(posts.length, 0, "fetch never executes or uploads reports");
+  assert.deepEqual(await invocations(f.root), [], "fetch only inspects the runner version");
   const localPlan = JSON.parse(await readFile(path.join(fetched, "plan.json"), "utf8"));
   assert.equal(localPlan.plan.registry.planSha256, correct);
   assert.ok(!JSON.stringify(localPlan).includes("synthetic-token"));
@@ -216,19 +327,38 @@ test("CLI registry handoff verifies pinned inputs, rechecks stages and shares on
   assert.match(err.join(""), /registry|endpoint/i);
   runtime.env.MYSKILLS_API_URL = "http://localhost:3001";
   assert.equal(await exec(["run", "--job", fetched, "--accept-plan", accepted, "--allow-cloud"]), 0, [...err, ...out].join("\n"));
-  const events = posts.filter((p) => p.url.endsWith("/events")).map((p) => p.body.event as { type: string; report?: { findings: unknown[] }; stage?: string });
+  const runner = posts.find((p) => p.url.endsWith("/runs"))?.body.runner as { adapter: string; adapterVersion: string; capabilities: Record<string, boolean> };
+  assert.equal(runner.adapter, "claude-code");
+  assert.equal(runner.adapterVersion, "2.1.283");
+  assert.equal(runner.capabilities.exactModelReadback, true);
+  assert.equal(runner.capabilities.tokenAccounting, false);
+  const events = posts.filter((p) => p.url.endsWith("/events")).map((p) => p.body.event as { type: string; report?: { findings: unknown[] }; stage?: string; observedModel?: unknown });
   assert.ok(events.some((e) => e.type === "candidate.frozen"));
+  const evaluations = events.filter((e) => e.type === "evaluation.recorded");
+  assert.equal(evaluations.length, 2);
+  for (const evaluation of evaluations) assert.deepEqual(evaluation.observedModel, { provider: "anthropic", id: MODEL }, "every call read back the accepted model");
   assert.deepEqual(events.at(-1)?.report?.findings, []);
   assert.ok(!JSON.stringify(posts).includes("IMPROVED: return"), "raw candidate content never uploads");
   assert.ok(!JSON.stringify(posts).includes("Clarify acceptance output"), "local-only findings never upload");
   assert.equal(await exec(["share", "--job", fetched, "--disclosure", "summary", "--subject", "baseline", "--release", "release-helper@0.1.0"]), 1);
   assert.match(err.join(""), /local-only|sharing/i);
   const second = path.join(f.root, "revoked-job");
-  assert.equal(await exec(["fetch", "--plan", "plan-1", "--output", second, "--codex-path", f.options.executable]), 0);
+  assert.equal(await exec(fetchArgsFor(second)), 0);
   const secondDigest = JSON.parse(out[0]).planDigest;
   denyStage = true;
   assert.equal(await exec(["run", "--job", second, "--accept-plan", secondDigest, "--allow-cloud"]), 1);
   assert.equal((await readImprovementReport(second)).calls, 0);
+  denyStage = false;
+  const legacyJob = path.join(f.root, "legacy-job");
+  assert.equal(await exec(fetchArgsFor(legacyJob)), 0, err.join("\n"));
+  const legacyDigest = await legacyPlan(legacyJob);
+  const postsBefore = posts.length;
+  const invocationsBefore = (await invocations(f.root)).length;
+  assert.equal(await exec(["run", "--job", legacyJob, "--accept-plan", legacyDigest, "--allow-cloud"]), 1);
+  assert.match(err.join(""), /codex-text-v1/);
+  assert.equal(posts.length, postsBefore, "a legacy plan never creates or mutates a registry run");
+  assert.equal((await invocations(f.root)).length, invocationsBefore, "no fallback runner is invoked");
+  assert.equal(await exists(path.join(legacyJob, "started")), false);
 });
 
 test("CLI configuration and review commands use bounded JSON bodies and exact registry routes", async (t) => {
@@ -286,8 +416,150 @@ async function fixture(t: { after: (fn: () => Promise<unknown>) => void }, mode 
     await writeFile(path.join(dir, "skill.json"), JSON.stringify({ name, title: name, summary: "Public test fixture.", version: "0.1.0", license: "MIT", visibility: "private", platforms: [{ name: "codex", install_target: ".agents/skills" }] }));
     await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: Review release notes when asked.\n---\nKeep release actions subject to approval.\n`);
   }
-  const executable = path.join(root, "codex-fixture");
-  await writeFile(executable, `#!/usr/bin/env node\nconst fs=require('node:fs');if(process.argv.includes('--version')){console.log('codex-cli 0.154.0');process.exit(0);}let input='';process.stdin.on('data',x=>input+=x);process.stdin.on('end',()=>{if(process.argv.includes('--version')){console.log('codex-cli 0.154.0');return;}const mode=${JSON.stringify(mode)};if(mode==='timeout'){setTimeout(()=>{},10000);return;}if(mode==='oversized'){process.stdout.write('x'.repeat(3000000));return;}if(mode==='malformed'){console.log('invalid');return;}const p=JSON.parse(input);if(mode==='separation'&&((p.stage==='analyze'&&(input.includes('unfamiliar')||input.includes('without release authority')))||(p.stage==='evaluate'&&(input.includes('prompt-reviewer')||input.includes('protected-authority'))))){process.exit(2);}let result;if(p.stage==='analyze'){result={disposition:mode==='noop'?'no-change':mode==='configuration'?'configuration-only':'candidate',findings:[{id:'clarity',severity:'info',summary:'Clarify acceptance output.'}],changes:['noop','configuration'].includes(mode)?[]:[{path:'SKILL.md',content:mode==='unsafe'?'rm -rf /':'---\\nname: release-helper\\ndescription: Review release notes when asked.\\n---\\nKeep release actions subject to approval.\\nIMPROVED: return ACCEPT.'}],rationale:'Add an explicit output contract.'};}else{result={response:(mode==='regression'?!p.skill.some(x=>x.content.includes('IMPROVED')):p.skill.some(x=>x.content.includes('IMPROVED'))&&(mode!=='overfit'||p.input==='Summarize a valid change.'))?'ACCEPT':'UNCLEAR'};}const i=process.argv.indexOf('--output-last-message');if(i>=0)fs.writeFileSync(process.argv[i+1],JSON.stringify(result));console.log(JSON.stringify({type:'thread.started',thread_id:'fixture-thread'}));console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:20,output_tokens:10}}));});\n`, { mode: 0o700 });
+  const executable = path.join(root, "claude-fixture");
+  await writeFile(executable, `#!/usr/bin/env node\nconst mode = ${JSON.stringify(mode)};\nconst root = ${JSON.stringify(root)};\n${claudeFixture}`, { mode: 0o700 });
   const job = path.join(root, "job");
-  return { root, source, reviewer, job, options: { sourcePath: source, reviewerPaths: [reviewer], outputPath: job, model: "gpt-6-sol", goal: "Improve clarity while preserving release authority.", targetVersion: "0.2.0", maxCalls: 7, timeoutSeconds: 10, executable, inference: "cloud" as const, protectedFiles: [] as string[] } };
+  return { root, source, reviewer, job, options: { sourcePath: source, reviewerPaths: [reviewer], outputPath: job, model: MODEL, goal: "Improve clarity while preserving release authority.", targetVersion: "0.2.0", maxCalls: 7, timeoutSeconds: 10, executable, inference: "cloud" as const, protectedFiles: [] as string[] } };
 }
+
+async function invocations(root: string): Promise<{ stage: string; violation: string; env: string[]; configDir: string | null }[]> {
+  let text: string;
+  try { text = await readFile(path.join(root, "invocations.jsonl"), "utf8"); } catch { return []; }
+  return text.split("\n").filter(Boolean).map((line) => JSON.parse(line));
+}
+async function exists(file: string) { try { await access(file); return true; } catch { return false; } }
+async function scratchDirs(job: string) { return (await readdir(job)).filter((name) => name.startsWith("call-")); }
+function withEnv(t: { after: (fn: () => void) => void }, values: Record<string, string>) {
+  const previous = Object.fromEntries(Object.keys(values).map((name) => [name, process.env[name]]));
+  Object.assign(process.env, values);
+  t.after(() => { for (const [name, value] of Object.entries(previous)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } });
+}
+/** Rewrites a sealed job as a validly digested plan for the retired Codex adapter. */
+async function legacyPlan(job: string): Promise<string> {
+  const file = path.join(job, "plan.json");
+  const plan = { ...JSON.parse(await readFile(file, "utf8")).plan, adapter: "codex-text-v1" };
+  const planDigest = createHash("sha256").update(JSON.stringify(plan)).digest("hex");
+  await writeFile(file, JSON.stringify({ plan, planDigest }));
+  return planDigest;
+}
+
+// Emulates Claude Code 2.1.283 `--print --output-format stream-json --verbose`
+// with --json-schema, as observed in the public-fixture probe. It enforces the
+// verified launch flags and environment, logs each invocation outside the job
+// directory, then emits either the observed stream or one adversarial variant.
+const claudeFixture = String.raw`
+const fs = require("node:fs");
+const cp = require("node:child_process");
+const argv = process.argv.slice(2);
+if (argv.includes("--version")) {
+  console.log(mode === "old-version" ? "2.1.282 (Claude Code)" : mode === "codex-version" ? "codex-cli 0.154.0" : "2.1.283 (Claude Code)");
+  process.exit(0);
+}
+const switches = ["--print", "--verbose", "--safe-mode", "--strict-mcp-config", "--disable-slash-commands", "--no-chrome", "--no-session-persistence"];
+const fixed = { "--output-format": "stream-json", "--setting-sources": "", "--tools": "", "--mcp-config": '{"mcpServers":{}}', "--permission-mode": "dontAsk", "--effort": "xhigh", "--max-turns": "1", "--model": null, "--system-prompt": null, "--json-schema": null };
+const seen = {};
+let violation = "";
+for (let i = 0; i < argv.length; i += 1) {
+  const name = argv[i];
+  if (Object.hasOwn(seen, name)) violation ||= "repeated " + name;
+  if (switches.includes(name)) seen[name] = true;
+  else if (Object.hasOwn(fixed, name)) { seen[name] = argv[i + 1]; i += 1; if (seen[name] === undefined || (fixed[name] !== null && seen[name] !== fixed[name])) violation ||= "value " + name; }
+  else violation ||= "unexpected " + name;
+}
+for (const name of [...switches, ...Object.keys(fixed)]) if (!Object.hasOwn(seen, name)) violation ||= "missing " + name;
+if (!seen["--system-prompt"]) violation ||= "empty system prompt";
+const allowedEnv = ["CLAUDE_CONFIG_DIR", "HOME", "LANG", "LOGNAME", "PATH", "SHELL", "TMPDIR", "USER"];
+const env = Object.keys(process.env).filter((name) => !name.startsWith("__CF")).sort();
+for (const name of env) if (!allowedEnv.includes(name)) violation ||= "env " + name;
+if (!process.env.TMPDIR || fs.realpathSync(process.env.TMPDIR) !== process.cwd()) violation ||= "tmpdir";
+if (fs.readdirSync(process.cwd()).length !== 0) violation ||= "scratch not empty";
+let schema = {};
+try { schema = JSON.parse(seen["--json-schema"]); } catch { violation ||= "schema"; }
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => { input += chunk; });
+process.stdin.on("end", () => {
+  if (input.includes("@")) violation ||= "unescaped file reference";
+  const p = JSON.parse(input);
+  if ((p.stage === "evaluate") !== Object.hasOwn(schema.properties || {}, "response")) violation ||= "schema stage";
+  fs.appendFileSync(root + "/invocations.jsonl", JSON.stringify({ stage: p.stage, violation, env, configDir: process.env.CLAUDE_CONFIG_DIR ?? null }) + "\n");
+  if (violation) process.exit(3);
+  run(p, input, seen["--model"]);
+});
+
+function answer(p) {
+  if (p.stage === "analyze") {
+    const unchanged = mode === "noop" || mode === "configuration";
+    const content = mode === "unsafe" ? "rm -rf /" : "---\nname: release-helper\ndescription: Review release notes when asked.\n---\nKeep release actions subject to approval.\nIMPROVED: return ACCEPT." + (mode === "split-utf8" ? "\nRésumé — preserved." : "");
+    return { disposition: mode === "noop" ? "no-change" : mode === "configuration" ? "configuration-only" : "candidate", findings: [{ id: "clarity", severity: "info", summary: "Clarify acceptance output." }], changes: unchanged ? [] : [{ path: "SKILL.md", content }], rationale: "Add an explicit output contract." };
+  }
+  const improved = p.skill.some((file) => file.content.includes("IMPROVED"));
+  const passed = mode === "regression" ? !improved : improved && (mode !== "overfit" || p.input === "Summarize a valid change.");
+  return { response: passed ? "ACCEPT" : "UNCLEAR" };
+}
+
+function run(p, raw, model) {
+  const hang = () => setTimeout(() => {}, 10000);
+  if (mode === "separation" && ((p.stage === "analyze" && (raw.includes("unfamiliar") || raw.includes("without release authority"))) || (p.stage === "evaluate" && (raw.includes("prompt-reviewer") || raw.includes("protected-authority"))))) process.exit(2);
+  const active = mode === "eval-model-drift" ? p.stage === "evaluate" : p.stage === "analyze";
+  if (active && mode === "malformed") return void process.stdout.write("invalid\n");
+  if (active && mode === "oversized-line") { process.stdout.write("x".repeat(5000000)); return hang(); }
+  const output = answer(p);
+  const session = "fixture-session";
+  const init = { type: "system", subtype: "init", cwd: process.cwd(), session_id: session, tools: ["StructuredOutput"], mcp_servers: [], model, permissionMode: "dontAsk", slash_commands: [], apiKeySource: "none", claude_code_version: "2.1.283", output_style: "default", agents: ["claude", "Explore", "general-purpose", "Plan"], skills: [], plugins: [{ name: "agents-md", path: "builtin", source: "agents-md@builtin" }, { name: "telemetry", path: "builtin", source: "telemetry@builtin" }], uuid: "init" };
+  const assistant = { type: "assistant", message: { id: "msg_fixture", type: "message", role: "assistant", model, content: [{ type: "tool_use", id: "toolu_output", name: "StructuredOutput", input: output }], stop_reason: null, usage: { input_tokens: 20, output_tokens: 10 } }, parent_tool_use_id: null, session_id: session, uuid: "assistant" };
+  const toolResult = { type: "user", message: { role: "user", content: [{ tool_use_id: "toolu_output", type: "tool_result", content: "Structured output provided successfully" }] }, parent_tool_use_id: null, session_id: session, uuid: "tool-result" };
+  const rate = { type: "rate_limit_event", rate_limit_info: { status: "allowed" }, session_id: session, uuid: "rate" };
+  const result = { type: "result", subtype: "success", is_error: false, duration_ms: 12, num_turns: 2, result: JSON.stringify(output), session_id: session, total_cost_usd: 0, usage: { input_tokens: 20, output_tokens: 10 }, modelUsage: { [model]: { inputTokens: 20, outputTokens: 10 } }, permission_denials: [], structured_output: output, uuid: "result" };
+  const thinkingProgress = { type: "system", subtype: "thinking_tokens", estimated_tokens: 128, estimated_tokens_delta: 128, session_id: session, uuid: "thinking-progress" };
+  let events = [init, thinkingProgress, assistant, toolResult, rate, result];
+  const variants = {
+    "init-tool": () => { init.tools.push("Bash"); },
+    "init-mcp": () => { init.mcp_servers.push({ name: "planted", status: "connected" }); },
+    "init-skill": () => { init.skills.push("planted-skill"); },
+    "init-plugin": () => { init.plugins.push({ name: "planted", path: "/tmp/planted", source: "planted@local" }); },
+    "init-plugin-spoof": () => { init.plugins[1] = { name: "telemetry", path: "/tmp/planted", source: "telemetry@builtin" }; },
+    "init-permission": () => { init.permissionMode = "bypassPermissions"; },
+    "init-version": () => { init.claude_code_version = "2.1.284"; },
+    "init-model": () => { init.model = "claude-sonnet-5"; },
+    "assistant-model": () => { assistant.message.model = "claude-sonnet-5"; },
+    "eval-model-drift": () => { assistant.message.model = "claude-sonnet-5"; },
+    "assistant-model-missing": () => { delete assistant.message.model; },
+    "usage-model": () => { result.modelUsage["claude-haiku-4-5-20251001"] = { inputTokens: 1, outputTokens: 1 }; },
+    "subagent": () => { assistant.parent_tool_use_id = "toolu_parent"; },
+    "stray-tool-result": () => { toolResult.message.content[0].tool_use_id = "toolu_unknown"; },
+    "permission-denial": () => { result.permission_denials = [{ tool_name: "Bash", tool_use_id: "toolu_denied", tool_input: {} }]; },
+    "synthetic-error": () => { assistant.error = "authentication_failed"; assistant.message.model = "<synthetic>"; assistant.message.content = [{ type: "text", text: "Not logged in" }]; result.is_error = true; delete result.structured_output; },
+    "tool-result-error": () => { toolResult.message.content[0].is_error = true; },
+    "error-result": () => { result.is_error = true; },
+    "error-subtype": () => { result.subtype = "error_during_execution"; },
+    "no-structured": () => { delete result.structured_output; },
+    "no-result": () => { events = [init, assistant, toolResult]; },
+    "no-init": () => { events = [assistant, toolResult, result]; },
+    "duplicate-init": () => { events = [init, init, assistant, toolResult, result]; },
+    "duplicate-result": () => { events.push(result); },
+    "event-after-result": () => { events.push(rate); },
+    "invalid-thinking-progress": () => { thinkingProgress.estimated_tokens = -1; },
+    "unknown-event": () => { events.splice(1, 0, { type: "system", subtype: "hook_started", hook_name: "SessionStart", session_id: session }); },
+    "timeout": () => { events = [init]; },
+    "oversized": () => { events = [init, ...Array.from({ length: 20 }, () => ({ ...rate, padding: "x".repeat(1000000) }))]; },
+    "forbidden-tool": () => {
+      // A descendant in the runner's process group must die with it.
+      cp.spawn(process.execPath, ["-e", "setTimeout(() => require('node:fs').writeFileSync(process.argv[1], 'alive'), 1500)", root + "/survivor"], { stdio: "ignore" });
+      assistant.message.content = [{ type: "tool_use", id: "toolu_bash", name: "Bash", input: { command: "touch planted" } }];
+      events = [init, assistant];
+    },
+  };
+  if (active && Object.hasOwn(variants, mode)) variants[mode]();
+  const text = events.map((event) => JSON.stringify(event) + "\n").join("");
+  if (active && mode === "split-utf8") {
+    const bytes = Buffer.from(text);
+    const at = bytes.indexOf(Buffer.from("—")) + 1;
+    process.stdout.write(bytes.subarray(0, at));
+    return void setTimeout(() => process.stdout.write(bytes.subarray(at)), 50);
+  }
+  process.stdout.write(text);
+  if (active && ["timeout", "oversized", "forbidden-tool"].includes(mode)) hang();
+  if (active && mode === "nonzero-exit") process.exitCode = 1;
+}
+`;

@@ -241,7 +241,7 @@ Subscription use is not zero resource use. Record calls, wall time, and tokens w
 
 Keep deterministic job planning, schema validation, digesting, budgets, state transitions, and patch application in the CLI/coordinator. Models supply analysis and candidate content. An adapter declares capabilities such as exact model readback, structured output, cancellation, workspace isolation, token accounting, and tool/network restrictions.
 
-Start with one verified adapter for an existing local agent app. Codex is the recommended pilot because MySkills already has a Codex workspace path; the present install companion is not an inference adapter. Prove the new execution contract separately. Define the contract so Claude Code and on-device model hosts can follow without changing policy semantics. Do not claim those adapters supported until their fixtures and live workflows pass.
+Start with the verified Claude Code text adapter. The user approved this first-runner choice on 26 September 2026 after the Codex capability spike failed to exclude host instructions and mutation tools. Codex execution remains disabled until a separate isolation gate passes. The contract permits future Codex and on-device adapters without changing policy semantics; each needs its own fixtures and live workflow evidence.
 
 Use a dedicated scratch job directory containing only approved inputs. Treat subject skills, references, evaluation inputs, and returned output as untrusted data. Avoid loading the subject skill as executable reviewer instructions. Inherited host instructions, plugins, hooks, MCP servers, auto-loaded skills, and account context must be constrained or fingerprinted; an uncontrolled session cannot claim isolated/reproducible execution.
 
@@ -424,7 +424,7 @@ Exit: legacy artifact bytes remain identical; new release metadata round-trips a
 
 **Phase 1b: candidate evaluation and adoption.** Complete the first recommended end-to-end product release. Deliver normalized metadata for all releases; authoring/UI declarations; versioned profiles and user/team/org reviewer policies; manual local plan/run; one supported app adapter; one candidate; shared minimal eval suite/run records; local report and optional sanitized upload; draft export and normal submission/adoption path. Provide curated starter reviewer recipes for model guidance and app/environment compatibility, using scanned ordinary skill packages.
 
-Automatic work within an approved run covers analysis, proposal, and evaluation. New-model detection and recurring unattended jobs are Phase 2. This boundary and the single supported Codex pilot adapter must be explicit in release messaging; other host adapters remain proposed.
+Automatic work within an approved run covers analysis, proposal, and evaluation. New-model detection and recurring unattended jobs are Phase 2. This boundary and the single supported Claude Code text adapter must be explicit in release messaging; other host adapters remain proposed.
 
 ### Phase 2 — enrolled automation and broader execution
 
@@ -475,16 +475,16 @@ Guardrails: zero unauthorized publication/install, no unexpected private-data up
 
 ## Open product choices and next step
 
-Recommended defaults remain proposals until reviewed:
+The user approved Phase 0 and Phase 1a/1b for the next release. Delivery choices:
 
 1. First automation level: analysis, candidates, and evaluation with human adoption; narrower alternative is analysis-only.
-2. First execution host: a verified Codex local adapter; alternative is a host-neutral supervised handoff pilot with weaker automation/evidence.
+2. First execution host: Claude Code, approved on 26 September 2026. Codex remains disabled pending its isolation gate.
 3. First test domains: choose two maintained skills with concrete outcomes—one text/review skill and one safe tool-using workflow—to expose different failure modes.
 4. Metadata naming: **Designed for**, **Tested on**, and **Measured improvement**, avoiding an unqualified optimized badge.
 5. First release should include user/team/org reviewer designation; scheduled detection can follow without blocking the manual useful workflow.
 6. Numeric budgets and retention defaults require adapter/pilot evidence and owner policy; do not invent enforceable currency caps for subscription sessions.
 
-Next implementation plan should cover Phase 0 only, with named files, fixture skills, host capability checks, and stop conditions. Stop if required isolation, exact input binding, or credible evaluation cannot be demonstrated; return the gap and the smallest alternative. Approval of this specification does not publish packages, change live policy, install a daemon, or authorize ongoing provider spend.
+Implementation covers Phase 0 and Phase 1a/1b, with named files, fixture skills, host capability checks, and stop conditions. Stop if required isolation, exact input binding, or credible evaluation cannot be demonstrated; return the gap and the smallest alternative. Approval of this specification does not publish packages, change live policy, install a daemon, or authorize ongoing provider spend.
 
 ## Opus collaboration and resolved tradeoffs
 

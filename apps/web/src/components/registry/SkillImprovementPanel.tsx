@@ -101,7 +101,7 @@ function ImprovementPlanner({ client, release, user, visibility }: { client: Reg
   const [skills, setSkills] = useState<PublicSkill[]>([]);
   const [reviewer, setReviewer] = useState("");
   const [model, setModel] = useState("");
-  const [provider, setProvider] = useState("openai");
+  const [provider, setProvider] = useState("anthropic");
   const [appVersion, setAppVersion] = useState("");
   const [goal, setGoal] = useState("");
   const [candidateVersion, setCandidateVersion] = useState("");
@@ -156,7 +156,7 @@ function ImprovementPlanner({ client, release, user, visibility }: { client: Reg
     const key = `${provider}:${model.trim()}:${appVersion.trim()}`;
     let profileRevisionId = profileCache.current.get(key);
     if (!profileRevisionId) {
-      const profile = await api.createProfile({ type: "user", id: user.id }, { schemaVersion: 1, name: `${model.trim()} in Codex`, target: { model: { provider, id: model.trim() }, app: { id: "codex", version: appVersion.trim() }, environment: { os: [], requiredCapabilities: [], network: "optional" } }, settings: {}, objectives: ["task-success"], protectedRequirements: [] });
+      const profile = await api.createProfile({ type: "user", id: user.id }, { schemaVersion: 1, name: `${model.trim()} in Claude Code`, target: { model: { provider, id: model.trim() }, app: { id: "claude-code", version: appVersion.trim() }, environment: { os: [], requiredCapabilities: [], network: "optional" } }, settings: {}, objectives: ["task-success"], protectedRequirements: [] });
       profileRevisionId = profile.latest.id; profileCache.current.set(key, profileRevisionId);
     }
     const next = { schemaVersion: 1, context: { type: scope.type, id: scope.id }, source: { kind: "release", slug: release.slug, version: release.version, artifactSha256: release.artifact.sha256 }, reviewers: [reviewerPin], profileRevisionId, suiteRevisionId: null,
@@ -166,13 +166,13 @@ function ImprovementPlanner({ client, release, user, visibility }: { client: Reg
   }
   return <div className="improvement-planner">
     <h3>Prepare a local improvement run</h3>
-    <p>Select the policy context, reviewer and target. Local execution can use cloud inference. The CLI shows the exact inputs and requires consent before dispatch.</p>
+    <p>Select the policy context, reviewer and target. Runs use Claude Code 2.1.283 or newer with cloud inference. The CLI shows the exact inputs and requires consent before dispatch.</p>
     <fieldset disabled={busy} className="improvement-fields improvement-inputs">
       <label>Policy context<select value={scopeKey} onChange={(e) => { setScopeKey(e.target.value); invalidate(); }}>{scopes.map((s) => <option key={`${s.type}:${s.id}`} value={`${s.type}:${s.id}`}>{s.name} ({s.type})</option>)}</select></label>
       <label>Reviewer skill<select value={reviewer} onChange={(e) => { setReviewer(e.target.value); invalidate(); }}><option value="">Choose a reviewer</option>{skills.map((s) => <option key={s.slug} value={s.slug}>{s.title} · {s.latestVersion}</option>)}</select></label>
-      <label>Model provider<select value={provider} onChange={(e) => { setProvider(e.target.value); invalidate(); }}><option value="openai">OpenAI</option></select></label>
-      <label>Target model<Input value={model} onChange={(e) => { setModel(e.target.value); invalidate(); }} placeholder="Exact model available in your Codex account" /></label>
-      <label>Installed app version<Input value={appVersion} onChange={(e) => { setAppVersion(e.target.value); invalidate(); }} placeholder="Version reported by codex --version" /></label>
+      <label>Model provider<select value={provider} onChange={(e) => { setProvider(e.target.value); invalidate(); }}><option value="anthropic">Anthropic</option></select></label>
+      <label>Target model<Input value={model} onChange={(e) => { setModel(e.target.value); invalidate(); }} placeholder="Exact model available in your Claude account" /></label>
+      <label>Installed app version<Input value={appVersion} onChange={(e) => { setAppVersion(e.target.value); invalidate(); }} placeholder="Version reported by claude --version" /></label>
       <label>Candidate version<Input value={candidateVersion} onChange={(e) => { setCandidateVersion(e.target.value); invalidate(); }} placeholder="New version" /></label>
       <label>Maximum model calls<Input type="number" min={1} max={101} value={maxCalls} onChange={(e) => { setMaxCalls(Number(e.target.value)); invalidate(); }} /></label>
     </fieldset>

@@ -49,7 +49,10 @@ export async function fetchImprovementJob(api: ImprovementRegistryApi, input: { 
   const plan = record.plan;
   if (plan.source.kind !== "release") throw new Error("Fetch requires a registry release source. Prepare local sources with improve plan.");
   if (plan.dataRoute.inference !== "cloud" || plan.budget.maxTokens !== null) throw new Error("This adapter cannot enforce the plan's inference route or token budget.");
-  if (plan.profile.target.app.id !== "codex" || plan.dataRoute.provider !== "openai") throw new Error("The prepared target requires an unsupported local adapter.");
+  // Claude Code is the only enabled local runner. Codex plans are refused, never
+  // rerouted, until that adapter passes its own isolation gate.
+  const target = plan.profile.target;
+  if (target.app.id !== "claude-code" || plan.dataRoute.provider !== "anthropic" || target.model.provider !== "anthropic" || target.model.id !== plan.dataRoute.model) throw new Error("The prepared target requires an unsupported local adapter.");
   if (Object.keys(plan.profile.settings).length > 0) throw new Error("This adapter does not yet support the prepared profile settings.");
   const environment = plan.profile.target.environment;
   const currentOs = process.platform === "darwin" ? "macos" : process.platform === "win32" ? "windows" : process.platform;
@@ -122,8 +125,10 @@ export async function registryLifecycle(api: ImprovementRegistryApi, jobPath: st
   return {
     async start() {
       const response = await api.post(`${base}/plans/${encodeURIComponent(binding.planId)}/runs`, {
-        planSha256: binding.planSha256, idempotencyKey: `local-${planDigest}`, runner: { adapter: "codex", adapterVersion: plan.runnerVersion, coordinatorVersion,
-          capabilities: { structuredOutput: true, workspaceIsolation: true, networkRestriction: false, tokenAccounting: false, cancellation: true, exactModelReadback: false } },
+        planSha256: binding.planSha256, idempotencyKey: `local-${planDigest}`, runner: { adapter: "claude-code", adapterVersion: plan.runnerVersion, coordinatorVersion,
+          // Model readback is mandatory on every call. No OS sandbox restricts the
+          // network, and token use is not accounted.
+          capabilities: { structuredOutput: true, workspaceIsolation: true, networkRestriction: false, tokenAccounting: false, cancellation: true, exactModelReadback: true } },
       });
       const run = response.run as { id?: string } | undefined;
       if (!run?.id) throw new Error("Registry did not return a run identifier.");
@@ -140,11 +145,14 @@ export async function registryLifecycle(api: ImprovementRegistryApi, jobPath: st
         return;
       }
       if (report.evaluation && remotePlan.suite) {
+        // A completed report is observed only when every call read back the
+        // same accepted model; anything else stays unverified.
+        const observedModel = report.modelVerification === "observed" && report.observedModel === remotePlan.dataRoute.model ? { provider: remotePlan.dataRoute.provider, id: report.observedModel } : null;
         for (const subject of ["baseline", "candidate"] as const) {
           const cases = report.evaluation.cases;
           const passed = (c: typeof cases[number]) => subject === "baseline" ? c.baselinePassed : c.candidatePassed;
           await event({ type: "evaluation.recorded", subject, treeSha256: subject === "baseline" ? report.sourceDigest : report.candidateDigest,
-            suiteSha256: remotePlan.suite.suiteSha256, observedModel: null,
+            suiteSha256: remotePlan.suite.suiteSha256, observedModel,
             cases: { total: cases.length, passed: cases.filter(passed).length, failed: cases.filter((c) => !passed(c)).length, errored: 0 },
             protectedCases: { total: cases.filter((c) => c.partition === "protected").length, failed: cases.filter((c) => c.partition === "protected" && !passed(c)).length },
             holdoutCases: { total: cases.filter((c) => c.partition === "holdout").length, passed: cases.filter((c) => c.partition === "holdout" && passed(c)).length }, repetitions: 1 });

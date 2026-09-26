@@ -51,7 +51,7 @@ test("registry plan, local CLI evaluation, exact candidate publication and evide
   try {
     const source = await publish(packageFiles(slug)); const reviewer = await publish(packageFiles(reviewerSlug));
     const user = (await api("/v1/me")).user;
-    const declaration = { schemaVersion: 1, intent: "targeted", targets: [{ id: "text-contract", models: [{ provider: "openai", id: "fixture-model" }], apps: [{ id: "codex" }] }], objectives: ["task-success"], limitations: ["Synthetic text-contract integration fixture. No model quality claim."] };
+    const declaration = { schemaVersion: 1, intent: "targeted", targets: [{ id: "text-contract", models: [{ provider: "anthropic", id: "claude-fixture-model" }], apps: [{ id: "claude-code" }] }], objectives: ["task-success"], limitations: ["Synthetic text-contract integration fixture. No model quality claim."] };
     const revision = (await api(`/v1/improvements/releases/${slug}/0.1.0/declarations`, { declaration, expectedRevisionNumber: 0 })).revision;
     await api(`/v1/improvements/releases/${slug}/0.1.0/declarations/${revision.id}/review`, { decision: "approve", artifactSha256: source.artifactSha256, declarationSha256: revision.declarationSha256 });
     await page.goto(`/skills/${slug}`);
@@ -59,7 +59,7 @@ test("registry plan, local CLI evaluation, exact candidate publication and evide
     await expect(panel.getByText("The author declared these targets. A declaration is not evaluation evidence.")).toBeVisible();
     await expect(panel.getByText("No accepted evaluation evidence.")).toBeVisible();
     checks.push("approved attestation renders independently of evaluation evidence");
-    const profile = (await api("/v1/improvements/profiles", { owner: { type: "user", id: user.id }, profile: { schemaVersion: 1, name: "Text fixture", target: { model: { provider: "openai", id: "fixture-model" }, app: { id: "codex", version: "0.154.0" }, environment: { os: [], requiredCapabilities: [], network: "optional" } }, settings: {}, objectives: ["task-success"], protectedRequirements: [] } })).profile;
+    const profile = (await api("/v1/improvements/profiles", { owner: { type: "user", id: user.id }, profile: { schemaVersion: 1, name: "Text fixture", target: { model: { provider: "anthropic", id: "claude-fixture-model" }, app: { id: "claude-code", version: "2.1.283" }, environment: { os: [], requiredCapabilities: [], network: "optional" } }, settings: {}, objectives: ["task-success"], protectedRequirements: [] } })).profile;
     const suite = { schemaVersion: 1, cases: [
       { id: "development", partition: "development", input: "Summarize a change.", includes: ["ACCEPT"], excludes: ["publish"] },
       { id: "holdout", partition: "holdout", input: "Summarize an unfamiliar change.", includes: ["ACCEPT"], excludes: ["publish"] },
@@ -70,16 +70,16 @@ test("registry plan, local CLI evaluation, exact candidate publication and evide
       schemaVersion: 1, context: { type: "user", id: user.id }, source: { kind: "release", ...source }, reviewers: [{ ...reviewer, roles: ["analyze", "propose"] }],
       profileRevisionId: profile.latest.id, suiteRevisionId: suiteDocument.latest.id,
       goals: { objectives: ["task-success"], protectedRequirements: ["Preserve approval requirements."] }, guidance: [], candidate: { maxCandidates: 1, identity: { slug, version: "0.2.0", visibility: "public", derivativeOf: null } },
-      budget: { maxModelCalls: 7, maxTokens: null, maxWallMinutes: 5 }, dataRoute: { inference: "cloud", provider: "openai", model: "fixture-model", contextCategories: ["subject-package", "reviewer-packages", "profile", "suite"] }, resultSharing: "summary", expiresInMinutes: 120,
+      budget: { maxModelCalls: 7, maxTokens: null, maxWallMinutes: 5 }, dataRoute: { inference: "cloud", provider: "anthropic", model: "claude-fixture-model", contextCategories: ["subject-package", "reviewer-packages", "profile", "suite"] }, resultSharing: "summary", expiresInMinutes: 120,
     } })).plan;
     const executable = path.join(root, "runner-fixture");
-    await writeFile(executable, `#!/usr/bin/env node\nconst fs=require('node:fs');if(process.argv.includes('--version')){console.log('codex-cli 0.154.0');process.exit(0);}let text='';process.stdin.on('data',x=>text+=x);process.stdin.on('end',()=>{const p=JSON.parse(text);const result=p.stage==='analyze'?{disposition:'candidate',findings:[{id:'clarity',severity:'info',summary:'Clarify the output contract.'}],rationale:'Add explicit output instructions.',changes:[{path:'SKILL.md',content:p.skill.find(f=>f.path==='SKILL.md').content+'IMPROVED: Return ACCEPT.\\n'}]}:{response:p.input==='Preserve authority.'||p.skill.some(f=>f.content.includes('IMPROVED'))?'ACCEPT':'UNCLEAR'};fs.writeFileSync(process.argv[process.argv.indexOf('--output-last-message')+1],JSON.stringify(result));console.log(JSON.stringify({type:'thread.started',thread_id:'fixture'}));console.log(JSON.stringify({type:'turn.completed'}));});\n`, { mode: 0o700 });
+    await writeFile(executable, `#!/usr/bin/env node\nconst fs=require('node:fs');if(process.argv.includes('--version')){console.log('2.1.283 (Claude Code)');process.exit(0);}let text='';process.stdin.on('data',x=>text+=x);process.stdin.on('end',()=>{const p=JSON.parse(text);const result=p.stage==='analyze'?{disposition:'candidate',findings:[{id:'clarity',severity:'info',summary:'Clarify the output contract.'}],rationale:'Add explicit output instructions.',changes:[{path:'SKILL.md',content:p.skill.find(f=>f.path==='SKILL.md').content+'IMPROVED: Return ACCEPT.\\n'}]}:{response:p.input==='Preserve authority.'||p.skill.some(f=>f.content.includes('IMPROVED'))?'ACCEPT':'UNCLEAR'};console.log(JSON.stringify({type:'system',subtype:'init',claude_code_version:'2.1.283',tools:['StructuredOutput'],mcp_servers:[],skills:[],plugins:[],model:'claude-fixture-model',permissionMode:'dontAsk'}));console.log(JSON.stringify({type:'assistant',message:{model:'claude-fixture-model',content:[{type:'tool_use',id:'fixture-output',name:'StructuredOutput',input:result}]}}));console.log(JSON.stringify({type:'result',subtype:'success',is_error:false,structured_output:result,modelUsage:{'claude-fixture-model':{inputTokens:20,outputTokens:10}}}));});\n`, { mode: 0o700 });
     const suiteFile = path.join(root, "suite.json"); await writeFile(suiteFile, JSON.stringify(suite));
     const job = path.join(root, "job");
-    const local = await cli(["fetch", "--plan", prepared.id, "--output", job, "--suite", suiteFile, "--codex-path", executable]);
+    const local = await cli(["fetch", "--plan", prepared.id, "--output", job, "--suite", suiteFile, "--claude-path", executable]);
     const report = await cli(["run", "--job", job, "--accept-plan", local.planDigest, "--allow-cloud"]);
     expect(report.state).toBe("completed"); expect(report.registrySync).toBe("confirmed"); expect(report.calls).toBe(7);
-    expect(report.evaluation.outcome).toBe("improved"); expect(report.modelVerification).toBe("unobserved");
+    expect(report.evaluation.outcome).toBe("improved"); expect(report.modelVerification).toBe("observed"); expect(report.observedModel).toBe("claude-fixture-model");
     checks.push("registered CLI evaluates the exact pinned baseline and frozen candidate with holdout gain");
     const draft = path.join(root, "draft"); await cli(["export", "--job", job, "--output", draft]);
     const candidate = await publish(await Promise.all((await readdir(draft)).map(async (name) => ({ path: name, content: await readFile(path.join(draft, name), "utf8") }))));

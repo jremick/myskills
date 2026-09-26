@@ -36,8 +36,8 @@ test("skill optimisation distinguishes declarations from evidence, rejects a blo
   await expect(panel.getByText("No accepted evaluation evidence.")).toBeVisible();
   await panel.getByRole("button", { name: "Plan an improvement" }).click();
   await panel.getByLabel("Reviewer skill").selectOption("prompt-reviewer");
-  await panel.getByLabel("Target model").fill("gpt-5.5");
-  await panel.getByLabel("Installed app version").fill("0.154.0");
+  await panel.getByLabel("Target model").fill("claude-opus-5-5");
+  await panel.getByLabel("Installed app version").fill("2.1.283");
   await panel.getByLabel("Candidate version").fill("1.1.0");
   await panel.getByLabel("Improvement goal").fill("Clarify output while preserving approval requirements.");
   await panel.getByRole("button", { name: "Preview policy" }).click();
@@ -47,7 +47,7 @@ test("skill optimisation distinguishes declarations from evidence, rejects a blo
   await panel.getByRole("button", { name: "Preview policy" }).click();
   await panel.getByRole("button", { name: "Prepare local run" }).click();
   await expect(panel.getByText(/myskills improve fetch.*plan1/)).toBeVisible();
-  await expect(panel.getByText(/Local execution can use cloud inference/)).toBeVisible();
+  await expect(panel.getByText(/Runs use Claude Code 2.1.283 or newer with cloud inference/)).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: test.info().outputPath("skill-improvement-mobile.png"), fullPage: true });

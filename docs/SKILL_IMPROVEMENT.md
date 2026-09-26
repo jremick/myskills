@@ -1,6 +1,6 @@
 # Skill improvement
 
-Status: implementation candidate for the next beta. The local runner's isolation gate is still open; this feature is not released.
+Status: implementation candidate for the next beta, using Claude Code as the first runner. The adapter has passed its macOS native journey and independent review. Commit-bound release verification remains in progress; this feature is not released.
 
 MySkills keeps optimisation intent, local review plans, and evaluation evidence separate. A release with no declaration shows **unspecified**. A declaration describes what its author designed for. A locally reported result is not independently verified performance evidence.
 
@@ -18,7 +18,11 @@ Team and organization policies can designate exact reviewer versions and roles, 
 
 ## CLI
 
-Existing login and API URL configuration apply. Never put an authentication token in a plan, suite, or request file.
+Existing MySkills login and API URL configuration apply. The local runner uses an existing Claude Code sign-in. Never put an authentication token in a plan, suite, or request file.
+
+The first supported runner is Claude Code 2.1.283 or newer on macOS or Linux (`claude --version`). Registry profiles use app `claude-code` and provider `anthropic`; choose an exact model identifier available to that account. Use `--claude-path` with `plan` or `fetch` to select a specific executable. The plan binds its version and file digest, and each call must report the same version. A native binary pin covers that binary. A script launcher pin covers only the launcher; version drift is detected after the first payload is sent, and a changed target reporting the same version is not detected. Native Windows execution is blocked pending validation. The real Claude journey was verified on macOS; Linux has executable-fixture coverage. WSL has not been validated. Codex improvement plans are rejected until that adapter passes its isolation gate.
+
+Every model call starts a fresh Claude Code process with safe mode, project/user settings disabled, no built-in action tools, an empty MCP configuration, and a one-turn limit. Calls count coordinator invocations; transport retries remain controlled by Claude Code. Only the schema output tool is permitted. The coordinator checks the initialization and response stream and requires the exact model identity on every call. This is a text-only host configuration, not an OS sandbox or a network firewall. Organization-managed host policy can still apply, including managed hooks and authentication helpers. Managed hooks may receive the task payload and run host commands; any hook event on the stream rejects the run, but event checks cannot undo host-side actions. Use a trusted host whose managed policy permits this workflow. Cloud model traffic uses the existing Claude authentication route; the coordinator does not copy credentials or enable an API-key fallback.
 
 ```sh
 myskills improve fetch --plan PLAN_ID --output ./review-job

@@ -327,11 +327,11 @@ async function validateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise
 async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const operation = parsed.args[0];
   const optionsByOperation: Record<string, string[]> = {
-    plan: ["path", "reviewer", "output", "model", "goal", "target-version", "max-calls", "timeout-seconds", "suite", "protect", "codex-path", "json"],
+    plan: ["path", "reviewer", "output", "model", "goal", "target-version", "max-calls", "timeout-seconds", "suite", "protect", "claude-path", "json"],
     run: ["job", "accept-plan", "allow-cloud", "json"],
     report: ["job", "json"],
     export: ["job", "output", "json"],
-    fetch: ["plan", "output", "suite", "codex-path", "api-url", "token", "json"],
+    fetch: ["plan", "output", "suite", "claude-path", "api-url", "token", "json"],
     share: ["job", "disclosure", "subject", "release", "api-url", "token", "json"],
     compatibility: ["release"], declare: ["release", "file"], "review-declaration": ["release", "revision", "file"],
     policy: ["scope", "owner", "file"], profiles: ["scope", "owner", "id", "file"], suites: ["scope", "owner", "id", "file"],
@@ -386,7 +386,7 @@ async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Prom
     result = method === "GET" ? await apiGet(endpoint, parsed, runtime, token) : method === "PUT" ? await apiPut(endpoint, body, parsed, runtime, token) : await apiPost(endpoint, body, parsed, runtime, token);
   } else if (operation === "fetch") {
     const suitePath = optionalStringOption(parsed, "suite");
-    result = await fetchImprovementJob(await registryApi(), { planId: required("plan"), outputPath: required("output"), executable: optionalStringOption(parsed, "codex-path"), ...(suitePath ? { suite: JSON.parse(await readRegularText(await realpath(suitePath), 256_000)) } : {}) });
+    result = await fetchImprovementJob(await registryApi(), { planId: required("plan"), outputPath: required("output"), executable: optionalStringOption(parsed, "claude-path"), ...(suitePath ? { suite: JSON.parse(await readRegularText(await realpath(suitePath), 256_000)) } : {}) });
   } else if (operation === "share") {
     result = await shareImprovementEvidence(await registryApi(), { jobPath: required("job"), disclosure: required("disclosure"), subject: required("subject"), ...parseReleaseTarget(required("release")) });
   } else if (operation === "plan") {
@@ -395,7 +395,7 @@ async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Prom
       sourcePath: required("path"), reviewerPaths: stringListOption(parsed, "reviewer"), outputPath: required("output"),
       model: required("model"), goal: required("goal"), targetVersion: required("target-version"),
       maxCalls: Number(optionalStringOption(parsed, "max-calls") ?? 21), timeoutSeconds: Number(optionalStringOption(parsed, "timeout-seconds") ?? 120),
-      inference: "cloud", protectedFiles: stringListOption(parsed, "protect"), executable: optionalStringOption(parsed, "codex-path"),
+      inference: "cloud", protectedFiles: stringListOption(parsed, "protect"), executable: optionalStringOption(parsed, "claude-path"),
       ...(suitePath ? { suite: JSON.parse(await readRegularText(await realpath(suitePath), 256_000)) } : {}),
     });
   } else if (operation === "run") {
@@ -5194,11 +5194,11 @@ function helpText(): string {
     "  validate --path <file-directory-or-zip>",
     "  scan --path <file-directory-or-zip>",
     "  package --path <directory> --output <file.zip> [--json]",
-    "  improve plan --path <skill-dir> --reviewer <reviewer-dir> --output <new-job-dir> --model <model-id> --goal <text> --target-version <version> [--suite <json>] [--protect <path>] [--max-calls <number>] [--timeout-seconds <number>] [--codex-path <executable>] [--json]",
+    "  improve plan --path <skill-dir> --reviewer <reviewer-dir> --output <new-job-dir> --model <model-id> --goal <text> --target-version <version> [--suite <json>] [--protect <path>] [--max-calls <number>] [--timeout-seconds <number>] [--claude-path <executable>] [--json]",
     "  improve run --job <dir> --accept-plan <sha256> --allow-cloud [--json]",
     "  improve report --job <dir> [--json]",
     "  improve export --job <dir> --output <new-draft-dir> [--json]",
-    "  improve fetch --plan <id> --output <new-job-dir> [--suite <json>] [--codex-path <executable>] [--api-url <url>] [--json]",
+    "  improve fetch --plan <id> --output <new-job-dir> [--suite <json>] [--claude-path <executable>] [--api-url <url>] [--json]",
     "  improve share --job <dir> --disclosure summary --subject baseline|candidate --release <slug>@<version> [--api-url <url>] [--json]",
     "  improve compatibility --release <slug>@<version> [--json]",
     "  improve declare|review-declaration --release <slug>@<version> [--revision <id>] --file <request.json> [--json]",
