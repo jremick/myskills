@@ -284,6 +284,10 @@ export class MemorySubmissionStore implements SubmissionStore {
     findings: StoredSubmission["scan"]["findings"];
     securityStatus: StoredSubmission["securityStatus"];
   }): Promise<StoredSubmission> {
+    if (input.importBinding) {
+      // Provenance must commit with the version; the memory store has no transaction.
+      throw new AppError("Source imports require the Postgres registry.", "LIBRARY_SERVICE_UNAVAILABLE", 503);
+    }
     const key = `${input.manifest.name}@${input.manifest.version}`;
     const existing = this.findSubmissionsBySlug(input.manifest.name)[0];
     if (existing && existing.ownerUserId !== input.actor.id) {

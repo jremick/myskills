@@ -1,13 +1,23 @@
 # Release Process
 
-Version: 0.1.0-beta.7
-Last updated: 2026-09-25
+Version: 0.1.0-beta.8
+Last updated: 2026-09-26
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
 
-## Beta.7 Candidate Acceptance Record
+## Beta.8 Candidate Acceptance Record
+
+Target release: `v0.1.0-beta.8`.
+
+Libraries implementation and verification are in progress. The approved scope,
+failure cases and evidence are recorded in the [Libraries build ledger](plans/2026-09-26-library-build-evidence.md).
+Run container tests on the Windows PC when available; remote execution must
+still produce the canonical gate and exact candidate evidence. A local source
+change is not release, npm or production evidence.
+
+## Beta.7 Historical Candidate Acceptance Record
 
 Target release: `v0.1.0-beta.7`.
 
@@ -42,6 +52,8 @@ TEST_DATABASE_URL=postgres://myskills_test:myskills_test@localhost:5432/myskills
 ```
 
 This single command runs repo quality/security checks, the exact public CLI pack/install smoke, route-mocked browser E2E, a production-like Docker Compose API/web/MinIO/Postgres browser journey, Postgres integration, and release artifact creation. Use `npm run check:prerelease`, `npm run smoke:cli-package`, or individual test commands only to diagnose a failure; do not substitute a collection of partial runs for the canonical gate.
+
+When using the Windows PC for container testing, run the verifier and PostgreSQL on that host so lease checks use the same clock. The verifier needs a clean Git checkout of the candidate, including `.git` and `.github`; the production Docker build context excludes those paths and is not a complete release-verification checkout. Match the Playwright container version to the repository's installed Playwright version and retain the reports and artifacts before removing the disposable runner.
 
 Each canonical run creates a unique `dist/release-verify-*/artifacts/` bundle so repeated verification never deletes or reuses an earlier output. The bundle contains:
 
@@ -99,7 +111,7 @@ Draft public release text in a file and use `--notes-file` or the GitHub UI if a
 
 ## CLI Package Candidate
 
-The source version `0.1.0-beta.7` and `publishConfig.tag=beta` are coherent. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle.
+The candidate source version is `0.1.0-beta.8`, with `publishConfig.tag=beta`. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle. Candidate preparation does not change the published npm version.
 
 The canonical gate proves:
 
@@ -150,6 +162,20 @@ Production deploy truth comes from [Railway Deployment](RAILWAY_DEPLOYMENT.md) a
 Promote API and web from the same commit, but do not replace them concurrently. Run migrations, deploy the API, wait for the platform deployment to report success, and verify the API `/ready` endpoint before deploying the web service. Deploying web only after API readiness ensures its upstream proxy starts against the healthy API deployment instead of retaining an address for a retiring instance. Do not rerun owner seed after bootstrap. After web promotion, verify same-origin `/api/ready`, public skill detail, browser login/MFA, authenticated export, CLI capability/version, and MCP authorization.
 
 ## Rollback
+
+### Libraries beta.8 compatibility boundary
+
+Beta.7 does not understand private self-review attestations or library target constraints. After beta.8 creates either, rolling the API back to beta.7 would remove those authorization checks. Disabling private self-review stops new attestations; it does not make existing data safe for an older API.
+
+Before enabling Libraries writes, drain older API instances and workers. Preserve a database-and-artifact recovery point. For an incident after Libraries writes, fix forward or select an API/web pair that retains the beta.8 guards. Do not use the general previous-commit rollback below until the chosen code is compatible with the retained library records. A restore to an earlier recovery point needs separate approval for its data loss and artifact consistency plan; do not drop library tables as a rollback shortcut.
+
+These read-only counts identify two downgrade blockers after migration 0032; zero counts alone do not replace compatibility review:
+
+```sql
+SELECT count(*) AS private_attestations
+FROM skill_version_review_attestations WHERE kind = 'private-self-review';
+SELECT count(*) AS library_target_bindings FROM library_target_bindings;
+```
 
 - **Source tag/release**: do not delete, reuse, or move a released tag. Fix forward with a new prerelease version. If public notes were wrong, correct the release text without changing artifact identity.
 - **npm**: move the `beta` dist-tag back to the last known-good published version after owner approval. Prefer deprecation guidance over unpublishing; do not move `latest` as part of beta rollback.

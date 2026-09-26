@@ -2,6 +2,25 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
+## 0.1.0-beta.8 - unreleased
+
+Target release: `v0.1.0-beta.8`.
+
+Libraries candidate: public GitHub sources, provenance, private imports,
+source tracking, in-app subscriptions, and team curation. Implementation and
+focused verification are complete; the canonical release gate and publication
+remain separate steps.
+
+- Add an administrator-controlled private import self-review policy, disabled
+  by default. Shared and published content still requires instance review.
+- Bind local installations to an explicitly adopted library version. Refuse
+  version bypass, stale adoption and inaccessible entry fallback; preserve local
+  edits and rollback history.
+- Normalize imported runtime skill names to their unique registry slugs. Preserve
+  the exact original file and show both SHA-256 digests during review.
+- Private upstream credentials, organization-owned imports, email notifications
+  and unattended local application remain later releases.
+
 ## 0.1.0-beta.7 - 2026-09-25
 
 Target release: `v0.1.0-beta.7`.

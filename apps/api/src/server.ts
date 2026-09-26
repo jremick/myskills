@@ -1,4 +1,5 @@
 import { isIP } from "node:net";
+import { LIBRARY_LIMITS } from "@myskills-app/core";
 import { createDb, createPgPool } from "./db/client.js";
 import { createArtifactObjectStorageFromEnv } from "./artifacts/storage.js";
 import { PostgresAuthRateLimiter } from "./auth/rate-limit.js";
@@ -30,6 +31,10 @@ import { PostgresTargetSkillOperationStore } from "./target-operations/postgres-
 import { TargetSkillOperationService } from "./target-operations/service.js";
 import { PostgresSkillUpgradePolicyStore } from "./upgrade-policies/postgres-store.js";
 import { SkillUpgradePolicyService } from "./upgrade-policies/service.js";
+import { PublicGithubSourceProvider } from "./libraries/github-source.js";
+import { PostgresLibraryStore } from "./libraries/postgres-store.js";
+import { LibraryService } from "./libraries/service.js";
+import { LibrarySourceWorker } from "./libraries/worker.js";
 
 const port = Number.parseInt(process.env.PORT ?? "3001", 10);
 const host = process.env.HOST ?? "0.0.0.0";
@@ -77,11 +82,19 @@ const architectureTargetService = new ArchitectureTargetService(
   new ArchitectureTargetBindingAuthorizer(architectureStore, organizationStore),
 );
 const skillUpgradePolicyService = new SkillUpgradePolicyService(new PostgresSkillUpgradePolicyStore(db));
+// Production always uses the fixed-host HTTPS transport; there is no fetch override.
+const libraryService = new LibraryService({
+  store: new PostgresLibraryStore(db),
+  submissions: submissionService,
+  skillRepository,
+  targets: architectureTargetService,
+  sourceProvider: new PublicGithubSourceProvider(),
+});
 const targetSkillOperationService = new TargetSkillOperationService(
   new PostgresTargetSkillOperationStore(db),
   architectureTargetService,
   submissionService,
-  { upgradePolicies: skillUpgradePolicyService },
+  { upgradePolicies: skillUpgradePolicyService, libraryAdoptions: libraryService },
 );
 const authStore = new PostgresAuthStore(db);
 const authSecret = requiredAuthSecret();
@@ -109,10 +122,12 @@ const app = buildApp({
   architectureTargetService,
   targetSkillOperationService,
   skillUpgradePolicyService,
+  libraryService,
   allowedOrigins: allowedOrigins(),
   trustProxy: trustProxy(),
   requestLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 600, windowMs: 60_000 }),
   architectureProjectionLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 30, windowMs: 60_000 }),
+  librarySourceLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: LIBRARY_LIMITS.maxSourceOperationsPerHour, windowMs: 60 * 60 * 1000 }),
   readinessProbes: {
     postgres: async () => {
       await pool.query("SELECT 1");
@@ -139,10 +154,17 @@ const artifactReconciliationTimer = artifactStorage
     }, 15 * 60 * 1000)
   : undefined;
 artifactReconciliationTimer?.unref();
+// Scheduled source checks use Postgres leases, so several API processes may run it.
+const librarySourceWorker = process.env.LIBRARY_SOURCE_WORKER?.trim() === "disabled"
+  ? undefined
+  : new LibrarySourceWorker(libraryService, {
+    onError: () => app.log.error("Library source check failed; due checks will be retried."),
+  });
 
 try {
   await app.listen({ port, host });
   authNotificationWorker?.start();
+  librarySourceWorker?.start();
 } catch (error) {
   app.log.error(error);
   await pool.end();
@@ -155,6 +177,7 @@ const shutdown = () => shutdownPromise ??= (async () => {
     clearInterval(artifactReconciliationTimer);
   }
   await authNotificationWorker?.stop();
+  await librarySourceWorker?.stop();
   await app.close();
   await pool.end();
 })();

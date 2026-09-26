@@ -134,6 +134,7 @@ export class AppError extends Error {
 export * from "./skill-updates.js";
 export * from "./skill-upgrade-policy.js";
 export * from "./target-skill-operations.js";
+export * from "./library-contracts.js";
 
 export function assertNever(value: never): never {
   throw new AppError(`Unhandled value: ${String(value)}`, "UNHANDLED_VALUE", 500);

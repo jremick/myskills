@@ -2,7 +2,7 @@ import type { ChronologicalPosition } from "../repositories/chronological-pagina
 import type { AuthNotificationClaim, AuthNotificationIntent, FinishAuthNotificationInput } from "./notification-outbox.js";
 import type { AuthenticatedUser, RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 
-export const apiTokenScopes = ["profile:read", "skills:read", "architectures:read", "skills:submit", "review:read", "review:write", "targets:execute"] as const;
+export const apiTokenScopes = ["profile:read", "skills:read", "architectures:read", "skills:submit", "review:read", "review:write", "targets:execute", "libraries:read", "libraries:write"] as const;
 export const authActionTokenPurposes = ["email_verification", "password_reset", "registration_invitation", "email_change"] as const;
 export const providerTypes = ["oidc", "saml", "cloudflare_access", "github", "google"] as const;
 
