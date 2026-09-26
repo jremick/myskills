@@ -46,6 +46,12 @@
  *       before any fetch; 496 plus a notice is ready with exactly 500 packaged files.
  * N14 F The duplicated SKILL.md bytes count toward the text limit before any fetch.
  *
+ * Review regressions recorded before their fixes
+ * N19 F Unicode-only blank/comment lines must not be erased by JS whitespace trimming: U+00A0
+ *       and U+3000 at top level, after name, and inside metadata block preview before import.
+ * N20 F Top-level and nested implicit YAML keys longer than 1024 characters block preview;
+ *       exact-boundary keys remain installable through the real CLI validator.
+ *
  * Native workspace journey (real CLI over loopback HTTP, real files)
  * N15 S `codex enroll`, `install --library-entry --workspace` and `codex observe --upload` install
  *       the API-produced normalized artifact. The files on disk are the held bytes. The preserved
@@ -358,6 +364,48 @@ test("library native install journey: normalized runtime name, preserved origina
   assert.throws(() => validateCodexSkill([{ path: "SKILL.md", content: COLON.replace("name: colon", `name: ${colon.lineage.slug}`) }], colon.lineage.slug), /valid YAML/);
   record("N10", { state: "blocked", finding: "native-frontmatter-unsupported", codexValidatorWouldFail: true });
 
+  // N19/N20: reviewer-reported parser divergences, recorded before the parser fix.
+  const edgeFiles: Record<string, string> = { LICENSE: MIT };
+  const edgeCases: Array<{ path: string; content: string; code: string }> = [];
+  for (const [label, character] of [["nbsp", "\u00a0"], ["fullwidth", "\u3000"]]) {
+    for (const [placement, body, code] of [
+      ["name", `name: edge\n  ${character}\ndescription: Safe helper.`, "invalid-native-name"],
+      ["top", `name: edge\n${character}\ndescription: Safe helper.`, "native-frontmatter-unsupported"],
+      ["description", `name: edge\ndescription: |\n  ${character}`, "native-frontmatter-unsupported"],
+      ["nested", `name: edge\ndescription: Safe helper.\nmetadata:\n  label: value\n  ${character}`, "native-frontmatter-unsupported"],
+      ["comment", `name: edge\ndescription: Safe helper.\nmetadata:\n  label: value\n  ${character}# note`, "native-frontmatter-unsupported"],
+    ]) {
+      const path = `skills/${label}-${placement}`;
+      const content = `---\n${body}\n---\n\n# Edge\n`;
+      edgeFiles[`${path}/SKILL.md`] = content;
+      edgeCases.push({ path, content, code: code! });
+    }
+  }
+  for (const nested of [false, true]) {
+    for (const length of [1024, 1025]) {
+      const path = `skills/key-${nested ? "nested" : "top"}-${length}`;
+      edgeFiles[`${path}/SKILL.md`] = `---\nname: edge\ndescription: Safe helper.\n${nested ? "metadata:\n  " : ""}${"k".repeat(length)}: value\n---\n\n# Edge\n`;
+    }
+  }
+  github.createRepository({ id: 838383, owner: "acme", name: "native-edges", license: "MIT", files: edgeFiles });
+  const edgeEntry = expectOk(await call("POST", `/v1/libraries/${library.id}/entries`, alice, { kind: "source", url: "https://github.com/acme/native-edges" }), 201).entry;
+  const edgeDiscovery = await discover(edgeEntry.id);
+  const edgePaths: string[] = edgeDiscovery.skills.map((root: Json) => root.path);
+  const edgeCandidates = await preview(edgeEntry.id, edgeDiscovery.snapshot.id, edgePaths, Object.fromEntries(edgePaths.map((path) => [path, { summary: "Reviewed edge case summary." }])));
+  for (const edge of edgeCases) {
+    const candidate = edgeCandidates.get(edge.path)!;
+    assert.throws(() => validateCodexSkill([{ path: "SKILL.md", content: edge.content.replace("name: edge", `name: ${candidate.lineage.slug}`) }], candidate.lineage.slug), /valid YAML|name must match|description/);
+    await assertBlocked(candidate, edge.code);
+  }
+  record("N19", { unicodeCases: edgeCases.length, state: "blocked", nativeValidatorRejects: true });
+  for (const nested of [false, true]) {
+    await assertBlocked(edgeCandidates.get(`skills/key-${nested ? "nested" : "top"}-1025`)!, "native-frontmatter-unsupported");
+    const boundary = await held(edgeCandidates.get(`skills/key-${nested ? "nested" : "top"}-1024`)!.id);
+    assert.equal(boundary.state, "ready-for-review", JSON.stringify(boundary.findings));
+    assert.doesNotThrow(() => validateCodexSkill(packageFiles(boundary), boundary.lineage.slug));
+  }
+  record("N20", { maximumKeyLength: 1024, overLimitBlocked: true, boundaryInstalls: true });
+
   // N11: the reserved preserved-original path collides as a file or a case-variant directory.
   for (const [root, path] of [["skills/collide", `skills/collide/${ORIGINAL_PATH}`], ["skills/collide-dir", "skills/collide-dir/MySkills-Source-Skill.TXT/notes.md"]] as const) {
     assert.ok(roots.get(root)!.blockers.some((finding: Json) => finding.code === "manifest-path-collision" && finding.path === path), `${root} discovery blocker`);
@@ -545,7 +593,7 @@ test("library native install journey: normalized runtime name, preserved origina
   assert.ok(drifted.observation.configFindings.some((finding: Json) => finding.code === "managed-skill-drift"));
   record("N17", { restoredVersion: "0.0.1", artifactSha256: planner.packageDigest, bindingKept: true, upstreamNameReportedAsDrift: true });
 
-  const expected = ["N01", "N02", "N03", "N04", "N05", "N06", "N07", "N08", "N09", "N10", "N11", "N12", "N13", "N14", "N15", "N16", "N17", "N18"];
+  const expected = ["N01", "N02", "N03", "N04", "N05", "N06", "N07", "N08", "N09", "N10", "N11", "N12", "N13", "N14", "N15", "N16", "N17", "N18", "N19", "N20"];
   assert.deepEqual([...new Set(evidence.map((item) => item.id))].sort(), expected);
   const evidencePath = process.env.LIBRARY_NATIVE_INSTALL_EVIDENCE_PATH ?? join(tmpdir(), "myskills-library-native-install-evidence.json");
   writeFileSync(evidencePath, `${JSON.stringify({

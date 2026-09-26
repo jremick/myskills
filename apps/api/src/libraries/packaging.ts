@@ -425,7 +425,7 @@ function analyzeNativeFrontmatter(document: string): NativeFrontmatter {
   const body = lines.slice(1);
   const last = body.at(-1);
   const length = last ? last.start + last.text.length - body[0]!.start : 0;
-  if (length < 1 || body.every((line) => line.text.trim() === "")) return unsupported("SKILL.md frontmatter is empty.");
+  if (length < 1 || body.every((line) => /^ *$/.test(line.text))) return unsupported("SKILL.md frontmatter is empty.");
   if (length > MAX_NATIVE_FRONTMATTER_LENGTH) return unsupported(`SKILL.md frontmatter is longer than the ${MAX_NATIVE_FRONTMATTER_LENGTH} characters Codex reads.`);
 
   const entries = new Map<string, FrontmatterEntry>();
@@ -436,7 +436,7 @@ function analyzeNativeFrontmatter(document: string): NativeFrontmatter {
       return unsupported(`SKILL.md frontmatter line ${lineNumber} contains a control character or a stray carriage return.`);
     }
     if (/^ *\t/.test(line.text)) return unsupported(`SKILL.md frontmatter line ${lineNumber} is indented with a tab.`);
-    if (line.text.trim() === "") {
+    if (/^ *$/.test(line.text)) {
       current?.body.push(line);
       continue;
     }
@@ -452,6 +452,7 @@ function analyzeNativeFrontmatter(document: string): NativeFrontmatter {
     }
     const key = FRONTMATTER_KEY.exec(line.text)?.[1];
     if (!key || NON_STRING_KEY.test(key)) return unsupported(`SKILL.md frontmatter line ${lineNumber} is not a plain \`key: value\` entry.`);
+    if (key.length > 1024) return unsupported(`SKILL.md frontmatter line ${lineNumber} has an implicit key longer than YAML allows (1024 characters).`);
     if (entries.has(key)) {
       return { ok: false, code: key === "name" ? "invalid-native-name" : "native-frontmatter-unsupported", message: `SKILL.md frontmatter declares \`${key}\` more than once.` };
     }
@@ -537,7 +538,7 @@ function codePoint(hex: string): string | undefined {
 }
 
 function frontmatterValueProblem(entry: FrontmatterEntry): string | null {
-  const content = entry.body.filter((line) => line.text.trim() !== "");
+  const content = entry.body.filter((line) => !/^ *$/.test(line.text));
   switch (entry.scalar.kind) {
     case "unsupported":
       return "has a value MySkills cannot check for Codex (an indicator, flow collection, anchor, alias, tag, unclosed quote or invalid escape)";
@@ -546,11 +547,11 @@ function frontmatterValueProblem(entry: FrontmatterEntry): string | null {
     case "single":
       return content.length > 0 ? "continues on indented lines" : null;
     case "block": {
-      const first = entry.body.findIndex((line) => line.text.trim() !== "");
+      const first = entry.body.findIndex((line) => !/^ *$/.test(line.text));
       if (first < 0) return null;
       const indent = leadingSpaces(entry.body[first]!.text);
       if (entry.body.slice(0, first).some((line) => line.text.length > indent)) return "has blank lines indented deeper than its text";
-      return entry.body.slice(first).some((line) => line.text.trim() !== "" && leadingSpaces(line.text) < indent) ? "has block text with uneven indentation" : null;
+      return entry.body.slice(first).some((line) => !/^ *$/.test(line.text) && leadingSpaces(line.text) < indent) ? "has block text with uneven indentation" : null;
     }
     case "empty":
       return content.length > 0 ? nestedValueProblem(content) : null;
@@ -559,7 +560,7 @@ function frontmatterValueProblem(entry: FrontmatterEntry): string | null {
 
 /** One level of `key: value` or `- value` lines. Deeper structure is not interpreted. */
 function nestedValueProblem(content: SourceLine[]): string | null {
-  const lines = content.filter((line) => !line.text.trimStart().startsWith("#"));
+  const lines = content.filter((line) => !/^ *#/.test(line.text));
   if (lines.length === 0) return null;
   const indent = leadingSpaces(lines[0]!.text);
   let shape: "sequence" | "mapping" | null = null;
@@ -575,6 +576,7 @@ function nestedValueProblem(content: SourceLine[]): string | null {
     } else {
       const key = FRONTMATTER_KEY.exec(text)?.[1];
       if (!key || NON_STRING_KEY.test(key)) return "has a nested line that is not a plain `key: value` or `- value` entry";
+      if (key.length > 1024) return "has an implicit key longer than YAML allows (1024 characters)";
       if (shape === "sequence") return "mixes a list and a mapping";
       shape = "mapping";
       if (keys.has(key)) return `declares \`${key}\` more than once`;
@@ -594,6 +596,7 @@ function nativeDescriptionProblem(entry: FrontmatterEntry): string | null {
     return scalar.value.length > MAX_NATIVE_DESCRIPTION_LENGTH ? `is longer than the ${MAX_NATIVE_DESCRIPTION_LENGTH} characters Codex accepts` : null;
   }
   if (scalar.kind !== "block") return "must be one text value";
+  // Native validation trims the decoded description, unlike YAML line syntax.
   if (!entry.body.some((line) => line.text.trim() !== "")) return "is empty";
   // The folded or literal value is never longer than its raw lines.
   const rawLength = entry.body.reduce((total, line) => total + line.text.length + 1, 0);

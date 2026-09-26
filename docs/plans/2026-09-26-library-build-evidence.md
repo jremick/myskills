@@ -49,8 +49,8 @@ The user approved building phases 1A–1C for the next release on 2026-09-26: pe
 | Populated beta.7 migration rehearsal | Passed after identity columns were added; existing users/skills unchanged, self-review disabled, rerun idempotent; 0032 SHA-256 `0af0856ea67bfa67108ff5beeaec3eaa11aa4b8c9a06dc660062dff2129d640e` |
 | Production-like full stack | All six journeys passed with containers on Windows and Comet as the browser; no skipped or flaky results |
 | Final Opus backend review | No release-blocking defect found in the tracking fences or license fix; read-only source and receipt review, with low-severity concurrency findings recorded below |
-| Canonical release gate and artifacts | Pending; no release or deployment claim |
-| Native imported-skill install | Passed all 18 persistent scenarios on Windows Docker: exact source preservation, served artifact, install, uploaded observations, adoption update, rollback and drift; actual Codex discovery independently found one enabled skill |
+| Canonical release gate and artifacts | Passed on initial candidate `293e0d2`, including 1,144 repository tests, 18 browser journeys, six fullstack journeys and 233 PostgreSQL tests; the parser review correction requires a new clean candidate run before release |
+| Native imported-skill install | Passed all 20 persistent scenarios on Windows Docker: exact source preservation, served artifact, install, uploaded observations, adoption update, rollback and drift; actual Codex discovery independently found one enabled skill |
 
 ## Verification record
 
@@ -85,6 +85,12 @@ For a focused persistent rerun, execute `node --import tsx --test apps/api/test/
 
 These focused runs diagnose and verify the implementation. The clean `npm run release:verify` gate in [RELEASE.md](../RELEASE.md) remains required before release preparation is complete.
 
+## Final normalization review
+
+A separate read-only Opus 5.5 review found an accepted-frontmatter mismatch: JavaScript whitespace trimming treated nonbreaking and full-width spaces as blank YAML lines, but the native parser treated them as content. A new persistent regression reproduced a ready preview that the installer rejected. The correction uses ASCII-space rules for YAML line syntax, retains native description emptiness checks, and bounds implicit mapping keys to 1024 characters. N19 checks ten Unicode cases; N20 checks both top-level and nested keys above and exactly at the limit. All 20 native-install scenarios, API build and lint then passed on Windows Docker. The first canonical gate passed before this correction and is not final evidence for the corrected commit.
+
+The reviewer used Read/Grep/Glob only; runtime records confirm `claude-opus-5-5` through the personal subscription, with `xhigh` configured. Codex reproduced and corrected the finding. The reviewer found no source-loss, provenance or scan/limit bypass.
+
 ## Open review findings
 
 The final read-only Opus review found no release-blocking defect in the tracking fence or license-freshness changes. These observations remain open; they are not verified production incidents:
@@ -94,6 +100,7 @@ The final read-only Opus review found no release-blocking defect in the tracking
 - Lease-takeover tests cover snapshot, candidate/event, root-event and completion writes. Identity-change writes and notifications for an already-existing candidate use the same locking boundary, but do not yet have separate takeover cases.
 - Explicit license mappings remain owner-reviewed decisions and persist across previews. A saved mapping that differs from current provider metadata is not separately flagged. Snapshot license notices remain in the inspected artifact.
 - Frontmatter import supports a conservative YAML subset without a new dependency. Some valid YAML structures are blocked rather than rewritten or guessed; unsupported syntax is reported in the preview. Missing descriptions and byte order marks also block because the native install contract requires a description and an initial `---`.
+- A blocked candidate can display the proposed name transformation even though it holds no importable artifact. Its blocked status and missing artifact digest prevent import; the preservation wording in that section could be clearer.
 - The web navigation assumes matching API/web versions; it does not hide Libraries when connected to an older API. Deploy both from the same candidate.
 
 ## Approved completion decisions
