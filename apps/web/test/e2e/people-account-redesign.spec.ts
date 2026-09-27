@@ -142,6 +142,8 @@ for (const width of [1440, 390]) test(`admin sections preserve unsaved settings 
   await dialog.getByRole("button", { name: /open/i }).click();
   await expect.poll(() => state.writes.length).toBe(1);
   expect(state.writes[0]).toMatchObject({ path: "/v1/admin/registration", body: { mode: "open" } });
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("button", { name: "Open", exact: true })).toBeFocused();
   await tabs.getByRole("tab", { name: "People", exact: true }).focus();
   await page.keyboard.press("End");
   await expect(tabs.getByRole("tab", { name: "Audit", exact: true })).toBeFocused();
