@@ -1284,6 +1284,34 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     return { token };
   });
 
+  app.get("/v1/site", async (_request, reply) => {
+    reply.header("cache-control", "no-store");
+    if (!options.authService) {
+      throw new AppError("Site settings are not available.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    return { site: await options.authService.getPublicSiteSettings() };
+  });
+
+  app.get("/v1/admin/site", async (request, reply) => {
+    reply.header("cache-control", "no-store");
+    if (!options.authService) throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    const user = await authenticateSessionUser(options.authService, requestAuthorization(request));
+    if (!user) return authFailureReply(options.authService, requestAuthorization(request), reply);
+    return { site: await options.authService.getSiteSettings(user) };
+  });
+
+  app.put("/v1/admin/site", async (request, reply) => {
+    reply.header("cache-control", "no-store");
+    if (!options.authService) throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    const user = await authenticateSessionUser(options.authService, requestAuthorization(request));
+    if (!user) return authFailureReply(options.authService, requestAuthorization(request), reply);
+    const body = request.body;
+    if (!body || typeof body !== "object" || !("landingPageEnabled" in body) || typeof body.landingPageEnabled !== "boolean") {
+      throw new AppError("Choose whether to show the landing page.", "INVALID_SITE_SETTINGS", 400);
+    }
+    return { site: await options.authService.updateSiteSettings(user, { landingPageEnabled: body.landingPageEnabled }) };
+  });
+
   app.get("/v1/admin/registration", async (request, reply) => {
     if (!options.authService) {
       throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);

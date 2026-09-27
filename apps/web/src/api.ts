@@ -68,6 +68,10 @@ export interface WebAuthUser {
 
 export type AdminRegistrationMode = "closed" | "request" | "open";
 
+export interface SiteSettings {
+  landingPageEnabled: boolean;
+}
+
 export interface AdminRegistrationSettings {
   mode: AdminRegistrationMode;
 }
@@ -811,6 +815,9 @@ export interface RegistryClient {
   listApiTokens(token?: string): Promise<ApiToken[]>;
   createApiToken(input: { name: string; scopes: ApiTokenScope[]; expiresAt?: string }, token?: string): Promise<CreatedApiToken>;
   revokeApiToken(tokenId: string, token?: string): Promise<ApiToken>;
+  getSiteSettings(): Promise<SiteSettings>;
+  getAdminSiteSettings(): Promise<SiteSettings>;
+  updateAdminSiteSettings(settings: SiteSettings): Promise<SiteSettings>;
   getAdminRegistration(token?: string): Promise<AdminRegistrationSettings>;
   updateAdminRegistration(mode: AdminRegistrationMode, token?: string): Promise<AdminRegistrationSettings>;
   createRegistrationInvitation(input: { email: string; name?: string }, token?: string): Promise<RegistrationInvitation>;
@@ -1146,6 +1153,21 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
         { method: "DELETE", token: overrideToken ?? token },
       );
       return body.token;
+    },
+    async getSiteSettings() {
+      const response = await fetchImpl(`${root}/v1/site`, { signal: AbortSignal.timeout(10_000), cache: "no-store", credentials: "omit", headers: { accept: "application/json" } });
+      if (!response.ok) throw new Error("Site settings are not available.");
+      const body = await response.json() as { site?: SiteSettings };
+      if (typeof body.site?.landingPageEnabled !== "boolean") throw new Error("Site settings are invalid.");
+      return { landingPageEnabled: body.site.landingPageEnabled };
+    },
+    async getAdminSiteSettings() {
+      const body = await requestJson<{ site: SiteSettings }>(fetchImpl, `${root}/v1/admin/site`, { token });
+      return body.site;
+    },
+    async updateAdminSiteSettings(settings) {
+      const body = await requestJson<{ site: SiteSettings }>(fetchImpl, `${root}/v1/admin/site`, { method: "PUT", body: settings, token });
+      return body.site;
     },
     async getAdminRegistration(overrideToken) {
       const body = await requestJson<{ registration: AdminRegistrationSettings }>(

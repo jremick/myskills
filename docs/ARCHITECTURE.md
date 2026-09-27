@@ -1,6 +1,6 @@
 # Architecture
 
-Version: 0.1.0-beta.8
+Version: 0.1.0-beta.9
 Last updated: 2026-07-13
 
 ## Core Decision

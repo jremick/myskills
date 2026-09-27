@@ -1,9 +1,15 @@
 # Operational Beta Delivery Brief
 
-Version: 0.1.0-beta.8
+Version: 0.1.0-beta.9
 Last updated: 2026-09-27
 
-Target release: `v0.1.0-beta.8`.
+Target release: `v0.1.0-beta.9`.
+
+## Beta.9 Candidate
+
+The optional marketing homepage is implemented and locally verified. Publication
+and production promotion are tracked in [Beta.9 Release Delivery](BETA9_RELEASE_DELIVERY.md).
+The outbox/email-settings workstream is separate. Required gates remain in force.
 
 ## Beta.8 Release Record
 

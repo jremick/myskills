@@ -12,6 +12,7 @@ import type {
   AuthActionTokenPurpose,
   AuthActionTokenWithUser,
   AuthStore,
+  SiteSettings,
   AuthUserRecord,
   AuthUserWithSession,
   AuthUserWithPassword,
@@ -168,6 +169,8 @@ export class MemoryAuthStore implements AuthStore {
   private adminMutationTail: Promise<void> = Promise.resolve();
   private accountActionTails = new Map<string, Promise<void>>();
 
+  private siteSettings: SiteSettings = { landingPageEnabled: true };
+
   constructor(private registrationMode: RegistrationMode = "closed") {}
 
   setUserStatus(email: string, status: UserStatus): void {
@@ -197,6 +200,20 @@ export class MemoryAuthStore implements AuthStore {
     };
     this.users.set(user.email, user);
     return toRecord(user);
+  }
+
+  async getSiteSettings(): Promise<SiteSettings> {
+    return { ...this.siteSettings };
+  }
+
+  async setSiteSettings(settings: SiteSettings, audit?: CreateAuditEventInput): Promise<SiteSettings> {
+    return this.commitAdminMutation(() => ({
+      audit: audit ? { ...audit, details: { ...audit.details, oldLandingPageEnabled: this.siteSettings.landingPageEnabled, newLandingPageEnabled: settings.landingPageEnabled } } : undefined,
+      commit: () => {
+        this.siteSettings = { ...settings };
+        return { ...this.siteSettings };
+      },
+    }));
   }
 
   async getRegistrationMode(): Promise<RegistrationMode> {

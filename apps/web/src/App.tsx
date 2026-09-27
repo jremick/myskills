@@ -1,3 +1,5 @@
+import { MarketingLanding } from "./components/marketing/MarketingLanding.js";
+import { LandingSettings } from "./components/marketing/LandingSettings.js";
 import {
   useCallback,
   useEffect,
@@ -20,6 +22,7 @@ import {
   Ellipsis,
   FileCode2,
   Fingerprint,
+  Globe,
   KeyRound,
   Link2,
   LockKeyhole,
@@ -181,6 +184,23 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [view, setView] = useState<AppView>(initialLocation.view);
   const [session, setSession] = useState<WebSession | null>(() => readStoredSession());
   const registryClient = useMemo(() => client ?? createRegistryClient(), [client]);
+  const [siteState, setSiteState] = useState<{ view: AppView; enabled?: boolean; failed?: boolean } | null>(null);
+  const [siteRetry, setSiteRetry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setSiteState(null);
+    if (!["landing", "login", "not-found"].includes(view)) return;
+    registryClient.getSiteSettings().then((site) => {
+      if (!active) return;
+      if (typeof site.landingPageEnabled !== "boolean") throw new Error("Invalid site settings.");
+      setSiteState({ view, enabled: site.landingPageEnabled });
+      if (view === "landing" && !site.landingPageEnabled) {
+        setView("login");
+        replaceAppHistory("/login");
+      }
+    }).catch(() => { if (active) setSiteState({ view, failed: true }); });
+    return () => { active = false; };
+  }, [registryClient, view, siteRetry]);
   const [query, setQuery] = useState(initialLocation.query);
   const [skills, setSkills] = useState<PublicSkill[]>([]);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(initialLocation.slug);
@@ -831,6 +851,9 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }
 
   if (activeView === "landing") {
+    if (siteState?.view !== "landing" || siteState.enabled !== true) {
+      return <SiteBootstrap failed={siteState?.view === "landing" && siteState.failed === true} onRetry={() => setSiteRetry((value) => value + 1)} onLogin={openLogin} />;
+    }
     return <MarketingLanding onLogin={openLogin} />;
   }
 
@@ -869,6 +892,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   if (activeView === "login") {
     return (
       <LoginPage
+        showLandingLink={siteState?.view === view && siteState.enabled === true}
         authMessage={authMessage}
         authState={authState}
         mfaPending={mfaPending}
@@ -881,7 +905,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }
 
   if (activeView === "not-found") {
-    return <NotFoundPage onHome={openLanding} />;
+    return <NotFoundPage onHome={openLanding} onLogin={openLogin} showLandingLink={siteState?.view === view && siteState.enabled === true} />;
   }
 
   const navItems = [
@@ -1195,142 +1219,20 @@ export function RegistryApp({ client }: RegistryAppProps) {
   );
 }
 
-function MarketingLanding({ onLogin }: { onLogin: () => void }) {
-  return (
-    <>
-    <a className="skip-link" href="#main-content">Skip to main content</a>
-    <main className="landing-page" id="main-content">
-      <section className="landing-hero" aria-label="MySkills public beta landing page">
-        <nav className="landing-nav" aria-label="Marketing navigation">
-          <a className="landing-brand" href="/">
-            <img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" width={360} height={110} />
-          </a>
-          <div className="landing-links">
-            <a href="/registry">Browse registry</a>
-            <a href="#trust">Trust model</a>
-            <a href="#beta-status">Status</a>
-            <Button asChild className="shadcn-action-button" size="sm">
-              <a href="/login" onClick={(event) => handleCallbackLink(event, onLogin)}>Login</a>
-            </Button>
-          </div>
-        </nav>
-
-        <div className="landing-hero-grid">
-          <div className="landing-hero-copy">
-            <p className="landing-status">Public beta. Hosted signups are owner-gated.</p>
-            <h1>MySkills</h1>
-            <p className="landing-lede">
-              A governed registry for packaging, reviewing, publishing, and installing reusable AI agent skills across web, CLI, API, and MCP surfaces.
-            </p>
-            <div className="landing-actions">
-              <Button asChild className="landing-primary shadcn-action-button" size="sm">
-                <a href="/login" onClick={(event) => handleCallbackLink(event, onLogin)}>
-                  Login
-                  <ArrowRight size={18} aria-hidden="true" />
-                </a>
-              </Button>
-              <a className="landing-secondary" href="/registry">Browse public skills</a>
-              <a className="landing-secondary" href="https://github.com/jremick/myskills/blob/main/docs/GETTING_STARTED.md">Run your own instance</a>
-            </div>
-          </div>
-          <LandingPreview />
-        </div>
-      </section>
-
-      <section className="landing-band" id="registry" aria-labelledby="registry-heading">
-        <div className="landing-section-heading">
-          <span>Registry foundation</span>
-          <h2 id="registry-heading">Built around reviewed releases, not loose prompt folders.</h2>
-        </div>
-        <div className="landing-feature-layout">
-          <article className="landing-feature featured">
-            <Boxes size={24} aria-hidden="true" />
-            <h3>Versioned skill packages</h3>
-            <p>Semantic releases, artifact checksums, supported platforms, and install or rollback flows stay tied to a specific skill version.</p>
-          </article>
-          <div className="landing-feature-stack">
-            <article className="landing-feature">
-              <ShieldCheck size={24} aria-hidden="true" />
-              <h3>Maintainer review</h3>
-              <p>Submissions pass through validation, scan evidence, role-aware review, and publish decisions before they become installable.</p>
-            </article>
-            <article className="landing-feature">
-              <Fingerprint size={24} aria-hidden="true" />
-              <h3>Shared authorization</h3>
-              <p>The API owns registry decisions so web, CLI, and MCP clients use one permission boundary instead of separate local assumptions.</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-band landing-split" id="trust" aria-labelledby="trust-heading">
-        <div>
-          <span className="landing-kicker">Trust boundary</span>
-          <h2 id="trust-heading">Designed for governed teams before broad public onboarding.</h2>
-        </div>
-        <div className="landing-checks">
-          <p><KeyRound size={18} aria-hidden="true" /> First-party accounts, MFA, scoped API tokens, and owner-controlled registration.</p>
-          <p><LockKeyhole size={18} aria-hidden="true" /> Package artifacts live behind authenticated delivery and integrity checks.</p>
-          <p><ShieldCheck size={18} aria-hidden="true" /> MCP starts read-only with discovery and install guidance, not package execution.</p>
-        </div>
-      </section>
-
-      <section className="landing-band landing-status-band" id="beta-status" aria-labelledby="status-heading">
-        <div className="landing-section-heading">
-          <span>Current status</span>
-          <h2 id="status-heading">Public beta release is live.</h2>
-          <p>
-            MySkills is available for external trial use and experimental self-hosting. To join this hosted registry, ask its owner for an invitation, then open the invitation email to create your account. You can browse public skills before signing in.
-          </p>
-        </div>
-        <p><a href="https://github.com/jremick/myskills">Source and releases on GitHub</a> · <a href="https://github.com/jremick/myskills/blob/main/docs/GETTING_STARTED.md">Setup documentation</a></p>
-        <Button asChild className="landing-primary shadcn-action-button" size="sm">
-          <a href="/login" onClick={(event) => handleCallbackLink(event, onLogin)}>
-            Login
-            <ArrowRight size={18} aria-hidden="true" />
-          </a>
-        </Button>
-      </section>
-    </main>
-    </>
-  );
-}
-
-function LandingPreview() {
-  return (
-    <aside className="landing-preview" aria-label="Sanitized product preview">
-      <div className="preview-chrome">
-        <span />
-        <span />
-        <span />
-      </div>
-      <div className="preview-body">
-        <div className="preview-rail">
-          <strong>MySkills</strong>
-          <span className="active">Registry</span>
-          <span>Review</span>
-          <span>Admin</span>
-        </div>
-        <div className="preview-list">
-          <p>No registry content shown</p>
-          {[
-            ["Governed package release", "reviewed", "0.8.4"],
-            ["Private team automation", "pending", "0.3.1"],
-            ["Scoped MCP installer", "approved", "1.2.0"],
-          ].map(([title, status, version]) => (
-            <div className="preview-row" key={title}>
-              <span>
-                <strong>{title}</strong>
-                <small>sanitized preview</small>
-              </span>
-              <StatusToken value={status} />
-              <code>{version}</code>
-            </div>
-          ))}
-        </div>
-      </div>
-    </aside>
-  );
+function SiteBootstrap({ failed, onRetry, onLogin }: { failed: boolean; onRetry: () => void; onLogin: () => void }) {
+  const [showDetails, setShowDetails] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowDetails(true), 600);
+    return () => window.clearTimeout(timer);
+  }, []);
+  return <main className="site-bootstrap" id="main-content">
+    <img src="/brand/myskills-mark.svg" alt="MySkills" width={48} height={48} />
+    {failed ? <>
+      <div role="alert"><h1>We couldn’t load this page.</h1><p>Try again, or continue to sign in.</p></div>
+      <Button type="button" onClick={onRetry}>Try again</Button>
+    </> : <p role="status">{showDetails ? "Loading MySkills…" : ""}</p>}
+    {(failed || showDetails) && <a href="/login" onClick={(event) => handleCallbackLink(event, onLogin)}>Sign in</a>}
+  </main>;
 }
 
 function newPasswordByteError(password: string): string | null {
@@ -1340,6 +1242,7 @@ function newPasswordByteError(password: string): string | null {
 }
 
 function LoginPage({
+  showLandingLink,
   authMessage,
   authState,
   mfaPending,
@@ -1348,6 +1251,7 @@ function LoginPage({
   onPasswordReset,
   onVerifyMfa,
 }: {
+  showLandingLink: boolean;
   authMessage: string | null;
   authState: AuthState;
   mfaPending: MfaPending | null;
@@ -1361,12 +1265,12 @@ function LoginPage({
     <a className="skip-link" href="#main-content">Skip to main content</a>
     <main className="login-page" id="main-content">
       <nav className="login-nav" aria-label="Login navigation">
-        <a className="landing-brand" href="/" onClick={(event) => handleCallbackLink(event, onHome)}>
+        {showLandingLink ? <a className="landing-brand" href="/" onClick={(event) => handleCallbackLink(event, onHome)}>
           <img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" width={360} height={110} />
-        </a>
-        <Button asChild className="login-back shadcn-action-button" size="sm" variant="outline">
+        </a> : <span className="landing-brand"><img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" width={360} height={110} /></span>}
+        {showLandingLink && <Button asChild className="login-back shadcn-action-button" size="sm" variant="outline">
           <a href="/" onClick={(event) => handleCallbackLink(event, onHome)}>Public site</a>
-        </Button>
+        </Button>}
       </nav>
       <section className="login-panel" aria-labelledby="login-heading">
         <p className="landing-status">Public beta. Hosted signups are closed.</p>
@@ -1555,7 +1459,7 @@ function InvitationRegistrationPage({
   );
 }
 
-function NotFoundPage({ onHome }: { onHome: () => void }) {
+function NotFoundPage({ onHome, onLogin, showLandingLink }: { onHome: () => void; onLogin: () => void; showLandingLink: boolean }) {
   return (
     <>
       <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -1563,9 +1467,9 @@ function NotFoundPage({ onHome }: { onHome: () => void }) {
         <section className="login-panel" aria-labelledby="not-found-heading">
           <p className="landing-status">404</p>
           <h1 id="not-found-heading">Page not found</h1>
-          <p>The address does not match a MySkills page. Return to the public site and choose a current destination.</p>
+          <p>The address does not match a MySkills page. Choose a destination below.</p>
           <Button asChild className="shadcn-action-button" size="sm">
-            <a href="/" onClick={(event) => handleCallbackLink(event, onHome)}>Return home</a>
+            {showLandingLink ? <a href="/" onClick={(event) => handleCallbackLink(event, onHome)}>Return home</a> : <a href="/login" onClick={(event) => handleCallbackLink(event, onLogin)}>Go to sign in</a>}
           </Button>
         </section>
       </main>
@@ -2859,6 +2763,9 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
       {message && <div className="safe-message admin-message" role="status">{message}</div>}
 
       <section className="admin-grid">
+        <AdminPanel icon={<Globe size={18} aria-hidden="true" />} title="Landing page" meta="First visit to this instance">
+          <LandingSettings key={`${session.user.id}:${session.expiresAt}`} client={client} canEdit={session.user.mfaVerified} onSaved={() => { void refreshAudit().catch(() => setMessage("Landing setting saved. Refresh to load the audit history.")); }} />
+        </AdminPanel>
         <AdminPanel
           icon={<Settings size={18} aria-hidden="true" />}
           title="Registration"
