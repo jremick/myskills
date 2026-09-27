@@ -91,7 +91,7 @@
 
 /* Body: list and inspector. The split follows the surface's measured width. */
 .registry-workspace .registry-body { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
-.registry-workspace .registry-surface[data-layout="split"] .registry-body { grid-template-columns: minmax(0, 1fr) clamp(460px, 56%, 620px); }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="split"] .registry-body { grid-template-columns: minmax(0, 1fr) clamp(460px, 56%, 620px); }
 
 /* List */
 .registry-workspace .registry-list { display: grid; align-content: start; gap: 4px; min-width: 0; padding: 12px 12px 16px; container-type: inline-size; }
@@ -122,7 +122,7 @@
 .registry-workspace .registry-row[aria-current="true"] { background: var(--teal-soft); box-shadow: inset 2px 0 0 var(--teal); }
 .registry-workspace .registry-rows .registry-row:focus-visible { outline-width: 2px; outline-offset: -3px; }
 .registry-workspace .registry-row > .registry-tile { align-self: start; margin-top: 2px; }
-.registry-workspace .registry-surface[data-layout="stack"] .registry-row { min-height: 64px; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-row { min-height: 64px; }
 .registry-workspace .registry-row-text { display: grid; gap: 2px; min-width: 0; }
 .registry-workspace .registry-row-title { font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
 .registry-workspace .registry-row-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; min-width: 0; color: var(--muted); font-size: 13px; line-height: 18px; }
@@ -173,7 +173,7 @@
 
 /* Inspector */
 .registry-workspace .registry-inspector { display: grid; align-content: start; gap: 20px; min-width: 0; padding: 20px 24px 24px; }
-.registry-workspace .registry-surface[data-layout="split"] .registry-inspector { border-left: 1px solid var(--line-soft); }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="split"] .registry-inspector { border-left: 1px solid var(--line-soft); }
 .registry-workspace .registry-back {
   justify-self: start;
   min-height: 44px;
@@ -194,19 +194,19 @@
 .registry-workspace .registry-ref span + code { color: var(--ink-soft); font-weight: 600; }
 .registry-workspace .registry-inspector-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; color: var(--muted); font-size: 13px; line-height: 18px; }
 .registry-workspace .registry-version-slot { min-width: 0; }
-.registry-workspace .registry-surface[data-layout="split"] .registry-version-slot { max-width: 260px; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="split"] .registry-version-slot { max-width: 260px; }
 .registry-workspace .registry-version-control { display: grid; justify-items: end; gap: 8px; }
 .registry-workspace .registry-version-control label { display: grid; gap: 4px; max-width: 100%; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
 .registry-workspace .registry-version-control select { min-width: 176px; }
 .registry-workspace .registry-version-control .control-plane-muted { color: var(--muted); font-size: 13px; line-height: 18px; text-align: right; }
 .registry-workspace .registry-version-control [role="status"] { display: grid; justify-items: end; gap: 6px; }
-.registry-workspace .registry-surface[data-layout="stack"] .registry-inspector-head { grid-template-columns: auto minmax(0, 1fr); }
-.registry-workspace .registry-surface[data-layout="stack"] .registry-version-slot { grid-column: 1 / -1; }
-.registry-workspace .registry-surface[data-layout="stack"] .registry-version-control,
-.registry-workspace .registry-surface[data-layout="stack"] .registry-version-control [role="status"] { justify-items: start; }
-.registry-workspace .registry-surface[data-layout="stack"] .registry-version-control label { width: min(100%, 320px); }
-.registry-workspace .registry-surface[data-layout="stack"] .registry-version-control select { width: 100%; }
-.registry-workspace .registry-surface[data-layout="stack"] .registry-version-control .control-plane-muted { text-align: left; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-inspector-head { grid-template-columns: auto minmax(0, 1fr); }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-slot { grid-column: 1 / -1; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-control,
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-control [role="status"] { justify-items: start; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-control label { width: min(100%, 320px); }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-control select { width: 100%; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-control .control-plane-muted { text-align: left; }
 .registry-workspace .registry-inspector-state {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -289,9 +289,9 @@
 .registry-workspace .release-install-panel .control-plane-muted { color: var(--muted); font-size: 13px; line-height: 18px; }
 .registry-workspace .release-install-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 10px; }
 .registry-workspace .release-install-controls label { display: grid; flex: 1 1 200px; gap: 4px; max-width: 360px; min-width: 0; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
-.registry-workspace .registry-surface[data-layout="stack"] .release-install-controls { display: grid; grid-template-columns: minmax(0, 1fr); }
-.registry-workspace .registry-surface[data-layout="stack"] .release-install-controls label { max-width: none; width: 100%; }
-.registry-workspace .registry-surface[data-layout="stack"] .release-install-controls > button { justify-self: start; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .release-install-controls { display: grid; grid-template-columns: minmax(0, 1fr); }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .release-install-controls label { max-width: none; width: 100%; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .release-install-controls > button { justify-self: start; }
 .registry-workspace .release-install-review {
   display: grid;
   flex-basis: 100%;

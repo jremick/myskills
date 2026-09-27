@@ -10,6 +10,7 @@ import { PackageFileViewer } from "../registry/PackageFileViewer.js";
 import { LibrarySharingReview } from "./LibrarySharingReview.js";
 import { LibraryDisclosure } from "./LibraryDisclosure.js";
 import { attestationLabel, bindingStatusLabel, candidateStateLabel, dateTime, eventLabel, healthLabel, platformLabel, refLabel, repositoryLabel, reviewStatusLabel, roleLabel, securityStatusLabel, severityLabel, shortDate, tileTone, trackingModeLabel, type Tone } from "./library-display.js";
+import { BundleReference } from "./BundleReference.js";
 
 const mutationId = () => crypto.randomUUID();
 const date = (value: string | null | undefined) => value ? new Date(value).toLocaleString() : "Never";
@@ -303,7 +304,7 @@ function LibraryDetail({ api, client, libraryId, onRemoved }: { api: LibraryClie
   const remove = (entry: LibraryEntry) => library.access.canWrite && <RemoveEntry api={api} entry={entry} onChanged={afterRemove(entry)} />;
   const inspector = inspected ? <aside key={inspected.id} className="library-inspector" aria-labelledby={titleId(inspected.id)} onFocusCapture={() => { automaticSelection.current = false; }}>
     {layout === "stack" && !importing && <Button type="button" variant="ghost" size="sm" className="library-back" onClick={backToEntries}><ArrowLeft size={16} aria-hidden="true" />Back to entries</Button>}
-    {inspected.kind === "source" && inspected.source ? <SourceEntry
+    {inspected.kind === "bundle" ? <><header className="library-inspector-head"><h3 id={titleId(inspected.id)} tabIndex={-1}>{inspected.title}</h3><Chip>Bundle</Chip></header><BundleReference entry={inspected} />{remove(inspected)}</> : inspected.kind === "source" && inspected.source ? <SourceEntry
       api={api}
       entry={inspected}
       library={library}
@@ -442,12 +443,12 @@ function EntryRow({ entry, sourceName, selected, register, onSelect }: { entry: 
       <span className="library-entry-text">
         <span id={`${id}-title`} className="library-entry-title">{entry.title}</span>
         <span id={`${id}-meta`} className="library-entry-meta">
-          {entry.kind === "source" ? <><span>{source?.path || "Repository root"}</span><span>{refLabel(source?.ref)}</span></>
+          {entry.kind === "bundle" ? <span>Bundle reference</span> : entry.kind === "source" ? <><span>{source?.path || "Repository root"}</span><span>{refLabel(source?.ref)}</span></>
             : <>{slug && <code>{slug}</code>}<span>{sourceName ?? (entry.skill?.sourceEntryId ? "Library source" : "Registry")}</span></>}
         </span>
       </span>
       <span id={`${id}-chips`} className="library-entry-chips">
-        {entry.kind === "source" ? <>
+        {entry.kind === "bundle" ? <Chip>Bundle</Chip> : entry.kind === "source" ? <>
           {entry.tracking && <Chip>{trackingModeLabel(entry.tracking.mode).label}</Chip>}
           {!["neutral", "teal"].includes(health.tone) && <Chip tone={health.tone}>{health.label}</Chip>}
         </> : entry.adoption ? <>

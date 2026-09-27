@@ -54,9 +54,9 @@ test("MCP server registers read-only registry tools and executes search", async 
     const tools = await client.listTools();
     assert.deepEqual(
       tools.tools.map((tool) => tool.name).sort(),
-      ["get_architecture_projection", "get_install_instructions", "get_skill_info", "list_architecture_patterns", "list_architectures", "search_skills"],
+      ["browse_bundles", "curate_bundle", "get_architecture_projection", "get_install_instructions", "get_skill_info", "list_architecture_patterns", "list_architectures", "search_skills"],
     );
-    assert.equal(tools.tools.every((tool) => tool.annotations?.readOnlyHint === true), true);
+    assert.equal(tools.tools.filter(tool => tool.name !== "curate_bundle").every((tool) => tool.annotations?.readOnlyHint === true), true);
 
     const result = await client.callTool({
       name: "search_skills",
@@ -150,6 +150,34 @@ class MemoryTransport implements Transport {
     this.onclose?.();
   }
 }
+
+// Authored before the bundle tools. Scope denial must stop before mutation.
+test("MCP bundle discovery and explicit curation retain token scope and API conflicts", async () => {
+  let scopes = ["skills:read"];
+  const calls: Array<{url:string; method:string|undefined}> = [];
+  const {clientTransport,serverTransport}=linkedTransports();
+  const bundleResponse=(status:number,body:unknown)=>new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json"}});
+  const server=createAiSkillsMcpServer({token:"fixture-bundle-token",fetchImpl:async(url,init)=>{
+    calls.push({url,method:init?.method});
+    if(url.endsWith("/v1/mcp/session"))return bundleResponse(200,{user:{id:"u",roles:["author"]},credential:{kind:"api_token",scopes}});
+    if(init?.method==="PATCH")return bundleResponse(409,{error:{code:"BUNDLE_REVISION_CONFLICT"}});
+    return bundleResponse(200,{rows:[],totalSkills:31,totalBundles:2,nextCursor:null,entry:{kind:"bundle",adoption:null}});
+  }});
+  const client=new Client({name:"bundle-test",version:"1"});await server.connect(serverTransport);await client.connect(clientTransport);
+  try {
+    const listed=await client.listTools();assert.ok(listed.tools.some(t=>t.name==="browse_bundles"&&t.annotations?.readOnlyHint===true));
+    assert.ok(listed.tools.some(t=>t.name==="curate_bundle"&&t.annotations?.readOnlyHint===false));
+    const result=await client.callTool({name:"browse_bundles",arguments:{action:"catalog",query:"engineering",view:"outline"}});
+    assert.notEqual(result.isError,true);assert.ok(calls.some(c=>c.url.includes("query=engineering")));
+    const id="11111111-1111-4111-8111-111111111111";
+    const denied=await client.callTool({name:"curate_bundle",arguments:{action:"save",id,input:{libraryId:id,expectedRevision:1}}});assert.equal(denied.isError,true);
+    assert.equal(calls.filter(c=>c.method==="POST").length,0);
+    scopes=["skills:read","libraries:write","skills:submit"];
+    assert.notEqual((await client.callTool({name:"curate_bundle",arguments:{action:"save",id,input:{libraryId:id,expectedRevision:1}}})).isError,true);
+    assert.equal((await client.callTool({name:"curate_bundle",arguments:{action:"edit",id,input:{expectedRevision:1}}})).isError,true);
+    assert.ok(!calls.some(c=>/adoptions|install|targets/.test(c.url)));
+  }finally{await client.close();await server.close();}
+});
 
 function linkedTransports(): { clientTransport: MemoryTransport; serverTransport: MemoryTransport } {
   const clientTransport = new MemoryTransport();

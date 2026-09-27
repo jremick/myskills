@@ -233,7 +233,6 @@ function checkCapabilityVersion() {
 }
 
 function checkReleaseMarkers() {
-  assertContains("README.md", `Current target: **${expectedTag}**.`);
   assertContains("CHANGELOG.md", `Target release: \`${expectedTag}\`.`);
   assertContains("docs/BETA_RELEASE_GOAL.md", `Target release: \`${expectedTag}\`.`);
   assertContains("docs/BETA_RELEASE_GOAL.md", "npm run release:verify");

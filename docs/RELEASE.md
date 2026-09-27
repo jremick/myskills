@@ -1,16 +1,38 @@
 # Release Process
 
-Version: 0.1.0-beta.9
+Version: 0.1.0-beta.10
 Last updated: 2026-09-27
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
 
-## Beta.9 Candidate
+## Beta.10 release record
+
+Skill bundles add Grouped, List and Outline registry views, curated collections,
+reviewed source groups and Library references. The approved release scope is
+GitHub and the hosted application; npm publication is excluded. The CLI archive
+is still built and verified. See [Beta.10 release delivery](BETA10_RELEASE_DELIVERY.md)
+and [Skill bundles](plans/2026-09-27-skill-bundles.md).
+
+The GitHub prerelease and production API/web pair are verified on source
+`084b48e4bce0e8693357f7a4f89d7aabf8ff89f4`. Required CI, the canonical gate,
+tagged workflow, staging acceptance and production checks passed. npm remains
+beta.8; the verified beta.10 CLI archive is attached to the GitHub release.
+
+Migration `0033_skill_bundles.sql` is additive. After bundle references are saved,
+retain a bundle-aware Library reader. Use `MYSKILLS_BUNDLES_ENABLED=false` to stop
+new bundle discovery and writes while preserving those readers and records.
+Do not downgrade to beta.9 or remove the tables as a rollback shortcut.
+
+## Beta.9 Release Record
+
+Released tag: `v0.1.0-beta.9`, source `4e728b16cc04f11faa7e23ad0657913b67f50577`.
 
 The homepage and optional landing setting are described in [Landing Page](LANDING_PAGE.md).
-Current delivery evidence is in [Beta.9 Release Delivery](BETA9_RELEASE_DELIVERY.md).
+The GitHub prerelease and production API/web promotion are verified. Required
+CI, the canonical gate, staging and production checks passed; exact delivery
+evidence is in [Beta.9 Release Delivery](BETA9_RELEASE_DELIVERY.md).
 This release updates GitHub and the hosted website; npm remains beta.8.
 
 ## Beta.8 Release Record
@@ -122,7 +144,7 @@ Draft public release text in a file and use `--notes-file` or the GitHub UI if a
 
 ## CLI Package Candidate
 
-The candidate source version is `0.1.0-beta.9`, with `publishConfig.tag=beta`. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle. Candidate preparation does not change the published npm version.
+The candidate source version is `0.1.0-beta.10`, with `publishConfig.tag=beta`. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle. Candidate preparation does not change the published npm version.
 
 The canonical gate proves:
 

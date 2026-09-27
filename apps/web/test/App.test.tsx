@@ -271,6 +271,12 @@ test("default registry client is stable between renders", async () => {
     if (url.includes("/v1/me")) {
       return jsonResponse(200, { user: authUser() });
     }
+    if (url.includes("/v1/registry/catalog")) {
+      return jsonResponse(200, { view: "grouped", query: "", rows: [{ kind: "skill", skill: publicSkill(), memberships: [] }], totalSkills: 1, totalBundles: 0, nextCursor: null });
+    }
+    if (url.endsWith("/v1/skills/release-notes-helper/bundles")) {
+      return jsonResponse(200, { bundles: [] });
+    }
     if (url.endsWith("/v1/skills/release-notes-helper/releases")) {
       return jsonResponse(200, { releases: [] });
     }
@@ -289,12 +295,14 @@ test("default registry client is stable between renders", async () => {
   try {
     const view = render(<RegistryApp />);
 
-    await view.findByText("Turns merged changes into concise release notes.");
-    await waitFor(() => assert.equal(calls.length, 7));
+    fireEvent.click(await view.findByRole("link", { name: "Release Notes Helper" }));
+    await view.findByRole("heading", { name: "Release Notes Helper" });
+    await waitFor(() => assert.equal(calls.length, 8));
     await delay(25);
     assert.deepEqual([...calls].sort(), [
       "http://localhost:3001/v1/me",
-      "http://localhost:3001/v1/skills",
+      "http://localhost:3001/v1/registry/catalog?view=grouped&limit=25",
+      "http://localhost:3001/v1/skills/release-notes-helper/bundles",
       "http://localhost:3001/v1/skills/release-notes-helper",
       "http://localhost:3001/v1/skills/release-notes-helper/releases",
       "http://localhost:3001/v1/skills/release-notes-helper/releases/0.1.0",

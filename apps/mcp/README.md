@@ -24,7 +24,7 @@ return empty lists; native discovery uses `skills/list`.
 The stdio entrypoint uses `serveStdio` to select the protocol for each connection.
 The HTTP entrypoint uses `createMcpHandler` for modern requests and the SDK's
 request classifier to preserve legacy stateless JSON responses. Both paths expose
-the same six metadata tools. Modern clients can use `server/discover`, `tools/list`,
+the same eight tools: seven reads and one explicit bundle-curation write. Modern clients can use `server/discover`, `tools/list`,
 and `tools/call`; the SDK supplies the required protocol envelope and server identity
 metadata. Legacy clients continue to use `initialize` and the existing tools.
 
@@ -134,7 +134,7 @@ metadata. Generated CLI commands do not embed an API URL or bearer token;
 configure the CLI with `myskills config set api-url ...` or `MYSKILLS_API_URL`,
 then authenticate separately.
 
-The MCP server remains read-only and does not perform team or sharing
+Bundle curation is the only write tool. The MCP server does not perform team or sharing
 mutations. Those API/CLI mutations now require the session/MFA boundary
 documented in the API and CLI guides. Before upgrading to beta.3, enroll TOTP with
 `POST /v1/auth/mfa/totp/enroll`, confirm with
@@ -187,3 +187,17 @@ Tool inputs must not carry tokens or API base URLs. For stdio, configure `MYSKIL
 - role-gated read-only maintainer/admin tools
 - authoritative per-tool MCP audit events for future maintainer/admin tools
 - client compatibility notes
+
+### Skill bundle tools
+
+`browse_bundles` supports `catalog`, `show`, `members`, `memberships` and
+`sources`. It returns only authorized registry metadata and never installs skills.
+It needs `skills:read`; source selections also need `libraries:read`.
+
+`curate_bundle` is an explicit write tool, with `create`, `edit` and `save`
+actions. Create/edit require `skills:submit`, current author/owner permissions,
+and a reviewed bundle input. Edit and save include `expectedRevision`. Save
+also requires `libraries:write` and stores only a Library reference. It does
+not change adoption or installation state. The API rechecks every permission;
+the tool does not accept arbitrary routes. Review the intended action before
+calling this write tool.

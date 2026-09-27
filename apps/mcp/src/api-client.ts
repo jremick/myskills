@@ -21,6 +21,7 @@ export interface ReleaseMetadata {
 export interface RegistryApiClient {
   readonly baseUrl: string;
   readonly hasToken: boolean;
+  bundleRequest?(request: import("@myskills-app/core").BundleRequest): Promise<Record<string, unknown>>;
   authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;
   searchSkills(input: { query?: string; limit?: number }): Promise<PublicSkill[]>;
   getSkill(slug: string): Promise<PublicSkill>;
@@ -179,6 +180,7 @@ export function createRegistryApiClient(options: RegistryApiClientOptions = {}):
   return {
     baseUrl,
     hasToken: Boolean(token),
+    bundleRequest: request => requestJson<Record<string, unknown>>(fetchImpl, token, `${baseUrl}${request.pathname}`, { method: request.method, ...(request.payload ? {body: request.payload} : {}) }),
     async authenticateMcp(method, signal) {
       if (!token) {
         throw new RegistryApiError(401, "AUTHENTICATION_REQUIRED");
@@ -270,7 +272,7 @@ function normalizeBaseUrl(value: string): string {
 
 async function requestJson<T>(fetchImpl: FetchLike, token: string | undefined, url: string, options: {
   body?: unknown;
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PATCH";
 } = {}): Promise<T> {
   const headers: Record<string, string> = { accept: "application/json" };
   if (token) {

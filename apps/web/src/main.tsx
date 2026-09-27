@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { RegistryApp } from "./App.js";
 import { installAnalytics } from "./analytics.js";
 import "./styles.css";
+import "./components/registry/bundles.css";
 
 installAnalytics();
 

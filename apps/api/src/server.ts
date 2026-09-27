@@ -1,3 +1,4 @@
+import { BundleService } from "./bundles/service.js";
 import { isIP } from "node:net";
 import { LIBRARY_LIMITS } from "@myskills-app/core";
 import { createDb, createPgPool } from "./db/client.js";
@@ -87,7 +88,9 @@ const architectureTargetService = new ArchitectureTargetService(
 );
 const skillUpgradePolicyService = new SkillUpgradePolicyService(new PostgresSkillUpgradePolicyStore(db));
 // Production always uses the fixed-host HTTPS transport; there is no fetch override.
+const bundleService = new BundleService(db);
 const libraryService = new LibraryService({
+  bundles: bundleService,
   store: new PostgresLibraryStore(db),
   submissions: submissionService,
   skillRepository,
@@ -134,6 +137,8 @@ const app = buildApp({
   skillUpgradePolicyService,
   improvementService,
   libraryService,
+  bundleService,
+  bundlesEnabled: process.env.MYSKILLS_BUNDLES_ENABLED !== "false",
   allowedOrigins: allowedOrigins(),
   trustProxy: trustProxy(),
   requestLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 600, windowMs: 60_000 }),

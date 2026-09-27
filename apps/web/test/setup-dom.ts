@@ -5,6 +5,7 @@ const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http:
 globalThis.window = dom.window as unknown as Window & typeof globalThis;
 globalThis.document = dom.window.document;
 globalThis.HTMLElement = dom.window.HTMLElement;
+globalThis.MutationObserver = dom.window.MutationObserver;
 globalThis.Event = dom.window.Event;
 globalThis.InputEvent = dom.window.InputEvent;
 globalThis.MouseEvent = dom.window.MouseEvent;
