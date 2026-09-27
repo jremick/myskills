@@ -216,7 +216,7 @@ test("anonymous registry routes load approved public skills without a session", 
   await view.findByText("Release Notes Helper");
   assert.deepEqual(client.searchCalls, [""]);
   assert.equal(document.body.textContent?.includes("owner@example.com"), false);
-  await waitFor(() => assert.equal(window.location.pathname, "/skills/release-notes-helper"));
+  await waitFor(() => assert.equal(window.location.pathname, "/registry"));
 });
 
 test("an explicit authorized skill URL survives a result page that excludes it", async () => {
@@ -243,7 +243,7 @@ test("registry pagination reaches later skills without replacing the selected de
   fireEvent.click(await view.findByRole("button", { name: "Load more skills" }));
   await view.findByRole("link", { name: /Second helper/ });
   assert.deepEqual(cursors, [undefined, "opaque-next-page"]);
-  assert.equal(window.location.pathname, "/skills/first-helper");
+  assert.equal(window.location.pathname, "/registry");
   fireEvent.click(view.getByRole("link", { name: /Second helper/ }));
   await waitFor(() => assert.equal(window.location.pathname, "/skills/second-helper"));
 });
@@ -382,7 +382,7 @@ test("public release history selects exact metadata and a supported platform wit
   assert.notEqual(view.getByText("Released").parentElement?.textContent, latestDate);
   assert.equal(view.getByText("fix").textContent, "fix");
   assert.match(view.getByText("Minimum MySkills").parentElement?.textContent ?? "", /1\.0\.0/);
-  assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /bbbbbbbbbb…bbbbbbbb/);
+  assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /b{64}/);
   assert.match(view.getByText("Byte size").parentElement?.textContent ?? "", /513/);
   assert.equal(view.getByText("Platforms").parentElement?.textContent?.includes("codex"), false);
   assert.equal(view.queryByRole("button", { name: "codex" }), null);
@@ -577,7 +577,7 @@ test("a release without supported platforms keeps its metadata but offers no exp
   await view.findByText(older.releaseNotes!);
   assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, older.version);
   assert.match(view.getByText("Platforms").parentElement?.textContent ?? "", /generic \(planned\).*codex \(deprecated\)/);
-  assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /bbbbbbbbbb…bbbbbbbb/);
+  assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /b{64}/);
   assert.match(view.getByText("Byte size").parentElement?.textContent ?? "", /513/);
   assert.match(view.getByText(/No supported export platform is available for this release/).textContent ?? "", /Export and install are unavailable/);
   assert.equal(view.queryByRole("heading", { name: "Install this exact release" }), null);
@@ -704,6 +704,7 @@ test("privileged skill controls stay locked without an MFA-verified session and 
 
   const view = render(<RegistryApp client={client} />);
 
+  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
   await view.findByRole("heading", { name: "Lifecycle and sharing controls are locked", level: 2 });
   assert.equal(view.queryByRole("region", { name: "Skill lifecycle controls" }), null);
   assert.equal(view.queryByRole("region", { name: "Sharing controls" }), null);
@@ -720,6 +721,7 @@ test("MFA-verified managers can load lifecycle and sharing controls", async () =
 
   const view = render(<RegistryApp client={client} />);
 
+  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
   await view.findByRole("region", { name: "Skill lifecycle controls" });
   await view.findByRole("region", { name: "Sharing controls" });
   assert.deepEqual(client.releaseHistoryCalls, [managedSkill.slug]);
@@ -737,6 +739,7 @@ test("metadata saves refresh the parent registry detail", async () => {
     return { ...skill, lifecycleStatus: "approved", allowedActions: ["edit"] };
   };
   const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
   await view.findByRole("region", { name: "Skill lifecycle controls" });
   fireEvent.input(view.getByRole("textbox", { name: "Title" }), { target: { value: "Updated registry title" } });
   fireEvent.input(view.getByRole("textbox", { name: "Summary" }), { target: { value: "Updated registry summary" } });
@@ -756,6 +759,7 @@ test("skill deletion clears the parent detail and its stale export actions", asy
   } });
   client.performSkillAction = async () => { deleted = true; return { ...skill, lifecycleStatus: "deleted", allowedActions: [] }; };
   const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
   await view.findByRole("region", { name: "Skill lifecycle controls" });
   const deleteButton = view.getByRole("button", { name: "Delete skill" }) as HTMLButtonElement;
   await waitFor(() => assert.equal(deleteButton.disabled, false));
@@ -777,6 +781,7 @@ test("release mutation refreshes parent history before offering the old artifact
   const client = historyClient(fixture, { user: owner, releaseListLoader: () => revoked ? [{ ...current, lifecycleStatus: "revoked" }] : [current] });
   client.performReleaseAction = async () => { revoked = true; return { ...current, lifecycleStatus: "revoked", allowedActions: [] }; };
   const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
   fireEvent.click(await view.findByRole("button", { name: "Revoke" }));
   const dialog = await view.findByRole("dialog");
   fireEvent.input(dialog.querySelector("textarea")!, { target: { value: "Withdraw this artifact" } });
@@ -895,7 +900,7 @@ test("out-of-order exact release responses cannot replace the current version", 
   await act(async () => { pendingRelease.resolve(fixture.older); await pendingRelease.promise; });
   assert.equal(window.location.search, "");
   assert.equal(view.queryByText(fixture.older.releaseNotes!), null);
-  assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /aaaaaaaaaa…aaaaaaaa/);
+  assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /a{64}/);
   assert.equal(client.releaseCalls.at(-1), "release-notes-helper@0.2.0");
 });
 
@@ -996,7 +1001,7 @@ test("login stores session metadata without persisting bearer tokens and logout 
 
   await view.findByText("reader@example.com");
   await view.findByText("Release Notes Helper");
-  assert.equal(window.location.pathname, "/skills/release-notes-helper");
+  assert.equal(window.location.pathname, "/registry");
   assert.equal(document.body.textContent?.includes("web-session-token"), false);
   const stored = JSON.parse(window.localStorage.getItem("myskills-app:web-session") ?? "{}") as Record<string, unknown>;
   assert.equal("token" in stored, false);
@@ -1148,7 +1153,7 @@ test("role-gated deep links normalize to the public registry when access is deni
   const view = render(<RegistryApp client={client} />);
 
   await view.findByText("Release Notes Helper");
-  await waitFor(() => assert.equal(window.location.pathname, "/skills/release-notes-helper"));
+  await waitFor(() => assert.equal(window.location.pathname, "/registry"));
   assert.equal(view.queryByRole("heading", { name: "Admin console" }), null);
 });
 
@@ -1776,7 +1781,7 @@ test("unsaved architecture edits guard browser back without duplicate prompts", 
     },
   });
   window.history.back();
-  await waitFor(() => assert.equal(window.location.pathname, "/skills/release-notes-helper"));
+  await waitFor(() => assert.equal(window.location.pathname, "/registry"));
   assert.equal(confirmCalls, 2);
 });
 

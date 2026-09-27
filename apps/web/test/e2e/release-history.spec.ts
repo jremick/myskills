@@ -62,6 +62,7 @@ test("selecting an older release survives its exact URL and browser history", as
   });
 
   await page.goto("/skills/release-notes-helper?q=writing");
+  await page.getByText("Release notes for 0.2.0", { exact: true }).click();
   await expect(page.getByText(latest.releaseNotes)).toBeVisible();
   const selector = page.getByRole("combobox", { name: "Release version" });
   await expect(selector).toHaveValue("0.2.0");
@@ -70,10 +71,11 @@ test("selecting an older release survives its exact URL and browser history", as
   await selector.selectOption("0.1.0");
   await expect(page).toHaveURL(/\/skills\/release-notes-helper\?q=writing&platform=generic&version=0\.1\.0$/);
   await expect(page.getByText(older.releaseNotes)).toBeVisible();
-  await expect(page.getByText("SHA-256").locator("..")).toContainText("bbbbbbbbbb…bbbbbbbb");
+  await expect(page.getByText("SHA-256").locator("..")).toContainText("b".repeat(64));
   await expect(page.getByText(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/)).toBeVisible();
 
   await page.reload();
+  await page.getByText("Release notes for 0.1.0", { exact: true }).click();
   await expect(selector).toHaveValue("0.1.0");
   await expect(page.getByText(older.releaseNotes)).toBeVisible();
   await page.goBack();
@@ -106,7 +108,7 @@ test("selecting an older release survives its exact URL and browser history", as
   await expect(page).toHaveURL(/\/skills\/release-notes-helper\?q=writing&platform=generic&version=0\.1\.0$/);
   await expect(page.getByText(older.releaseNotes)).toBeVisible();
   await expect(selector).toBeFocused();
-  await expect(page.getByText("SHA-256").locator("..")).toContainText("bbbbbbbbbb…bbbbbbbb");
+  await expect(page.getByText("SHA-256").locator("..")).toContainText("b".repeat(64));
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await selector.press("ArrowUp");
   await expect(page.getByText(latest.releaseNotes)).toBeVisible();

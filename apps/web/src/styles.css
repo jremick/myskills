@@ -1,5 +1,6 @@
 @import "./components/marketing/marketing.css";
 @import "./components/library/libraries.css";
+@import "./components/registry/registry.css";
 @import "./components/architecture/editor/architecture-editor.css";
 @import "@xyflow/react/dist/style.css";
 @import "tailwindcss";
@@ -8889,4 +8890,90 @@ textarea:focus-visible {
 @media (pointer: coarse), (any-pointer: coarse), (max-width: 680px) {
   .app-shell :is([data-slot="button"], [data-slot="input"], select) { min-height: 44px; }
   .app-shell [data-slot="button"] { min-width: 44px; }
+}
+
+/* Mobile shell: a top bar with the account menu on every app route, and a
+   More menu grouped like the sidebar. Both appear where the sidebar hides. */
+.mobile-topbar { display: none; }
+@media (max-width: 960px) {
+  .mobile-topbar {
+    position: relative;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 52px;
+    padding: 4px max(8px, env(safe-area-inset-right)) 4px max(16px, env(safe-area-inset-left));
+    border-bottom: 1px solid var(--line);
+    background: #fbfcfc;
+  }
+  .mobile-topbar .mobile-brand { gap: 8px; font-size: 16px; }
+  .mobile-topbar .mobile-brand img { width: 28px; height: 28px; }
+}
+.mobile-account { position: relative; }
+.mobile-account-button {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--ink-soft);
+  background: transparent;
+}
+.mobile-account-button:hover,
+.mobile-account-button[aria-expanded="true"] { border-color: #c8dedb; color: var(--teal-dark); background: var(--teal-soft); }
+.app-shell .mobile-account-button:focus-visible,
+.app-shell .mobile-account-menu button:focus-visible,
+.app-shell .mobile-nav-item:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.mobile-account-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: grid;
+  width: min(288px, calc(100vw - 24px));
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+}
+.mobile-account-identity { display: grid; gap: 2px; margin-bottom: 6px; padding: 8px 10px 10px; border-bottom: 1px solid var(--line-soft); }
+.mobile-account-identity strong { color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.mobile-account-identity span { color: var(--muted); font-size: 12px; line-height: 16px; }
+.mobile-account-menu :is(a, button) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--ink-soft);
+  background: transparent;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: none;
+}
+.mobile-account-menu :is(a, button):hover,
+.mobile-account-menu a[aria-current="page"] { color: var(--teal-dark); background: var(--teal-soft); }
+.mobile-more-menu {
+  min-width: 208px;
+  max-height: calc(100dvh - 140px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.mobile-more-group { display: grid; }
+.mobile-more-group + .mobile-more-group { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line-soft); }
+.mobile-more-label {
+  padding: 6px 11px 2px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
