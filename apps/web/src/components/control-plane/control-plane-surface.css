@@ -301,3 +301,8 @@
   .app-shell main.cp-page .cp-row[aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
   .app-shell main.cp-page .cp-chip { border: 1px solid CanvasText; }
 }
+
+.app-shell main.cp-page .architecture-diagram-kind { font-size: 11px; }
+.app-shell main.cp-page .architecture-diagram-shell:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
+
+.app-shell main.cp-page :is(.architecture-preview-stack, .architecture-panel-section) { min-width: 0; grid-template-columns: minmax(0, 1fr); }

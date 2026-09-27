@@ -307,18 +307,6 @@ export function ManagedSkillsDashboard({ client, mfaVerified }: { client: Regist
                   <span>An MFA-verified session is required for lifecycle changes. <a href="/settings">Open security settings</a>.</span>
                 </p>
               )}
-              {(skillActions.length > 0 || detailMessage?.section === "skill") && (
-                <section aria-labelledby={`${baseId}-skill`} className="registry-section">
-                  <h3 id={`${baseId}-skill`}>Skill lifecycle</h3>
-                  {skillActions.length > 0 && (
-                    <div className="registry-actions">
-                      {skillActions.map((action) => <Button className={isDestructive(action) ? "author-danger" : undefined} data-action={`skill:${action}`} key={action} size="sm" type="button" variant="outline" disabled={busy || !mfaVerified} onClick={() => openPending({ kind: "skill", action })}>{label(action)} skill</Button>)}
-                    </div>
-                  )}
-                  {confirmation("skill")}
-                  {sectionMessage("skill")}
-                </section>
-              )}
               <section aria-labelledby={`${baseId}-release`} className="registry-section">
                 <h3 id={`${baseId}-release`}>Release lifecycle</h3>
                 {detailLoading && <p className="registry-muted" role="status">Loading releases…</p>}
@@ -346,6 +334,18 @@ export function ManagedSkillsDashboard({ client, mfaVerified }: { client: Regist
                 {confirmation("release")}
                 {sectionMessage("release")}
               </section>
+              {(skillActions.length > 0 || detailMessage?.section === "skill") && (
+                <section aria-labelledby={`${baseId}-skill`} className="registry-section">
+                  <h3 id={`${baseId}-skill`}>Skill lifecycle</h3>
+                  {skillActions.length > 0 && (
+                    <div className="registry-actions">
+                      {skillActions.map((action) => <Button className={isDestructive(action) ? "author-danger" : undefined} data-action={`skill:${action}`} key={action} size="sm" type="button" variant="outline" disabled={busy || !mfaVerified} onClick={() => openPending({ kind: "skill", action })}>{label(action)} skill</Button>)}
+                    </div>
+                  )}
+                  {confirmation("skill")}
+                  {sectionMessage("skill")}
+                </section>
+              )}
             </div>
           </section>
         )}

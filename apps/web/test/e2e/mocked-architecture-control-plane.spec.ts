@@ -76,6 +76,18 @@ test("signed-in owner inspects the same profile-filtered nodes in the diagram an
   const [, , viewBoxWidth, viewBoxHeight] = (viewBox ?? "").split(/\s+/).map(Number);
   expect(viewBoxWidth).toBeGreaterThan(900);
   expect(viewBoxHeight).toBeGreaterThan(400);
+  const mapMetrics = await diagram.evaluate((element) => {
+    const svg = element as SVGSVGElement;
+    const scale = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+    return { scale, labelSize: parseFloat(getComputedStyle(svg.querySelector(".architecture-diagram-label")!).fontSize) * scale };
+  });
+  expect(mapMetrics.scale).toBeGreaterThanOrEqual(0.9);
+  expect(mapMetrics.labelSize).toBeGreaterThanOrEqual(11);
+  const mapRegion = page.getByRole("region", { name: "Scrollable architecture topology" });
+  await mapRegion.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => mapRegion.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+
 
   await page.getByText("Compare observed-state fixture").click();
   await page.getByLabel("Observed-state fixture JSON").fill('{"targetId":"codex-personal","nodes":[]}');

@@ -512,7 +512,7 @@ function TargetUpdateSurface({ row, titleRef, reviewHeadingRef, reviewButtons, o
         </Fragment>;
       })}</div>
       {row.updates.items.length === 0 && <p className="cp-muted">No managed installed skills were present in the latest observation.</p>}
-      <div className="cp-actions"><Button disabled={!candidates.length} size="sm" type="button" variant="outline" onClick={onArchitectureReview}>Review architecture revision</Button>{architectureReview && <Button disabled={busy === `architecture:${row.target.id}`} size="sm" type="button" variant="outline" onClick={onPromoteArchitecture}>{busy === `architecture:${row.target.id}` ? "Creating…" : `Confirm ${candidates.length} pinned versions`}</Button>}</div>
+      <div className="cp-actions">{candidates.length > 0 && <Button size="sm" type="button" variant="outline" onClick={onArchitectureReview}>Review architecture revision</Button>}{architectureReview && <Button disabled={busy === `architecture:${row.target.id}`} size="sm" type="button" variant="outline" onClick={onPromoteArchitecture}>{busy === `architecture:${row.target.id}` ? "Creating…" : `Confirm ${candidates.length} pinned versions`}</Button>}</div>
     </section>}
     <section className="cp-section target-operation-history" aria-label={`Operation history for ${row.target.name}`}>
       {active.length > 0 && <div className="cp-band"><h3>In progress</h3>{active.map(operationRow)}</div>}

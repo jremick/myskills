@@ -190,3 +190,7 @@
   .registry-workspace.author-review .review-steps li::before { forced-color-adjust: none; border-color: CanvasText; }
   .registry-workspace.author-review .author-status { border: 1px solid CanvasText; }
 }
+
+@media (max-width: 480px) {
+  .registry-workspace.author-review .review-steps li:not(:last-child)::after { display: none; }
+}

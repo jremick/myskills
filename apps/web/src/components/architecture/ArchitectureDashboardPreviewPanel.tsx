@@ -156,11 +156,11 @@ function ArchitectureDiagram({ topology }: { topology: { nodes: ArchitectureTopo
   const width = Math.max(760, maxX - minX + padding * 2);
   const height = Math.max(260, maxY - minY + padding * 2);
   return (
-    <div className="architecture-diagram-shell">
+    <div className="architecture-diagram-shell" role="region" aria-label="Scrollable architecture topology" tabIndex={0}>
       {topology.nodes.length === 0 ? (
         <div className="architecture-empty-inline"><CircleAlert size={17} aria-hidden="true" /> No topology nodes were returned.</div>
       ) : (
-        <svg className="architecture-diagram" role="img" aria-labelledby="architecture-diagram-title architecture-diagram-description" viewBox={`${viewBoxX} ${viewBoxY} ${width} ${height}`}>
+        <svg className="architecture-diagram" style={{ minWidth: Math.ceil(width * 0.9) }} role="img" aria-labelledby="architecture-diagram-title architecture-diagram-description" viewBox={`${viewBoxX} ${viewBoxY} ${width} ${height}`}>
           <title id="architecture-diagram-title">Skill architecture topology</title>
           <desc id="architecture-diagram-description">A deterministic map of routers, sub-routers, and leaf skills returned by the API.</desc>
           <g className="architecture-diagram-edges" aria-hidden="true">
