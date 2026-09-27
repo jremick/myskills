@@ -1,6 +1,6 @@
 # Beta.10 release delivery
 
-Status: candidate preparation on 27 September 2026. No publication or production promotion is claimed by this preparation record.
+Status: GitHub prerelease published and production promotion verified on 27 September 2026. npm publication is excluded.
 
 ## Approved scope
 
@@ -30,7 +30,30 @@ The pre-promotion production baseline is beta.9, source `4e728b16cc04f11faa7e23a
 
 Before any bundle references exist, the previous API/web pair can use the additive schema. After references exist, beta.9 readers cannot safely handle them. Keep the beta.10 reader and set `MYSKILLS_BUNDLES_ENABLED=false` to return the registry to flat browsing and stop bundle writes; fix forward for a reader failure. Retain tables, audit records and recovery data. No destructive database rollback or restore is authorized.
 
-Codex owns promotion and post-deploy smoke checks. Stop promotion on failed required checks, migration errors, incorrect source identity, missing recovery evidence or permission regressions.
+Stop promotion on failed required checks, migration errors, incorrect source identity, missing recovery evidence or permission regressions.
+
+## Verified release
+
+- [PR #93](https://github.com/jremick/myskills/pull/93) merged through the protected branch. All 12 checks passed on source `084b48e4bce0e8693357f7a4f89d7aabf8ff89f4`, including both supported Node versions, browser and PostgreSQL suites, image builds and CodeQL. The merge commit is `f7daef45aa4fd8e435ca5503af402977b225154b`; its tree matches the tested source.
+- Two review findings were reproduced before repair: anonymous CLI reads incorrectly required a token, and authenticated bundle audiences could accept public members while public sharing was disabled. Both regression journeys pass after the fixes, and the review threads are resolved.
+- The final clean Linux canonical gate passed 1,194 repository tests, 241 PostgreSQL tests, 28 browser tests and eight full-stack journeys, with no skipped or flaky full-stack journeys. Its report and bundle persistence screenshot were retained outside tracked source. An earlier macOS run stopped at the existing native release-selector keyboard test; it is not counted as a passing canonical run.
+- Immutable tag `v0.1.0-beta.10` points to the tested source. The [tagged workflow](https://github.com/jremick/myskills/actions/runs/36299367000) passed the canonical gate, application and Railway image builds, and credential-free backup-image entrypoint smokes.
+- The [GitHub prerelease](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.10) contains five assets. All uploaded sizes and SHA-256 digests match the local files. The workflow's source archive, metadata and checksums match the prepared files byte for byte. Source archive SHA-256: `70b46e32665c381224d08e22e218ccf36e60fc692331e424951ec47a80be325d`. CLI archive SHA-256: `1c9bbd6bb5f56934a53db9facb5ae6298b397c78e74abd0627eb117400ccaf1d`.
+- The CLI archive passed a fresh installation, version readback, example validation and scan. npm remains beta.8.
+
+## Staging and production
+
+Staging API `5c90c8ff-b81e-4968-8076-2cd825589e65` reached readiness before web `cd2dd483-39c1-4020-8cfc-ce08f1c900a2` deployed. Both succeeded from the tested source. Fourteen HTTP checks passed. Authenticated acceptance covered bundle creation, all three catalog views, membership reads, idempotent reference saving, retained saved revision, stale-edit rejection and private-bundle denial. Temporary staging MFA was removed, and ordinary login and logout were read back. Browser inspection confirmed the bundle inspector and outline collapse, with no console errors.
+
+Production API `a73367e7-94c5-4f31-a6aa-917f8002e5f0` applied migrations and reached readiness before web `77cdfa45-cd97-4564-8f34-f4487edfc499` deployed. Both report `SUCCESS` and serve version beta.10 with revision `084b48e4bce0e8693357f7a4f89d7aabf8ff89f4`. No owner seeding ran.
+
+Fourteen production HTTP checks passed across direct API, web and same-origin API, including health, readiness, revision identity, three catalog views and anonymous denial of a private artifact. The fresh CLI passed all eight doctor checks and anonymous catalog browsing. The existing owner session remained usable. Browser checks confirmed all three view controls, the private-default creation dialog and keyboard/pointer activation, with no console errors. No test bundles were created in production.
+
+Authenticated browser export returned HTTP 200 and a 17,300-byte package with four files and the selected private release manifest. Anonymous access to that release returned 404. The native download event timed out and a newly saved file was not confirmed; verification inspected the actual browser network response without retaining its private contents.
+
+Sampled logs contained no application faults across 67 API and 100 web entries. Railway labelled 54 nginx startup notices as errors because they used stderr; none carried an nginx error, critical, alert or emergency level.
+
+Pre-promotion backup validation passed for capture `2026-09-26T16-00-54.119Z_525b18d1a2ca4cad`, captured at `2026-09-26T16:00:54.194Z`, with manifest SHA-256 `172c83c83d6d31cc3521d4fc97c99ab55e747a6d8aedcfce73d9bcd1fd3eb4dd`. Its age was 51,192 seconds, within the existing 26-hour policy. This is freshness and completed-manifest evidence; no new capture or restore is claimed.
 
 ## Limits
 
