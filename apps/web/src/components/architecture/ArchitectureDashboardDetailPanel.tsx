@@ -48,6 +48,10 @@ import type {
 } from "./architecture-dashboard-types.js";
 
 export function ArchitectureDetailPanel({
+  accessExpanded,
+  historyExpanded,
+  onAccessExpandedChange,
+  onHistoryExpandedChange,
   architecture,
   detail,
   detailState,
@@ -86,6 +90,10 @@ export function ArchitectureDetailPanel({
   editorRef,
   onBack,
 }: {
+  accessExpanded: boolean;
+  historyExpanded: boolean;
+  onAccessExpandedChange: (open: boolean) => void;
+  onHistoryExpandedChange: (open: boolean) => void;
   titleRef?: RefObject<HTMLHeadingElement | null>;
   editorRef?: RefObject<HTMLDivElement | null>;
   /** Shown in the stacked layout; returns to the list without unmounting the draft. */
@@ -260,7 +268,7 @@ export function ArchitectureDetailPanel({
         {/* Native disclosures keep closed content mounted, which preserves
             grant drafts and the migration retry idempotency key. */}
         {detail && (
-          <details className="cp-details cp-section architecture-history-disclosure">
+          <details className="cp-details cp-section architecture-history-disclosure" open={historyExpanded} onToggle={(event) => onHistoryExpandedChange(event.currentTarget.open)}>
             <summary>Revision history · {currentRevision ? `${revisionLabel(currentRevision)} is current` : "no saved revision yet"}</summary>
             <div className="cp-details-body">
               <RevisionHistoryPanel
@@ -278,7 +286,7 @@ export function ArchitectureDetailPanel({
           </details>
         )}
         {detail && canManage && (
-          <details className="cp-details cp-section architecture-access-disclosure">
+          <details className="cp-details cp-section architecture-access-disclosure" open={accessExpanded} onToggle={(event) => onAccessExpandedChange(event.currentTarget.open)}>
             <summary>Access and migration</summary>
             <div className="cp-details-body">
               <ArchitectureOrganizationGrantsCard

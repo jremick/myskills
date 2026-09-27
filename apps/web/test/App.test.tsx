@@ -1,7 +1,7 @@
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { useLayoutEffect, useRef } from "react";
 import { createArchitectureDiagramArtifact, type PublicSkill, type SkillSharingDetails, type TeamSharedSkillGroup } from "@myskills-app/core";
 import { unsupportedWorkspaceTargets, workspaceTarget } from "./workspace-target-fixture.js";

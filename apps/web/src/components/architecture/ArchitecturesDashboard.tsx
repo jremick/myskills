@@ -48,6 +48,8 @@ export function ArchitecturesDashboard({ client, session, onNavigationGuardChang
   const [message, setMessage] = useState<string | null>(null);
   const [patterns, setPatterns] = useState<ArchitecturePattern[]>(BUILTIN_PATTERNS);
   const [architectures, setArchitectures] = useState<ArchitectureSummary[]>([]);
+  const [expandedAccessId, setExpandedAccessId] = useState<string | null>(null);
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<ArchitectureProfile[]>([]);
   const [environments, setEnvironments] = useState<ArchitectureEnvironment[]>([]);
   const [selectedArchitectureId, setSelectedArchitectureId] = useState<string | null>(null);
@@ -484,6 +486,10 @@ export function ArchitecturesDashboard({ client, session, onNavigationGuardChang
               </div>
               <div className="cp-panel" hidden={newVisible}>
                 <ArchitectureDetailPanel
+                  accessExpanded={expandedAccessId === selectedArchitectureId}
+                  historyExpanded={expandedHistoryId === selectedArchitectureId}
+                  onAccessExpandedChange={(open) => setExpandedAccessId(open ? selectedArchitectureId : null)}
+                  onHistoryExpandedChange={(open) => setExpandedHistoryId(open ? selectedArchitectureId : null)}
                   titleRef={titleRef}
                   editorRef={editorRef}
                   onBack={stacked ? backToArchitectures : undefined}

@@ -198,7 +198,7 @@ test("target registry guides the owner and current architecture context and neve
   fireEvent.click(view.getByRole("button", { name: "Setup guide" }));
   await view.findByRole("heading", { name: "Connect a Codex workspace" });
   assert.match(view.container.textContent ?? "", /myskills codex enroll/);
-  fireEvent.click(view.getByRole("button", { name: "Register read-only target", exact: true }));
+  fireEvent.click(view.getByRole("button", { name: "Register read-only target" }));
   fireEvent.input(view.getByLabelText("Target name"), { target: { value: "Work Codex" } });
   const architecture = await view.findByLabelText("Target architecture");
   await waitFor(() => assert.equal((architecture as HTMLSelectElement).value, "architecture-1"));
@@ -251,7 +251,7 @@ test("target registration prefers the selected user's personal context regardles
 
   const view = render(<ArchitectureTargetsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
   await view.findByText("No connected targets");
-  fireEvent.click(view.getByRole("button", { name: "Register read-only target", exact: true }));
+  fireEvent.click(view.getByRole("button", { name: "Register read-only target" }));
   await waitFor(() => assert.equal((view.getByLabelText("Target profile") as HTMLSelectElement).value, "personal"));
   await waitFor(() => assert.equal((view.getByLabelText("Target logical environment") as HTMLSelectElement).value, "personal-laptop"));
   assert.equal(view.getByText(/User-owned targets prefer a matching user profile and personal environment/).textContent?.includes("explicit selections remain authoritative"), true);
@@ -281,7 +281,7 @@ test("target registration prefers a team profile and team environment for a team
 
   const view = render(<ArchitectureTargetsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
   await view.findByText("No connected targets");
-  fireEvent.click(view.getByRole("button", { name: "Register read-only target", exact: true }));
+  fireEvent.click(view.getByRole("button", { name: "Register read-only target" }));
   await waitFor(() => assert.equal((view.getByLabelText("Authorized target owner") as HTMLSelectElement).value, "team:team-1"));
   await waitFor(() => assert.equal((view.getByLabelText("Target profile") as HTMLSelectElement).value, "team"));
   await waitFor(() => assert.equal((view.getByLabelText("Target logical environment") as HTMLSelectElement).value, "team-runtime"));
@@ -312,7 +312,7 @@ test("target registration uses stable name and ID fallback when the preferred co
 
   const view = render(<ArchitectureTargetsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
   await view.findByText("No connected targets");
-  fireEvent.click(view.getByRole("button", { name: "Register read-only target", exact: true }));
+  fireEvent.click(view.getByRole("button", { name: "Register read-only target" }));
   await waitFor(() => assert.equal((view.getByLabelText("Target profile") as HTMLSelectElement).value, "fallback-profile"));
   await waitFor(() => assert.equal((view.getByLabelText("Target logical environment") as HTMLSelectElement).value, "a-work"));
   const summary = view.getByRole("region", { name: "Binding and consent summary" });

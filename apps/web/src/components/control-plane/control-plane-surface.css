@@ -252,6 +252,7 @@
 }
 .app-shell main.update-centre-workspace.cp-page .target-operation-row { grid-template-columns: minmax(0, 1fr) auto auto; }
 .app-shell main.update-centre-workspace.cp-page :is(.target-update-row label, .target-operation-row > span:first-child) { align-items: flex-start; }
+.app-shell main.update-centre-workspace.cp-page .target-update-row label > span { display: grid; gap: 3px; min-width: 0; }
 .app-shell main.update-centre-workspace.cp-page .target-update-row input[type="checkbox"] { flex: none; width: 16px; height: 16px; margin-top: 2px; accent-color: var(--teal); }
 .app-shell main.update-centre-workspace.cp-page :is(.target-update-row, .target-operation-row) small { color: var(--muted); font-size: 13px; line-height: 18px; }
 /* Older .target-operation-row > span rules stack their children; keep actions in a row. */
