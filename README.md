@@ -17,7 +17,7 @@ An open-source home for your own skills and the ones your team relies on.
 
 A skill is a folder of instructions, built around a `SKILL.md` file, that an AI agent follows for a task: turning meeting notes into actions, drafting release notes or reviewing code. MySkills helps you find skills, inspect their files and choose which versions to use.
 
-![MySkills public homepage illustrating a personal library, skill instructions and a source change awaiting review.](artifacts/screenshots/myskills-homepage.png)
+![MySkills public homepage illustrating a personal library, skill instructions and a source change awaiting review.](artifacts/screenshots/myskills-homepage.jpg)
 
 *The homepage preview uses illustrative skill data.*
 
