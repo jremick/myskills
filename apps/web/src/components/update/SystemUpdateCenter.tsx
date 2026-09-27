@@ -3,6 +3,7 @@ import type { SkillUpdateBlockerCode, SkillUpgradeMaintenanceWindow } from "@mys
 import { Check, CircleAlert, Clock3, PackageCheck, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
   ArchitectureTargetRecord,
@@ -17,6 +18,7 @@ import { UpgradePolicyEditor } from "./UpgradePolicyEditor.js";
 interface UpdateSession { user: { email: string } }
 interface TargetUpdateState { target: ArchitectureTargetRecord; updates: TargetSkillUpdates | null; operations: TargetSkillOperationRecord[]; error?: string }
 interface SelectedUpdate { targetId: string; slug: string }
+interface RollbackReview { operation: TargetSkillOperationRecord; targetName: string; idempotencyKey: string }
 
 export function SystemUpdateCenter({ client, session }: { client: RegistryClient; session: UpdateSession }) {
   const [rows, setRows] = useState<TargetUpdateState[]>([]);
@@ -27,6 +29,7 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
   const [batchReview, setBatchReview] = useState(false);
   const [architectureReviewTarget, setArchitectureReviewTarget] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [rollbackReview, setRollbackReview] = useState<RollbackReview | null>(null);
 
   const refresh = useMemo(() => ({
     active: false,
@@ -87,6 +90,7 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
     setRows([]);
     setSelected([]);
     setReview(null);
+    setRollbackReview(null);
     void load();
     return () => { refresh.active = false; };
   }, [load, refresh]);
@@ -101,6 +105,8 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
   const activeCount = rows.reduce((count, row) => count + row.operations.filter((operation) => ["queued", "claimed", "applying", "verifying"].includes(operation.state)).length, 0);
   const reviewed = review ? reviewFor(rows, review) : null;
   const reviewedPin = review ? policyPin(rows.find((row) => row.target.id === review.targetId)?.updates?.policy, review.slug) : undefined;
+  const rollbackObservedVersion = rollbackReview && rows.find((row) => row.target.id === rollbackReview.operation.targetId)?.updates?.items
+    .find((item) => item.slug === rollbackReview.operation.skillSlug && item.platform === rollbackReview.operation.platform)?.evaluation.installedVersion;
 
   async function queueOne(selection: SelectedUpdate) {
     const candidate = candidateFor(rows, selection);
@@ -164,9 +170,17 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
     }
   }
 
-  async function rollback(operation: TargetSkillOperationRecord) {
+  function reviewRollback(operation: TargetSkillOperationRecord) {
+    const row = rows.find((item) => item.target.id === operation.targetId);
+    if (!row || !operation.fromVersion || !canQueueWorkspaceOperation(row.target, operation.platform, "rollback")) return;
+    setRollbackReview({ operation, targetName: row.target.name, idempotencyKey: operationKey("rollback") });
+  }
+
+  async function rollback({ operation, idempotencyKey }: RollbackReview) {
     const target = rows.find((row) => row.target.id === operation.targetId)?.target;
-    if (!target || !canQueueWorkspaceOperation(target, operation.platform, "rollback") || !client.scheduleTargetSkillOperation || !operation.fromVersion) return;
+    if (!target || !canQueueWorkspaceOperation(target, operation.platform, "rollback") || !client.scheduleTargetSkillOperation || !operation.fromVersion) {
+      throw new Error("This workspace can no longer accept the rollback. Cancel and refresh its access and consent.");
+    }
     setBusy(`rollback:${operation.id}`);
     try {
       await client.scheduleTargetSkillOperation(operation.targetId, {
@@ -174,11 +188,11 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
         slug: operation.skillSlug,
         version: operation.fromVersion,
         platform: operation.platform,
-        idempotencyKey: operationKey("rollback"),
+        idempotencyKey,
       });
       await load(true, true);
     } catch (error) {
-      setMessage(safeArchitectureTargetErrorMessage(error));
+      throw new Error(safeArchitectureTargetErrorMessage(error));
     } finally {
       setBusy(null);
     }
@@ -215,14 +229,28 @@ export function SystemUpdateCenter({ client, session }: { client: RegistryClient
   }
 
   return <main className="control-plane-workspace update-centre-workspace" aria-label="System update centre">
-    <section className="control-plane-hero" aria-labelledby="updates-heading"><div><p className="control-plane-kicker">Installed state and recovery</p><h1 id="updates-heading">System update centre</h1><p>{session.user.email} · {availableCount} updates available · {activeCount} active operations</p></div><Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />Refresh</Button></section>
+    <section className="control-plane-hero app-page-header" aria-labelledby="updates-heading"><div><p className="control-plane-kicker">Installed state and recovery</p><h1 id="updates-heading">System update centre</h1><p>{session.user.email} · {availableCount} updates available · {activeCount} active operations</p></div><Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />Refresh</Button></section>
     {message && <div className="safe-message control-plane-message" role="status">{message}</div>}
     {state === "loading" && <div className="control-plane-loading" role="status"><span /><span /><span className="short" /></div>}
     {state === "error" && <div className="safe-message control-plane-message" role="alert"><CircleAlert size={20} aria-hidden="true" />{message}</div>}
     {state === "ready" && rows.length === 0 && <Card className="control-plane-card"><CardContent className="control-plane-empty-state"><PackageCheck size={28} aria-hidden="true" /><strong>No installed targets</strong><span>Register a target and submit its bounded inventory before checking for updates.</span></CardContent></Card>}
     {state === "ready" && selected.length > 0 && <Card className="control-plane-card update-batch-card"><CardHeader><CardTitle>{selected.length} selected updates</CardTitle><CardDescription>Batch execution creates one separately fenced and recoverable operation per target and skill.</CardDescription></CardHeader><CardContent><div className="target-action-row">{batchReview ? <><Button disabled={busy === "batch"} onClick={() => void queueBatch()}><Check size={15} />{busy === "batch" ? "Queueing…" : "Confirm batch"}</Button><Button variant="outline" onClick={() => setBatchReview(false)}>Back</Button></> : <Button onClick={() => setBatchReview(true)}>Review batch</Button>}<Button variant="outline" onClick={() => setSelected([])}>Clear</Button></div>{batchReview && <ul>{selected.map((item) => { const candidate = candidateFor(rows, item); return <li key={`${item.targetId}:${item.slug}`}>{item.slug} → {candidate?.evaluation.candidate?.version} on {rows.find((row) => row.target.id === item.targetId)?.target.name}</li>; })}</ul>}</CardContent></Card>}
-    <div className="update-centre-grid">{rows.map((row) => <TargetUpdateCard key={row.target.id} row={row} selected={selected} busy={busy} architectureReview={architectureReviewTarget === row.target.id} onSelect={(selection, checked) => { if (checked && !candidateFor(rows, selection)) return; setSelected((current) => checked ? [...current.filter((item) => item.targetId !== selection.targetId || item.slug !== selection.slug), selection] : current.filter((item) => item.targetId !== selection.targetId || item.slug !== selection.slug)); }} onReview={setReview} onArchitectureReview={() => setArchitectureReviewTarget((current) => current === row.target.id ? null : row.target.id)} onPromoteArchitecture={() => void promoteArchitecture(row.target.id)} onCancel={(operation) => void cancel(operation)} onRollback={(operation) => void rollback(operation)} client={client} onPolicySaved={() => void load(true, true)} />)}</div>
+    <div className="update-centre-grid">{rows.map((row) => <TargetUpdateCard key={row.target.id} row={row} selected={selected} busy={busy} architectureReview={architectureReviewTarget === row.target.id} onSelect={(selection, checked) => { if (checked && !candidateFor(rows, selection)) return; setSelected((current) => checked ? [...current.filter((item) => item.targetId !== selection.targetId || item.slug !== selection.slug), selection] : current.filter((item) => item.targetId !== selection.targetId || item.slug !== selection.slug)); }} onReview={setReview} onArchitectureReview={() => setArchitectureReviewTarget((current) => current === row.target.id ? null : row.target.id)} onPromoteArchitecture={() => void promoteArchitecture(row.target.id)} onCancel={(operation) => void cancel(operation)} onRollback={reviewRollback} client={client} onPolicySaved={() => void load(true, true)} />)}</div>
     {reviewed && review && <Card className="control-plane-card update-review-card" aria-label="Update review"><CardHeader><CardTitle>{reviewed.evaluation.candidate ? `Review ${review.slug} ${reviewed.evaluation.installedVersion} → ${reviewed.evaluation.candidate.version}` : `Review blocked update for ${review.slug}`}</CardTitle><CardDescription>Review every included release before queueing the exact artifact.</CardDescription></CardHeader><CardContent>{reviewed.evaluation.blockers.length > 0 && <p>{reviewed.evaluation.blockers.map((blocker) => updateBlockerText(blocker, reviewedPin)).join(" ")}</p>}<div className="release-review-list">{reviewed.evaluation.includedReleases.map((release) => <article key={release.version}><div><strong>{release.version}</strong> <Badge variant="outline">{release.changeKind}</Badge>{release.requiresUserAction && <Badge variant="destructive">User action required</Badge>}</div><p>{release.releaseNotes || "No release notes were supplied."}</p><small>SHA-256 {release.artifact.sha256.slice(0, 12)}… · {release.artifact.byteSize.toLocaleString()} bytes</small></article>)}</div><div className="target-action-row"><Button disabled={!candidateFor(rows, review) || busy?.startsWith("queue:")} onClick={() => void queueOne(review)}><ShieldCheck size={15} />Queue exact update</Button><Button variant="outline" onClick={() => setReview(null)}>Close</Button></div></CardContent></Card>}
+    {rollbackReview && <ConfirmationDialog request={{
+      key: `rollback-${rollbackReview.operation.id}`,
+      title: `Queue rollback for ${rollbackReview.operation.skillSlug}?`,
+      description: "The workspace runner will replace the installed skill with the selected earlier version. Current access, consent and upgrade policy still apply.",
+      details: [
+        { label: "Workspace", value: rollbackReview.targetName },
+        { label: "Skill", value: rollbackReview.operation.skillSlug },
+        { label: "Recorded update", value: `${rollbackReview.operation.fromVersion} → ${rollbackReview.operation.toVersion}` },
+        { label: "Currently observed", value: rollbackObservedVersion ?? "Unavailable; refresh the workspace inventory to verify." },
+        { label: "Roll back to", value: rollbackReview.operation.fromVersion! },
+      ],
+      confirmLabel: "Queue rollback",
+      onConfirm: () => rollback(rollbackReview),
+    }} onClose={() => setRollbackReview(null)} />}
   </main>;
 }
 

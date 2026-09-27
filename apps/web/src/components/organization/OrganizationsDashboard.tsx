@@ -1,3 +1,4 @@
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   Archive,
@@ -188,7 +189,7 @@ export function OrganizationsDashboard({ client, session }: { client: RegistryCl
 
   return (
     <main className="control-plane-workspace organization-workspace" aria-label="Organizations">
-      <section className="control-plane-hero" aria-labelledby="organizations-heading">
+      <section className="control-plane-hero app-page-header" aria-labelledby="organizations-heading">
         <div>
           <p className="control-plane-kicker">Sharing boundaries</p>
           <h1 id="organizations-heading">Organizations</h1>
@@ -261,6 +262,7 @@ export function OrganizationsDashboard({ client, session }: { client: RegistryCl
           policies={policies}
           teams={teams}
           onRefresh={() => selectedId && void refreshDetail(selectedId)}
+          onArchived={() => setRefreshKey((value) => value + 1)}
         />
       </section>
     </main>
@@ -341,6 +343,7 @@ function OrganizationDetailPanel({
   policies,
   teams,
   onRefresh,
+  onArchived,
 }: {
   client: RegistryClient;
   detail: OrganizationDetail | null;
@@ -351,6 +354,7 @@ function OrganizationDetailPanel({
   policies: OrganizationPolicyRevisionRecord[];
   teams: TeamRecord[];
   onRefresh: () => void;
+  onArchived: () => void;
 }) {
   if (!detail) {
     return (
@@ -374,7 +378,7 @@ function OrganizationDetailPanel({
         <div className="control-plane-detail-actions">
           <Badge variant={detail.status === "active" ? "secondary" : "outline"}>{detail.status}</Badge>
           <Badge variant="outline">{detail.role}</Badge>
-          {canManagePolicy && <ArchiveOrganizationButton client={client} organizationId={detail.id} onArchived={onRefresh} />}
+          {canManagePolicy && detail.status === "active" && <ArchiveOrganizationButton key={detail.id} client={client} organizationId={detail.id} organizationName={detail.name} onArchived={onArchived} />}
         </div>
       </CardHeader>
       <CardContent className="control-plane-detail-content">
@@ -741,28 +745,28 @@ function PendingOrganizationInvitations({ client, invitations, onAccepted }: { c
   return <Card className="control-plane-card" aria-label="Pending organization invitations"><CardHeader className="control-plane-card-heading"><div className="control-plane-card-icon"><Mail size={17} aria-hidden="true" /></div><div><CardTitle>Pending invitations</CardTitle><CardDescription>Accept invitations addressed to this account.</CardDescription></div></CardHeader><CardContent><div className="organization-pending-list">{invitations.map((invitation) => <div className="organization-pending-row" key={invitation.id}><span><strong>{invitation.organizationName}</strong><small>{invitation.role} · {invitation.email}</small></span><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" onClick={() => void accept(invitation)}><Check size={15} aria-hidden="true" />{state === "saving" && pendingInvitationId === invitation.id ? "Accepting…" : "Accept"}</Button></div>)}{invitations.length === 0 && <p className="control-plane-muted">No pending organization invitations.</p>}</div>{message && <div className="control-plane-inline-message" role={state === "error" ? "alert" : "status"}><span>{message}</span>{state === "error" && pendingInvitation && <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void accept(pendingInvitation)}><RefreshCw size={15} aria-hidden="true" /> Retry</Button>}</div>}</CardContent></Card>;
 }
 
-function ArchiveOrganizationButton({ client, organizationId, onArchived }: { client: RegistryClient; organizationId: string; onArchived: () => void }) {
+function ArchiveOrganizationButton({ client, organizationId, organizationName, onArchived }: { client: RegistryClient; organizationId: string; organizationName: string; onArchived: () => void }) {
   const [confirm, setConfirm] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   async function archive() {
-    if (!client.archiveOrganization) return;
-    if (!confirm) {
-      setConfirm(true);
-      return;
-    }
+    if (!client.archiveOrganization) throw new Error("Organization archiving is unavailable.");
     try {
       await client.archiveOrganization(organizationId);
-      setConfirm(false);
       onArchived();
     } catch (error) {
-      setMessage(safeOrganizationErrorMessage(error));
+      throw new Error(safeOrganizationErrorMessage(error));
     }
   }
-  function cancelArchive() {
-    setConfirm(false);
-    setMessage(null);
-  }
-  return <span className="control-plane-danger-action">{confirm && <span className="sr-only">Archiving this organization is permanent for active sharing and team membership.</span>}{message && <span className="control-plane-inline-message" role="alert">{message}<Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void archive()}>Retry</Button></span>}<Button className="shadcn-action-button" size="sm" type="button" variant={confirm ? "destructive" : "outline"} onClick={() => void archive()}><Archive size={15} aria-hidden="true" />{confirm ? "Confirm archive" : "Archive"}</Button>{confirm && <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={cancelArchive}>Cancel</Button>}</span>;
+  return <>
+    <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => setConfirm(true)}><Archive size={15} aria-hidden="true" />Archive</Button>
+    {confirm && <ConfirmationDialog request={{
+      key: `archive-${organizationId}`,
+      title: `Archive ${organizationName}?`,
+      description: `${organizationName} will be marked archived. Access through its child teams stops, and it no longer acts as an active sharing boundary. Member, team and policy records are kept. MySkills has no restore action for archived organizations.`,
+      confirmLabel: "Archive organization",
+      destructive: true,
+      onConfirm: archive,
+    }} onClose={() => setConfirm(false)} />}
+  </>;
 }
 
 function OrganizationEmptyState({ icon, title, copy }: { icon: ReactNode; title: string; copy: string }) {

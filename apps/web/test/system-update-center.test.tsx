@@ -157,6 +157,8 @@ test("enrolled personal workspaces can queue a batch and an exact rollback", asy
   assert.equal(calls[0]?.action, "update");
   assert.equal(calls[0]?.version, "1.2.0");
   fireEvent.click(view.getByRole("button", { name: "Rollback" }));
+  assert.equal(calls.length, 1);
+  fireEvent.click(await view.findByRole("button", { name: "Queue rollback" }));
   await waitFor(() => assert.equal(calls.length, 2));
   assert.equal(calls[1]?.action, "rollback");
   assert.equal(calls[1]?.version, "1.0.0");
@@ -201,6 +203,7 @@ test("a queued mutation requests fresh state after an in-flight refresh", async 
   await view.findByRole("heading", { name: "Personal Codex workspace" });
   fireEvent.click(view.getByRole("button", { name: "Refresh" }));
   fireEvent.click(view.getByRole("button", { name: "Rollback" }));
+  fireEvent.click(await view.findByRole("button", { name: "Queue rollback" }));
   await waitFor(() => assert.equal(queued, true));
   assert.equal(lists, 2);
   await act(async () => { pending.resolve([workspaceTarget()]); });
