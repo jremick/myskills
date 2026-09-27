@@ -27,6 +27,12 @@ Create the untracked local environment file from the public-safe template:
 cp .env.example .env
 ```
 
+Build the workspace packages before seeding or starting the API:
+
+```bash
+npm run build
+```
+
 Review the local-only seed credentials before use. Do not reuse them in production and do not commit `.env`.
 
 The normal `db:migrate`, `db:seed`, `dev:api`, `dev:web`, `dev:mcp`, and `dev:mcp:http` npm paths read this repository-root `.env` automatically through Node's env-file support. Existing process variables take precedence, and production container start commands continue to use platform-injected variables rather than a copied env file. No shell-specific `source`, `set -a`, or exported secret values are required.
@@ -53,7 +59,7 @@ npm run dev:api
 npm run dev:web
 ```
 
-Open `http://localhost:3000`. The API is available at `http://localhost:3001`.
+Open `http://localhost:3000/registry` to see the seeded **Release Notes Helper** skill. Sign in with `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` from your local `.env`. The root URL shows the public homepage by default. The API is available at `http://localhost:3001`.
 
 ## Verify The First Run
 
