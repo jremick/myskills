@@ -18,15 +18,17 @@ MySkills is an open-source beta platform for publishing, reviewing, discovering,
 
 Current target: **v0.1.0-beta.9**.
 
-The beta.9 candidate adds a marketing homepage for people managing their own AI
+[The beta.9 GitHub prerelease](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.9)
+and hosted deployment are verified.
+
+Beta.9 adds a marketing homepage for people managing their own AI
 skills and administrators managing shared skills. Owners can disable it so root
 visitors go straight to login. See [homepage behavior](docs/LANDING_PAGE.md) and
 [beta.9 delivery evidence](docs/BETA9_RELEASE_DELIVERY.md).
 
-The published baseline is [v0.1.0-beta.8](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.8),
-including Libraries and governed skill improvement. npm `beta` resolves to
+The new homepage is live at [myskills.sh](https://myskills.sh). Libraries and
+governed skill improvement from beta.8 remain included. npm `beta` resolves to
 `0.1.0-beta.8`; this website release does not publish a new npm package.
-Production remains beta.8 until beta.9 promotion is verified in the delivery record.
 
 MySkills is prerelease software for external trial use. API contracts, package
 formats and deployment guidance may change before v1.0. Hosted registration
