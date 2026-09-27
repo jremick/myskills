@@ -106,6 +106,7 @@ test("landing setting keeps a failed draft, discards it, and confirms a successf
   client.getAdminSiteSettings = async () => ({ landingPageEnabled: saved });
   client.updateAdminSiteSettings = async (site) => { if (fail) throw new Error("network failed"); saved = site.landingPageEnabled; return site; };
   const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("tab", { name: "Instance" }));
   const toggle = await view.findByRole("switch", { name: "Show landing page" });
   fireEvent.click(toggle);
   fireEvent.click(view.getByRole("button", { name: "Save landing setting" }));
@@ -1067,7 +1068,7 @@ test("signed-in users can set up MFA and save recovery codes", async () => {
 
   await view.findByText("owner@example.com");
   fireEvent.click(view.getAllByRole("link", { name: "Settings" })[0]!);
-  await view.findByText("Authenticator app not set");
+  await view.findByText("Authenticator app MFA is not set.");
   fireEvent.input(view.getAllByLabelText("Current password").at(-1)!, { target: { value: "correct horse battery staple" } });
   fireEvent.click(view.getByRole("button", { name: /continue/i }));
 
@@ -1086,7 +1087,7 @@ test("settings can request email change and password change", async () => {
   const client = mockClient({ user: authUser({ email: "owner@example.com", roles: ["owner"] }) });
 
   const view = render(<RegistryApp client={client} />);
-  await view.findByText("Change email");
+  await view.findByRole("region", { name: "Email" });
   await view.findByRole("heading", { name: "Security and access", level: 1 });
   await view.findByText("Authenticator app MFA is enabled.");
   assert.equal(document.body.textContent?.includes("Authenticator setup"), false);
@@ -2030,22 +2031,24 @@ test("admin sessions can manage registration, users, and provider metadata", asy
 
   await view.findByRole("heading", { name: "Admin console", level: 1 });
   await view.findByRole("button", { name: "Refresh" });
-  await waitFor(() => assert.equal(view.getAllByText("Cloudflare Access").length >= 1, true));
-  await view.findByText("API keys");
+  await view.findByRole("tab", { name: "API keys" });
   assert.equal(document.body.textContent?.includes("clientSecret"), false);
   assert.equal(document.body.textContent?.includes("private_key"), false);
   assert.equal((view.getByLabelText("Set author@example.com author role") as HTMLInputElement).disabled, true);
 
+  fireEvent.click(view.getByRole("button", { name: "Invite user" }));
   fireEvent.input(view.getByLabelText("Email", { selector: "input[name='invitation-email']" }), { target: { value: "new-author@example.com" } });
   fireEvent.input(view.getByLabelText(/Name/, { selector: "input[name='invitation-name']" }), { target: { value: "New Author" } });
   fireEvent.click(view.getByRole("button", { name: "Send invitation" }));
   await view.findByText(/Invitation sent to new-author@example\.com\./);
   assert.deepEqual(client.registrationInvitations, [{ email: "new-author@example.com", name: "New Author" }]);
 
+  fireEvent.click(view.getByRole("tab", { name: "API keys" }));
   fireEvent.click(view.getByLabelText("Revoke CLI"));
   fireEvent.click(await view.findByRole("button", { name: "Revoke key" }));
   await waitFor(() => assert.deepEqual(client.adminTokenRevokes, ["api-token-1"]));
 
+  fireEvent.click(view.getByRole("tab", { name: "Instance" }));
   fireEvent.click(view.getByRole("button", { name: "Request" }));
   await waitFor(() => assert.deepEqual(client.registrationUpdates, ["request"]));
 
@@ -2057,6 +2060,7 @@ test("admin sessions can manage registration, users, and provider metadata", asy
   fireEvent.click(await view.findByRole("button", { name: "Open registration" }));
   await waitFor(() => assert.deepEqual(client.registrationUpdates, ["request", "open"]));
 
+  fireEvent.click(view.getByRole("tab", { name: "People" }));
   fireEvent.click(view.getByLabelText("Disable user"));
   fireEvent.input(view.getByLabelText("Reason (required)"), { target: { value: "Access review failed" } });
   fireEvent.click((await view.findAllByRole("button", { name: "Disable user" })).at(-1)!);
@@ -2068,6 +2072,8 @@ test("admin sessions can manage registration, users, and provider metadata", asy
   await waitFor(() => assert.deepEqual(client.roleUpdates, ["user-2:maintainer,author:Maintainer promotion approved"]));
   await waitFor(() => assert.equal((view.getByLabelText("Set author@example.com maintainer role") as HTMLInputElement).checked, true));
 
+  fireEvent.click(view.getByRole("tab", { name: "Sign-in providers" }));
+  await waitFor(() => assert.equal(view.getAllByText("Cloudflare Access").length >= 1, true));
   fireEvent.input(view.getByLabelText("Display name"), { target: { value: "Cloudflare Main" } });
   fireEvent.click(view.getByRole("button", { name: /save provider/i }));
 
@@ -2379,6 +2385,7 @@ test("audit pagination appends unique events on request and resets after admin r
     return input?.cursor ? { events: [first, older, older], nextCursor: null } : { events: [first], nextCursor: "audit-next" };
   };
   const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("tab", { name: "Audit" }));
   const more = await view.findByRole("button", { name: "Load more audit events" });
   assert.deepEqual(cursors, [undefined]);
   fireEvent.click(more);
@@ -2406,6 +2413,7 @@ test("audit refresh ignores a delayed previous page and permits retry after a pa
     return { events: [{ ...first, id: "retry-event", action: "retried.audit.event" }], nextCursor: null };
   };
   const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("tab", { name: "Audit" }));
   fireEvent.click(await view.findByRole("button", { name: "Load more audit events" }));
   fireEvent.click(view.getByRole("button", { name: "Refresh" }));
   await view.findByRole("button", { name: "Load more audit events" });
@@ -2433,6 +2441,7 @@ for (const surface of ["review", "admin"] as const) {
     currentClient.listReviewSubmissionPage = async () => ({ submissions: [{ ...submission, id: "current-review", title: "Current review" }], nextCursor: null });
     currentClient.listAdminAuditPage = async () => ({ events: [{ ...event, id: "current-audit", action: "current.audit" }], nextCursor: null });
     const view = render(<RegistryApp client={oldClient} />);
+    if (surface === "admin") fireEvent.click(await view.findByRole("tab", { name: "Audit" }));
     fireEvent.click(await view.findByRole("button", { name: surface === "review" ? "Load more submissions" : "Load more audit events" }));
     view.rerender(<RegistryApp client={currentClient} />);
     if (surface === "review") await view.findByRole("button", { name: /Current review/ });

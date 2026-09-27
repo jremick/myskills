@@ -108,6 +108,7 @@ test("archive presents a visible named consequence, preserves cancellation and r
   const state = await fixture(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/organizations");
+  await page.getByRole("button", { name: new RegExp(organization.name) }).click();
   const archive = page.getByRole("button", { name: "Archive", exact: true });
   await archive.click();
   const dialog = page.getByRole("dialog", { name: `Archive ${organization.name}?` });

@@ -1,22 +1,19 @@
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from "react";
 import {
   Archive,
+  ArrowLeft,
   Check,
-  CircleAlert,
   GitBranch,
   Mail,
   Plus,
   RefreshCw,
-  ShieldCheck,
-  UserRound,
-  UsersRound,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { humanize } from "@/components/registry/status-display";
+import { useSplitLayout } from "@/components/registry/useSplitLayout";
 import {
   safeOrganizationErrorMessage,
   type OrganizationDetail,
@@ -39,6 +36,7 @@ interface OrganizationSession {
 }
 
 type LoadState = "loading" | "ready" | "error";
+type FocusTarget = { kind: "title" } | { kind: "row"; id: string } | { kind: "new" } | { kind: "create-name" };
 
 const ORGANIZATION_POLICY_DEFAULTS: OrganizationPolicyV1 = {
   schemaVersion: 1,
@@ -61,7 +59,10 @@ const ORGANIZATION_POLICY_DEFAULTS: OrganizationPolicyV1 = {
   },
 };
 
-export function OrganizationsDashboard({ client, session }: { client: RegistryClient; session: OrganizationSession }) {
+// Organizations use the Registry list and detail layout (people.css). The list
+// comes first; the selected organization's detail sits beside it when the
+// surface is wide, and replaces it (with Back) when the surface is narrow.
+export function OrganizationsDashboard({ client }: { client: RegistryClient; session: OrganizationSession }) {
   const [state, setState] = useState<LoadState>("loading");
   const [message, setMessage] = useState<string | null>(null);
   const [organizations, setOrganizations] = useState<OrganizationListItem[]>([]);
@@ -75,8 +76,21 @@ export function OrganizationsDashboard({ client, session }: { client: RegistryCl
   const [detailState, setDetailState] = useState<LoadState>("ready");
   const [detailMessage, setDetailMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const listEpoch = useRef(0);
   const detailEpoch = useRef(0);
+  const selectedRef = useRef<string | null>(null);
+  const listRef = useRef<HTMLElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const newButtonRef = useRef<HTMLButtonElement>(null);
+  const focusTarget = useRef<FocusTarget | null>(null);
+  const { layout, ref: surfaceRef } = useSplitLayout();
+  const baseId = useId();
+  const stacked = layout === "stack";
+  const selected = organizations.find((item) => item.id === selectedId) ?? null;
+  const showDetail = Boolean(selected) && (!stacked || detailOpen);
+  const listHidden = stacked && showDetail;
 
   const listOrganizations = client.listOrganizations;
   const getOrganization = client.getOrganization;
@@ -103,11 +117,14 @@ export function OrganizationsDashboard({ client, session }: { client: RegistryCl
         client.listOrganizationPendingInvitations(),
       ]);
       if (requestEpoch !== listEpoch.current) return;
+      const current = selectedRef.current;
+      const kept = current && nextOrganizations.some((item) => item.id === current) ? current : null;
+      // Auto-selection never opens the stacked detail; only a tap does.
+      if (!kept) setDetailOpen(false);
+      selectedRef.current = kept ?? nextOrganizations[0]?.id ?? null;
       setOrganizations(nextOrganizations);
       setPendingInvitations(nextInvitations);
-      setSelectedId((current) => current && nextOrganizations.some((item) => item.id === current)
-        ? current
-        : nextOrganizations[0]?.id ?? null);
+      setSelectedId(selectedRef.current);
       setState("ready");
     } catch (error) {
       if (requestEpoch !== listEpoch.current) return;
@@ -180,96 +197,156 @@ export function OrganizationsDashboard({ client, session }: { client: RegistryCl
     void refreshDetail(selectedId);
   }, [refreshDetail, selectedId, state]);
 
-  const selectOrganization = useCallback((id: string) => {
-    if (id === selectedId) return;
-    detailEpoch.current += 1;
-    setDetail(null);
-    setSelectedId(id);
-  }, [selectedId]);
+  // Focus follows the reader: into the opened detail, back to the row that
+  // opened it, and between New organization and its form.
+  useEffect(() => {
+    const target = focusTarget.current;
+    if (!target) return;
+    const element = target.kind === "title" ? titleRef.current
+      : target.kind === "row" ? findRow(listRef.current, target.id)
+        : target.kind === "new" ? newButtonRef.current
+          : document.getElementById("new-organization-name");
+    if (!element) return;
+    focusTarget.current = null;
+    element.focus();
+  });
+
+  function openOrganization(id: string) {
+    if (id !== selectedRef.current) {
+      detailEpoch.current += 1;
+      setDetail(null);
+      selectedRef.current = id;
+      setSelectedId(id);
+    }
+    setDetailOpen(true);
+    focusTarget.current = { kind: "title" };
+  }
+
+  function backToOrganizations() {
+    setDetailOpen(false);
+    if (selectedRef.current) focusTarget.current = { kind: "row", id: selectedRef.current };
+  }
+
+  function openCreate() {
+    setCreateOpen(true);
+    if (stacked) setDetailOpen(false);
+    focusTarget.current = { kind: "create-name" };
+  }
+
+  function closeCreate() {
+    setCreateOpen(false);
+    focusTarget.current = { kind: "new" };
+  }
 
   return (
-    <main className="control-plane-workspace organization-workspace" aria-label="Organizations">
-      <section className="control-plane-hero app-page-header" aria-labelledby="organizations-heading">
-        <div>
-          <p className="control-plane-kicker">Sharing boundaries</p>
-          <h1 id="organizations-heading">Organizations</h1>
-          <p>{session.user.email} · {state === "loading" ? "Refreshing organization access…" : `${organizations.length} organizations`}</p>
+    <main className="registry-workspace people-workspace organization-workspace" aria-label="Organizations">
+      <header className="app-page-header people-page-head">
+        <h1>Organizations</h1>
+        <div className="people-page-actions">
+          <Button aria-expanded={createOpen} ref={newButtonRef} size="sm" type="button" onClick={openCreate}>
+            <Plus size={16} aria-hidden="true" />
+            New organization
+          </Button>
+          <Button size="sm" type="button" variant="outline" onClick={() => setRefreshKey((value) => value + 1)}>
+            <RefreshCw size={16} aria-hidden="true" />
+            Refresh
+          </Button>
         </div>
-        <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => setRefreshKey((value) => value + 1)}>
-          <RefreshCw size={16} aria-hidden="true" />
-          Refresh
-        </Button>
-      </section>
+      </header>
 
-      {message && <div className="safe-message control-plane-message" role={state === "error" ? "alert" : "status"}><span>{message}</span>{state === "error" && <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw size={15} aria-hidden="true" /> Retry</Button>}</div>}
+      <PendingOrganizationInvitations
+        invitations={pendingInvitations}
+        client={client}
+        onAccepted={() => setRefreshKey((value) => value + 1)}
+      />
 
-      <section className="organization-layout">
-        <div className="organization-sidebar">
-          <CreateOrganizationCard client={client} onCreated={(created) => {
-            setSelectedId(created.id);
-            setRefreshKey((value) => value + 1);
-          }} />
-          <Card className="control-plane-card" aria-label="Organization list">
-            <CardHeader className="control-plane-card-heading">
-              <div className="control-plane-card-icon"><UsersRound size={17} aria-hidden="true" /></div>
-              <div>
-                <CardTitle>Your organizations</CardTitle>
-                <CardDescription>{organizations.length} visible sharing {organizations.length === 1 ? "boundary" : "boundaries"}</CardDescription>
+      <div className="registry-surface" data-layout={layout} ref={surfaceRef}>
+        <div className="registry-body" data-columns={showDetail && !listHidden ? undefined : "1"}>
+          <section aria-busy={state === "loading"} aria-labelledby={`${baseId}-list`} className="registry-list" hidden={listHidden} ref={listRef}>
+            {createOpen && (
+              <CreateOrganizationForm
+                client={client}
+                onCancel={closeCreate}
+                onCreated={(created) => {
+                  setCreateOpen(false);
+                  selectedRef.current = created.id;
+                  setSelectedId(created.id);
+                  setDetailOpen(true);
+                  focusTarget.current = { kind: "title" };
+                  setRefreshKey((value) => value + 1);
+                }}
+              />
+            )}
+            <div className="registry-list-label">
+              <h2 id={`${baseId}-list`}>Organizations</h2>
+              <span aria-live="polite">{state === "ready" ? organizations.length : ""}</span>
+            </div>
+            {state === "loading" && organizations.length === 0 && <PeopleSkeleton label="Loading organizations…" />}
+            {state === "error" && message && (
+              <div className="registry-list-state">
+                <p role="alert">{message}</p>
+                <Button size="sm" type="button" variant="outline" onClick={() => setRefreshKey((value) => value + 1)}>
+                  <RefreshCw size={15} aria-hidden="true" />
+                  Retry
+                </Button>
               </div>
-            </CardHeader>
-            <CardContent className="organization-list-content">
-              {state === "loading" && <ControlPlaneLoadingRows label="Loading organizations…" />}
-              {state === "error" && <OrganizationEmptyState icon={<CircleAlert size={22} aria-hidden="true" />} title="Organizations unavailable" copy="Retry when the organization service is ready." />}
-              {state === "ready" && organizations.length === 0 && <OrganizationEmptyState icon={<UsersRound size={22} aria-hidden="true" />} title="No organizations yet" copy="Create an organization to manage shared skills, teams, and policy." />}
-              {state === "ready" && organizations.length > 0 && (
-                <div className="organization-list" role="list">
-                  {organizations.map((organization) => (
-                    <div key={organization.id} role="listitem">
-                      <button
-                        aria-current={organization.id === selectedId ? "true" : undefined}
-                        aria-pressed={organization.id === selectedId}
-                        className={organization.id === selectedId ? "organization-list-row selected" : "organization-list-row"}
-                        type="button"
-                        onClick={() => selectOrganization(organization.id)}
-                      >
-                        <span className="organization-list-icon"><GitBranch size={15} aria-hidden="true" /></span>
-                        <span className="organization-list-main">
-                          <strong>{organization.name}</strong>
-                          <small>{organization.slug} · {organization.role}</small>
-                        </span>
-                        <Badge variant={organization.status === "active" ? "secondary" : "outline"}>{organization.status}</Badge>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          <PendingOrganizationInvitations
-            invitations={pendingInvitations}
-            client={client}
-            onAccepted={() => setRefreshKey((value) => value + 1)}
-          />
-        </div>
+            )}
+            {state === "ready" && organizations.length === 0 && (
+              <div className="registry-list-state">
+                <strong>No organizations yet.</strong>
+                <p>Create an organization to manage shared skills, teams, and policy.</p>
+              </div>
+            )}
+            {organizations.length > 0 && (
+              <div className="registry-rows">
+                {organizations.map((organization) => (
+                  <button
+                    aria-current={!stacked && organization.id === selectedId ? "true" : undefined}
+                    className="registry-row people-row"
+                    data-row-id={organization.id}
+                    key={organization.id}
+                    type="button"
+                    onClick={() => openOrganization(organization.id)}
+                  >
+                    <span className="people-row-icon" aria-hidden="true"><GitBranch size={16} /></span>
+                    <span className="registry-row-text">
+                      <span className="registry-row-title">{organization.name}</span>
+                      <span className="registry-row-meta">
+                        <code>{organization.slug}</code>
+                        <span>{humanize(organization.role)}</span>
+                        {organization.status !== "active" && <span>{humanize(organization.status)}</span>}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
 
-        <OrganizationDetailPanel
-          client={client}
-          detail={detail}
-          detailState={detailState}
-          message={detailMessage}
-          members={members}
-          invitations={invitations}
-          policies={policies}
-          teams={teams}
-          onRefresh={() => selectedId && void refreshDetail(selectedId)}
-          onArchived={() => setRefreshKey((value) => value + 1)}
-        />
-      </section>
+          {showDetail && (
+            <OrganizationDetailPanel
+              client={client}
+              detail={detail}
+              detailState={detailState}
+              message={detailMessage}
+              members={members}
+              invitations={invitations}
+              policies={policies}
+              teams={teams}
+              stacked={stacked}
+              titleRef={titleRef}
+              onBack={backToOrganizations}
+              onRefresh={() => selectedId && void refreshDetail(selectedId)}
+              onArchived={() => setRefreshKey((value) => value + 1)}
+            />
+          )}
+        </div>
+      </div>
     </main>
   );
 }
 
-function CreateOrganizationCard({ client, onCreated }: { client: RegistryClient; onCreated: (organization: OrganizationDetail) => void }) {
+function CreateOrganizationForm({ client, onCancel, onCreated }: { client: RegistryClient; onCancel: () => void; onCreated: (organization: OrganizationDetail) => void }) {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [reason, setReason] = useState("");
@@ -311,25 +388,24 @@ function CreateOrganizationCard({ client, onCreated }: { client: RegistryClient;
     void create();
   }
 
+  function onKeyDown(event: KeyboardEvent<HTMLFormElement>) {
+    if (event.key !== "Escape" || state === "saving") return;
+    event.preventDefault();
+    onCancel();
+  }
+
   return (
-    <Card className="control-plane-card" aria-label="Create organization">
-      <CardHeader className="control-plane-card-heading">
-        <div className="control-plane-card-icon"><Plus size={17} aria-hidden="true" /></div>
-        <div>
-          <CardTitle>New organization</CardTitle>
-          <CardDescription>Create a governed sharing boundary. Organization creation requires an MFA-verified owner session.</CardDescription>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <form className="control-plane-form" onSubmit={(event) => void submit(event)}>
-          <label htmlFor="new-organization-name"><span>Name</span><Input id="new-organization-name" aria-describedby={state === "error" && !name.trim() ? "new-organization-name-error" : undefined} aria-invalid={state === "error" && !name.trim()} aria-required="true" disabled={state === "saving"} onChange={(event) => setName(event.target.value)} placeholder="Acme skills" value={name} />{state === "error" && !name.trim() && <small id="new-organization-name-error" role="alert">Give the organization a name before creating it.</small>}</label>
-          <label><span>Slug <small>(optional)</small></span><Input aria-label="Organization slug" disabled={state === "saving"} onChange={(event) => setSlug(event.target.value)} placeholder="acme-skills" value={slug} /></label>
-          <label><span>Reason <small>(optional audit note)</small></span><Input aria-label="Organization creation reason" disabled={state === "saving"} onChange={(event) => setReason(event.target.value)} placeholder="Why this boundary exists" value={reason} /></label>
-          {message && <div className="control-plane-inline-message" role={state === "error" ? "alert" : "status"}><span>{message}</span>{state === "error" && name.trim() && <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void create()}>Retry</Button>}</div>}
-          <Button className="shadcn-action-button" disabled={state === "saving" || !name.trim()} size="sm" type="submit"><Plus size={15} aria-hidden="true" />{state === "saving" ? "Creating…" : "Create organization"}</Button>
-        </form>
-      </CardContent>
-    </Card>
+    <form aria-label="Create organization" className="control-plane-form people-create" onKeyDown={onKeyDown} onSubmit={(event) => void submit(event)}>
+      <p className="people-create-intro"><strong>New organization</strong> <span>Create a governed sharing boundary. Organization creation requires an MFA-verified owner session.</span></p>
+      <label htmlFor="new-organization-name"><span>Name</span><Input id="new-organization-name" aria-describedby={state === "error" && !name.trim() ? "new-organization-name-error" : undefined} aria-invalid={state === "error" && !name.trim()} aria-required="true" disabled={state === "saving"} onChange={(event) => setName(event.target.value)} placeholder="Acme skills" value={name} />{state === "error" && !name.trim() && <small id="new-organization-name-error" role="alert">Give the organization a name before creating it.</small>}</label>
+      <label><span>Slug <small>(optional)</small></span><Input aria-label="Organization slug" disabled={state === "saving"} onChange={(event) => setSlug(event.target.value)} placeholder="acme-skills" value={slug} /></label>
+      <label><span>Reason <small>(optional audit note)</small></span><Input aria-label="Organization creation reason" disabled={state === "saving"} onChange={(event) => setReason(event.target.value)} placeholder="Why this boundary exists" value={reason} /></label>
+      {message && <div className="control-plane-inline-message" role={state === "error" ? "alert" : "status"}><span>{message}</span>{state === "error" && name.trim() && <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void create()}>Retry</Button>}</div>}
+      <div className="people-form-actions">
+        <Button disabled={state === "saving" || !name.trim()} size="sm" type="submit"><Plus size={15} aria-hidden="true" />{state === "saving" ? "Creating…" : "Create organization"}</Button>
+        <Button disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+      </div>
+    </form>
   );
 }
 
@@ -342,6 +418,9 @@ function OrganizationDetailPanel({
   invitations,
   policies,
   teams,
+  stacked,
+  titleRef,
+  onBack,
   onRefresh,
   onArchived,
 }: {
@@ -353,46 +432,51 @@ function OrganizationDetailPanel({
   invitations: OrganizationInvitationRecord[];
   policies: OrganizationPolicyRevisionRecord[];
   teams: TeamRecord[];
+  stacked: boolean;
+  titleRef: RefObject<HTMLHeadingElement | null>;
+  onBack: () => void;
   onRefresh: () => void;
   onArchived: () => void;
 }) {
-  if (!detail) {
-    return (
-      <Card className="control-plane-card organization-detail-card empty" aria-label="Organization detail">
-        <CardContent className="control-plane-empty-detail">{detailState === "loading" ? <ControlPlaneLoadingRows label="Loading organization detail…" /> : detailState === "error" && message ? <div className="safe-message control-plane-message" role="alert"><span>{message}</span><Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={onRefresh}><RefreshCw size={15} aria-hidden="true" /> Retry</Button></div> : <><UsersRound size={42} aria-hidden="true" /><h2>Select an organization</h2><p>Choose a sharing boundary to manage members, policy revisions, and child teams.</p></>}</CardContent>
-      </Card>
-    );
-  }
-
-  const canAdmin = detail.role === "owner" || detail.role === "admin";
-  const canManagePolicy = detail.role === "owner";
+  const titleId = useId();
+  const canAdmin = detail?.role === "owner" || detail?.role === "admin";
+  const canManagePolicy = detail?.role === "owner";
+  const retry = <Button size="sm" type="button" variant="outline" onClick={onRefresh}><RefreshCw size={15} aria-hidden="true" /> Retry</Button>;
   return (
-    <Card className="control-plane-card organization-detail-card" aria-label={`Organization detail: ${detail.name}`}>
-      <CardHeader className="control-plane-detail-header">
-        <div>
-          <p className="control-plane-kicker">Organization detail</p>
-          <CardTitle>{detail.name}</CardTitle>
-          <CardDescription>{detail.slug} · {detail.status}</CardDescription>
-          <p className="control-plane-context-note"><ShieldCheck size={15} aria-hidden="true" /> Organization is a sharing boundary. Personal, work, and team labels do not grant access.</p>
-        </div>
-        <div className="control-plane-detail-actions">
-          <Badge variant={detail.status === "active" ? "secondary" : "outline"}>{detail.status}</Badge>
-          <Badge variant="outline">{detail.role}</Badge>
-          {canManagePolicy && detail.status === "active" && <ArchiveOrganizationButton key={detail.id} client={client} organizationId={detail.id} organizationName={detail.name} onArchived={onArchived} />}
-        </div>
-      </CardHeader>
-      <CardContent className="control-plane-detail-content">
-        {detailState === "loading" && <ControlPlaneLoadingRows label="Loading organization detail…" />}
-        {detailState === "error" && message && <div className="safe-message control-plane-message" role="alert">{message}<Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={onRefresh}><RefreshCw size={15} aria-hidden="true" /> Retry</Button></div>}
-        {detailState === "ready" && (
-          <>
-            <OrganizationMembersPanel client={client} detail={detail} members={members} invitations={invitations} canAdmin={canAdmin} onChanged={onRefresh} />
-            <OrganizationPolicyPanel client={client} detail={detail} policies={policies} canManage={canManagePolicy} onChanged={onRefresh} />
-            <OrganizationTeamsPanel client={client} detail={detail} teams={teams} canAdmin={canAdmin} onChanged={onRefresh} />
-          </>
-        )}
-      </CardContent>
-    </Card>
+    <section aria-label={detail ? undefined : "Organization detail"} aria-labelledby={detail ? titleId : undefined} className="registry-inspector people-detail">
+      {stacked && (
+        <Button className="registry-back" type="button" variant="ghost" onClick={onBack}>
+          <ArrowLeft size={16} aria-hidden="true" />
+          Back to organizations
+        </Button>
+      )}
+      {!detail ? (
+        detailState === "error" && message
+          ? <div className="people-status" data-tone="danger" role="alert"><span>{message}</span>{retry}</div>
+          : <PeopleSkeleton detail label="Loading organization detail…" />
+      ) : (
+        <>
+          <header className="people-detail-head">
+            <div className="registry-inspector-title">
+              <h2 id={titleId} ref={titleRef} tabIndex={-1}>{detail.name}</h2>
+              <p className="registry-inspector-meta">
+                <code>{detail.slug}</code>
+                <span aria-hidden="true">·</span>
+                <span>{humanize(detail.status)}</span>
+                <span aria-hidden="true">·</span>
+                <span>Your role: {humanize(detail.role)}</span>
+              </p>
+              <p className="people-note">Organization is a sharing boundary. Personal, work, and team labels do not grant access.</p>
+            </div>
+            {canManagePolicy && detail.status === "active" && <ArchiveOrganizationButton key={detail.id} client={client} organizationId={detail.id} organizationName={detail.name} onArchived={onArchived} />}
+          </header>
+          {detailState === "error" && message && <div className="people-status" data-tone="danger" role="alert"><span>{message}</span>{retry}</div>}
+          <OrganizationMembersPanel client={client} detail={detail} members={members} invitations={invitations} canAdmin={canAdmin} onChanged={onRefresh} />
+          <OrganizationTeamsPanel client={client} detail={detail} teams={teams} canAdmin={canAdmin} onChanged={onRefresh} />
+          <OrganizationPolicyPanel client={client} detail={detail} policies={policies} canManage={canManagePolicy} onChanged={onRefresh} />
+        </>
+      )}
+    </section>
   );
 }
 
@@ -404,32 +488,69 @@ function OrganizationMembersPanel({ client, detail, members, invitations, canAdm
   canAdmin: boolean;
   onChanged: () => void;
 }) {
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<OrganizationRole>("member");
   const [state, setState] = useState<"idle" | "saving" | "error">("idle");
-  const [message, setMessage] = useState<string | null>(null);
-  const [pendingRemoval, setPendingRemoval] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ scope: "invite" | "role" | "members"; text: string; tone: "danger" | "teal" } | null>(null);
   const [pendingRoleChange, setPendingRoleChange] = useState<{ member: OrganizationMembershipRecord; nextRole: OrganizationRole } | null>(null);
+  const [removal, setRemoval] = useState<OrganizationMembershipRecord | null>(null);
+  const removed = useRef(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const focusTarget = useRef<{ kind: "email" | "trigger" | "heading" } | { kind: "role"; userId: string } | null>(null);
+  const baseId = useId();
+
+  useEffect(() => {
+    const target = focusTarget.current;
+    if (!target) return;
+    const element = target.kind === "email" ? document.getElementById(`${baseId}-email`)
+      : target.kind === "trigger" ? triggerRef.current
+        : target.kind === "heading" ? headingRef.current
+          : target.kind === "role" ? findRole(listRef.current, target.userId) : null;
+    if (!element) return;
+    focusTarget.current = null;
+    element.focus();
+  });
 
   async function submitInvite() {
     if (!client.inviteOrganizationMember || !email.trim()) return;
+    const invited = email.trim();
     setState("saving");
     setMessage(null);
     try {
-      await client.inviteOrganizationMember({ organizationId: detail.id, email: email.trim(), role });
+      await client.inviteOrganizationMember({ organizationId: detail.id, email: invited, role });
       setEmail("");
       setRole("member");
       setState("idle");
+      setInviteOpen(false);
+      setMessage({ scope: "members", text: `Invitation sent to ${invited}.`, tone: "teal" });
+      focusTarget.current = { kind: "trigger" };
       onChanged();
     } catch (error) {
       setState("error");
-      setMessage(safeOrganizationErrorMessage(error));
+      setMessage({ scope: "invite", text: safeOrganizationErrorMessage(error), tone: "danger" });
     }
   }
 
   function invite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void submitInvite();
+  }
+
+  function openInvite() {
+    setInviteOpen(true);
+    setMessage(null);
+    focusTarget.current = { kind: "email" };
+  }
+
+  function closeInvite() {
+    if (state === "saving") return;
+    setInviteOpen(false);
+    setState("idle");
+    setMessage(null);
+    focusTarget.current = { kind: "trigger" };
   }
 
   function requestRoleChange(member: OrganizationMembershipRecord, nextRole: OrganizationRole) {
@@ -439,9 +560,11 @@ function OrganizationMembersPanel({ client, detail, members, invitations, canAdm
   }
 
   function cancelRoleChange() {
+    const userId = pendingRoleChange?.member.userId;
     setPendingRoleChange(null);
     setState("idle");
     setMessage(null);
+    if (userId) focusTarget.current = { kind: "role", userId };
   }
 
   async function confirmRoleChange() {
@@ -450,67 +573,131 @@ function OrganizationMembersPanel({ client, detail, members, invitations, canAdm
     setMessage(null);
     try {
       await client.updateOrganizationMemberRole({ organizationId: detail.id, memberId: pendingRoleChange.member.userId, role: pendingRoleChange.nextRole });
+      focusTarget.current = { kind: "role", userId: pendingRoleChange.member.userId };
       setPendingRoleChange(null);
       setState("idle");
       onChanged();
     } catch (error) {
       setState("error");
-      setMessage(safeOrganizationErrorMessage(error));
+      setMessage({ scope: "role", text: safeOrganizationErrorMessage(error), tone: "danger" });
     }
   }
 
-  async function confirmRemoveMember(member: OrganizationMembershipRecord) {
-    if (!client.removeOrganizationMember) return;
-    setState("saving");
-    setMessage(null);
+  async function removeMember(member: OrganizationMembershipRecord) {
+    if (!client.removeOrganizationMember) throw new Error("Member removal is not available in this workspace yet.");
     try {
       await client.removeOrganizationMember(detail.id, member.userId);
-      setPendingRemoval(null);
-      setState("idle");
-      onChanged();
     } catch (error) {
-      setState("error");
-      setMessage(safeOrganizationErrorMessage(error));
+      throw new Error(safeOrganizationErrorMessage(error));
     }
+    removed.current = true;
+    setPendingRoleChange(null);
+    setMessage({ scope: "members", text: `${member.email} was removed from ${detail.name}.`, tone: "teal" });
+    onChanged();
   }
 
-  function removeMember(member: OrganizationMembershipRecord) {
-    if (pendingRemoval !== member.userId) {
-      setPendingRemoval(member.userId);
-      setPendingRoleChange(null);
-      return;
-    }
-    void confirmRemoveMember(member);
+  function closeRemoval() {
+    // The dialog returns focus to Remove first; after a removal that row is
+    // going away, so the Members heading takes focus instead.
+    if (removed.current) focusTarget.current = { kind: "heading" };
+    removed.current = false;
+    setRemoval(null);
   }
 
-  const pendingMember = pendingRemoval ? members.find((member) => member.userId === pendingRemoval) : undefined;
+  const status = (scope: "invite" | "role" | "members") => message?.scope === scope
+    ? <p className="people-status" data-tone={message.tone} role={message.tone === "danger" ? "alert" : "status"}>{message.text}</p>
+    : null;
 
   return (
-    <section className="control-plane-section" aria-labelledby="organization-members-heading">
-      <div className="control-plane-section-heading"><div><p className="control-plane-kicker">Membership</p><h2 id="organization-members-heading">Members and invitations</h2></div><span>{members.length} members · {invitations.length} invitations</span></div>
-      {canAdmin && <form className="organization-invite-form" onSubmit={(event) => void invite(event)}>
-        <Input aria-label="Organization member email" disabled={state === "saving"} onChange={(event) => setEmail(event.target.value)} placeholder="collaborator@example.com" type="email" value={email} />
-        <select aria-label="Organization invitation role" disabled={state === "saving"} onChange={(event) => setRole(event.target.value as OrganizationRole)} value={role}><option value="member">Member</option><option value="admin">Admin</option></select>
-        <Button className="shadcn-action-button" disabled={state === "saving" || !email.trim()} size="sm" type="submit"><Mail size={15} aria-hidden="true" />Invite</Button>
-      </form>}
-      {!canAdmin && <p className="control-plane-muted">Only organization owners and admins can invite or manage members.</p>}
-      {message && <div className="control-plane-inline-message" role={state === "error" ? "alert" : "status"}><span>{message}</span>{state === "error" && <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => { if (pendingRoleChange) void confirmRoleChange(); else if (pendingMember) void confirmRemoveMember(pendingMember); else void submitInvite(); }}>Retry</Button>}</div>}
-      <div className="organization-members-list">
-        {members.map((member) => (
-          <div className="organization-member-row" key={member.id}>
-            <UserRound size={16} aria-hidden="true" />
-            <span><strong>{member.name || member.email}</strong><small>{member.email}</small></span>
-            {canAdmin && (detail.role === "owner" || member.role !== "owner") ? <select aria-label={`Role for ${member.email}`} disabled={state === "saving" || Boolean(pendingRoleChange)} onChange={(event) => requestRoleChange(member, event.target.value as OrganizationRole)} value={member.role}><option value="member">Member</option><option value="admin">Admin</option>{detail.role === "owner" && <option value="owner">Owner</option>}</select> : <Badge variant="outline">{member.role}</Badge>}
-            {canAdmin && (detail.role === "owner" || member.role !== "owner") && <Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant={pendingRemoval === member.userId ? "destructive" : "outline"} onClick={() => void removeMember(member)}>{pendingRemoval === member.userId ? "Confirm remove" : "Remove"}</Button>}
-            {pendingRoleChange?.member.userId === member.userId && <div className="control-plane-inline-message" role="alert"><span>Change {member.email} from {member.role} to {pendingRoleChange.nextRole}?</span><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" onClick={() => void confirmRoleChange()}>Confirm role change</Button><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={cancelRoleChange}>Cancel</Button></div>}
+    <section aria-labelledby={`${baseId}-heading`} className="registry-section">
+      <div className="people-section-head">
+        <h3 id={`${baseId}-heading`} ref={headingRef} tabIndex={-1}>Members</h3>
+        {canAdmin && (
+          <Button aria-expanded={inviteOpen} ref={triggerRef} size="sm" type="button" variant="outline" onClick={() => inviteOpen ? closeInvite() : openInvite()}>
+            <Mail size={15} aria-hidden="true" />
+            Invite member
+          </Button>
+        )}
+      </div>
+      {!canAdmin && <p className="registry-muted">Only organization owners and admins can invite or manage members.</p>}
+      {canAdmin && inviteOpen && (
+        <form aria-label="Invite organization member" className="people-inline-form" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); closeInvite(); } }} onSubmit={(event) => void invite(event)}>
+          <label className="people-field people-field-grow" htmlFor={`${baseId}-email`}>
+            <span>Email</span>
+            <Input aria-label="Organization member email" autoComplete="email" disabled={state === "saving"} id={`${baseId}-email`} onChange={(event) => setEmail(event.target.value)} placeholder="collaborator@example.com" spellCheck={false} type="email" value={email} />
+          </label>
+          <label className="people-field people-field-role">
+            <span>Role</span>
+            <select aria-label="Organization invitation role" disabled={state === "saving"} onChange={(event) => setRole(event.target.value as OrganizationRole)} value={role}><option value="member">Member</option><option value="admin">Admin</option></select>
+          </label>
+          <div className="people-form-actions">
+            <Button disabled={state === "saving" || !email.trim()} size="sm" type="submit"><Mail size={15} aria-hidden="true" />Invite</Button>
+            <Button disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={closeInvite}>Cancel</Button>
           </div>
-        ))}
-        {members.length === 0 && <p className="control-plane-muted">No active members were returned.</p>}
-      </div>
-      <div className="organization-invitations-list">
-        {invitations.map((invitation) => <div className="organization-invitation-row" key={invitation.id}><Mail size={15} aria-hidden="true" /><span><strong>{invitation.email}</strong><small>{invitation.role} · {invitation.status}</small></span><Badge variant="outline">{invitation.status}</Badge></div>)}
-        {invitations.length === 0 && <p className="control-plane-muted">No organization invitations.</p>}
-      </div>
+          {message?.scope === "invite" && <div className="people-status" data-tone="danger" role="alert"><span>{message.text}</span><Button size="sm" type="button" variant="outline" onClick={() => void submitInvite()}>Retry</Button></div>}
+        </form>
+      )}
+      {status("members")}
+      <ul aria-labelledby={`${baseId}-heading`} className="people-list" ref={listRef}>
+        {members.map((member) => {
+          const manageable = canAdmin && (detail.role === "owner" || member.role !== "owner");
+          const changing = pendingRoleChange?.member.userId === member.userId ? pendingRoleChange : null;
+          return (
+            <li key={member.id}>
+              <span className="people-person">
+                <strong>{member.name || member.email}</strong>
+                {member.name && <small>{member.email}</small>}
+              </span>
+              <span className="people-row-actions">
+                {manageable
+                  ? <select aria-label={`Role for ${member.email}`} data-user-id={member.userId} disabled={state === "saving" || Boolean(pendingRoleChange)} onChange={(event) => requestRoleChange(member, event.target.value as OrganizationRole)} value={member.role}><option value="member">Member</option><option value="admin">Admin</option>{detail.role === "owner" && <option value="owner">Owner</option>}</select>
+                  : <span className="registry-chip">{humanize(member.role)}</span>}
+                {manageable && <Button className="people-danger" disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={() => setRemoval(member)}>Remove</Button>}
+              </span>
+              {changing && (
+                <div className="people-confirm-strip" role="alert">
+                  <span>Change {member.email} from {humanize(member.role)} to {humanize(changing.nextRole)}?</span>
+                  {status("role")}
+                  <div className="people-form-actions">
+                    <Button disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={cancelRoleChange}>Cancel</Button>
+                    <Button disabled={state === "saving"} size="sm" type="button" onClick={() => void confirmRoleChange()}>Confirm role change</Button>
+                  </div>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {members.length === 0 && <p className="registry-muted">No active members were returned.</p>}
+      {canAdmin && (
+        <div className="people-subsection">
+          <h4>Pending invitations</h4>
+          {invitations.length === 0 ? <p className="registry-muted">No pending invitations.</p> : (
+            <ul className="people-list">
+              {invitations.map((invitation) => (
+                <li key={invitation.id}>
+                  <span className="people-person"><strong>{invitation.email}</strong><small>{humanize(invitation.role)} · Sent {formatControlPlaneDate(invitation.createdAt)}</small></span>
+                  <span className="registry-chip">{humanize(invitation.status)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {removal && (
+        <ConfirmationDialog
+          key={`remove-member-${removal.id}`}
+          request={{
+            key: `remove-member-${removal.id}`,
+            title: `Remove ${removal.email}?`,
+            description: `${removal.email} will be removed from ${detail.name}. Access that comes from membership in this organization ends.`,
+            confirmLabel: "Remove member",
+            destructive: true,
+            onConfirm: () => removeMember(removal),
+          }}
+          onClose={closeRemoval}
+        />
+      )}
     </section>
   );
 }
@@ -526,8 +713,10 @@ function OrganizationPolicyPanel({ client, detail, policies, canManage, onChange
   const [reason, setReason] = useState("");
   const [state, setState] = useState<"idle" | "saving" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   const [pendingAppend, setPendingAppend] = useState(false);
   const [pendingActivation, setPendingActivation] = useState<OrganizationPolicyRevisionRecord | null>(null);
+  const baseId = useId();
 
   useEffect(() => {
     setDraft(clonePolicy(detail.currentPolicy?.policy ?? ORGANIZATION_POLICY_DEFAULTS));
@@ -555,6 +744,7 @@ function OrganizationPolicyPanel({ client, detail, policies, canManage, onChange
       const result = await client.appendOrganizationPolicy({ organizationId: detail.id, policy: draft, ...(reason.trim() ? { reason: reason.trim() } : {}) });
       setState("idle");
       setPendingAppend(false);
+      setEditing(false);
       setMessage(result.activated ? `Policy revision ${result.revision.revisionNumber} was appended and activated.` : `Policy revision ${result.revision.revisionNumber} was appended; the current policy remains unchanged.`);
       setReason("");
       onChanged();
@@ -607,37 +797,83 @@ function OrganizationPolicyPanel({ client, detail, policies, canManage, onChange
     setMessage(null);
   }
 
+  function toggleEditing() {
+    if (editing) {
+      // Closing the form discards the unsaved draft.
+      setDraft(clonePolicy(detail.currentPolicy?.policy ?? ORGANIZATION_POLICY_DEFAULTS));
+      setReason("");
+      setPendingAppend(false);
+      setState("idle");
+      setMessage(null);
+    }
+    setEditing(!editing);
+  }
+
+  const current = policies.find((revision) => revision.id === detail.currentPolicyRevisionId);
+
   return (
-    <section className="control-plane-section" aria-labelledby="organization-policy-heading">
-      <div className="control-plane-section-heading"><div><p className="control-plane-kicker">Immutable policy</p><h2 id="organization-policy-heading">Policy revisions</h2></div><span>{policies.length} revisions</span></div>
-      <p className="control-plane-muted">Policy changes create immutable revisions. A new revision activates immediately when the API reports activation; the current pointer controls organization sharing and team boundaries.</p>
-      <div className="organization-policy-history">
-        {policies.map((revision) => {
-          const current = revision.id === detail.currentPolicyRevisionId;
-          return <div className="organization-policy-row" key={revision.id}><span><strong>Revision {revision.revisionNumber}{current ? " · Current" : ""}</strong><small>{revision.reason || "No audit note"} · {formatControlPlaneDate(revision.createdAt)}</small></span>{current ? <Badge variant="secondary">Active</Badge> : canManage ? pendingActivation?.id === revision.id ? <div className="control-plane-inline-message" role="alert"><span>Activate immutable policy revision {revision.revisionNumber}?</span><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" onClick={() => void commitActivatePolicy(revision)}>{state === "saving" ? "Activating…" : "Confirm activate"}</Button><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={cancelActivatePolicy}>Cancel</Button></div> : <Button className="shadcn-action-button" disabled={state === "saving" || Boolean(pendingActivation)} size="sm" type="button" variant="outline" onClick={() => requestActivatePolicy(revision)}><Check size={15} aria-hidden="true" />Activate</Button> : <Badge variant="outline">Inactive</Badge>}</div>;
-        })}
-        {policies.length === 0 && <p className="control-plane-muted">No policy revisions returned.</p>}
+    <section aria-labelledby={`${baseId}-heading`} className="registry-section">
+      <div className="people-section-head">
+        <h3 id={`${baseId}-heading`}>Policy</h3>
+        {canManage && (
+          <Button aria-controls={editing ? `${baseId}-form` : undefined} aria-expanded={editing} disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={toggleEditing}>
+            Change policy
+          </Button>
+        )}
       </div>
-      {canManage ? <form className="organization-policy-form" onSubmit={(event) => void appendPolicy(event)}>
-        <div className="organization-policy-flags">
-          <PolicyCheckbox disabled={state === "saving"} label="Enable organization skill sharing" checked={draft.sharing.organizationSkillSharingEnabled} onChange={(value) => setFlag("sharing", "organizationSkillSharingEnabled", value)} />
-          <PolicyCheckbox disabled={state === "saving"} label="Enable organization architecture sharing" checked={draft.sharing.organizationArchitectureSharingEnabled} onChange={(value) => setFlag("sharing", "organizationArchitectureSharingEnabled", value)} />
-          <PolicyCheckbox disabled={state === "saving"} label="Let members share owned skills" checked={draft.sharing.membersCanShareOwnedSkillsToOrganization} onChange={(value) => setFlag("sharing", "membersCanShareOwnedSkillsToOrganization", value)} />
-          <PolicyCheckbox disabled={state === "saving"} label="Let team owners share architectures" checked={draft.sharing.teamOwnersCanShareArchitecturesToParentOrganization} onChange={(value) => setFlag("sharing", "teamOwnersCanShareArchitecturesToParentOrganization", value)} />
-          <PolicyCheckbox disabled={state === "saving"} label="Let members create child teams" checked={draft.teams.membersCanCreateTeams} onChange={(value) => setFlag("teams", "membersCanCreateTeams", value)} />
-          <PolicyCheckbox disabled={state === "saving"} label="Require organization membership for team members" checked={draft.teams.requireOrganizationMembershipForTeamMembers} onChange={(value) => setFlag("teams", "requireOrganizationMembershipForTeamMembers", value)} />
-          <PolicyCheckbox disabled={state === "saving"} label="Allow standalone team adoption" checked={draft.teams.allowStandaloneTeamAdoption} onChange={(value) => setFlag("teams", "allowStandaloneTeamAdoption", value)} />
-        </div>
-        <div className="organization-policy-limits">
-          <PolicyLimit disabled={state === "saving"} label="Teams per organization" value={draft.limits.teamsPerOrganization} onChange={(value) => setLimit("teamsPerOrganization", value)} />
-          <PolicyLimit disabled={state === "saving"} label="Members per organization" value={draft.limits.membersPerOrganization} onChange={(value) => setLimit("membersPerOrganization", value)} />
-          <PolicyLimit disabled={state === "saving"} label="Skill grants" value={draft.limits.organizationGrantsPerSkill} onChange={(value) => setLimit("organizationGrantsPerSkill", value)} />
-          <PolicyLimit disabled={state === "saving"} label="Architecture grants" value={draft.limits.organizationGrantsPerArchitecture} onChange={(value) => setLimit("organizationGrantsPerArchitecture", value)} />
-        </div>
-        <label><span>Revision reason</span><Textarea aria-label="Policy revision reason" disabled={state === "saving"} onChange={(event) => setReason(event.target.value)} placeholder="Why this policy change is needed" value={reason} /></label>
-        {message && <div className="control-plane-inline-message" role={state === "error" ? "alert" : "status"}><span>{message}</span>{state === "error" && <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => pendingActivation ? void commitActivatePolicy(pendingActivation) : void commitAppendPolicy()}>Retry</Button>}</div>}
-        {!pendingAppend ? <Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="submit"><Plus size={15} aria-hidden="true" />Review append and activate</Button> : <div className="control-plane-inline-message" role="alert"><span>Confirm this immutable revision. The API will report whether it becomes the current policy immediately.</span><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" onClick={() => void commitAppendPolicy()}>{state === "saving" ? "Saving…" : "Confirm append and activate"}</Button><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={cancelAppendPolicy}>Cancel</Button></div>}
-      </form> : <p className="control-plane-muted">Only the organization owner can append or activate policy revisions.</p>}
+      <p className="registry-muted">{current ? `Revision ${current.revisionNumber} is the current policy.` : "No current policy revision."} Policy changes create immutable revisions. A new revision activates immediately when the API reports activation; the current pointer controls organization sharing and team boundaries.</p>
+      {policies.length > 0 && (
+        <ul className="people-list">
+          {policies.map((revision) => {
+            const isCurrent = revision.id === detail.currentPolicyRevisionId;
+            return (
+              <li key={revision.id}>
+                <span className="people-person"><strong>Revision {revision.revisionNumber}{isCurrent ? " · Current" : ""}</strong><small>{revision.reason || "No audit note"} · {formatControlPlaneDate(revision.createdAt)}</small></span>
+                <span className="people-row-actions">
+                  {isCurrent
+                    ? <span className="registry-chip" data-tone="teal">Active</span>
+                    : canManage
+                      ? pendingActivation?.id === revision.id ? null : <Button disabled={state === "saving" || Boolean(pendingActivation)} size="sm" type="button" variant="outline" onClick={() => requestActivatePolicy(revision)}><Check size={15} aria-hidden="true" />Activate</Button>
+                      : <span className="registry-chip">Inactive</span>}
+                </span>
+                {canManage && pendingActivation?.id === revision.id && (
+                  <div className="control-plane-inline-message people-confirm-strip" role="alert">
+                    <span>Activate immutable policy revision {revision.revisionNumber}?</span>
+                    <div className="people-form-actions">
+                      <Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={cancelActivatePolicy}>Cancel</Button>
+                      <Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" onClick={() => void commitActivatePolicy(revision)}>{state === "saving" ? "Activating…" : "Confirm activate"}</Button>
+                    </div>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {policies.length === 0 && <p className="registry-muted">No policy revisions returned.</p>}
+      {canManage && editing && (
+        <form className="organization-policy-form" id={`${baseId}-form`} onSubmit={(event) => void appendPolicy(event)}>
+          <div className="organization-policy-flags">
+            <PolicyCheckbox disabled={state === "saving"} label="Enable organization skill sharing" checked={draft.sharing.organizationSkillSharingEnabled} onChange={(value) => setFlag("sharing", "organizationSkillSharingEnabled", value)} />
+            <PolicyCheckbox disabled={state === "saving"} label="Enable organization architecture sharing" checked={draft.sharing.organizationArchitectureSharingEnabled} onChange={(value) => setFlag("sharing", "organizationArchitectureSharingEnabled", value)} />
+            <PolicyCheckbox disabled={state === "saving"} label="Let members share owned skills" checked={draft.sharing.membersCanShareOwnedSkillsToOrganization} onChange={(value) => setFlag("sharing", "membersCanShareOwnedSkillsToOrganization", value)} />
+            <PolicyCheckbox disabled={state === "saving"} label="Let team owners share architectures" checked={draft.sharing.teamOwnersCanShareArchitecturesToParentOrganization} onChange={(value) => setFlag("sharing", "teamOwnersCanShareArchitecturesToParentOrganization", value)} />
+            <PolicyCheckbox disabled={state === "saving"} label="Let members create child teams" checked={draft.teams.membersCanCreateTeams} onChange={(value) => setFlag("teams", "membersCanCreateTeams", value)} />
+            <PolicyCheckbox disabled={state === "saving"} label="Require organization membership for team members" checked={draft.teams.requireOrganizationMembershipForTeamMembers} onChange={(value) => setFlag("teams", "requireOrganizationMembershipForTeamMembers", value)} />
+            <PolicyCheckbox disabled={state === "saving"} label="Allow standalone team adoption" checked={draft.teams.allowStandaloneTeamAdoption} onChange={(value) => setFlag("teams", "allowStandaloneTeamAdoption", value)} />
+          </div>
+          <div className="organization-policy-limits">
+            <PolicyLimit disabled={state === "saving"} label="Teams per organization" value={draft.limits.teamsPerOrganization} onChange={(value) => setLimit("teamsPerOrganization", value)} />
+            <PolicyLimit disabled={state === "saving"} label="Members per organization" value={draft.limits.membersPerOrganization} onChange={(value) => setLimit("membersPerOrganization", value)} />
+            <PolicyLimit disabled={state === "saving"} label="Skill grants" value={draft.limits.organizationGrantsPerSkill} onChange={(value) => setLimit("organizationGrantsPerSkill", value)} />
+            <PolicyLimit disabled={state === "saving"} label="Architecture grants" value={draft.limits.organizationGrantsPerArchitecture} onChange={(value) => setLimit("organizationGrantsPerArchitecture", value)} />
+          </div>
+          <label><span>Revision reason</span><Textarea aria-label="Policy revision reason" disabled={state === "saving"} onChange={(event) => setReason(event.target.value)} placeholder="Why this policy change is needed" value={reason} /></label>
+          {!pendingAppend ? <Button className="shadcn-action-button people-start" disabled={state === "saving"} size="sm" type="submit"><Plus size={15} aria-hidden="true" />Review append and activate</Button> : <div className="control-plane-inline-message people-confirm-strip" role="alert"><span>Confirm this immutable revision. The API will report whether it becomes the current policy immediately.</span><div className="people-form-actions"><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={cancelAppendPolicy}>Cancel</Button><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" onClick={() => void commitAppendPolicy()}>{state === "saving" ? "Saving…" : "Confirm append and activate"}</Button></div></div>}
+        </form>
+      )}
+      {!canManage && <p className="registry-muted">Only the organization owner can append or activate policy revisions.</p>}
+      {message && <div className="people-status" data-tone={state === "error" ? "danger" : undefined} role={state === "error" ? "alert" : "status"}><span>{message}</span>{state === "error" && <Button size="sm" type="button" variant="outline" onClick={() => pendingActivation ? void commitActivatePolicy(pendingActivation) : void commitAppendPolicy()}>Retry</Button>}</div>}
     </section>
   );
 }
@@ -656,6 +892,7 @@ function OrganizationTeamsPanel({ client, detail, teams, canAdmin, onChanged }: 
   const [state, setState] = useState<"idle" | "saving" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [pendingAdoption, setPendingAdoption] = useState(false);
+  const baseId = useId();
   const canCreateTeam = canAdmin || detail.currentPolicy?.policy.teams.membersCanCreateTeams === true;
 
   async function submitCreateTeam() {
@@ -710,14 +947,15 @@ function OrganizationTeamsPanel({ client, detail, teams, canAdmin, onChanged }: 
     setMessage(null);
   }
 
-  return <section className="control-plane-section" aria-labelledby="organization-teams-heading">
-    <div className="control-plane-section-heading"><div><p className="control-plane-kicker">Scoped teams</p><h2 id="organization-teams-heading">Child teams</h2></div><span>{teams.length} visible</span></div>
-    <p className="control-plane-muted">Child-team membership is resolved against this organization. A standalone team is not an organization member until it is explicitly adopted.</p>
+  return <section aria-labelledby={`${baseId}-heading`} className="registry-section">
+    <div className="people-section-head"><h3 id={`${baseId}-heading`}>Child teams</h3></div>
+    {teams.length > 0 && <ul className="people-list">{teams.map((team) => <li key={team.id}><span className="people-person"><strong>{team.name}</strong><small><code>{team.slug}</code> · {team.members.length === 1 ? "1 member" : `${team.members.length} members`}</small></span><span className="registry-chip">{humanize(team.role)}</span></li>)}</ul>}
+    {teams.length === 0 && <p className="registry-muted">No child teams are visible in this organization.</p>}
+    <p className="registry-muted">Child-team membership is resolved against this organization. A standalone team is not an organization member until it is explicitly adopted.</p>
     {(canCreateTeam || canAdmin) && <div className="organization-team-actions">{canCreateTeam && <form className="organization-inline-form" onSubmit={(event) => void createTeam(event)}><Input aria-label="Child team name" disabled={state === "saving"} onChange={(event) => setName(event.target.value)} placeholder="Team name" value={name} /><Button className="shadcn-action-button" disabled={state === "saving" || !name.trim()} size="sm" type="submit"><Plus size={15} aria-hidden="true" />Create child team</Button></form>}{canAdmin && <form className="organization-inline-form" onSubmit={(event) => void adoptTeam(event)}><Input aria-label="Standalone team ID" disabled={state === "saving" || pendingAdoption} onChange={(event) => setTeamId(event.target.value)} placeholder="Standalone team ID" value={teamId} /><Button className="shadcn-action-button" disabled={state === "saving" || !teamId.trim() || pendingAdoption} size="sm" type="submit" variant="outline"><GitBranch size={15} aria-hidden="true" />Adopt team</Button></form>}</div>}
-    {!canAdmin && canCreateTeam && <p className="control-plane-muted">Your current organization policy allows members to create child teams.</p>}
+    {!canAdmin && canCreateTeam && <p className="registry-muted">Your current organization policy allows members to create child teams.</p>}
     {message && <div className="control-plane-inline-message" role={state === "error" ? "alert" : "status"}><span>{message}</span>{state === "error" && <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => pendingAdoption ? void submitAdoptTeam() : void submitCreateTeam()}>Retry</Button>}</div>}
-    {pendingAdoption && <div className="control-plane-inline-message" role="alert"><span>Adopting this team changes its effective organization membership and policy boundary.</span><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" onClick={() => void submitAdoptTeam()}>Confirm adopt team</Button><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={cancelAdoption}>Cancel</Button></div>}
-    <div className="organization-team-list">{teams.map((team) => <div className="organization-team-row" key={team.id}><GitBranch size={16} aria-hidden="true" /><span><strong>{team.name}</strong><small>{team.slug} · {team.members.length} members</small></span><Badge variant="outline">{team.role}</Badge></div>)}{teams.length === 0 && <p className="control-plane-muted">No child teams are visible in this organization.</p>}</div>
+    {pendingAdoption && <div className="control-plane-inline-message people-confirm-strip" role="alert"><span>Adopting this team changes its effective organization membership and policy boundary.</span><div className="people-form-actions"><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={cancelAdoption}>Cancel</Button><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" onClick={() => void submitAdoptTeam()}>Confirm adopt team</Button></div></div>}
   </section>;
 }
 
@@ -725,6 +963,14 @@ function PendingOrganizationInvitations({ client, invitations, onAccepted }: { c
   const [state, setState] = useState<"idle" | "saving" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [pendingInvitationId, setPendingInvitationId] = useState<string | null>(null);
+  const statusRef = useRef<HTMLParagraphElement>(null);
+  const focusStatus = useRef(false);
+  const baseId = useId();
+  useEffect(() => {
+    if (!focusStatus.current || !statusRef.current) return;
+    focusStatus.current = false;
+    statusRef.current.focus();
+  });
   async function accept(invitation: OrganizationInvitationRecord) {
     if (!client.acceptOrganizationInvitation) return;
     setState("saving");
@@ -735,6 +981,7 @@ function PendingOrganizationInvitations({ client, invitations, onAccepted }: { c
       setState("idle");
       setPendingInvitationId(null);
       setMessage(`Invitation from ${invitation.organizationName} accepted.`);
+      focusStatus.current = true;
       onAccepted();
     } catch (error) {
       setState("error");
@@ -742,7 +989,32 @@ function PendingOrganizationInvitations({ client, invitations, onAccepted }: { c
     }
   }
   const pendingInvitation = pendingInvitationId ? invitations.find((invitation) => invitation.id === pendingInvitationId) : undefined;
-  return <Card className="control-plane-card" aria-label="Pending organization invitations"><CardHeader className="control-plane-card-heading"><div className="control-plane-card-icon"><Mail size={17} aria-hidden="true" /></div><div><CardTitle>Pending invitations</CardTitle><CardDescription>Accept invitations addressed to this account.</CardDescription></div></CardHeader><CardContent><div className="organization-pending-list">{invitations.map((invitation) => <div className="organization-pending-row" key={invitation.id}><span><strong>{invitation.organizationName}</strong><small>{invitation.role} · {invitation.email}</small></span><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" onClick={() => void accept(invitation)}><Check size={15} aria-hidden="true" />{state === "saving" && pendingInvitationId === invitation.id ? "Accepting…" : "Accept"}</Button></div>)}{invitations.length === 0 && <p className="control-plane-muted">No pending organization invitations.</p>}</div>{message && <div className="control-plane-inline-message" role={state === "error" ? "alert" : "status"}><span>{message}</span>{state === "error" && pendingInvitation && <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void accept(pendingInvitation)}><RefreshCw size={15} aria-hidden="true" /> Retry</Button>}</div>}</CardContent></Card>;
+  if (invitations.length === 0 && !message) return null;
+  return (
+    <section aria-labelledby={`${baseId}-heading`} className="people-invitations">
+      <h2 id={`${baseId}-heading`}>Invitations for you</h2>
+      {invitations.length > 0 && (
+        <ul>
+          {invitations.map((invitation) => (
+            <li key={invitation.id}>
+              <span className="people-person">
+                <strong id={`${baseId}-${invitation.id}`}>{invitation.organizationName}</strong>
+                <small>{humanize(invitation.role)} · {invitation.email} · Sent {formatControlPlaneDate(invitation.createdAt)}</small>
+              </span>
+              <Button aria-describedby={`${baseId}-${invitation.id}`} disabled={state === "saving"} size="sm" type="button" onClick={() => void accept(invitation)}>
+                <Check size={15} aria-hidden="true" />
+                {state === "saving" && pendingInvitationId === invitation.id ? "Accepting…" : "Accept"}
+              </Button>
+              {state === "error" && message && pendingInvitationId === invitation.id && (
+                <div className="people-status" data-tone="danger" role="alert"><span>{message}</span>{pendingInvitation && <Button size="sm" type="button" variant="outline" onClick={() => void accept(pendingInvitation)}><RefreshCw size={15} aria-hidden="true" /> Retry</Button>}</div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {state !== "error" && message && <p className="people-status" data-tone="teal" ref={statusRef} role="status" tabIndex={-1}>{message}</p>}
+    </section>
+  );
 }
 
 function ArchiveOrganizationButton({ client, organizationId, organizationName, onArchived }: { client: RegistryClient; organizationId: string; organizationName: string; onArchived: () => void }) {
@@ -757,7 +1029,7 @@ function ArchiveOrganizationButton({ client, organizationId, organizationName, o
     }
   }
   return <>
-    <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => setConfirm(true)}><Archive size={15} aria-hidden="true" />Archive</Button>
+    <Button className="people-danger" size="sm" type="button" variant="outline" onClick={() => setConfirm(true)}><Archive size={15} aria-hidden="true" />Archive</Button>
     {confirm && <ConfirmationDialog request={{
       key: `archive-${organizationId}`,
       title: `Archive ${organizationName}?`,
@@ -769,12 +1041,29 @@ function ArchiveOrganizationButton({ client, organizationId, organizationName, o
   </>;
 }
 
-function OrganizationEmptyState({ icon, title, copy }: { icon: ReactNode; title: string; copy: string }) {
-  return <div className="control-plane-empty-state">{icon}<strong>{title}</strong><span>{copy}</span></div>;
+function PeopleSkeleton({ detail, label }: { detail?: boolean; label: string }) {
+  return (
+    <div className={detail ? "registry-skeleton registry-skeleton-detail" : "registry-skeleton"} role="status" aria-live="polite">
+      <span className="sr-only">{label}</span>
+      {detail
+        ? <><div className="registry-skeleton-head"><span /><span /></div><span className="registry-skeleton-line" /><span className="registry-skeleton-line" /><span className="registry-skeleton-block" /></>
+        : [0, 1, 2].map((item) => <div className="registry-skeleton-row" key={item}><span /><span /></div>)}
+    </div>
+  );
 }
 
-function ControlPlaneLoadingRows({ label }: { label: string }) {
-  return <div className="control-plane-loading" role="status" aria-live="polite"><span className="sr-only">{label}</span><span /><span /><span className="short" /></div>;
+function findRow(root: HTMLElement | null, id: string): HTMLElement | null {
+  for (const element of root?.querySelectorAll<HTMLElement>("[data-row-id]") ?? []) {
+    if (element.dataset.rowId === id) return element;
+  }
+  return null;
+}
+
+function findRole(root: HTMLElement | null, userId: string): HTMLElement | null {
+  for (const element of root?.querySelectorAll<HTMLElement>("select[data-user-id]") ?? []) {
+    if (element.dataset.userId === userId) return element;
+  }
+  return null;
 }
 
 function clonePolicy(policy: OrganizationPolicyV1): OrganizationPolicyV1 {

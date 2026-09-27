@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
@@ -25,8 +26,6 @@ import {
   Download,
   Ellipsis,
   FileCode2,
-  Fingerprint,
-  Globe,
   KeyRound,
   Link2,
   LockKeyhole,
@@ -51,9 +50,7 @@ import {
   X,
 } from "lucide-react";
 import { parseSemanticVersion, type PublicSkill, type RegistryView, type SkillSharingDetails, type TeamSharedSkillGroup, type VisibilityScope } from "@myskills-app/core";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Frame, FrameDescription, FrameHeader, FramePanel, FrameTitle } from "@/components/reui/frame";
 import { ArchitecturesDashboard } from "@/components/architecture/ArchitecturesDashboard";
@@ -1462,6 +1459,8 @@ function LoginPage({
   onPasswordReset: (input: { email: string }) => Promise<void>;
   onVerifyMfa: (codeOrRecoveryCode: string) => Promise<void>;
 }) {
+  const [resetMode, setResetMode] = useState(false);
+  const step = mfaPending ? "mfa" : resetMode ? "reset" : "login";
   return (
     <>
     <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -1476,9 +1475,11 @@ function LoginPage({
       </nav>
       <section className="login-panel" aria-labelledby="login-heading">
         <p className="landing-status">Public beta. Hosted signups are closed.</p>
-        <h1 id="login-heading">Login</h1>
-        <p>Use an approved owner or team account to access the hosted beta workspace. Need an account? Ask the instance owner for an invitation and follow the email link.</p>
-        <p><a href="/registry">Browse public skills</a> · <a href="https://github.com/jremick/myskills/blob/main/docs/GETTING_STARTED.md">Self-host MySkills</a></p>
+        <h1 id="login-heading">{step === "mfa" ? "Verify sign-in" : step === "reset" ? "Reset password" : "Login"}</h1>
+        {step === "login" && <>
+          <p>Use an approved owner or team account to sign in. Need an account? Ask the instance owner for an invitation and follow the email link.</p>
+          <p><a href="/registry">Browse public skills</a> · <a href="https://github.com/jremick/myskills/blob/main/docs/GETTING_STARTED.md">Self-host MySkills</a></p>
+        </>}
         <AuthWidget
           authMessage={authMessage}
           authState={authState}
@@ -1486,7 +1487,9 @@ function LoginPage({
           onLogin={onLogin}
           onLogout={async () => undefined}
           onPasswordReset={onPasswordReset}
+          onResetModeChange={setResetMode}
           onVerifyMfa={onVerifyMfa}
+          resetMode={resetMode}
           session={null}
         />
       </section>
@@ -2574,339 +2577,453 @@ function reviewSteps(submission: ReviewSubmissionSummary, allowed: ReviewActionN
   ];
 }
 
-function TeamsDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
+type TeamEntry = { id: string; name: string; role: string; team: TeamRecord | null; group: TeamSharedSkillGroup | null };
+type PeopleNotice = { scope: string; text: string; tone: "danger" | "teal" };
+type TeamsFocus = { kind: "title" | "new-team" | "team-name" | "invite-email" | "invite-trigger" | "accepted" } | { kind: "row"; id: string };
+
+/** Listed teams, plus read-only entries for shared groups whose team is not listed. */
+function teamEntries(dashboard: TeamDashboard, groups: TeamSharedSkillGroup[]): TeamEntry[] {
+  const groupByTeam = new Map(groups.map((group) => [group.team.id, group]));
+  const entries: TeamEntry[] = dashboard.teams.map((team) => ({ id: team.id, name: team.name, role: team.role, team, group: groupByTeam.get(team.id) ?? null }));
+  const listed = new Set(entries.map((entry) => entry.id));
+  for (const group of groups) {
+    if (!listed.has(group.team.id)) entries.push({ id: group.team.id, name: group.team.name, role: group.team.role, team: null, group });
+  }
+  return entries;
+}
+
+function findRowById(root: HTMLElement | null, id: string): HTMLElement | null {
+  for (const element of root?.querySelectorAll<HTMLElement>("[data-row-id]") ?? []) {
+    if (element.dataset.rowId === id) return element;
+  }
+  return null;
+}
+
+// Teams use the Registry list and detail layout (people.css): the list comes
+// first, and the selected team's detail sits beside it on a wide surface or
+// replaces it (with Back) on a narrow one. Messages render beside the control
+// that caused them.
+function TeamsDashboard({ client }: { client: RegistryClient; session: WebSession }) {
   const [state, setState] = useState<LoadState>("loading");
-  const [message, setMessage] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [notice, setNotice] = useState<PeopleNotice | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<TeamDashboard>({ teams: [], invitations: [] });
   const [sharedGroups, setSharedGroups] = useState<TeamSharedSkillGroup[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [teamName, setTeamName] = useState("");
+  const [inviteOpenId, setInviteOpenId] = useState<string | null>(null);
   const [inviteEmails, setInviteEmails] = useState<Record<string, string>>({});
-  const teamCount = dashboard.teams.length;
-  const invitationCount = dashboard.invitations.length;
-  const sharedByYouCount = sharedGroups.reduce((total, group) => total + group.sharingWithTeam.length, 0);
-  const sharedWithYouCount = sharedGroups.reduce((total, group) => total + group.sharedWithMe.length, 0);
+  const { layout, ref: surfaceRef } = useSplitLayout();
+  const refreshEpoch = useRef(0);
+  const selectedRef = useRef<string | null>(null);
+  const listRef = useRef<HTMLElement>(null);
+  const listLabelRef = useRef<HTMLHeadingElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const newTeamRef = useRef<HTMLButtonElement>(null);
+  const inviteTriggerRef = useRef<HTMLButtonElement>(null);
+  const acceptedRef = useRef<HTMLParagraphElement>(null);
+  const focusTarget = useRef<TeamsFocus | null>(null);
+  const baseId = useId();
+  const stacked = layout === "stack";
+  const entries = useMemo(() => teamEntries(dashboard, sharedGroups), [dashboard, sharedGroups]);
+  const selected = entries.find((entry) => entry.id === selectedId) ?? null;
+  const team = selected?.team ?? null;
+  const inviteOpen = team !== null && inviteOpenId === team.id;
+  const showDetail = selected !== null && (!stacked || detailOpen);
+  const listHidden = stacked && showDetail;
 
   const refreshTeams = useCallback(async () => {
+    const epoch = ++refreshEpoch.current;
     setState("loading");
-    setMessage(null);
+    setNotice((current) => current?.scope === "load" ? null : current);
     try {
       const [nextDashboard, nextGroups] = await Promise.all([
         client.listTeams(),
         client.listTeamSharedSkills(),
       ]);
+      if (epoch !== refreshEpoch.current) return false;
+      const ids = teamEntries(nextDashboard, nextGroups).map((entry) => entry.id);
+      const current = selectedRef.current;
+      const kept = current && ids.includes(current) ? current : null;
+      // Auto-selection never opens the stacked detail; only a tap does.
+      if (!kept) setDetailOpen(false);
+      selectedRef.current = kept ?? ids[0] ?? null;
+      setSelectedId(selectedRef.current);
       setDashboard(nextDashboard);
       setSharedGroups(nextGroups);
+      setLoaded(true);
       setState("ready");
+      return true;
     } catch (error) {
-      setMessage(safeTeamErrorMessage(error));
+      if (epoch !== refreshEpoch.current) return false;
+      setNotice({ scope: "load", text: safeTeamErrorMessage(error), tone: "danger" });
       setState("error");
+      return false;
     }
   }, [client]);
 
   useEffect(() => {
     void refreshTeams();
+    return () => { refreshEpoch.current += 1; };
   }, [refreshTeams]);
 
+  // Focus follows the reader: into an opened team, back to its row, and
+  // between each on-demand form and the button that opened it.
+  useEffect(() => {
+    const target = focusTarget.current;
+    if (!target) return;
+    const element = target.kind === "row" ? findRowById(listRef.current, target.id) ?? listLabelRef.current
+      : target.kind === "title" ? titleRef.current
+        : target.kind === "new-team" ? newTeamRef.current
+          : target.kind === "team-name" ? document.getElementById(`${baseId}-team-name`)
+            : target.kind === "invite-email" ? document.getElementById(`${baseId}-invite-email`)
+              : target.kind === "invite-trigger" ? inviteTriggerRef.current
+                : acceptedRef.current;
+    if (!element) return;
+    focusTarget.current = null;
+    element.focus();
+  });
+
+  function openTeam(id: string) {
+    if (id !== selectedRef.current) setInviteOpenId(null);
+    selectedRef.current = id;
+    setSelectedId(id);
+    setDetailOpen(true);
+    focusTarget.current = { kind: "title" };
+  }
+
+  function backToTeams() {
+    setDetailOpen(false);
+    setInviteOpenId(null);
+    if (selectedRef.current) focusTarget.current = { kind: "row", id: selectedRef.current };
+  }
+
+  function openCreate() {
+    setCreateOpen(true);
+    if (stacked) setDetailOpen(false);
+    focusTarget.current = { kind: "team-name" };
+  }
+
+  function closeCreate() {
+    if (pending === "create") return;
+    setCreateOpen(false);
+    setTeamName("");
+    setNotice((current) => current?.scope === "create" ? null : current);
+    focusTarget.current = { kind: "new-team" };
+  }
+
+  function openInvite(teamId: string) {
+    setInviteOpenId(teamId);
+    setNotice((current) => current?.scope === `invite:${teamId}` ? null : current);
+    focusTarget.current = { kind: "invite-email" };
+  }
+
+  function closeInvite() {
+    if (pending?.startsWith("invite:")) return;
+    setInviteOpenId(null);
+    focusTarget.current = { kind: "invite-trigger" };
+  }
+
   async function createTeam() {
-    if (!teamName.trim()) {
-      return;
-    }
-    setMessage(null);
+    if (!teamName.trim() || pending) return;
+    const created = teamName.trim();
+    setPending("create");
+    setNotice(null);
     try {
       await client.createTeam(teamName);
       setTeamName("");
-      await refreshTeams();
+      setCreateOpen(false);
+      focusTarget.current = { kind: "new-team" };
+      if (await refreshTeams()) setNotice({ scope: "list", text: `${created} was created.`, tone: "teal" });
     } catch (error) {
-      setMessage(safeTeamErrorMessage(error));
+      setNotice({ scope: "create", text: safeTeamErrorMessage(error), tone: "danger" });
+    } finally {
+      setPending(null);
     }
   }
 
-  async function inviteMember(team: TeamRecord) {
-    const email = inviteEmails[team.id]?.trim();
-    if (!email) {
-      return;
-    }
-    setMessage(null);
+  async function inviteMember(invitedTeam: TeamRecord) {
+    const email = inviteEmails[invitedTeam.id]?.trim();
+    if (!email || pending) return;
+    const scope = `invite:${invitedTeam.id}`;
+    setPending(scope);
+    setNotice(null);
     try {
-      await client.inviteTeamMember(team.id, email);
-      setInviteEmails((current) => ({ ...current, [team.id]: "" }));
-      await refreshTeams();
+      await client.inviteTeamMember(invitedTeam.id, email);
+      setInviteEmails((current) => ({ ...current, [invitedTeam.id]: "" }));
+      setInviteOpenId(null);
+      focusTarget.current = { kind: "invite-trigger" };
+      if (await refreshTeams()) setNotice({ scope, text: `Invitation sent to ${email}.`, tone: "teal" });
     } catch (error) {
-      setMessage(safeTeamErrorMessage(error));
+      setNotice({ scope, text: safeTeamErrorMessage(error), tone: "danger" });
+    } finally {
+      setPending(null);
     }
   }
 
   async function acceptInvitation(invitation: TeamInvitation) {
-    setMessage(null);
+    if (pending) return;
+    setPending(`accept:${invitation.id}`);
+    setNotice(null);
     try {
       await client.acceptTeamInvitation(invitation.id);
-      await refreshTeams();
+      if (await refreshTeams()) {
+        setNotice({ scope: "accepted", text: `You joined ${invitation.teamName}.`, tone: "teal" });
+        focusTarget.current = { kind: "accepted" };
+      }
     } catch (error) {
-      setMessage(safeTeamErrorMessage(error));
+      setNotice({ scope: `accept:${invitation.id}`, text: safeTeamErrorMessage(error), tone: "danger" });
+    } finally {
+      setPending(null);
     }
   }
 
+  const scoped = (scope: string) => notice?.scope === scope
+    ? <p className="people-status" data-tone={notice.tone} role={notice.tone === "danger" ? "alert" : "status"}>{notice.text}</p>
+    : null;
+
   return (
-    <main className="teams-workspace" aria-label="Teams">
-      <section className="admin-hero teams-hero shadcn-teams-hero" aria-labelledby="teams-heading">
-        <div>
-          <h1 id="teams-heading">Teams</h1>
-          <p aria-live="polite">{session.user.email} · {state === "loading" ? "Refreshing team access…" : `${teamCount} teams`}</p>
-        </div>
-        <div className="teams-hero-actions">
-          <dl className="teams-header-metrics" aria-label="Team summary">
-            <div>
-              <dt>Teams</dt>
-              <dd>{teamCount}</dd>
-            </div>
-            <div>
-              <dt>Invitations</dt>
-              <dd>{invitationCount}</dd>
-            </div>
-            <div>
-              <dt>Sharing</dt>
-              <dd>{sharedByYouCount}</dd>
-            </div>
-            <div>
-              <dt>Shared</dt>
-              <dd>{sharedWithYouCount}</dd>
-            </div>
-          </dl>
-          <Button className="shadcn-action-button teams-refresh-button" size="sm" type="button" variant="outline" onClick={() => void refreshTeams()}>
+    <main className="registry-workspace people-workspace teams-workspace" aria-label="Teams">
+      <header className="app-page-header people-page-head">
+        <h1>Teams</h1>
+        <div className="people-page-actions">
+          <Button aria-expanded={createOpen} ref={newTeamRef} size="sm" type="button" onClick={openCreate}>
+            <Plus size={16} aria-hidden="true" />
+            New team
+          </Button>
+          <Button size="sm" type="button" variant="outline" onClick={() => void refreshTeams()}>
             <RotateCw size={16} aria-hidden="true" />
             Refresh
           </Button>
         </div>
-      </section>
+      </header>
 
-      {message && <div className="safe-message admin-message" role="status">{message}</div>}
+      {(dashboard.invitations.length > 0 || notice?.scope === "accepted") && (
+        <section aria-labelledby={`${baseId}-invitations`} className="people-invitations">
+          <h2 id={`${baseId}-invitations`}>Invitations for you</h2>
+          {dashboard.invitations.length > 0 && (
+            <ul>
+              {dashboard.invitations.map((invitation) => (
+                <li key={invitation.id}>
+                  <span className="people-person">
+                    <strong id={`${baseId}-invitation-${invitation.id}`}>{invitation.teamName}</strong>
+                    <small>{invitation.email} · Sent {formatDate(invitation.createdAt)}</small>
+                  </span>
+                  <Button aria-describedby={`${baseId}-invitation-${invitation.id}`} disabled={pending !== null} size="sm" type="button" onClick={() => void acceptInvitation(invitation)}>
+                    <Check size={15} aria-hidden="true" />
+                    {pending === `accept:${invitation.id}` ? "Accepting…" : "Accept"}
+                  </Button>
+                  {scoped(`accept:${invitation.id}`)}
+                </li>
+              ))}
+            </ul>
+          )}
+          {notice?.scope === "accepted" && <p className="people-status" data-tone="teal" ref={acceptedRef} role="status" tabIndex={-1}>{notice.text}</p>}
+        </section>
+      )}
 
-      <section className="teams-layout shadcn-teams-layout">
-        <Card className="teams-access-panel shadcn-console-card" aria-label="Teams and invitations">
-          <CardHeader className="admin-panel-heading shadcn-card-header teams-combined-heading">
-            <span className="admin-panel-icon"><UsersRound size={18} aria-hidden="true" /></span>
-            <div>
-              <CardTitle>Teams and invitations</CardTitle>
-              <CardDescription>Create teams, review members, and accept pending invites.</CardDescription>
+      <div className="registry-surface" data-layout={layout} ref={surfaceRef}>
+        <div className="registry-body" data-columns={showDetail && !listHidden ? undefined : "1"}>
+          <section aria-busy={state === "loading"} aria-labelledby={`${baseId}-list`} className="registry-list" hidden={listHidden} ref={listRef}>
+            {createOpen && (
+              <form className="people-create" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); closeCreate(); } }} onSubmit={(event) => { event.preventDefault(); void createTeam(); }}>
+                <label className="people-field" htmlFor={`${baseId}-team-name`}>
+                  <span>Team name</span>
+                  <Input autoComplete="off" disabled={pending === "create"} id={`${baseId}-team-name`} onChange={(event) => setTeamName(event.target.value)} value={teamName} />
+                </label>
+                <div className="people-form-actions">
+                  <Button disabled={!teamName.trim() || pending === "create"} size="sm" type="submit">
+                    <Plus size={15} aria-hidden="true" />
+                    Create
+                  </Button>
+                  <Button disabled={pending === "create"} size="sm" type="button" variant="outline" onClick={closeCreate}>Cancel</Button>
+                </div>
+                {scoped("create")}
+              </form>
+            )}
+            <div className="registry-list-label">
+              <h2 id={`${baseId}-list`} ref={listLabelRef} tabIndex={-1}>Teams</h2>
+              <span aria-live="polite">{loaded ? entries.length : ""}</span>
             </div>
-          </CardHeader>
-          <CardContent className="teams-access-content">
-            <form className="team-create-row shadcn-team-create-row" onSubmit={(event) => {
-              event.preventDefault();
-              void createTeam();
-            }}>
-              <Input
-                aria-label="Team name"
-                value={teamName}
-                onChange={(event) => setTeamName(event.target.value)}
-                placeholder="Team name"
-              />
-              <Button className="save-button shadcn-action-button" disabled={!teamName.trim()} size="sm" type="submit">
-                <Plus size={16} aria-hidden="true" />
-                Create
-              </Button>
-            </form>
-
-            <section className="teams-combined-section" aria-labelledby="team-list-heading">
-              <div className="teams-section-heading">
-                <h2 id="team-list-heading">Teams</h2>
-                <span>{teamCount} active</span>
+            {scoped("list")}
+            {state === "loading" && !loaded && (
+              <div className="registry-skeleton" role="status" aria-live="polite">
+                <span className="sr-only">Loading teams…</span>
+                {[0, 1, 2].map((item) => <div className="registry-skeleton-row" key={item}><span /><span /></div>)}
               </div>
-              <div className="team-list">
-                {state === "loading" && <TeamsLoadingRows />}
-                {state !== "loading" && dashboard.teams.map((team) => (
-                  <article className="team-card" key={team.id}>
-                    <div className="team-row">
-                      <div className="team-row-main">
-                        <strong>{team.name}</strong>
-                        <small>{team.members.length} members · {team.invitations.length} pending · {team.slug}</small>
-                      </div>
-                      <StatusToken value={team.role} />
-                      {team.role === "owner" ? (
-                        <form className="team-invite-row" onSubmit={(event) => {
-                          event.preventDefault();
-                          void inviteMember(team);
-                        }}>
+            )}
+            {notice?.scope === "load" && (
+              <div className="registry-list-state">
+                <p role="alert">{notice.text}</p>
+                <Button size="sm" type="button" variant="outline" onClick={() => void refreshTeams()}>
+                  <RotateCw size={15} aria-hidden="true" />
+                  Retry
+                </Button>
+              </div>
+            )}
+            {entries.length > 0 && (
+              <div className="registry-rows">
+                {entries.map((entry) => (
+                  <button
+                    aria-current={!stacked && entry.id === selectedId ? "true" : undefined}
+                    className="registry-row people-row"
+                    data-row-id={entry.id}
+                    key={entry.id}
+                    type="button"
+                    onClick={() => openTeam(entry.id)}
+                  >
+                    <span className="people-row-icon" aria-hidden="true"><UsersRound size={16} /></span>
+                    <span className="registry-row-text">
+                      <span className="registry-row-title">{entry.name}</span>
+                      <span className="registry-row-meta">
+                        <span>{formatStatusLabel(entry.role)}</span>
+                        <span>{entry.team ? `${entry.team.members.length} ${entry.team.members.length === 1 ? "member" : "members"}` : "Shared skills only"}</span>
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {state === "ready" && entries.length === 0 && (
+              <div className="registry-list-state">
+                <strong>No teams yet.</strong>
+                <p>Create a team to start sharing private skills with members.</p>
+              </div>
+            )}
+          </section>
+
+          {showDetail && selected && (
+            <section aria-labelledby={`${baseId}-title`} className="registry-inspector people-detail">
+              {stacked && (
+                <Button className="registry-back" type="button" variant="ghost" onClick={backToTeams}>
+                  <ArrowLeft size={16} aria-hidden="true" />
+                  Back to teams
+                </Button>
+              )}
+              <header className="people-detail-head">
+                <div className="registry-inspector-title">
+                  <h2 id={`${baseId}-title`} ref={titleRef} tabIndex={-1}>{selected.name}</h2>
+                  <p className="registry-inspector-meta">
+                    {team && <><code>{team.slug}</code><span aria-hidden="true">·</span></>}
+                    <span>Your role: {formatStatusLabel(selected.role)}</span>
+                  </p>
+                </div>
+              </header>
+              {team ? (
+                <>
+                  <section aria-labelledby={`${baseId}-members`} className="registry-section">
+                    <div className="people-section-head">
+                      <h3 id={`${baseId}-members`}>Members</h3>
+                      {team.role === "owner" && (
+                        <Button aria-expanded={inviteOpen} ref={inviteTriggerRef} size="sm" type="button" variant="outline" onClick={() => inviteOpen ? closeInvite() : openInvite(team.id)}>
+                          <Mail size={15} aria-hidden="true" />
+                          Invite member
+                        </Button>
+                      )}
+                    </div>
+                    {team.role !== "owner" && <p className="registry-muted">Only team owners can invite members.</p>}
+                    {inviteOpen && (
+                      <form className="people-inline-form" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); closeInvite(); } }} onSubmit={(event) => { event.preventDefault(); void inviteMember(team); }}>
+                        <label className="people-field people-field-grow" htmlFor={`${baseId}-invite-email`}>
+                          <span>Email</span>
                           <Input
                             aria-label={`Invite user to ${team.name}`}
-                            value={inviteEmails[team.id] ?? ""}
+                            autoComplete="email"
+                            disabled={pending === `invite:${team.id}`}
+                            id={`${baseId}-invite-email`}
                             onChange={(event) => setInviteEmails((current) => ({ ...current, [team.id]: event.target.value }))}
                             placeholder="user@example.com"
+                            spellCheck={false}
                             type="email"
+                            value={inviteEmails[team.id] ?? ""}
                           />
-                          <Button className="shadcn-action-button" disabled={!inviteEmails[team.id]?.trim()} size="sm" type="submit" variant="outline">
+                        </label>
+                        <div className="people-form-actions">
+                          <Button disabled={!inviteEmails[team.id]?.trim() || pending === `invite:${team.id}`} size="sm" type="submit">
                             <Plus size={15} aria-hidden="true" />
                             Invite
                           </Button>
-                        </form>
-                      ) : (
-                        <span className="team-permission-note">Invite access limited to owners</span>
-                      )}
-                    </div>
-
-                    <div className="team-detail-grid">
-                      <div className="team-detail-list">
-                        <h3>Members</h3>
+                          <Button disabled={pending === `invite:${team.id}`} size="sm" type="button" variant="outline" onClick={closeInvite}>Cancel</Button>
+                        </div>
+                      </form>
+                    )}
+                    {scoped(`invite:${team.id}`)}
+                    {team.members.length > 0 ? (
+                      <ul aria-labelledby={`${baseId}-members`} className="people-list">
                         {team.members.map((member) => (
-                          <div className="team-person-row" key={member.id}>
-                            <UserRound size={15} aria-hidden="true" />
-                            <span>
+                          <li key={member.id}>
+                            <span className="people-person">
                               <strong>{member.name || member.email}</strong>
-                              <small>{member.email}</small>
+                              {member.name && <small>{member.email}</small>}
                             </span>
-                            <StatusToken value={member.role} />
-                          </div>
+                            <span className="registry-chip">{formatStatusLabel(member.role)}</span>
+                          </li>
                         ))}
-                        {team.members.length === 0 && <div className="empty-inline">No members returned for this team.</div>}
-                      </div>
-
-                      <div className="team-detail-list">
-                        <h3>Pending invitations</h3>
+                      </ul>
+                    ) : <p className="registry-muted">No members returned for this team.</p>}
+                  </section>
+                  <section aria-labelledby={`${baseId}-invited`} className="registry-section">
+                    <h3 id={`${baseId}-invited`}>Pending invitations</h3>
+                    {team.invitations.length > 0 ? (
+                      <ul aria-labelledby={`${baseId}-invited`} className="people-list">
                         {team.invitations.map((invitation) => (
-                          <div className="team-person-row" key={invitation.id}>
-                            <Mail size={15} aria-hidden="true" />
-                            <span>
+                          <li key={invitation.id}>
+                            <span className="people-person">
                               <strong>{invitation.email}</strong>
                               <small>Sent {formatDate(invitation.createdAt)}</small>
                             </span>
-                            <StatusToken value={invitation.status} />
-                          </div>
+                            {invitation.status !== "pending" && <span className="registry-chip">{formatStatusLabel(invitation.status)}</span>}
+                          </li>
                         ))}
-                        {team.invitations.length === 0 && <div className="empty-inline">No pending invitations.</div>}
-                      </div>
-                    </div>
-                  </article>
-                ))}
-                {state === "ready" && dashboard.teams.length === 0 && (
-                  <div className="empty-state compact">
-                    <UsersRound size={22} aria-hidden="true" />
-                    <strong>No teams yet.</strong>
-                    <span>Create a team to start sharing private skills with members.</span>
-                  </div>
-                )}
-              </div>
+                      </ul>
+                    ) : <p className="registry-muted">No pending invitations.</p>}
+                  </section>
+                </>
+              ) : (
+                <p className="registry-muted">This team is not in your team list, so only the skills shared through it are shown.</p>
+              )}
+              <TeamSkillSection title="Shared by you" skills={selected.group?.sharingWithTeam ?? []} empty="You are not sharing skills with this team." />
+              <TeamSkillSection title="Shared with you" skills={selected.group?.sharedWithMe ?? []} empty="No skills are shared with you through this team." />
             </section>
-
-            <section className="teams-combined-section" aria-labelledby="team-invitations-heading">
-              <div className="teams-section-heading">
-                <h2 id="team-invitations-heading">Invitations</h2>
-                <span>{invitationCount} pending</span>
-              </div>
-              <div className="invitation-list">
-                {state === "loading" && <TeamsLoadingRows />}
-                {state !== "loading" && dashboard.invitations.map((invitation) => (
-                  <div className="invitation-row" key={invitation.id}>
-                    <span>
-                      <strong>{invitation.teamName}</strong>
-                      <small>{invitation.email} · sent {formatDate(invitation.createdAt)}</small>
-                    </span>
-                    <StatusToken value={invitation.status} />
-                    <Button className="save-button shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void acceptInvitation(invitation)}>
-                      <Check size={16} aria-hidden="true" />
-                      Accept
-                    </Button>
-                  </div>
-                ))}
-                {state === "ready" && dashboard.invitations.length === 0 && (
-                  <div className="empty-state compact">
-                    <Check size={22} aria-hidden="true" />
-                    <strong>No pending invitations.</strong>
-                    <span>Accepted teams appear in the team list.</span>
-                  </div>
-                )}
-              </div>
-            </section>
-          </CardContent>
-        </Card>
-
-        <section className="team-shared-groups teams-shared-column" aria-label="Team shared skills">
-          {state === "loading" && (
-            <Card className="team-skill-group shadcn-console-card">
-              <CardHeader className="admin-panel-heading shadcn-card-header">
-                <span className="admin-panel-icon"><PackageOpen size={18} aria-hidden="true" /></span>
-                <div>
-                  <CardTitle>Shared skills</CardTitle>
-                  <CardDescription>Loading team visibility grants.</CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <TeamsLoadingRows />
-              </CardContent>
-            </Card>
           )}
-          {state !== "loading" && sharedGroups.map((group) => (
-            <TeamSkillGroupCard group={group} key={group.team.id} />
-          ))}
-          {state === "ready" && sharedGroups.length === 0 && (
-            <Card className="team-skill-group teams-shared-empty shadcn-console-card">
-              <CardHeader className="admin-panel-heading shadcn-card-header">
-                <span className="admin-panel-icon"><PackageOpen size={18} aria-hidden="true" /></span>
-                <div>
-                  <CardTitle>Shared skills</CardTitle>
-                  <CardDescription>Team visibility grants grouped by team.</CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="empty-state compact">
-                  <PackageOpen size={24} aria-hidden="true" />
-                  <strong>No team-shared skills.</strong>
-                  <span>Team visibility grants will appear here grouped by team.</span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </section>
-      </section>
+        </div>
+      </div>
     </main>
   );
 }
 
-function TeamsLoadingRows() {
+function TeamSkillSection({ empty, skills, title }: { empty: string; skills: PublicSkill[]; title: string }) {
+  const headingId = useId();
   return (
-    <div className="teams-loading-list" role="status" aria-live="polite">
-      <span className="sr-only">Loading teams…</span>
-      <span className="loading-row" />
-      <span className="loading-row short" />
-      <span className="loading-row" />
-    </div>
+    <section aria-labelledby={headingId} className="registry-section">
+      <h3 id={headingId}>{title}</h3>
+      {skills.length > 0 ? (
+        <ul aria-labelledby={headingId} className="people-list">
+          {skills.map((skill) => (
+            <li key={skill.slug}>
+              <span className="people-person">
+                <strong>{skill.title}</strong>
+                <small><code>{skill.slug}</code>{skill.latestVersion ? ` · ${skill.latestVersion}` : ""}</small>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="registry-muted">{empty}</p>}
+    </section>
   );
 }
 
-function TeamSkillGroupCard({ group }: { group: TeamSharedSkillGroup }) {
-  return (
-    <Card className="team-skill-group shadcn-console-card">
-      <CardHeader className="admin-panel-heading shadcn-card-header">
-        <span className="admin-panel-icon"><UsersRound size={18} aria-hidden="true" /></span>
-        <div>
-          <CardTitle>{group.team.name}</CardTitle>
-          <CardDescription>{group.sharingWithTeam.length} shared by you · {group.sharedWithMe.length} shared with you</CardDescription>
-        </div>
-      </CardHeader>
-      <CardContent className="team-skill-columns">
-        <TeamSkillList title="Sharing with this team" skills={group.sharingWithTeam} />
-        <TeamSkillList title="Shared with you" skills={group.sharedWithMe} />
-      </CardContent>
-    </Card>
-  );
-}
-
-function TeamSkillList({ skills, title }: { skills: PublicSkill[]; title: string }) {
-  return (
-    <div className="team-skill-list">
-      <h3>{title}</h3>
-      {skills.map((skill) => (
-        <div className="team-skill-row" key={skill.slug}>
-          <span>
-            <strong>{skill.title}</strong>
-            <small>{skill.latestVersion ?? "-"} | {skill.tags.slice(0, 2).join(", ") || "untagged"}</small>
-          </span>
-          <StatusToken value={skill.visibility} />
-        </div>
-      ))}
-      {skills.length === 0 && <div className="empty-inline">No skills in this group.</div>}
-    </div>
-  );
-}
+type AdminTab = "people" | "instance" | "keys" | "providers" | "audit";
+const ADMIN_TABS: ReadonlyArray<{ id: AdminTab; label: string }> = [
+  { id: "people", label: "People" },
+  { id: "instance", label: "Instance" },
+  { id: "keys", label: "API keys" },
+  { id: "providers", label: "Sign-in providers" },
+  { id: "audit", label: "Audit" },
+];
 
 function AdminConsole({ client, session }: { client: RegistryClient; session: WebSession }) {
   const [state, setState] = useState<LoadState>("loading");
@@ -2929,6 +3046,11 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
   const [inviteState, setInviteState] = useState<LoadState>("idle");
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
   const [invitation, setInvitation] = useState<RegistrationInvitation | null>(null);
+  const [tab, setTab] = useState<AdminTab>("people");
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const tabRefs = useRef(new Map<AdminTab, HTMLButtonElement>());
+  const inviteTriggerRef = useRef<HTMLButtonElement>(null);
+  const baseId = useId();
   const sessionCanEditPrivilegedRoles = session.user.roles.includes("owner");
   const adminInitialLoading = state === "loading" && users.length === 0 && apiTokens.length === 0 && providers.length === 0 && auditEvents.length === 0;
 
@@ -3158,127 +3280,160 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
     }
   }
 
+  // Tabs activate on arrow, Home and End. Inactive panels stay mounted and
+  // hidden, so an unsaved landing or provider draft survives a tab change.
+  function moveTab(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const focused = ADMIN_TABS.findIndex((item) => item.id === (event.target as HTMLElement).dataset.tab);
+    const from = focused >= 0 ? focused : ADMIN_TABS.findIndex((item) => item.id === tab);
+    const last = ADMIN_TABS.length - 1;
+    const next = event.key === "ArrowRight" ? (from === last ? 0 : from + 1)
+      : event.key === "ArrowLeft" ? (from === 0 ? last : from - 1)
+        : event.key === "Home" ? 0
+          : event.key === "End" ? last
+            : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    const nextTab = ADMIN_TABS[next]!.id;
+    setTab(nextTab);
+    tabRefs.current.get(nextTab)?.focus();
+  }
+
+  function closeInvite() {
+    setInviteOpen(false);
+    setInvitation(null);
+    setInviteMessage(null);
+    setInviteState("idle");
+    inviteTriggerRef.current?.focus();
+  }
+
+  const panelProps = (id: AdminTab) => ({
+    "aria-labelledby": `${baseId}-${id}-tab`,
+    className: "account-panel",
+    hidden: tab !== id,
+    id: `${baseId}-${id}-panel`,
+    role: "tabpanel",
+  });
+  const activeTokenCount = apiTokens.filter((token) => !token.revokedAt).length;
+
   return (
-    <main className="admin-workspace shadcn-admin-workspace" aria-label="Admin console">
-      <section className="admin-hero shadcn-admin-hero" aria-labelledby="admin-console-heading">
-        <div>
-          <Badge className="shadcn-review-eyebrow" variant="outline">Owner workflow</Badge>
-          <h1 id="admin-console-heading">Admin console</h1>
-          <p aria-live="polite">{session.user.email} · {adminInitialLoading ? "Loading accounts…" : `${users.length} accounts`}</p>
-        </div>
-        <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void refreshAdmin()}>
+    <main className="account-workspace account-admin" aria-label="Admin console">
+      <header className="account-page-head">
+        <h1 id="admin-console-heading">Admin console</h1>
+        <Button size="sm" type="button" variant="outline" onClick={() => void refreshAdmin()}>
           <RotateCw size={16} aria-hidden="true" />
           Refresh
         </Button>
-      </section>
+      </header>
 
-      {message && <div className="safe-message admin-message" role="status">{message}</div>}
+      <div className="account-surface">
+        <div aria-label="Admin sections" className="account-tabs" role="tablist" onKeyDown={moveTab}>
+          {ADMIN_TABS.map((item) => (
+            <button
+              aria-controls={`${baseId}-${item.id}-panel`}
+              aria-selected={tab === item.id}
+              className="account-tab"
+              data-tab={item.id}
+              id={`${baseId}-${item.id}-tab`}
+              key={item.id}
+              ref={(node) => { if (node) tabRefs.current.set(item.id, node); else tabRefs.current.delete(item.id); }}
+              role="tab"
+              tabIndex={tab === item.id ? 0 : -1}
+              type="button"
+              onClick={() => setTab(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
 
-      <section className="admin-grid">
-        <AdminPanel icon={<Globe size={18} aria-hidden="true" />} title="Landing page" meta="First visit to this instance">
-          <LandingSettings key={`${session.user.id}:${session.expiresAt}`} client={client} canEdit={session.user.mfaVerified} onSaved={() => { void refreshAudit().catch(() => setMessage("Landing setting saved. Refresh to load the audit history.")); }} />
-        </AdminPanel>
-        <AdminPanel
-          icon={<Settings size={18} aria-hidden="true" />}
-          title="Registration"
-          meta={state === "loading" ? "Loading…" : registrationMode}
-        >
-          {adminInitialLoading ? (
-            <LoadingRows />
-          ) : (
-            <>
-              <div className={`registration-posture registration-posture-${registrationMode}`}>
-                <span>{capitalize(registrationMode)}</span>
-                <strong>{registrationPostureTitle(registrationMode)}</strong>
-                <p>{registrationPostureDescription(registrationMode)}</p>
-              </div>
-              <div className="segmented-control" aria-label="Registration mode">
-                {(["closed", "request", "open"] as const).map((mode) => (
-                  <button
-                    className={registrationMode === mode ? "active" : undefined}
-                    key={mode}
-                    type="button"
-                    onClick={() => void updateRegistration(mode)}
-                  >
-                    {capitalize(mode)}
-                  </button>
-                ))}
-              </div>
-              <p className="admin-guidance">
-                Use request mode for controlled beta access. Open registration is intentionally guarded until public onboarding and abuse handling are ready.
-              </p>
-              {session.user.mfaVerified ? (
-                <form className="provider-form admin-invite-form" aria-label="Invite user" onSubmit={(event) => {
-                  event.preventDefault();
-                  void createInvitation();
-                }}>
-                  <label>
-                    Email
-                    <input
-                      autoComplete="email"
-                      disabled={inviteState === "loading"}
-                      name="invitation-email"
-                      onChange={(event) => setInviteEmail(event.target.value)}
-                      required
-                      spellCheck={false}
-                      type="email"
-                      value={inviteEmail}
-                    />
-                  </label>
-                  <label>
-                    Name <small>(optional)</small>
-                    <input
-                      autoComplete="name"
-                      disabled={inviteState === "loading"}
-                      name="invitation-name"
-                      onChange={(event) => setInviteName(event.target.value)}
-                      value={inviteName}
-                    />
-                  </label>
-                  <Button className="save-button shadcn-action-button" disabled={inviteState === "loading"} size="sm" type="submit">
-                    <Mail size={16} aria-hidden="true" />
-                    {inviteState === "loading" ? "Sending invitation…" : "Send invitation"}
-                  </Button>
-                  {invitation && (
-                    <div className="success-message compact-message admin-invite-message" role="status" aria-live="polite">
-                      Invitation sent to {invitation.email}. It expires {formatDate(invitation.expiresAt)}.
-                    </div>
-                  )}
-                  {inviteMessage && (
-                    <div className="safe-message compact-message admin-invite-message" role="status" aria-live="polite">{inviteMessage}</div>
-                  )}
-                </form>
-              ) : (
-                <div className="safe-message compact-message" role="status">
-                  Sign in with MFA before sending registration invitations.
-                </div>
-              )}
-            </>
+        {message && (
+          <div className="account-notice account-surface-notice" data-tone="amber" role="status">
+            <span>{message}</span>
+            {state === "error" && <Button size="sm" type="button" variant="outline" onClick={() => void refreshAdmin()}>Retry</Button>}
+          </div>
+        )}
+
+        <section {...panelProps("people")}>
+          <div className="account-panel-head">
+            <div>
+              <h2>People</h2>
+              <p>{adminInitialLoading ? "Loading accounts…" : `${users.length} ${users.length === 1 ? "account" : "accounts"}`}</p>
+            </div>
+            {session.user.mfaVerified && (
+              <Button aria-expanded={inviteOpen} ref={inviteTriggerRef} size="sm" type="button" onClick={() => inviteOpen ? closeInvite() : setInviteOpen(true)}>
+                <Mail size={16} aria-hidden="true" />
+                Invite user
+              </Button>
+            )}
+          </div>
+          {!session.user.mfaVerified && (
+            <p className="account-callout" role="status">
+              <LockKeyhole size={16} aria-hidden="true" />
+              <span>Sign in with MFA before sending registration invitations.</span>
+            </p>
           )}
-        </AdminPanel>
-
-        <AdminPanel
-          icon={<UsersRound size={18} aria-hidden="true" />}
-          title="Users"
-          meta={`${users.length} accounts`}
-        >
-          <div className="admin-table user-table">
-            <div className="admin-table-head">
+          {session.user.mfaVerified && inviteOpen && (
+            <form aria-label="Invite user" className="account-form account-invite" onSubmit={(event) => {
+              event.preventDefault();
+              void createInvitation();
+            }}>
+              <label className="account-field">
+                <span>Email</span>
+                <Input
+                  autoComplete="email"
+                  disabled={inviteState === "loading"}
+                  name="invitation-email"
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  required
+                  spellCheck={false}
+                  type="email"
+                  value={inviteEmail}
+                />
+              </label>
+              <label className="account-field">
+                <span>Name <small>(optional)</small></span>
+                <Input
+                  autoComplete="name"
+                  disabled={inviteState === "loading"}
+                  name="invitation-name"
+                  onChange={(event) => setInviteName(event.target.value)}
+                  value={inviteName}
+                />
+              </label>
+              <div className="account-actions">
+                <Button disabled={inviteState === "loading"} size="sm" type="submit">
+                  <Mail size={16} aria-hidden="true" />
+                  {inviteState === "loading" ? "Sending invitation…" : "Send invitation"}
+                </Button>
+                <Button disabled={inviteState === "loading"} size="sm" type="button" variant="outline" onClick={closeInvite}>Cancel</Button>
+              </div>
+              {invitation && (
+                <p className="account-notice" data-tone="teal" role="status">
+                  Invitation sent to {invitation.email}. It expires {formatDate(invitation.expiresAt)}.
+                </p>
+              )}
+              {inviteMessage && <p className="account-notice" data-tone="danger" role="status">{inviteMessage}</p>}
+            </form>
+          )}
+          <div className="account-users">
+            <div className="account-users-head" aria-hidden="true">
               <span>User</span>
               <span>Status</span>
               <span>Roles</span>
-              <span>Security</span>
               <span>Actions</span>
             </div>
             {adminInitialLoading && <LoadingRows />}
-            {users.map((user) => (
-              <div className="admin-table-row" key={user.id}>
-                <span className="cell-main">
-                  <strong>{user.email}</strong>
-                  <small>{user.name || user.id}</small>
-                </span>
-                <span><StatusToken value={user.status} /></span>
-                <span>
+            <ul aria-label="Accounts" className="account-user-list">
+              {users.map((user) => (
+                <li className="account-user" key={user.id}>
+                  <span className="account-cell-main">
+                    <strong>{user.email}</strong>
+                    <small>{user.name || user.id}</small>
+                  </span>
+                  <span className="account-user-status">
+                    <span className="account-chip" data-tone={user.status === "active" ? undefined : user.status === "pending" ? "amber" : "danger"}>{formatStatusLabel(user.status)}</span>
+                    <small>{user.emailVerified ? "Email verified" : "Email unverified"} · {user.mfaEnabled ? "MFA on" : "No MFA"}</small>
+                  </span>
                   <RoleEditor
                     canEditPrivilegedRoles={sessionCanEditPrivilegedRoles}
                     disabled={
@@ -3290,236 +3445,228 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
                     userEmail={user.email}
                     onChange={(roles) => void updateUserRoles(user.id, roles)}
                   />
-                </span>
-                <span>{user.emailVerified ? "verified" : "unverified"} · {user.mfaEnabled ? "MFA" : "no MFA"}</span>
-                <span className="row-actions">
-                  {user.status === "pending" && (
-                    <IconButton label="Approve user" onClick={() => void performUserAction(user.id, "approve")}>
-                      <Check size={15} aria-hidden="true" />
-                    </IconButton>
-                  )}
-                  {user.status === "disabled" && (
-                    <IconButton label="Activate user" onClick={() => void performUserAction(user.id, "activate")}>
-                      <RotateCw size={15} aria-hidden="true" />
-                    </IconButton>
-                  )}
-                  {user.id !== session.user.id && user.status === "active" && (
-                    <IconButton label="Disable user" onClick={() => void performUserAction(user.id, "disable")}>
-                      <X size={15} aria-hidden="true" />
-                    </IconButton>
-                  )}
-                  {user.id !== session.user.id && user.status !== "deleted" && (
-                    <IconButton label="Delete user" onClick={() => void performUserAction(user.id, "delete")}>
-                      <Trash2 size={15} aria-hidden="true" />
-                    </IconButton>
-                  )}
-                </span>
-              </div>
-            ))}
+                  <span className="account-user-actions">
+                    {user.status === "pending" && (
+                      <Button aria-label="Approve user" size="icon-sm" title="Approve user" type="button" variant="outline" onClick={() => void performUserAction(user.id, "approve")}>
+                        <Check size={15} aria-hidden="true" />
+                      </Button>
+                    )}
+                    {user.status === "disabled" && (
+                      <Button aria-label="Activate user" size="icon-sm" title="Activate user" type="button" variant="outline" onClick={() => void performUserAction(user.id, "activate")}>
+                        <RotateCw size={15} aria-hidden="true" />
+                      </Button>
+                    )}
+                    {user.id !== session.user.id && user.status === "active" && (
+                      <Button aria-label="Disable user" size="icon-sm" title="Disable user" type="button" variant="outline" onClick={() => void performUserAction(user.id, "disable")}>
+                        <X size={15} aria-hidden="true" />
+                      </Button>
+                    )}
+                    {user.id !== session.user.id && user.status !== "deleted" && (
+                      <Button aria-label="Delete user" className="account-danger" size="icon-sm" title="Delete user" type="button" variant="outline" onClick={() => void performUserAction(user.id, "delete")}>
+                        <Trash2 size={15} aria-hidden="true" />
+                      </Button>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
-        </AdminPanel>
+        </section>
 
-        <AdminPanel
-          icon={<KeyRound size={18} aria-hidden="true" />}
-          title="API keys"
-          meta={`${apiTokens.filter((token) => !token.revokedAt).length} active`}
-        >
-          <div className="admin-token-list">
-            {adminInitialLoading && <LoadingRows />}
-            {apiTokens.map((token) => (
-              <div className="token-row admin-token-row" key={token.id}>
-                <span className="cell-main">
-                  <strong>{token.name}</strong>
-                  <small>{token.user.email} · {token.tokenPrefix}…</small>
-                </span>
-                <StatusToken value={token.revokedAt ? "revoked" : "active"} />
-                <span className="admin-token-scopes">{token.scopes.join(", ")}</span>
-                <span className="admin-token-expiry">Expires {formatDate(token.expiresAt)}</span>
-                <button
-                  className="icon-button"
-                  disabled={Boolean(token.revokedAt)}
-                  type="button"
-                  onClick={() => void revokeAdminToken(token.id)}
-                  aria-label={`Revoke ${token.name}`}
-                >
-                  <Trash2 size={15} aria-hidden="true" />
-                </button>
-              </div>
-            ))}
-            {state === "ready" && apiTokens.length === 0 && (
-              <div className="empty-state compact">
-                <KeyRound size={22} aria-hidden="true" />
-                <strong>No API keys.</strong>
-                <span>User-created keys will appear here for monitoring and revocation.</span>
-              </div>
-            )}
+        <section {...panelProps("instance")}>
+          <div className="account-panel-head">
+            <div><h2>New account sign-ups</h2></div>
           </div>
-        </AdminPanel>
-
-        <AdminPanel
-          icon={<UserCog size={18} aria-hidden="true" />}
-          title="Provider"
-          meta={`${providers.length} configured`}
-        >
           {adminInitialLoading ? (
             <LoadingRows />
           ) : (
-            <div className="provider-layout">
-              <div className="provider-list">
-                <button type="button" onClick={() => setDraft(emptyProviderDraft())}>
+            <>
+              <p className="account-posture"><strong>{registrationPostureTitle(registrationMode)}</strong> {registrationPostureDescription(registrationMode)}</p>
+              <div aria-label="Registration mode" className="account-segmented" role="group">
+                {(["closed", "request", "open"] as const).map((mode) => (
+                  <Button aria-pressed={registrationMode === mode} key={mode} size="sm" type="button" variant="outline" onClick={() => void updateRegistration(mode)}>
+                    {capitalize(mode)}
+                  </Button>
+                ))}
+              </div>
+            </>
+          )}
+          <div className="account-panel-head account-panel-divider">
+            <div><h2>Landing page</h2><p>First visit to this instance</p></div>
+          </div>
+          <LandingSettings key={`${session.user.id}:${session.expiresAt}`} client={client} canEdit={session.user.mfaVerified} onSaved={() => { void refreshAudit().catch(() => setMessage("Landing setting saved. Refresh to load the audit history.")); }} />
+        </section>
+
+        <section {...panelProps("keys")}>
+          <div className="account-panel-head">
+            <div><h2 id={`${baseId}-keys-heading`}>API keys</h2><p>{activeTokenCount} active</p></div>
+          </div>
+          {adminInitialLoading && <LoadingRows />}
+          {apiTokens.length > 0 && (
+            <ul aria-labelledby={`${baseId}-keys-heading`} className="account-token-list">
+              {apiTokens.map((token) => (
+                <li className="account-token" key={token.id}>
+                  <span className="account-cell-main">
+                    <strong>{token.name}</strong>
+                    <small>{token.user.email} · <code>{token.tokenPrefix}…</code></small>
+                  </span>
+                  <span className="account-chip" data-tone={token.revokedAt ? "danger" : undefined}>{token.revokedAt ? "Revoked" : "Active"}</span>
+                  <small className="account-token-meta">{token.scopes.join(", ")} · Expires {formatDate(token.expiresAt)}</small>
+                  <Button aria-label={`Revoke ${token.name}`} className="account-danger" disabled={Boolean(token.revokedAt)} size="icon-sm" title={`Revoke ${token.name}`} type="button" variant="outline" onClick={() => void revokeAdminToken(token.id)}>
+                    <Trash2 size={15} aria-hidden="true" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {state === "ready" && apiTokens.length === 0 && <p className="account-muted">No API keys. User-created keys appear here for monitoring and revocation.</p>}
+        </section>
+
+        <section {...panelProps("providers")}>
+          <div className="account-panel-head">
+            <div><h2>Sign-in providers</h2><p>{providers.length} configured</p></div>
+          </div>
+          {adminInitialLoading ? (
+            <LoadingRows />
+          ) : (
+            <div className="account-providers">
+              <div className="account-provider-list">
+                <Button size="sm" type="button" variant="outline" onClick={() => setDraft(emptyProviderDraft())}>
                   <Plus size={15} aria-hidden="true" />
                   New provider
-                </button>
+                </Button>
                 {providers.map((provider) => (
                   <button
-                    className={provider.key === draft.key ? "selected" : undefined}
+                    aria-current={provider.key === draft.key ? "true" : undefined}
+                    className="account-provider"
                     key={provider.key}
                     type="button"
                     onClick={() => setDraft(providerToDraft(provider))}
                   >
-                    <span>
+                    <span className="account-cell-main">
                       <strong>{provider.displayName}</strong>
                       <small>{provider.key}</small>
                     </span>
-                    <StatusToken value={provider.enabled ? "enabled" : "disabled"} />
+                    <span className="account-chip" data-tone={provider.enabled ? "teal" : undefined}>{provider.enabled ? "Enabled" : "Disabled"}</span>
                   </button>
                 ))}
               </div>
-              <form className="provider-form" onSubmit={(event) => {
+              <form className="account-form account-provider-form" onSubmit={(event) => {
                 event.preventDefault();
                 void saveProvider();
               }}>
-                <label>
-                  Key
-                  <input value={draft.key} onChange={(event) => setDraft({ ...draft, key: event.target.value })} />
-                </label>
-                <label>
-                  Type
-                  <select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as ProviderDraft["type"] })}>
-                    <option value="oidc">OIDC</option>
-                    <option value="saml">SAML</option>
-                    <option value="cloudflare_access">Cloudflare Access</option>
-                    <option value="github">GitHub</option>
-                    <option value="google">Google</option>
-                  </select>
-                </label>
-                <label>
-                  Display name
-                  <input value={draft.displayName} onChange={(event) => setDraft({ ...draft, displayName: event.target.value })} />
-                </label>
-                <label>
-                  Issuer
-                  <input value={draft.issuer} onChange={(event) => setDraft({ ...draft, issuer: event.target.value })} />
-                </label>
-                <label>
-                  Client ID
-                  <input value={draft.clientId} onChange={(event) => setDraft({ ...draft, clientId: event.target.value })} />
-                </label>
-                <label className="toggle-row">
+                <div className="account-field-grid">
+                  <label className="account-field">
+                    <span>Key</span>
+                    <Input value={draft.key} onChange={(event) => setDraft({ ...draft, key: event.target.value })} />
+                  </label>
+                  <label className="account-field">
+                    <span>Type</span>
+                    <select className="account-select" value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as ProviderDraft["type"] })}>
+                      <option value="oidc">OIDC</option>
+                      <option value="saml">SAML</option>
+                      <option value="cloudflare_access">Cloudflare Access</option>
+                      <option value="github">GitHub</option>
+                      <option value="google">Google</option>
+                    </select>
+                  </label>
+                  <label className="account-field">
+                    <span>Display name</span>
+                    <Input value={draft.displayName} onChange={(event) => setDraft({ ...draft, displayName: event.target.value })} />
+                  </label>
+                  <label className="account-field">
+                    <span>Issuer</span>
+                    <Input value={draft.issuer} onChange={(event) => setDraft({ ...draft, issuer: event.target.value })} />
+                  </label>
+                  <label className="account-field">
+                    <span>Client ID</span>
+                    <Input value={draft.clientId} onChange={(event) => setDraft({ ...draft, clientId: event.target.value })} />
+                  </label>
+                </div>
+                <label className="account-check">
                   <input checked={draft.enabled} type="checkbox" onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} />
-                  Enabled
+                  <span>Enabled</span>
                 </label>
-
-                <div className="mapping-editor">
-                  <div className="mapping-heading">
-                    <span>Role mappings</span>
-                    <button type="button" onClick={() => setDraft({
-                      ...draft,
-                      roleMappings: [...draft.roleMappings, { claim: "", value: "", role: "user" }],
-                    })}>
-                      <Plus size={15} aria-hidden="true" />
-                      Add
-                    </button>
-                  </div>
+                <fieldset className="account-mappings">
+                  <legend>Role mappings</legend>
                   {draft.roleMappings.map((mapping, index) => (
-                    <div className="mapping-row" key={index}>
-                      <input
+                    <div className="account-mapping" key={index}>
+                      <Input
                         aria-label={`Mapping ${index + 1} claim`}
+                        placeholder="Claim"
                         value={mapping.claim}
                         onChange={(event) => updateDraftMapping(setDraft, draft, index, { claim: event.target.value })}
                       />
-                      <input
+                      <Input
                         aria-label={`Mapping ${index + 1} value`}
+                        placeholder="Value"
                         value={mapping.value}
                         onChange={(event) => updateDraftMapping(setDraft, draft, index, { value: event.target.value })}
                       />
                       <select
                         aria-label={`Mapping ${index + 1} role`}
+                        className="account-select"
                         value={mapping.role}
                         onChange={(event) => updateDraftMapping(setDraft, draft, index, { role: event.target.value })}
                       >
-                        <option value="user">user</option>
-                        <option value="author">author</option>
-                        <option value="maintainer">maintainer</option>
+                        <option value="user">User</option>
+                        <option value="author">Author</option>
+                        <option value="maintainer">Maintainer</option>
                       </select>
-                      <IconButton label={`Remove mapping ${index + 1}`} onClick={() => setDraft({
+                      <Button aria-label={`Remove mapping ${index + 1}`} size="icon-sm" title={`Remove mapping ${index + 1}`} type="button" variant="outline" onClick={() => setDraft({
                         ...draft,
                         roleMappings: draft.roleMappings.filter((_, itemIndex) => itemIndex !== index),
                       })}>
                         <Trash2 size={14} aria-hidden="true" />
-                      </IconButton>
+                      </Button>
                     </div>
                   ))}
+                  <Button size="sm" type="button" variant="outline" onClick={() => setDraft({
+                    ...draft,
+                    roleMappings: [...draft.roleMappings, { claim: "", value: "", role: "user" }],
+                  })}>
+                    <Plus size={15} aria-hidden="true" />
+                    Add
+                  </Button>
+                </fieldset>
+                <div className="account-actions">
+                  <Button size="sm" type="submit">
+                    <Save size={16} aria-hidden="true" />
+                    Save provider
+                  </Button>
                 </div>
-                <button className="save-button" type="submit">
-                  <Save size={16} aria-hidden="true" />
-                  Save provider
-                </button>
               </form>
             </div>
           )}
-        </AdminPanel>
+        </section>
 
-        <AdminPanel
-          icon={<ShieldCheck size={18} aria-hidden="true" />}
-          title="Audit"
-          meta={`${auditEvents.length} loaded`}
-        >
-          <div className="audit-list">
+        <section {...panelProps("audit")}>
+          <div className="account-panel-head">
+            <div><h2>Audit</h2><p>{auditEvents.length} loaded</p></div>
+          </div>
+          <div className="audit-list account-audit">
             {adminInitialLoading && <LoadingRows />}
             {auditEvents.map((event) => (
               <div className="audit-row" key={event.id}>
-                <span className={event.decision === "allow" ? "audit-decision allow" : "audit-decision deny"}>
-                  {event.decision}
-                </span>
-                <span>
+                <span className="account-chip" data-tone={event.decision === "allow" ? "teal" : "danger"}>{formatStatusLabel(event.decision)}</span>
+                <span className="account-cell-main">
                   <strong>{event.action}</strong>
                   <small>{event.resourceType}{event.resourceId ? ` · ${event.resourceId}` : ""}</small>
                 </span>
                 <time dateTime={event.createdAt}>{formatDate(event.createdAt)}</time>
               </div>
             ))}
-            {auditCursor && <Button type="button" size="sm" variant="outline" disabled={loadingAudit} onClick={() => void loadMoreAudit()}>{loadingAudit ? "Loading more events…" : "Load more audit events"}</Button>}
-            {state === "ready" && auditEvents.length === 0 && <div className="empty-state">No audit events.</div>}
+            {auditCursor && (
+              <div className="account-actions">
+                <Button disabled={loadingAudit} size="sm" type="button" variant="outline" onClick={() => void loadMoreAudit()}>{loadingAudit ? "Loading more events…" : "Load more audit events"}</Button>
+              </div>
+            )}
+            {state === "ready" && auditEvents.length === 0 && <p className="account-muted">No audit events.</p>}
           </div>
-        </AdminPanel>
-      </section>
+        </section>
+      </div>
       {confirmation && <ConfirmationDialog key={confirmation.key} request={confirmation} onClose={() => setConfirmation(null)} />}
     </main>
-  );
-}
-
-function AdminPanel({ children, icon, meta, title }: {
-  children: ReactNode;
-  icon: ReactNode;
-  meta: string;
-  title: string;
-}) {
-  return (
-    <section className="admin-panel reui-admin-section">
-      <Frame className="reui-admin-frame" dense spacing="xs" variant="ghost">
-        <FramePanel className="reui-admin-panel">
-          <FrameHeader className="admin-panel-heading reui-admin-heading">
-            <span className="admin-panel-icon">{icon}</span>
-            <div>
-              <FrameTitle>{title}</FrameTitle>
-              <FrameDescription>{meta}</FrameDescription>
-            </div>
-          </FrameHeader>
-          {children}
-        </FramePanel>
-      </Frame>
-    </section>
   );
 }
 
@@ -3732,7 +3879,8 @@ function AccountSettings({
   const [mfaStatus, setMfaStatus] = useState<MfaStatus | null>(null);
   const [apiTokens, setApiTokens] = useState<ApiToken[]>([]);
   const [state, setState] = useState<LoadState>("loading");
-  const [message, setMessage] = useState<string | null>(null);
+  // Each message belongs to one settings row and renders under that row's action.
+  const [notice, setNotice] = useState<{ scope: AccountScope; text: string; tone: "danger" | "teal" } | null>(null);
   const [email, setEmail] = useState("");
   const [emailPassword, setEmailPassword] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -3740,6 +3888,10 @@ function AccountSettings({
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [mfaPassword, setMfaPassword] = useState("");
   const [mfaSetupOpen, setMfaSetupOpen] = useState(false);
+  const [mfaRemovalOpen, setMfaRemovalOpen] = useState(false);
+  const removeMfaRef = useRef<HTMLButtonElement>(null);
+  const focusRemoval = useRef<"password" | "trigger" | null>(null);
+  const baseId = useId();
   const [apiTokenName, setApiTokenName] = useState("");
   const [apiTokenScopes, setApiTokenScopes] = useState<ApiTokenScope[]>(["skills:read"]);
   const [apiTokenExpiresAt, setApiTokenExpiresAt] = useState("");
@@ -3749,6 +3901,7 @@ function AccountSettings({
   const tokenExpiryBounds = useMemo(() => apiTokenExpiryBounds(), []);
 
   async function refreshAccountSecurity() {
+    setNotice((current) => current?.scope === "load" ? null : current);
     try {
       const [nextMfaStatus, nextApiTokens] = await Promise.all([
         client.getMfaStatus(),
@@ -3758,7 +3911,7 @@ function AccountSettings({
       setApiTokens(nextApiTokens);
       setState("ready");
     } catch (error) {
-      setMessage(safeAccountErrorMessage(error));
+      setNotice({ scope: "load", text: safeAccountErrorMessage(error), tone: "danger" });
       setState("error");
     }
   }
@@ -3767,20 +3920,29 @@ function AccountSettings({
     void refreshAccountSecurity();
   }, [client]);
 
+  useEffect(() => {
+    const target = focusRemoval.current;
+    if (!target) return;
+    const element = target === "password" ? document.getElementById(`${baseId}-mfa-removal`) : removeMfaRef.current;
+    if (!element) return;
+    focusRemoval.current = null;
+    element.focus();
+  });
+
   async function submitPasswordChange(input?: { currentPassword: string; password: string; confirmPassword: string }) {
-    setMessage(null);
+    setNotice(null);
     const passwordInput = input ?? {
       currentPassword,
       password: newPassword,
       confirmPassword: confirmNewPassword,
     };
     if (passwordInput.password !== passwordInput.confirmPassword) {
-      setMessage("Passwords do not match.");
+      setNotice({ scope: "password", text: "Passwords do not match.", tone: "danger" });
       return;
     }
     const passwordError = newPasswordByteError(passwordInput.password);
     if (passwordError) {
-      setMessage(passwordError);
+      setNotice({ scope: "password", text: passwordError, tone: "danger" });
       return;
     }
     setState("loading");
@@ -3789,12 +3951,12 @@ function AccountSettings({
       onSessionInvalidated("Password changed. Sign in again with the new password.");
     } catch (error) {
       setState("error");
-      setMessage(safeAccountErrorMessage(error));
+      setNotice({ scope: "password", text: safeAccountErrorMessage(error), tone: "danger" });
     }
   }
 
   async function submitEmailChange(input?: { email: string; password: string }) {
-    setMessage(null);
+    setNotice(null);
     setState("loading");
     try {
       const emailInput = input ?? { email, password: emailPassword };
@@ -3802,11 +3964,22 @@ function AccountSettings({
       setEmail("");
       setEmailPassword("");
       setState("ready");
-      setMessage("Verification email sent. Confirm the new address to complete the change.");
+      setNotice({ scope: "email", text: "Verification email sent. Confirm the new address to complete the change.", tone: "teal" });
     } catch (error) {
       setState("error");
-      setMessage(safeAccountErrorMessage(error));
+      setNotice({ scope: "email", text: safeAccountErrorMessage(error), tone: "danger" });
     }
+  }
+
+  function openMfaRemoval() {
+    setMfaRemovalOpen(true);
+    focusRemoval.current = "password";
+  }
+
+  function closeMfaRemoval() {
+    setMfaRemovalOpen(false);
+    setMfaPassword("");
+    focusRemoval.current = "trigger";
   }
 
   function requestMfaRemoval(password: string) {
@@ -3821,7 +3994,7 @@ function AccountSettings({
   }
 
   async function removeMfa(password: string) {
-    setMessage(null);
+    setNotice(null);
     setState("loading");
     try {
       await client.disableTotpMfa({ password });
@@ -3829,13 +4002,13 @@ function AccountSettings({
     } catch (error) {
       setState("error");
       const safeMessage = safeAccountErrorMessage(error);
-      setMessage(safeMessage);
+      setNotice({ scope: "mfa", text: safeMessage, tone: "danger" });
       throw new Error(safeMessage);
     }
   }
 
   async function createAccountApiToken() {
-    setMessage(null);
+    setNotice(null);
     setCreatedApiToken(null);
     const expiry = validateApiTokenExpiry(apiTokenExpiresAt);
     if (!expiry.valid) {
@@ -3858,12 +4031,12 @@ function AccountSettings({
       setState("ready");
     } catch (error) {
       setState("error");
-      setMessage(safeAccountErrorMessage(error));
+      setNotice({ scope: "tokens", text: safeAccountErrorMessage(error), tone: "danger" });
     }
   }
 
   async function revokeAccountApiToken(tokenId: string) {
-    setMessage(null);
+    setNotice(null);
     const token = apiTokens.find((item) => item.id === tokenId);
     setConfirmation({
       key: "revoke-account-token",
@@ -3884,223 +4057,228 @@ function AccountSettings({
     } catch (error) {
       setState("error");
       const safeMessage = safeAccountErrorMessage(error);
-      setMessage(safeMessage);
+      setNotice({ scope: "tokens", text: safeMessage, tone: "danger" });
       throw new Error(safeMessage);
     }
   }
 
   const mfaEnabled = Boolean(mfaStatus?.totpEnabled);
-  const activeApiTokenCount = apiTokens.filter((token) => !token.revokedAt).length;
   const accountInitialLoading = state === "loading" && mfaStatus === null;
-  const sessionMfaLabel = session.user.mfaVerified ? "verified" : "not verified";
-  const mfaPostureLabel = accountInitialLoading ? "Loading…" : mfaEnabled ? (session.user.mfaVerified ? "MFA verified" : "MFA enabled") : "MFA not set";
-  const apiTokenCountLabel = accountInitialLoading ? "Loading…" : String(activeApiTokenCount);
-  const recoveryCodeLabel = accountInitialLoading ? "Loading…" : mfaEnabled ? String(mfaStatus?.recoveryCodesRemaining ?? 0) : "not issued";
+  const recoveryCodes = mfaStatus?.recoveryCodesRemaining ?? 0;
+  const roleLabel = session.user.roles.map(formatStatusLabel).join(", ") || "User";
+  const rowNotice = (scope: AccountScope) => notice?.scope === scope
+    ? <p className="account-notice" data-tone={notice.tone} role="status">{notice.text}</p>
+    : null;
 
   return (
-    <main className="settings-workspace shadcn-settings-workspace" aria-label="Account settings">
-      {message && <div className={state === "error" ? "safe-message admin-message" : "success-message admin-message"} role="status">{message}</div>}
-      <section className="settings-hero shadcn-settings-hero">
+    <main className="account-workspace account-settings" aria-label="Account settings">
+      <header className="account-page-head">
         <div>
-          <Badge className="settings-eyebrow shadcn-review-eyebrow" variant="outline">Account settings</Badge>
           <h1>Security and access</h1>
-          <p>Manage identity, authentication, and external access for this account.</p>
+          <p>{session.user.email} · {roleLabel} · {session.user.emailVerified ? "Email verified" : "Email not verified"}</p>
         </div>
-        <div className="settings-hero-metrics" aria-label="Account posture">
-          <SettingsMetric label="Session MFA" value={sessionMfaLabel} strong={session.user.mfaVerified} />
-          <SettingsMetric label="Active API keys" value={apiTokenCountLabel} />
-        </div>
-      </section>
+      </header>
 
       {!accountInitialLoading && mfaEnabled && !session.user.mfaVerified && (
-        <section className="settings-risk-banner" role="status" aria-live="polite">
+        <section className="account-banner" role="status" aria-live="polite">
           <CircleAlert size={20} aria-hidden="true" />
           <div>
             <strong>MFA is enabled, but this session is not MFA verified.</strong>
             <p>Privileged owner workflows remain locked until the next MFA sign-in.</p>
           </div>
-          <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => onSessionInvalidated("Sign in with MFA to continue.")}>
+          <Button size="sm" type="button" variant="outline" onClick={() => onSessionInvalidated("Sign in with MFA to continue.")}>
             <LogIn size={16} aria-hidden="true" />
             Sign in with MFA
           </Button>
         </section>
       )}
 
-      <div className="settings-layout">
-        <aside className="settings-overview" aria-label="Account summary">
-          <div className="settings-profile">
-            <span className="settings-avatar" aria-hidden="true">
-              <UserRound size={24} />
-            </span>
-            <div>
-              <strong>{session.user.email}</strong>
-              <span>{session.user.roles.join(", ") || "user"}</span>
-            </div>
+      <div className="account-surface">
+        {notice?.scope === "load" && (
+          <div className="account-notice account-surface-notice" data-tone="danger" role="status">
+            <span>{notice.text}</span>
+            <Button size="sm" type="button" variant="outline" onClick={() => { setState("loading"); void refreshAccountSecurity(); }}>Retry</Button>
           </div>
-          <dl className="settings-summary-list">
-            <Metadata label="Email status" value={session.user.emailVerified ? "verified" : "unverified"} />
-            <Metadata label="MFA posture" value={mfaPostureLabel} />
-            <Metadata label="Recovery codes" value={recoveryCodeLabel} />
-            <Metadata label="API access" value={accountInitialLoading ? "Loading…" : `${activeApiTokenCount} active`} />
-          </dl>
-        </aside>
+        )}
 
-        <section className="settings-content" aria-label="Settings controls">
-          <AccountPanel icon={<Mail size={18} aria-hidden="true" />} title="Change email" meta="Requires new-address verification">
-            <form className="settings-form two-column" onSubmit={(event) => {
-              event.preventDefault();
-              const formData = new window.FormData(event.currentTarget);
-              void submitEmailChange({
-                email: String(formData.get("new-email") ?? ""),
-                password: String(formData.get("email-current-password") ?? ""),
-              });
-            }}>
-              <div className="settings-field">
-                <label>
-                  <span>New email</span>
-                  <Input
-                    className="settings-input"
-                    aria-label="New email"
-                    autoComplete="email"
-                    name="new-email"
-                    onChange={(event) => setEmail(event.target.value)}
-                    onInput={(event) => setEmail(event.currentTarget.value)}
-                    required
-                    type="email"
-                    value={email}
-                  />
-                </label>
-                <small>The new address must be verified before it replaces the current one.</small>
-              </div>
-              <div className="settings-field">
-                <label>
-                  <span>Current password</span>
-                  <Input
-                    className="settings-input"
-                    autoComplete="current-password"
-                    name="email-current-password"
-                    onChange={(event) => setEmailPassword(event.target.value)}
-                    onInput={(event) => setEmailPassword(event.currentTarget.value)}
-                    required
-                    type="password"
-                    value={emailPassword}
-                  />
-                </label>
-                <small>Required for account identity changes.</small>
-              </div>
-              <div className="settings-submit-row">
-                <Button className="save-button shadcn-action-button" disabled={state === "loading"} size="sm" type="submit">
-                  <Mail size={16} aria-hidden="true" />
-                  Send verification
-                </Button>
-              </div>
-            </form>
-          </AccountPanel>
+        <section aria-labelledby={`${baseId}-email`} className="account-row">
+          <div className="account-row-intro">
+            <h2 id={`${baseId}-email`}>Email</h2>
+            <p>The new address must be verified before it replaces the current one.</p>
+          </div>
+          <form className="account-form account-row-body" onSubmit={(event) => {
+            event.preventDefault();
+            const formData = new window.FormData(event.currentTarget);
+            void submitEmailChange({
+              email: String(formData.get("new-email") ?? ""),
+              password: String(formData.get("email-current-password") ?? ""),
+            });
+          }}>
+            <label className="account-field">
+              <span>New email</span>
+              <Input
+                aria-label="New email"
+                autoComplete="email"
+                name="new-email"
+                onChange={(event) => setEmail(event.target.value)}
+                onInput={(event) => setEmail(event.currentTarget.value)}
+                required
+                type="email"
+                value={email}
+              />
+            </label>
+            <label className="account-field">
+              <span>Current password</span>
+              <Input
+                aria-describedby={`${baseId}-email-password-help`}
+                autoComplete="current-password"
+                name="email-current-password"
+                onChange={(event) => setEmailPassword(event.target.value)}
+                onInput={(event) => setEmailPassword(event.currentTarget.value)}
+                required
+                type="password"
+                value={emailPassword}
+              />
+            </label>
+            <small className="account-hint" id={`${baseId}-email-password-help`}>Required for account identity changes.</small>
+            <div className="account-actions">
+              <Button disabled={state === "loading"} size="sm" type="submit">
+                <Mail size={16} aria-hidden="true" />
+                Send verification
+              </Button>
+            </div>
+            {rowNotice("email")}
+          </form>
+        </section>
 
-          <AccountPanel icon={<KeyRound size={18} aria-hidden="true" />} title="Password" meta="Current password required">
-            <form className="settings-form password-grid" onSubmit={(event) => {
-              event.preventDefault();
-              const formData = new window.FormData(event.currentTarget);
-              void submitPasswordChange({
-                currentPassword: String(formData.get("current-password") ?? ""),
-                password: String(formData.get("new-password") ?? ""),
-                confirmPassword: String(formData.get("confirm-new-password") ?? ""),
-              });
-            }}>
-              <label className="span-all">
-                <span>Current password</span>
-                <Input
-                  className="settings-input"
-                  autoComplete="current-password"
-                  name="current-password"
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  onInput={(event) => setCurrentPassword(event.currentTarget.value)}
-                  required
-                  type="password"
-                  value={currentPassword}
-                />
-              </label>
-              <label>
-                <span>New password</span>
-                <Input
-                  className="settings-input"
-                  aria-label="New password"
-                  autoComplete="new-password"
-                  name="new-password"
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  onInput={(event) => setNewPassword(event.currentTarget.value)}
-                  required
-                  type="password"
-                  value={newPassword}
-                />
-              </label>
-              <label>
-                <span>Confirm new password</span>
-                <Input
-                  className="settings-input"
-                  aria-label="Confirm new password"
-                  autoComplete="new-password"
-                  name="confirm-new-password"
-                  onChange={(event) => setConfirmNewPassword(event.target.value)}
-                  onInput={(event) => setConfirmNewPassword(event.currentTarget.value)}
-                  required
-                  type="password"
-                  value={confirmNewPassword}
-                />
-              </label>
-              <div className="settings-submit-row">
-                <Button className="save-button shadcn-action-button" disabled={state === "loading"} size="sm" type="submit">
-                  <Save size={16} aria-hidden="true" />
-                  Change password
-                </Button>
-              </div>
-            </form>
-          </AccountPanel>
+        <section aria-labelledby={`${baseId}-password`} className="account-row">
+          <div className="account-row-intro">
+            <h2 id={`${baseId}-password`}>Password</h2>
+            <p>Changing the password ends this session. Sign in again with the new password.</p>
+          </div>
+          <form className="account-form account-row-body" onSubmit={(event) => {
+            event.preventDefault();
+            const formData = new window.FormData(event.currentTarget);
+            void submitPasswordChange({
+              currentPassword: String(formData.get("current-password") ?? ""),
+              password: String(formData.get("new-password") ?? ""),
+              confirmPassword: String(formData.get("confirm-new-password") ?? ""),
+            });
+          }}>
+            <label className="account-field">
+              <span>Current password</span>
+              <Input
+                autoComplete="current-password"
+                name="current-password"
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                onInput={(event) => setCurrentPassword(event.currentTarget.value)}
+                required
+                type="password"
+                value={currentPassword}
+              />
+            </label>
+            <label className="account-field">
+              <span>New password</span>
+              <Input
+                aria-label="New password"
+                autoComplete="new-password"
+                name="new-password"
+                onChange={(event) => setNewPassword(event.target.value)}
+                onInput={(event) => setNewPassword(event.currentTarget.value)}
+                required
+                type="password"
+                value={newPassword}
+              />
+            </label>
+            <label className="account-field">
+              <span>Confirm new password</span>
+              <Input
+                aria-label="Confirm new password"
+                autoComplete="new-password"
+                name="confirm-new-password"
+                onChange={(event) => setConfirmNewPassword(event.target.value)}
+                onInput={(event) => setConfirmNewPassword(event.currentTarget.value)}
+                required
+                type="password"
+                value={confirmNewPassword}
+              />
+            </label>
+            <div className="account-actions">
+              <Button disabled={state === "loading"} size="sm" type="submit">
+                <Save size={16} aria-hidden="true" />
+                Change password
+              </Button>
+            </div>
+            {rowNotice("password")}
+          </form>
+        </section>
 
-          <AccountPanel icon={<ShieldCheck size={18} aria-hidden="true" />} title="MFA" meta={accountInitialLoading ? "Loading…" : mfaEnabled ? `${mfaStatus?.recoveryCodesRemaining ?? 0} recovery codes` : "Authenticator app not set"}>
+        <section aria-labelledby={`${baseId}-mfa`} className="account-row">
+          <div className="account-row-intro">
+            <h2 id={`${baseId}-mfa`}>MFA</h2>
+            <p>An authenticator app code at sign-in. Privileged owner workflows need an MFA-verified session.</p>
+          </div>
+          <div className="account-row-body">
             {accountInitialLoading ? (
               <LoadingRows />
+            ) : mfaStatus === null ? (
+              <p className="account-muted">MFA status could not be loaded.</p>
             ) : (
-              <div className="settings-stack">
-                <div className={mfaEnabled ? "settings-security-state verified" : "settings-security-state attention"}>
-                  <ShieldCheck size={18} aria-hidden="true" />
-                  <div>
-                    <strong>{mfaEnabled ? "Authenticator app MFA is enabled." : "Authenticator app MFA is not set."}</strong>
-                    <span>{session.user.mfaVerified ? "This session is MFA verified." : "Sign in with MFA before using privileged owner workflows."}</span>
-                  </div>
-                </div>
+              <>
+                <p className="account-status-line">
+                  <strong>{mfaEnabled ? "Authenticator app MFA is enabled." : "Authenticator app MFA is not set."}</strong>
+                  <span>
+                    {mfaEnabled
+                      ? `${recoveryCodes} recovery ${recoveryCodes === 1 ? "code" : "codes"} left.${session.user.mfaVerified ? " This session is MFA verified." : ""}`
+                      : "Enter your current password to start setup."}
+                  </span>
+                </p>
                 {mfaEnabled && (
-                  <div className="settings-actions">
-                    <Button className="save-button shadcn-action-button secondary-action" size="sm" type="button" variant="outline" onClick={() => setMfaSetupOpen((open) => !open)}>
+                  <div className="account-actions">
+                    <Button aria-expanded={mfaSetupOpen} size="sm" type="button" variant="outline" onClick={() => setMfaSetupOpen((open) => !open)}>
                       <RotateCw size={16} aria-hidden="true" />
                       Reset authenticator
                     </Button>
-                    <form className="inline-security-form" onSubmit={(event) => {
-                      event.preventDefault();
-                      const formData = new window.FormData(event.currentTarget);
-                      requestMfaRemoval(String(formData.get("mfa-removal-password") ?? ""));
-                    }}>
-                      <label>
-                        <span>Password for MFA removal</span>
-                        <Input
-                          className="settings-input"
-                          aria-label="Password for MFA removal"
-                          autoComplete="current-password"
-                          name="mfa-removal-password"
-                          onChange={(event) => setMfaPassword(event.target.value)}
-                          onInput={(event) => setMfaPassword(event.currentTarget.value)}
-                          placeholder="Current password"
-                          required
-                          type="password"
-                          value={mfaPassword}
-                        />
-                      </label>
-                      <Button className="shadcn-action-button" disabled={state === "loading"} size="sm" type="submit" variant="destructive">
+                    {!mfaRemovalOpen && (
+                      <Button className="account-danger" ref={removeMfaRef} size="sm" type="button" variant="outline" onClick={openMfaRemoval}>
                         <X size={16} aria-hidden="true" />
                         Remove MFA
                       </Button>
-                    </form>
+                    )}
                   </div>
+                )}
+                {mfaEnabled && mfaRemovalOpen && (
+                  <form className="account-form account-inline-form" onKeyDown={(event) => {
+                    if (event.key !== "Escape") return;
+                    event.preventDefault();
+                    closeMfaRemoval();
+                  }} onSubmit={(event) => {
+                    event.preventDefault();
+                    const formData = new window.FormData(event.currentTarget);
+                    requestMfaRemoval(String(formData.get("mfa-removal-password") ?? ""));
+                  }}>
+                    <label className="account-field">
+                      <span>Password for MFA removal</span>
+                      <Input
+                        aria-label="Password for MFA removal"
+                        autoComplete="current-password"
+                        id={`${baseId}-mfa-removal`}
+                        name="mfa-removal-password"
+                        onChange={(event) => setMfaPassword(event.target.value)}
+                        onInput={(event) => setMfaPassword(event.currentTarget.value)}
+                        required
+                        type="password"
+                        value={mfaPassword}
+                      />
+                    </label>
+                    <div className="account-actions">
+                      <Button disabled={state === "loading"} size="sm" type="submit" variant="destructive">
+                        <X size={16} aria-hidden="true" />
+                        Remove MFA
+                      </Button>
+                      <Button size="sm" type="button" variant="outline" onClick={closeMfaRemoval}>Cancel</Button>
+                    </div>
+                  </form>
                 )}
                 {(!mfaEnabled || mfaSetupOpen) && (
                   <MfaSetupPanel
@@ -4116,90 +4294,88 @@ function AccountSettings({
                     session={session}
                   />
                 )}
+                {rowNotice("mfa")}
+                <p className="account-muted">Passkeys are not available yet.</p>
+              </>
+            )}
+          </div>
+        </section>
+
+        <section aria-labelledby={`${baseId}-keys`} className="account-row">
+          <div className="account-row-intro">
+            <h2 id={`${baseId}-keys`}>API keys</h2>
+            <p>Scoped keys for the CLI, MCP clients and automation. A new key is shown only once.</p>
+          </div>
+          <div className="account-row-body">
+            <form className="account-form" noValidate onSubmit={(event) => {
+              event.preventDefault();
+              void createAccountApiToken();
+            }}>
+              <label className="account-field">
+                <span>Key name</span>
+                <Input
+                  aria-label="Key name"
+                  name="api-token-name"
+                  onChange={(event) => setApiTokenName(event.target.value)}
+                  onInput={(event) => setApiTokenName(event.currentTarget.value)}
+                  placeholder="CLI or MCP client"
+                  value={apiTokenName}
+                />
+              </label>
+              <label className="account-field">
+                <span>Expires at</span>
+                <Input
+                  aria-label="Expires at"
+                  aria-describedby="api-token-expiry-help api-token-expiry-error"
+                  aria-invalid={Boolean(apiTokenExpiryError)}
+                  autoComplete="off"
+                  max={tokenExpiryBounds.max}
+                  min={tokenExpiryBounds.min}
+                  name="api-token-expires-at"
+                  onChange={(event) => {
+                    setApiTokenExpiresAt(event.target.value);
+                    setApiTokenExpiryError(null);
+                  }}
+                  onInput={(event) => {
+                    setApiTokenExpiresAt(event.currentTarget.value);
+                    setApiTokenExpiryError(null);
+                  }}
+                  type="datetime-local"
+                  value={apiTokenExpiresAt}
+                />
+                <small id="api-token-expiry-help">Optional. Choose a future expiry no more than 1 year away; blank uses the 90-day default.</small>
+                {apiTokenExpiryError && <small className="field-error" id="api-token-expiry-error" role="alert">{apiTokenExpiryError}</small>}
+              </label>
+              <fieldset className="account-scopes">
+                <legend>API key scopes</legend>
+                {API_TOKEN_SCOPE_OPTIONS.map((option) => (
+                  <label className="account-check" key={option.scope}>
+                    <input
+                      checked={apiTokenScopes.includes(option.scope)}
+                      onChange={() => setApiTokenScopes((current) => toggleApiTokenScope(current, option.scope))}
+                      type="checkbox"
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </fieldset>
+              <div className="account-actions">
+                <Button disabled={state === "loading" || !apiTokenName.trim() || apiTokenScopes.length === 0} size="sm" type="submit">
+                  <KeyRound size={16} aria-hidden="true" />
+                  Create key
+                </Button>
+              </div>
+              {rowNotice("tokens")}
+            </form>
+            {createdApiToken && (
+              <div className="account-reveal" role="status">
+                <span>Copy this key now. It will not be shown again.</span>
+                <code>{createdApiToken}</code>
+                <CopyButton text={createdApiToken} />
               </div>
             )}
-          </AccountPanel>
-
-          <AccountPanel icon={<KeyRound size={18} aria-hidden="true" />} title="API keys" meta={accountInitialLoading ? "Loading…" : `${activeApiTokenCount} active`}>
-            <div className="settings-stack">
-              <form className="settings-form api-key-form" noValidate onSubmit={(event) => {
-                event.preventDefault();
-                void createAccountApiToken();
-              }}>
-                <label>
-                  <span>Key name</span>
-                  <Input
-                    className="settings-input"
-                    aria-label="Key name"
-                    name="api-token-name"
-                    onChange={(event) => setApiTokenName(event.target.value)}
-                    onInput={(event) => setApiTokenName(event.currentTarget.value)}
-                    placeholder="CLI or MCP client"
-                    value={apiTokenName}
-                  />
-                </label>
-                <label>
-                  <span>Expires at</span>
-                  <Input
-                    className="settings-input"
-                    aria-label="Expires at"
-                    aria-describedby="api-token-expiry-help api-token-expiry-error"
-                    aria-invalid={Boolean(apiTokenExpiryError)}
-                    autoComplete="off"
-                    max={tokenExpiryBounds.max}
-                    min={tokenExpiryBounds.min}
-                    name="api-token-expires-at"
-                    onChange={(event) => {
-                      setApiTokenExpiresAt(event.target.value);
-                      setApiTokenExpiryError(null);
-                    }}
-                    onInput={(event) => {
-                      setApiTokenExpiresAt(event.currentTarget.value);
-                      setApiTokenExpiryError(null);
-                    }}
-                    type="datetime-local"
-                    value={apiTokenExpiresAt}
-                  />
-                  <small id="api-token-expiry-help">Optional. Choose a future expiry no more than 1 year away; blank uses the 90-day default.</small>
-                  {apiTokenExpiryError && <small className="field-error" id="api-token-expiry-error" role="alert">{apiTokenExpiryError}</small>}
-                </label>
-                <fieldset className="scope-grid">
-                  <legend>API key scopes</legend>
-                  {API_TOKEN_SCOPE_OPTIONS.map((option) => (
-                    <label className="role-toggle" key={option.scope}>
-                      <input
-                        checked={apiTokenScopes.includes(option.scope)}
-                        onChange={() => setApiTokenScopes((current) => toggleApiTokenScope(current, option.scope))}
-                        type="checkbox"
-                      />
-                      <span>{option.label}</span>
-                    </label>
-                  ))}
-                </fieldset>
-                <div className="settings-submit-row">
-                  <Button className="save-button shadcn-action-button" disabled={state === "loading" || !apiTokenName.trim() || apiTokenScopes.length === 0} size="sm" type="submit">
-                    <KeyRound size={16} aria-hidden="true" />
-                    Create key
-                  </Button>
-                </div>
-              </form>
-              {createdApiToken && (
-                <div className="token-reveal" role="status">
-                  <span>Copy this key now. It will not be shown again.</span>
-                  <code>{createdApiToken}</code>
-                  <CopyButton text={createdApiToken} />
-                </div>
-              )}
-              {accountInitialLoading ? <LoadingRows /> : <TokenList tokens={apiTokens} onRevoke={(tokenId) => void revokeAccountApiToken(tokenId)} />}
-            </div>
-          </AccountPanel>
-
-          <AccountPanel icon={<Fingerprint size={18} aria-hidden="true" />} title="Passkeys" meta="Planned security option">
-            <div className="passkey-panel">
-              <StatusToken value="planned" />
-              <p>Passkeys can be added after WebAuthn credential storage, challenge expiry, relying-party ID, and origin checks are implemented in the API.</p>
-            </div>
-          </AccountPanel>
+            {accountInitialLoading ? <LoadingRows /> : <TokenList tokens={apiTokens} onRevoke={(tokenId) => void revokeAccountApiToken(tokenId)} />}
+          </div>
         </section>
       </div>
       {confirmation && <ConfirmationDialog key={confirmation.key} request={confirmation} onClose={() => setConfirmation(null)} />}
@@ -4207,64 +4383,26 @@ function AccountSettings({
   );
 }
 
-function SettingsMetric({ label, strong, value }: { label: string; strong?: boolean; value: string }) {
-  return (
-    <div className={strong ? "settings-metric strong" : "settings-metric"}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function AccountPanel({ children, icon, meta, title }: {
-  children: ReactNode;
-  icon: ReactNode;
-  meta: string;
-  title: string;
-}) {
-  return (
-    <section className="settings-panel reui-settings-section">
-      <Frame className="reui-settings-frame" dense spacing="xs" variant="ghost">
-        <FramePanel className="reui-settings-panel">
-          <FrameHeader className="settings-panel-heading reui-settings-heading">
-            <span className="settings-panel-icon">{icon}</span>
-            <div>
-              <FrameTitle>{title}</FrameTitle>
-              <FrameDescription>{meta}</FrameDescription>
-            </div>
-          </FrameHeader>
-          {children}
-        </FramePanel>
-      </Frame>
-    </section>
-  );
-}
+type AccountScope = "load" | "email" | "password" | "mfa" | "tokens";
 
 function TokenList({ tokens, onRevoke }: { tokens: ApiToken[]; onRevoke: (tokenId: string) => void }) {
+  if (tokens.length === 0) return <p className="account-muted">No API keys. Create a scoped key for CLI, MCP, or automation access.</p>;
   return (
-    <div className="token-list">
+    <ul aria-label="Your API keys" className="account-token-list">
       {tokens.map((token) => (
-        <div className="token-row" key={token.id}>
-          <span className="cell-main">
+        <li className="account-token" key={token.id}>
+          <span className="account-cell-main">
             <strong>{token.name}</strong>
-            <small>{token.tokenPrefix}… · {token.scopes.join(", ")}</small>
+            <small><code>{token.tokenPrefix}…</code> · {token.scopes.join(", ")}</small>
           </span>
-          <StatusToken value={token.revokedAt ? "revoked" : "active"} />
-          <span>Expires {formatDate(token.expiresAt)}</span>
-          <span>{token.lastUsedAt ? `Used ${formatDate(token.lastUsedAt)}` : "Never used"}</span>
-          <button className="icon-button" disabled={Boolean(token.revokedAt)} type="button" onClick={() => onRevoke(token.id)} aria-label={`Revoke ${token.name}`}>
+          <span className="account-chip" data-tone={token.revokedAt ? "danger" : undefined}>{token.revokedAt ? "Revoked" : "Active"}</span>
+          <small className="account-token-meta">Expires {formatDate(token.expiresAt)} · {token.lastUsedAt ? `Used ${formatDate(token.lastUsedAt)}` : "Never used"}</small>
+          <Button aria-label={`Revoke ${token.name}`} className="account-danger" disabled={Boolean(token.revokedAt)} size="icon-sm" title={`Revoke ${token.name}`} type="button" variant="outline" onClick={() => onRevoke(token.id)}>
             <Trash2 size={15} aria-hidden="true" />
-          </button>
-        </div>
+          </Button>
+        </li>
       ))}
-      {tokens.length === 0 && (
-        <div className="empty-state compact">
-          <KeyRound size={22} aria-hidden="true" />
-          <strong>No API keys.</strong>
-          <span>Create a scoped key for CLI, MCP, or automation access.</span>
-        </div>
-      )}
-    </div>
+    </ul>
   );
 }
 
@@ -4320,7 +4458,7 @@ function RoleEditor({
   userEmail: string;
 }) {
   return (
-    <div className="role-editor">
+    <div aria-label={`Roles for ${userEmail}`} className="role-editor" role="group">
       {ADMIN_ROLE_OPTIONS.map((role) => {
         const privilegedRole = role === "owner" || role === "admin";
         const removingLastRole = roles.length === 1 && roles.includes(role);
@@ -4334,7 +4472,7 @@ function RoleEditor({
               onChange={() => onChange(toggleRole(roles, role))}
               type="checkbox"
             />
-            <span>{role}</span>
+            <span>{formatStatusLabel(role)}</span>
           </label>
         );
       })}
@@ -4375,7 +4513,9 @@ function AuthWidget({
   onLogin,
   onLogout,
   onPasswordReset,
+  onResetModeChange,
   onVerifyMfa,
+  resetMode,
   session,
 }: {
   authMessage: string | null;
@@ -4385,7 +4525,9 @@ function AuthWidget({
   onLogin: (input: { email: string; password: string }) => Promise<void>;
   onLogout: () => Promise<void>;
   onPasswordReset?: (input: { email: string }) => Promise<void>;
+  onResetModeChange: (resetMode: boolean) => void;
   onVerifyMfa: (codeOrRecoveryCode: string) => Promise<void>;
+  resetMode: boolean;
   session: WebSession | null;
 }) {
   const [email, setEmail] = useState("");
@@ -4393,7 +4535,26 @@ function AuthWidget({
   const [mfaCode, setMfaCode] = useState("");
   const [mfaStatus, setMfaStatus] = useState<MfaStatus | null>(null);
   const [mfaSetupOpen, setMfaSetupOpen] = useState(false);
-  const [resetMode, setResetMode] = useState(false);
+  const step = mfaPending ? "mfa" : resetMode && onPasswordReset ? "reset" : "login";
+  const previousStep = useRef(step);
+  const backToLogin = useRef(false);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const mfaCodeRef = useRef<HTMLInputElement>(null);
+  const resetEmailRef = useRef<HTMLInputElement>(null);
+  const forgotRef = useRef<HTMLButtonElement>(null);
+
+  // Focus moves only when the step changes, never on a keystroke: to the
+  // step's first field, or back to "Forgot password?" after "Back to login".
+  useEffect(() => {
+    if (previousStep.current === step) return;
+    previousStep.current = step;
+    const target = step === "mfa" ? mfaCodeRef.current
+      : step === "reset" ? resetEmailRef.current
+        : backToLogin.current ? forgotRef.current
+          : emailRef.current;
+    backToLogin.current = false;
+    target?.focus();
+  }, [step]);
 
   useEffect(() => {
     if (!session || !client) {
@@ -4473,6 +4634,7 @@ function AuthWidget({
             name="mfa-code"
             onChange={(event) => setMfaCode(event.target.value)}
             placeholder="123456"
+            ref={mfaCodeRef}
             spellCheck={false}
             value={mfaCode}
           />
@@ -4491,7 +4653,7 @@ function AuthWidget({
     return (
       <form className="auth-widget auth-form" onSubmit={(event) => {
         event.preventDefault();
-        void onPasswordReset({ email }).then(() => setResetMode(false));
+        void onPasswordReset({ email }).then(() => onResetModeChange(false));
       }}>
         <label className="auth-field">
           <span>Email</span>
@@ -4503,6 +4665,7 @@ function AuthWidget({
             name="reset-email"
             onChange={(event) => setEmail(event.target.value)}
             placeholder="owner@example.com"
+            ref={resetEmailRef}
             spellCheck={false}
             type="email"
             value={email}
@@ -4512,7 +4675,10 @@ function AuthWidget({
           <Mail size={16} aria-hidden="true" />
           Send reset email
         </Button>
-        <Button className="link-button shadcn-action-button" disabled={authState === "loading"} size="sm" type="button" variant="link" onClick={() => setResetMode(false)}>
+        <Button className="link-button shadcn-action-button" disabled={authState === "loading"} size="sm" type="button" variant="link" onClick={() => {
+          backToLogin.current = true;
+          onResetModeChange(false);
+        }}>
           Back to login
         </Button>
         <AuthMessage message={authMessage} />
@@ -4535,6 +4701,7 @@ function AuthWidget({
           name="email"
           onChange={(event) => setEmail(event.target.value)}
           placeholder="owner@example.com"
+          ref={emailRef}
           spellCheck={false}
           type="email"
           value={email}
@@ -4559,11 +4726,10 @@ function AuthWidget({
         Sign in
       </Button>
       {onPasswordReset && (
-        <Button className="link-button shadcn-action-button" disabled={authState === "loading"} size="sm" type="button" variant="link" onClick={() => setResetMode(true)}>
+        <Button className="link-button shadcn-action-button" disabled={authState === "loading"} ref={forgotRef} size="sm" type="button" variant="link" onClick={() => onResetModeChange(true)}>
           Forgot password?
         </Button>
       )}
-      <p className="auth-help">Access is limited to approved hosted-beta accounts.</p>
       <AuthMessage message={authMessage} />
     </form>
   );
@@ -5456,15 +5622,6 @@ export function SharingPanel({
         {confirmation && <ConfirmationDialog key={confirmation.key} request={confirmation} onClose={() => setConfirmation(null)} />}
       </FramePanel>
     </Frame>
-  );
-}
-
-function Metadata({ label, monospace, value }: { label: string; value: string; monospace?: boolean }) {
-  return (
-    <div className="metadata-item">
-      <dt>{label}</dt>
-      <dd className={monospace ? "mono" : undefined}>{value}</dd>
-    </div>
   );
 }
 

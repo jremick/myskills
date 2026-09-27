@@ -1,0 +1,192 @@
+/* Teams and Organizations reuse the Registry workspace (registry.css): a plain
+   page head, one surface, a list and the selected detail. These rules add what
+   the two routes need. Every selector starts at the two-class root, so it holds
+   over older app-wide .teams-workspace, .organization-* and .control-plane-*
+   rules whatever the stylesheet import order. */
+
+.registry-workspace.people-workspace {
+  gap: 24px;
+  width: 100%;
+  min-width: 0;
+  max-width: 1420px;
+  margin: 0 auto;
+  padding: 24px 24px 40px;
+}
+.registry-workspace.people-workspace [tabindex="-1"]:focus { outline: none; }
+.registry-workspace.people-workspace [tabindex="-1"]:focus-visible { border-radius: 4px; outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* Page head: the h1 and the page actions above one hairline. */
+.registry-workspace.people-workspace .people-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+.registry-workspace.people-workspace .people-page-head h1 { margin: 0; color: var(--ink); font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: 0; }
+.registry-workspace.people-workspace .people-page-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Invitations for you: the attention band above the surface. */
+.registry-workspace.people-workspace .people-invitations {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 16px;
+  border: 1px solid rgba(122, 75, 0, 0.18);
+  border-radius: 12px;
+  background: var(--warning-soft);
+}
+.registry-workspace.people-workspace .people-invitations h2 { color: var(--warning); font-size: 13px; line-height: 18px; font-weight: 600; }
+.registry-workspace.people-workspace .people-invitations ul { display: grid; margin: 0; padding: 0; list-style: none; }
+.registry-workspace.people-workspace .people-invitations li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 8px 0;
+}
+.registry-workspace.people-workspace .people-invitations li + li { border-top: 1px solid rgba(122, 75, 0, 0.12); }
+.registry-workspace.people-workspace .people-invitations li > .people-status { grid-column: 1 / -1; }
+
+/* Surface: a fixed list column beside the detail when split. */
+.registry-workspace.people-workspace .registry-surface[data-layout="split"] .registry-body { grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); }
+.registry-workspace.people-workspace .registry-surface[data-layout="split"] .registry-body[data-columns="1"] { grid-template-columns: minmax(0, 1fr); }
+.registry-workspace.people-workspace .registry-list-state [role="alert"] { color: var(--danger); font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+
+/* Rows are buttons: neutral icon, title, muted metadata. */
+.registry-workspace.people-workspace button.registry-row {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+}
+.registry-workspace.people-workspace button.registry-row:hover { background: var(--surface-soft); }
+.registry-workspace.people-workspace button.registry-row[aria-current="true"] { background: var(--teal-soft); box-shadow: inset 2px 0 0 var(--teal); }
+.registry-workspace.people-workspace .people-row-icon { display: inline-flex; align-self: start; margin-top: 2px; color: var(--muted); }
+.registry-workspace.people-workspace .people-row .registry-row-meta { font-size: 12.5px; line-height: 18px; }
+
+/* On-demand forms: New team or New organization at the top of the list, and
+   Invite member in the detail. */
+.registry-workspace.people-workspace .people-create {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0 0 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.registry-workspace.people-workspace .people-create-intro { color: var(--ink-soft); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.registry-workspace.people-workspace .people-create-intro strong { color: var(--ink); font-weight: 600; }
+.registry-workspace.people-workspace .people-create label > span,
+.registry-workspace.people-workspace .people-field > span { color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
+.registry-workspace.people-workspace .people-create label small { color: var(--muted); font-weight: 400; }
+.registry-workspace.people-workspace .people-create [role="alert"]:not(.control-plane-inline-message) { color: var(--danger); font-size: 12px; line-height: 16px; }
+.registry-workspace.people-workspace .people-field { display: grid; gap: 4px; min-width: 0; }
+.registry-workspace.people-workspace .people-form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.registry-workspace.people-workspace .people-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.registry-workspace.people-workspace .people-inline-form .people-field-grow { flex: 1 1 200px; min-width: min(100%, 200px); }
+.registry-workspace.people-workspace .people-inline-form .people-field-role { flex: 0 1 140px; min-width: 120px; }
+.registry-workspace.people-workspace .people-inline-form select { width: 100%; }
+.registry-workspace.people-workspace .people-inline-form > .people-status { flex-basis: 100%; }
+
+/* Detail */
+.registry-workspace.people-workspace .people-detail-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 16px; }
+.registry-workspace.people-workspace .people-detail-head .registry-inspector-title { flex: 1 1 240px; }
+.registry-workspace.people-workspace .people-note { max-width: 64ch; margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 18px; }
+.registry-workspace.people-workspace .people-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.registry-workspace.people-workspace .registry-section h3 { color: var(--ink); font-size: 15px; line-height: 22px; font-weight: 600; }
+.registry-workspace.people-workspace .people-subsection { display: grid; gap: 4px; }
+.registry-workspace.people-workspace .people-subsection h4 { color: var(--ink-soft); font-size: 13px; line-height: 18px; font-weight: 600; }
+.registry-workspace.people-workspace .people-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.registry-workspace.people-workspace .people-list > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  min-height: 48px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.registry-workspace.people-workspace .people-list > li:first-child { border-top: 0; }
+.registry-workspace.people-workspace .people-list > li > :is(.people-confirm-strip, .people-status) { grid-column: 1 / -1; }
+.registry-workspace.people-workspace .people-person { display: grid; gap: 2px; min-width: 0; }
+.registry-workspace.people-workspace .people-person strong { color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.registry-workspace.people-workspace .people-person small { color: var(--muted); font-size: 12.5px; line-height: 18px; overflow-wrap: anywhere; }
+.registry-workspace.people-workspace .people-row-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.registry-workspace.people-workspace .people-row-actions select { min-width: 120px; }
+.registry-workspace.people-workspace .organization-team-actions { display: grid; gap: 8px; }
+
+/* Messages and confirmation strips sit beside the control that caused them. */
+.registry-workspace.people-workspace .people-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--ink-soft);
+  background: var(--surface-soft);
+  font-size: 13px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+.registry-workspace.people-workspace .people-status[data-tone="teal"] { color: var(--teal-dark); background: var(--teal-soft); }
+.registry-workspace.people-workspace .people-status[data-tone="danger"] { color: var(--danger); background: var(--danger-soft); }
+.registry-workspace.people-workspace .control-plane-inline-message { flex-wrap: wrap; overflow-wrap: anywhere; }
+.registry-workspace.people-workspace .people-confirm-strip {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(122, 75, 0, 0.18);
+  border-radius: 8px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  font-size: 13px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+.registry-workspace.people-workspace .people-danger[data-variant="outline"] { border-color: rgba(180, 35, 24, 0.35); color: var(--danger); background: var(--surface); }
+.registry-workspace.people-workspace .people-danger[data-variant="outline"]:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+
+/* Policy: history first; the existing form opens on Change policy. */
+.registry-workspace.people-workspace .organization-policy-form { border-color: var(--line); border-radius: 8px; background: var(--surface-soft); }
+.registry-workspace.people-workspace .organization-policy-form .people-start { justify-self: start; }
+
+@media (max-width: 680px) {
+  .registry-workspace.people-workspace { gap: 16px; padding: 16px 16px 32px; }
+  .registry-workspace.people-workspace .people-invitations { padding: 10px 12px; }
+}
+
+@media (max-width: 640px) {
+  .registry-workspace.people-workspace :is(.organization-policy-flags, .organization-policy-limits) { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 560px) {
+  .registry-workspace.people-workspace .people-list > li { grid-template-columns: minmax(0, 1fr); }
+  .registry-workspace.people-workspace .people-row-actions { justify-content: flex-start; }
+}
+
+@media (forced-colors: active) {
+  .registry-workspace.people-workspace button.registry-row[aria-current="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
+  .registry-workspace.people-workspace :is(.people-status, .people-confirm-strip, .people-invitations) { border: 1px solid CanvasText; }
+}

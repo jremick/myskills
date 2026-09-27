@@ -3,6 +3,8 @@
 @import "./components/registry/registry.css";
 @import "./components/registry/author-review.css";
 @import "./components/control-plane/control-plane-surface.css";
+@import "./components/people/people.css";
+@import "./components/account/account.css";
 @import "./components/architecture/editor/architecture-editor.css";
 @import "@xyflow/react/dist/style.css";
 @import "tailwindcss";

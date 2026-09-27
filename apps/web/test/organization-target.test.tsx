@@ -44,9 +44,9 @@ test("organization management loads a scoped detail and keeps member/policy acti
   const view = render(<OrganizationsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
 
   await view.findByRole("heading", { name: "Acme Skills" });
-  await view.findByText(/owner@example\.com/);
   assert.equal(view.getByText("Organization is a sharing boundary. Personal, work, and team labels do not grant access.").textContent?.includes("labels do not grant access"), true);
 
+  fireEvent.click(view.getByRole("button", { name: "Invite member" }));
   fireEvent.input(view.getByLabelText("Organization member email"), { target: { value: "member@example.com" } });
   fireEvent.click(view.getByRole("button", { name: "Invite" }));
   await waitFor(() => assert.deepEqual(calls, ["invite:member@example.com"]));
@@ -56,6 +56,7 @@ test("organization management loads a scoped detail and keeps member/policy acti
   fireEvent.click(await view.findByRole("button", { name: "Confirm role change" }));
   await waitFor(() => assert.equal(calls.includes("role:user-2:admin"), true));
 
+  fireEvent.click(view.getByRole("button", { name: "Change policy" }));
   fireEvent.click(view.getByRole("button", { name: "Review append and activate" }));
   fireEvent.click(await view.findByRole("button", { name: "Confirm append and activate" }));
   await waitFor(() => assert.equal(calls.includes("append-policy"), true));
@@ -141,6 +142,7 @@ test("organization policy controls stay disabled while a revision is being saved
   } as unknown as RegistryClient;
   const view = render(<OrganizationsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
   await view.findByRole("heading", { name: "Acme Skills" });
+  fireEvent.click(view.getByRole("button", { name: "Change policy" }));
   fireEvent.click(view.getByRole("button", { name: "Review append and activate" }));
   fireEvent.click(await view.findByRole("button", { name: "Confirm append and activate" }));
   await waitFor(() => assert.ok(finishSave));
