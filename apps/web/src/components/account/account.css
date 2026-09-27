@@ -135,7 +135,9 @@ main.account-workspace {
 .account-workspace .account-chip[data-tone="teal"] { color: var(--teal-dark); background: var(--teal-soft); }
 .account-workspace .account-chip[data-tone="amber"] { color: var(--warning); background: var(--warning-soft); }
 .account-workspace .account-chip[data-tone="danger"] { color: var(--danger); background: var(--danger-soft); }
-.account-workspace .account-danger[data-variant="outline"] { border-color: rgba(180, 35, 24, 0.35); color: var(--danger); background: var(--surface); }
+.account-workspace [data-slot="button"][data-variant="outline"] { border-color: var(--line); color: var(--ink-soft); background: var(--surface); box-shadow: none; }
+.account-workspace [data-slot="button"][data-variant="outline"]:hover { border-color: var(--teal); color: var(--teal-dark); background: var(--teal-soft); }
+.account-workspace .account-danger[data-slot="button"][data-variant="outline"] { border-color: rgba(180, 35, 24, 0.35); color: var(--danger); background: var(--surface); }
 .account-workspace .account-danger[data-variant="outline"]:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
 .account-workspace .account-muted { color: var(--muted); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
 .account-workspace .account-cell-main { display: grid; gap: 2px; min-width: 0; }

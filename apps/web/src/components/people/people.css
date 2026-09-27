@@ -165,7 +165,9 @@
   line-height: 18px;
   overflow-wrap: anywhere;
 }
-.registry-workspace.people-workspace .people-danger[data-variant="outline"] { border-color: rgba(180, 35, 24, 0.35); color: var(--danger); background: var(--surface); }
+.registry-workspace.people-workspace [data-slot="button"][data-variant="outline"] { border-color: var(--line); color: var(--ink-soft); background: var(--surface); box-shadow: none; }
+.registry-workspace.people-workspace [data-slot="button"][data-variant="outline"]:hover { border-color: var(--teal); color: var(--teal-dark); background: var(--teal-soft); }
+.registry-workspace.people-workspace .people-danger[data-slot="button"][data-variant="outline"] { border-color: rgba(180, 35, 24, 0.35); color: var(--danger); background: var(--surface); }
 .registry-workspace.people-workspace .people-danger[data-variant="outline"]:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
 
 /* Policy: history first; the existing form opens on Change policy. */
