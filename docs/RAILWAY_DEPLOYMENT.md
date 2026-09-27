@@ -1,13 +1,29 @@
 # Railway Deployment
 
 Version: 0.1.0-beta.9
-Last updated: 2026-09-26
+Last updated: 2026-09-27
 
 This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.
-The current beta.8 release is tracked in [Beta.8 Release Delivery](BETA8_RELEASE_DELIVERY.md).
+The current beta.9 release is tracked in [Beta.9 Release Delivery](BETA9_RELEASE_DELIVERY.md).
 The historical operational beta evidence remains in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
 
-## Beta.8 production status
+## Beta.9 production status
+
+On 27 September 2026, production API `7ccb9f32-10bf-4efa-8f24-fcad805e6476`
+and web `d8e6fc04-d028-4579-aaaa-c69af7758394` succeeded from
+`4e728b16cc04f11faa7e23ad0657913b67f50577` in API-ready-then-web order.
+Direct API, web, same-origin API and www version responses matched beta.9 and
+that revision. Health, readiness, cache headers, preserved owner/MFA session,
+private export, anonymous denial and CLI doctor checks passed. The new homepage
+and enabled admin setting rendered correctly. No migration was required.
+
+The existing 26 September recovery point passed the 26-hour freshness policy
+before promotion. No new capture or restore is claimed. The beta.8 pair below
+remains the application rollback target. GitHub release assets are published
+with verified checksums; npm remains beta.8. Documentation-only follow-up commits
+do not change the deployed source revision.
+
+## Historical beta.8 production status
 
 On 26 September 2026, production API `fca21294-e5ee-414f-91b8-cc612e4e6203`
 and web `a53c83e5-33e3-45b4-98f2-b8d8828b221a` succeeded from

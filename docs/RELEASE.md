@@ -7,10 +7,14 @@ MySkills beta releases are verification-first and approval-gated. A passing comm
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
 
-## Beta.9 Candidate
+## Beta.9 Release Record
+
+Released tag: `v0.1.0-beta.9`, source `4e728b16cc04f11faa7e23ad0657913b67f50577`.
 
 The homepage and optional landing setting are described in [Landing Page](LANDING_PAGE.md).
-Current delivery evidence is in [Beta.9 Release Delivery](BETA9_RELEASE_DELIVERY.md).
+The GitHub prerelease and production API/web promotion are verified. Required
+CI, the canonical gate, staging and production checks passed; exact delivery
+evidence is in [Beta.9 Release Delivery](BETA9_RELEASE_DELIVERY.md).
 This release updates GitHub and the hosted website; npm remains beta.8.
 
 ## Beta.8 Release Record

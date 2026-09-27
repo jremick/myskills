@@ -5,11 +5,14 @@ Last updated: 2026-09-27
 
 Target release: `v0.1.0-beta.9`.
 
-## Beta.9 Candidate
+## Beta.9 Release Record
 
-The optional marketing homepage is implemented and locally verified. Publication
-and production promotion are tracked in [Beta.9 Release Delivery](BETA9_RELEASE_DELIVERY.md).
-The outbox/email-settings workstream is separate. Required gates remain in force.
+The optional marketing homepage is published on GitHub and live at myskills.sh.
+The immutable tag and both production services use source
+`4e728b16cc04f11faa7e23ad0657913b67f50577`. Canonical release verification,
+required CI, staging acceptance and production browser checks passed. See
+[Beta.9 Release Delivery](BETA9_RELEASE_DELIVERY.md) for exact evidence.
+The outbox/email-settings workstream is separate. npm remains beta.8.
 
 ## Beta.8 Release Record
 
