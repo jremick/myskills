@@ -1009,7 +1009,7 @@ test("login stores session metadata without persisting bearer tokens and logout 
   fireEvent.click(view.getByRole("button", { name: /sign in/i }));
 
   await view.findByText("reader@example.com");
-  await view.findByRole("link", { name: "Release Notes Helper" });
+  await view.findByRole("link", { name: /Release Notes Helper/ });
   assert.equal(window.location.pathname, "/registry");
   assert.equal(document.body.textContent?.includes("web-session-token"), false);
   const stored = JSON.parse(window.localStorage.getItem("myskills-app:web-session") ?? "{}") as Record<string, unknown>;
