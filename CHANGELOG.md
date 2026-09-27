@@ -2,6 +2,18 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
+## 0.1.0-beta.11 - 2026-09-27
+
+Target release: `v0.1.0-beta.11`.
+
+- Bring the approved Libraries design across the application with clearer lists, selected details, labels and responsive navigation.
+- Put exact-release use and artifact review ahead of supporting evidence. Preserve hash-bound approval, permission checks and lifecycle confirmations.
+- Open architecture and target setup on request. Keep unsaved-draft protection, target-specific update review, batch selection and rollback context.
+- Improve Teams, Organizations, Admin and account workflows with focused tasks, local feedback and usable controls on small screens.
+- Preserve the existing API, CLI, package and database contracts. No new schema migration or dependency.
+
+This release targets GitHub and the hosted app. npm remains beta.8; the CLI archive is built and verified as a GitHub release asset.
+
 ## 0.1.0-beta.10 - 2026-09-27
 
 Target release: `v0.1.0-beta.10`.
