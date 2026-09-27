@@ -19,6 +19,8 @@ test("session users can create, list, use, and revoke scoped API tokens", async 
     email: "author@example.com",
     roles: ["author"],
   });
+  assert.equal(await authStore.findUserBySessionTokenHash(session), null);
+  assert.equal((await authStore.findUserBySessionTokenHash(createHash("sha256").update(session).digest("hex")))?.id, "author-1");
 
   const create = await app.inject({
     method: "POST",
@@ -43,7 +45,8 @@ test("session users can create, list, use, and revoke scoped API tokens", async 
   assert.equal(token.lastUsedAt, null);
   assert.equal(JSON.stringify(create.json()).includes("tokenHash"), false);
 
-  const stored = await authStore.findUserByApiTokenHash(hashApiToken(token.token));
+  assert.equal(await authStore.findUserByApiTokenHash(token.token), null);
+  const stored = await authStore.findUserByApiTokenHash(createHash("sha256").update(token.token).digest("hex"));
   assert.equal(stored?.id, "author-1");
   assert.deepEqual(stored?.apiTokenScopes, ["profile:read", "skills:submit"]);
   assert.equal(await authStore.findUserByApiTokenHash(hashApiToken(`${token.tokenPrefix}wrong-secret`)), null);
