@@ -1,11 +1,11 @@
 # Operational Beta Delivery Brief
 
-Version: 0.1.0-beta.11
+Version: 0.1.0-beta.12
 Last updated: 2026-09-27
 
-Target release: `v0.1.0-beta.11`.
+Target release: `v0.1.0-beta.12`.
 
-## Beta.11 candidate
+## Beta.12 candidate
 
 The owner authorized all four application redesign waves through push, deployment
 and release. The candidate aligns Registry, author/review workspaces, runtime
@@ -14,7 +14,7 @@ design. Existing exact-version, authorization and mutation contracts remain.
 
 This record is preparation, not deployment proof. The final source must pass
 `npm run release:verify`, required CI, Opus visual review and staging acceptance
-before production. See [Beta.11 release delivery](BETA11_RELEASE_DELIVERY.md).
+before production. See [Beta.12 release delivery](BETA12_RELEASE_DELIVERY.md).
 GitHub and hosted services are in scope; npm remains beta.8.
 
 ## Beta.10 Release Record

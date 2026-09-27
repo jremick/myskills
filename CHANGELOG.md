@@ -2,7 +2,15 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
-## 0.1.0-beta.11 - 2026-09-27
+## 0.1.0-beta.12 - 2026-09-27
+
+Target release: `v0.1.0-beta.12`.
+
+- Deliver the four-wave application redesign described in the beta.11 candidate below.
+- Make the Admin keyboard browser test wait for confirmation closure and restored focus before checking tab navigation.
+- Preserve the immutable beta.11 tag after its tagged verification failed; no beta.11 production release was published.
+
+## 0.1.0-beta.11 - 2026-09-27 (superseded candidate)
 
 Target release: `v0.1.0-beta.11`.
 

@@ -1,6 +1,6 @@
-# Beta.11 release delivery
+# Beta.12 release delivery
 
-Status: superseded candidate. The immutable beta.11 tag was created, but its tagged workflow failed before production promotion or GitHub release publication. Continue with [Beta.12 release delivery](BETA12_RELEASE_DELIVERY.md).
+Status: candidate preparation. No beta.12 deployment or release is claimed by this record.
 
 ## Approved scope
 
@@ -13,7 +13,7 @@ Opus 5.5 leads design and implementation through the personal Claude subscriptio
 ## Verification and promotion
 
 1. Complete all wave acceptance scenarios and resolve material visual findings.
-2. Select one immutable beta.11 source. Pass the clean canonical `npm run release:verify` gate and protected-branch checks, retaining reports and release artifacts.
+2. Select one immutable beta.12 source. Pass the clean canonical `npm run release:verify` gate and protected-branch checks, retaining reports and release artifacts.
 3. Deploy that source to staging API, wait for readiness, then deploy staging web. Verify exact identities and representative authenticated browser workflows, including export and anonymous denial.
 4. Merge through the protected branch, confirm the tested source is included, create the immutable tag and pass its verification-only workflow.
 5. Read back a completed backup within the existing 26-hour policy. Promote production API and wait for readiness before promoting web from the same source.
@@ -27,15 +27,11 @@ For a material runtime regression, redeploy the previous API, verify readiness, 
 
 Stop promotion on failed required checks, incorrect source identity, migration errors, missing recovery evidence, permission regressions or material visual defects. Record open limitations without substituting local-source results for deployed proof.
 
-## Superseded verification attempt
+## Candidate supersession
 
-PR #95 merged with the approved redesign, required checks and clean canonical
-verification passing on `da2558a1825e0caf9b1304c7429b3fa2ae50479b`. Opus passed
-the final visual review. Tag `v0.1.0-beta.11` preserves that source. Its
-[tagged workflow](https://github.com/jremick/myskills/actions/runs/36309344236)
-failed in two Admin keyboard tests after 78 browser scenarios passed. The test
-started keyboard navigation after observing the request, before the confirmation
-dialog finished closing and restored focus. The replacement candidate waits for
-those visible outcomes and retains the keyboard focus assertion. No application
-source change is required. Production remained beta.10; no beta.11 GitHub release
-or npm publication occurred.
+Beta.11 stopped at tagged verification because an Admin browser test began its
+keyboard assertion before the confirmation dialog closed and restored focus.
+Beta.12 waits for those visible results before testing the End key. Application
+source and the Opus-approved design are unchanged. The immutable beta.11 tag is
+retained; its incomplete delivery is recorded in
+[Beta.11 release delivery](BETA11_RELEASE_DELIVERY.md).
