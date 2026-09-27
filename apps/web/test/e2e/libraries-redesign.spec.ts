@@ -7,7 +7,7 @@ const digest = "a".repeat(64);
 
 async function libraryScene(page: Page, options: { empty?: boolean; reader?: boolean; failCreate?: boolean; failDelete?: boolean } = {}) {
   const user = { id: "design-owner", email: "owner@example.test", name: "Library owner", status: "active", roles: options.reader ? ["member"] : ["owner"], emailVerified: true, mfaVerified: true };
-  await page.addInitScript((user) => localStorage.setItem("myskills-app:web-session", JSON.stringify({ expiresAt: "2027-09-27T00:00:00Z", user })), user);
+  await page.addInitScript((user) => { if (location.origin !== "null") localStorage.setItem("myskills-app:web-session", JSON.stringify({ expiresAt: "2027-09-27T00:00:00Z", user })); }, user);
   const writes: Array<{ path: string; body: Record<string, unknown> }> = [];
   let created = !options.empty;
   let createAttempts = 0;
@@ -202,4 +202,57 @@ test("library deletion is cancelable, retryable and selects the remaining librar
   await expect(page.getByRole("heading", { name: "Support team", exact: true })).toBeVisible();
   expect(state.writes.map((w) => w.path)).toEqual(["/v1/libraries/personal", "/v1/libraries/personal"]);
   await testInfo.attach("delete-receipt", { body: JSON.stringify(state.writes), contentType: "application/json" });
+});
+
+// Reference fidelity and usability, authored before the sidebar translation.
+// A narrower rail or flattened footer must not hide navigation/account actions;
+// underline library selection must retain keyboard operation and drafts.
+test("reference shell keeps navigation and library controls usable at desktop and mobile sizes", async ({ page }, info) => {
+  const state = await libraryScene(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/libraries");
+  await expect(page.getByRole("heading", { name: "My skills", exact: true })).toBeVisible();
+  for (const width of [1440, 1024, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await fitsPage(page);
+    await expect(page.locator(".library-page-header")).toHaveCSS("border-bottom-width", "0px");
+    await page.screenshot({ path: info.outputPath(`reference-libraries-${width}.png`), animations: "disabled" });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const sidebar = page.getByRole("complementary", { name: "Primary navigation" });
+  expect((await sidebar.boundingBox())!.width).toBe(240);
+  await expect(sidebar).toHaveCSS("background-color", "rgb(247, 249, 251)");
+  await expect(sidebar.getByRole("link", { name: "Libraries", exact: true })).toHaveCSS("box-shadow", "rgb(11, 112, 102) 2px 0px 0px 0px inset");
+  await expect(sidebar.getByRole("link", { name: "Registry", exact: true })).toHaveCSS("font-weight", "400");
+  await expect(sidebar.getByText("MFA verified", { exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: "Sign out", exact: true })).toBeInViewport();
+  const personal = page.getByRole("navigation", { name: "Your libraries" }).getByRole("button", { name: "My skills", exact: true });
+  await expect(personal).toHaveCSS("border-bottom-color", "rgb(11, 112, 102)");
+  await expect(personal).toHaveCSS("border-bottom-width", "2px");
+  await page.getByRole("button", { name: "Collapse navigation", exact: true }).click();
+  expect((await sidebar.boundingBox())!.width).toBe(64);
+  await expect(sidebar.getByRole("link", { name: "Libraries", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "Account settings", exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("reference-sidebar-collapsed.png"), animations: "disabled" });
+  await page.getByRole("button", { name: "Expand navigation", exact: true }).click();
+  const team = page.getByRole("navigation", { name: "Your libraries" }).getByRole("button", { name: /Support team.*team library/ });
+  await team.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Support team", exact: true })).toBeVisible();
+  await expect(team).toHaveAttribute("aria-current", "true");
+  await personal.click();
+  await expect(personal).toHaveAttribute("aria-current", "true");
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(sidebar).not.toBeVisible();
+    await team.click();
+    await expect(page.getByRole("heading", { name: "Support team", exact: true })).toBeVisible();
+    await personal.click();
+    await page.getByRole("button", { name: "More", exact: true }).click();
+    await expect(page.locator(".mobile-more-menu").getByRole("link", { name: "Settings", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "More", exact: true })).toBeFocused();
+    await fitsPage(page);
+  }
+  expect(state.writes).toEqual([]);
 });
