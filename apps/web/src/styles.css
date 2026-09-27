@@ -1,6 +1,7 @@
 @import "./components/marketing/marketing.css";
 @import "./components/library/libraries.css";
 @import "./components/registry/registry.css";
+@import "./components/registry/author-review.css";
 @import "./components/architecture/editor/architecture-editor.css";
 @import "@xyflow/react/dist/style.css";
 @import "tailwindcss";

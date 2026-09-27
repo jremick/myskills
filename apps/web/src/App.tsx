@@ -55,7 +55,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Frame, FrameDescription, FrameHeader, FramePanel, FrameTitle } from "@/components/reui/frame";
 import { ArchitecturesDashboard } from "@/components/architecture/ArchitecturesDashboard";
 import { OrganizationsDashboard } from "@/components/organization/OrganizationsDashboard";
@@ -68,6 +67,8 @@ import { ManagedSkillsDashboard } from "@/components/registry/ManagedSkillsDashb
 import { SubmissionEvidencePanel } from "@/components/registry/SubmissionEvidencePanel";
 import { SkillImprovementPanel } from "@/components/registry/SkillImprovementPanel";
 import { BundleWorkspace } from "@/components/registry/BundleWorkspace";
+import { chipTone, findingsLabel, lifecycleLabel, reviewStatusLabel, securityStatusLabel, severityLabel, visibilityLabel } from "@/components/registry/status-display";
+import { useSplitLayout } from "@/components/registry/useSplitLayout";
 import {
   createRegistryClient,
   exportCommand,
@@ -1678,25 +1679,34 @@ function NotFoundPage({ onHome, onLogin, showLandingLink }: { onHome: () => void
   );
 }
 
-function SubmitDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
+function SubmitDashboard({ client }: { client: RegistryClient; session: WebSession }) {
   const [file, setFile] = useState<File | null>(null);
   const [feedbackId, setFeedbackId] = useState<string | null>(null);
   const [state, setState] = useState<LoadState>("idle");
   const [submissionsState, setSubmissionsState] = useState<LoadState>("loading");
-  const [message, setMessage] = useState<string | null>(null);
+  // Each message renders in the part of the page that produced it.
+  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const [listMessage, setListMessage] = useState<string | null>(null);
+  const [rowMessage, setRowMessage] = useState<{ submissionId: string; text: string; alert: boolean } | null>(null);
   const [result, setResult] = useState<SubmitSkillResult | null>(null);
   const [submissions, setSubmissions] = useState<UserSubmissionSummary[]>([]);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<ConfirmationRequest | null>(null);
+  const baseId = useId();
+  const resultHeadingRef = useRef<HTMLHeadingElement>(null);
+  const listHeadingRef = useRef<HTMLHeadingElement>(null);
+  const feedbackTriggers = useRef(new Map<string, HTMLButtonElement>());
+  const focusTarget = useRef<{ kind: "result" } | { kind: "trigger"; id: string } | null>(null);
 
   async function refreshSubmissions() {
     setSubmissionsState("loading");
+    setListMessage(null);
     try {
       setSubmissions(await client.listUserSubmissions());
       setSubmissionsState("ready");
     } catch (error) {
-      setMessage(safeSubmitErrorMessage(error));
+      setListMessage(safeSubmitErrorMessage(error));
       setSubmissionsState("error");
     }
   }
@@ -1705,23 +1715,34 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
     void refreshSubmissions();
   }, [client]);
 
+  // Focus follows the result, or returns to a row's feedback trigger (or the
+  // list heading when the row has gone) once any dialog has closed.
+  useEffect(() => {
+    const target = focusTarget.current;
+    if (!target || confirmation) return;
+    const element = target.kind === "result" ? resultHeadingRef.current : feedbackTriggers.current.get(target.id) ?? listHeadingRef.current;
+    if (!element?.isConnected) return;
+    focusTarget.current = null;
+    element.focus();
+  });
+
   async function submitPackage() {
     setMessage(null);
     setResult(null);
     if (!file) {
-      setMessage("Choose a package archive before submitting.");
+      setMessage({ text: "Choose a package archive before submitting.", error: true });
       return;
     }
     if (!isZipArchive(file)) {
-      setMessage("Choose a .zip package archive.");
+      setMessage({ text: "Choose a .zip package archive.", error: true });
       return;
     }
     if (file.size === 0) {
-      setMessage("Package archive is empty.");
+      setMessage({ text: "Package archive is empty.", error: true });
       return;
     }
     if (file.size > MAX_WEB_ARCHIVE_BYTES) {
-      setMessage("Package archive exceeds 10 MB.");
+      setMessage({ text: "Package archive exceeds 10 MB.", error: true });
       return;
     }
     setState("loading");
@@ -1732,21 +1753,22 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
       });
       setResult(submitted);
       setState("ready");
+      focusTarget.current = { kind: "result" };
       await refreshSubmissions();
     } catch (error) {
-      setMessage(safeSubmitErrorMessage(error));
+      setMessage({ text: safeSubmitErrorMessage(error), error: true });
       setState("error");
     }
   }
 
   async function exportSubmission(submission: UserSubmissionSummary) {
-    setMessage(null);
+    setRowMessage(null);
     setExportingId(submission.id);
     try {
       const bundle = await client.exportUserSubmission(submission.id);
       downloadJsonFile(`${submission.slug}-${submission.version}.myskills.json`, bundle);
     } catch (error) {
-      setMessage(safeSubmitErrorMessage(error));
+      setRowMessage({ submissionId: submission.id, text: safeSubmitErrorMessage(error), alert: true });
     } finally {
       setExportingId(null);
     }
@@ -1758,6 +1780,7 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
       title: "Withdraw this submission?",
       description: "The version will leave the active review queue. Record why the author is withdrawing it.",
       confirmLabel: "Withdraw submission",
+      details: [{ label: "Release", value: `${submission.slug}@${submission.version}` }],
       destructive: true,
       requireReason: true,
       onConfirm: (confirmedReason) => commitSubmissionWithdrawal(submission, confirmedReason),
@@ -1765,203 +1788,223 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
   }
 
   async function commitSubmissionWithdrawal(submission: UserSubmissionSummary, confirmedReason: string) {
-    setMessage(null);
+    setRowMessage(null);
     setActioningId(submission.id);
     try {
       await client.performSubmissionAction(submission.id, "withdraw", confirmedReason);
+      focusTarget.current = { kind: "trigger", id: submission.id };
       await refreshSubmissions();
     } catch (error) {
       const safeMessage = safeSubmitErrorMessage(error);
-      setMessage(safeMessage);
+      // The dialog owns the alert; the row keeps a quiet copy after it closes.
+      setRowMessage({ submissionId: submission.id, text: safeMessage, alert: false });
       throw new Error(safeMessage);
     } finally {
       setActioningId(null);
     }
   }
 
+  function closeFeedback(submissionId: string) {
+    setFeedbackId(null);
+    focusTarget.current = { kind: "trigger", id: submissionId };
+  }
+
+  function chooseCorrection() {
+    setFile(null);
+    setResult(null);
+    setMessage({ text: "Choose the corrected archive with a new semantic version. Previous submissions remain immutable.", error: false });
+    const input = document.getElementById("package-archive") as HTMLInputElement | null;
+    if (input) { input.value = ""; input.focus(); input.scrollIntoView?.({ block: "center" }); }
+  }
+
+  const resultReview = result ? reviewStatusLabel(result.submission.reviewStatus) : null;
+  const resultSecurity = result ? securityStatusLabel(result.submission.securityStatus) : null;
+  const resultFindings = result ? findingsLabel(result.scan.findingCount) : null;
+
   return (
-    <main className="submit-workspace shadcn-submit-workspace" aria-label="Skill package submission">
-      <section className="admin-hero shadcn-submit-hero">
-        <div>
-          <Badge className="shadcn-review-eyebrow" variant="outline">Author workflow</Badge>
-          <h1>Submit package</h1>
-          <p aria-live="polite">{session.user.email} · {state === "loading" ? "Uploading archive…" : "author submission"}</p>
-        </div>
-      </section>
+    <main className="registry-workspace author-review submit-dashboard" aria-label="Skill package submission">
+      <header className="registry-page-head">
+        <h1>Submit package</h1>
+      </header>
 
-      {message && <div className="safe-message admin-message" role="status">{message}</div>}
-
-      <section className="submit-layout shadcn-submit-layout">
-        <Card className="submit-panel shadcn-submit-panel shadcn-console-card" aria-label="Package upload">
-          <CardHeader className="admin-panel-heading shadcn-card-header">
-            <span className="admin-panel-icon"><Upload size={18} aria-hidden="true" /></span>
-            <div>
-              <CardTitle>Package archive</CardTitle>
-              <CardDescription>{file ? `${file.name} · ${formatBytes(file.size)}` : "No file selected"}</CardDescription>
-            </div>
-          </CardHeader>
-
-          <CardContent className="submit-form shadcn-submit-form">
-            <form className="submit-form-fields" onSubmit={(event) => {
-              event.preventDefault();
-              void submitPackage();
-            }}>
-              <div className="submit-guidance">
-                <strong>Package requirements</strong>
-                <span>.zip archive, 10 MB maximum, semantic version metadata, and no private paths or install hooks without review notes.</span>
-              </div>
-              <label className="file-picker" htmlFor="package-archive">
-                <PackageOpen size={26} aria-hidden="true" />
-                <span>
-                  <strong>{file?.name ?? "Choose .zip package"}</strong>
-                  <small>{file ? formatBytes(file.size) : "Archive upload"}</small>
-                </span>
-                <input
-                  accept=".zip,application/zip,application/x-zip-compressed"
-                  id="package-archive"
-                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                  type="file"
-                />
-              </label>
-
-              <Button className="save-button shadcn-action-button" disabled={state === "loading" || !file} size="sm" type="submit">
-                <Upload size={16} aria-hidden="true" />
-                Submit for review
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="submit-panel submit-result-panel shadcn-submit-panel shadcn-console-card" aria-label="Submission result">
-          <CardHeader className="admin-panel-heading shadcn-card-header">
-            <span className="admin-panel-icon"><ClipboardList size={18} aria-hidden="true" /></span>
-            <div>
-              <CardTitle>Submission status</CardTitle>
-              <CardDescription>{result ? `${result.submission.slug}@${result.submission.version}` : "Awaiting upload"}</CardDescription>
-            </div>
-          </CardHeader>
-
-          {result ? (
-            <CardContent className="submit-result shadcn-submit-result">
-              <div className={result.scan.findings.length > 0 ? "state-banner state-banner-warning" : "state-banner state-banner-success"}>
-                {result.scan.findings.length > 0 ? (
-                  <>
-                    <CircleAlert size={18} aria-hidden="true" />
-                    <span>Review the scan warnings before a maintainer approves this package.</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck size={18} aria-hidden="true" />
-                    <span>No scan findings. The package is ready for maintainer review.</span>
-                  </>
-                )}
-              </div>
-              <dl className="metadata-grid">
-                <Metadata label="Submission ID" value={result.submission.id} monospace />
-                <Metadata label="Skill" value={result.submission.slug} />
-                <Metadata label="Version" value={result.submission.version} />
-                <Metadata label="Review" value={result.submission.reviewStatus} />
-                <Metadata label="Security" value={result.submission.securityStatus} />
-                <Metadata label="Findings" value={String(result.scan.findingCount)} />
+      <div className="registry-surface">
+        <section aria-labelledby={`${baseId}-upload`} className="submit-upload">
+          <h2 id={`${baseId}-upload`}>Package archive</h2>
+          <form className="submit-upload-form" onSubmit={(event) => {
+            event.preventDefault();
+            void submitPackage();
+          }}>
+            <label className="file-picker submit-picker" htmlFor="package-archive">
+              <PackageOpen size={20} aria-hidden="true" />
+              <span>
+                <strong>{file?.name ?? "Choose .zip package"}</strong>
+                <small>{file ? formatBytes(file.size) : "Archive upload"}</small>
+              </span>
+              <input
+                accept=".zip,application/zip,application/x-zip-compressed"
+                aria-describedby={`${baseId}-requirements`}
+                id="package-archive"
+                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                type="file"
+              />
+            </label>
+            <Button disabled={state === "loading" || !file} size="sm" type="submit">
+              <Upload size={16} aria-hidden="true" />
+              Submit for review
+            </Button>
+          </form>
+          <p className="registry-muted" id={`${baseId}-requirements`}>.zip archive, 10 MB maximum, semantic version metadata, and no private paths or install hooks without review notes.</p>
+          {state === "loading" && <p className="registry-muted" role="status">Uploading archive…</p>}
+          {message && <p className="author-status" data-tone={message.error ? "danger" : undefined} role={message.error ? "alert" : "status"}>{message.text}</p>}
+          {result && resultReview && resultSecurity && resultFindings && (
+            <div className="submit-result-block">
+              <h3 ref={resultHeadingRef} tabIndex={-1}>Submitted {result.submission.slug}@{result.submission.version}</h3>
+              <p className="author-chips">
+                <span className="registry-chip" data-tone={chipTone(resultReview.tone)}>{resultReview.label}</span>
+                <span className="registry-chip" data-tone={chipTone(resultSecurity.tone)}>{resultSecurity.label}</span>
+                <span className="registry-chip" data-tone={chipTone(resultFindings.tone)}>{resultFindings.label}</span>
+              </p>
+              <p className="author-status" data-tone={result.scan.findings.length > 0 ? "amber" : "teal"}>
+                {result.scan.findings.length > 0 ? "Review the scan warnings before a maintainer approves this package." : "No scan findings. The package is ready for maintainer review."}
+              </p>
+              <dl className="registry-facts" data-labels="wide">
+                <div>
+                  <dt>Submission ID</dt>
+                  <dd className="registry-mono">{result.submission.id}</dd>
+                </div>
               </dl>
-              <div className="finding-list" aria-label="Scan findings">
-                {result.scan.findings.length === 0 ? (
-                  <div className="empty-state compact">
-                    <ShieldCheck size={22} aria-hidden="true" />
-                    <strong>No scan findings.</strong>
-                    <span>Ready for maintainer review.</span>
-                  </div>
-                ) : result.scan.findings.map((finding, index) => (
-                  <div className="finding-row" key={`${finding.category}-${finding.path ?? "package"}-${index}`}>
-                    <StatusToken value={finding.severity} />
-                    <span>
-                      <strong>{finding.category}</strong>
-                      <small>{finding.path ?? "package"}</small>
-                    </span>
-                    <p>{finding.message}</p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          ) : (
-            <div className="empty-detail">
-              <Upload size={42} aria-hidden="true" />
-              <h2>No submission yet</h2>
-              <p>Submitted packages appear here after server validation.</p>
+              {result.scan.findings.length > 0 && (
+                <ul aria-label="Scan findings" className="submit-findings">
+                  {result.scan.findings.map((finding, index) => {
+                    const severity = severityLabel(finding.severity);
+                    return (
+                      <li key={`${finding.category}-${finding.path ?? "package"}-${index}`}>
+                        <span className="registry-chip" data-tone={chipTone(severity.tone)}>{severity.label}</span>
+                        <strong>{finding.category}</strong>
+                        <code>{finding.path ?? "package"}</code>
+                        <p>{finding.message}</p>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           )}
-        </Card>
+        </section>
 
-        <Card className="submit-panel user-submissions-panel shadcn-submit-panel shadcn-console-card" aria-label="My submitted skills">
-          <CardHeader className="admin-panel-heading shadcn-card-header">
-            <span className="admin-panel-icon"><PackageOpen size={18} aria-hidden="true" /></span>
-            <div>
-              <CardTitle>My submitted skills</CardTitle>
-              <CardDescription aria-live="polite">{submissionsState === "loading" ? "Loading…" : `${submissions.length} versions`}</CardDescription>
+        <section aria-busy={submissionsState === "loading"} aria-labelledby={`${baseId}-submitted`} className="registry-list submit-list">
+          <div className="registry-list-label">
+            <h2 id={`${baseId}-submitted`} ref={listHeadingRef} tabIndex={-1}>My submitted skills</h2>
+            <span aria-live="polite">{submissionsState === "ready" ? String(submissions.length) : ""}</span>
+          </div>
+          {submissionsState === "loading" && submissions.length === 0 && (
+            <div className="registry-skeleton" role="status" aria-live="polite">
+              <span className="sr-only">Loading submissions…</span>
+              {[0, 1, 2].map((item) => <div className="registry-skeleton-row" key={item}><span /><span /></div>)}
             </div>
-          </CardHeader>
-          <CardContent className="submission-list shadcn-submission-list">
-            {submissions.map((submission) => (
-              <div className="submission-row" key={submission.id}>
-                <span className="cell-main">
-                  <strong>{submission.title}</strong>
-                  <small>{submission.slug}@{submission.version}</small>
-                </span>
-                <span className="submission-statuses">
-                  <StatusToken value={submission.reviewStatus} />
-                  <StatusToken value={submission.lifecycleStatus} />
-                  <StatusToken value={submission.securityStatus} />
-                  <span>{formatBytes(submission.artifact.byteSize)}</span>
-                </span>
-                <span className="submission-actions">
-                  {client.getUserSubmissionDetail && <Button type="button" size="sm" variant="outline" onClick={() => setFeedbackId(submission.id)}>View feedback for {submission.version}</Button>}
-                  <Button
-                    className="save-button compact-button shadcn-action-button"
-                    disabled={exportingId === submission.id}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                    onClick={() => void exportSubmission(submission)}
-                  >
-                    <Download size={15} aria-hidden="true" />
-                    Export
-                  </Button>
-                  {(submission.allowedActions ?? []).includes("withdraw") && (
-                    <Button
-                      className="danger-button compact-button shadcn-action-button"
-                      disabled={actioningId === submission.id}
-                      size="sm"
-                      type="button"
-                      variant="destructive"
-                      onClick={() => void withdrawSubmission(submission)}
-                    >
-                      <X size={15} aria-hidden="true" />
-                      Withdraw
-                    </Button>
-                  )}
-                </span>
-              </div>
-            ))}
-            {submissionsState === "ready" && submissions.length === 0 && (
-              <div className="empty-state compact">
-                <PackageOpen size={22} aria-hidden="true" />
-                <strong>No submitted skills.</strong>
-                <span>Validated submissions will appear here for export.</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-      {feedbackId && <Card><CardContent>
-        <SubmissionEvidencePanel key={feedbackId} client={client} submissionId={feedbackId} mode="author" onCorrect={() => {
-          setFile(null);
-          setResult(null);
-          setMessage("Choose the corrected archive with a new semantic version. Previous submissions remain immutable.");
-          const input = document.getElementById("package-archive") as HTMLInputElement | null;
-          if (input) { input.value = ""; input.focus(); input.scrollIntoView?.({ block: "center" }); }
-        }} />
-        <PackageFileViewer resourceKey={`author:${feedbackId}`} loadBundle={() => client.exportUserSubmission(feedbackId)} />
-      </CardContent></Card>}
+          )}
+          {submissionsState === "error" && (
+            <div className="registry-list-state">
+              <p role="alert"><strong>{listMessage ?? "Your submissions could not load."}</strong></p>
+              <Button size="sm" type="button" variant="outline" onClick={() => void refreshSubmissions()}>
+                <RotateCw size={15} aria-hidden="true" />
+                Retry
+              </Button>
+            </div>
+          )}
+          {submissions.length > 0 && (
+            <ul className="registry-rows submit-rows">
+              {submissions.map((submission) => {
+                const titleId = `${baseId}-${submission.id}-title`;
+                const feedbackPanelId = `${baseId}-${submission.id}-feedback`;
+                const feedbackOpen = feedbackId === submission.id;
+                const review = reviewStatusLabel(submission.reviewStatus);
+                const security = securityStatusLabel(submission.securityStatus);
+                const findings = findingsLabel(submission.findingCount);
+                return (
+                  <li className="submit-item" key={submission.id}>
+                    <div className="registry-row submission-row">
+                      <span className="registry-tile" data-tone={tileTone(submission.slug)} aria-hidden="true" />
+                      <span className="registry-row-text">
+                        <span className="registry-row-title" id={titleId}>{submission.title}</span>
+                        <span className="registry-row-meta">
+                          <code>{submission.slug}@{submission.version}</code>
+                          <span>{formatBytes(submission.artifact.byteSize)}</span>
+                          <span>Submitted {formatDate(submission.createdAt)}</span>
+                        </span>
+                        <span className="author-chips">
+                          <span className="registry-chip" data-tone={chipTone(review.tone)}>{review.label}</span>
+                          <span className="registry-chip" data-tone={chipTone(security.tone)}>{security.label}</span>
+                          <span className="registry-chip" data-tone={chipTone(findings.tone)}>{findings.label}</span>
+                        </span>
+                      </span>
+                      <span className="submit-row-actions">
+                        {client.getUserSubmissionDetail && (
+                          <Button
+                            aria-controls={feedbackPanelId}
+                            aria-describedby={titleId}
+                            aria-expanded={feedbackOpen}
+                            ref={(element: HTMLButtonElement | null) => {
+                              if (element) feedbackTriggers.current.set(submission.id, element);
+                              else feedbackTriggers.current.delete(submission.id);
+                            }}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                            onClick={() => setFeedbackId((current) => current === submission.id ? null : submission.id)}
+                          >
+                            View feedback for {submission.version}
+                          </Button>
+                        )}
+                        <Button
+                          aria-describedby={titleId}
+                          disabled={exportingId === submission.id}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                          onClick={() => void exportSubmission(submission)}
+                        >
+                          <Download size={15} aria-hidden="true" />
+                          Export
+                        </Button>
+                        {(submission.allowedActions ?? []).includes("withdraw") && (
+                          <Button
+                            aria-describedby={titleId}
+                            className="author-danger"
+                            disabled={actioningId === submission.id}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                            onClick={() => void withdrawSubmission(submission)}
+                          >
+                            <X size={15} aria-hidden="true" />
+                            Withdraw
+                          </Button>
+                        )}
+                      </span>
+                    </div>
+                    {rowMessage?.submissionId === submission.id && (
+                      <p className="author-status submit-row-message" data-tone="danger" role={rowMessage.alert ? "alert" : "status"}>{rowMessage.text}</p>
+                    )}
+                    {feedbackOpen && (
+                      <div className="submit-feedback" id={feedbackPanelId}>
+                        <SubmissionEvidencePanel client={client} submissionId={submission.id} mode="author" focusOnOpen onClose={() => closeFeedback(submission.id)} onCorrect={chooseCorrection} />
+                        <PackageFileViewer resourceKey={`author:${submission.id}`} loadBundle={() => client.exportUserSubmission(submission.id)} />
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {submissionsState === "ready" && submissions.length === 0 && (
+            <div className="registry-list-state">
+              <strong>No submitted skills.</strong>
+              <p>Validated submissions will appear here for export.</p>
+            </div>
+          )}
+        </section>
+      </div>
       {confirmation && <ConfirmationDialog key={confirmation.key} request={confirmation} onClose={() => setConfirmation(null)} />}
     </main>
   );
@@ -1978,25 +2021,40 @@ function appendUniqueById<T extends { id: string }>(current: T[], incoming: T[])
 
 function ReviewDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
   const [state, setState] = useState<LoadState>("loading");
+  // Queue load failures stay in the queue; decision and artifact messages stay
+  // beside the submission they belong to.
   const [message, setMessage] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ submissionId: string; text: string } | null>(null);
+  const [decisionError, setDecisionError] = useState<{ submissionId: string; text: string } | null>(null);
+  const [artifactStatus, setArtifactStatus] = useState<{ submissionId: string; text: string; error: boolean } | null>(null);
   const [submissions, setSubmissions] = useState<ReviewSubmissionSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const listEpoch = useRef(0);
   const morePending = useRef(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [reason, setReason] = useState("");
   const [confirmation, setConfirmation] = useState<ConfirmationRequest | null>(null);
   const [reviewArtifactHashes, setReviewArtifactHashes] = useState<Record<string, string>>({});
   const [artifactLoadingId, setArtifactLoadingId] = useState<string | null>(null);
-  const selected = submissions.find((submission) => submission.id === selectedId) ?? submissions[0] ?? null;
+  const [inspectingId, setInspectingId] = useState<string | null>(null);
+  const [inspectAttempts, setInspectAttempts] = useState<Record<string, number>>({});
+  const [detailOpen, setDetailOpen] = useState(false);
+  const inspecting = useRef<string | null>(null);
+  const { layout, ref: surfaceRef } = useSplitLayout();
+  const queueRef = useRef<HTMLElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const decisionNoticeRef = useRef<HTMLParagraphElement>(null);
+  const queueNoticeRef = useRef<HTMLParagraphElement>(null);
+  const focusTarget = useRef<ReviewFocus | null>(null);
+  const baseId = useId();
+  const stacked = layout === "stack";
+  const selected = submissions.find((submission) => submission.id === selectedId) ?? queueOrder(submissions)[0] ?? null;
   const allowedReviewActions = selected?.allowedActions ?? fallbackReviewActions(selected);
   const selectedArtifactHash = selected ? reviewArtifactHashes[selected.id] ?? selected.approvedArtifactSha256 ?? null : null;
-  const approveDisabled = !allowedReviewActions.includes("approve") || !selectedArtifactHash;
-  const requestChangesDisabled = !allowedReviewActions.includes("request-changes");
-  const rejectDisabled = !allowedReviewActions.includes("reject");
-  const publishDisabled = !allowedReviewActions.includes("publish");
+  const inspectorVisible = Boolean(selected || state === "loading") && (!stacked || detailOpen);
+  const showQueue = !stacked || !inspectorVisible;
+  const queueNotice = notice && !submissions.some((submission) => submission.id === notice.submissionId) ? notice : null;
   const actionHint = selected
     ? selected.securityStatus !== "passed"
       ? "Resolve or document scan findings before approving or publishing."
@@ -2021,6 +2079,8 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
     setState("loading");
     setMessage(null);
     setNotice(null);
+    setDecisionError(null);
+    setArtifactStatus(null);
     try {
       const page = await readReviewPage();
       if (epoch !== listEpoch.current) return;
@@ -2030,7 +2090,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
       setSelectedId((current) => (
         current && nextSubmissions.some((submission) => submission.id === current)
           ? current
-          : nextSubmissions[0]?.id ?? null
+          : queueOrder(nextSubmissions)[0]?.id ?? null
       ));
       setState("ready");
     } catch (error) {
@@ -2063,25 +2123,26 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
     }
   }
 
-  async function commitReviewAction(submission: ReviewSubmissionSummary, action: ReviewActionName, confirmedReason: string) {
-    setMessage(null);
+  // The approval hash is the one shown in the confirmation, captured when it opened.
+  async function commitReviewAction(submission: ReviewSubmissionSummary, action: ReviewActionName, confirmedReason: string, artifactSha256: string | null) {
+    setDecisionError(null);
     setNotice(null);
     const epoch = listEpoch.current;
     try {
-      if (action === "approve" && !selectedArtifactHash) {
-        setMessage("Download the review artifact before approving this submission.");
+      if (action === "approve" && !artifactSha256) {
+        setDecisionError({ submissionId: submission.id, text: "Download the review artifact before approving this submission." });
         return;
       }
       const result = await client.performReviewAction({
         submissionId: submission.id,
         action,
         reason: confirmedReason || undefined,
-        ...(action === "approve" && selectedArtifactHash ? { artifactSha256: selectedArtifactHash } : {}),
+        ...(action === "approve" && artifactSha256 ? { artifactSha256 } : {}),
       });
       if (epoch !== listEpoch.current) return;
+      focusTarget.current = { kind: "decision", id: submission.id };
       await refreshReview();
       if (!result.publishedAt) setSelectedId(result.id);
-      setReason("");
       const actionLabel = action === "request-changes"
         ? "was returned for changes"
         : action === "reject"
@@ -2089,17 +2150,19 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
           : action === "publish"
             ? "was published"
             : "was approved and can now be published";
-      setNotice(`${submission.title} ${actionLabel}.`);
+      setNotice({ submissionId: submission.id, text: `${submission.title} ${actionLabel}.` });
     } catch (error) {
       const safeMessage = safeReviewErrorMessage(error);
-      setMessage(safeMessage);
+      // The dialog owns the alert; the decision band keeps a quiet copy.
+      setDecisionError({ submissionId: submission.id, text: safeMessage });
       throw new Error(safeMessage);
     }
   }
 
   function requestReviewAction(submission: ReviewSubmissionSummary, action: ReviewActionName) {
-    if (action === "approve" && !selectedArtifactHash) {
-      setMessage("Download the review artifact before approving this submission.");
+    const artifactSha256 = reviewArtifactHashes[submission.id] ?? submission.approvedArtifactSha256 ?? null;
+    if (action === "approve" && !artifactSha256) {
+      setDecisionError({ submissionId: submission.id, text: "Download the review artifact before approving this submission." });
       return;
     }
     const labels: Record<ReviewActionName, { title: string; description: string; confirmLabel: string }> = {
@@ -2125,224 +2188,341 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
       },
     };
     const label = labels[action];
+    const release = { label: "Release", value: `${submission.slug}@${submission.version}` };
+    const details = action === "approve" && artifactSha256 ? [release, { label: "Artifact SHA-256", value: artifactSha256 }]
+      : action === "publish" && submission.approvedArtifactSha256 ? [release, { label: "Approved SHA-256", value: submission.approvedArtifactSha256 }]
+        : [release];
     setConfirmation({
       key: `review-${action}`,
       ...label,
+      details,
       destructive: action === "reject",
-      initialReason: reason,
+      // An empty initial reason keeps the optional approval note in the dialog.
+      initialReason: "",
       requireReason: action !== "approve",
-      onConfirm: (confirmedReason) => commitReviewAction(submission, action, confirmedReason),
+      onConfirm: (confirmedReason) => commitReviewAction(submission, action, confirmedReason, action === "approve" ? artifactSha256 : null),
     });
   }
 
   async function downloadReviewArtifact(submission: ReviewSubmissionSummary) {
-    setMessage(null);
-    setNotice(null);
+    setArtifactStatus(null);
     setArtifactLoadingId(submission.id);
     try {
       const bundle = await client.getReviewSubmissionBundle(submission.id);
       setReviewArtifactHashes((current) => ({ ...current, [submission.id]: bundle.artifactSha256 }));
       downloadJsonFile(`${submission.slug}-${submission.version}-review.myskills.json`, bundle.payload);
-      setNotice(`Review artifact downloaded. Hash ${bundle.artifactSha256.slice(0, 12)}… is ready for approval.`);
+      setArtifactStatus({ submissionId: submission.id, error: false, text: "Review artifact downloaded. Its SHA-256 is recorded for approval." });
     } catch (error) {
-      setMessage(safeReviewErrorMessage(error));
+      setArtifactStatus({ submissionId: submission.id, error: true, text: safeReviewErrorMessage(error) });
     } finally {
       setArtifactLoadingId(null);
     }
   }
 
-  return (
-    <main className="review-workspace shadcn-review-workspace" aria-label="Maintainer review dashboard">
-      <section className="admin-hero shadcn-review-hero">
-        <div>
-          <Badge className="shadcn-review-eyebrow" variant="outline">Maintainer workflow</Badge>
-          <h1>Review dashboard</h1>
-          <p aria-live="polite">{session.user.email} · {state === "loading" ? "Loading queue…" : `${submissions.length} awaiting action`}</p>
-        </div>
-        <Button className="shadcn-action-button" size="sm" type="button" onClick={() => void refreshReview()}>
-          <RotateCw size={16} aria-hidden="true" />
-          Refresh
-        </Button>
-      </section>
+  // "Inspect artifact" mounts the auto-loading viewer; pressing it again after
+  // a failure starts a fresh attempt. The loader records the header hash for
+  // the submission it was created for.
+  function inspectArtifact(submission: ReviewSubmissionSummary) {
+    if (inspecting.current === submission.id) return;
+    inspecting.current = submission.id;
+    setInspectingId(submission.id);
+    setInspectAttempts((current) => ({ ...current, [submission.id]: (current[submission.id] ?? 0) + 1 }));
+  }
 
-      {message && <div className="safe-message admin-message" role="status">{message}</div>}
-      {notice && <div className="success-message admin-message" role="status" aria-live="polite">{notice}</div>}
+  async function loadReviewBundle(submissionId: string) {
+    inspecting.current = submissionId;
+    setInspectingId(submissionId);
+    try {
+      const bundle = await client.getReviewSubmissionBundle(submissionId);
+      setReviewArtifactHashes((current) => ({ ...current, [submissionId]: bundle.artifactSha256 }));
+      return bundle.payload;
+    } finally {
+      if (inspecting.current === submissionId) inspecting.current = null;
+      setInspectingId((current) => current === submissionId ? null : current);
+    }
+  }
 
-      <section className="review-layout shadcn-review-layout">
-        <Card className="results-panel review-queue review-registry-panel shadcn-console-card" aria-label="Review queue">
-          <CardHeader className="panel-heading review-registry-heading shadcn-card-header">
-            <div>
-              <CardTitle>Queue</CardTitle>
-              <CardDescription aria-live="polite">{state === "loading" ? "Loading…" : `${submissions.length} submissions`}</CardDescription>
-            </div>
-            <Badge className="shadcn-review-eyebrow" variant="outline">Maintainer</Badge>
-          </CardHeader>
-          <CardContent className="review-card-content">
-            <div className="result-list shadcn-review-list">
-              {submissions.map((submission) => (
-                <button
-                  aria-pressed={selected?.id === submission.id}
-                  className={selected?.id === submission.id ? "result-row review-registry-row selected" : "result-row review-registry-row"}
-                  key={submission.id}
+  function openSubmission(submissionId: string) {
+    setSelectedId(submissionId);
+    if (stacked) {
+      setDetailOpen(true);
+      focusTarget.current = { kind: "title" };
+    }
+  }
+
+  function backToQueue() {
+    setDetailOpen(false);
+    if (selected) focusTarget.current = { kind: "row", id: selected.id };
+  }
+
+  // Focus moves into the detail, back to the row, and after a decision to the
+  // same submission's next step, or to the queue notice when it has left the
+  // queue. This runs after the dialog's own focus restoration.
+  useEffect(() => {
+    if (stacked && detailOpen && state !== "loading" && !selected) setDetailOpen(false);
+    const target = focusTarget.current;
+    if (!target || confirmation) return;
+    let element: HTMLElement | null | undefined = null;
+    if (target.kind === "title") element = titleRef.current;
+    else if (target.kind === "row") element = Array.from(queueRef.current?.querySelectorAll<HTMLElement>("[data-id]") ?? []).find((row) => row.dataset.id === target.id);
+    else {
+      if (state === "loading") return;
+      if (submissions.some((submission) => submission.id === target.id)) {
+        element = primaryRef.current ?? decisionNoticeRef.current ?? titleRef.current;
+      } else if (stacked && detailOpen) {
+        setDetailOpen(false);
+        return;
+      } else {
+        element = queueNoticeRef.current;
+      }
+    }
+    if (!element) return;
+    focusTarget.current = null;
+    element.focus();
+  });
+
+  const canPublish = allowedReviewActions.includes("publish");
+  const canApprove = allowedReviewActions.includes("approve");
+  const primary = !selected ? null
+    : canPublish ? { label: "Publish", icon: <PackageCheck size={16} aria-hidden="true" />, busy: false, run: () => requestReviewAction(selected, "publish") }
+      : canApprove && !selectedArtifactHash ? { label: inspectingId === selected.id ? "Inspecting artifact…" : "Inspect artifact", icon: <FileCode2 size={16} aria-hidden="true" />, busy: inspectingId === selected.id, run: () => inspectArtifact(selected) }
+        : canApprove ? { label: "Approve", icon: <Check size={16} aria-hidden="true" />, busy: false, run: () => requestReviewAction(selected, "approve") }
+          : null;
+  const inspectAttempt = selected ? inspectAttempts[selected.id] : undefined;
+
+  const renderQueueRow = (submission: ReviewSubmissionSummary) => {
+    const security = securityStatusLabel(submission.securityStatus);
+    const findings = findingsLabel(submission.findingCount);
+    const review = reviewStatusLabel(submission.reviewStatus);
+    return (
+      <button
+        aria-pressed={stacked ? undefined : selected?.id === submission.id}
+        className="registry-row result-row"
+        data-id={submission.id}
+        key={submission.id}
+        type="button"
+        onClick={() => openSubmission(submission.id)}
+      >
+        <span className="registry-tile" data-tone={tileTone(submission.slug)} aria-hidden="true" />
+        <span className="registry-row-text">
+          <span className="registry-row-title">{submission.title}</span>
+          <span className="registry-row-meta">
+            <code>{submission.slug}@{submission.version}</code>
+            <span>Submitted {formatDate(submission.createdAt)}</span>
+          </span>
+          <span className="author-chips">
+            {["changes-requested", "rejected"].includes(submission.reviewStatus) && <span className="registry-chip" data-tone={chipTone(review.tone)}>{review.label}</span>}
+            <span className="registry-chip" data-tone={chipTone(security.tone)}>{security.label}</span>
+            <span className="registry-chip" data-tone={chipTone(findings.tone)}>{findings.label}</span>
+          </span>
+        </span>
+      </button>
+    );
+  };
+
+  const renderInspector = (submission: ReviewSubmissionSummary) => {
+    const security = securityStatusLabel(submission.securityStatus);
+    const findings = findingsLabel(submission.findingCount);
+    const review = reviewStatusLabel(submission.reviewStatus);
+    const steps = reviewSteps(submission, allowedReviewActions, selectedArtifactHash);
+    const canRequestChanges = allowedReviewActions.includes("request-changes");
+    const canReject = allowedReviewActions.includes("reject");
+    const decisionNotice = notice?.submissionId === submission.id ? notice : null;
+    const decisionMessage = decisionError?.submissionId === submission.id ? decisionError : null;
+    const artifactMessage = artifactStatus?.submissionId === submission.id ? artifactStatus : null;
+    return (
+      <>
+        <header className="registry-inspector-head">
+          <span className="registry-tile" data-size="32" data-tone={tileTone(submission.slug)} aria-hidden="true" />
+          <div className="registry-inspector-title">
+            <h2 ref={titleRef} tabIndex={-1}>{submission.title}</h2>
+            <p className="registry-ref">
+              <code>{submission.slug}</code>
+              <span aria-hidden="true">@</span>
+              <code>{submission.version}</code>
+            </p>
+            <p className="registry-inspector-meta">
+              <span>Submitted {formatDate(submission.createdAt)}</span>
+              <span aria-hidden="true">·</span>
+              <span>{visibilityLabel(submission.visibility)}</span>
+            </p>
+            <p className="author-chips">
+              {["changes-requested", "rejected"].includes(submission.reviewStatus) && <span className="registry-chip" data-tone={chipTone(review.tone)}>{review.label}</span>}
+              <span className="registry-chip" data-tone={chipTone(security.tone)}>{security.label}</span>
+              <span className="registry-chip" data-tone={chipTone(findings.tone)}>{findings.label}</span>
+            </p>
+          </div>
+        </header>
+
+        <section aria-label="Review decision" className="review-decision">
+          <p className="review-decision-context">Decision for <code>{submission.slug}@{submission.version}</code></p>
+          <ol aria-label="Release steps" className="review-steps">
+            {steps.map((step) => (
+              <li aria-current={step.state === "current" ? "step" : undefined} data-state={step.state} key={step.label}>
+                {step.state === "done" && <span className="sr-only">Done: </span>}
+                {step.state === "blocked" && <span className="sr-only">Blocked: </span>}
+                {step.label}
+              </li>
+            ))}
+          </ol>
+          {actionHint && <p className="review-hint">{actionHint}</p>}
+          {decisionNotice && <p className="author-status" data-tone="teal" ref={decisionNoticeRef} role="status" tabIndex={-1}>{decisionNotice.text}</p>}
+          {decisionMessage && <p className="author-status" data-tone="danger" role="status">{decisionMessage.text}</p>}
+          {primary || canRequestChanges || canReject ? (
+            <div className="review-decision-actions">
+              {primary && (
+                <Button
+                  aria-disabled={primary.busy || undefined}
+                  className="review-primary"
+                  ref={primaryRef}
+                  size="sm"
                   type="button"
-                  onClick={() => setSelectedId(submission.id)}
+                  onClick={() => { if (!primary.busy) primary.run(); }}
                 >
-                  <SkillIcon slug={submission.slug} />
-                  <span className="result-main review-registry-main">
-                    <strong>{submission.title}</strong>
-                    <span>{submission.slug}@{submission.version}</span>
-                    <span className="tag-row review-registry-tags">
-                      <ReviewStatusBadge value={submission.reviewStatus} />
-                      <ReviewStatusBadge value={submission.lifecycleStatus} />
-                      <ReviewStatusBadge value={submission.securityStatus} />
-                    </span>
-                  </span>
-                  <Badge className="shadcn-finding-badge review-registry-finding" variant="secondary">{submission.findingCount} findings</Badge>
-                </button>
-              ))}
-              {state === "ready" && nextCursor && <Button type="button" size="sm" variant="outline" disabled={loadingMore} onClick={() => void loadMoreReview()}>{loadingMore ? "Loading more submissions…" : "Load more submissions"}</Button>}
-              {state === "ready" && submissions.length === 0 && (
-                <div className="empty-state">
-                  <ShieldCheck size={22} aria-hidden="true" />
-                  <strong>Review queue is clear.</strong>
-                  <span>No submissions are awaiting approval or publication.</span>
-                </div>
+                  {primary.icon}
+                  {primary.label}
+                </Button>
+              )}
+              {canRequestChanges && (
+                <Button size="sm" type="button" variant="outline" onClick={() => requestReviewAction(submission, "request-changes")}>
+                  <RotateCw size={16} aria-hidden="true" />
+                  Request changes
+                </Button>
+              )}
+              {canReject && (
+                <Button className="author-danger review-reject" size="sm" type="button" variant="outline" onClick={() => requestReviewAction(submission, "reject")}>
+                  <X size={16} aria-hidden="true" />
+                  Reject
+                </Button>
               )}
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="detail-panel review-detail shadcn-console-card" aria-label="Selected submission review">
-          {selected ? (
-            <>
-              <CardHeader className="shadcn-detail-header">
-                <div className="shadcn-detail-title-row">
-                  <SkillIcon slug={selected.slug} />
-                  <div className="detail-title shadcn-detail-title">
-                    <CardTitle>{selected.title}</CardTitle>
-                    <CardDescription>{selected.slug}@{selected.version}</CardDescription>
-                  </div>
-                  <ReviewStatusBadge value={selected.reviewStatus} />
-                </div>
-              </CardHeader>
-              <CardContent className="shadcn-detail-content">
-                <dl className="shadcn-metadata-grid">
-                  <div>
-                    <dt>Visibility</dt>
-                    <dd>{formatStatusLabel(selected.visibility)}</dd>
-                  </div>
-                  <div>
-                    <dt>Security</dt>
-                    <dd>{formatStatusLabel(selected.securityStatus)}</dd>
-                  </div>
-                  <div>
-                    <dt>Platforms</dt>
-                    <dd>{selected.platforms.map((item) => item.name).join(", ") || "-"}</dd>
-                  </div>
-                  <div>
-                    <dt>Findings</dt>
-                    <dd>{String(selected.findingCount)}</dd>
-                  </div>
-                  <div>
-                    <dt>Artifact hash</dt>
-                    <dd className="mono">{selectedArtifactHash ? `${selectedArtifactHash.slice(0, 12)}…` : "inspection required"}</dd>
-                  </div>
-                  <div>
-                    <dt>Submitted</dt>
-                    <dd>{formatDate(selected.createdAt)}</dd>
-                  </div>
-                  <div>
-                    <dt>Submission ID</dt>
-                    <dd className="mono">{selected.id}</dd>
-                  </div>
-                </dl>
-
-                {client.getReviewSubmissionDetail && <SubmissionEvidencePanel key={`${selected.id}:${selected.reviewStatus}`} client={client} submissionId={selected.id} mode="reviewer" />}
-                <PackageFileViewer resourceKey={`review:${selected.id}`} loadBundle={async () => {
-                  const bundle = await client.getReviewSubmissionBundle(selected.id);
-                  setReviewArtifactHashes((current) => ({ ...current, [selected.id]: bundle.artifactSha256 }));
-                  return bundle.payload;
-                }} />
-
-                <label className="shadcn-review-reason">
-                  <span>Reason</span>
-                  <Textarea
-                    className="review-textarea"
-                    value={reason}
-                    onChange={(event) => setReason(event.target.value)}
-                    placeholder="Optional review note"
-                  />
-                </label>
-
-                <div className="shadcn-action-bar">
-                  <div className="review-actions shadcn-review-actions">
-                    <Button
-                      className="shadcn-action-button"
-                      disabled={artifactLoadingId === selected.id}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                      onClick={() => void downloadReviewArtifact(selected)}
-                    >
-                      <Download size={16} aria-hidden="true" />
-                      Download artifact
-                    </Button>
-                    <Button
-                      className="shadcn-action-button"
-                      disabled={approveDisabled}
-                      size="sm"
-                      type="button"
-                      onClick={() => requestReviewAction(selected, "approve")}
-                    >
-                      <Check size={16} aria-hidden="true" />
-                      Approve
-                    </Button>
-                    <Button
-                      className="shadcn-action-button"
-                      disabled={requestChangesDisabled}
-                      size="sm"
-                      type="button"
-                      onClick={() => requestReviewAction(selected, "request-changes")}
-                    >
-                      <RotateCw size={16} aria-hidden="true" />
-                      Request changes
-                    </Button>
-                    <Button
-                      className="shadcn-action-button"
-                      disabled={rejectDisabled}
-                      variant="destructive"
-                      size="sm"
-                      type="button"
-                      onClick={() => requestReviewAction(selected, "reject")}
-                    >
-                      <X size={16} aria-hidden="true" />
-                      Reject
-                    </Button>
-                    <Button
-                      className="shadcn-action-button"
-                      disabled={publishDisabled}
-                      variant="secondary"
-                      size="sm"
-                      type="button"
-                      onClick={() => requestReviewAction(selected, "publish")}
-                    >
-                      <PackageOpen size={16} aria-hidden="true" />
-                      Publish
-                    </Button>
-                  </div>
-                  <p className="action-hint">{actionHint}</p>
-                </div>
-              </CardContent>
-            </>
           ) : (
-            <div className="empty-detail">
-              <ClipboardList size={42} aria-hidden="true" />
-              <h2>No selected submission</h2>
-              <p>Approved unpublished submissions and new review requests appear here.</p>
-            </div>
+            <p className="registry-muted">No review decision is available for this submission.</p>
           )}
-        </Card>
-      </section>
+        </section>
+
+        <div className="registry-inspector-body">
+          <section aria-labelledby={`${baseId}-artifact`} className="registry-section review-artifact">
+            <h3 id={`${baseId}-artifact`}>Artifact</h3>
+            <dl className="registry-facts">
+              <div>
+                <dt>SHA-256</dt>
+                <dd className={selectedArtifactHash ? "registry-mono" : undefined}>{selectedArtifactHash ?? "Not inspected yet"}</dd>
+              </div>
+              {selectedArtifactHash && (
+                <div>
+                  <dt>Recorded</dt>
+                  <dd>{reviewArtifactHashes[submission.id] ? "In this session" : "At approval"}</dd>
+                </div>
+              )}
+            </dl>
+            <div className="registry-actions">
+              <Button disabled={artifactLoadingId === submission.id} size="sm" type="button" variant="outline" onClick={() => void downloadReviewArtifact(submission)}>
+                <Download size={16} aria-hidden="true" />
+                Download artifact
+              </Button>
+            </div>
+            {artifactMessage && <p className="author-status" data-tone={artifactMessage.error ? "danger" : "teal"} role={artifactMessage.error ? "alert" : "status"}>{artifactMessage.text}</p>}
+            {inspectAttempt !== undefined && (
+              <PackageFileViewer autoInspect loadBundle={() => loadReviewBundle(submission.id)} resourceKey={`review:${submission.id}:${inspectAttempt}`} />
+            )}
+          </section>
+
+          {client.getReviewSubmissionDetail && <SubmissionEvidencePanel key={`${submission.id}:${submission.reviewStatus}`} client={client} submissionId={submission.id} mode="reviewer" />}
+
+          <section aria-labelledby={`${baseId}-details`} className="registry-section">
+            <h3 id={`${baseId}-details`}>Submission details</h3>
+            <dl className="registry-facts" data-labels="wide">
+              <div><dt>Review status</dt><dd>{review.label}</dd></div>
+              <div><dt>Lifecycle</dt><dd>{lifecycleLabel(submission.lifecycleStatus).label}</dd></div>
+              <div><dt>Platforms</dt><dd>{submission.platforms.map((item) => item.name).join(", ") || "None declared"}</dd></div>
+              <div><dt>Submission ID</dt><dd className="registry-mono">{submission.id}</dd></div>
+            </dl>
+          </section>
+        </div>
+      </>
+    );
+  };
+
+  return (
+    <main className="registry-workspace author-review review-dashboard" aria-label="Maintainer review dashboard">
+      <header className="registry-page-head">
+        <h1>Review dashboard</h1>
+        <Button aria-label="Refresh" size="icon-sm" type="button" variant="outline" onClick={() => void refreshReview()}>
+          <RotateCw size={16} aria-hidden="true" />
+        </Button>
+      </header>
+
+      <div className="registry-surface" data-layout={layout} ref={surfaceRef}>
+        <div className="registry-body" data-columns={inspectorVisible && showQueue ? undefined : "1"}>
+          {showQueue && (
+            <section aria-busy={state === "loading"} aria-label="Review queue" className="registry-list review-queue" ref={queueRef}>
+              <div className="registry-list-label">
+                <h2>Queue</h2>
+                <span aria-live="polite">{state === "ready" ? (nextCursor ? `${submissions.length} loaded` : String(submissions.length)) : ""}</span>
+              </div>
+              {queueNotice && <p className="author-status" data-tone="teal" ref={queueNoticeRef} role="status" tabIndex={-1}>{queueNotice.text}</p>}
+              {state === "loading" && (
+                <div className="registry-skeleton" role="status" aria-live="polite">
+                  <span className="sr-only">Loading submissions…</span>
+                  {[0, 1, 2].map((item) => <div className="registry-skeleton-row" key={item}><span /><span /></div>)}
+                </div>
+              )}
+              {state === "error" && (
+                <div className="registry-list-state">
+                  <p role="alert"><strong>{message ?? "Review queue is not available."}</strong></p>
+                  <p>Retry the queue before reviewing a submission.</p>
+                  <Button size="sm" type="button" variant="outline" onClick={() => void refreshReview()}>
+                    <RotateCw size={15} aria-hidden="true" />
+                    Retry
+                  </Button>
+                </div>
+              )}
+              {QUEUE_GROUPS.map((group) => {
+                const rows = submissions.filter((submission) => reviewGroup(submission) === group.id);
+                if (rows.length === 0) return null;
+                return (
+                  <div aria-labelledby={`${baseId}-${group.id}`} className="review-group" key={group.id} role="group">
+                    <h3 className="review-group-label" id={`${baseId}-${group.id}`}>{group.label}</h3>
+                    <div className="registry-rows">{rows.map(renderQueueRow)}</div>
+                  </div>
+                );
+              })}
+              {state === "ready" && nextCursor && (
+                <div className="registry-list-foot">
+                  <Button type="button" size="sm" variant="outline" disabled={loadingMore} onClick={() => void loadMoreReview()}>{loadingMore ? "Loading more submissions…" : "Load more submissions"}</Button>
+                </div>
+              )}
+              {state === "ready" && message && <p className="registry-alert" role="alert">{message}</p>}
+              {state === "ready" && submissions.length === 0 && (
+                <div className="registry-list-state">
+                  <strong>Review queue is clear.</strong>
+                  <p>No submissions are awaiting approval or publication.</p>
+                </div>
+              )}
+            </section>
+          )}
+          {inspectorVisible && (
+            <section aria-label="Selected submission review" className="registry-inspector review-inspector">
+              {stacked && (
+                <Button className="registry-back" type="button" variant="ghost" onClick={backToQueue}>
+                  <ArrowLeft size={16} aria-hidden="true" />
+                  Back to queue
+                </Button>
+              )}
+              {selected ? renderInspector(selected) : (
+                <div className="registry-skeleton registry-skeleton-detail" role="status" aria-live="polite">
+                  <span className="sr-only">Loading submission…</span>
+                  <div className="registry-skeleton-head"><span /><span /></div>
+                  <div className="registry-skeleton-line" />
+                  <div className="registry-skeleton-line" />
+                  <div className="registry-skeleton-block" />
+                </div>
+              )}
+            </section>
+          )}
+        </div>
+      </div>
       {confirmation && <ConfirmationDialog key={confirmation.key} request={confirmation} onClose={() => setConfirmation(null)} />}
     </main>
   );
@@ -2361,6 +2541,37 @@ function fallbackReviewActions(submission: ReviewSubmissionSummary | null): Revi
       : ["request-changes", "reject"];
   }
   return [];
+}
+
+type ReviewFocus = { kind: "title" } | { kind: "row"; id: string } | { kind: "decision"; id: string };
+type ReviewGroup = "decide" | "publish" | "blocked";
+type ReviewStepState = "done" | "current" | "blocked" | "upcoming";
+
+// The queue groups rows by the next action the server allows.
+const QUEUE_GROUPS: Array<{ id: ReviewGroup; label: string }> = [
+  { id: "decide", label: "Needs a decision" },
+  { id: "publish", label: "Ready to publish" },
+  { id: "blocked", label: "Approval blocked" },
+];
+
+function reviewGroup(submission: ReviewSubmissionSummary): ReviewGroup {
+  const allowed = submission.allowedActions ?? fallbackReviewActions(submission);
+  return allowed.includes("approve") ? "decide" : allowed.includes("publish") ? "publish" : "blocked";
+}
+
+/** Queue rows in display order, so the implicit selection is the first visible row. */
+function queueOrder(submissions: ReviewSubmissionSummary[]): ReviewSubmissionSummary[] {
+  return QUEUE_GROUPS.flatMap((group) => submissions.filter((submission) => reviewGroup(submission) === group.id));
+}
+
+function reviewSteps(submission: ReviewSubmissionSummary, allowed: ReviewActionName[], artifactHash: string | null): Array<{ label: string; state: ReviewStepState }> {
+  const approved = submission.reviewStatus === "approved";
+  const canApprove = allowed.includes("approve");
+  return [
+    { label: "Inspect artifact", state: artifactHash ? "done" : canApprove ? "current" : "upcoming" },
+    { label: "Approve", state: approved ? "done" : canApprove ? (artifactHash ? "current" : "upcoming") : "blocked" },
+    { label: "Publish", state: allowed.includes("publish") ? "current" : approved ? "blocked" : "upcoming" },
+  ];
 }
 
 function TeamsDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
@@ -4136,15 +4347,6 @@ function StatusToken({ value }: { value?: string }) {
   return <span className={`status-token status-token-${statusValue}`}>{formatStatusLabel(statusValue)}</span>;
 }
 
-function ReviewStatusBadge({ value }: { value?: string }) {
-  const statusValue = value ?? "unknown";
-  return (
-    <Badge className={`review-status-badge review-status-badge-${statusValue}`} variant="outline">
-      {formatStatusLabel(statusValue)}
-    </Badge>
-  );
-}
-
 function formatStatusLabel(value: string) {
   const label = value.replace(/[-_]+/g, " ");
   return label.charAt(0).toUpperCase() + label.slice(1);
@@ -5263,15 +5465,6 @@ function Metadata({ label, monospace, value }: { label: string; value: string; m
       <dt>{label}</dt>
       <dd className={monospace ? "mono" : undefined}>{value}</dd>
     </div>
-  );
-}
-
-function SkillIcon({ large, slug }: { slug: string; large?: boolean }) {
-  const Icon = slug.includes("query") ? FileCode2 : PackageOpen;
-  return (
-    <span className={large ? "skill-icon large" : "skill-icon"} aria-hidden="true">
-      <Icon size={large ? 34 : 26} />
-    </span>
   );
 }
 

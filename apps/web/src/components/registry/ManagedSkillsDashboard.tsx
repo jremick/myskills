@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { ArrowLeft, LockKeyhole, RotateCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { safeReviewErrorMessage, type RegistryClient, type ReleaseLifecycleActionName, type SkillLifecycleActionName, type SkillManagementSummary, type SkillReleaseSummary } from "../../api.js";
+import { changeKindLabel, chipTone, findingsLabel, lifecycleLabel, reviewStatusLabel, securityStatusLabel, shortDate, tileTone, visibilityLabel } from "./status-display.js";
+import { useSplitLayout } from "./useSplitLayout.js";
 
 type PendingAction = { kind: "skill"; action: SkillLifecycleActionName } | { kind: "release"; action: ReleaseLifecycleActionName; version: string };
+type Section = PendingAction["kind"];
+type FocusTarget = { kind: "title" } | { kind: "row"; slug: string } | { kind: "confirm" } | { kind: "trigger"; key: string } | { kind: "saved" };
 
 export function ManagedSkillsDashboard({ client, mfaVerified }: { client: RegistryClient; mfaVerified: boolean }) {
   const [skills, setSkills] = useState<SkillManagementSummary[]>([]);
@@ -18,14 +21,26 @@ export function ManagedSkillsDashboard({ client, mfaVerified }: { client: Regist
   const [loadingMore, setLoadingMore] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [detailMessage, setDetailMessage] = useState<string | null>(null);
+  const [detailMessage, setDetailMessage] = useState<{ section: Section; text: string; saved?: boolean } | null>(null);
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
   const listEpoch = useRef(0);
   const detailEpoch = useRef(0);
+  const { layout, ref: surfaceRef } = useSplitLayout();
+  const listRef = useRef<HTMLElement>(null);
+  const inspectorRef = useRef<HTMLElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const confirmRef = useRef<HTMLHeadingElement>(null);
+  const savedRef = useRef<HTMLParagraphElement>(null);
+  const focusTarget = useRef<FocusTarget | null>(null);
+  const baseId = useId();
   const selected = skills.find((skill) => skill.slug === selectedSlug) ?? null;
   const release = releases.find((item) => item.version === version) ?? null;
+  const stacked = layout === "stack";
+  const showDetail = Boolean(selected) && (!stacked || detailOpen);
+  const showList = !stacked || !showDetail;
 
   const loadList = useCallback(async () => {
     const epoch = ++listEpoch.current;
@@ -67,7 +82,7 @@ export function ManagedSkillsDashboard({ client, mfaVerified }: { client: Regist
       setVersion((current) => records.some((item) => item.version === current) ? current : records[0]?.version ?? "");
       return true;
     } catch (error) {
-      if (epoch === detailEpoch.current) setDetailMessage(safeReviewErrorMessage(error));
+      if (epoch === detailEpoch.current) setDetailMessage({ section: "release", text: safeReviewErrorMessage(error) });
     } finally {
       if (epoch === detailEpoch.current) setDetailLoading(false);
     }
@@ -75,6 +90,22 @@ export function ManagedSkillsDashboard({ client, mfaVerified }: { client: Regist
 
   useEffect(() => { void loadList(); return () => { listEpoch.current += 1; }; }, [loadList]);
   useEffect(() => { setPending(null); setReason(""); void loadReleases(); return () => { detailEpoch.current += 1; }; }, [loadReleases]);
+
+  // Focus moves with the reader: into the detail, the confirmation and the
+  // saved status, and back to the row or trigger that opened them.
+  useEffect(() => {
+    if (stacked && detailOpen && !selected && !loading) setDetailOpen(false);
+    const target = focusTarget.current;
+    if (!target) return;
+    const element = target.kind === "title" ? titleRef.current
+      : target.kind === "row" ? findByData(listRef.current, "slug", target.slug)
+        : target.kind === "confirm" ? confirmRef.current
+          : target.kind === "trigger" ? findByData(inspectorRef.current, "action", target.key)
+            : savedRef.current;
+    if (!element) return;
+    focusTarget.current = null;
+    element.focus();
+  });
 
   async function more() {
     if (!cursor || !client.listManagedSkills || loadingMore) return;
@@ -93,9 +124,43 @@ export function ManagedSkillsDashboard({ client, mfaVerified }: { client: Regist
     }
   }
 
+  function openSkill(slug: string) {
+    // Reset the version only for a different skill; the same slug keeps its loaded releases.
+    if (slug !== selectedSlug) {
+      setVersion("");
+      setSelectedSlug(slug);
+    }
+    if (stacked) {
+      setDetailOpen(true);
+      focusTarget.current = { kind: "title" };
+    }
+  }
+
+  function backToSkills() {
+    setPending(null);
+    setReason("");
+    setDetailOpen(false);
+    if (selectedSlug) focusTarget.current = { kind: "row", slug: selectedSlug };
+  }
+
+  function openPending(next: PendingAction) {
+    setReason("");
+    setDetailMessage(null);
+    setPending(next);
+    focusTarget.current = { kind: "confirm" };
+  }
+
+  function cancelPending() {
+    if (!pending || busy) return;
+    focusTarget.current = { kind: "trigger", key: pendingKey(pending) };
+    setPending(null);
+    setReason("");
+  }
+
   async function confirm() {
     if (!selected || !pending || busy || !mfaVerified) return;
     if (pending.action !== "restore" && !reason.trim()) return;
+    const section = pending.kind;
     setBusy(true);
     setDetailMessage(null);
     try {
@@ -108,41 +173,210 @@ export function ManagedSkillsDashboard({ client, mfaVerified }: { client: Regist
       setPending(null);
       setReason("");
       if (await loadReleases()) {
-        setDetailMessage("Lifecycle change saved. This inventory includes archived and unpublished records.");
+        setDetailMessage({ section, saved: true, text: "Lifecycle change saved. This inventory includes archived and unpublished records." });
+        focusTarget.current = { kind: "saved" };
       }
     } catch (error) {
-      setDetailMessage(safeReviewErrorMessage(error));
+      setDetailMessage({ section, text: safeReviewErrorMessage(error) });
     } finally {
       setBusy(false);
     }
   }
 
-  return <main className="control-plane-workspace" aria-label="Manage skills">
-    <section className="control-plane-hero"><div><p className="control-plane-kicker">Ownership and lifecycle</p><h1>Manage skills</h1><p>Find skills you can manage, including archived skills and unpublished releases.</p></div><Button type="button" variant="outline" onClick={() => void loadList()} disabled={busy}>Refresh inventory</Button></section>
-    <label className="control-plane-form"><span>Search managed skills</span><Input aria-label="Search managed skills" value={query} disabled={busy} onChange={(event) => setQuery(event.target.value)} /></label>
-    {message && <p role="alert">{message}</p>}
-    {loading && <p role="status">Loading managed skills…</p>}
-    <div className="managed-skills-layout">
-      <Card><CardHeader><CardTitle>Managed inventory</CardTitle></CardHeader><CardContent>
-        {skills.map((skill) => <Button className="managed-skill-row" key={skill.slug} type="button" variant={skill.slug === selectedSlug ? "secondary" : "outline"} disabled={busy} onClick={() => { setVersion(""); setSelectedSlug(skill.slug); }} aria-pressed={skill.slug === selectedSlug}><span>{skill.title} <small>{skill.slug}</small></span><Badge variant="outline">{skill.lifecycleStatus}</Badge></Button>)}
-        {!loading && skills.length === 0 && <p>No manageable skills match this search.</p>}
-        {cursor && <Button type="button" variant="outline" disabled={loadingMore || busy} onClick={() => void more()}>{loadingMore ? "Loading…" : "Load more managed skills"}</Button>}
-      </CardContent></Card>
-      {selected && <Card><CardHeader><CardTitle>{selected.title}</CardTitle><p>{selected.slug} · {selected.visibility} · {selected.lifecycleStatus}</p></CardHeader><CardContent>
-        <p>{selected.summary}</p>
-        {!mfaVerified && <p role="status">An MFA-verified session is required for lifecycle changes. <a href="/settings">Open security settings</a>.</p>}
-        <div className="target-action-row">{selected.allowedActions.filter((action): action is SkillLifecycleActionName => action !== "edit").map((action) => <Button key={action} type="button" variant={action === "delete" ? "destructive" : "outline"} disabled={busy || !mfaVerified} onClick={() => { setReason(""); setPending({ kind: "skill", action }); }}>{label(action)} skill</Button>)}</div>
-        <section className="control-plane-section"><h2>Release history</h2>
-          {detailLoading && <p role="status">Loading releases…</p>}
-          {!detailLoading && releases.length > 0 && <label className="control-plane-form"><span>Release version</span><select aria-label="Managed release version" value={version} disabled={busy} onChange={(event) => { setPending(null); setReason(""); setVersion(event.target.value); }}>{releases.map((item) => <option key={item.id} value={item.version}>{item.version} · {item.lifecycleStatus}</option>)}</select></label>}
-          {!detailLoading && releases.length === 0 && <p>No release records are available.</p>}
-          {release && <><p>{release.version} · {release.lifecycleStatus} · review {release.reviewStatus} · security {release.securityStatus}</p><p>{release.releaseNotes || "No release notes were supplied."}</p><div className="target-action-row">{release.allowedActions.map((action) => <Button key={action} type="button" variant={action === "delete" || action === "revoke" ? "destructive" : "outline"} disabled={busy || !mfaVerified} onClick={() => { setReason(""); setPending({ kind: "release", action, version: release.version }); }}>{label(action)} {release.version}</Button>)}</div></>}
-        </section>
-        {pending && <section className="control-plane-section" aria-label="Confirm lifecycle change"><h2>{label(pending.action)} {selected.slug}{pending.kind === "release" ? ` ${pending.version}` : ""}</h2><p>{pending.action === "delete" ? "Deletion removes this resource from use and cannot be undone from this screen." : pending.action === "restore" ? "Restore this exact resource when its review and security state permit it." : "This changes availability through the registry. Existing local installations may require a separate action."}</p><label className="control-plane-form"><span>Reason {pending.action === "restore" ? "(optional)" : "(required)"}</span><Input aria-label="Lifecycle reason" value={reason} disabled={busy} onChange={(event) => setReason(event.target.value)} /></label><div className="target-action-row"><Button type="button" disabled={busy || (pending.action !== "restore" && !reason.trim())} variant={pending.action === "delete" ? "destructive" : "default"} onClick={() => void confirm()}>{busy ? "Saving…" : `Confirm ${pending.action}`}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => setPending(null)}>Cancel</Button></div></section>}
-        {detailMessage && <p role="status">{detailMessage}</p>}
-      </CardContent></Card>}
+  function sectionMessage(section: Section) {
+    if (detailMessage?.section !== section) return null;
+    return detailMessage.saved
+      ? <p className="author-status" data-tone="teal" ref={savedRef} role="status" tabIndex={-1}>{detailMessage.text}</p>
+      : <p className="author-status" data-tone="danger" role="status">{detailMessage.text}</p>;
+  }
+
+  function confirmation(section: Section) {
+    if (!selected || pending?.kind !== section) return null;
+    const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      cancelPending();
+    };
+    const reasonId = `${baseId}-reason`;
+    return <section aria-label="Confirm lifecycle change" className="manage-confirm" onKeyDown={onKeyDown}>
+      <h4 ref={confirmRef} tabIndex={-1}>{label(pending.action)} {selected.slug}{pending.kind === "release" ? ` ${pending.version}` : ""}</h4>
+      <p>{pending.action === "delete" ? "Deletion removes this resource from use and cannot be undone from this screen." : pending.action === "restore" ? "Restore this exact resource when its review and security state permit it." : "This changes availability through the registry. Existing local installations may require a separate action."}</p>
+      <label className="manage-reason" htmlFor={reasonId}>
+        <span>Reason {pending.action === "restore" ? "(optional)" : "(required)"}</span>
+        <Input aria-label="Lifecycle reason" id={reasonId} value={reason} disabled={busy} onChange={(event) => setReason(event.target.value)} />
+      </label>
+      <div className="registry-actions">
+        <Button type="button" size="sm" disabled={busy || (pending.action !== "restore" && !reason.trim())} variant={isDestructive(pending.action) ? "destructive" : "default"} onClick={() => void confirm()}>{busy ? "Saving…" : `Confirm ${pending.action}`}</Button>
+        <Button type="button" size="sm" variant="outline" disabled={busy} onClick={cancelPending}>Cancel</Button>
+      </div>
+    </section>;
+  }
+
+  const skillActions = selected ? selected.allowedActions.filter((action): action is SkillLifecycleActionName => action !== "edit") : [];
+  const lifecycle = selected ? lifecycleLabel(selected.lifecycleStatus) : null;
+
+  return <main className="registry-workspace author-review manage-dashboard" aria-label="Manage skills">
+    <header className="registry-page-head">
+      <h1>Manage skills</h1>
+      <Button aria-label="Refresh inventory" size="icon-sm" type="button" variant="outline" onClick={() => void loadList()} disabled={busy}>
+        <RotateCw size={16} aria-hidden="true" />
+      </Button>
+    </header>
+    <div className="registry-surface" data-layout={layout} ref={surfaceRef}>
+      {showList && (
+        <div className="registry-toolbar">
+          <label className="registry-search" htmlFor={`${baseId}-search`}>
+            <Search size={16} aria-hidden="true" />
+            <input id={`${baseId}-search`} aria-label="Search managed skills" value={query} disabled={busy} onChange={(event) => setQuery(event.target.value)} placeholder="Search managed skills…" autoComplete="off" spellCheck={false} />
+          </label>
+        </div>
+      )}
+      <div className="registry-body" data-columns={showDetail && showList ? undefined : "1"}>
+        {showList && (
+          <section aria-busy={loading} aria-label="Managed skills" className="registry-list" ref={listRef}>
+            <div className="registry-list-label">
+              <h2>Skills</h2>
+              <span aria-live="polite">{loading ? "" : cursor ? `${skills.length} loaded` : String(skills.length)}</span>
+            </div>
+            {loading && skills.length === 0 && (
+              <div className="registry-skeleton" role="status" aria-live="polite">
+                <span className="sr-only">Loading managed skills…</span>
+                {[0, 1, 2].map((item) => <div className="registry-skeleton-row" key={item}><span /><span /></div>)}
+              </div>
+            )}
+            {message && <p className="registry-alert" role="alert">{message}</p>}
+            {skills.length > 0 && (
+              <div className="registry-rows">
+                {skills.map((skill) => {
+                  const status = lifecycleLabel(skill.lifecycleStatus);
+                  return (
+                    <button
+                      aria-pressed={stacked ? undefined : skill.slug === selectedSlug}
+                      className="registry-row managed-skill-row"
+                      data-slug={skill.slug}
+                      disabled={busy}
+                      key={skill.slug}
+                      type="button"
+                      onClick={() => openSkill(skill.slug)}
+                    >
+                      <span className="registry-tile" data-tone={tileTone(skill.slug)} aria-hidden="true" />
+                      <span className="registry-row-text">
+                        <span className="registry-row-title">{skill.title}</span>
+                        <span className="registry-row-meta"><code>{skill.slug}</code><span>{visibilityLabel(skill.visibility)}</span></span>
+                        {skill.lifecycleStatus !== "approved" && <span className="author-chips"><span className="registry-chip" data-tone={chipTone(status.tone)}>{status.label}</span></span>}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {!loading && !message && skills.length === 0 && (
+              <div className="registry-list-state">
+                <strong>No manageable skills match this search.</strong>
+                <p>The inventory includes archived skills and unpublished releases you can manage.</p>
+              </div>
+            )}
+            {cursor && (
+              <div className="registry-list-foot">
+                <Button type="button" size="sm" variant="outline" disabled={loadingMore || busy} onClick={() => void more()}>{loadingMore ? "Loading…" : "Load more managed skills"}</Button>
+              </div>
+            )}
+          </section>
+        )}
+        {showDetail && selected && lifecycle && (
+          <section aria-label="Selected managed skill" className="registry-inspector" ref={inspectorRef}>
+            {stacked && (
+              <Button className="registry-back" type="button" variant="ghost" onClick={backToSkills}>
+                <ArrowLeft size={16} aria-hidden="true" />
+                Back to skills
+              </Button>
+            )}
+            <header className="registry-inspector-head">
+              <span className="registry-tile" data-size="32" data-tone={tileTone(selected.slug)} aria-hidden="true" />
+              <div className="registry-inspector-title">
+                <h2 ref={titleRef} tabIndex={-1}>{selected.title}</h2>
+                <p className="registry-ref"><code>{selected.slug}</code></p>
+                <p className="registry-inspector-meta"><span>{visibilityLabel(selected.visibility)}</span><span aria-hidden="true">·</span><span>{lifecycle.label}</span></p>
+              </div>
+            </header>
+            <div className="registry-inspector-body">
+              {selected.summary && <p className="registry-summary">{selected.summary}</p>}
+              {!mfaVerified && (
+                <p className="registry-callout" role="status">
+                  <LockKeyhole size={16} aria-hidden="true" />
+                  <span>An MFA-verified session is required for lifecycle changes. <a href="/settings">Open security settings</a>.</span>
+                </p>
+              )}
+              {(skillActions.length > 0 || detailMessage?.section === "skill") && (
+                <section aria-labelledby={`${baseId}-skill`} className="registry-section">
+                  <h3 id={`${baseId}-skill`}>Skill lifecycle</h3>
+                  {skillActions.length > 0 && (
+                    <div className="registry-actions">
+                      {skillActions.map((action) => <Button className={isDestructive(action) ? "author-danger" : undefined} data-action={`skill:${action}`} key={action} size="sm" type="button" variant="outline" disabled={busy || !mfaVerified} onClick={() => openPending({ kind: "skill", action })}>{label(action)} skill</Button>)}
+                    </div>
+                  )}
+                  {confirmation("skill")}
+                  {sectionMessage("skill")}
+                </section>
+              )}
+              <section aria-labelledby={`${baseId}-release`} className="registry-section">
+                <h3 id={`${baseId}-release`}>Release lifecycle</h3>
+                {detailLoading && <p className="registry-muted" role="status">Loading releases…</p>}
+                {!detailLoading && releases.length > 0 && (
+                  <label className="manage-version">
+                    <span>Release version</span>
+                    <select aria-label="Managed release version" value={version} disabled={busy} onChange={(event) => { setPending(null); setReason(""); setVersion(event.target.value); }}>
+                      {releases.map((item) => <option key={item.id} value={item.version}>{item.version} · {lifecycleLabel(item.lifecycleStatus).label}</option>)}
+                    </select>
+                  </label>
+                )}
+                {!detailLoading && releases.length === 0 && !detailMessage && <p className="registry-muted">No release records are available.</p>}
+                {release && <ReleaseFacts release={release} />}
+                {release && (
+                  <div className="manage-notes">
+                    <h4>Release notes</h4>
+                    <p className="registry-notes">{release.releaseNotes || "No release notes were supplied."}</p>
+                  </div>
+                )}
+                {release && release.allowedActions.length > 0 && (
+                  <div className="registry-actions">
+                    {release.allowedActions.map((action) => <Button className={isDestructive(action) ? "author-danger" : undefined} data-action={`release:${action}:${release.version}`} key={action} size="sm" type="button" variant="outline" disabled={busy || !mfaVerified} onClick={() => openPending({ kind: "release", action, version: release.version })}>{label(action)} {release.version}</Button>)}
+                  </div>
+                )}
+                {confirmation("release")}
+                {sectionMessage("release")}
+              </section>
+            </div>
+          </section>
+        )}
+      </div>
     </div>
   </main>;
 }
+
+function ReleaseFacts({ release }: { release: SkillReleaseSummary }) {
+  const status = lifecycleLabel(release.lifecycleStatus);
+  const review = reviewStatusLabel(release.reviewStatus);
+  const security = securityStatusLabel(release.securityStatus);
+  return <dl className="registry-facts">
+    <div><dt>Status</dt><dd><span className="registry-chip" data-tone={chipTone(status.tone)}>{status.label}</span></dd></div>
+    <div><dt>Review</dt><dd><span className="registry-chip" data-tone={chipTone(review.tone)}>{review.label}</span></dd></div>
+    <div><dt>Security</dt><dd><span className="registry-chip" data-tone={chipTone(security.tone)}>{security.label}</span></dd></div>
+    <div><dt>Published</dt><dd>{shortDate(release.publishedAt) ?? "Not published"}</dd></div>
+    <div><dt>Findings</dt><dd>{findingsLabel(release.findingCount).label}</dd></div>
+    {release.changeKind && <div><dt>Change kind</dt><dd>{changeKindLabel(release.changeKind)}</dd></div>}
+    {release.artifact && <div><dt>SHA-256</dt><dd className="registry-mono">{release.artifact.sha256}</dd></div>}
+  </dl>;
+}
+
+function pendingKey(pending: PendingAction): string {
+  return pending.kind === "skill" ? `skill:${pending.action}` : `release:${pending.action}:${pending.version}`;
+}
+
+function findByData(root: HTMLElement | null, key: string, value: string): HTMLElement | undefined {
+  return Array.from(root?.querySelectorAll<HTMLElement>(`[data-${key}]`) ?? []).find((element) => element.dataset[key] === value);
+}
+
+function isDestructive(action: string): boolean { return action === "delete" || action === "revoke"; }
 
 function label(value: string): string { return value.charAt(0).toUpperCase() + value.slice(1); }

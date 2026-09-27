@@ -48,7 +48,7 @@ test("author feedback, immutable publication, upgrade policy, real CLI install/u
         await expect(row).toBeVisible();
         await row.click();
         await page.getByLabel("Managed release version").selectOption(version);
-        await expect(page.getByLabel("Managed release version").locator("option:checked")).toHaveText(`${version} · unpublished`);
+        await expect(page.getByLabel("Managed release version").locator("option:checked")).toHaveText(`${version} · Unpublished`);
         await expect(page.getByRole("button", { name: `Restore ${version}`, exact: true })).toBeEnabled();
         await page.screenshot({ path: testInfo.outputPath("maintainer-unpublished-history.png"), fullPage: true });
       },
@@ -56,7 +56,7 @@ test("author feedback, immutable publication, upgrade policy, real CLI install/u
         await useSession(page, actor, "/manage/skills");
         await page.getByRole("textbox", { name: "Search managed skills" }).fill(slug);
         const row = page.locator(".managed-skill-row").filter({ hasText: slug });
-        await expect(row).toContainText("archived");
+        await expect(row).toContainText("Archived");
         await row.click();
         await expect(page.getByRole("button", { name: "Restore skill", exact: true })).toBeEnabled();
         await page.screenshot({ path: testInfo.outputPath("maintainer-archived-inventory.png"), fullPage: true });

@@ -2158,9 +2158,8 @@ test("maintainer sessions download an artifact hash before approving review subm
   assert.equal(document.body.textContent?.includes("storageKey"), false);
   assert.equal(document.body.textContent?.includes("Summarize release notes."), false);
   assert.equal(client.bundleCalls, 0);
-  assert.equal((view.getByRole("button", { name: /approve/i }) as HTMLButtonElement).disabled, true);
-
-  fireEvent.input(view.getByLabelText("Reason"), { target: { value: "checked" } });
+  assert.equal(view.queryByRole("button", { name: /^approve$/i }), null);
+  assert.equal((view.getByRole("button", { name: "Inspect artifact" }) as HTMLButtonElement).disabled, false);
   fireEvent.click(view.getByRole("button", { name: /download artifact/i }));
   await waitFor(() => assert.deepEqual(client.reviewBundleCalls, ["submission-1"]));
   assert.equal(document.body.textContent?.includes("Summarize release notes."), false);
@@ -2168,6 +2167,7 @@ test("maintainer sessions download an artifact hash before approving review subm
   const downloadedText = await downloadedBlob!.text();
   assert.equal(artifactTextSha256(downloadedText), expectedArtifactHash);
   fireEvent.click(view.getByRole("button", { name: /approve/i }));
+  fireEvent.input(view.getByLabelText("Reason (optional)"), { target: { value: "checked" } });
   fireEvent.click(await view.findByRole("button", { name: "Approve submission" }));
   await waitFor(() => assert.deepEqual(client.reviewActions, [`submission-1:approve:checked:${expectedArtifactHash}`]));
 
