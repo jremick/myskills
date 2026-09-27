@@ -1,8 +1,8 @@
 # Roadmap
 
 Version: 0.1.0-beta.12
-Document revision: 0.3.6
-Last updated: 2026-09-27
+Document revision: 0.3.7
+Last updated: 2026-09-28
 
 ## Release Tracks
 
@@ -18,7 +18,7 @@ Last updated: 2026-09-27
   At that checkpoint npm publication awaited passkey authentication; the current
   `beta` selector now resolves to beta.8. Native host activation and guided setup remain later
   roadmap slices. See [Beta.7 Release Delivery](BETA7_RELEASE_DELIVERY.md).
-- **Hosted beta baseline**: beta.8 at `55849876639fbb55167496051bd8d573b5a6a6af` is the verified deployment recorded on 26 September 2026. Confirm subsequent runtime state by live readback; beta.7 deployment evidence is historical.
+- **Hosted release record**: beta.12 at `c280795e6f0bd54533514ab6c58af7a584cbd3a4` is the verified deployment recorded on 27 September 2026. See [Beta.12 Release Delivery](BETA12_RELEASE_DELIVERY.md). Confirm subsequent runtime state by live readback; newer commits on main do not establish deployment.
 - **Libraries and skill improvement (`v0.1.0-beta.8`)**: GitHub prerelease,
   hosted API/web and npm publication are complete. Libraries phases 1A–1C cover public GitHub imports, provenance, private self-review
   under an administrator policy, source checks, subscriptions, team curation and
@@ -28,6 +28,17 @@ Last updated: 2026-09-27
   See the [combined release evidence](BETA8_RELEASE_DELIVERY.md),
   [Libraries specification](plans/2026-09-26-library-feature-spec.md) and
   [build evidence](plans/2026-09-26-library-build-evidence.md).
+- **Public landing page (`v0.1.0-beta.9`)**: GitHub prerelease and hosted
+  API/web delivery are complete. See [Beta.9 Release Delivery](BETA9_RELEASE_DELIVERY.md).
+- **Skill bundles (`v0.1.0-beta.10`)**: GitHub prerelease and hosted API/web
+  delivery are complete. See [Beta.10 Release Delivery](BETA10_RELEASE_DELIVERY.md).
+- **Application redesign (`v0.1.0-beta.12`)**: GitHub prerelease and hosted
+  API/web delivery are complete. Beta.11 was superseded after a browser-test
+  synchronization failure; its immutable tag remains, but it was not published
+  as a GitHub release or promoted to production. See [Beta.11](BETA11_RELEASE_DELIVERY.md)
+  and [Beta.12](BETA12_RELEASE_DELIVERY.md) delivery records. npm publication was
+  excluded from these later releases: `beta` remains beta.8, and their newer
+  CLI archives are GitHub release assets.
 - **Business-safe production release**: harden the beta into an operator-ready release with stronger audit, background scanning, skill evals, provider lifecycle, artifact delivery, trusted publishing, deploy/ops guidance, and upgrade policy. See [BUSINESS_SAFE_RELEASE_GOAL.md](BUSINESS_SAFE_RELEASE_GOAL.md).
 
 ## Current Focus
@@ -44,18 +55,20 @@ Last updated: 2026-09-27
   milestone status lists. Earlier branch and
   beta.2 labels below are historical; they do not supersede the release tracks.
 
-## Current Delivery Batch
+## Foundation Delivery Batch
 
-Status checked on 2026-09-25. A reviewed or tested candidate is not a merged,
-released, or deployed feature.
+This table records the 25 September foundation batch, with npm status reconciled
+against the later beta.8 publication. The release tracks above cover subsequent
+deliveries. A reviewed or tested candidate is not a merged, released, or deployed
+feature.
 
 | Slice | Evidence | Remaining gate |
 | --- | --- | --- |
 | Maintenance baseline | [PR #75](https://github.com/jremick/myskills/pull/75) merged bootstrap-directory revalidation, Hono remediation, and the MinIO CI image fix after required CI passed. Duplicate Hono PR #69 is closed. | Grouped production and development updates merged in [PR #81](https://github.com/jremick/myskills/pull/81) and [PR #71](https://github.com/jremick/myskills/pull/71). Node 26 and Nodemailer 10 remain separate compatibility decisions. |
 | Roadmap and hosting investigation | This revision records the adoption workstreams, merged foundations, and verified setup gaps. | Prioritize the remaining delivery slices after the full review. |
 | HOST-1 build caching | [PR #77](https://github.com/jremick/myskills/pull/77) merged after required CI passed. Six Windows image targets, source and build-argument cache reuse, and runtime smokes were verified. | Release images, setup and operations remain later slices. Deployment-time improvement is unmeasured. |
-| AUTHOR-1 CLI scaffold | [PR #78](https://github.com/jremick/myskills/pull/78) merged private Codex skill scaffolding after required CI passed. Windows CLI tests, package smoke, lint, shell-guidance tests, and source review passed. | Archive creation is included in the beta.7 GitHub CLI asset; npm publication remains pending. Browser drafts and imports remain subsequent slices. |
-| AUTHOR-1 CLI archive | [PR #83](https://github.com/jremick/myskills/pull/83) adds `myskills package --path <directory> --output <file.zip>` with a checked text snapshot, validation and scan gates, deterministic ZIP bytes, and exclusive output creation. Windows-hosted authoring and submission checks passed. | The verified CLI asset is published on GitHub; npm publication remains pending. Browser drafts and imports remain open. |
+| AUTHOR-1 CLI scaffold | [PR #78](https://github.com/jremick/myskills/pull/78) merged private Codex skill scaffolding after required CI passed. Windows CLI tests, package smoke, lint, shell-guidance tests, and source review passed. | Included in the beta.7 GitHub CLI asset and the published npm beta.8 package. Browser drafts and imports remain subsequent slices. |
+| AUTHOR-1 CLI archive | [PR #83](https://github.com/jremick/myskills/pull/83) adds `myskills package --path <directory> --output <file.zip>` with a checked text snapshot, validation and scan gates, deterministic ZIP bytes, and exclusive output creation. Windows-hosted authoring and submission checks passed. | Included in the GitHub CLI assets and the published npm beta.8 package. Browser drafts and imports remain open. |
 | MCP-1 protocol prerequisite | [PR #79](https://github.com/jremick/myskills/pull/79) merged modern protocol entrypoints and legacy compatibility after required CI passed. Windows MCP tests, repository checks, image smoke, and security review support the adapter change. | Native Skills handlers are included in beta.7. Conformance and host activation remain separate gates. |
 | MCP-1 native delivery | [PR #83](https://github.com/jremick/myskills/pull/83) adds `skills/list`, `skills/get`, and verified `resources/read` over authorized immutable API bundles. Official scenario checks with a configured client and the released fast-agent importer passed. | Stock conformance CLI omits the required client declaration. Full on-demand host activation remains open; see [verification details](AUTHOR_MCP_DELIVERY.md). |
 | Public release history | [PR #80](https://github.com/jremick/myskills/pull/80) merged public history browsing and exact-version links after required CI, including browser tests, passed. | Version comparison and further history usability improvements remain open. |
@@ -80,12 +93,12 @@ and do not create separate registries or release systems.
 | AUTHOR-1 | Authors create, edit, import, and submit skills without manually rebuilding packages. | 3, 4, 5 | [Authoring and imports](#authoring-and-imports-author-1) |
 | REC-1 | Users and agents find relevant skills from a task description. | 1, 6, 7 | [Task-aware recommendations](#task-aware-recommendations-rec-1) |
 | HOST-1 | Operators reach a usable, maintainable instance with fewer steps and less build work. | 8, 9, 10 | [Self-hosting and deployment](#self-hosting-and-deployment-host-1) |
-| OPT-1 (proposal) | Users, teams, and organizations designate reviewer skills, run improvement locally, and inspect model/app/environment evidence. | 3, 4, 5, 6, 7 | [Skill improvement and optimisation specification](SKILL_IMPROVEMENT_SPEC.md) |
+| OPT-1 | Users, teams, and organizations designate reviewer skills, run improvement locally, and inspect model/app/environment evidence. | 3, 4, 5, 6, 7 | [Skill improvement and optimisation specification](SKILL_IMPROVEMENT_SPEC.md) and [beta.8 delivery](BETA8_RELEASE_DELIVERY.md) |
 
-OPT-1 is a proposed feature specification, not a scheduled release. It recommends
-release metadata and an explicit local review/evaluation workflow before enrolled
-event-driven automation. It depends on a minimal Milestone 6 evaluation foundation
-and preserves existing publication and target-adoption gates.
+The initial OPT-1 slice shipped in beta.8: declared targets, reviewer selection,
+local Claude Code runs and evaluation evidence. Broader event-driven automation
+remains future work. Publication and target-adoption gates continue to apply;
+evaluation evidence does not itself approve a candidate for release.
 
 The [self-hosting investigation](SELF_HOSTING_INVESTIGATION.md) records current
 friction, options, dependencies, and proposed verification. It recommends release
