@@ -23,8 +23,8 @@ test("route-mocked owner registry fits 320, 375, and 390 px with safe mobile ove
     await page.setViewportSize({ width, height: 760 });
     await page.goto("/skills/release-notes-helper");
     await expect(page.getByRole("heading", { name: "Release Notes Helper" })).toBeVisible();
-    await expect(page.locator(".mobile-nav").getByRole("link", { name: "Architectures" })).toContainText("Build");
-    await expect(page.locator(".mobile-nav").getByRole("link", { name: "Connected targets" })).toContainText("Targets");
+    await expect(page.locator(".mobile-nav").getByRole("link", { name: "Libraries", exact: true })).toBeVisible();
+    await expect(page.locator(".mobile-nav").getByRole("link", { name: "Review", exact: true })).toBeVisible();
 
     const measurements = await page.evaluate(() => {
       const nav = document.querySelector<HTMLElement>(".mobile-nav")!.getBoundingClientRect();
@@ -62,7 +62,7 @@ test("route-mocked owner registry fits 320, 375, and 390 px with safe mobile ove
 
     await more.click();
     await expect(adminMenuItem).toBeVisible();
-    await page.getByLabel("Search skills").click();
+    await page.getByRole("heading", { name: "Skill registry", exact: true }).click();
     await expect(adminMenuItem).toBeHidden();
   }
 });

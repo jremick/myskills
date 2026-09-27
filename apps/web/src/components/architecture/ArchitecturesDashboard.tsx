@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import type { ArchitectureSpecV1 } from "@myskills-app/core";
-import { RefreshCw, Workflow } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ArchitectureList } from "./ArchitectureDashboardListPanel.js";
-import {
-  CreateArchitectureCard,
-  PatternGallery,
-} from "./ArchitectureDashboardCreatePanel.js";
+import { CreateArchitectureCard } from "./ArchitectureDashboardCreatePanel.js";
 import { ArchitectureDetailPanel } from "./ArchitectureDashboardDetailPanel.js";
+import { useSplitLayout } from "../registry/useSplitLayout.js";
 import { ArchitectureState } from "./ArchitectureDashboardFeedback.js";
 import {
   architectureContexts,
@@ -50,6 +48,8 @@ export function ArchitecturesDashboard({ client, session, onNavigationGuardChang
   const [message, setMessage] = useState<string | null>(null);
   const [patterns, setPatterns] = useState<ArchitecturePattern[]>(BUILTIN_PATTERNS);
   const [architectures, setArchitectures] = useState<ArchitectureSummary[]>([]);
+  const [expandedAccessId, setExpandedAccessId] = useState<string | null>(null);
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<ArchitectureProfile[]>([]);
   const [environments, setEnvironments] = useState<ArchitectureEnvironment[]>([]);
   const [selectedArchitectureId, setSelectedArchitectureId] = useState<string | null>(null);
@@ -74,6 +74,35 @@ export function ArchitecturesDashboard({ client, session, onNavigationGuardChang
   const previewContextRef = useRef("");
   const refreshEpoch = useRef(0);
   const [hasUnsavedDraft, setHasUnsavedDraft] = useState(false);
+  const [mode, setMode] = useState<"detail" | "new">("detail");
+  const [opened, setOpened] = useState(false);
+  const selectedArchitectureRef = useRef(selectedArchitectureId);
+  selectedArchitectureRef.current = selectedArchitectureId;
+  const { layout, ref: measureSurface } = useSplitLayout();
+  const surfaceNode = useRef<HTMLDivElement | null>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const newNameRef = useRef<HTMLInputElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const pendingFocus = useRef<{ kind: "title" } | { kind: "editor" } | { kind: "new" } | { kind: "row"; id: string } | null>(null);
+  const stacked = layout === "stack";
+
+  const surfaceRef = useCallback((node: HTMLDivElement | null) => {
+    surfaceNode.current = node;
+    measureSurface(node);
+  }, [measureSurface]);
+
+  useEffect(() => {
+    const next = pendingFocus.current;
+    if (!next) return;
+    const element = next.kind === "title" ? titleRef.current
+      : next.kind === "editor" ? editorRef.current
+        : next.kind === "new" ? newNameRef.current
+          : Array.from(surfaceNode.current?.querySelectorAll<HTMLElement>("[data-architecture-id]") ?? []).find((item) => item.dataset.architectureId === next.id) ?? null;
+    if (!element || element.closest("[hidden]")) return;
+    pendingFocus.current = null;
+    element.focus();
+  });
 
   const confirmDiscardDraft = useArchitectureNavigationGuard(hasUnsavedDraft);
 
@@ -104,6 +133,9 @@ export function ArchitecturesDashboard({ client, session, onNavigationGuardChang
       if (requestEpoch !== refreshEpoch.current) return;
       setPatterns(nextPatterns.length > 0 ? nextPatterns : BUILTIN_PATTERNS);
       setArchitectures(nextArchitectures);
+      // A phone view must not reopen onto a different architecture when the
+      // selected one is no longer visible.
+      if (!nextArchitectures.some((item) => item.id === selectedArchitectureRef.current)) setOpened(false);
       setSelectedArchitectureId((current) => current && nextArchitectures.some((item) => item.id === current)
         ? current
         : nextArchitectures[0]?.id ?? null);
@@ -314,6 +346,8 @@ export function ArchitecturesDashboard({ client, session, onNavigationGuardChang
     setEditorSeed({ revisionId: revision.id, spec: structuredClone(revision.spec) });
     setDraftPreview(null);
     draftPreviewEpoch.current += 1;
+    // The editor sits above the history, so move the reader to the new draft.
+    pendingFocus.current = { kind: "editor" };
   }, [confirmDiscardDraft, selectedArchitectureId, selectedDetail]);
   const availableProfiles = profiles;
   const availableEnvironments = environments;
@@ -325,11 +359,11 @@ export function ArchitecturesDashboard({ client, session, onNavigationGuardChang
     }
   }, []);
 
-  function selectArchitecture(id: string) {
+  function selectArchitecture(id: string): boolean {
     if (id === selectedArchitectureId) {
-      return;
+      return true;
     }
-    if (!confirmDiscardDraft("switch architectures")) return;
+    if (!confirmDiscardDraft("switch architectures")) return false;
     setSelectedDetail(null);
     setHistoryRevisionId(null);
     setHistoryRevision(null);
@@ -347,196 +381,253 @@ export function ArchitecturesDashboard({ client, session, onNavigationGuardChang
     setPreview(null);
     setDraftPreview(null);
     setDetailMessage(null);
+    return true;
   }
 
+  // Tapping the already-selected row still opens it in the stacked layout;
+  // selectArchitecture keeps the discard guard for a different architecture.
+  function openArchitecture(id: string) {
+    if (!selectArchitecture(id)) return;
+    setMode("detail");
+    openerRef.current = null;
+    if (stacked) {
+      setOpened(true);
+      pendingFocus.current = { kind: "title" };
+    }
+  }
+
+  function backToArchitectures() {
+    setOpened(false);
+    if (selectedArchitectureId) pendingFocus.current = { kind: "row", id: selectedArchitectureId };
+  }
+
+  function openNew(event: MouseEvent<HTMLButtonElement>) {
+    openerRef.current = event.currentTarget;
+    setMode("new");
+    pendingFocus.current = { kind: "new" };
+  }
+
+  // The detail stays mounted while New is open, so Cancel keeps the draft.
+  function cancelNew() {
+    setMode("detail");
+    const opener = openerRef.current;
+    openerRef.current = null;
+    pendingFocus.current = null;
+    opener?.focus();
+  }
+
+  const noArchitectures = loadState === "ready" && architectures.length === 0;
+  const newVisible = mode === "new" || noArchitectures;
+  const showList = !stacked || (!opened && !newVisible);
+  const showInspector = !stacked || opened || newVisible;
+
   return (
-    <main className="architecture-workspace" aria-label="Skill architectures">
-      <section className="architecture-hero" aria-labelledby="architectures-heading">
-        <div>
-          <p className="architecture-eyebrow"><Workflow size={15} aria-hidden="true" /> Control plane</p>
-          <h1 id="architectures-heading">Skill architectures</h1>
-          <p>Choose a server-declared router or leaf pattern, then inspect the exact result for each declared profile and environment.</p>
-          <small className="architecture-session-note">Signed in as {session.user.email}. The API decides what is visible and effective.</small>
+    <main className="architecture-workspace cp-page" aria-label="Skill architectures">
+      <header className="cp-page-head app-page-header">
+        <div><h1 id="architectures-heading">Skill architectures</h1></div>
+        <div className="cp-page-actions">
+          <Button aria-controls="architecture-new-panel" aria-expanded={newVisible} disabled={loadState !== "ready"} size="sm" type="button" variant="outline" onClick={openNew}>
+            <Plus size={15} aria-hidden="true" />New architecture
+          </Button>
+          <Button aria-label="Refresh" size="icon-sm" title="Refresh" type="button" variant="outline" onClick={requestRefresh}>
+            <RefreshCw size={16} aria-hidden="true" />
+          </Button>
         </div>
-        <Button className="architecture-refresh-button" size="sm" type="button" variant="outline" onClick={requestRefresh}>
-          <RefreshCw size={15} aria-hidden="true" /> Refresh
-        </Button>
-      </section>
+      </header>
 
       {message && loadState !== "ready" && (
         <ArchitectureState state={loadState} message={message} onRetry={requestRefresh} />
       )}
+      {loadState === "loading" && <div className="cp-loading" role="status"><span className="sr-only">Loading architectures…</span><span /><span /><span /></div>}
 
       {loadState === "ready" && (
-        <>
-          <PatternGallery patterns={patterns} />
-          <section className="architecture-grid" aria-label="Architecture workspace">
-            <div className="architecture-sidebar">
-              <CreateArchitectureCard
-                client={client}
-                session={session}
-                patterns={patterns}
-                onCreated={(created) => {
-                  const shouldOpen = confirmDiscardDraft("open the new architecture");
-                  setArchitectures((current) => [created, ...current.filter((item) => item.id !== created.id)]);
-                  if (!shouldOpen) return;
-                  setSelectedDetail(null);
-                  setHistoryRevisionId(null);
-                  setHistoryRevision(null);
-                  setHistoryState("idle");
-                  setHistoryMessage(null);
-                  setEditorSeed(null);
-                  setProfiles([]);
-                  setEnvironments([]);
-                  setSelectedProfileId("");
-                  setSelectedEnvironmentId("");
-                  setSelectedOrganizationId("");
-                  setVisibleOrganizations([]);
-                  setHasUnsavedDraft(false);
-                  setDraftPreview(null);
-                  setSelectedArchitectureId(created.id);
-                }}
-              />
-              <ArchitectureList
-                architectures={architectures}
-                selectedId={selectedArchitectureId}
-                onSelect={selectArchitecture}
-              />
-            </div>
-            <ArchitectureDetailPanel
-              architecture={selectedArchitecture}
-              detail={selectedDetail}
-              detailState={detailState}
-              message={detailMessage}
-              preview={preview}
-              draftPreview={draftPreview}
-              historyRevisionId={historyRevisionId}
-              historyRevision={historyRevision}
-              historyState={historyState}
-              historyMessage={historyMessage}
-              editorSeed={editorSeed}
-              profiles={availableProfiles}
-              environments={availableEnvironments}
-              patterns={patterns}
-              selectedProfileId={selectedProfileId}
-              selectedEnvironmentId={selectedEnvironmentId}
-              allowedOrganizationIds={architectureOrganizationIds(selectedDetail ?? selectedArchitecture)}
-              organizationChoices={organizationChoices(architectureOrganizationIds(selectedDetail ?? selectedArchitecture), visibleOrganizations)}
-              organizationOnly={architectureIsOrganizationOnly(selectedDetail ?? selectedArchitecture)}
-              selectedOrganizationId={selectedOrganizationId}
-              onProfileChange={(value) => {
-                const profile = availableProfiles.find((item) => item.id === value);
-                const environment = profile ? boundEnvironmentForProfile(availableEnvironments, profile.id) : undefined;
-                if (!profile || !environment) return;
-                setDraftPreview(null);
-                setSelectedProfileId(profile.id);
-                setSelectedEnvironmentId(environment.id);
-              }}
-              onEnvironmentChange={(value) => {
-                const environment = availableEnvironments.find((item) => item.id === value);
-                const profileId = environment ? environmentProfileId(environment, availableProfiles) : undefined;
-                if (!environment || !profileId) return;
-                setDraftPreview(null);
-                setSelectedProfileId(profileId);
-                setSelectedEnvironmentId(environment.id);
-              }}
-              onOrganizationChange={(value) => {
-                const allowedOrganizationIds = architectureOrganizationIds(selectedDetail ?? selectedArchitecture);
-                if (value && !allowedOrganizationIds.includes(value)) return;
-                setDraftPreview(null);
-                setSelectedOrganizationId(value);
-              }}
-              onDraftPreview={async ({ spec, expectedRevisionId }) => {
-                if (!selectedArchitectureId || selectedDetail?.id !== selectedArchitectureId || !selectedDetail.latestRevision || !selectedProfileId || !selectedEnvironmentId) {
-                  return;
-                }
-                const requestEpoch = draftPreviewEpoch.current + 1;
-                draftPreviewEpoch.current = requestEpoch;
-                const requestContextKey = previewContextRef.current;
-                try {
-                  const nextPreview = await client.previewArchitectureDraft(selectedArchitectureId, {
-                    spec,
-                    expectedCurrentRevisionId: expectedRevisionId,
-                    profileId: selectedProfileId,
-                    environmentId: selectedEnvironmentId,
-                  });
-                  if (requestEpoch !== draftPreviewEpoch.current || requestContextKey !== previewContextRef.current) {
-                    return;
-                  }
-                  setDraftPreview(nextPreview);
-                } catch (error) {
-                  if (requestEpoch !== draftPreviewEpoch.current || requestContextKey !== previewContextRef.current) {
-                    return;
-                  }
-                  throw new Error(safeArchitectureErrorMessage(error));
-                }
-              }}
-              onDraftSave={async ({ spec, expectedRevisionId, message: revisionMessage }) => {
-                if (!selectedArchitectureId || selectedDetail?.id !== selectedArchitectureId) {
-                  return;
-                }
-                try {
-                  await client.createArchitectureRevision(selectedArchitectureId, {
-                    spec,
-                    expectedCurrentRevisionId: expectedRevisionId,
-                    ...(revisionMessage ? { message: revisionMessage } : {}),
-                  });
-                  setDraftPreview(null);
-                  setRefreshKey((value) => value + 1);
-                } catch (error) {
-                  throw new Error(safeArchitectureErrorMessage(error));
-                }
-              }}
-              onDraftChange={handleDraftChange}
-              onHistorySelect={handleHistorySelect}
-              onUseRevisionAsDraft={handleUseRevisionAsDraft}
-              onSearchRegistrySkills={searchArchitectureRegistrySkills}
-              onLoadRegistryReleases={loadArchitectureRegistryReleases}
-              onFixturePreview={async (fixture) => {
-                if (!selectedArchitectureId || selectedDetail?.id !== selectedArchitectureId || !selectedDetail?.latestRevision || !selectedProfileId || !selectedEnvironmentId) {
-                  return;
-                }
-                const requestEpoch = fixturePreviewEpoch.current + 1;
-                fixturePreviewEpoch.current = requestEpoch;
-                const requestContextKey = previewContextKey;
-                setDetailMessage(null);
-                try {
-                  const nextPreview = await client.previewArchitecture(selectedArchitectureId, {
-                    profileId: selectedProfileId,
-                    environmentId: selectedEnvironmentId,
-                    revisionId: selectedDetail.latestRevision.id,
-                    fixture,
-                    ...(selectedOrganizationId ? { organizationId: selectedOrganizationId } : {}),
-                  });
-                  if (requestEpoch !== fixturePreviewEpoch.current || requestContextKey !== previewContextRef.current) {
-                    return;
-                  }
-                  setDraftPreview(null);
-                  setPreview(nextPreview);
-                  setDetailState("ready");
-                } catch (error) {
-                  if (requestEpoch !== fixturePreviewEpoch.current || requestContextKey !== previewContextRef.current) {
-                    return;
-                  }
-                  setDetailMessage(safeArchitectureErrorMessage(error));
-                  setDetailState(isUnsupportedError(error) ? "unsupported" : "error");
-                  throw error;
-                }
-              }}
-              onPatternMigrationCreated={(result) => {
-                const created = result.persisted?.targetArchitecture;
-                if (created) {
-                  setArchitectures((current) => [created, ...current.filter((item) => item.id !== created.id)]);
-                  selectArchitecture(created.id);
-                } else {
-                  setRefreshKey((value) => value + 1);
-                }
-              }}
-              client={client}
-              onRetry={requestRefresh}
+        <div className="cp-surface" data-layout={layout} ref={surfaceRef}>
+          <div className="cp-body">
+            <ArchitectureList
+              architectures={architectures}
+              hidden={!showList}
+              selectedId={selectedArchitectureId}
+              onSelect={openArchitecture}
             />
-          </section>
-        </>
+            <div className="cp-inspector" hidden={!showInspector}>
+              <div className="cp-panel" id="architecture-new-panel" hidden={!newVisible}>
+                <CreateArchitectureCard
+                  client={client}
+                  session={session}
+                  patterns={patterns}
+                  nameInputRef={newNameRef}
+                  onCancel={noArchitectures ? undefined : cancelNew}
+                  onCreated={(created) => {
+                    const shouldOpen = confirmDiscardDraft("open the new architecture");
+                    setArchitectures((current) => [created, ...current.filter((item) => item.id !== created.id)]);
+                    setMode("detail");
+                    setOpened(true);
+                    openerRef.current = null;
+                    // Declining the discard returns to the dirty architecture.
+                    pendingFocus.current = { kind: "title" };
+                    if (!shouldOpen) return;
+                    setSelectedDetail(null);
+                    setHistoryRevisionId(null);
+                    setHistoryRevision(null);
+                    setHistoryState("idle");
+                    setHistoryMessage(null);
+                    setEditorSeed(null);
+                    setProfiles([]);
+                    setEnvironments([]);
+                    setSelectedProfileId("");
+                    setSelectedEnvironmentId("");
+                    setSelectedOrganizationId("");
+                    setVisibleOrganizations([]);
+                    setHasUnsavedDraft(false);
+                    setDraftPreview(null);
+                    setSelectedArchitectureId(created.id);
+                  }}
+                />
+              </div>
+              <div className="cp-panel" hidden={newVisible}>
+                <ArchitectureDetailPanel
+                  accessExpanded={expandedAccessId === selectedArchitectureId}
+                  historyExpanded={expandedHistoryId === selectedArchitectureId}
+                  onAccessExpandedChange={(open) => setExpandedAccessId(open ? selectedArchitectureId : null)}
+                  onHistoryExpandedChange={(open) => setExpandedHistoryId(open ? selectedArchitectureId : null)}
+                  titleRef={titleRef}
+                  editorRef={editorRef}
+                  onBack={stacked ? backToArchitectures : undefined}
+                  architecture={selectedArchitecture}
+                  detail={selectedDetail}
+                  detailState={detailState}
+                  message={detailMessage}
+                  preview={preview}
+                  draftPreview={draftPreview}
+                  historyRevisionId={historyRevisionId}
+                  historyRevision={historyRevision}
+                  historyState={historyState}
+                  historyMessage={historyMessage}
+                  editorSeed={editorSeed}
+                  profiles={availableProfiles}
+                  environments={availableEnvironments}
+                  patterns={patterns}
+                  selectedProfileId={selectedProfileId}
+                  selectedEnvironmentId={selectedEnvironmentId}
+                  allowedOrganizationIds={architectureOrganizationIds(selectedDetail ?? selectedArchitecture)}
+                  organizationChoices={organizationChoices(architectureOrganizationIds(selectedDetail ?? selectedArchitecture), visibleOrganizations)}
+                  organizationOnly={architectureIsOrganizationOnly(selectedDetail ?? selectedArchitecture)}
+                  selectedOrganizationId={selectedOrganizationId}
+                  onProfileChange={(value) => {
+                    const profile = availableProfiles.find((item) => item.id === value);
+                    const environment = profile ? boundEnvironmentForProfile(availableEnvironments, profile.id) : undefined;
+                    if (!profile || !environment) return;
+                    setDraftPreview(null);
+                    setSelectedProfileId(profile.id);
+                    setSelectedEnvironmentId(environment.id);
+                  }}
+                  onEnvironmentChange={(value) => {
+                    const environment = availableEnvironments.find((item) => item.id === value);
+                    const profileId = environment ? environmentProfileId(environment, availableProfiles) : undefined;
+                    if (!environment || !profileId) return;
+                    setDraftPreview(null);
+                    setSelectedProfileId(profileId);
+                    setSelectedEnvironmentId(environment.id);
+                  }}
+                  onOrganizationChange={(value) => {
+                    const allowedOrganizationIds = architectureOrganizationIds(selectedDetail ?? selectedArchitecture);
+                    if (value && !allowedOrganizationIds.includes(value)) return;
+                    setDraftPreview(null);
+                    setSelectedOrganizationId(value);
+                  }}
+                  onDraftPreview={async ({ spec, expectedRevisionId }) => {
+                    if (!selectedArchitectureId || selectedDetail?.id !== selectedArchitectureId || !selectedDetail.latestRevision || !selectedProfileId || !selectedEnvironmentId) {
+                      return;
+                    }
+                    const requestEpoch = draftPreviewEpoch.current + 1;
+                    draftPreviewEpoch.current = requestEpoch;
+                    const requestContextKey = previewContextRef.current;
+                    try {
+                      const nextPreview = await client.previewArchitectureDraft(selectedArchitectureId, {
+                        spec,
+                        expectedCurrentRevisionId: expectedRevisionId,
+                        profileId: selectedProfileId,
+                        environmentId: selectedEnvironmentId,
+                      });
+                      if (requestEpoch !== draftPreviewEpoch.current || requestContextKey !== previewContextRef.current) {
+                        return;
+                      }
+                      setDraftPreview(nextPreview);
+                    } catch (error) {
+                      if (requestEpoch !== draftPreviewEpoch.current || requestContextKey !== previewContextRef.current) {
+                        return;
+                      }
+                      throw new Error(safeArchitectureErrorMessage(error));
+                    }
+                  }}
+                  onDraftSave={async ({ spec, expectedRevisionId, message: revisionMessage }) => {
+                    if (!selectedArchitectureId || selectedDetail?.id !== selectedArchitectureId) {
+                      return;
+                    }
+                    try {
+                      await client.createArchitectureRevision(selectedArchitectureId, {
+                        spec,
+                        expectedCurrentRevisionId: expectedRevisionId,
+                        ...(revisionMessage ? { message: revisionMessage } : {}),
+                      });
+                      setDraftPreview(null);
+                      setRefreshKey((value) => value + 1);
+                    } catch (error) {
+                      throw new Error(safeArchitectureErrorMessage(error));
+                    }
+                  }}
+                  onDraftChange={handleDraftChange}
+                  onHistorySelect={handleHistorySelect}
+                  onUseRevisionAsDraft={handleUseRevisionAsDraft}
+                  onSearchRegistrySkills={searchArchitectureRegistrySkills}
+                  onLoadRegistryReleases={loadArchitectureRegistryReleases}
+                  onFixturePreview={async (fixture) => {
+                    if (!selectedArchitectureId || selectedDetail?.id !== selectedArchitectureId || !selectedDetail?.latestRevision || !selectedProfileId || !selectedEnvironmentId) {
+                      return;
+                    }
+                    const requestEpoch = fixturePreviewEpoch.current + 1;
+                    fixturePreviewEpoch.current = requestEpoch;
+                    const requestContextKey = previewContextKey;
+                    setDetailMessage(null);
+                    try {
+                      const nextPreview = await client.previewArchitecture(selectedArchitectureId, {
+                        profileId: selectedProfileId,
+                        environmentId: selectedEnvironmentId,
+                        revisionId: selectedDetail.latestRevision.id,
+                        fixture,
+                        ...(selectedOrganizationId ? { organizationId: selectedOrganizationId } : {}),
+                      });
+                      if (requestEpoch !== fixturePreviewEpoch.current || requestContextKey !== previewContextRef.current) {
+                        return;
+                      }
+                      setDraftPreview(null);
+                      setPreview(nextPreview);
+                      setDetailState("ready");
+                    } catch (error) {
+                      if (requestEpoch !== fixturePreviewEpoch.current || requestContextKey !== previewContextRef.current) {
+                        return;
+                      }
+                      setDetailMessage(safeArchitectureErrorMessage(error));
+                      setDetailState(isUnsupportedError(error) ? "unsupported" : "error");
+                      throw error;
+                    }
+                  }}
+                  onPatternMigrationCreated={(result) => {
+                    const created = result.persisted?.targetArchitecture;
+                    if (created) {
+                      setArchitectures((current) => [created, ...current.filter((item) => item.id !== created.id)]);
+                      selectArchitecture(created.id);
+                    } else {
+                      setRefreshKey((value) => value + 1);
+                    }
+                  }}
+                  client={client}
+                  onRetry={requestRefresh}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

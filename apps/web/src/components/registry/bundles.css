@@ -1373,3 +1373,8 @@
     border: 1px solid CanvasText;
   }
 }
+
+/* Keep catalog search and the exact-release inspector inside the shared workspace. */
+.app-shell .bundle-search { flex: 1 1 100%; max-width: none; }
+.app-shell .bundle-toolbar { flex-wrap: wrap; }
+.app-shell .bundle-inspector-panel.is-skill.registry-inspector { border-left: 0; }

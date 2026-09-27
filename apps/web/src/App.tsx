@@ -1,17 +1,22 @@
+import { ConfirmationDialog, type ConfirmationRequest } from "@/components/ui/confirmation-dialog";
 import { MarketingLanding } from "./components/marketing/MarketingLanding.js";
 import { LandingSettings } from "./components/marketing/LandingSettings.js";
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
 import {
+  ArrowLeft,
   ArrowRight,
   Boxes,
+  Building2,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -21,14 +26,13 @@ import {
   Download,
   Ellipsis,
   FileCode2,
-  Fingerprint,
-  Globe,
   KeyRound,
   Link2,
   LockKeyhole,
   LogIn,
   LogOut,
   Mail,
+  PackageCheck,
   PackageOpen,
   Plus,
   RotateCw,
@@ -46,22 +50,22 @@ import {
   X,
 } from "lucide-react";
 import { parseSemanticVersion, type PublicSkill, type RegistryView, type SkillSharingDetails, type TeamSharedSkillGroup, type VisibilityScope } from "@myskills-app/core";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Frame, FrameDescription, FrameHeader, FramePanel, FrameTitle } from "@/components/reui/frame";
 import { ArchitecturesDashboard } from "@/components/architecture/ArchitecturesDashboard";
 import { OrganizationsDashboard } from "@/components/organization/OrganizationsDashboard";
 import { ArchitectureTargetsDashboard } from "@/components/target/ArchitectureTargetsDashboard";
 import { LibrariesDashboard } from "@/components/library/LibrariesDashboard";
+import { tileTone } from "@/components/library/library-display";
 import { SystemUpdateCenter } from "@/components/update/SystemUpdateCenter";
 import { PackageFileViewer } from "@/components/registry/PackageFileViewer";
 import { ManagedSkillsDashboard } from "@/components/registry/ManagedSkillsDashboard";
 import { SubmissionEvidencePanel } from "@/components/registry/SubmissionEvidencePanel";
 import { SkillImprovementPanel } from "@/components/registry/SkillImprovementPanel";
 import { BundleWorkspace } from "@/components/registry/BundleWorkspace";
+import { chipTone, findingsLabel, lifecycleLabel, reviewStatusLabel, securityStatusLabel, severityLabel, visibilityLabel } from "@/components/registry/status-display";
+import { useSplitLayout } from "@/components/registry/useSplitLayout";
 import {
   createRegistryClient,
   exportCommand,
@@ -127,8 +131,18 @@ interface CatalogLocation {
 }
 
 type ArchitectureNavigationGuard = (action: string) => boolean;
+type RegistryLayout = "split" | "stack";
+type MobileMenu = "more" | "account";
+type RegistryFocus = { kind: "title" } | { kind: "row"; slug: string };
+interface RegistryDisclosures {
+  notes: boolean;
+  improvement: boolean;
+  owner: boolean;
+}
 
 const APP_HISTORY_INDEX_KEY = "__myskillsAppHistoryIndex";
+// The Registry splits into list and inspector when its own surface is this wide.
+const REGISTRY_SPLIT_WIDTH = 880;
 
 interface WebSession {
   expiresAt: string;
@@ -150,16 +164,6 @@ interface ProviderDraft {
   roleMappings: ProviderRoleMappingInput[];
 }
 
-interface ConfirmationRequest {
-  key: string;
-  title: string;
-  description: string;
-  confirmLabel: string;
-  destructive?: boolean;
-  initialReason?: string;
-  requireReason?: boolean;
-  onConfirm: (reason: string) => Promise<void>;
-}
 
 function operationKey(action: "install"): string {
   const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -241,9 +245,22 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [authState, setAuthState] = useState<AuthState>("idle");
   const [mfaPending, setMfaPending] = useState<MfaPending | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [mobileMenu, setMobileMenu] = useState<MobileMenu | null>(null);
   const mobileMoreButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMoreMenuRef = useRef<HTMLDivElement>(null);
+  const mobileAccountButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileAccountMenuRef = useRef<HTMLDivElement>(null);
+  const [registryLayout, setRegistryLayout] = useState<RegistryLayout | null>(null);
+  const registryLayoutRef = useRef<RegistryLayout | null>(null);
+  const registryObserver = useRef<ResizeObserver | null>(null);
+  const registrySurfaceRef = useRef<HTMLDivElement | null>(null);
+  const inspectorTitleRef = useRef<HTMLHeadingElement>(null);
+  const pendingRegistryFocus = useRef<RegistryFocus | null>(null);
+  const [registryDisclosures, setRegistryDisclosures] = useState<RegistryDisclosures>({ notes: false, improvement: false, owner: false });
+  // A desktop split shows the first result without choosing it: the URL stays
+  // /registry until the reader picks a skill. A stack shows the list instead.
+  const implicitSlug = registryLayout === "split" && selectedSlug === null ? skills[0]?.slug ?? null : null;
+  const detailSlug = selectedSlug ?? implicitSlug;
   const canUseAdmin = Boolean(session && isAdminUser(session.user));
   const canUseReview = Boolean(session && isReviewerUser(session.user));
   const canUseSubmit = Boolean(session && isSubmitterUser(session.user));
@@ -293,6 +310,24 @@ export function RegistryApp({ client }: RegistryAppProps) {
 
   const registerArchitectureNavigationGuard = useCallback((guard: ArchitectureNavigationGuard | null) => {
     architectureNavigationGuardRef.current = guard;
+  }, []);
+
+  // Split or stack follows the Registry surface's own width, not the viewport.
+  // A surface without layout (width 0, as in DOM tests) keeps the split default.
+  const measureRegistry = useCallback((node: HTMLDivElement | null) => {
+    registryObserver.current?.disconnect();
+    registryObserver.current = null;
+    registrySurfaceRef.current = node;
+    if (!node) return;
+    const apply = (width: number) => {
+      const next: RegistryLayout = width === 0 || width >= REGISTRY_SPLIT_WIDTH ? "split" : "stack";
+      registryLayoutRef.current = next;
+      setRegistryLayout(next);
+    };
+    apply(node.clientWidth);
+    if (typeof ResizeObserver === "undefined") return;
+    registryObserver.current = new ResizeObserver(([entry]) => { if (entry) apply(entry.contentRect.width); });
+    registryObserver.current.observe(node);
   }, []);
 
   useEffect(() => {
@@ -352,14 +387,21 @@ export function RegistryApp({ client }: RegistryAppProps) {
       currentUrlRef.current = currentBrowserUrl();
       searchSelectionQuery.current = null;
       setView(next.view);
-      if (next.slug !== previous.slug) {
+      // Clear eagerly only when the detail effects are certain to reload. An
+      // implicit desktop selection can become the same explicit skill, so a
+      // change to or from /registry is left to those effects.
+      const bothExplicit = next.slug !== null && previous.slug !== null;
+      if (bothExplicit && next.slug !== previous.slug) {
         setSelectedSkill(null);
         setVisibleReleases([]);
         setHistoryState("idle");
       }
-      if (next.slug !== previous.slug || next.version !== previous.version) {
+      if (bothExplicit && (next.slug !== previous.slug || next.version !== previous.version)) {
         setRelease(null);
         setDetailState("loading");
+      }
+      if (registryLayoutRef.current === "stack" && next.view === "browse" && previous.view === "browse" && next.slug !== previous.slug) {
+        pendingRegistryFocus.current = next.slug ? { kind: "title" } : previous.slug ? { kind: "row", slug: previous.slug } : null;
       }
       setSelectedSlug(next.slug);
       setSelectedVersion(next.version);
@@ -368,32 +410,34 @@ export function RegistryApp({ client }: RegistryAppProps) {
       catalogLocationRef.current = next.catalog;
       setCatalogView(next.catalog.view);
       setSelectedBundleId(next.catalog.bundle);
-      setMobileMoreOpen(false);
+      setMobileMenu(null);
     }
     window.addEventListener("popstate", syncFromBrowserHistory);
     return () => window.removeEventListener("popstate", syncFromBrowserHistory);
   }, []);
 
   useEffect(() => {
-    if (!mobileMoreOpen) {
+    if (!mobileMenu) {
       return;
     }
-    mobileMoreMenuRef.current?.querySelector<HTMLElement>("a[href]")?.focus();
+    const menu = mobileMenu === "more" ? mobileMoreMenuRef.current : mobileAccountMenuRef.current;
+    const trigger = mobileMenu === "more" ? mobileMoreButtonRef.current : mobileAccountButtonRef.current;
+    menu?.querySelector<HTMLElement>("a[href], button")?.focus();
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key !== "Escape") {
         return;
       }
       event.preventDefault();
-      setMobileMoreOpen(false);
-      queueMicrotask(() => mobileMoreButtonRef.current?.focus());
+      setMobileMenu(null);
+      queueMicrotask(() => trigger?.focus());
     }
     function closeOnOutsideClick(event: MouseEvent) {
       const target = event.target;
       if (!(target instanceof window.Node)) {
         return;
       }
-      if (!mobileMoreMenuRef.current?.contains(target) && !mobileMoreButtonRef.current?.contains(target)) {
-        setMobileMoreOpen(false);
+      if (!menu?.contains(target) && !trigger?.contains(target)) {
+        setMobileMenu(null);
       }
     }
     window.addEventListener("keydown", closeOnEscape);
@@ -402,7 +446,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
       window.removeEventListener("keydown", closeOnEscape);
       document.removeEventListener("mousedown", closeOnOutsideClick);
     };
-  }, [mobileMoreOpen]);
+  }, [mobileMenu]);
 
   useEffect(() => {
     if (!session && !isPublicView(view)) {
@@ -495,14 +539,20 @@ export function RegistryApp({ client }: RegistryAppProps) {
         setNextCursor(result.nextCursor ?? null);
         if (searchSelectionQuery.current === query) {
           searchSelectionQuery.current = null;
-          const currentSlug = currentLocationRef.current.slug;
-          const nextSlug = result.skills.some((skill) => skill.slug === currentSlug) ? currentSlug : result.skills[0]?.slug ?? null;
-          if (nextSlug !== currentSlug) {
-            setSelectedVersion(null);
-            setRelease(null);
-            setDetailState("loading");
+          // Only an explicit split-view selection follows the search. An
+          // implicit selection follows the first result, and a stacked list
+          // never opens a skill the reader did not tap.
+          const current = currentLocationRef.current;
+          if (registryLayoutRef.current === "split" && current.slug !== null) {
+            const nextSlug = result.skills.some((skill) => skill.slug === current.slug) ? current.slug : result.skills[0]?.slug ?? null;
+            if (nextSlug !== current.slug) {
+              setSelectedVersion(null);
+              setRelease(null);
+              setDetailState("loading");
+              setSelectedSlug(nextSlug);
+              replaceAppHistory(browseUrl(nextSlug, current.query, current.platform));
+            }
           }
-          setSelectedSlug(nextSlug);
         }
         setListMessage(null);
         setListState("ready");
@@ -521,28 +571,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }, [activeView, catalogAvailable, registryClient, query, refreshKey]);
 
   useEffect(() => {
-    if (activeView !== "browse" || listState !== "ready") {
-      return;
-    }
-    if (currentLocationRef.current.view !== "browse") {
-      return;
-    }
-    // An explicit detail URL is independent of a filtered or paginated list.
-    // Only choose the first result when no skill has been selected.
-    const nextSlug = selectedSlug ?? skills[0]?.slug ?? null;
-    const nextVersion = nextSlug === selectedSlug ? selectedVersion : null;
-    if (nextSlug !== selectedSlug) {
-      setSelectedSlug(nextSlug);
-      setSelectedVersion(null);
-    }
-    const nextUrl = browseUrl(nextSlug, query, platform, nextVersion);
-    if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
-      replaceAppHistory(nextUrl);
-    }
-  }, [activeView, listState, platform, query, selectedSlug, selectedVersion, skills]);
-
-  useEffect(() => {
-    if (activeView !== "browse" || !selectedSlug) {
+    if (activeView !== "browse" || !detailSlug) {
       setSelectedSkill(null);
       setRelease(null);
       setVisibleReleases([]);
@@ -558,10 +587,10 @@ export function RegistryApp({ client }: RegistryAppProps) {
     setHistoryState("loading");
     setDetailState("loading");
     setDetailMessage(null);
-    registryClient.getSkill(selectedSlug)
+    registryClient.getSkill(detailSlug)
       .then(async (skill) => {
         if (!active) return;
-        if (skill.slug !== selectedSlug) {
+        if (skill.slug !== detailSlug) {
           setHistoryState("error");
           setDetailMessage("Skill or release not found.");
           setDetailState("error");
@@ -569,10 +598,10 @@ export function RegistryApp({ client }: RegistryAppProps) {
         }
         setSelectedSkill(skill);
         try {
-          const rows = await registryClient.listSkillReleases(selectedSlug);
+          const rows = await registryClient.listSkillReleases(detailSlug);
           if (!active) return;
           const visible = rows
-            .filter((row) => row.slug === selectedSlug && isExactReleaseVersion(row.version) && isPublishedRelease(row))
+            .filter((row) => row.slug === detailSlug && isExactReleaseVersion(row.version) && isPublishedRelease(row))
             .sort((a, b) => Date.parse(b.publishedAt ?? "") - Date.parse(a.publishedAt ?? ""))
             .filter((row, index, all) => all.findIndex((other) => other.version === row.version) === index);
           setVisibleReleases(visible);
@@ -593,10 +622,10 @@ export function RegistryApp({ client }: RegistryAppProps) {
         setDetailState("error");
       });
     return () => { active = false; };
-  }, [activeView, registryClient, selectedSlug, refreshKey]);
+  }, [activeView, registryClient, detailSlug, refreshKey]);
 
   useEffect(() => {
-    if (activeView !== "browse" || !selectedSlug || !selectedSkill || selectedSkill.slug !== selectedSlug
+    if (activeView !== "browse" || !detailSlug || !selectedSkill || selectedSkill.slug !== detailSlug
       || (historyState !== "ready" && historyState !== "error")) return;
     let active = true;
     const exactVersion = selectedVersion ?? selectedSkill.latestVersion;
@@ -614,10 +643,10 @@ export function RegistryApp({ client }: RegistryAppProps) {
       return;
     }
     setDetailState("loading");
-    registryClient.getRelease(selectedSlug, exactVersion)
+    registryClient.getRelease(detailSlug, exactVersion)
       .then((nextRelease) => {
         if (!active) return;
-        if (nextRelease.slug !== selectedSlug || nextRelease.version !== exactVersion
+        if (nextRelease.slug !== detailSlug || nextRelease.version !== exactVersion
           || !isPublishedRelease(nextRelease)
           || !Array.isArray(nextRelease.platforms)
           || !nextRelease.artifact
@@ -638,20 +667,21 @@ export function RegistryApp({ client }: RegistryAppProps) {
         setDetailState("error");
       });
     return () => { active = false; };
-  }, [activeView, registryClient, selectedSlug, selectedSkill, selectedVersion, historyState, visibleReleases]);
+  }, [activeView, registryClient, detailSlug, selectedSkill, selectedVersion, historyState, visibleReleases]);
 
   useEffect(() => {
-    if (activeView !== "browse" || !release || release.slug !== selectedSlug
+    if (activeView !== "browse" || !release || release.slug !== detailSlug
       || (selectedVersion !== null && release.version !== selectedVersion)) return;
     const nextPlatform = releasePlatform(release.platforms, platform);
     if (nextPlatform && nextPlatform !== platform) {
       setPlatform(nextPlatform);
       const current = currentLocationRef.current;
-      if (current.slug === selectedSlug && current.version === selectedVersion) {
+      // An implicit desktop selection leaves the URL alone.
+      if (selectedSlug !== null && current.slug === selectedSlug && current.version === selectedVersion) {
         replaceAppHistory(browseUrl(selectedSlug, current.query, nextPlatform, selectedVersion));
       }
     }
-  }, [activeView, platform, release, selectedSlug, selectedVersion]);
+  }, [activeView, platform, release, detailSlug, selectedSlug, selectedVersion]);
 
   const supportedDetailPlatform = release ? releasePlatform(release.platforms, platform) : null;
   const detailPlatform = supportedDetailPlatform ?? platform;
@@ -659,7 +689,12 @@ export function RegistryApp({ client }: RegistryAppProps) {
     selectedSkill && release && supportedDetailPlatform ? exportCommand(selectedSkill.slug, release.version, supportedDetailPlatform) : ""
   ), [release, selectedSkill, supportedDetailPlatform]);
   const latestVisibleRelease = visibleReleases.find((item) => item.version === selectedSkill?.latestVersion) ?? null;
-  const historyControls = selectedSkill?.slug === selectedSlug ? (
+  // Guards keep a stale skill or release off screen for the frame between a
+  // selection change and the effects that reload it.
+  const skillReady = selectedSkill !== null && selectedSkill.slug === detailSlug;
+  const expectedVersion = selectedVersion ?? selectedSkill?.latestVersion ?? null;
+  const releaseReady = skillReady && release !== null && release.slug === detailSlug && release.version === expectedVersion;
+  const historyControls = skillReady ? (
     <ReleaseHistoryControls
       historyState={historyState}
       latestVersion={latestVisibleRelease?.version ?? null}
@@ -670,19 +705,47 @@ export function RegistryApp({ client }: RegistryAppProps) {
       selectedVersion={selectedVersion}
     />
   ) : null;
+  const registryStacked = registryLayout === "stack";
+  const showRegistryList = !(registryStacked && selectedSlug !== null);
+  const showRegistryInspector = registryLayout === "split" || selectedSlug !== null;
+
+  useEffect(() => {
+    const pending = pendingRegistryFocus.current;
+    if (!pending || activeView !== "browse") return;
+    if (pending.kind === "title") {
+      if (skillReady && inspectorTitleRef.current) {
+        inspectorTitleRef.current.focus();
+        pendingRegistryFocus.current = null;
+      }
+      return;
+    }
+    if (!showRegistryList || listState === "loading") return;
+    const rows = registrySurfaceRef.current?.querySelectorAll<HTMLAnchorElement>("a[data-slug]") ?? [];
+    Array.from(rows).find((row) => row.dataset.slug === pending.slug)?.focus();
+    pendingRegistryFocus.current = null;
+  }, [activeView, skillReady, showRegistryList, listState, skills]);
 
   function selectSkill(slug: string) {
     searchSelectionQuery.current = null;
     setView("browse");
-    if (slug !== selectedSlug) {
+    if (slug !== detailSlug) {
       setSelectedVersion(null);
       setRelease(null);
       setDetailState("loading");
     }
+    if (registryLayoutRef.current === "stack") pendingRegistryFocus.current = { kind: "title" };
     setSelectedSlug(slug);
     catalogLocationRef.current = { ...catalogLocationRef.current, bundle: null };
     setSelectedBundleId(null);
     pushAppHistory(browseUrl(slug, query, platform, slug === selectedSlug ? selectedVersion : null));
+  }
+
+  function backToSkills() {
+    pendingRegistryFocus.current = selectedSlug ? { kind: "row", slug: selectedSlug } : null;
+    searchSelectionQuery.current = null;
+    setSelectedSlug(null);
+    setSelectedVersion(null);
+    pushAppHistory(browseUrl(null, query, platform));
   }
 
   /** Selecting a bundle (or nothing) clears the skill so no release is fetched. */
@@ -706,18 +769,20 @@ export function RegistryApp({ client }: RegistryAppProps) {
 
   function selectVersion(version: string) {
     const target = visibleReleases.find((item) => item.version === version);
-    if (!selectedSlug || !target || version === selectedVersion) return;
+    if (!detailSlug || !target || version === selectedVersion) return;
     const nextPlatform = releasePlatform(target.platforms, platform) ?? platform;
+    // Pinning a version makes an implicit desktop selection explicit.
+    setSelectedSlug(detailSlug);
     setSelectedVersion(version);
     setPlatform(nextPlatform);
     setRelease(null);
     setDetailMessage(null);
     setDetailState("loading");
-    pushAppHistory(browseUrl(selectedSlug, query, nextPlatform, version));
+    pushAppHistory(browseUrl(detailSlug, query, nextPlatform, version));
   }
 
   function returnToLatest() {
-    if (!selectedSlug) return;
+    if (!detailSlug) return;
     const nextPlatform = latestVisibleRelease
       ? releasePlatform(latestVisibleRelease.platforms, platform) ?? platform
       : platform;
@@ -726,7 +791,8 @@ export function RegistryApp({ client }: RegistryAppProps) {
     setRelease(null);
     setDetailMessage(null);
     setDetailState("loading");
-    pushAppHistory(browseUrl(selectedSlug, query, nextPlatform));
+    setSelectedSlug(detailSlug);
+    pushAppHistory(browseUrl(detailSlug, query, nextPlatform));
     if (!selectedSkill) setRefreshKey((current) => current + 1);
   }
 
@@ -742,11 +808,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
 
   function openRegistry() {
     setView("browse");
-    const nextSlug = selectedSlug ?? skills[0]?.slug ?? null;
-    const nextVersion = nextSlug === selectedSlug ? selectedVersion : null;
-    setSelectedSlug(nextSlug);
-    setSelectedVersion(nextVersion);
-    pushAppHistory(browseUrl(nextSlug, query, platform, nextVersion));
+    pushAppHistory(browseUrl(selectedSlug, query, platform, selectedVersion));
   }
 
   async function loadMoreSkills() {
@@ -837,6 +899,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }
 
   async function handleLogout() {
+    setMobileMenu(null);
     setAuthMessage(null);
     setSession(null);
     clearStoredSession();
@@ -851,6 +914,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }
 
   function handleSessionInvalidated(message: string) {
+    setMobileMenu(null);
     setSession(null);
     clearStoredSession();
     setMfaPending(null);
@@ -863,15 +927,11 @@ export function RegistryApp({ client }: RegistryAppProps) {
   function navigateTo(nextView: AppView) {
     setView(nextView);
     if (nextView === "browse") {
-      const nextSlug = selectedSlug ?? skills[0]?.slug ?? null;
-      const nextVersion = nextSlug === selectedSlug ? selectedVersion : null;
-      setSelectedSlug(nextSlug);
-      setSelectedVersion(nextVersion);
-      pushAppHistory(browseUrl(nextSlug, query, platform, nextVersion));
+      pushAppHistory(browseUrl(selectedSlug, query, platform, selectedVersion));
     } else {
       pushAppHistory(pathForView(nextView));
     }
-    setMobileMoreOpen(false);
+    setMobileMenu(null);
   }
 
   function handleAppLink(event: ReactMouseEvent<HTMLAnchorElement>, nextView: AppView) {
@@ -956,10 +1016,10 @@ export function RegistryApp({ client }: RegistryAppProps) {
     { view: "browse" as const, label: "Registry", group: "Library" as const, icon: <Boxes size={18} aria-hidden="true" />, enabled: true },
     { view: "architectures" as const, label: "Architectures", group: "Build" as const, icon: <Workflow size={18} aria-hidden="true" />, enabled: Boolean(session) },
     { view: "submit" as const, label: "Submit", group: "Build" as const, icon: <Upload size={18} aria-hidden="true" />, enabled: canUseSubmit },
-    { view: "manage" as const, label: "Manage skills", group: "Govern" as const, icon: <PackageOpen size={18} aria-hidden="true" />, enabled: Boolean(session && registryClient.listManagedSkills) },
+    { view: "manage" as const, label: "Manage skills", group: "Govern" as const, icon: <PackageCheck size={18} aria-hidden="true" />, enabled: Boolean(session && registryClient.listManagedSkills) },
     { view: "review" as const, label: "Review", group: "Govern" as const, icon: <ClipboardList size={18} aria-hidden="true" />, enabled: canUseReview },
     { view: "teams" as const, label: "Teams", group: "Govern" as const, icon: <UsersRound size={18} aria-hidden="true" />, enabled: canUseTeams },
-    { view: "organizations" as const, label: "Organizations", group: "Govern" as const, icon: <UsersRound size={18} aria-hidden="true" />, enabled: canUseOrganizations },
+    { view: "organizations" as const, label: "Organizations", group: "Govern" as const, icon: <Building2 size={18} aria-hidden="true" />, enabled: canUseOrganizations },
     { view: "targets" as const, label: "Connected targets", group: "Observe" as const, icon: <Link2 size={18} aria-hidden="true" />, enabled: canUseTargets },
     { view: "updates" as const, label: "Updates", group: "Observe" as const, icon: <RotateCw size={18} aria-hidden="true" />, enabled: canUseTargets },
     { view: "admin" as const, label: "Admin", group: "Account" as const, icon: <Settings size={18} aria-hidden="true" />, enabled: canUseAdmin },
@@ -969,68 +1029,83 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const navGroups = (["Library", "Build", "Govern", "Observe", "Account"] as const)
     .map((label) => ({ label, items: navItems.filter((item) => item.group === label) }))
     .filter((group) => group.items.length > 0);
-  const mobilePriority = ["browse", "architectures", "review", "targets", "submit"] as const;
-  const mobilePrimaryItems = mobilePriority
-    .map((view) => navItems.find((item) => item.view === view))
-    .filter((item): item is (typeof navItems)[number] => Boolean(item))
-    .slice(0, 4);
-  const mobilePrimaryViews = new Set(mobilePrimaryItems.map((item) => item.view));
-  const mobileOverflowItems = navItems.filter((item) => !mobilePrimaryViews.has(item.view));
+  // Mobile keeps Libraries and Registry, plus one shortcut for the reader's
+  // main job. Every other allowed destination stays grouped under More.
+  const mobileRoleView = canUseReview ? "review" : canUseSubmit ? "submit" : canUseTargets ? "targets" : null;
+  const mobilePrimaryItems = navItems.filter((item) => item.view === "libraries" || item.view === "browse" || item.view === mobileRoleView);
+  const mobilePrimaryViews = new Set<AppView>(mobilePrimaryItems.map((item) => item.view));
+  const mobileOverflowGroups = navGroups
+    .map((group) => ({ label: group.label, items: group.items.filter((item) => !mobilePrimaryViews.has(item.view)) }))
+    .filter((group) => group.items.length > 0);
+  const mobileOverflowActive = mobileOverflowGroups.some((group) => group.items.some((item) => item.view === activeView));
 
   // Existing skill detail (release history, export, trust panels). The bundle
   // workspace renders it in its inspector and adds bundle backlinks.
   const renderSkillDetail = (bundles: ReactNode) => (
     <>
-      {historyControls && <CardContent className="shadcn-detail-content registry-detail-content">{historyControls}</CardContent>}
-      {detailMessage && (
-        <CardContent className="registry-state-content">
-          <div className="safe-message panel-state" role="status" aria-live="polite">
-            <CircleAlert size={24} aria-hidden="true" />
-            <strong>{detailMessage}</strong>
-            <span>{selectedVersion !== null
-              ? "The requested exact version was not substituted. Choose a published version or return to latest."
-              : "The selected skill could not load. Retry the request or choose a different approved skill."}</span>
-            <Button className="state-action shadcn-action-button" size="sm" type="button" variant="outline" onClick={retryRegistry}>
-              <RotateCw size={15} aria-hidden="true" />
-              Retry
-            </Button>
-            {selectedVersion !== null && !selectedSkill && <Button size="sm" type="button" variant="outline" onClick={returnToLatest}>Return to latest</Button>}
-          </div>
-        </CardContent>
-      )}
-      {detailState === "loading" && <DetailSkeleton />}
-      {detailState === "ready" && !detailMessage && selectedSkill && selectedSkill.slug === selectedSlug && release && (
-        <SkillDetail
-          bundles={bundles}
-          command={selectedCommand}
-          client={registryClient}
-          platform={detailPlatform}
-          release={release}
-          selectedSkill={selectedSkill}
-          session={session}
-          setPlatform={updatePlatform}
-          onChanged={() => setRefreshKey((value) => value + 1)}
-        />
-      )}
-      {detailState === "ready" && selectedSkill && !release && !detailMessage && (
-        <CardContent className="registry-state-content">
-          <div className="empty-detail">
-            <FileCode2 size={42} aria-hidden="true" />
-            <h2>No default stable release</h2>
-            <p>Choose an exact version from release history when no approved stable release is available.</p>
-          </div>
-          {bundles}
-        </CardContent>
-      )}
-      {detailState !== "loading" && !selectedSkill && !detailMessage && (
-        <CardContent className="registry-state-content">
-          <div className="empty-detail">
-            <FileCode2 size={42} aria-hidden="true" />
-            <h2>Select a skill</h2>
-            <p>Choose an approved skill to inspect release metadata and export guidance.</p>
-          </div>
-        </CardContent>
-      )}
+                      {skillReady && selectedSkill ? (
+                        <header className="registry-inspector-head">
+                          <span className="registry-tile" data-size="32" data-tone={tileTone(selectedSkill.slug)} aria-hidden="true" />
+                          <div className="registry-inspector-title">
+                            <h2 ref={inspectorTitleRef} tabIndex={-1}>{selectedSkill.title}</h2>
+                            <p className="registry-ref">
+                              <code>{selectedSkill.slug}</code>
+                              {releaseReady && release && <><span aria-hidden="true">@</span><code>{release.version}</code></>}
+                            </p>
+                            {releaseReady && release && ((selectedVersion !== null && selectedSkill.latestVersion && selectedSkill.latestVersion !== release.version) || release.lifecycleStatus === "deprecated") && (
+                              <p className="registry-inspector-meta">
+                                {selectedVersion !== null && selectedSkill.latestVersion && selectedSkill.latestVersion !== release.version && <span>Latest is {selectedSkill.latestVersion}</span>}
+                                {release.lifecycleStatus === "deprecated" && <span className="registry-chip" data-tone="amber">Deprecated</span>}
+                              </p>
+                            )}
+                          </div>
+                          <div className="registry-version-slot">{historyControls}</div>
+                        </header>
+                      ) : null}
+                      {detailMessage ? (
+                        <div className="registry-inspector-state" role="status" aria-live="polite">
+                          <CircleAlert size={20} aria-hidden="true" />
+                          <div>
+                            <strong>{detailMessage}</strong>
+                            <p>{selectedVersion !== null
+                              ? "The requested exact version was not substituted. Choose a published version or return to latest."
+                              : "The selected skill could not load. Retry the request or choose a different approved skill."}</p>
+                            <div className="registry-actions">
+                              <Button size="sm" type="button" variant="outline" onClick={retryRegistry}>
+                                <RotateCw size={15} aria-hidden="true" />
+                                Retry
+                              </Button>
+                              {selectedVersion !== null && !selectedSkill && <Button size="sm" type="button" variant="outline" onClick={returnToLatest}>Return to latest</Button>}
+                            </div>
+                          </div>
+                        </div>
+                      ) : detailState === "ready" && releaseReady && release && selectedSkill ? (
+                        <SkillDetail
+                          bundles={bundles}
+                          command={selectedCommand}
+                          client={registryClient}
+                          disclosures={registryDisclosures}
+                          platform={detailPlatform}
+                          release={release}
+                          selectedSkill={selectedSkill}
+                          session={session}
+                          setDisclosure={(key, open) => setRegistryDisclosures((current) => current[key] === open ? current : { ...current, [key]: open })}
+                          setPlatform={updatePlatform}
+                          onChanged={() => setRefreshKey((value) => value + 1)}
+                        />
+                      ) : detailState === "ready" && skillReady && !release ? (
+                        <div className="registry-inspector-state">
+                          <FileCode2 size={20} aria-hidden="true" />
+                          <div>
+                            <h3>No default stable release</h3>
+                            <p>Choose an exact version from release history when no approved stable release is available.</p>
+                          </div>
+                        </div>
+                      ) : detailSlug || detailState === "loading" || listState === "loading" ? (
+                        <RegistryInspectorSkeleton withHeader={!skillReady} />
+                      ) : (
+                        <p className="registry-inspector-empty">{skills.length > 0 ? "Select a skill to see its exact releases." : "No skill selected."}</p>
+                      )}
     </>
   );
 
@@ -1088,30 +1163,49 @@ export function RegistryApp({ client }: RegistryAppProps) {
       </aside>
 
       <div className="app-main">
-        {activeView === "browse" && (
-          <header className="app-topbar">
-            <a className="mobile-brand" href="/registry" onClick={(event) => {
-              handleAppLink(event, "browse");
-            }}>
-              <img src="/brand/myskills-mark.svg" alt="" width={100} height={100} />
-              <span>MySkills</span>
-            </a>
-            <label className="global-search" htmlFor="skill-search">
-              <Search size={18} aria-hidden="true" />
-              <input
-                id="skill-search"
-                aria-label={bundleCatalog ? "Search skills and bundles" : "Search skills"}
-                name="skill-search"
-                value={query}
-                onChange={(event) => updateSearch(event.target.value)}
-                placeholder={bundleCatalog ? "Search skills and bundles…" : "Search skills…"}
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <kbd>/</kbd>
-            </label>
-          </header>
-        )}
+        <header className="mobile-topbar">
+          <a className="mobile-brand" href="/registry" onClick={(event) => {
+            handleAppLink(event, "browse");
+          }}>
+            <img src="/brand/myskills-mark.svg" alt="" width={100} height={100} />
+            <span>MySkills</span>
+          </a>
+          {session && (
+            <div className="mobile-account">
+              <button
+                aria-controls="mobile-account-menu"
+                aria-expanded={mobileMenu === "account"}
+                aria-label="Account menu"
+                className="mobile-account-button"
+                ref={mobileAccountButtonRef}
+                type="button"
+                onClick={() => setMobileMenu((open) => open === "account" ? null : "account")}
+              >
+                <UserRound size={20} aria-hidden="true" />
+              </button>
+              {mobileMenu === "account" && (
+                <div className="mobile-account-menu" id="mobile-account-menu" ref={mobileAccountMenuRef}>
+                  <div className="mobile-account-identity">
+                    <strong>{session.user.email}</strong>
+                    <span>{session.user.roles.map(formatStatusLabel).join(", ") || "User"} · {session.user.mfaVerified ? "MFA verified" : "MFA pending"}</span>
+                  </div>
+                  <a
+                    aria-current={activeView === "settings" ? "page" : undefined}
+                    href="/settings"
+                    onClick={(event) => handleAppLink(event, "settings")}
+                  >
+                    <UserCog size={18} aria-hidden="true" />
+                    <span>Settings</span>
+                  </a>
+                  <button type="button" onClick={() => void handleLogout()}>
+                    <LogOut size={18} aria-hidden="true" />
+                    <span>Sign out</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </header>
 
         <div className="app-content" id="main-content" tabIndex={-1}>
           {activeView === "libraries" && session ? (
@@ -1148,6 +1242,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
               libraries={session ? registryClient.libraries : undefined}
               listTeams={session ? () => registryClient.listTeams() : undefined}
               onClearQuery={() => updateSearch("")}
+              onQueryChange={updateSearch}
               onClearSelection={() => selectBundle(null)}
               onSelectBundle={selectBundle}
               onSelectSkill={selectSkill}
@@ -1161,83 +1256,109 @@ export function RegistryApp({ client }: RegistryAppProps) {
               view={catalogView}
             />
           ) : (
-            <main className="workspace shadcn-registry-workspace shadcn-registry-layout">
-              <header className="registry-page-header">
-                <div>
-                  <span className="registry-page-eyebrow">Library / approved catalogue</span>
-                  <div className="registry-page-title-row">
-                    <h1>Skill registry</h1>
-                    <Badge className="registry-count-badge" variant="outline" aria-live="polite">
-                      {listState === "ready" ? `${skills.length} ${nextCursor ? "shown" : "approved"}` : resultCountText(listState, skills.length)}
-                    </Badge>
-                  </div>
-                  <p>Find an exact release, inspect its trust evidence, and carry the approved reference into your workflow.</p>
-                </div>
+            <main className="registry-workspace" aria-labelledby="registry-heading">
+              <header className="registry-page-head">
+                <h1 id="registry-heading">Skill registry</h1>
               </header>
-              <Card className="results-panel registry-results-panel shadcn-console-card" aria-label="Skill search results">
-                <CardHeader className="panel-heading review-registry-heading shadcn-card-header">
-                  <div>
-                    <CardTitle>Approved skills</CardTitle>
-                    <CardDescription aria-live="polite">{nextCursor && listState === "ready" ? `${skills.length} shown · more available` : resultCountText(listState, skills.length)}</CardDescription>
+              <div
+                className="registry-surface"
+                data-layout={registryLayout ?? undefined}
+                data-view={showRegistryList ? "list" : "detail"}
+                ref={measureRegistry}
+              >
+                {showRegistryList && (
+                  <div className="registry-toolbar">
+                    <label className="registry-search" htmlFor="skill-search">
+                      <Search size={16} aria-hidden="true" />
+                      <input
+                        id="skill-search"
+                        aria-label="Search skills"
+                        name="skill-search"
+                        value={query}
+                        onChange={(event) => updateSearch(event.target.value)}
+                        placeholder="Search skills…"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <kbd aria-hidden="true">/</kbd>
+                    </label>
                   </div>
-                  <span className="registry-panel-note">Exact references</span>
-                </CardHeader>
-                <CardContent className="review-card-content registry-card-content">
-                  <div className="result-list shadcn-review-list registry-result-list">
-                    {listState === "loading" && <LoadingRows />}
-                    {listState === "error" && (
-                      <div className="safe-message panel-state" role="status" aria-live="polite">
-                        <CircleAlert size={24} aria-hidden="true" />
-                        <strong>{listMessage ?? "The registry is not available."}</strong>
-                        <span>The list could not load. Retry the registry request before selecting a skill.</span>
-                        <Button className="state-action shadcn-action-button" size="sm" type="button" variant="outline" onClick={retryRegistry}>
-                          <RotateCw size={15} aria-hidden="true" />
-                          Retry
-                        </Button>
+                )}
+                <div className="registry-body">
+                  {showRegistryList && (
+                    <section className="registry-results-panel registry-list" aria-label="Skill search results">
+                      <div className="registry-list-label">
+                        <h2>Skills</h2>
+                        <span aria-live="polite">{listState === "ready" ? (nextCursor ? `${skills.length} loaded` : String(skills.length)) : ""}</span>
                       </div>
-                    )}
-                    {listState !== "loading" && listState !== "error" && skills.map((skill) => (
-                      <a
-                        aria-current={skill.slug === selectedSlug ? "true" : undefined}
-                        className={skill.slug === selectedSlug ? "result-row review-registry-row registry-result-row selected" : "result-row review-registry-row registry-result-row"}
-                        href={browseUrl(skill.slug, query, platform, skill.slug === selectedSlug ? selectedVersion : null)}
-                        key={skill.slug}
-                        onClick={(event) => handleCallbackLink(event, () => selectSkill(skill.slug))}
-                      >
-                        <SkillIcon slug={skill.slug} />
-                        <span className="result-main review-registry-main">
-                          <strong>{skill.title}</strong>
-                          <span>{skill.slug}</span>
-                          <span className="tag-row review-registry-tags">{skill.tags.slice(0, 3).map((tag) => <Tag key={tag}>{tag}</Tag>)}</span>
-                        </span>
-                        <span className="registry-result-meta">
-                          <Badge className="registry-version-badge" variant="secondary">{skill.latestVersion ?? "-"}</Badge>
-                          <span className="registry-visibility">{formatStatusLabel(skill.visibility)}</span>
-                          <span className="platform-icons">{skill.platforms.slice(0, 2).map((item) => item.name).join(", ")}</span>
-                        </span>
-                      </a>
-                    ))}
-                    {listState === "ready" && nextCursor && <Button type="button" size="sm" variant="outline" disabled={loadingMore} onClick={() => void loadMoreSkills()}>{loadingMore ? "Loading more skills…" : "Load more skills"}</Button>}
-                    {listState === "ready" && listMessage && <p role="alert">{listMessage}</p>}
-                    {listState === "ready" && skills.length === 0 && (
-                      <div className="empty-state">
-                        <CircleAlert size={22} aria-hidden="true" />
-                        <strong>No skills found.</strong>
-                        <span>{query.trim() ? `No approved skills match "${query.trim()}".` : "Approved skills will appear here after publication."}</span>
-                        {query.trim() && (
-                          <Button className="state-action shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => updateSearch("")}>
-                            Clear search
+                      {listState === "loading" && <RegistryLoadingRows />}
+                      {listState === "error" && (
+                        <div className="registry-list-state" role="status" aria-live="polite">
+                          <strong>{listMessage ?? "The registry is not available."}</strong>
+                          <p>The list could not load. Retry the registry request before selecting a skill.</p>
+                          <Button size="sm" type="button" variant="outline" onClick={retryRegistry}>
+                            <RotateCw size={15} aria-hidden="true" />
+                            Retry
                           </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="detail-panel registry-detail-panel shadcn-console-card" aria-label="Selected skill detail">
-                {renderSkillDetail(null)}
-              </Card>
+                        </div>
+                      )}
+                      {listState !== "loading" && listState !== "error" && skills.length > 0 && (
+                        <div className="registry-rows">
+                          {skills.map((skill) => (
+                            <a
+                              aria-current={!registryStacked && skill.slug === detailSlug ? "true" : undefined}
+                              className="registry-row"
+                              data-slug={skill.slug}
+                              href={browseUrl(skill.slug, query, platform, skill.slug === selectedSlug ? selectedVersion : null)}
+                              key={skill.slug}
+                              onClick={(event) => handleCallbackLink(event, () => selectSkill(skill.slug))}
+                            >
+                              <span className="registry-tile" data-tone={tileTone(skill.slug)} aria-hidden="true" />
+                              <span className="registry-row-text">
+                                <span className="registry-row-title">{skill.title}</span>
+                                <span className="registry-row-meta">
+                                  <code>{skill.slug}</code>
+                                  <span>{formatStatusLabel(skill.visibility)}</span>
+                                  {skill.platforms.length > 0 && <span>{skill.platforms.slice(0, 2).map((item) => item.name).join(", ")}</span>}
+                                </span>
+                              </span>
+                              {skill.latestVersion && <span className="registry-version-chip">{skill.latestVersion}</span>}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                      {listState === "ready" && nextCursor && (
+                        <div className="registry-list-foot">
+                          <Button type="button" size="sm" variant="outline" disabled={loadingMore} onClick={() => void loadMoreSkills()}>{loadingMore ? "Loading more skills…" : "Load more skills"}</Button>
+                        </div>
+                      )}
+                      {listState === "ready" && listMessage && <p className="registry-alert" role="alert">{listMessage}</p>}
+                      {listState === "ready" && skills.length === 0 && (
+                        <div className="registry-list-state">
+                          <strong>No skills found.</strong>
+                          <p>{query.trim() ? `No approved skills match "${query.trim()}".` : "Approved skills will appear here after publication."}</p>
+                          {query.trim() && (
+                            <Button size="sm" type="button" variant="outline" onClick={() => updateSearch("")}>
+                              Clear search
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </section>
+                  )}
+                  {showRegistryInspector && (
+                    <section className="registry-detail-panel registry-inspector" aria-label="Selected skill detail">
+                      {registryStacked && (
+                        <Button className="registry-back" type="button" variant="ghost" onClick={backToSkills}>
+                          <ArrowLeft size={16} aria-hidden="true" />
+                          Back to skills
+                        </Button>
+                      )}
+                      {renderSkillDetail(null)}
+                    </section>
+                  )}
+                </div>
+              </div>
             </main>
           )}
         </div>
@@ -1256,31 +1377,36 @@ export function RegistryApp({ client }: RegistryAppProps) {
               <span>{item.view === "architectures" ? "Build" : item.view === "targets" ? "Targets" : item.label}</span>
             </a>
           ))}
-          {mobileOverflowItems.length > 0 && (
+          {mobileOverflowGroups.length > 0 && (
             <>
               <button
                 aria-controls="mobile-more-navigation"
-                aria-expanded={mobileMoreOpen}
-                className={mobileOverflowItems.some((item) => item.view === activeView) ? "mobile-nav-item active" : "mobile-nav-item"}
+                aria-expanded={mobileMenu === "more"}
+                className={mobileOverflowActive ? "mobile-nav-item active" : "mobile-nav-item"}
                 ref={mobileMoreButtonRef}
                 type="button"
-                onClick={() => setMobileMoreOpen((open) => !open)}
+                onClick={() => setMobileMenu((open) => open === "more" ? null : "more")}
               >
                 <Ellipsis size={18} aria-hidden="true" />
                 <span>More</span>
               </button>
-              {mobileMoreOpen && (
+              {mobileMenu === "more" && (
                 <div className="mobile-more-menu" id="mobile-more-navigation" ref={mobileMoreMenuRef}>
-                  {mobileOverflowItems.map((item) => (
-                    <a
-                      aria-current={activeView === item.view ? "page" : undefined}
-                      href={pathForView(item.view)}
-                      key={item.view}
-                      onClick={(event) => handleAppLink(event, item.view)}
-                    >
-                      {item.icon}
-                      <span>{item.label}</span>
-                    </a>
+                  {mobileOverflowGroups.map((group) => (
+                    <div className="mobile-more-group" role="group" aria-labelledby={`mobile-more-${group.label.toLowerCase()}`} key={group.label}>
+                      <span className="mobile-more-label" id={`mobile-more-${group.label.toLowerCase()}`}>{group.label}</span>
+                      {group.items.map((item) => (
+                        <a
+                          aria-current={activeView === item.view ? "page" : undefined}
+                          href={pathForView(item.view)}
+                          key={item.view}
+                          onClick={(event) => handleAppLink(event, item.view)}
+                        >
+                          {item.icon}
+                          <span>{item.label}</span>
+                        </a>
+                      ))}
+                    </div>
                   ))}
                 </div>
               )}
@@ -1333,6 +1459,8 @@ function LoginPage({
   onPasswordReset: (input: { email: string }) => Promise<void>;
   onVerifyMfa: (codeOrRecoveryCode: string) => Promise<void>;
 }) {
+  const [resetMode, setResetMode] = useState(false);
+  const step = mfaPending ? "mfa" : resetMode ? "reset" : "login";
   return (
     <>
     <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -1347,9 +1475,11 @@ function LoginPage({
       </nav>
       <section className="login-panel" aria-labelledby="login-heading">
         <p className="landing-status">Public beta. Hosted signups are closed.</p>
-        <h1 id="login-heading">Login</h1>
-        <p>Use an approved owner or team account to access the hosted beta workspace. Need an account? Ask the instance owner for an invitation and follow the email link.</p>
-        <p><a href="/registry">Browse public skills</a> · <a href="https://github.com/jremick/myskills/blob/main/docs/GETTING_STARTED.md">Self-host MySkills</a></p>
+        <h1 id="login-heading">{step === "mfa" ? "Verify sign-in" : step === "reset" ? "Reset password" : "Login"}</h1>
+        {step === "login" && <>
+          <p>Use an approved owner or team account to sign in. Need an account? Ask the instance owner for an invitation and follow the email link.</p>
+          <p><a href="/registry">Browse public skills</a> · <a href="https://github.com/jremick/myskills/blob/main/docs/GETTING_STARTED.md">Self-host MySkills</a></p>
+        </>}
         <AuthWidget
           authMessage={authMessage}
           authState={authState}
@@ -1357,7 +1487,9 @@ function LoginPage({
           onLogin={onLogin}
           onLogout={async () => undefined}
           onPasswordReset={onPasswordReset}
+          onResetModeChange={setResetMode}
           onVerifyMfa={onVerifyMfa}
+          resetMode={resetMode}
           session={null}
         />
       </section>
@@ -1550,25 +1682,34 @@ function NotFoundPage({ onHome, onLogin, showLandingLink }: { onHome: () => void
   );
 }
 
-function SubmitDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
+function SubmitDashboard({ client }: { client: RegistryClient; session: WebSession }) {
   const [file, setFile] = useState<File | null>(null);
   const [feedbackId, setFeedbackId] = useState<string | null>(null);
   const [state, setState] = useState<LoadState>("idle");
   const [submissionsState, setSubmissionsState] = useState<LoadState>("loading");
-  const [message, setMessage] = useState<string | null>(null);
+  // Each message renders in the part of the page that produced it.
+  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const [listMessage, setListMessage] = useState<string | null>(null);
+  const [rowMessage, setRowMessage] = useState<{ submissionId: string; text: string; alert: boolean } | null>(null);
   const [result, setResult] = useState<SubmitSkillResult | null>(null);
   const [submissions, setSubmissions] = useState<UserSubmissionSummary[]>([]);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<ConfirmationRequest | null>(null);
+  const baseId = useId();
+  const resultHeadingRef = useRef<HTMLHeadingElement>(null);
+  const listHeadingRef = useRef<HTMLHeadingElement>(null);
+  const feedbackTriggers = useRef(new Map<string, HTMLButtonElement>());
+  const focusTarget = useRef<{ kind: "result" } | { kind: "trigger"; id: string } | null>(null);
 
   async function refreshSubmissions() {
     setSubmissionsState("loading");
+    setListMessage(null);
     try {
       setSubmissions(await client.listUserSubmissions());
       setSubmissionsState("ready");
     } catch (error) {
-      setMessage(safeSubmitErrorMessage(error));
+      setListMessage(safeSubmitErrorMessage(error));
       setSubmissionsState("error");
     }
   }
@@ -1577,23 +1718,34 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
     void refreshSubmissions();
   }, [client]);
 
+  // Focus follows the result, or returns to a row's feedback trigger (or the
+  // list heading when the row has gone) once any dialog has closed.
+  useEffect(() => {
+    const target = focusTarget.current;
+    if (!target || confirmation) return;
+    const element = target.kind === "result" ? resultHeadingRef.current : feedbackTriggers.current.get(target.id) ?? listHeadingRef.current;
+    if (!element?.isConnected) return;
+    focusTarget.current = null;
+    element.focus();
+  });
+
   async function submitPackage() {
     setMessage(null);
     setResult(null);
     if (!file) {
-      setMessage("Choose a package archive before submitting.");
+      setMessage({ text: "Choose a package archive before submitting.", error: true });
       return;
     }
     if (!isZipArchive(file)) {
-      setMessage("Choose a .zip package archive.");
+      setMessage({ text: "Choose a .zip package archive.", error: true });
       return;
     }
     if (file.size === 0) {
-      setMessage("Package archive is empty.");
+      setMessage({ text: "Package archive is empty.", error: true });
       return;
     }
     if (file.size > MAX_WEB_ARCHIVE_BYTES) {
-      setMessage("Package archive exceeds 10 MB.");
+      setMessage({ text: "Package archive exceeds 10 MB.", error: true });
       return;
     }
     setState("loading");
@@ -1604,21 +1756,22 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
       });
       setResult(submitted);
       setState("ready");
+      focusTarget.current = { kind: "result" };
       await refreshSubmissions();
     } catch (error) {
-      setMessage(safeSubmitErrorMessage(error));
+      setMessage({ text: safeSubmitErrorMessage(error), error: true });
       setState("error");
     }
   }
 
   async function exportSubmission(submission: UserSubmissionSummary) {
-    setMessage(null);
+    setRowMessage(null);
     setExportingId(submission.id);
     try {
       const bundle = await client.exportUserSubmission(submission.id);
       downloadJsonFile(`${submission.slug}-${submission.version}.myskills.json`, bundle);
     } catch (error) {
-      setMessage(safeSubmitErrorMessage(error));
+      setRowMessage({ submissionId: submission.id, text: safeSubmitErrorMessage(error), alert: true });
     } finally {
       setExportingId(null);
     }
@@ -1630,6 +1783,7 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
       title: "Withdraw this submission?",
       description: "The version will leave the active review queue. Record why the author is withdrawing it.",
       confirmLabel: "Withdraw submission",
+      details: [{ label: "Release", value: `${submission.slug}@${submission.version}` }],
       destructive: true,
       requireReason: true,
       onConfirm: (confirmedReason) => commitSubmissionWithdrawal(submission, confirmedReason),
@@ -1637,203 +1791,223 @@ function SubmitDashboard({ client, session }: { client: RegistryClient; session:
   }
 
   async function commitSubmissionWithdrawal(submission: UserSubmissionSummary, confirmedReason: string) {
-    setMessage(null);
+    setRowMessage(null);
     setActioningId(submission.id);
     try {
       await client.performSubmissionAction(submission.id, "withdraw", confirmedReason);
+      focusTarget.current = { kind: "trigger", id: submission.id };
       await refreshSubmissions();
     } catch (error) {
       const safeMessage = safeSubmitErrorMessage(error);
-      setMessage(safeMessage);
+      // The dialog owns the alert; the row keeps a quiet copy after it closes.
+      setRowMessage({ submissionId: submission.id, text: safeMessage, alert: false });
       throw new Error(safeMessage);
     } finally {
       setActioningId(null);
     }
   }
 
+  function closeFeedback(submissionId: string) {
+    setFeedbackId(null);
+    focusTarget.current = { kind: "trigger", id: submissionId };
+  }
+
+  function chooseCorrection() {
+    setFile(null);
+    setResult(null);
+    setMessage({ text: "Choose the corrected archive with a new semantic version. Previous submissions remain immutable.", error: false });
+    const input = document.getElementById("package-archive") as HTMLInputElement | null;
+    if (input) { input.value = ""; input.focus(); input.scrollIntoView?.({ block: "center" }); }
+  }
+
+  const resultReview = result ? reviewStatusLabel(result.submission.reviewStatus) : null;
+  const resultSecurity = result ? securityStatusLabel(result.submission.securityStatus) : null;
+  const resultFindings = result ? findingsLabel(result.scan.findingCount) : null;
+
   return (
-    <main className="submit-workspace shadcn-submit-workspace" aria-label="Skill package submission">
-      <section className="admin-hero shadcn-submit-hero">
-        <div>
-          <Badge className="shadcn-review-eyebrow" variant="outline">Author workflow</Badge>
-          <h1>Submit package</h1>
-          <p aria-live="polite">{session.user.email} · {state === "loading" ? "Uploading archive…" : "author submission"}</p>
-        </div>
-      </section>
+    <main className="registry-workspace author-review submit-dashboard" aria-label="Skill package submission">
+      <header className="registry-page-head">
+        <h1>Submit package</h1>
+      </header>
 
-      {message && <div className="safe-message admin-message" role="status">{message}</div>}
-
-      <section className="submit-layout shadcn-submit-layout">
-        <Card className="submit-panel shadcn-submit-panel shadcn-console-card" aria-label="Package upload">
-          <CardHeader className="admin-panel-heading shadcn-card-header">
-            <span className="admin-panel-icon"><Upload size={18} aria-hidden="true" /></span>
-            <div>
-              <CardTitle>Package archive</CardTitle>
-              <CardDescription>{file ? `${file.name} · ${formatBytes(file.size)}` : "No file selected"}</CardDescription>
-            </div>
-          </CardHeader>
-
-          <CardContent className="submit-form shadcn-submit-form">
-            <form className="submit-form-fields" onSubmit={(event) => {
-              event.preventDefault();
-              void submitPackage();
-            }}>
-              <div className="submit-guidance">
-                <strong>Package requirements</strong>
-                <span>.zip archive, 10 MB maximum, semantic version metadata, and no private paths or install hooks without review notes.</span>
-              </div>
-              <label className="file-picker" htmlFor="package-archive">
-                <PackageOpen size={26} aria-hidden="true" />
-                <span>
-                  <strong>{file?.name ?? "Choose .zip package"}</strong>
-                  <small>{file ? formatBytes(file.size) : "Archive upload"}</small>
-                </span>
-                <input
-                  accept=".zip,application/zip,application/x-zip-compressed"
-                  id="package-archive"
-                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                  type="file"
-                />
-              </label>
-
-              <Button className="save-button shadcn-action-button" disabled={state === "loading" || !file} size="sm" type="submit">
-                <Upload size={16} aria-hidden="true" />
-                Submit for review
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="submit-panel submit-result-panel shadcn-submit-panel shadcn-console-card" aria-label="Submission result">
-          <CardHeader className="admin-panel-heading shadcn-card-header">
-            <span className="admin-panel-icon"><ClipboardList size={18} aria-hidden="true" /></span>
-            <div>
-              <CardTitle>Submission status</CardTitle>
-              <CardDescription>{result ? `${result.submission.slug}@${result.submission.version}` : "Awaiting upload"}</CardDescription>
-            </div>
-          </CardHeader>
-
-          {result ? (
-            <CardContent className="submit-result shadcn-submit-result">
-              <div className={result.scan.findings.length > 0 ? "state-banner state-banner-warning" : "state-banner state-banner-success"}>
-                {result.scan.findings.length > 0 ? (
-                  <>
-                    <CircleAlert size={18} aria-hidden="true" />
-                    <span>Review the scan warnings before a maintainer approves this package.</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck size={18} aria-hidden="true" />
-                    <span>No scan findings. The package is ready for maintainer review.</span>
-                  </>
-                )}
-              </div>
-              <dl className="metadata-grid">
-                <Metadata label="Submission ID" value={result.submission.id} monospace />
-                <Metadata label="Skill" value={result.submission.slug} />
-                <Metadata label="Version" value={result.submission.version} />
-                <Metadata label="Review" value={result.submission.reviewStatus} />
-                <Metadata label="Security" value={result.submission.securityStatus} />
-                <Metadata label="Findings" value={String(result.scan.findingCount)} />
+      <div className="registry-surface">
+        <section aria-labelledby={`${baseId}-upload`} className="submit-upload">
+          <h2 id={`${baseId}-upload`}>Package archive</h2>
+          <form className="submit-upload-form" onSubmit={(event) => {
+            event.preventDefault();
+            void submitPackage();
+          }}>
+            <label className="file-picker submit-picker" htmlFor="package-archive">
+              <PackageOpen size={20} aria-hidden="true" />
+              <span>
+                <strong>{file?.name ?? "Choose .zip package"}</strong>
+                <small>{file ? formatBytes(file.size) : "Archive upload"}</small>
+              </span>
+              <input
+                accept=".zip,application/zip,application/x-zip-compressed"
+                aria-describedby={`${baseId}-requirements`}
+                id="package-archive"
+                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                type="file"
+              />
+            </label>
+            <Button disabled={state === "loading" || !file} size="sm" type="submit">
+              <Upload size={16} aria-hidden="true" />
+              Submit for review
+            </Button>
+          </form>
+          <p className="registry-muted" id={`${baseId}-requirements`}>.zip archive, 10 MB maximum, semantic version metadata, and no private paths or install hooks without review notes.</p>
+          {state === "loading" && <p className="registry-muted" role="status">Uploading archive…</p>}
+          {message && <p className="author-status" data-tone={message.error ? "danger" : undefined} role={message.error ? "alert" : "status"}>{message.text}</p>}
+          {result && resultReview && resultSecurity && resultFindings && (
+            <div className="submit-result-block">
+              <h3 ref={resultHeadingRef} tabIndex={-1}>Submitted {result.submission.slug}@{result.submission.version}</h3>
+              <p className="author-chips">
+                <span className="registry-chip" data-tone={chipTone(resultReview.tone)}>{resultReview.label}</span>
+                <span className="registry-chip" data-tone={chipTone(resultSecurity.tone)}>{resultSecurity.label}</span>
+                <span className="registry-chip" data-tone={chipTone(resultFindings.tone)}>{resultFindings.label}</span>
+              </p>
+              <p className="author-status" data-tone={result.scan.findings.length > 0 ? "amber" : "teal"}>
+                {result.scan.findings.length > 0 ? "Review the scan warnings before a maintainer approves this package." : "No scan findings. The package is ready for maintainer review."}
+              </p>
+              <dl className="registry-facts" data-labels="wide">
+                <div>
+                  <dt>Submission ID</dt>
+                  <dd className="registry-mono">{result.submission.id}</dd>
+                </div>
               </dl>
-              <div className="finding-list" aria-label="Scan findings">
-                {result.scan.findings.length === 0 ? (
-                  <div className="empty-state compact">
-                    <ShieldCheck size={22} aria-hidden="true" />
-                    <strong>No scan findings.</strong>
-                    <span>Ready for maintainer review.</span>
-                  </div>
-                ) : result.scan.findings.map((finding, index) => (
-                  <div className="finding-row" key={`${finding.category}-${finding.path ?? "package"}-${index}`}>
-                    <StatusToken value={finding.severity} />
-                    <span>
-                      <strong>{finding.category}</strong>
-                      <small>{finding.path ?? "package"}</small>
-                    </span>
-                    <p>{finding.message}</p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          ) : (
-            <div className="empty-detail">
-              <Upload size={42} aria-hidden="true" />
-              <h2>No submission yet</h2>
-              <p>Submitted packages appear here after server validation.</p>
+              {result.scan.findings.length > 0 && (
+                <ul aria-label="Scan findings" className="submit-findings">
+                  {result.scan.findings.map((finding, index) => {
+                    const severity = severityLabel(finding.severity);
+                    return (
+                      <li key={`${finding.category}-${finding.path ?? "package"}-${index}`}>
+                        <span className="registry-chip" data-tone={chipTone(severity.tone)}>{severity.label}</span>
+                        <strong>{finding.category}</strong>
+                        <code>{finding.path ?? "package"}</code>
+                        <p>{finding.message}</p>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           )}
-        </Card>
+        </section>
 
-        <Card className="submit-panel user-submissions-panel shadcn-submit-panel shadcn-console-card" aria-label="My submitted skills">
-          <CardHeader className="admin-panel-heading shadcn-card-header">
-            <span className="admin-panel-icon"><PackageOpen size={18} aria-hidden="true" /></span>
-            <div>
-              <CardTitle>My submitted skills</CardTitle>
-              <CardDescription aria-live="polite">{submissionsState === "loading" ? "Loading…" : `${submissions.length} versions`}</CardDescription>
+        <section aria-busy={submissionsState === "loading"} aria-labelledby={`${baseId}-submitted`} className="registry-list submit-list">
+          <div className="registry-list-label">
+            <h2 id={`${baseId}-submitted`} ref={listHeadingRef} tabIndex={-1}>My submitted skills</h2>
+            <span aria-live="polite">{submissionsState === "ready" ? String(submissions.length) : ""}</span>
+          </div>
+          {submissionsState === "loading" && submissions.length === 0 && (
+            <div className="registry-skeleton" role="status" aria-live="polite">
+              <span className="sr-only">Loading submissions…</span>
+              {[0, 1, 2].map((item) => <div className="registry-skeleton-row" key={item}><span /><span /></div>)}
             </div>
-          </CardHeader>
-          <CardContent className="submission-list shadcn-submission-list">
-            {submissions.map((submission) => (
-              <div className="submission-row" key={submission.id}>
-                <span className="cell-main">
-                  <strong>{submission.title}</strong>
-                  <small>{submission.slug}@{submission.version}</small>
-                </span>
-                <span className="submission-statuses">
-                  <StatusToken value={submission.reviewStatus} />
-                  <StatusToken value={submission.lifecycleStatus} />
-                  <StatusToken value={submission.securityStatus} />
-                  <span>{formatBytes(submission.artifact.byteSize)}</span>
-                </span>
-                <span className="submission-actions">
-                  {client.getUserSubmissionDetail && <Button type="button" size="sm" variant="outline" onClick={() => setFeedbackId(submission.id)}>View feedback for {submission.version}</Button>}
-                  <Button
-                    className="save-button compact-button shadcn-action-button"
-                    disabled={exportingId === submission.id}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                    onClick={() => void exportSubmission(submission)}
-                  >
-                    <Download size={15} aria-hidden="true" />
-                    Export
-                  </Button>
-                  {(submission.allowedActions ?? []).includes("withdraw") && (
-                    <Button
-                      className="danger-button compact-button shadcn-action-button"
-                      disabled={actioningId === submission.id}
-                      size="sm"
-                      type="button"
-                      variant="destructive"
-                      onClick={() => void withdrawSubmission(submission)}
-                    >
-                      <X size={15} aria-hidden="true" />
-                      Withdraw
-                    </Button>
-                  )}
-                </span>
-              </div>
-            ))}
-            {submissionsState === "ready" && submissions.length === 0 && (
-              <div className="empty-state compact">
-                <PackageOpen size={22} aria-hidden="true" />
-                <strong>No submitted skills.</strong>
-                <span>Validated submissions will appear here for export.</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-      {feedbackId && <Card><CardContent>
-        <SubmissionEvidencePanel key={feedbackId} client={client} submissionId={feedbackId} mode="author" onCorrect={() => {
-          setFile(null);
-          setResult(null);
-          setMessage("Choose the corrected archive with a new semantic version. Previous submissions remain immutable.");
-          const input = document.getElementById("package-archive") as HTMLInputElement | null;
-          if (input) { input.value = ""; input.focus(); input.scrollIntoView?.({ block: "center" }); }
-        }} />
-        <PackageFileViewer resourceKey={`author:${feedbackId}`} loadBundle={() => client.exportUserSubmission(feedbackId)} />
-      </CardContent></Card>}
+          )}
+          {submissionsState === "error" && (
+            <div className="registry-list-state">
+              <p role="alert"><strong>{listMessage ?? "Your submissions could not load."}</strong></p>
+              <Button size="sm" type="button" variant="outline" onClick={() => void refreshSubmissions()}>
+                <RotateCw size={15} aria-hidden="true" />
+                Retry
+              </Button>
+            </div>
+          )}
+          {submissions.length > 0 && (
+            <ul className="registry-rows submit-rows">
+              {submissions.map((submission) => {
+                const titleId = `${baseId}-${submission.id}-title`;
+                const feedbackPanelId = `${baseId}-${submission.id}-feedback`;
+                const feedbackOpen = feedbackId === submission.id;
+                const review = reviewStatusLabel(submission.reviewStatus);
+                const security = securityStatusLabel(submission.securityStatus);
+                const findings = findingsLabel(submission.findingCount);
+                return (
+                  <li className="submit-item" key={submission.id}>
+                    <div className="registry-row submission-row">
+                      <span className="registry-tile" data-tone={tileTone(submission.slug)} aria-hidden="true" />
+                      <span className="registry-row-text">
+                        <span className="registry-row-title" id={titleId}>{submission.title}</span>
+                        <span className="registry-row-meta">
+                          <code>{submission.slug}@{submission.version}</code>
+                          <span>{formatBytes(submission.artifact.byteSize)}</span>
+                          <span>Submitted {formatDate(submission.createdAt)}</span>
+                        </span>
+                        <span className="author-chips">
+                          <span className="registry-chip" data-tone={chipTone(review.tone)}>{review.label}</span>
+                          <span className="registry-chip" data-tone={chipTone(security.tone)}>{security.label}</span>
+                          <span className="registry-chip" data-tone={chipTone(findings.tone)}>{findings.label}</span>
+                        </span>
+                      </span>
+                      <span className="submit-row-actions">
+                        {client.getUserSubmissionDetail && (
+                          <Button
+                            aria-controls={feedbackPanelId}
+                            aria-describedby={titleId}
+                            aria-expanded={feedbackOpen}
+                            ref={(element: HTMLButtonElement | null) => {
+                              if (element) feedbackTriggers.current.set(submission.id, element);
+                              else feedbackTriggers.current.delete(submission.id);
+                            }}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                            onClick={() => setFeedbackId((current) => current === submission.id ? null : submission.id)}
+                          >
+                            View feedback for {submission.version}
+                          </Button>
+                        )}
+                        <Button
+                          aria-describedby={titleId}
+                          disabled={exportingId === submission.id}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                          onClick={() => void exportSubmission(submission)}
+                        >
+                          <Download size={15} aria-hidden="true" />
+                          Export
+                        </Button>
+                        {(submission.allowedActions ?? []).includes("withdraw") && (
+                          <Button
+                            aria-describedby={titleId}
+                            className="author-danger"
+                            disabled={actioningId === submission.id}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                            onClick={() => void withdrawSubmission(submission)}
+                          >
+                            <X size={15} aria-hidden="true" />
+                            Withdraw
+                          </Button>
+                        )}
+                      </span>
+                    </div>
+                    {rowMessage?.submissionId === submission.id && (
+                      <p className="author-status submit-row-message" data-tone="danger" role={rowMessage.alert ? "alert" : "status"}>{rowMessage.text}</p>
+                    )}
+                    {feedbackOpen && (
+                      <div className="submit-feedback" id={feedbackPanelId}>
+                        <SubmissionEvidencePanel client={client} submissionId={submission.id} mode="author" focusOnOpen onClose={() => closeFeedback(submission.id)} onCorrect={chooseCorrection} />
+                        <PackageFileViewer resourceKey={`author:${submission.id}`} loadBundle={() => client.exportUserSubmission(submission.id)} />
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {submissionsState === "ready" && submissions.length === 0 && (
+            <div className="registry-list-state">
+              <strong>No submitted skills.</strong>
+              <p>Validated submissions will appear here for export.</p>
+            </div>
+          )}
+        </section>
+      </div>
       {confirmation && <ConfirmationDialog key={confirmation.key} request={confirmation} onClose={() => setConfirmation(null)} />}
     </main>
   );
@@ -1850,25 +2024,40 @@ function appendUniqueById<T extends { id: string }>(current: T[], incoming: T[])
 
 function ReviewDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
   const [state, setState] = useState<LoadState>("loading");
+  // Queue load failures stay in the queue; decision and artifact messages stay
+  // beside the submission they belong to.
   const [message, setMessage] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ submissionId: string; text: string } | null>(null);
+  const [decisionError, setDecisionError] = useState<{ submissionId: string; text: string } | null>(null);
+  const [artifactStatus, setArtifactStatus] = useState<{ submissionId: string; text: string; error: boolean } | null>(null);
   const [submissions, setSubmissions] = useState<ReviewSubmissionSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const listEpoch = useRef(0);
   const morePending = useRef(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [reason, setReason] = useState("");
   const [confirmation, setConfirmation] = useState<ConfirmationRequest | null>(null);
   const [reviewArtifactHashes, setReviewArtifactHashes] = useState<Record<string, string>>({});
   const [artifactLoadingId, setArtifactLoadingId] = useState<string | null>(null);
-  const selected = submissions.find((submission) => submission.id === selectedId) ?? submissions[0] ?? null;
+  const [inspectingId, setInspectingId] = useState<string | null>(null);
+  const [inspectAttempts, setInspectAttempts] = useState<Record<string, number>>({});
+  const [detailOpen, setDetailOpen] = useState(false);
+  const inspecting = useRef<string | null>(null);
+  const { layout, ref: surfaceRef } = useSplitLayout();
+  const queueRef = useRef<HTMLElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const decisionNoticeRef = useRef<HTMLParagraphElement>(null);
+  const queueNoticeRef = useRef<HTMLParagraphElement>(null);
+  const focusTarget = useRef<ReviewFocus | null>(null);
+  const baseId = useId();
+  const stacked = layout === "stack";
+  const selected = submissions.find((submission) => submission.id === selectedId) ?? queueOrder(submissions)[0] ?? null;
   const allowedReviewActions = selected?.allowedActions ?? fallbackReviewActions(selected);
   const selectedArtifactHash = selected ? reviewArtifactHashes[selected.id] ?? selected.approvedArtifactSha256 ?? null : null;
-  const approveDisabled = !allowedReviewActions.includes("approve") || !selectedArtifactHash;
-  const requestChangesDisabled = !allowedReviewActions.includes("request-changes");
-  const rejectDisabled = !allowedReviewActions.includes("reject");
-  const publishDisabled = !allowedReviewActions.includes("publish");
+  const inspectorVisible = Boolean(selected || state === "loading") && (!stacked || detailOpen);
+  const showQueue = !stacked || !inspectorVisible;
+  const queueNotice = notice && !submissions.some((submission) => submission.id === notice.submissionId) ? notice : null;
   const actionHint = selected
     ? selected.securityStatus !== "passed"
       ? "Resolve or document scan findings before approving or publishing."
@@ -1893,6 +2082,8 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
     setState("loading");
     setMessage(null);
     setNotice(null);
+    setDecisionError(null);
+    setArtifactStatus(null);
     try {
       const page = await readReviewPage();
       if (epoch !== listEpoch.current) return;
@@ -1902,7 +2093,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
       setSelectedId((current) => (
         current && nextSubmissions.some((submission) => submission.id === current)
           ? current
-          : nextSubmissions[0]?.id ?? null
+          : queueOrder(nextSubmissions)[0]?.id ?? null
       ));
       setState("ready");
     } catch (error) {
@@ -1935,25 +2126,26 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
     }
   }
 
-  async function commitReviewAction(submission: ReviewSubmissionSummary, action: ReviewActionName, confirmedReason: string) {
-    setMessage(null);
+  // The approval hash is the one shown in the confirmation, captured when it opened.
+  async function commitReviewAction(submission: ReviewSubmissionSummary, action: ReviewActionName, confirmedReason: string, artifactSha256: string | null) {
+    setDecisionError(null);
     setNotice(null);
     const epoch = listEpoch.current;
     try {
-      if (action === "approve" && !selectedArtifactHash) {
-        setMessage("Download the review artifact before approving this submission.");
+      if (action === "approve" && !artifactSha256) {
+        setDecisionError({ submissionId: submission.id, text: "Download the review artifact before approving this submission." });
         return;
       }
       const result = await client.performReviewAction({
         submissionId: submission.id,
         action,
         reason: confirmedReason || undefined,
-        ...(action === "approve" && selectedArtifactHash ? { artifactSha256: selectedArtifactHash } : {}),
+        ...(action === "approve" && artifactSha256 ? { artifactSha256 } : {}),
       });
       if (epoch !== listEpoch.current) return;
+      focusTarget.current = { kind: "decision", id: submission.id };
       await refreshReview();
       if (!result.publishedAt) setSelectedId(result.id);
-      setReason("");
       const actionLabel = action === "request-changes"
         ? "was returned for changes"
         : action === "reject"
@@ -1961,17 +2153,19 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
           : action === "publish"
             ? "was published"
             : "was approved and can now be published";
-      setNotice(`${submission.title} ${actionLabel}.`);
+      setNotice({ submissionId: submission.id, text: `${submission.title} ${actionLabel}.` });
     } catch (error) {
       const safeMessage = safeReviewErrorMessage(error);
-      setMessage(safeMessage);
+      // The dialog owns the alert; the decision band keeps a quiet copy.
+      setDecisionError({ submissionId: submission.id, text: safeMessage });
       throw new Error(safeMessage);
     }
   }
 
   function requestReviewAction(submission: ReviewSubmissionSummary, action: ReviewActionName) {
-    if (action === "approve" && !selectedArtifactHash) {
-      setMessage("Download the review artifact before approving this submission.");
+    const artifactSha256 = reviewArtifactHashes[submission.id] ?? submission.approvedArtifactSha256 ?? null;
+    if (action === "approve" && !artifactSha256) {
+      setDecisionError({ submissionId: submission.id, text: "Download the review artifact before approving this submission." });
       return;
     }
     const labels: Record<ReviewActionName, { title: string; description: string; confirmLabel: string }> = {
@@ -1997,224 +2191,341 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
       },
     };
     const label = labels[action];
+    const release = { label: "Release", value: `${submission.slug}@${submission.version}` };
+    const details = action === "approve" && artifactSha256 ? [release, { label: "Artifact SHA-256", value: artifactSha256 }]
+      : action === "publish" && submission.approvedArtifactSha256 ? [release, { label: "Approved SHA-256", value: submission.approvedArtifactSha256 }]
+        : [release];
     setConfirmation({
       key: `review-${action}`,
       ...label,
+      details,
       destructive: action === "reject",
-      initialReason: reason,
+      // An empty initial reason keeps the optional approval note in the dialog.
+      initialReason: "",
       requireReason: action !== "approve",
-      onConfirm: (confirmedReason) => commitReviewAction(submission, action, confirmedReason),
+      onConfirm: (confirmedReason) => commitReviewAction(submission, action, confirmedReason, action === "approve" ? artifactSha256 : null),
     });
   }
 
   async function downloadReviewArtifact(submission: ReviewSubmissionSummary) {
-    setMessage(null);
-    setNotice(null);
+    setArtifactStatus(null);
     setArtifactLoadingId(submission.id);
     try {
       const bundle = await client.getReviewSubmissionBundle(submission.id);
       setReviewArtifactHashes((current) => ({ ...current, [submission.id]: bundle.artifactSha256 }));
       downloadJsonFile(`${submission.slug}-${submission.version}-review.myskills.json`, bundle.payload);
-      setNotice(`Review artifact downloaded. Hash ${bundle.artifactSha256.slice(0, 12)}… is ready for approval.`);
+      setArtifactStatus({ submissionId: submission.id, error: false, text: "Review artifact downloaded. Its SHA-256 is recorded for approval." });
     } catch (error) {
-      setMessage(safeReviewErrorMessage(error));
+      setArtifactStatus({ submissionId: submission.id, error: true, text: safeReviewErrorMessage(error) });
     } finally {
       setArtifactLoadingId(null);
     }
   }
 
-  return (
-    <main className="review-workspace shadcn-review-workspace" aria-label="Maintainer review dashboard">
-      <section className="admin-hero shadcn-review-hero">
-        <div>
-          <Badge className="shadcn-review-eyebrow" variant="outline">Maintainer workflow</Badge>
-          <h1>Review dashboard</h1>
-          <p aria-live="polite">{session.user.email} · {state === "loading" ? "Loading queue…" : `${submissions.length} awaiting action`}</p>
-        </div>
-        <Button className="shadcn-action-button" size="sm" type="button" onClick={() => void refreshReview()}>
-          <RotateCw size={16} aria-hidden="true" />
-          Refresh
-        </Button>
-      </section>
+  // "Inspect artifact" mounts the auto-loading viewer; pressing it again after
+  // a failure starts a fresh attempt. The loader records the header hash for
+  // the submission it was created for.
+  function inspectArtifact(submission: ReviewSubmissionSummary) {
+    if (inspecting.current === submission.id) return;
+    inspecting.current = submission.id;
+    setInspectingId(submission.id);
+    setInspectAttempts((current) => ({ ...current, [submission.id]: (current[submission.id] ?? 0) + 1 }));
+  }
 
-      {message && <div className="safe-message admin-message" role="status">{message}</div>}
-      {notice && <div className="success-message admin-message" role="status" aria-live="polite">{notice}</div>}
+  async function loadReviewBundle(submissionId: string) {
+    inspecting.current = submissionId;
+    setInspectingId(submissionId);
+    try {
+      const bundle = await client.getReviewSubmissionBundle(submissionId);
+      setReviewArtifactHashes((current) => ({ ...current, [submissionId]: bundle.artifactSha256 }));
+      return bundle.payload;
+    } finally {
+      if (inspecting.current === submissionId) inspecting.current = null;
+      setInspectingId((current) => current === submissionId ? null : current);
+    }
+  }
 
-      <section className="review-layout shadcn-review-layout">
-        <Card className="results-panel review-queue review-registry-panel shadcn-console-card" aria-label="Review queue">
-          <CardHeader className="panel-heading review-registry-heading shadcn-card-header">
-            <div>
-              <CardTitle>Queue</CardTitle>
-              <CardDescription aria-live="polite">{state === "loading" ? "Loading…" : `${submissions.length} submissions`}</CardDescription>
-            </div>
-            <Badge className="shadcn-review-eyebrow" variant="outline">Maintainer</Badge>
-          </CardHeader>
-          <CardContent className="review-card-content">
-            <div className="result-list shadcn-review-list">
-              {submissions.map((submission) => (
-                <button
-                  aria-pressed={selected?.id === submission.id}
-                  className={selected?.id === submission.id ? "result-row review-registry-row selected" : "result-row review-registry-row"}
-                  key={submission.id}
+  function openSubmission(submissionId: string) {
+    setSelectedId(submissionId);
+    if (stacked) {
+      setDetailOpen(true);
+      focusTarget.current = { kind: "title" };
+    }
+  }
+
+  function backToQueue() {
+    setDetailOpen(false);
+    if (selected) focusTarget.current = { kind: "row", id: selected.id };
+  }
+
+  // Focus moves into the detail, back to the row, and after a decision to the
+  // same submission's next step, or to the queue notice when it has left the
+  // queue. This runs after the dialog's own focus restoration.
+  useEffect(() => {
+    if (stacked && detailOpen && state !== "loading" && !selected) setDetailOpen(false);
+    const target = focusTarget.current;
+    if (!target || confirmation) return;
+    let element: HTMLElement | null | undefined = null;
+    if (target.kind === "title") element = titleRef.current;
+    else if (target.kind === "row") element = Array.from(queueRef.current?.querySelectorAll<HTMLElement>("[data-id]") ?? []).find((row) => row.dataset.id === target.id);
+    else {
+      if (state === "loading") return;
+      if (submissions.some((submission) => submission.id === target.id)) {
+        element = primaryRef.current ?? decisionNoticeRef.current ?? titleRef.current;
+      } else if (stacked && detailOpen) {
+        setDetailOpen(false);
+        return;
+      } else {
+        element = queueNoticeRef.current;
+      }
+    }
+    if (!element) return;
+    focusTarget.current = null;
+    element.focus();
+  });
+
+  const canPublish = allowedReviewActions.includes("publish");
+  const canApprove = allowedReviewActions.includes("approve");
+  const primary = !selected ? null
+    : canPublish ? { label: "Publish", icon: <PackageCheck size={16} aria-hidden="true" />, busy: false, run: () => requestReviewAction(selected, "publish") }
+      : canApprove && !selectedArtifactHash ? { label: inspectingId === selected.id ? "Inspecting artifact…" : "Inspect artifact", icon: <FileCode2 size={16} aria-hidden="true" />, busy: inspectingId === selected.id, run: () => inspectArtifact(selected) }
+        : canApprove ? { label: "Approve", icon: <Check size={16} aria-hidden="true" />, busy: false, run: () => requestReviewAction(selected, "approve") }
+          : null;
+  const inspectAttempt = selected ? inspectAttempts[selected.id] : undefined;
+
+  const renderQueueRow = (submission: ReviewSubmissionSummary) => {
+    const security = securityStatusLabel(submission.securityStatus);
+    const findings = findingsLabel(submission.findingCount);
+    const review = reviewStatusLabel(submission.reviewStatus);
+    return (
+      <button
+        aria-pressed={stacked ? undefined : selected?.id === submission.id}
+        className="registry-row result-row"
+        data-id={submission.id}
+        key={submission.id}
+        type="button"
+        onClick={() => openSubmission(submission.id)}
+      >
+        <span className="registry-tile" data-tone={tileTone(submission.slug)} aria-hidden="true" />
+        <span className="registry-row-text">
+          <span className="registry-row-title">{submission.title}</span>
+          <span className="registry-row-meta">
+            <code>{submission.slug}@{submission.version}</code>
+            <span>Submitted {formatDate(submission.createdAt)}</span>
+          </span>
+          <span className="author-chips">
+            {["changes-requested", "rejected"].includes(submission.reviewStatus) && <span className="registry-chip" data-tone={chipTone(review.tone)}>{review.label}</span>}
+            <span className="registry-chip" data-tone={chipTone(security.tone)}>{security.label}</span>
+            <span className="registry-chip" data-tone={chipTone(findings.tone)}>{findings.label}</span>
+          </span>
+        </span>
+      </button>
+    );
+  };
+
+  const renderInspector = (submission: ReviewSubmissionSummary) => {
+    const security = securityStatusLabel(submission.securityStatus);
+    const findings = findingsLabel(submission.findingCount);
+    const review = reviewStatusLabel(submission.reviewStatus);
+    const steps = reviewSteps(submission, allowedReviewActions, selectedArtifactHash);
+    const canRequestChanges = allowedReviewActions.includes("request-changes");
+    const canReject = allowedReviewActions.includes("reject");
+    const decisionNotice = notice?.submissionId === submission.id ? notice : null;
+    const decisionMessage = decisionError?.submissionId === submission.id ? decisionError : null;
+    const artifactMessage = artifactStatus?.submissionId === submission.id ? artifactStatus : null;
+    return (
+      <>
+        <header className="registry-inspector-head">
+          <span className="registry-tile" data-size="32" data-tone={tileTone(submission.slug)} aria-hidden="true" />
+          <div className="registry-inspector-title">
+            <h2 ref={titleRef} tabIndex={-1}>{submission.title}</h2>
+            <p className="registry-ref">
+              <code>{submission.slug}</code>
+              <span aria-hidden="true">@</span>
+              <code>{submission.version}</code>
+            </p>
+            <p className="registry-inspector-meta">
+              <span>Submitted {formatDate(submission.createdAt)}</span>
+              <span aria-hidden="true">·</span>
+              <span>{visibilityLabel(submission.visibility)}</span>
+            </p>
+            <p className="author-chips">
+              {["changes-requested", "rejected"].includes(submission.reviewStatus) && <span className="registry-chip" data-tone={chipTone(review.tone)}>{review.label}</span>}
+              <span className="registry-chip" data-tone={chipTone(security.tone)}>{security.label}</span>
+              <span className="registry-chip" data-tone={chipTone(findings.tone)}>{findings.label}</span>
+            </p>
+          </div>
+        </header>
+
+        <section aria-label="Review decision" className="review-decision">
+          <p className="review-decision-context">Decision for <code>{submission.slug}@{submission.version}</code></p>
+          <ol aria-label="Release steps" className="review-steps">
+            {steps.map((step) => (
+              <li aria-current={step.state === "current" ? "step" : undefined} data-state={step.state} key={step.label}>
+                {step.state === "done" && <span className="sr-only">Done: </span>}
+                {step.state === "blocked" && <span className="sr-only">Blocked: </span>}
+                {step.label}
+              </li>
+            ))}
+          </ol>
+          {actionHint && <p className="review-hint">{actionHint}</p>}
+          {decisionNotice && <p className="author-status" data-tone="teal" ref={decisionNoticeRef} role="status" tabIndex={-1}>{decisionNotice.text}</p>}
+          {decisionMessage && <p className="author-status" data-tone="danger" role="status">{decisionMessage.text}</p>}
+          {primary || canRequestChanges || canReject ? (
+            <div className="review-decision-actions">
+              {primary && (
+                <Button
+                  aria-disabled={primary.busy || undefined}
+                  className="review-primary"
+                  ref={primaryRef}
+                  size="sm"
                   type="button"
-                  onClick={() => setSelectedId(submission.id)}
+                  onClick={() => { if (!primary.busy) primary.run(); }}
                 >
-                  <SkillIcon slug={submission.slug} />
-                  <span className="result-main review-registry-main">
-                    <strong>{submission.title}</strong>
-                    <span>{submission.slug}@{submission.version}</span>
-                    <span className="tag-row review-registry-tags">
-                      <ReviewStatusBadge value={submission.reviewStatus} />
-                      <ReviewStatusBadge value={submission.lifecycleStatus} />
-                      <ReviewStatusBadge value={submission.securityStatus} />
-                    </span>
-                  </span>
-                  <Badge className="shadcn-finding-badge review-registry-finding" variant="secondary">{submission.findingCount} findings</Badge>
-                </button>
-              ))}
-              {state === "ready" && nextCursor && <Button type="button" size="sm" variant="outline" disabled={loadingMore} onClick={() => void loadMoreReview()}>{loadingMore ? "Loading more submissions…" : "Load more submissions"}</Button>}
-              {state === "ready" && submissions.length === 0 && (
-                <div className="empty-state">
-                  <ShieldCheck size={22} aria-hidden="true" />
-                  <strong>Review queue is clear.</strong>
-                  <span>No submissions are awaiting approval or publication.</span>
-                </div>
+                  {primary.icon}
+                  {primary.label}
+                </Button>
+              )}
+              {canRequestChanges && (
+                <Button size="sm" type="button" variant="outline" onClick={() => requestReviewAction(submission, "request-changes")}>
+                  <RotateCw size={16} aria-hidden="true" />
+                  Request changes
+                </Button>
+              )}
+              {canReject && (
+                <Button className="author-danger review-reject" size="sm" type="button" variant="outline" onClick={() => requestReviewAction(submission, "reject")}>
+                  <X size={16} aria-hidden="true" />
+                  Reject
+                </Button>
               )}
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="detail-panel review-detail shadcn-console-card" aria-label="Selected submission review">
-          {selected ? (
-            <>
-              <CardHeader className="shadcn-detail-header">
-                <div className="shadcn-detail-title-row">
-                  <SkillIcon slug={selected.slug} />
-                  <div className="detail-title shadcn-detail-title">
-                    <CardTitle>{selected.title}</CardTitle>
-                    <CardDescription>{selected.slug}@{selected.version}</CardDescription>
-                  </div>
-                  <ReviewStatusBadge value={selected.reviewStatus} />
-                </div>
-              </CardHeader>
-              <CardContent className="shadcn-detail-content">
-                <dl className="shadcn-metadata-grid">
-                  <div>
-                    <dt>Visibility</dt>
-                    <dd>{formatStatusLabel(selected.visibility)}</dd>
-                  </div>
-                  <div>
-                    <dt>Security</dt>
-                    <dd>{formatStatusLabel(selected.securityStatus)}</dd>
-                  </div>
-                  <div>
-                    <dt>Platforms</dt>
-                    <dd>{selected.platforms.map((item) => item.name).join(", ") || "-"}</dd>
-                  </div>
-                  <div>
-                    <dt>Findings</dt>
-                    <dd>{String(selected.findingCount)}</dd>
-                  </div>
-                  <div>
-                    <dt>Artifact hash</dt>
-                    <dd className="mono">{selectedArtifactHash ? `${selectedArtifactHash.slice(0, 12)}…` : "inspection required"}</dd>
-                  </div>
-                  <div>
-                    <dt>Submitted</dt>
-                    <dd>{formatDate(selected.createdAt)}</dd>
-                  </div>
-                  <div>
-                    <dt>Submission ID</dt>
-                    <dd className="mono">{selected.id}</dd>
-                  </div>
-                </dl>
-
-                {client.getReviewSubmissionDetail && <SubmissionEvidencePanel key={`${selected.id}:${selected.reviewStatus}`} client={client} submissionId={selected.id} mode="reviewer" />}
-                <PackageFileViewer resourceKey={`review:${selected.id}`} loadBundle={async () => {
-                  const bundle = await client.getReviewSubmissionBundle(selected.id);
-                  setReviewArtifactHashes((current) => ({ ...current, [selected.id]: bundle.artifactSha256 }));
-                  return bundle.payload;
-                }} />
-
-                <label className="shadcn-review-reason">
-                  <span>Reason</span>
-                  <Textarea
-                    className="review-textarea"
-                    value={reason}
-                    onChange={(event) => setReason(event.target.value)}
-                    placeholder="Optional review note"
-                  />
-                </label>
-
-                <div className="shadcn-action-bar">
-                  <div className="review-actions shadcn-review-actions">
-                    <Button
-                      className="shadcn-action-button"
-                      disabled={artifactLoadingId === selected.id}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                      onClick={() => void downloadReviewArtifact(selected)}
-                    >
-                      <Download size={16} aria-hidden="true" />
-                      Download artifact
-                    </Button>
-                    <Button
-                      className="shadcn-action-button"
-                      disabled={approveDisabled}
-                      size="sm"
-                      type="button"
-                      onClick={() => requestReviewAction(selected, "approve")}
-                    >
-                      <Check size={16} aria-hidden="true" />
-                      Approve
-                    </Button>
-                    <Button
-                      className="shadcn-action-button"
-                      disabled={requestChangesDisabled}
-                      size="sm"
-                      type="button"
-                      onClick={() => requestReviewAction(selected, "request-changes")}
-                    >
-                      <RotateCw size={16} aria-hidden="true" />
-                      Request changes
-                    </Button>
-                    <Button
-                      className="shadcn-action-button"
-                      disabled={rejectDisabled}
-                      variant="destructive"
-                      size="sm"
-                      type="button"
-                      onClick={() => requestReviewAction(selected, "reject")}
-                    >
-                      <X size={16} aria-hidden="true" />
-                      Reject
-                    </Button>
-                    <Button
-                      className="shadcn-action-button"
-                      disabled={publishDisabled}
-                      variant="secondary"
-                      size="sm"
-                      type="button"
-                      onClick={() => requestReviewAction(selected, "publish")}
-                    >
-                      <PackageOpen size={16} aria-hidden="true" />
-                      Publish
-                    </Button>
-                  </div>
-                  <p className="action-hint">{actionHint}</p>
-                </div>
-              </CardContent>
-            </>
           ) : (
-            <div className="empty-detail">
-              <ClipboardList size={42} aria-hidden="true" />
-              <h2>No selected submission</h2>
-              <p>Approved unpublished submissions and new review requests appear here.</p>
-            </div>
+            <p className="registry-muted">No review decision is available for this submission.</p>
           )}
-        </Card>
-      </section>
+        </section>
+
+        <div className="registry-inspector-body">
+          <section aria-labelledby={`${baseId}-artifact`} className="registry-section review-artifact">
+            <h3 id={`${baseId}-artifact`}>Artifact</h3>
+            <dl className="registry-facts">
+              <div>
+                <dt>SHA-256</dt>
+                <dd className={selectedArtifactHash ? "registry-mono" : undefined}>{selectedArtifactHash ?? "Not inspected yet"}</dd>
+              </div>
+              {selectedArtifactHash && (
+                <div>
+                  <dt>Recorded</dt>
+                  <dd>{reviewArtifactHashes[submission.id] ? "In this session" : "At approval"}</dd>
+                </div>
+              )}
+            </dl>
+            <div className="registry-actions">
+              <Button disabled={artifactLoadingId === submission.id} size="sm" type="button" variant="outline" onClick={() => void downloadReviewArtifact(submission)}>
+                <Download size={16} aria-hidden="true" />
+                Download artifact
+              </Button>
+            </div>
+            {artifactMessage && <p className="author-status" data-tone={artifactMessage.error ? "danger" : "teal"} role={artifactMessage.error ? "alert" : "status"}>{artifactMessage.text}</p>}
+            {inspectAttempt !== undefined && (
+              <PackageFileViewer autoInspect loadBundle={() => loadReviewBundle(submission.id)} resourceKey={`review:${submission.id}:${inspectAttempt}`} />
+            )}
+          </section>
+
+          {client.getReviewSubmissionDetail && <SubmissionEvidencePanel key={`${submission.id}:${submission.reviewStatus}`} client={client} submissionId={submission.id} mode="reviewer" />}
+
+          <section aria-labelledby={`${baseId}-details`} className="registry-section">
+            <h3 id={`${baseId}-details`}>Submission details</h3>
+            <dl className="registry-facts" data-labels="wide">
+              <div><dt>Review status</dt><dd>{review.label}</dd></div>
+              <div><dt>Lifecycle</dt><dd>{lifecycleLabel(submission.lifecycleStatus).label}</dd></div>
+              <div><dt>Platforms</dt><dd>{submission.platforms.map((item) => item.name).join(", ") || "None declared"}</dd></div>
+              <div><dt>Submission ID</dt><dd className="registry-mono">{submission.id}</dd></div>
+            </dl>
+          </section>
+        </div>
+      </>
+    );
+  };
+
+  return (
+    <main className="registry-workspace author-review review-dashboard" aria-label="Maintainer review dashboard">
+      <header className="registry-page-head">
+        <h1>Review dashboard</h1>
+        <Button aria-label="Refresh" size="icon-sm" type="button" variant="outline" onClick={() => void refreshReview()}>
+          <RotateCw size={16} aria-hidden="true" />
+        </Button>
+      </header>
+
+      <div className="registry-surface" data-layout={layout} ref={surfaceRef}>
+        <div className="registry-body" data-columns={inspectorVisible && showQueue ? undefined : "1"}>
+          {showQueue && (
+            <section aria-busy={state === "loading"} aria-label="Review queue" className="registry-list review-queue" ref={queueRef}>
+              <div className="registry-list-label">
+                <h2>Queue</h2>
+                <span aria-live="polite">{state === "ready" ? (nextCursor ? `${submissions.length} loaded` : String(submissions.length)) : ""}</span>
+              </div>
+              {queueNotice && <p className="author-status" data-tone="teal" ref={queueNoticeRef} role="status" tabIndex={-1}>{queueNotice.text}</p>}
+              {state === "loading" && (
+                <div className="registry-skeleton" role="status" aria-live="polite">
+                  <span className="sr-only">Loading submissions…</span>
+                  {[0, 1, 2].map((item) => <div className="registry-skeleton-row" key={item}><span /><span /></div>)}
+                </div>
+              )}
+              {state === "error" && (
+                <div className="registry-list-state">
+                  <p role="alert"><strong>{message ?? "Review queue is not available."}</strong></p>
+                  <p>Retry the queue before reviewing a submission.</p>
+                  <Button size="sm" type="button" variant="outline" onClick={() => void refreshReview()}>
+                    <RotateCw size={15} aria-hidden="true" />
+                    Retry
+                  </Button>
+                </div>
+              )}
+              {QUEUE_GROUPS.map((group) => {
+                const rows = submissions.filter((submission) => reviewGroup(submission) === group.id);
+                if (rows.length === 0) return null;
+                return (
+                  <div aria-labelledby={`${baseId}-${group.id}`} className="review-group" key={group.id} role="group">
+                    <h3 className="review-group-label" id={`${baseId}-${group.id}`}>{group.label}</h3>
+                    <div className="registry-rows">{rows.map(renderQueueRow)}</div>
+                  </div>
+                );
+              })}
+              {state === "ready" && nextCursor && (
+                <div className="registry-list-foot">
+                  <Button type="button" size="sm" variant="outline" disabled={loadingMore} onClick={() => void loadMoreReview()}>{loadingMore ? "Loading more submissions…" : "Load more submissions"}</Button>
+                </div>
+              )}
+              {state === "ready" && message && <p className="registry-alert" role="alert">{message}</p>}
+              {state === "ready" && submissions.length === 0 && (
+                <div className="registry-list-state">
+                  <strong>Review queue is clear.</strong>
+                  <p>No submissions are awaiting approval or publication.</p>
+                </div>
+              )}
+            </section>
+          )}
+          {inspectorVisible && (
+            <section aria-label="Selected submission review" className="registry-inspector review-inspector">
+              {stacked && (
+                <Button className="registry-back" type="button" variant="ghost" onClick={backToQueue}>
+                  <ArrowLeft size={16} aria-hidden="true" />
+                  Back to queue
+                </Button>
+              )}
+              {selected ? renderInspector(selected) : (
+                <div className="registry-skeleton registry-skeleton-detail" role="status" aria-live="polite">
+                  <span className="sr-only">Loading submission…</span>
+                  <div className="registry-skeleton-head"><span /><span /></div>
+                  <div className="registry-skeleton-line" />
+                  <div className="registry-skeleton-line" />
+                  <div className="registry-skeleton-block" />
+                </div>
+              )}
+            </section>
+          )}
+        </div>
+      </div>
       {confirmation && <ConfirmationDialog key={confirmation.key} request={confirmation} onClose={() => setConfirmation(null)} />}
     </main>
   );
@@ -2235,339 +2546,484 @@ function fallbackReviewActions(submission: ReviewSubmissionSummary | null): Revi
   return [];
 }
 
-function TeamsDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
+type ReviewFocus = { kind: "title" } | { kind: "row"; id: string } | { kind: "decision"; id: string };
+type ReviewGroup = "decide" | "publish" | "blocked";
+type ReviewStepState = "done" | "current" | "blocked" | "upcoming";
+
+// The queue groups rows by the next action the server allows.
+const QUEUE_GROUPS: Array<{ id: ReviewGroup; label: string }> = [
+  { id: "decide", label: "Needs a decision" },
+  { id: "publish", label: "Ready to publish" },
+  { id: "blocked", label: "Approval blocked" },
+];
+
+function reviewGroup(submission: ReviewSubmissionSummary): ReviewGroup {
+  const allowed = submission.allowedActions ?? fallbackReviewActions(submission);
+  return allowed.includes("approve") ? "decide" : allowed.includes("publish") ? "publish" : "blocked";
+}
+
+/** Queue rows in display order, so the implicit selection is the first visible row. */
+function queueOrder(submissions: ReviewSubmissionSummary[]): ReviewSubmissionSummary[] {
+  return QUEUE_GROUPS.flatMap((group) => submissions.filter((submission) => reviewGroup(submission) === group.id));
+}
+
+function reviewSteps(submission: ReviewSubmissionSummary, allowed: ReviewActionName[], artifactHash: string | null): Array<{ label: string; state: ReviewStepState }> {
+  const approved = submission.reviewStatus === "approved";
+  const canApprove = allowed.includes("approve");
+  return [
+    { label: "Inspect artifact", state: artifactHash ? "done" : canApprove ? "current" : "upcoming" },
+    { label: "Approve", state: approved ? "done" : canApprove ? (artifactHash ? "current" : "upcoming") : "blocked" },
+    { label: "Publish", state: allowed.includes("publish") ? "current" : approved ? "blocked" : "upcoming" },
+  ];
+}
+
+type TeamEntry = { id: string; name: string; role: string; team: TeamRecord | null; group: TeamSharedSkillGroup | null };
+type PeopleNotice = { scope: string; text: string; tone: "danger" | "teal" };
+type TeamsFocus = { kind: "title" | "new-team" | "team-name" | "invite-email" | "invite-trigger" | "accepted" } | { kind: "row"; id: string };
+
+/** Listed teams, plus read-only entries for shared groups whose team is not listed. */
+function teamEntries(dashboard: TeamDashboard, groups: TeamSharedSkillGroup[]): TeamEntry[] {
+  const groupByTeam = new Map(groups.map((group) => [group.team.id, group]));
+  const entries: TeamEntry[] = dashboard.teams.map((team) => ({ id: team.id, name: team.name, role: team.role, team, group: groupByTeam.get(team.id) ?? null }));
+  const listed = new Set(entries.map((entry) => entry.id));
+  for (const group of groups) {
+    if (!listed.has(group.team.id)) entries.push({ id: group.team.id, name: group.team.name, role: group.team.role, team: null, group });
+  }
+  return entries;
+}
+
+function findRowById(root: HTMLElement | null, id: string): HTMLElement | null {
+  for (const element of root?.querySelectorAll<HTMLElement>("[data-row-id]") ?? []) {
+    if (element.dataset.rowId === id) return element;
+  }
+  return null;
+}
+
+// Teams use the Registry list and detail layout (people.css): the list comes
+// first, and the selected team's detail sits beside it on a wide surface or
+// replaces it (with Back) on a narrow one. Messages render beside the control
+// that caused them.
+function TeamsDashboard({ client }: { client: RegistryClient; session: WebSession }) {
   const [state, setState] = useState<LoadState>("loading");
-  const [message, setMessage] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [notice, setNotice] = useState<PeopleNotice | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<TeamDashboard>({ teams: [], invitations: [] });
   const [sharedGroups, setSharedGroups] = useState<TeamSharedSkillGroup[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [teamName, setTeamName] = useState("");
+  const [inviteOpenId, setInviteOpenId] = useState<string | null>(null);
   const [inviteEmails, setInviteEmails] = useState<Record<string, string>>({});
-  const teamCount = dashboard.teams.length;
-  const invitationCount = dashboard.invitations.length;
-  const sharedByYouCount = sharedGroups.reduce((total, group) => total + group.sharingWithTeam.length, 0);
-  const sharedWithYouCount = sharedGroups.reduce((total, group) => total + group.sharedWithMe.length, 0);
+  const { layout, ref: surfaceRef } = useSplitLayout();
+  const refreshEpoch = useRef(0);
+  const selectedRef = useRef<string | null>(null);
+  const listRef = useRef<HTMLElement>(null);
+  const listLabelRef = useRef<HTMLHeadingElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const newTeamRef = useRef<HTMLButtonElement>(null);
+  const inviteTriggerRef = useRef<HTMLButtonElement>(null);
+  const acceptedRef = useRef<HTMLParagraphElement>(null);
+  const focusTarget = useRef<TeamsFocus | null>(null);
+  const baseId = useId();
+  const stacked = layout === "stack";
+  const entries = useMemo(() => teamEntries(dashboard, sharedGroups), [dashboard, sharedGroups]);
+  const selected = entries.find((entry) => entry.id === selectedId) ?? null;
+  const team = selected?.team ?? null;
+  const inviteOpen = team !== null && inviteOpenId === team.id;
+  const showDetail = selected !== null && (!stacked || detailOpen);
+  const listHidden = stacked && showDetail;
 
   const refreshTeams = useCallback(async () => {
+    const epoch = ++refreshEpoch.current;
     setState("loading");
-    setMessage(null);
+    setNotice((current) => current?.scope === "load" ? null : current);
     try {
       const [nextDashboard, nextGroups] = await Promise.all([
         client.listTeams(),
         client.listTeamSharedSkills(),
       ]);
+      if (epoch !== refreshEpoch.current) return false;
+      const ids = teamEntries(nextDashboard, nextGroups).map((entry) => entry.id);
+      const current = selectedRef.current;
+      const kept = current && ids.includes(current) ? current : null;
+      // Auto-selection never opens the stacked detail; only a tap does.
+      if (!kept) setDetailOpen(false);
+      selectedRef.current = kept ?? ids[0] ?? null;
+      setSelectedId(selectedRef.current);
       setDashboard(nextDashboard);
       setSharedGroups(nextGroups);
+      setLoaded(true);
       setState("ready");
+      return true;
     } catch (error) {
-      setMessage(safeTeamErrorMessage(error));
+      if (epoch !== refreshEpoch.current) return false;
+      setNotice({ scope: "load", text: safeTeamErrorMessage(error), tone: "danger" });
       setState("error");
+      return false;
     }
   }, [client]);
 
   useEffect(() => {
     void refreshTeams();
+    return () => { refreshEpoch.current += 1; };
   }, [refreshTeams]);
 
+  // Focus follows the reader: into an opened team, back to its row, and
+  // between each on-demand form and the button that opened it.
+  useEffect(() => {
+    const target = focusTarget.current;
+    if (!target) return;
+    const element = target.kind === "row" ? findRowById(listRef.current, target.id) ?? listLabelRef.current
+      : target.kind === "title" ? titleRef.current
+        : target.kind === "new-team" ? newTeamRef.current
+          : target.kind === "team-name" ? document.getElementById(`${baseId}-team-name`)
+            : target.kind === "invite-email" ? document.getElementById(`${baseId}-invite-email`)
+              : target.kind === "invite-trigger" ? inviteTriggerRef.current
+                : acceptedRef.current;
+    if (!element) return;
+    focusTarget.current = null;
+    element.focus();
+  });
+
+  function openTeam(id: string) {
+    if (id !== selectedRef.current) setInviteOpenId(null);
+    selectedRef.current = id;
+    setSelectedId(id);
+    setDetailOpen(true);
+    focusTarget.current = { kind: "title" };
+  }
+
+  function backToTeams() {
+    setDetailOpen(false);
+    setInviteOpenId(null);
+    if (selectedRef.current) focusTarget.current = { kind: "row", id: selectedRef.current };
+  }
+
+  function openCreate() {
+    setCreateOpen(true);
+    if (stacked) setDetailOpen(false);
+    focusTarget.current = { kind: "team-name" };
+  }
+
+  function closeCreate() {
+    if (pending === "create") return;
+    setCreateOpen(false);
+    setTeamName("");
+    setNotice((current) => current?.scope === "create" ? null : current);
+    focusTarget.current = { kind: "new-team" };
+  }
+
+  function openInvite(teamId: string) {
+    setInviteOpenId(teamId);
+    setNotice((current) => current?.scope === `invite:${teamId}` ? null : current);
+    focusTarget.current = { kind: "invite-email" };
+  }
+
+  function closeInvite() {
+    if (pending?.startsWith("invite:")) return;
+    setInviteOpenId(null);
+    focusTarget.current = { kind: "invite-trigger" };
+  }
+
   async function createTeam() {
-    if (!teamName.trim()) {
-      return;
-    }
-    setMessage(null);
+    if (!teamName.trim() || pending) return;
+    const created = teamName.trim();
+    setPending("create");
+    setNotice(null);
     try {
       await client.createTeam(teamName);
       setTeamName("");
-      await refreshTeams();
+      setCreateOpen(false);
+      focusTarget.current = { kind: "new-team" };
+      if (await refreshTeams()) setNotice({ scope: "list", text: `${created} was created.`, tone: "teal" });
     } catch (error) {
-      setMessage(safeTeamErrorMessage(error));
+      setNotice({ scope: "create", text: safeTeamErrorMessage(error), tone: "danger" });
+    } finally {
+      setPending(null);
     }
   }
 
-  async function inviteMember(team: TeamRecord) {
-    const email = inviteEmails[team.id]?.trim();
-    if (!email) {
-      return;
-    }
-    setMessage(null);
+  async function inviteMember(invitedTeam: TeamRecord) {
+    const email = inviteEmails[invitedTeam.id]?.trim();
+    if (!email || pending) return;
+    const scope = `invite:${invitedTeam.id}`;
+    setPending(scope);
+    setNotice(null);
     try {
-      await client.inviteTeamMember(team.id, email);
-      setInviteEmails((current) => ({ ...current, [team.id]: "" }));
-      await refreshTeams();
+      await client.inviteTeamMember(invitedTeam.id, email);
+      setInviteEmails((current) => ({ ...current, [invitedTeam.id]: "" }));
+      setInviteOpenId(null);
+      focusTarget.current = { kind: "invite-trigger" };
+      if (await refreshTeams()) setNotice({ scope, text: `Invitation sent to ${email}.`, tone: "teal" });
     } catch (error) {
-      setMessage(safeTeamErrorMessage(error));
+      setNotice({ scope, text: safeTeamErrorMessage(error), tone: "danger" });
+    } finally {
+      setPending(null);
     }
   }
 
   async function acceptInvitation(invitation: TeamInvitation) {
-    setMessage(null);
+    if (pending) return;
+    setPending(`accept:${invitation.id}`);
+    setNotice(null);
     try {
       await client.acceptTeamInvitation(invitation.id);
-      await refreshTeams();
+      if (await refreshTeams()) {
+        setNotice({ scope: "accepted", text: `You joined ${invitation.teamName}.`, tone: "teal" });
+        focusTarget.current = { kind: "accepted" };
+      }
     } catch (error) {
-      setMessage(safeTeamErrorMessage(error));
+      setNotice({ scope: `accept:${invitation.id}`, text: safeTeamErrorMessage(error), tone: "danger" });
+    } finally {
+      setPending(null);
     }
   }
 
+  const scoped = (scope: string) => notice?.scope === scope
+    ? <p className="people-status" data-tone={notice.tone} role={notice.tone === "danger" ? "alert" : "status"}>{notice.text}</p>
+    : null;
+
   return (
-    <main className="teams-workspace" aria-label="Teams">
-      <section className="admin-hero teams-hero shadcn-teams-hero" aria-labelledby="teams-heading">
-        <div>
-          <h1 id="teams-heading">Teams</h1>
-          <p aria-live="polite">{session.user.email} · {state === "loading" ? "Refreshing team access…" : `${teamCount} teams`}</p>
-        </div>
-        <div className="teams-hero-actions">
-          <dl className="teams-header-metrics" aria-label="Team summary">
-            <div>
-              <dt>Teams</dt>
-              <dd>{teamCount}</dd>
-            </div>
-            <div>
-              <dt>Invitations</dt>
-              <dd>{invitationCount}</dd>
-            </div>
-            <div>
-              <dt>Sharing</dt>
-              <dd>{sharedByYouCount}</dd>
-            </div>
-            <div>
-              <dt>Shared</dt>
-              <dd>{sharedWithYouCount}</dd>
-            </div>
-          </dl>
-          <Button className="shadcn-action-button teams-refresh-button" size="sm" type="button" variant="outline" onClick={() => void refreshTeams()}>
+    <main className="registry-workspace people-workspace teams-workspace" aria-label="Teams">
+      <header className="app-page-header people-page-head">
+        <h1>Teams</h1>
+        <div className="people-page-actions">
+          <Button aria-expanded={createOpen} ref={newTeamRef} size="sm" type="button" onClick={openCreate}>
+            <Plus size={16} aria-hidden="true" />
+            New team
+          </Button>
+          <Button size="sm" type="button" variant="outline" onClick={() => void refreshTeams()}>
             <RotateCw size={16} aria-hidden="true" />
             Refresh
           </Button>
         </div>
-      </section>
+      </header>
 
-      {message && <div className="safe-message admin-message" role="status">{message}</div>}
+      {(dashboard.invitations.length > 0 || notice?.scope === "accepted") && (
+        <section aria-labelledby={`${baseId}-invitations`} className="people-invitations">
+          <h2 id={`${baseId}-invitations`}>Invitations for you</h2>
+          {dashboard.invitations.length > 0 && (
+            <ul>
+              {dashboard.invitations.map((invitation) => (
+                <li key={invitation.id}>
+                  <span className="people-person">
+                    <strong id={`${baseId}-invitation-${invitation.id}`}>{invitation.teamName}</strong>
+                    <small>{invitation.email} · Sent {formatDate(invitation.createdAt)}</small>
+                  </span>
+                  <Button aria-describedby={`${baseId}-invitation-${invitation.id}`} disabled={pending !== null} size="sm" type="button" onClick={() => void acceptInvitation(invitation)}>
+                    <Check size={15} aria-hidden="true" />
+                    {pending === `accept:${invitation.id}` ? "Accepting…" : "Accept"}
+                  </Button>
+                  {scoped(`accept:${invitation.id}`)}
+                </li>
+              ))}
+            </ul>
+          )}
+          {notice?.scope === "accepted" && <p className="people-status" data-tone="teal" ref={acceptedRef} role="status" tabIndex={-1}>{notice.text}</p>}
+        </section>
+      )}
 
-      <section className="teams-layout shadcn-teams-layout">
-        <Card className="teams-access-panel shadcn-console-card" aria-label="Teams and invitations">
-          <CardHeader className="admin-panel-heading shadcn-card-header teams-combined-heading">
-            <span className="admin-panel-icon"><UsersRound size={18} aria-hidden="true" /></span>
-            <div>
-              <CardTitle>Teams and invitations</CardTitle>
-              <CardDescription>Create teams, review members, and accept pending invites.</CardDescription>
+      <div className="registry-surface" data-layout={layout} ref={surfaceRef}>
+        <div className="registry-body" data-columns={showDetail && !listHidden ? undefined : "1"}>
+          <section aria-busy={state === "loading"} aria-labelledby={`${baseId}-list`} className="registry-list" hidden={listHidden} ref={listRef}>
+            {createOpen && (
+              <form className="people-create" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); closeCreate(); } }} onSubmit={(event) => { event.preventDefault(); void createTeam(); }}>
+                <label className="people-field" htmlFor={`${baseId}-team-name`}>
+                  <span>Team name</span>
+                  <Input autoComplete="off" disabled={pending === "create"} id={`${baseId}-team-name`} onChange={(event) => setTeamName(event.target.value)} value={teamName} />
+                </label>
+                <div className="people-form-actions">
+                  <Button disabled={!teamName.trim() || pending === "create"} size="sm" type="submit">
+                    <Plus size={15} aria-hidden="true" />
+                    Create
+                  </Button>
+                  <Button disabled={pending === "create"} size="sm" type="button" variant="outline" onClick={closeCreate}>Cancel</Button>
+                </div>
+                {scoped("create")}
+              </form>
+            )}
+            <div className="registry-list-label">
+              <h2 id={`${baseId}-list`} ref={listLabelRef} tabIndex={-1}>Teams</h2>
+              <span aria-live="polite">{loaded ? entries.length : ""}</span>
             </div>
-          </CardHeader>
-          <CardContent className="teams-access-content">
-            <form className="team-create-row shadcn-team-create-row" onSubmit={(event) => {
-              event.preventDefault();
-              void createTeam();
-            }}>
-              <Input
-                aria-label="Team name"
-                value={teamName}
-                onChange={(event) => setTeamName(event.target.value)}
-                placeholder="Team name"
-              />
-              <Button className="save-button shadcn-action-button" disabled={!teamName.trim()} size="sm" type="submit">
-                <Plus size={16} aria-hidden="true" />
-                Create
-              </Button>
-            </form>
-
-            <section className="teams-combined-section" aria-labelledby="team-list-heading">
-              <div className="teams-section-heading">
-                <h2 id="team-list-heading">Teams</h2>
-                <span>{teamCount} active</span>
+            {scoped("list")}
+            {state === "loading" && !loaded && (
+              <div className="registry-skeleton" role="status" aria-live="polite">
+                <span className="sr-only">Loading teams…</span>
+                {[0, 1, 2].map((item) => <div className="registry-skeleton-row" key={item}><span /><span /></div>)}
               </div>
-              <div className="team-list">
-                {state === "loading" && <TeamsLoadingRows />}
-                {state !== "loading" && dashboard.teams.map((team) => (
-                  <article className="team-card" key={team.id}>
-                    <div className="team-row">
-                      <div className="team-row-main">
-                        <strong>{team.name}</strong>
-                        <small>{team.members.length} members · {team.invitations.length} pending · {team.slug}</small>
-                      </div>
-                      <StatusToken value={team.role} />
-                      {team.role === "owner" ? (
-                        <form className="team-invite-row" onSubmit={(event) => {
-                          event.preventDefault();
-                          void inviteMember(team);
-                        }}>
+            )}
+            {notice?.scope === "load" && (
+              <div className="registry-list-state">
+                <p role="alert">{notice.text}</p>
+                <Button size="sm" type="button" variant="outline" onClick={() => void refreshTeams()}>
+                  <RotateCw size={15} aria-hidden="true" />
+                  Retry
+                </Button>
+              </div>
+            )}
+            {entries.length > 0 && (
+              <div className="registry-rows">
+                {entries.map((entry) => (
+                  <button
+                    aria-current={!stacked && entry.id === selectedId ? "true" : undefined}
+                    className="registry-row people-row"
+                    data-row-id={entry.id}
+                    key={entry.id}
+                    type="button"
+                    onClick={() => openTeam(entry.id)}
+                  >
+                    <span className="people-row-icon" aria-hidden="true"><UsersRound size={16} /></span>
+                    <span className="registry-row-text">
+                      <span className="registry-row-title">{entry.name}</span>
+                      <span className="registry-row-meta">
+                        <span>{formatStatusLabel(entry.role)}</span>
+                        <span>{entry.team ? `${entry.team.members.length} ${entry.team.members.length === 1 ? "member" : "members"}` : "Shared skills only"}</span>
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {state === "ready" && entries.length === 0 && (
+              <div className="registry-list-state">
+                <strong>No teams yet.</strong>
+                <p>Create a team to start sharing private skills with members.</p>
+              </div>
+            )}
+          </section>
+
+          {showDetail && selected && (
+            <section aria-labelledby={`${baseId}-title`} className="registry-inspector people-detail">
+              {stacked && (
+                <Button className="registry-back" type="button" variant="ghost" onClick={backToTeams}>
+                  <ArrowLeft size={16} aria-hidden="true" />
+                  Back to teams
+                </Button>
+              )}
+              <header className="people-detail-head">
+                <div className="registry-inspector-title">
+                  <h2 id={`${baseId}-title`} ref={titleRef} tabIndex={-1}>{selected.name}</h2>
+                  <p className="registry-inspector-meta">
+                    {team && <><code>{team.slug}</code><span aria-hidden="true">·</span></>}
+                    <span>Your role: {formatStatusLabel(selected.role)}</span>
+                  </p>
+                </div>
+              </header>
+              {team ? (
+                <>
+                  <section aria-labelledby={`${baseId}-members`} className="registry-section">
+                    <div className="people-section-head">
+                      <h3 id={`${baseId}-members`}>Members</h3>
+                      {team.role === "owner" && (
+                        <Button aria-expanded={inviteOpen} ref={inviteTriggerRef} size="sm" type="button" variant="outline" onClick={() => inviteOpen ? closeInvite() : openInvite(team.id)}>
+                          <Mail size={15} aria-hidden="true" />
+                          Invite member
+                        </Button>
+                      )}
+                    </div>
+                    {team.role !== "owner" && <p className="registry-muted">Only team owners can invite members.</p>}
+                    {inviteOpen && (
+                      <form className="people-inline-form" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); closeInvite(); } }} onSubmit={(event) => { event.preventDefault(); void inviteMember(team); }}>
+                        <label className="people-field people-field-grow" htmlFor={`${baseId}-invite-email`}>
+                          <span>Email</span>
                           <Input
                             aria-label={`Invite user to ${team.name}`}
-                            value={inviteEmails[team.id] ?? ""}
+                            autoComplete="email"
+                            disabled={pending === `invite:${team.id}`}
+                            id={`${baseId}-invite-email`}
                             onChange={(event) => setInviteEmails((current) => ({ ...current, [team.id]: event.target.value }))}
                             placeholder="user@example.com"
+                            spellCheck={false}
                             type="email"
+                            value={inviteEmails[team.id] ?? ""}
                           />
-                          <Button className="shadcn-action-button" disabled={!inviteEmails[team.id]?.trim()} size="sm" type="submit" variant="outline">
+                        </label>
+                        <div className="people-form-actions">
+                          <Button disabled={!inviteEmails[team.id]?.trim() || pending === `invite:${team.id}`} size="sm" type="submit">
                             <Plus size={15} aria-hidden="true" />
                             Invite
                           </Button>
-                        </form>
-                      ) : (
-                        <span className="team-permission-note">Invite access limited to owners</span>
-                      )}
-                    </div>
-
-                    <div className="team-detail-grid">
-                      <div className="team-detail-list">
-                        <h3>Members</h3>
+                          <Button disabled={pending === `invite:${team.id}`} size="sm" type="button" variant="outline" onClick={closeInvite}>Cancel</Button>
+                        </div>
+                      </form>
+                    )}
+                    {scoped(`invite:${team.id}`)}
+                    {team.members.length > 0 ? (
+                      <ul aria-labelledby={`${baseId}-members`} className="people-list">
                         {team.members.map((member) => (
-                          <div className="team-person-row" key={member.id}>
-                            <UserRound size={15} aria-hidden="true" />
-                            <span>
+                          <li key={member.id}>
+                            <span className="people-person">
                               <strong>{member.name || member.email}</strong>
-                              <small>{member.email}</small>
+                              {member.name && <small>{member.email}</small>}
                             </span>
-                            <StatusToken value={member.role} />
-                          </div>
+                            <span className="registry-chip">{formatStatusLabel(member.role)}</span>
+                          </li>
                         ))}
-                        {team.members.length === 0 && <div className="empty-inline">No members returned for this team.</div>}
-                      </div>
-
-                      <div className="team-detail-list">
-                        <h3>Pending invitations</h3>
+                      </ul>
+                    ) : <p className="registry-muted">No members returned for this team.</p>}
+                  </section>
+                  <section aria-labelledby={`${baseId}-invited`} className="registry-section">
+                    <h3 id={`${baseId}-invited`}>Pending invitations</h3>
+                    {team.invitations.length > 0 ? (
+                      <ul aria-labelledby={`${baseId}-invited`} className="people-list">
                         {team.invitations.map((invitation) => (
-                          <div className="team-person-row" key={invitation.id}>
-                            <Mail size={15} aria-hidden="true" />
-                            <span>
+                          <li key={invitation.id}>
+                            <span className="people-person">
                               <strong>{invitation.email}</strong>
                               <small>Sent {formatDate(invitation.createdAt)}</small>
                             </span>
-                            <StatusToken value={invitation.status} />
-                          </div>
+                            {invitation.status !== "pending" && <span className="registry-chip">{formatStatusLabel(invitation.status)}</span>}
+                          </li>
                         ))}
-                        {team.invitations.length === 0 && <div className="empty-inline">No pending invitations.</div>}
-                      </div>
-                    </div>
-                  </article>
-                ))}
-                {state === "ready" && dashboard.teams.length === 0 && (
-                  <div className="empty-state compact">
-                    <UsersRound size={22} aria-hidden="true" />
-                    <strong>No teams yet.</strong>
-                    <span>Create a team to start sharing private skills with members.</span>
-                  </div>
-                )}
-              </div>
+                      </ul>
+                    ) : <p className="registry-muted">No pending invitations.</p>}
+                  </section>
+                </>
+              ) : (
+                <p className="registry-muted">This team is not in your team list, so only the skills shared through it are shown.</p>
+              )}
+              <TeamSkillSection title="Shared by you" skills={selected.group?.sharingWithTeam ?? []} empty="You are not sharing skills with this team." />
+              <TeamSkillSection title="Shared with you" skills={selected.group?.sharedWithMe ?? []} empty="No skills are shared with you through this team." />
             </section>
-
-            <section className="teams-combined-section" aria-labelledby="team-invitations-heading">
-              <div className="teams-section-heading">
-                <h2 id="team-invitations-heading">Invitations</h2>
-                <span>{invitationCount} pending</span>
-              </div>
-              <div className="invitation-list">
-                {state === "loading" && <TeamsLoadingRows />}
-                {state !== "loading" && dashboard.invitations.map((invitation) => (
-                  <div className="invitation-row" key={invitation.id}>
-                    <span>
-                      <strong>{invitation.teamName}</strong>
-                      <small>{invitation.email} · sent {formatDate(invitation.createdAt)}</small>
-                    </span>
-                    <StatusToken value={invitation.status} />
-                    <Button className="save-button shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void acceptInvitation(invitation)}>
-                      <Check size={16} aria-hidden="true" />
-                      Accept
-                    </Button>
-                  </div>
-                ))}
-                {state === "ready" && dashboard.invitations.length === 0 && (
-                  <div className="empty-state compact">
-                    <Check size={22} aria-hidden="true" />
-                    <strong>No pending invitations.</strong>
-                    <span>Accepted teams appear in the team list.</span>
-                  </div>
-                )}
-              </div>
-            </section>
-          </CardContent>
-        </Card>
-
-        <section className="team-shared-groups teams-shared-column" aria-label="Team shared skills">
-          {state === "loading" && (
-            <Card className="team-skill-group shadcn-console-card">
-              <CardHeader className="admin-panel-heading shadcn-card-header">
-                <span className="admin-panel-icon"><PackageOpen size={18} aria-hidden="true" /></span>
-                <div>
-                  <CardTitle>Shared skills</CardTitle>
-                  <CardDescription>Loading team visibility grants.</CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <TeamsLoadingRows />
-              </CardContent>
-            </Card>
           )}
-          {state !== "loading" && sharedGroups.map((group) => (
-            <TeamSkillGroupCard group={group} key={group.team.id} />
-          ))}
-          {state === "ready" && sharedGroups.length === 0 && (
-            <Card className="team-skill-group teams-shared-empty shadcn-console-card">
-              <CardHeader className="admin-panel-heading shadcn-card-header">
-                <span className="admin-panel-icon"><PackageOpen size={18} aria-hidden="true" /></span>
-                <div>
-                  <CardTitle>Shared skills</CardTitle>
-                  <CardDescription>Team visibility grants grouped by team.</CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="empty-state compact">
-                  <PackageOpen size={24} aria-hidden="true" />
-                  <strong>No team-shared skills.</strong>
-                  <span>Team visibility grants will appear here grouped by team.</span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </section>
-      </section>
+        </div>
+      </div>
     </main>
   );
 }
 
-function TeamsLoadingRows() {
+function TeamSkillSection({ empty, skills, title }: { empty: string; skills: PublicSkill[]; title: string }) {
+  const headingId = useId();
   return (
-    <div className="teams-loading-list" role="status" aria-live="polite">
-      <span className="sr-only">Loading teams…</span>
-      <span className="loading-row" />
-      <span className="loading-row short" />
-      <span className="loading-row" />
-    </div>
+    <section aria-labelledby={headingId} className="registry-section">
+      <h3 id={headingId}>{title}</h3>
+      {skills.length > 0 ? (
+        <ul aria-labelledby={headingId} className="people-list">
+          {skills.map((skill) => (
+            <li key={skill.slug}>
+              <span className="people-person">
+                <strong>{skill.title}</strong>
+                <small><code>{skill.slug}</code>{skill.latestVersion ? ` · ${skill.latestVersion}` : ""}</small>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="registry-muted">{empty}</p>}
+    </section>
   );
 }
 
-function TeamSkillGroupCard({ group }: { group: TeamSharedSkillGroup }) {
-  return (
-    <Card className="team-skill-group shadcn-console-card">
-      <CardHeader className="admin-panel-heading shadcn-card-header">
-        <span className="admin-panel-icon"><UsersRound size={18} aria-hidden="true" /></span>
-        <div>
-          <CardTitle>{group.team.name}</CardTitle>
-          <CardDescription>{group.sharingWithTeam.length} shared by you · {group.sharedWithMe.length} shared with you</CardDescription>
-        </div>
-      </CardHeader>
-      <CardContent className="team-skill-columns">
-        <TeamSkillList title="Sharing with this team" skills={group.sharingWithTeam} />
-        <TeamSkillList title="Shared with you" skills={group.sharedWithMe} />
-      </CardContent>
-    </Card>
-  );
-}
-
-function TeamSkillList({ skills, title }: { skills: PublicSkill[]; title: string }) {
-  return (
-    <div className="team-skill-list">
-      <h3>{title}</h3>
-      {skills.map((skill) => (
-        <div className="team-skill-row" key={skill.slug}>
-          <span>
-            <strong>{skill.title}</strong>
-            <small>{skill.latestVersion ?? "-"} | {skill.tags.slice(0, 2).join(", ") || "untagged"}</small>
-          </span>
-          <StatusToken value={skill.visibility} />
-        </div>
-      ))}
-      {skills.length === 0 && <div className="empty-inline">No skills in this group.</div>}
-    </div>
-  );
-}
+type AdminTab = "people" | "instance" | "keys" | "providers" | "audit";
+const ADMIN_TABS: ReadonlyArray<{ id: AdminTab; label: string }> = [
+  { id: "people", label: "People" },
+  { id: "instance", label: "Instance" },
+  { id: "keys", label: "API keys" },
+  { id: "providers", label: "Sign-in providers" },
+  { id: "audit", label: "Audit" },
+];
 
 function AdminConsole({ client, session }: { client: RegistryClient; session: WebSession }) {
   const [state, setState] = useState<LoadState>("loading");
@@ -2590,6 +3046,11 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
   const [inviteState, setInviteState] = useState<LoadState>("idle");
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
   const [invitation, setInvitation] = useState<RegistrationInvitation | null>(null);
+  const [tab, setTab] = useState<AdminTab>("people");
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const tabRefs = useRef(new Map<AdminTab, HTMLButtonElement>());
+  const inviteTriggerRef = useRef<HTMLButtonElement>(null);
+  const baseId = useId();
   const sessionCanEditPrivilegedRoles = session.user.roles.includes("owner");
   const adminInitialLoading = state === "loading" && users.length === 0 && apiTokens.length === 0 && providers.length === 0 && auditEvents.length === 0;
 
@@ -2819,127 +3280,160 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
     }
   }
 
+  // Tabs activate on arrow, Home and End. Inactive panels stay mounted and
+  // hidden, so an unsaved landing or provider draft survives a tab change.
+  function moveTab(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const focused = ADMIN_TABS.findIndex((item) => item.id === (event.target as HTMLElement).dataset.tab);
+    const from = focused >= 0 ? focused : ADMIN_TABS.findIndex((item) => item.id === tab);
+    const last = ADMIN_TABS.length - 1;
+    const next = event.key === "ArrowRight" ? (from === last ? 0 : from + 1)
+      : event.key === "ArrowLeft" ? (from === 0 ? last : from - 1)
+        : event.key === "Home" ? 0
+          : event.key === "End" ? last
+            : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    const nextTab = ADMIN_TABS[next]!.id;
+    setTab(nextTab);
+    tabRefs.current.get(nextTab)?.focus();
+  }
+
+  function closeInvite() {
+    setInviteOpen(false);
+    setInvitation(null);
+    setInviteMessage(null);
+    setInviteState("idle");
+    inviteTriggerRef.current?.focus();
+  }
+
+  const panelProps = (id: AdminTab) => ({
+    "aria-labelledby": `${baseId}-${id}-tab`,
+    className: "account-panel",
+    hidden: tab !== id,
+    id: `${baseId}-${id}-panel`,
+    role: "tabpanel",
+  });
+  const activeTokenCount = apiTokens.filter((token) => !token.revokedAt).length;
+
   return (
-    <main className="admin-workspace shadcn-admin-workspace" aria-label="Admin console">
-      <section className="admin-hero shadcn-admin-hero" aria-labelledby="admin-console-heading">
-        <div>
-          <Badge className="shadcn-review-eyebrow" variant="outline">Owner workflow</Badge>
-          <h1 id="admin-console-heading">Admin console</h1>
-          <p aria-live="polite">{session.user.email} · {adminInitialLoading ? "Loading accounts…" : `${users.length} accounts`}</p>
-        </div>
-        <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => void refreshAdmin()}>
+    <main className="account-workspace account-admin" aria-label="Admin console">
+      <header className="account-page-head">
+        <h1 id="admin-console-heading">Admin console</h1>
+        <Button size="sm" type="button" variant="outline" onClick={() => void refreshAdmin()}>
           <RotateCw size={16} aria-hidden="true" />
           Refresh
         </Button>
-      </section>
+      </header>
 
-      {message && <div className="safe-message admin-message" role="status">{message}</div>}
+      <div className="account-surface">
+        <div aria-label="Admin sections" className="account-tabs" role="tablist" onKeyDown={moveTab}>
+          {ADMIN_TABS.map((item) => (
+            <button
+              aria-controls={`${baseId}-${item.id}-panel`}
+              aria-selected={tab === item.id}
+              className="account-tab"
+              data-tab={item.id}
+              id={`${baseId}-${item.id}-tab`}
+              key={item.id}
+              ref={(node) => { if (node) tabRefs.current.set(item.id, node); else tabRefs.current.delete(item.id); }}
+              role="tab"
+              tabIndex={tab === item.id ? 0 : -1}
+              type="button"
+              onClick={() => setTab(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
 
-      <section className="admin-grid">
-        <AdminPanel icon={<Globe size={18} aria-hidden="true" />} title="Landing page" meta="First visit to this instance">
-          <LandingSettings key={`${session.user.id}:${session.expiresAt}`} client={client} canEdit={session.user.mfaVerified} onSaved={() => { void refreshAudit().catch(() => setMessage("Landing setting saved. Refresh to load the audit history.")); }} />
-        </AdminPanel>
-        <AdminPanel
-          icon={<Settings size={18} aria-hidden="true" />}
-          title="Registration"
-          meta={state === "loading" ? "Loading…" : registrationMode}
-        >
-          {adminInitialLoading ? (
-            <LoadingRows />
-          ) : (
-            <>
-              <div className={`registration-posture registration-posture-${registrationMode}`}>
-                <span>{capitalize(registrationMode)}</span>
-                <strong>{registrationPostureTitle(registrationMode)}</strong>
-                <p>{registrationPostureDescription(registrationMode)}</p>
-              </div>
-              <div className="segmented-control" aria-label="Registration mode">
-                {(["closed", "request", "open"] as const).map((mode) => (
-                  <button
-                    className={registrationMode === mode ? "active" : undefined}
-                    key={mode}
-                    type="button"
-                    onClick={() => void updateRegistration(mode)}
-                  >
-                    {capitalize(mode)}
-                  </button>
-                ))}
-              </div>
-              <p className="admin-guidance">
-                Use request mode for controlled beta access. Open registration is intentionally guarded until public onboarding and abuse handling are ready.
-              </p>
-              {session.user.mfaVerified ? (
-                <form className="provider-form admin-invite-form" aria-label="Invite user" onSubmit={(event) => {
-                  event.preventDefault();
-                  void createInvitation();
-                }}>
-                  <label>
-                    Email
-                    <input
-                      autoComplete="email"
-                      disabled={inviteState === "loading"}
-                      name="invitation-email"
-                      onChange={(event) => setInviteEmail(event.target.value)}
-                      required
-                      spellCheck={false}
-                      type="email"
-                      value={inviteEmail}
-                    />
-                  </label>
-                  <label>
-                    Name <small>(optional)</small>
-                    <input
-                      autoComplete="name"
-                      disabled={inviteState === "loading"}
-                      name="invitation-name"
-                      onChange={(event) => setInviteName(event.target.value)}
-                      value={inviteName}
-                    />
-                  </label>
-                  <Button className="save-button shadcn-action-button" disabled={inviteState === "loading"} size="sm" type="submit">
-                    <Mail size={16} aria-hidden="true" />
-                    {inviteState === "loading" ? "Sending invitation…" : "Send invitation"}
-                  </Button>
-                  {invitation && (
-                    <div className="success-message compact-message admin-invite-message" role="status" aria-live="polite">
-                      Invitation sent to {invitation.email}. It expires {formatDate(invitation.expiresAt)}.
-                    </div>
-                  )}
-                  {inviteMessage && (
-                    <div className="safe-message compact-message admin-invite-message" role="status" aria-live="polite">{inviteMessage}</div>
-                  )}
-                </form>
-              ) : (
-                <div className="safe-message compact-message" role="status">
-                  Sign in with MFA before sending registration invitations.
-                </div>
-              )}
-            </>
+        {message && (
+          <div className="account-notice account-surface-notice" data-tone="amber" role="status">
+            <span>{message}</span>
+            {state === "error" && <Button size="sm" type="button" variant="outline" onClick={() => void refreshAdmin()}>Retry</Button>}
+          </div>
+        )}
+
+        <section {...panelProps("people")}>
+          <div className="account-panel-head">
+            <div>
+              <h2>People</h2>
+              <p>{adminInitialLoading ? "Loading accounts…" : `${users.length} ${users.length === 1 ? "account" : "accounts"}`}</p>
+            </div>
+            {session.user.mfaVerified && (
+              <Button aria-expanded={inviteOpen} ref={inviteTriggerRef} size="sm" type="button" onClick={() => inviteOpen ? closeInvite() : setInviteOpen(true)}>
+                <Mail size={16} aria-hidden="true" />
+                Invite user
+              </Button>
+            )}
+          </div>
+          {!session.user.mfaVerified && (
+            <p className="account-callout" role="status">
+              <LockKeyhole size={16} aria-hidden="true" />
+              <span>Sign in with MFA before sending registration invitations.</span>
+            </p>
           )}
-        </AdminPanel>
-
-        <AdminPanel
-          icon={<UsersRound size={18} aria-hidden="true" />}
-          title="Users"
-          meta={`${users.length} accounts`}
-        >
-          <div className="admin-table user-table">
-            <div className="admin-table-head">
+          {session.user.mfaVerified && inviteOpen && (
+            <form aria-label="Invite user" className="account-form account-invite" onSubmit={(event) => {
+              event.preventDefault();
+              void createInvitation();
+            }}>
+              <label className="account-field">
+                <span>Email</span>
+                <Input
+                  autoComplete="email"
+                  disabled={inviteState === "loading"}
+                  name="invitation-email"
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  required
+                  spellCheck={false}
+                  type="email"
+                  value={inviteEmail}
+                />
+              </label>
+              <label className="account-field">
+                <span>Name <small>(optional)</small></span>
+                <Input
+                  autoComplete="name"
+                  disabled={inviteState === "loading"}
+                  name="invitation-name"
+                  onChange={(event) => setInviteName(event.target.value)}
+                  value={inviteName}
+                />
+              </label>
+              <div className="account-actions">
+                <Button disabled={inviteState === "loading"} size="sm" type="submit">
+                  <Mail size={16} aria-hidden="true" />
+                  {inviteState === "loading" ? "Sending invitation…" : "Send invitation"}
+                </Button>
+                <Button disabled={inviteState === "loading"} size="sm" type="button" variant="outline" onClick={closeInvite}>Cancel</Button>
+              </div>
+              {invitation && (
+                <p className="account-notice" data-tone="teal" role="status">
+                  Invitation sent to {invitation.email}. It expires {formatDate(invitation.expiresAt)}.
+                </p>
+              )}
+              {inviteMessage && <p className="account-notice" data-tone="danger" role="status">{inviteMessage}</p>}
+            </form>
+          )}
+          <div className="account-users">
+            <div className="account-users-head" aria-hidden="true">
               <span>User</span>
               <span>Status</span>
               <span>Roles</span>
-              <span>Security</span>
               <span>Actions</span>
             </div>
             {adminInitialLoading && <LoadingRows />}
-            {users.map((user) => (
-              <div className="admin-table-row" key={user.id}>
-                <span className="cell-main">
-                  <strong>{user.email}</strong>
-                  <small>{user.name || user.id}</small>
-                </span>
-                <span><StatusToken value={user.status} /></span>
-                <span>
+            <ul aria-label="Accounts" className="account-user-list">
+              {users.map((user) => (
+                <li className="account-user" key={user.id}>
+                  <span className="account-cell-main">
+                    <strong>{user.email}</strong>
+                    <small>{user.name || user.id}</small>
+                  </span>
+                  <span className="account-user-status">
+                    <span className="account-chip" data-tone={user.status === "active" ? undefined : user.status === "pending" ? "amber" : "danger"}>{formatStatusLabel(user.status)}</span>
+                    <small>{user.emailVerified ? "Email verified" : "Email unverified"} · {user.mfaEnabled ? "MFA on" : "No MFA"}</small>
+                  </span>
                   <RoleEditor
                     canEditPrivilegedRoles={sessionCanEditPrivilegedRoles}
                     disabled={
@@ -2951,236 +3445,228 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
                     userEmail={user.email}
                     onChange={(roles) => void updateUserRoles(user.id, roles)}
                   />
-                </span>
-                <span>{user.emailVerified ? "verified" : "unverified"} · {user.mfaEnabled ? "MFA" : "no MFA"}</span>
-                <span className="row-actions">
-                  {user.status === "pending" && (
-                    <IconButton label="Approve user" onClick={() => void performUserAction(user.id, "approve")}>
-                      <Check size={15} aria-hidden="true" />
-                    </IconButton>
-                  )}
-                  {user.status === "disabled" && (
-                    <IconButton label="Activate user" onClick={() => void performUserAction(user.id, "activate")}>
-                      <RotateCw size={15} aria-hidden="true" />
-                    </IconButton>
-                  )}
-                  {user.id !== session.user.id && user.status === "active" && (
-                    <IconButton label="Disable user" onClick={() => void performUserAction(user.id, "disable")}>
-                      <X size={15} aria-hidden="true" />
-                    </IconButton>
-                  )}
-                  {user.id !== session.user.id && user.status !== "deleted" && (
-                    <IconButton label="Delete user" onClick={() => void performUserAction(user.id, "delete")}>
-                      <Trash2 size={15} aria-hidden="true" />
-                    </IconButton>
-                  )}
-                </span>
-              </div>
-            ))}
+                  <span className="account-user-actions">
+                    {user.status === "pending" && (
+                      <Button aria-label="Approve user" size="icon-sm" title="Approve user" type="button" variant="outline" onClick={() => void performUserAction(user.id, "approve")}>
+                        <Check size={15} aria-hidden="true" />
+                      </Button>
+                    )}
+                    {user.status === "disabled" && (
+                      <Button aria-label="Activate user" size="icon-sm" title="Activate user" type="button" variant="outline" onClick={() => void performUserAction(user.id, "activate")}>
+                        <RotateCw size={15} aria-hidden="true" />
+                      </Button>
+                    )}
+                    {user.id !== session.user.id && user.status === "active" && (
+                      <Button aria-label="Disable user" size="icon-sm" title="Disable user" type="button" variant="outline" onClick={() => void performUserAction(user.id, "disable")}>
+                        <X size={15} aria-hidden="true" />
+                      </Button>
+                    )}
+                    {user.id !== session.user.id && user.status !== "deleted" && (
+                      <Button aria-label="Delete user" className="account-danger" size="icon-sm" title="Delete user" type="button" variant="outline" onClick={() => void performUserAction(user.id, "delete")}>
+                        <Trash2 size={15} aria-hidden="true" />
+                      </Button>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
-        </AdminPanel>
+        </section>
 
-        <AdminPanel
-          icon={<KeyRound size={18} aria-hidden="true" />}
-          title="API keys"
-          meta={`${apiTokens.filter((token) => !token.revokedAt).length} active`}
-        >
-          <div className="admin-token-list">
-            {adminInitialLoading && <LoadingRows />}
-            {apiTokens.map((token) => (
-              <div className="token-row admin-token-row" key={token.id}>
-                <span className="cell-main">
-                  <strong>{token.name}</strong>
-                  <small>{token.user.email} · {token.tokenPrefix}…</small>
-                </span>
-                <StatusToken value={token.revokedAt ? "revoked" : "active"} />
-                <span className="admin-token-scopes">{token.scopes.join(", ")}</span>
-                <span className="admin-token-expiry">Expires {formatDate(token.expiresAt)}</span>
-                <button
-                  className="icon-button"
-                  disabled={Boolean(token.revokedAt)}
-                  type="button"
-                  onClick={() => void revokeAdminToken(token.id)}
-                  aria-label={`Revoke ${token.name}`}
-                >
-                  <Trash2 size={15} aria-hidden="true" />
-                </button>
-              </div>
-            ))}
-            {state === "ready" && apiTokens.length === 0 && (
-              <div className="empty-state compact">
-                <KeyRound size={22} aria-hidden="true" />
-                <strong>No API keys.</strong>
-                <span>User-created keys will appear here for monitoring and revocation.</span>
-              </div>
-            )}
+        <section {...panelProps("instance")}>
+          <div className="account-panel-head">
+            <div><h2>New account sign-ups</h2></div>
           </div>
-        </AdminPanel>
-
-        <AdminPanel
-          icon={<UserCog size={18} aria-hidden="true" />}
-          title="Provider"
-          meta={`${providers.length} configured`}
-        >
           {adminInitialLoading ? (
             <LoadingRows />
           ) : (
-            <div className="provider-layout">
-              <div className="provider-list">
-                <button type="button" onClick={() => setDraft(emptyProviderDraft())}>
+            <>
+              <p className="account-posture"><strong>{registrationPostureTitle(registrationMode)}</strong> {registrationPostureDescription(registrationMode)}</p>
+              <div aria-label="Registration mode" className="account-segmented" role="group">
+                {(["closed", "request", "open"] as const).map((mode) => (
+                  <Button aria-pressed={registrationMode === mode} key={mode} size="sm" type="button" variant="outline" onClick={() => void updateRegistration(mode)}>
+                    {capitalize(mode)}
+                  </Button>
+                ))}
+              </div>
+            </>
+          )}
+          <div className="account-panel-head account-panel-divider">
+            <div><h2>Landing page</h2><p>First visit to this instance</p></div>
+          </div>
+          <LandingSettings key={`${session.user.id}:${session.expiresAt}`} client={client} canEdit={session.user.mfaVerified} onSaved={() => { void refreshAudit().catch(() => setMessage("Landing setting saved. Refresh to load the audit history.")); }} />
+        </section>
+
+        <section {...panelProps("keys")}>
+          <div className="account-panel-head">
+            <div><h2 id={`${baseId}-keys-heading`}>API keys</h2><p>{activeTokenCount} active</p></div>
+          </div>
+          {adminInitialLoading && <LoadingRows />}
+          {apiTokens.length > 0 && (
+            <ul aria-labelledby={`${baseId}-keys-heading`} className="account-token-list">
+              {apiTokens.map((token) => (
+                <li className="account-token" key={token.id}>
+                  <span className="account-cell-main">
+                    <strong>{token.name}</strong>
+                    <small>{token.user.email} · <code>{token.tokenPrefix}…</code></small>
+                  </span>
+                  <span className="account-chip" data-tone={token.revokedAt ? "danger" : undefined}>{token.revokedAt ? "Revoked" : "Active"}</span>
+                  <small className="account-token-meta">{token.scopes.join(", ")} · Expires {formatDate(token.expiresAt)}</small>
+                  <Button aria-label={`Revoke ${token.name}`} className="account-danger" disabled={Boolean(token.revokedAt)} size="icon-sm" title={`Revoke ${token.name}`} type="button" variant="outline" onClick={() => void revokeAdminToken(token.id)}>
+                    <Trash2 size={15} aria-hidden="true" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {state === "ready" && apiTokens.length === 0 && <p className="account-muted">No API keys. User-created keys appear here for monitoring and revocation.</p>}
+        </section>
+
+        <section {...panelProps("providers")}>
+          <div className="account-panel-head">
+            <div><h2>Sign-in providers</h2><p>{providers.length} configured</p></div>
+          </div>
+          {adminInitialLoading ? (
+            <LoadingRows />
+          ) : (
+            <div className="account-providers">
+              <div className="account-provider-list">
+                <Button size="sm" type="button" variant="outline" onClick={() => setDraft(emptyProviderDraft())}>
                   <Plus size={15} aria-hidden="true" />
                   New provider
-                </button>
+                </Button>
                 {providers.map((provider) => (
                   <button
-                    className={provider.key === draft.key ? "selected" : undefined}
+                    aria-current={provider.key === draft.key ? "true" : undefined}
+                    className="account-provider"
                     key={provider.key}
                     type="button"
                     onClick={() => setDraft(providerToDraft(provider))}
                   >
-                    <span>
+                    <span className="account-cell-main">
                       <strong>{provider.displayName}</strong>
                       <small>{provider.key}</small>
                     </span>
-                    <StatusToken value={provider.enabled ? "enabled" : "disabled"} />
+                    <span className="account-chip" data-tone={provider.enabled ? "teal" : undefined}>{provider.enabled ? "Enabled" : "Disabled"}</span>
                   </button>
                 ))}
               </div>
-              <form className="provider-form" onSubmit={(event) => {
+              <form className="account-form account-provider-form" onSubmit={(event) => {
                 event.preventDefault();
                 void saveProvider();
               }}>
-                <label>
-                  Key
-                  <input value={draft.key} onChange={(event) => setDraft({ ...draft, key: event.target.value })} />
-                </label>
-                <label>
-                  Type
-                  <select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as ProviderDraft["type"] })}>
-                    <option value="oidc">OIDC</option>
-                    <option value="saml">SAML</option>
-                    <option value="cloudflare_access">Cloudflare Access</option>
-                    <option value="github">GitHub</option>
-                    <option value="google">Google</option>
-                  </select>
-                </label>
-                <label>
-                  Display name
-                  <input value={draft.displayName} onChange={(event) => setDraft({ ...draft, displayName: event.target.value })} />
-                </label>
-                <label>
-                  Issuer
-                  <input value={draft.issuer} onChange={(event) => setDraft({ ...draft, issuer: event.target.value })} />
-                </label>
-                <label>
-                  Client ID
-                  <input value={draft.clientId} onChange={(event) => setDraft({ ...draft, clientId: event.target.value })} />
-                </label>
-                <label className="toggle-row">
+                <div className="account-field-grid">
+                  <label className="account-field">
+                    <span>Key</span>
+                    <Input value={draft.key} onChange={(event) => setDraft({ ...draft, key: event.target.value })} />
+                  </label>
+                  <label className="account-field">
+                    <span>Type</span>
+                    <select className="account-select" value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as ProviderDraft["type"] })}>
+                      <option value="oidc">OIDC</option>
+                      <option value="saml">SAML</option>
+                      <option value="cloudflare_access">Cloudflare Access</option>
+                      <option value="github">GitHub</option>
+                      <option value="google">Google</option>
+                    </select>
+                  </label>
+                  <label className="account-field">
+                    <span>Display name</span>
+                    <Input value={draft.displayName} onChange={(event) => setDraft({ ...draft, displayName: event.target.value })} />
+                  </label>
+                  <label className="account-field">
+                    <span>Issuer</span>
+                    <Input value={draft.issuer} onChange={(event) => setDraft({ ...draft, issuer: event.target.value })} />
+                  </label>
+                  <label className="account-field">
+                    <span>Client ID</span>
+                    <Input value={draft.clientId} onChange={(event) => setDraft({ ...draft, clientId: event.target.value })} />
+                  </label>
+                </div>
+                <label className="account-check">
                   <input checked={draft.enabled} type="checkbox" onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} />
-                  Enabled
+                  <span>Enabled</span>
                 </label>
-
-                <div className="mapping-editor">
-                  <div className="mapping-heading">
-                    <span>Role mappings</span>
-                    <button type="button" onClick={() => setDraft({
-                      ...draft,
-                      roleMappings: [...draft.roleMappings, { claim: "", value: "", role: "user" }],
-                    })}>
-                      <Plus size={15} aria-hidden="true" />
-                      Add
-                    </button>
-                  </div>
+                <fieldset className="account-mappings">
+                  <legend>Role mappings</legend>
                   {draft.roleMappings.map((mapping, index) => (
-                    <div className="mapping-row" key={index}>
-                      <input
+                    <div className="account-mapping" key={index}>
+                      <Input
                         aria-label={`Mapping ${index + 1} claim`}
+                        placeholder="Claim"
                         value={mapping.claim}
                         onChange={(event) => updateDraftMapping(setDraft, draft, index, { claim: event.target.value })}
                       />
-                      <input
+                      <Input
                         aria-label={`Mapping ${index + 1} value`}
+                        placeholder="Value"
                         value={mapping.value}
                         onChange={(event) => updateDraftMapping(setDraft, draft, index, { value: event.target.value })}
                       />
                       <select
                         aria-label={`Mapping ${index + 1} role`}
+                        className="account-select"
                         value={mapping.role}
                         onChange={(event) => updateDraftMapping(setDraft, draft, index, { role: event.target.value })}
                       >
-                        <option value="user">user</option>
-                        <option value="author">author</option>
-                        <option value="maintainer">maintainer</option>
+                        <option value="user">User</option>
+                        <option value="author">Author</option>
+                        <option value="maintainer">Maintainer</option>
                       </select>
-                      <IconButton label={`Remove mapping ${index + 1}`} onClick={() => setDraft({
+                      <Button aria-label={`Remove mapping ${index + 1}`} size="icon-sm" title={`Remove mapping ${index + 1}`} type="button" variant="outline" onClick={() => setDraft({
                         ...draft,
                         roleMappings: draft.roleMappings.filter((_, itemIndex) => itemIndex !== index),
                       })}>
                         <Trash2 size={14} aria-hidden="true" />
-                      </IconButton>
+                      </Button>
                     </div>
                   ))}
+                  <Button size="sm" type="button" variant="outline" onClick={() => setDraft({
+                    ...draft,
+                    roleMappings: [...draft.roleMappings, { claim: "", value: "", role: "user" }],
+                  })}>
+                    <Plus size={15} aria-hidden="true" />
+                    Add
+                  </Button>
+                </fieldset>
+                <div className="account-actions">
+                  <Button size="sm" type="submit">
+                    <Save size={16} aria-hidden="true" />
+                    Save provider
+                  </Button>
                 </div>
-                <button className="save-button" type="submit">
-                  <Save size={16} aria-hidden="true" />
-                  Save provider
-                </button>
               </form>
             </div>
           )}
-        </AdminPanel>
+        </section>
 
-        <AdminPanel
-          icon={<ShieldCheck size={18} aria-hidden="true" />}
-          title="Audit"
-          meta={`${auditEvents.length} loaded`}
-        >
-          <div className="audit-list">
+        <section {...panelProps("audit")}>
+          <div className="account-panel-head">
+            <div><h2>Audit</h2><p>{auditEvents.length} loaded</p></div>
+          </div>
+          <div className="audit-list account-audit">
             {adminInitialLoading && <LoadingRows />}
             {auditEvents.map((event) => (
               <div className="audit-row" key={event.id}>
-                <span className={event.decision === "allow" ? "audit-decision allow" : "audit-decision deny"}>
-                  {event.decision}
-                </span>
-                <span>
+                <span className="account-chip" data-tone={event.decision === "allow" ? "teal" : "danger"}>{formatStatusLabel(event.decision)}</span>
+                <span className="account-cell-main">
                   <strong>{event.action}</strong>
                   <small>{event.resourceType}{event.resourceId ? ` · ${event.resourceId}` : ""}</small>
                 </span>
                 <time dateTime={event.createdAt}>{formatDate(event.createdAt)}</time>
               </div>
             ))}
-            {auditCursor && <Button type="button" size="sm" variant="outline" disabled={loadingAudit} onClick={() => void loadMoreAudit()}>{loadingAudit ? "Loading more events…" : "Load more audit events"}</Button>}
-            {state === "ready" && auditEvents.length === 0 && <div className="empty-state">No audit events.</div>}
+            {auditCursor && (
+              <div className="account-actions">
+                <Button disabled={loadingAudit} size="sm" type="button" variant="outline" onClick={() => void loadMoreAudit()}>{loadingAudit ? "Loading more events…" : "Load more audit events"}</Button>
+              </div>
+            )}
+            {state === "ready" && auditEvents.length === 0 && <p className="account-muted">No audit events.</p>}
           </div>
-        </AdminPanel>
-      </section>
+        </section>
+      </div>
       {confirmation && <ConfirmationDialog key={confirmation.key} request={confirmation} onClose={() => setConfirmation(null)} />}
     </main>
-  );
-}
-
-function AdminPanel({ children, icon, meta, title }: {
-  children: ReactNode;
-  icon: ReactNode;
-  meta: string;
-  title: string;
-}) {
-  return (
-    <section className="admin-panel reui-admin-section">
-      <Frame className="reui-admin-frame" dense spacing="xs" variant="ghost">
-        <FramePanel className="reui-admin-panel">
-          <FrameHeader className="admin-panel-heading reui-admin-heading">
-            <span className="admin-panel-icon">{icon}</span>
-            <div>
-              <FrameTitle>{title}</FrameTitle>
-              <FrameDescription>{meta}</FrameDescription>
-            </div>
-          </FrameHeader>
-          {children}
-        </FramePanel>
-      </Frame>
-    </section>
   );
 }
 
@@ -3393,7 +3879,8 @@ function AccountSettings({
   const [mfaStatus, setMfaStatus] = useState<MfaStatus | null>(null);
   const [apiTokens, setApiTokens] = useState<ApiToken[]>([]);
   const [state, setState] = useState<LoadState>("loading");
-  const [message, setMessage] = useState<string | null>(null);
+  // Each message belongs to one settings row and renders under that row's action.
+  const [notice, setNotice] = useState<{ scope: AccountScope; text: string; tone: "danger" | "teal" } | null>(null);
   const [email, setEmail] = useState("");
   const [emailPassword, setEmailPassword] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -3401,6 +3888,10 @@ function AccountSettings({
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [mfaPassword, setMfaPassword] = useState("");
   const [mfaSetupOpen, setMfaSetupOpen] = useState(false);
+  const [mfaRemovalOpen, setMfaRemovalOpen] = useState(false);
+  const removeMfaRef = useRef<HTMLButtonElement>(null);
+  const focusRemoval = useRef<"password" | "trigger" | null>(null);
+  const baseId = useId();
   const [apiTokenName, setApiTokenName] = useState("");
   const [apiTokenScopes, setApiTokenScopes] = useState<ApiTokenScope[]>(["skills:read"]);
   const [apiTokenExpiresAt, setApiTokenExpiresAt] = useState("");
@@ -3410,6 +3901,7 @@ function AccountSettings({
   const tokenExpiryBounds = useMemo(() => apiTokenExpiryBounds(), []);
 
   async function refreshAccountSecurity() {
+    setNotice((current) => current?.scope === "load" ? null : current);
     try {
       const [nextMfaStatus, nextApiTokens] = await Promise.all([
         client.getMfaStatus(),
@@ -3419,7 +3911,7 @@ function AccountSettings({
       setApiTokens(nextApiTokens);
       setState("ready");
     } catch (error) {
-      setMessage(safeAccountErrorMessage(error));
+      setNotice({ scope: "load", text: safeAccountErrorMessage(error), tone: "danger" });
       setState("error");
     }
   }
@@ -3428,20 +3920,29 @@ function AccountSettings({
     void refreshAccountSecurity();
   }, [client]);
 
+  useEffect(() => {
+    const target = focusRemoval.current;
+    if (!target) return;
+    const element = target === "password" ? document.getElementById(`${baseId}-mfa-removal`) : removeMfaRef.current;
+    if (!element) return;
+    focusRemoval.current = null;
+    element.focus();
+  });
+
   async function submitPasswordChange(input?: { currentPassword: string; password: string; confirmPassword: string }) {
-    setMessage(null);
+    setNotice(null);
     const passwordInput = input ?? {
       currentPassword,
       password: newPassword,
       confirmPassword: confirmNewPassword,
     };
     if (passwordInput.password !== passwordInput.confirmPassword) {
-      setMessage("Passwords do not match.");
+      setNotice({ scope: "password", text: "Passwords do not match.", tone: "danger" });
       return;
     }
     const passwordError = newPasswordByteError(passwordInput.password);
     if (passwordError) {
-      setMessage(passwordError);
+      setNotice({ scope: "password", text: passwordError, tone: "danger" });
       return;
     }
     setState("loading");
@@ -3450,12 +3951,12 @@ function AccountSettings({
       onSessionInvalidated("Password changed. Sign in again with the new password.");
     } catch (error) {
       setState("error");
-      setMessage(safeAccountErrorMessage(error));
+      setNotice({ scope: "password", text: safeAccountErrorMessage(error), tone: "danger" });
     }
   }
 
   async function submitEmailChange(input?: { email: string; password: string }) {
-    setMessage(null);
+    setNotice(null);
     setState("loading");
     try {
       const emailInput = input ?? { email, password: emailPassword };
@@ -3463,11 +3964,22 @@ function AccountSettings({
       setEmail("");
       setEmailPassword("");
       setState("ready");
-      setMessage("Verification email sent. Confirm the new address to complete the change.");
+      setNotice({ scope: "email", text: "Verification email sent. Confirm the new address to complete the change.", tone: "teal" });
     } catch (error) {
       setState("error");
-      setMessage(safeAccountErrorMessage(error));
+      setNotice({ scope: "email", text: safeAccountErrorMessage(error), tone: "danger" });
     }
+  }
+
+  function openMfaRemoval() {
+    setMfaRemovalOpen(true);
+    focusRemoval.current = "password";
+  }
+
+  function closeMfaRemoval() {
+    setMfaRemovalOpen(false);
+    setMfaPassword("");
+    focusRemoval.current = "trigger";
   }
 
   function requestMfaRemoval(password: string) {
@@ -3482,7 +3994,7 @@ function AccountSettings({
   }
 
   async function removeMfa(password: string) {
-    setMessage(null);
+    setNotice(null);
     setState("loading");
     try {
       await client.disableTotpMfa({ password });
@@ -3490,13 +4002,13 @@ function AccountSettings({
     } catch (error) {
       setState("error");
       const safeMessage = safeAccountErrorMessage(error);
-      setMessage(safeMessage);
+      setNotice({ scope: "mfa", text: safeMessage, tone: "danger" });
       throw new Error(safeMessage);
     }
   }
 
   async function createAccountApiToken() {
-    setMessage(null);
+    setNotice(null);
     setCreatedApiToken(null);
     const expiry = validateApiTokenExpiry(apiTokenExpiresAt);
     if (!expiry.valid) {
@@ -3519,12 +4031,12 @@ function AccountSettings({
       setState("ready");
     } catch (error) {
       setState("error");
-      setMessage(safeAccountErrorMessage(error));
+      setNotice({ scope: "tokens", text: safeAccountErrorMessage(error), tone: "danger" });
     }
   }
 
   async function revokeAccountApiToken(tokenId: string) {
-    setMessage(null);
+    setNotice(null);
     const token = apiTokens.find((item) => item.id === tokenId);
     setConfirmation({
       key: "revoke-account-token",
@@ -3545,223 +4057,228 @@ function AccountSettings({
     } catch (error) {
       setState("error");
       const safeMessage = safeAccountErrorMessage(error);
-      setMessage(safeMessage);
+      setNotice({ scope: "tokens", text: safeMessage, tone: "danger" });
       throw new Error(safeMessage);
     }
   }
 
   const mfaEnabled = Boolean(mfaStatus?.totpEnabled);
-  const activeApiTokenCount = apiTokens.filter((token) => !token.revokedAt).length;
   const accountInitialLoading = state === "loading" && mfaStatus === null;
-  const sessionMfaLabel = session.user.mfaVerified ? "verified" : "not verified";
-  const mfaPostureLabel = accountInitialLoading ? "Loading…" : mfaEnabled ? (session.user.mfaVerified ? "MFA verified" : "MFA enabled") : "MFA not set";
-  const apiTokenCountLabel = accountInitialLoading ? "Loading…" : String(activeApiTokenCount);
-  const recoveryCodeLabel = accountInitialLoading ? "Loading…" : mfaEnabled ? String(mfaStatus?.recoveryCodesRemaining ?? 0) : "not issued";
+  const recoveryCodes = mfaStatus?.recoveryCodesRemaining ?? 0;
+  const roleLabel = session.user.roles.map(formatStatusLabel).join(", ") || "User";
+  const rowNotice = (scope: AccountScope) => notice?.scope === scope
+    ? <p className="account-notice" data-tone={notice.tone} role="status">{notice.text}</p>
+    : null;
 
   return (
-    <main className="settings-workspace shadcn-settings-workspace" aria-label="Account settings">
-      {message && <div className={state === "error" ? "safe-message admin-message" : "success-message admin-message"} role="status">{message}</div>}
-      <section className="settings-hero shadcn-settings-hero">
+    <main className="account-workspace account-settings" aria-label="Account settings">
+      <header className="account-page-head">
         <div>
-          <Badge className="settings-eyebrow shadcn-review-eyebrow" variant="outline">Account settings</Badge>
           <h1>Security and access</h1>
-          <p>Manage identity, authentication, and external access for this account.</p>
+          <p>{session.user.email} · {roleLabel} · {session.user.emailVerified ? "Email verified" : "Email not verified"}</p>
         </div>
-        <div className="settings-hero-metrics" aria-label="Account posture">
-          <SettingsMetric label="Session MFA" value={sessionMfaLabel} strong={session.user.mfaVerified} />
-          <SettingsMetric label="Active API keys" value={apiTokenCountLabel} />
-        </div>
-      </section>
+      </header>
 
       {!accountInitialLoading && mfaEnabled && !session.user.mfaVerified && (
-        <section className="settings-risk-banner" role="status" aria-live="polite">
+        <section className="account-banner" role="status" aria-live="polite">
           <CircleAlert size={20} aria-hidden="true" />
           <div>
             <strong>MFA is enabled, but this session is not MFA verified.</strong>
             <p>Privileged owner workflows remain locked until the next MFA sign-in.</p>
           </div>
-          <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => onSessionInvalidated("Sign in with MFA to continue.")}>
+          <Button size="sm" type="button" variant="outline" onClick={() => onSessionInvalidated("Sign in with MFA to continue.")}>
             <LogIn size={16} aria-hidden="true" />
             Sign in with MFA
           </Button>
         </section>
       )}
 
-      <div className="settings-layout">
-        <aside className="settings-overview" aria-label="Account summary">
-          <div className="settings-profile">
-            <span className="settings-avatar" aria-hidden="true">
-              <UserRound size={24} />
-            </span>
-            <div>
-              <strong>{session.user.email}</strong>
-              <span>{session.user.roles.join(", ") || "user"}</span>
-            </div>
+      <div className="account-surface">
+        {notice?.scope === "load" && (
+          <div className="account-notice account-surface-notice" data-tone="danger" role="status">
+            <span>{notice.text}</span>
+            <Button size="sm" type="button" variant="outline" onClick={() => { setState("loading"); void refreshAccountSecurity(); }}>Retry</Button>
           </div>
-          <dl className="settings-summary-list">
-            <Metadata label="Email status" value={session.user.emailVerified ? "verified" : "unverified"} />
-            <Metadata label="MFA posture" value={mfaPostureLabel} />
-            <Metadata label="Recovery codes" value={recoveryCodeLabel} />
-            <Metadata label="API access" value={accountInitialLoading ? "Loading…" : `${activeApiTokenCount} active`} />
-          </dl>
-        </aside>
+        )}
 
-        <section className="settings-content" aria-label="Settings controls">
-          <AccountPanel icon={<Mail size={18} aria-hidden="true" />} title="Change email" meta="Requires new-address verification">
-            <form className="settings-form two-column" onSubmit={(event) => {
-              event.preventDefault();
-              const formData = new window.FormData(event.currentTarget);
-              void submitEmailChange({
-                email: String(formData.get("new-email") ?? ""),
-                password: String(formData.get("email-current-password") ?? ""),
-              });
-            }}>
-              <div className="settings-field">
-                <label>
-                  <span>New email</span>
-                  <Input
-                    className="settings-input"
-                    aria-label="New email"
-                    autoComplete="email"
-                    name="new-email"
-                    onChange={(event) => setEmail(event.target.value)}
-                    onInput={(event) => setEmail(event.currentTarget.value)}
-                    required
-                    type="email"
-                    value={email}
-                  />
-                </label>
-                <small>The new address must be verified before it replaces the current one.</small>
-              </div>
-              <div className="settings-field">
-                <label>
-                  <span>Current password</span>
-                  <Input
-                    className="settings-input"
-                    autoComplete="current-password"
-                    name="email-current-password"
-                    onChange={(event) => setEmailPassword(event.target.value)}
-                    onInput={(event) => setEmailPassword(event.currentTarget.value)}
-                    required
-                    type="password"
-                    value={emailPassword}
-                  />
-                </label>
-                <small>Required for account identity changes.</small>
-              </div>
-              <div className="settings-submit-row">
-                <Button className="save-button shadcn-action-button" disabled={state === "loading"} size="sm" type="submit">
-                  <Mail size={16} aria-hidden="true" />
-                  Send verification
-                </Button>
-              </div>
-            </form>
-          </AccountPanel>
+        <section aria-labelledby={`${baseId}-email`} className="account-row">
+          <div className="account-row-intro">
+            <h2 id={`${baseId}-email`}>Email</h2>
+            <p>The new address must be verified before it replaces the current one.</p>
+          </div>
+          <form className="account-form account-row-body" onSubmit={(event) => {
+            event.preventDefault();
+            const formData = new window.FormData(event.currentTarget);
+            void submitEmailChange({
+              email: String(formData.get("new-email") ?? ""),
+              password: String(formData.get("email-current-password") ?? ""),
+            });
+          }}>
+            <label className="account-field">
+              <span>New email</span>
+              <Input
+                aria-label="New email"
+                autoComplete="email"
+                name="new-email"
+                onChange={(event) => setEmail(event.target.value)}
+                onInput={(event) => setEmail(event.currentTarget.value)}
+                required
+                type="email"
+                value={email}
+              />
+            </label>
+            <label className="account-field">
+              <span>Current password</span>
+              <Input
+                aria-describedby={`${baseId}-email-password-help`}
+                autoComplete="current-password"
+                name="email-current-password"
+                onChange={(event) => setEmailPassword(event.target.value)}
+                onInput={(event) => setEmailPassword(event.currentTarget.value)}
+                required
+                type="password"
+                value={emailPassword}
+              />
+            </label>
+            <small className="account-hint" id={`${baseId}-email-password-help`}>Required for account identity changes.</small>
+            <div className="account-actions">
+              <Button disabled={state === "loading"} size="sm" type="submit">
+                <Mail size={16} aria-hidden="true" />
+                Send verification
+              </Button>
+            </div>
+            {rowNotice("email")}
+          </form>
+        </section>
 
-          <AccountPanel icon={<KeyRound size={18} aria-hidden="true" />} title="Password" meta="Current password required">
-            <form className="settings-form password-grid" onSubmit={(event) => {
-              event.preventDefault();
-              const formData = new window.FormData(event.currentTarget);
-              void submitPasswordChange({
-                currentPassword: String(formData.get("current-password") ?? ""),
-                password: String(formData.get("new-password") ?? ""),
-                confirmPassword: String(formData.get("confirm-new-password") ?? ""),
-              });
-            }}>
-              <label className="span-all">
-                <span>Current password</span>
-                <Input
-                  className="settings-input"
-                  autoComplete="current-password"
-                  name="current-password"
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  onInput={(event) => setCurrentPassword(event.currentTarget.value)}
-                  required
-                  type="password"
-                  value={currentPassword}
-                />
-              </label>
-              <label>
-                <span>New password</span>
-                <Input
-                  className="settings-input"
-                  aria-label="New password"
-                  autoComplete="new-password"
-                  name="new-password"
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  onInput={(event) => setNewPassword(event.currentTarget.value)}
-                  required
-                  type="password"
-                  value={newPassword}
-                />
-              </label>
-              <label>
-                <span>Confirm new password</span>
-                <Input
-                  className="settings-input"
-                  aria-label="Confirm new password"
-                  autoComplete="new-password"
-                  name="confirm-new-password"
-                  onChange={(event) => setConfirmNewPassword(event.target.value)}
-                  onInput={(event) => setConfirmNewPassword(event.currentTarget.value)}
-                  required
-                  type="password"
-                  value={confirmNewPassword}
-                />
-              </label>
-              <div className="settings-submit-row">
-                <Button className="save-button shadcn-action-button" disabled={state === "loading"} size="sm" type="submit">
-                  <Save size={16} aria-hidden="true" />
-                  Change password
-                </Button>
-              </div>
-            </form>
-          </AccountPanel>
+        <section aria-labelledby={`${baseId}-password`} className="account-row">
+          <div className="account-row-intro">
+            <h2 id={`${baseId}-password`}>Password</h2>
+            <p>Changing the password ends this session. Sign in again with the new password.</p>
+          </div>
+          <form className="account-form account-row-body" onSubmit={(event) => {
+            event.preventDefault();
+            const formData = new window.FormData(event.currentTarget);
+            void submitPasswordChange({
+              currentPassword: String(formData.get("current-password") ?? ""),
+              password: String(formData.get("new-password") ?? ""),
+              confirmPassword: String(formData.get("confirm-new-password") ?? ""),
+            });
+          }}>
+            <label className="account-field">
+              <span>Current password</span>
+              <Input
+                autoComplete="current-password"
+                name="current-password"
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                onInput={(event) => setCurrentPassword(event.currentTarget.value)}
+                required
+                type="password"
+                value={currentPassword}
+              />
+            </label>
+            <label className="account-field">
+              <span>New password</span>
+              <Input
+                aria-label="New password"
+                autoComplete="new-password"
+                name="new-password"
+                onChange={(event) => setNewPassword(event.target.value)}
+                onInput={(event) => setNewPassword(event.currentTarget.value)}
+                required
+                type="password"
+                value={newPassword}
+              />
+            </label>
+            <label className="account-field">
+              <span>Confirm new password</span>
+              <Input
+                aria-label="Confirm new password"
+                autoComplete="new-password"
+                name="confirm-new-password"
+                onChange={(event) => setConfirmNewPassword(event.target.value)}
+                onInput={(event) => setConfirmNewPassword(event.currentTarget.value)}
+                required
+                type="password"
+                value={confirmNewPassword}
+              />
+            </label>
+            <div className="account-actions">
+              <Button disabled={state === "loading"} size="sm" type="submit">
+                <Save size={16} aria-hidden="true" />
+                Change password
+              </Button>
+            </div>
+            {rowNotice("password")}
+          </form>
+        </section>
 
-          <AccountPanel icon={<ShieldCheck size={18} aria-hidden="true" />} title="MFA" meta={accountInitialLoading ? "Loading…" : mfaEnabled ? `${mfaStatus?.recoveryCodesRemaining ?? 0} recovery codes` : "Authenticator app not set"}>
+        <section aria-labelledby={`${baseId}-mfa`} className="account-row">
+          <div className="account-row-intro">
+            <h2 id={`${baseId}-mfa`}>MFA</h2>
+            <p>An authenticator app code at sign-in. Privileged owner workflows need an MFA-verified session.</p>
+          </div>
+          <div className="account-row-body">
             {accountInitialLoading ? (
               <LoadingRows />
+            ) : mfaStatus === null ? (
+              <p className="account-muted">MFA status could not be loaded.</p>
             ) : (
-              <div className="settings-stack">
-                <div className={mfaEnabled ? "settings-security-state verified" : "settings-security-state attention"}>
-                  <ShieldCheck size={18} aria-hidden="true" />
-                  <div>
-                    <strong>{mfaEnabled ? "Authenticator app MFA is enabled." : "Authenticator app MFA is not set."}</strong>
-                    <span>{session.user.mfaVerified ? "This session is MFA verified." : "Sign in with MFA before using privileged owner workflows."}</span>
-                  </div>
-                </div>
+              <>
+                <p className="account-status-line">
+                  <strong>{mfaEnabled ? "Authenticator app MFA is enabled." : "Authenticator app MFA is not set."}</strong>
+                  <span>
+                    {mfaEnabled
+                      ? `${recoveryCodes} recovery ${recoveryCodes === 1 ? "code" : "codes"} left.${session.user.mfaVerified ? " This session is MFA verified." : ""}`
+                      : "Enter your current password to start setup."}
+                  </span>
+                </p>
                 {mfaEnabled && (
-                  <div className="settings-actions">
-                    <Button className="save-button shadcn-action-button secondary-action" size="sm" type="button" variant="outline" onClick={() => setMfaSetupOpen((open) => !open)}>
+                  <div className="account-actions">
+                    <Button aria-expanded={mfaSetupOpen} size="sm" type="button" variant="outline" onClick={() => setMfaSetupOpen((open) => !open)}>
                       <RotateCw size={16} aria-hidden="true" />
                       Reset authenticator
                     </Button>
-                    <form className="inline-security-form" onSubmit={(event) => {
-                      event.preventDefault();
-                      const formData = new window.FormData(event.currentTarget);
-                      requestMfaRemoval(String(formData.get("mfa-removal-password") ?? ""));
-                    }}>
-                      <label>
-                        <span>Password for MFA removal</span>
-                        <Input
-                          className="settings-input"
-                          aria-label="Password for MFA removal"
-                          autoComplete="current-password"
-                          name="mfa-removal-password"
-                          onChange={(event) => setMfaPassword(event.target.value)}
-                          onInput={(event) => setMfaPassword(event.currentTarget.value)}
-                          placeholder="Current password"
-                          required
-                          type="password"
-                          value={mfaPassword}
-                        />
-                      </label>
-                      <Button className="shadcn-action-button" disabled={state === "loading"} size="sm" type="submit" variant="destructive">
+                    {!mfaRemovalOpen && (
+                      <Button className="account-danger" ref={removeMfaRef} size="sm" type="button" variant="outline" onClick={openMfaRemoval}>
                         <X size={16} aria-hidden="true" />
                         Remove MFA
                       </Button>
-                    </form>
+                    )}
                   </div>
+                )}
+                {mfaEnabled && mfaRemovalOpen && (
+                  <form className="account-form account-inline-form" onKeyDown={(event) => {
+                    if (event.key !== "Escape") return;
+                    event.preventDefault();
+                    closeMfaRemoval();
+                  }} onSubmit={(event) => {
+                    event.preventDefault();
+                    const formData = new window.FormData(event.currentTarget);
+                    requestMfaRemoval(String(formData.get("mfa-removal-password") ?? ""));
+                  }}>
+                    <label className="account-field">
+                      <span>Password for MFA removal</span>
+                      <Input
+                        aria-label="Password for MFA removal"
+                        autoComplete="current-password"
+                        id={`${baseId}-mfa-removal`}
+                        name="mfa-removal-password"
+                        onChange={(event) => setMfaPassword(event.target.value)}
+                        onInput={(event) => setMfaPassword(event.currentTarget.value)}
+                        required
+                        type="password"
+                        value={mfaPassword}
+                      />
+                    </label>
+                    <div className="account-actions">
+                      <Button disabled={state === "loading"} size="sm" type="submit" variant="destructive">
+                        <X size={16} aria-hidden="true" />
+                        Remove MFA
+                      </Button>
+                      <Button size="sm" type="button" variant="outline" onClick={closeMfaRemoval}>Cancel</Button>
+                    </div>
+                  </form>
                 )}
                 {(!mfaEnabled || mfaSetupOpen) && (
                   <MfaSetupPanel
@@ -3777,90 +4294,88 @@ function AccountSettings({
                     session={session}
                   />
                 )}
+                {rowNotice("mfa")}
+                <p className="account-muted">Passkeys are not available yet.</p>
+              </>
+            )}
+          </div>
+        </section>
+
+        <section aria-labelledby={`${baseId}-keys`} className="account-row">
+          <div className="account-row-intro">
+            <h2 id={`${baseId}-keys`}>API keys</h2>
+            <p>Scoped keys for the CLI, MCP clients and automation. A new key is shown only once.</p>
+          </div>
+          <div className="account-row-body">
+            <form className="account-form" noValidate onSubmit={(event) => {
+              event.preventDefault();
+              void createAccountApiToken();
+            }}>
+              <label className="account-field">
+                <span>Key name</span>
+                <Input
+                  aria-label="Key name"
+                  name="api-token-name"
+                  onChange={(event) => setApiTokenName(event.target.value)}
+                  onInput={(event) => setApiTokenName(event.currentTarget.value)}
+                  placeholder="CLI or MCP client"
+                  value={apiTokenName}
+                />
+              </label>
+              <label className="account-field">
+                <span>Expires at</span>
+                <Input
+                  aria-label="Expires at"
+                  aria-describedby="api-token-expiry-help api-token-expiry-error"
+                  aria-invalid={Boolean(apiTokenExpiryError)}
+                  autoComplete="off"
+                  max={tokenExpiryBounds.max}
+                  min={tokenExpiryBounds.min}
+                  name="api-token-expires-at"
+                  onChange={(event) => {
+                    setApiTokenExpiresAt(event.target.value);
+                    setApiTokenExpiryError(null);
+                  }}
+                  onInput={(event) => {
+                    setApiTokenExpiresAt(event.currentTarget.value);
+                    setApiTokenExpiryError(null);
+                  }}
+                  type="datetime-local"
+                  value={apiTokenExpiresAt}
+                />
+                <small id="api-token-expiry-help">Optional. Choose a future expiry no more than 1 year away; blank uses the 90-day default.</small>
+                {apiTokenExpiryError && <small className="field-error" id="api-token-expiry-error" role="alert">{apiTokenExpiryError}</small>}
+              </label>
+              <fieldset className="account-scopes">
+                <legend>API key scopes</legend>
+                {API_TOKEN_SCOPE_OPTIONS.map((option) => (
+                  <label className="account-check" key={option.scope}>
+                    <input
+                      checked={apiTokenScopes.includes(option.scope)}
+                      onChange={() => setApiTokenScopes((current) => toggleApiTokenScope(current, option.scope))}
+                      type="checkbox"
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </fieldset>
+              <div className="account-actions">
+                <Button disabled={state === "loading" || !apiTokenName.trim() || apiTokenScopes.length === 0} size="sm" type="submit">
+                  <KeyRound size={16} aria-hidden="true" />
+                  Create key
+                </Button>
+              </div>
+              {rowNotice("tokens")}
+            </form>
+            {createdApiToken && (
+              <div className="account-reveal" role="status">
+                <span>Copy this key now. It will not be shown again.</span>
+                <code>{createdApiToken}</code>
+                <CopyButton text={createdApiToken} />
               </div>
             )}
-          </AccountPanel>
-
-          <AccountPanel icon={<KeyRound size={18} aria-hidden="true" />} title="API keys" meta={accountInitialLoading ? "Loading…" : `${activeApiTokenCount} active`}>
-            <div className="settings-stack">
-              <form className="settings-form api-key-form" noValidate onSubmit={(event) => {
-                event.preventDefault();
-                void createAccountApiToken();
-              }}>
-                <label>
-                  <span>Key name</span>
-                  <Input
-                    className="settings-input"
-                    aria-label="Key name"
-                    name="api-token-name"
-                    onChange={(event) => setApiTokenName(event.target.value)}
-                    onInput={(event) => setApiTokenName(event.currentTarget.value)}
-                    placeholder="CLI or MCP client"
-                    value={apiTokenName}
-                  />
-                </label>
-                <label>
-                  <span>Expires at</span>
-                  <Input
-                    className="settings-input"
-                    aria-label="Expires at"
-                    aria-describedby="api-token-expiry-help api-token-expiry-error"
-                    aria-invalid={Boolean(apiTokenExpiryError)}
-                    autoComplete="off"
-                    max={tokenExpiryBounds.max}
-                    min={tokenExpiryBounds.min}
-                    name="api-token-expires-at"
-                    onChange={(event) => {
-                      setApiTokenExpiresAt(event.target.value);
-                      setApiTokenExpiryError(null);
-                    }}
-                    onInput={(event) => {
-                      setApiTokenExpiresAt(event.currentTarget.value);
-                      setApiTokenExpiryError(null);
-                    }}
-                    type="datetime-local"
-                    value={apiTokenExpiresAt}
-                  />
-                  <small id="api-token-expiry-help">Optional. Choose a future expiry no more than 1 year away; blank uses the 90-day default.</small>
-                  {apiTokenExpiryError && <small className="field-error" id="api-token-expiry-error" role="alert">{apiTokenExpiryError}</small>}
-                </label>
-                <fieldset className="scope-grid">
-                  <legend>API key scopes</legend>
-                  {API_TOKEN_SCOPE_OPTIONS.map((option) => (
-                    <label className="role-toggle" key={option.scope}>
-                      <input
-                        checked={apiTokenScopes.includes(option.scope)}
-                        onChange={() => setApiTokenScopes((current) => toggleApiTokenScope(current, option.scope))}
-                        type="checkbox"
-                      />
-                      <span>{option.label}</span>
-                    </label>
-                  ))}
-                </fieldset>
-                <div className="settings-submit-row">
-                  <Button className="save-button shadcn-action-button" disabled={state === "loading" || !apiTokenName.trim() || apiTokenScopes.length === 0} size="sm" type="submit">
-                    <KeyRound size={16} aria-hidden="true" />
-                    Create key
-                  </Button>
-                </div>
-              </form>
-              {createdApiToken && (
-                <div className="token-reveal" role="status">
-                  <span>Copy this key now. It will not be shown again.</span>
-                  <code>{createdApiToken}</code>
-                  <CopyButton text={createdApiToken} />
-                </div>
-              )}
-              {accountInitialLoading ? <LoadingRows /> : <TokenList tokens={apiTokens} onRevoke={(tokenId) => void revokeAccountApiToken(tokenId)} />}
-            </div>
-          </AccountPanel>
-
-          <AccountPanel icon={<Fingerprint size={18} aria-hidden="true" />} title="Passkeys" meta="Planned security option">
-            <div className="passkey-panel">
-              <StatusToken value="planned" />
-              <p>Passkeys can be added after WebAuthn credential storage, challenge expiry, relying-party ID, and origin checks are implemented in the API.</p>
-            </div>
-          </AccountPanel>
+            {accountInitialLoading ? <LoadingRows /> : <TokenList tokens={apiTokens} onRevoke={(tokenId) => void revokeAccountApiToken(tokenId)} />}
+          </div>
         </section>
       </div>
       {confirmation && <ConfirmationDialog key={confirmation.key} request={confirmation} onClose={() => setConfirmation(null)} />}
@@ -3868,64 +4383,26 @@ function AccountSettings({
   );
 }
 
-function SettingsMetric({ label, strong, value }: { label: string; strong?: boolean; value: string }) {
-  return (
-    <div className={strong ? "settings-metric strong" : "settings-metric"}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function AccountPanel({ children, icon, meta, title }: {
-  children: ReactNode;
-  icon: ReactNode;
-  meta: string;
-  title: string;
-}) {
-  return (
-    <section className="settings-panel reui-settings-section">
-      <Frame className="reui-settings-frame" dense spacing="xs" variant="ghost">
-        <FramePanel className="reui-settings-panel">
-          <FrameHeader className="settings-panel-heading reui-settings-heading">
-            <span className="settings-panel-icon">{icon}</span>
-            <div>
-              <FrameTitle>{title}</FrameTitle>
-              <FrameDescription>{meta}</FrameDescription>
-            </div>
-          </FrameHeader>
-          {children}
-        </FramePanel>
-      </Frame>
-    </section>
-  );
-}
+type AccountScope = "load" | "email" | "password" | "mfa" | "tokens";
 
 function TokenList({ tokens, onRevoke }: { tokens: ApiToken[]; onRevoke: (tokenId: string) => void }) {
+  if (tokens.length === 0) return <p className="account-muted">No API keys. Create a scoped key for CLI, MCP, or automation access.</p>;
   return (
-    <div className="token-list">
+    <ul aria-label="Your API keys" className="account-token-list">
       {tokens.map((token) => (
-        <div className="token-row" key={token.id}>
-          <span className="cell-main">
+        <li className="account-token" key={token.id}>
+          <span className="account-cell-main">
             <strong>{token.name}</strong>
-            <small>{token.tokenPrefix}… · {token.scopes.join(", ")}</small>
+            <small><code>{token.tokenPrefix}…</code> · {token.scopes.join(", ")}</small>
           </span>
-          <StatusToken value={token.revokedAt ? "revoked" : "active"} />
-          <span>Expires {formatDate(token.expiresAt)}</span>
-          <span>{token.lastUsedAt ? `Used ${formatDate(token.lastUsedAt)}` : "Never used"}</span>
-          <button className="icon-button" disabled={Boolean(token.revokedAt)} type="button" onClick={() => onRevoke(token.id)} aria-label={`Revoke ${token.name}`}>
+          <span className="account-chip" data-tone={token.revokedAt ? "danger" : undefined}>{token.revokedAt ? "Revoked" : "Active"}</span>
+          <small className="account-token-meta">Expires {formatDate(token.expiresAt)} · {token.lastUsedAt ? `Used ${formatDate(token.lastUsedAt)}` : "Never used"}</small>
+          <Button aria-label={`Revoke ${token.name}`} className="account-danger" disabled={Boolean(token.revokedAt)} size="icon-sm" title={`Revoke ${token.name}`} type="button" variant="outline" onClick={() => onRevoke(token.id)}>
             <Trash2 size={15} aria-hidden="true" />
-          </button>
-        </div>
+          </Button>
+        </li>
       ))}
-      {tokens.length === 0 && (
-        <div className="empty-state compact">
-          <KeyRound size={22} aria-hidden="true" />
-          <strong>No API keys.</strong>
-          <span>Create a scoped key for CLI, MCP, or automation access.</span>
-        </div>
-      )}
-    </div>
+    </ul>
   );
 }
 
@@ -3966,133 +4443,6 @@ function CopyButton({ text, variant }: { text: string; variant?: "outline" }) {
   );
 }
 
-function ConfirmationDialog({ onClose, request }: { onClose: () => void; request: ConfirmationRequest }) {
-  const [reason, setReason] = useState(request.initialReason ?? "");
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
-  const [error, setError] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLElement>(null);
-  const headingRef = useRef<HTMLHeadingElement>(null);
-  const loadingRef = useRef(false);
-  const previouslyFocusedRef = useRef<HTMLElement | null>(
-    document.activeElement instanceof window.HTMLElement ? document.activeElement : null,
-  );
-  const showReason = request.requireReason || request.initialReason !== undefined;
-  const reasonIsValid = !request.requireReason || reason.trim().length >= 4;
-
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    headingRef.current?.focus();
-    function handleDialogKeydown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !loadingRef.current) {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") {
-        return;
-      }
-      const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
-        "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
-      ) ?? []);
-      if (focusable.length === 0) {
-        event.preventDefault();
-        return;
-      }
-      const first = focusable[0]!;
-      const last = focusable.at(-1)!;
-      const active = document.activeElement;
-      if (event.shiftKey && (active === first || !focusable.includes(active as HTMLElement))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (active === last || !focusable.includes(active as HTMLElement))) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-    window.addEventListener("keydown", handleDialogKeydown);
-    return () => {
-      window.removeEventListener("keydown", handleDialogKeydown);
-      document.body.style.overflow = previousOverflow;
-      restoreInteractionFocus(previouslyFocusedRef.current);
-    };
-  }, [onClose]);
-
-  async function confirm() {
-    if (!reasonIsValid) {
-      setError("Enter a specific reason of at least 4 characters.");
-      return;
-    }
-    loadingRef.current = true;
-    setStatus("loading");
-    setError(null);
-    try {
-      await request.onConfirm(reason.trim());
-      onClose();
-    } catch (nextError) {
-      loadingRef.current = false;
-      setStatus("error");
-      setError(nextError instanceof Error ? nextError.message : "The action could not be completed. Try again.");
-    }
-  }
-
-  return (
-    <div className="confirmation-backdrop" role="presentation">
-      <section className="confirmation-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={`${request.key}-title`} aria-describedby={`${request.key}-description`}>
-        <div className="confirmation-heading">
-          <CircleAlert size={22} aria-hidden="true" />
-          <div>
-            <h2 id={`${request.key}-title`} ref={headingRef} tabIndex={-1}>{request.title}</h2>
-            <p id={`${request.key}-description`}>{request.description}</p>
-          </div>
-        </div>
-        {showReason && (
-          <div className="confirmation-reason">
-            <label htmlFor={`${request.key}-reason`}>Reason {request.requireReason ? "(required)" : "(optional)"}</label>
-            <Textarea
-              aria-describedby={`${request.key}-reason-help`}
-              aria-invalid={!reasonIsValid}
-              disabled={status === "loading"}
-              id={`${request.key}-reason`}
-              name={`${request.key}-reason`}
-              autoComplete="off"
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              placeholder="Explain the decision…"
-            />
-            <small id={`${request.key}-reason-help`}>{request.requireReason ? "Record at least 4 characters so the decision is meaningful." : "This note is included with the decision when supported."}</small>
-          </div>
-        )}
-        {error && <div className="safe-message compact" role="alert">{error}</div>}
-        <div className="confirmation-actions">
-          <Button disabled={status === "loading"} size="sm" type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          <Button disabled={status === "loading" || !reasonIsValid} size="sm" type="button" variant={request.destructive ? "destructive" : "default"} onClick={() => void confirm()}>
-            {status === "loading" ? "Working…" : request.confirmLabel}
-          </Button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function restoreInteractionFocus(previous: HTMLElement | null): void {
-  if (!previous) {
-    return;
-  }
-  if (previous.isConnected) {
-    previous.focus();
-    return;
-  }
-  const ariaLabel = previous.getAttribute("aria-label");
-  const text = previous.textContent?.trim();
-  const replacement = Array.from(document.querySelectorAll<HTMLElement>(
-    "button, a[href], input, select, textarea, [tabindex]:not([tabindex='-1'])",
-  )).find((candidate) => (
-    candidate.tagName === previous.tagName
-    && (ariaLabel ? candidate.getAttribute("aria-label") === ariaLabel : candidate.textContent?.trim() === text)
-  ));
-  replacement?.focus();
-}
 
 function RoleEditor({
   canEditPrivilegedRoles,
@@ -4108,7 +4458,7 @@ function RoleEditor({
   userEmail: string;
 }) {
   return (
-    <div className="role-editor">
+    <div aria-label={`Roles for ${userEmail}`} className="role-editor" role="group">
       {ADMIN_ROLE_OPTIONS.map((role) => {
         const privilegedRole = role === "owner" || role === "admin";
         const removingLastRole = roles.length === 1 && roles.includes(role);
@@ -4122,7 +4472,7 @@ function RoleEditor({
               onChange={() => onChange(toggleRole(roles, role))}
               type="checkbox"
             />
-            <span>{role}</span>
+            <span>{formatStatusLabel(role)}</span>
           </label>
         );
       })}
@@ -4133,15 +4483,6 @@ function RoleEditor({
 function StatusToken({ value }: { value?: string }) {
   const statusValue = value ?? "unknown";
   return <span className={`status-token status-token-${statusValue}`}>{formatStatusLabel(statusValue)}</span>;
-}
-
-function ReviewStatusBadge({ value }: { value?: string }) {
-  const statusValue = value ?? "unknown";
-  return (
-    <Badge className={`review-status-badge review-status-badge-${statusValue}`} variant="outline">
-      {formatStatusLabel(statusValue)}
-    </Badge>
-  );
 }
 
 function formatStatusLabel(value: string) {
@@ -4172,7 +4513,9 @@ function AuthWidget({
   onLogin,
   onLogout,
   onPasswordReset,
+  onResetModeChange,
   onVerifyMfa,
+  resetMode,
   session,
 }: {
   authMessage: string | null;
@@ -4182,7 +4525,9 @@ function AuthWidget({
   onLogin: (input: { email: string; password: string }) => Promise<void>;
   onLogout: () => Promise<void>;
   onPasswordReset?: (input: { email: string }) => Promise<void>;
+  onResetModeChange: (resetMode: boolean) => void;
   onVerifyMfa: (codeOrRecoveryCode: string) => Promise<void>;
+  resetMode: boolean;
   session: WebSession | null;
 }) {
   const [email, setEmail] = useState("");
@@ -4190,7 +4535,26 @@ function AuthWidget({
   const [mfaCode, setMfaCode] = useState("");
   const [mfaStatus, setMfaStatus] = useState<MfaStatus | null>(null);
   const [mfaSetupOpen, setMfaSetupOpen] = useState(false);
-  const [resetMode, setResetMode] = useState(false);
+  const step = mfaPending ? "mfa" : resetMode && onPasswordReset ? "reset" : "login";
+  const previousStep = useRef(step);
+  const backToLogin = useRef(false);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const mfaCodeRef = useRef<HTMLInputElement>(null);
+  const resetEmailRef = useRef<HTMLInputElement>(null);
+  const forgotRef = useRef<HTMLButtonElement>(null);
+
+  // Focus moves only when the step changes, never on a keystroke: to the
+  // step's first field, or back to "Forgot password?" after "Back to login".
+  useEffect(() => {
+    if (previousStep.current === step) return;
+    previousStep.current = step;
+    const target = step === "mfa" ? mfaCodeRef.current
+      : step === "reset" ? resetEmailRef.current
+        : backToLogin.current ? forgotRef.current
+          : emailRef.current;
+    backToLogin.current = false;
+    target?.focus();
+  }, [step]);
 
   useEffect(() => {
     if (!session || !client) {
@@ -4270,6 +4634,7 @@ function AuthWidget({
             name="mfa-code"
             onChange={(event) => setMfaCode(event.target.value)}
             placeholder="123456"
+            ref={mfaCodeRef}
             spellCheck={false}
             value={mfaCode}
           />
@@ -4288,7 +4653,7 @@ function AuthWidget({
     return (
       <form className="auth-widget auth-form" onSubmit={(event) => {
         event.preventDefault();
-        void onPasswordReset({ email }).then(() => setResetMode(false));
+        void onPasswordReset({ email }).then(() => onResetModeChange(false));
       }}>
         <label className="auth-field">
           <span>Email</span>
@@ -4300,6 +4665,7 @@ function AuthWidget({
             name="reset-email"
             onChange={(event) => setEmail(event.target.value)}
             placeholder="owner@example.com"
+            ref={resetEmailRef}
             spellCheck={false}
             type="email"
             value={email}
@@ -4309,7 +4675,10 @@ function AuthWidget({
           <Mail size={16} aria-hidden="true" />
           Send reset email
         </Button>
-        <Button className="link-button shadcn-action-button" disabled={authState === "loading"} size="sm" type="button" variant="link" onClick={() => setResetMode(false)}>
+        <Button className="link-button shadcn-action-button" disabled={authState === "loading"} size="sm" type="button" variant="link" onClick={() => {
+          backToLogin.current = true;
+          onResetModeChange(false);
+        }}>
           Back to login
         </Button>
         <AuthMessage message={authMessage} />
@@ -4332,6 +4701,7 @@ function AuthWidget({
           name="email"
           onChange={(event) => setEmail(event.target.value)}
           placeholder="owner@example.com"
+          ref={emailRef}
           spellCheck={false}
           type="email"
           value={email}
@@ -4356,11 +4726,10 @@ function AuthWidget({
         Sign in
       </Button>
       {onPasswordReset && (
-        <Button className="link-button shadcn-action-button" disabled={authState === "loading"} size="sm" type="button" variant="link" onClick={() => setResetMode(true)}>
+        <Button className="link-button shadcn-action-button" disabled={authState === "loading"} ref={forgotRef} size="sm" type="button" variant="link" onClick={() => onResetModeChange(true)}>
           Forgot password?
         </Button>
       )}
-      <p className="auth-help">Access is limited to approved hosted-beta accounts.</p>
       <AuthMessage message={authMessage} />
     </form>
   );
@@ -4512,7 +4881,7 @@ function ReleaseHistoryControls({
 }) {
   const missingPin = selectedVersion !== null && !releases.some((item) => item.version === selectedVersion);
   return (
-    <div className="release-install-controls">
+    <div className="registry-version-control">
       {historyState === "loading" && <p className="control-plane-muted" role="status">Loading release history…</p>}
       {historyState === "ready" && releases.length === 0 && <p className="control-plane-muted" role="status">No published release history is available.</p>}
       {historyState === "error" && (
@@ -4540,14 +4909,18 @@ function ReleaseHistoryControls({
   );
 }
 
+// The inspector body for one exact release: consumer facts and use first,
+// optional depth in disclosures, and owner tools last.
 function SkillDetail({
   bundles,
   command,
   client,
+  disclosures,
   platform,
   release,
   selectedSkill,
   session,
+  setDisclosure,
   setPlatform,
   onChanged,
 }: {
@@ -4555,10 +4928,12 @@ function SkillDetail({
   bundles?: ReactNode;
   command: string;
   client: RegistryClient;
+  disclosures: RegistryDisclosures;
   platform: string;
   release: ReleaseMetadata;
   selectedSkill: PublicSkill;
   session: WebSession | null;
+  setDisclosure: (key: keyof RegistryDisclosures, open: boolean) => void;
   setPlatform: (platform: string) => void;
   onChanged: () => void;
 }) {
@@ -4566,115 +4941,202 @@ function SkillDetail({
   const hasSupportedPlatform = supportedPlatforms.length > 0;
   const canManageSkill = Boolean(session && selectedSkill.access?.canManageSharing);
   const canUsePrivilegedControls = Boolean(canManageSkill && session?.user.mfaVerified);
+  // Owner tools load on first open and stay mounted so drafts survive closing.
+  const [ownerVisited, setOwnerVisited] = useState(disclosures.owner);
+  const baseId = useId();
+  const compatibility = release.compatibility && Object.keys(release.compatibility).length > 0 ? release.compatibility : null;
+
+  function toggleOwner() {
+    if (!disclosures.owner) setOwnerVisited(true);
+    setDisclosure("owner", !disclosures.owner);
+  }
+
   return (
-    <>
-      <CardHeader className="shadcn-detail-header registry-detail-header">
-        <div className="detail-heading shadcn-detail-title-row">
-          <SkillIcon slug={selectedSkill.slug} large />
-          <div className="detail-title shadcn-detail-title">
-            <span className="registry-detail-eyebrow">Approved skill release</span>
-            <CardTitle>{selectedSkill.title}</CardTitle>
-            <CardDescription>{selectedSkill.slug}</CardDescription>
-          </div>
-          <div className="registry-detail-reference">
-            <span>Exact release</span>
-            <strong>{release.version}</strong>
-            <div className="detail-status registry-detail-status" aria-label="Release status">
-              <Badge className={`review-status-badge review-status-badge-${release.reviewStatus}`} variant="outline">
-                Review {formatStatusLabel(release.reviewStatus)}
-              </Badge>
-              <Badge className={`review-status-badge review-status-badge-${release.securityStatus}`} variant="outline">
-                Security {formatStatusLabel(release.securityStatus)}
-              </Badge>
+    <div className="registry-inspector-body">
+      <p className="registry-summary">{selectedSkill.summary}</p>
+      {bundles}
+
+      <dl className="registry-facts registry-section">
+        <RegistryFact label="Released">{release.publishedAt ? formatDate(release.publishedAt) : "Not published"}</RegistryFact>
+        <RegistryFact label="Review"><RegistryStatus value={release.reviewStatus} /></RegistryFact>
+        <RegistryFact label="Security"><RegistryStatus value={release.securityStatus} /></RegistryFact>
+        <RegistryFact label="Platforms">{hasSupportedPlatform
+          ? supportedPlatforms.map((item) => item.name).join(", ")
+          : release.platforms.map((item) => `${item.name} (${item.status})`).join(", ") || "None declared"}</RegistryFact>
+        <RegistryFact label="Byte size">{new Intl.NumberFormat().format(release.artifact.byteSize)}</RegistryFact>
+        <RegistryFact label="Content type" mono>{release.artifact.contentType}</RegistryFact>
+        <RegistryFact label="SHA-256" mono>{release.artifact.sha256}</RegistryFact>
+        {selectedSkill.tags.length > 0 && <RegistryFact label="Tags">{selectedSkill.tags.join(", ")}</RegistryFact>}
+      </dl>
+
+      {hasSupportedPlatform ? (
+        <section className="registry-section registry-use" aria-labelledby={`${baseId}-use`}>
+          <h3 id={`${baseId}-use`}>Use this release</h3>
+          {release.requiresUserAction && (
+            <p className="registry-callout" data-tone="amber">
+              <CircleAlert size={16} aria-hidden="true" />
+              This release requires a user action. Review the instructions before updating.
+            </p>
+          )}
+          <div className="registry-platforms">
+            <span id={`${baseId}-platform`}>Export platform</span>
+            <div role="group" aria-labelledby={`${baseId}-platform`}>
+              {supportedPlatforms.map((item) => (
+                <Button
+                  aria-pressed={item.name === platform}
+                  className={item.name === platform ? "platform-button active" : "platform-button"}
+                  key={item.name}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={() => setPlatform(item.name)}
+                >
+                  {item.name}
+                </Button>
+              ))}
             </div>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent className="shadcn-detail-content registry-detail-content">
-        <p className="summary">{selectedSkill.summary}</p>
-        {bundles}
-        {!hasSupportedPlatform && <div className="control-plane-inline-message" role="status">No supported export platform is available for this release. Export and install are unavailable.</div>}
-        <dl className="metadata-grid shadcn-metadata-grid registry-metadata-grid">
-          <Metadata label="Platforms" value={hasSupportedPlatform
-            ? supportedPlatforms.map((item) => item.name).join(", ")
-            : release.platforms.map((item) => `${item.name} (${item.status})`).join(", ") || "None declared"} />
-          <Metadata label="Tags" value={selectedSkill.tags.join(", ") || "-"} />
-          <Metadata label="Released" value={release.publishedAt ? formatDate(release.publishedAt) : "Not published"} />
-          <Metadata label="Review" value={formatStatusLabel(release.reviewStatus)} />
-          <Metadata label="Security" value={formatStatusLabel(release.securityStatus)} />
-          <Metadata label="Byte size" value={new Intl.NumberFormat().format(release.artifact.byteSize)} />
-          <Metadata label="Content type" value={release.artifact.contentType} />
-          <Metadata label="SHA-256" value={shortHash(release.artifact.sha256)} monospace />
-        </dl>
-
-        <section className="control-plane-section release-notes-panel" aria-labelledby="release-notes-heading">
-          <div className="control-plane-section-heading"><div><p className="control-plane-kicker">What changed</p><h2 id="release-notes-heading">Release notes</h2></div><Badge variant={release.requiresUserAction ? "destructive" : "outline"}>{release.changeKind ?? "maintenance"}</Badge></div>
-          <p>{release.releaseNotes || "No release notes were supplied for this release."}</p>
-          {release.requiresUserAction && <p className="control-plane-muted"><CircleAlert size={15} aria-hidden="true" /> This release requires a user action. Review the instructions before updating.</p>}
-          {release.compatibility && Object.keys(release.compatibility).length > 0 && <dl className="metadata-grid shadcn-metadata-grid registry-metadata-grid"><Metadata label="Minimum MySkills" value={release.compatibility.minimumMyskillsVersion ?? "Any"} /><Metadata label="Minimum adapter contract" value={release.compatibility.minimumAdapterContractVersion?.toString() ?? "Any"} /><Metadata label="Minimum source version" value={release.compatibility.minimumSourceVersion ?? "Any"} /></dl>}
-        </section>
-
-        <SkillImprovementPanel key={`${release.slug}:${release.version}`} client={client} release={release} user={session?.user ?? null} canManage={canManageSkill} visibility={selectedSkill.visibility} />
-
-        {session && hasSupportedPlatform && (
-          <ReleaseInstallPanel
-            key={`${selectedSkill.slug}:${release.version}:${platform}`}
-            client={client}
-            platform={platform}
-            release={release}
-            selectedSkill={selectedSkill}
-          />
-        )}
-
-        {hasSupportedPlatform && <div className="platform-select registry-platform-select">
-          <span>Export platform</span>
-          <div>
-            {supportedPlatforms.map((item) => (
-              <Button
-                className={item.name === platform ? "platform-button active shadcn-action-button" : "platform-button shadcn-action-button"}
-                key={item.name}
-                size="sm"
-                type="button"
-                variant={item.name === platform ? "secondary" : "outline"}
-                onClick={() => setPlatform(item.name)}
-              >
-                {item.name}
-              </Button>
-            ))}
+          <div className="command-panel registry-command">
+            <span className="registry-command-label">
+              <TerminalSquare size={14} aria-hidden="true" />
+              CLI export
+            </span>
+            <div className="registry-command-row">
+              <code>{command}</code>
+              <CopyButton text={command} variant="outline" />
+            </div>
           </div>
-        </div>}
+          <p className="registry-muted">For a personal Codex workspace, follow <a href="/targets">Connect a Codex workspace</a> to enroll the directory and install this exact version with the matching CLI release.</p>
+          {session && (
+            <ReleaseInstallPanel
+              key={`${selectedSkill.slug}:${release.version}:${platform}`}
+              client={client}
+              platform={platform}
+              release={release}
+              selectedSkill={selectedSkill}
+            />
+          )}
+        </section>
+      ) : (
+        <p className="registry-callout registry-section-callout" data-tone="amber" role="status">No supported export platform is available for this release. Export and install are unavailable.</p>
+      )}
 
-        {canManageSkill && !canUsePrivilegedControls && <PrivilegedControlsLocked />}
-
-        {session && canUsePrivilegedControls && (
-          <LifecyclePanel
-            client={client}
-            release={release}
-            selectedSkill={selectedSkill}
-            session={session}
-            onChanged={onChanged}
-          />
-        )}
+      <div className="registry-section registry-more">
+        <details className="registry-details" open={disclosures.notes}>
+          <summary onClick={(event) => {
+            // Save the preference before a release change can unmount the disclosure.
+            event.preventDefault();
+            setDisclosure("notes", !disclosures.notes);
+          }}>
+            <span>Release notes for {release.version}</span>
+            {release.changeKind && <span className="registry-chip registry-change-kind">{release.changeKind}</span>}
+          </summary>
+          <div className="registry-details-body">
+            <p className="registry-notes">{release.releaseNotes || "No release notes were supplied for this release."}</p>
+            {compatibility && (
+              <dl className="registry-facts" data-labels="wide">
+                <RegistryFact label="Minimum MySkills">{compatibility.minimumMyskillsVersion ?? "Any"}</RegistryFact>
+                <RegistryFact label="Minimum adapter contract">{compatibility.minimumAdapterContractVersion?.toString() ?? "Any"}</RegistryFact>
+                <RegistryFact label="Minimum source version">{compatibility.minimumSourceVersion ?? "Any"}</RegistryFact>
+              </dl>
+            )}
+          </div>
+        </details>
 
         {hasSupportedPlatform && client.getReleaseBundle && <PackageFileViewer
           resourceKey={`${selectedSkill.slug}:${release.version}:${platform}`}
           loadBundle={() => client.getReleaseBundle!(selectedSkill.slug, release.version, platform)}
         />}
 
-        {hasSupportedPlatform && <div className="command-panel registry-command-panel">
-          <div className="command-heading">
-            <TerminalSquare size={18} aria-hidden="true" />
-            <span>CLI export</span>
+        {client.improvements && (
+          <div className="registry-disclosure">
+            <button
+              aria-controls={`${baseId}-improvement`}
+              aria-expanded={disclosures.improvement}
+              className="registry-disclosure-button"
+              type="button"
+              onClick={() => setDisclosure("improvement", !disclosures.improvement)}
+            >
+              Compatibility and improvement
+            </button>
+            {/* Stays mounted so compatibility evidence and planner drafts persist. */}
+            <div className="registry-disclosure-body" hidden={!disclosures.improvement} id={`${baseId}-improvement`}>
+              <SkillImprovementPanel key={`${release.slug}:${release.version}`} client={client} release={release} user={session?.user ?? null} canManage={canManageSkill} visibility={selectedSkill.visibility} />
+            </div>
           </div>
-          <code>{command}</code>
-          <CopyButton text={command} variant="outline" />
-        </div>}
-        {hasSupportedPlatform && <p className="control-plane-muted">For a personal Codex workspace, follow <a href="/targets">Connect a Codex workspace</a> to enroll the directory and install this exact version with the matching CLI release.</p>}
-        {session && canUsePrivilegedControls && (
-          <SharingPanel client={client} selectedSkill={selectedSkill} session={session} />
         )}
-      </CardContent>
-    </>
+      </div>
+
+      {canManageSkill && (
+        <div className="registry-section registry-owner">
+          <div className="registry-owner-head">
+            <button
+              aria-controls={`${baseId}-owner`}
+              aria-expanded={disclosures.owner}
+              className="registry-disclosure-button"
+              type="button"
+              onClick={toggleOwner}
+            >
+              Owner controls
+            </button>
+            {!canUsePrivilegedControls && (
+              <span className="registry-owner-hint">
+                <LockKeyhole size={14} aria-hidden="true" />
+                Locked until MFA
+              </span>
+            )}
+          </div>
+          <div className="registry-disclosure-body registry-owner-panel" hidden={!disclosures.owner} id={`${baseId}-owner`}>
+            {(disclosures.owner || ownerVisited) && (canUsePrivilegedControls && session ? (
+              <>
+                <LifecyclePanel
+                  client={client}
+                  release={release}
+                  selectedSkill={selectedSkill}
+                  session={session}
+                  onChanged={onChanged}
+                />
+                <SharingPanel client={client} selectedSkill={selectedSkill} session={session} />
+              </>
+            ) : <PrivilegedControlsLocked />)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RegistryFact({ children, label, mono }: { children: ReactNode; label: string; mono?: boolean }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd className={mono ? "registry-mono" : undefined}>{children}</dd>
+    </div>
+  );
+}
+
+function RegistryStatus({ value }: { value: string }) {
+  return <span className="registry-chip" data-tone={value === "approved" || value === "passed" ? "teal" : "amber"}>{formatStatusLabel(value)}</span>;
+}
+
+function RegistryLoadingRows() {
+  return (
+    <div className="registry-skeleton" role="status" aria-live="polite">
+      <span className="sr-only">Loading skills…</span>
+      {[0, 1, 2].map((item) => <div className="registry-skeleton-row" key={item}><span /><span /></div>)}
+    </div>
+  );
+}
+
+function RegistryInspectorSkeleton({ withHeader }: { withHeader: boolean }) {
+  return (
+    <div className="registry-skeleton registry-skeleton-detail" role="status" aria-live="polite">
+      <span className="sr-only">Loading skill detail…</span>
+      {withHeader && <div className="registry-skeleton-head"><span /><span /></div>}
+      <div className="registry-skeleton-line" />
+      <div className="registry-skeleton-line" />
+      <div className="registry-skeleton-block" />
+    </div>
   );
 }
 
@@ -4739,11 +5201,8 @@ function ReleaseInstallPanel({
   }
 
   return (
-    <section className="control-plane-section release-install-panel" aria-labelledby="release-install-heading">
-      <div className="control-plane-section-heading">
-        <div><p className="control-plane-kicker">Connected target</p><h2 id="release-install-heading">Install this exact release</h2></div>
-        <PackageOpen size={20} aria-hidden="true" />
-      </div>
+    <section className="release-install-panel" aria-labelledby="release-install-heading">
+      <h4 id="release-install-heading">Install this exact release</h4>
       {state === "loading" && <p className="control-plane-muted" role="status">Loading eligible targets…</p>}
       {state !== "loading" && targets.length === 0 && <p className="control-plane-muted">Browser installs require a consented personal Codex workspace and a Codex release. Use Connect a Codex workspace in Connected targets to enroll with the CLI.</p>}
       {targets.length > 0 && <div className="release-install-controls"><label><span>Target</span><select value={selectedTargetId} onChange={(event) => { setSelectedTargetId(event.target.value); setReviewing(false); }} disabled={state === "queueing"}>{targets.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}</select></label>{reviewing ? <div className="release-install-review"><p><strong>{selectedSkill.slug} {release.version}</strong> for {targets.find((target) => target.id === selectedTargetId)?.name}</p><p>{release.releaseNotes || "No release notes were supplied."}</p><small>{platform} · SHA-256 {release.artifact.sha256.slice(0, 12)}… · {release.artifact.byteSize.toLocaleString()} bytes</small>{release.requiresUserAction && <div className="control-plane-inline-message"><CircleAlert size={16} aria-hidden="true" />This release requires a user action after installation.</div>}<div className="target-action-row"><Button type="button" disabled={state === "queueing"} onClick={() => void install()}><ShieldCheck size={15} aria-hidden="true" />{state === "queueing" ? "Queueing…" : "Confirm exact install"}</Button><Button type="button" variant="outline" disabled={state === "queueing"} onClick={() => setReviewing(false)}>Back</Button></div></div> : <Button size="sm" type="button" variant="outline" onClick={() => setReviewing(true)}>Review install</Button>}</div>}
@@ -4922,7 +5381,7 @@ function LifecyclePanel({
             <RotateCw size={15} aria-hidden="true" />
             Restore skill
           </Button>
-          <Button className="danger-button shadcn-action-button" disabled={state === "loading"} size="sm" type="button" variant="destructive" onClick={() => void runSkillAction("delete")}>
+          <Button className="registry-danger-button shadcn-action-button" disabled={state === "loading"} size="sm" type="button" variant="outline" onClick={() => void runSkillAction("delete")}>
             <Trash2 size={15} aria-hidden="true" />
             Delete skill
           </Button>
@@ -4944,12 +5403,12 @@ function LifecyclePanel({
               <div className="release-lifecycle-actions">
                 {item.allowedActions.map((action) => (
                   <Button
-                    className={action === "delete" || action === "revoke" ? "danger-button compact-button shadcn-action-button" : "compact-button shadcn-action-button"}
+                    className={action === "delete" || action === "revoke" ? "registry-danger-button compact-button shadcn-action-button" : "compact-button shadcn-action-button"}
                     key={action}
                     disabled={state === "loading"}
                     size="sm"
                     type="button"
-                    variant={action === "delete" || action === "revoke" ? "destructive" : "outline"}
+                    variant="outline"
                     onClick={() => void runReleaseAction(action)}
                   >
                     {formatStatusLabel(action)}
@@ -5166,28 +5625,6 @@ export function SharingPanel({
   );
 }
 
-function Metadata({ label, monospace, value }: { label: string; value: string; monospace?: boolean }) {
-  return (
-    <div className="metadata-item">
-      <dt>{label}</dt>
-      <dd className={monospace ? "mono" : undefined}>{value}</dd>
-    </div>
-  );
-}
-
-function SkillIcon({ large, slug }: { slug: string; large?: boolean }) {
-  const Icon = slug.includes("query") ? FileCode2 : PackageOpen;
-  return (
-    <span className={large ? "skill-icon large" : "skill-icon"} aria-hidden="true">
-      <Icon size={large ? 34 : 26} />
-    </span>
-  );
-}
-
-function Tag({ children }: { children: string }) {
-  return <span className="tag">{children}</span>;
-}
-
 function LoadingRows() {
   return (
     <div className="loading-announcement" role="status" aria-live="polite">
@@ -5195,27 +5632,6 @@ function LoadingRows() {
       {[0, 1, 2].map((item) => <div className="loading-row" key={item} />)}
     </div>
   );
-}
-
-function DetailSkeleton() {
-  return (
-    <div className="detail-skeleton" role="status" aria-live="polite">
-      <span className="sr-only">Loading skill detail…</span>
-      <div />
-      <div />
-      <div />
-    </div>
-  );
-}
-
-function resultCountText(state: LoadState, count: number): string {
-  if (state === "loading") {
-    return "Loading registry…";
-  }
-  if (state === "error") {
-    return "Registry unavailable";
-  }
-  return `${count} ${count === 1 ? "result" : "results"}`;
 }
 
 function preferredPlatform(platforms: Array<{ name: string; status?: string }>): string {
@@ -5238,10 +5654,6 @@ function isPublishedRelease(release: Pick<SkillReleaseSummary, "lifecycleStatus"
     && release.securityStatus === "passed"
     && typeof release.publishedAt === "string"
     && Number.isFinite(Date.parse(release.publishedAt));
-}
-
-function shortHash(value: string): string {
-  return value.length > 18 ? `${value.slice(0, 10)}…${value.slice(-8)}` : value;
 }
 
 function formatDate(input: string): string {

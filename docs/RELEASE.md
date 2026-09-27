@@ -1,11 +1,19 @@
 # Release Process
 
-Version: 0.1.0-beta.10
+Version: 0.1.0-beta.11
 Last updated: 2026-09-27
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
+
+## Beta.11 candidate
+
+The application redesign is being prepared for GitHub and hosted delivery. The
+owner authorized the four waves through release. The final candidate requires
+canonical verification, protected-branch CI, staging acceptance, matching API/web
+identity and production readback. See [Beta.11 release delivery](BETA11_RELEASE_DELIVERY.md).
+No database migration or npm publication is included.
 
 ## Beta.10 release record
 
@@ -144,7 +152,7 @@ Draft public release text in a file and use `--notes-file` or the GitHub UI if a
 
 ## CLI Package Candidate
 
-The candidate source version is `0.1.0-beta.10`, with `publishConfig.tag=beta`. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle. Candidate preparation does not change the published npm version.
+The candidate source version is `0.1.0-beta.11`, with `publishConfig.tag=beta`. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle. Candidate preparation does not change the published npm version.
 
 The canonical gate proves:
 

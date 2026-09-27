@@ -46,8 +46,12 @@ test("registry bundles keep relationships through inspect, save and Library reop
   expect((await memberships.json()).bundles.map((b:{id:string})=>b.id)).toContain(bundle.id);
   await page.goto("/libraries");
   await expect(page.getByRole("heading",{name:"Libraries",exact:true})).toBeVisible();
-  await page.getByRole("button",{name:new RegExp(libraryName)}).click();
-  await expect(page.getByText(name,{exact:true})).toBeVisible();
+  const libraryButton = page.getByRole("button", { name: libraryName, exact: true });
+  const libraryHeading = page.getByRole("heading", { name: libraryName, exact: true });
+  await expect(libraryButton.or(libraryHeading).first()).toBeVisible();
+  if (await libraryButton.isVisible()) await libraryButton.click();
+  await expect(libraryHeading).toBeVisible();
+  await expect(page.getByRole("heading", { name, exact: true, level: 3 })).toBeVisible();
   await expect(page.getByRole("link",{name:"Open in registry",exact:true})).toBeVisible();
   await page.getByRole("link",{name:"Open in registry",exact:true}).click();
   await expect(page.getByRole("heading",{name,exact:true,level:2})).toBeVisible();

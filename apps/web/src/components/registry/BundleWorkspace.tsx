@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { Boxes, ChevronLeft, CircleAlert, List, ListTree, Plus, RotateCw } from "lucide-react";
+import { Boxes, ChevronLeft, CircleAlert, List, ListTree, Plus, RotateCw, Search } from "lucide-react";
 import type { BundleSummary, RegistryCatalogRow, RegistryView } from "@myskills-app/core";
 import { Button } from "@/components/ui/button";
 import type { BundleClient } from "../../bundle-api.js";
@@ -22,6 +22,7 @@ export interface BundleWorkspaceProps {
   canCreate: boolean;
   query: string;
   onClearQuery: () => void;
+  onQueryChange: (query: string) => void;
   view: RegistryView;
   onViewChange: (view: RegistryView) => void;
   selection: Selection;
@@ -209,7 +210,7 @@ export function BundleWorkspace(props: BundleWorkspaceProps) {
       skillHref={props.skillHref}
     />
   ) : selection?.kind === "skill" ? (
-    <aside aria-label="Selected skill detail" className="bundle-inspector-panel is-skill">
+    <aside aria-label="Selected skill detail" className="bundle-inspector-panel is-skill registry-inspector">
       {back}
       {props.renderSkillDetail(<BundleMemberships api={api} bundleHref={props.bundleHref} onOpenBundle={viewProps.onOpenBundle} slug={selection.slug} />)}
     </aside>
@@ -238,7 +239,7 @@ export function BundleWorkspace(props: BundleWorkspaceProps) {
   }
 
   return (
-    <main aria-labelledby="registry-title" className="bundle-workspace">
+    <main aria-labelledby="registry-title" className="bundle-workspace registry-workspace">
       <header className="bundle-page-head">
         <h1 id="registry-title">Skill registry</h1>
         {props.canCreate && (
@@ -249,6 +250,10 @@ export function BundleWorkspace(props: BundleWorkspaceProps) {
       </header>
       <div className="bundle-surface">
         <div className="bundle-toolbar">
+          <label className="registry-search bundle-search" htmlFor="skill-search">
+            <Search size={16} aria-hidden="true" />
+            <input id="skill-search" aria-label="Search skills and bundles" value={props.query} onChange={(event) => props.onQueryChange(event.target.value)} placeholder="Search skills and bundles…" autoComplete="off" spellCheck={false} />
+          </label>
           <p className="bundle-summary" role="status"><Summary catalog={loaded} overlap={hasOverlap(loaded.rows, members.pages)} /></p>
           <div aria-label="Catalog view" className="bundle-views" role="group">
             {VIEWS.map((item) => (

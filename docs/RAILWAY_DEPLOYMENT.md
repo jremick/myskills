@@ -1,6 +1,6 @@
 # Railway Deployment
 
-Version: 0.1.0-beta.10
+Version: 0.1.0-beta.11
 Last updated: 2026-09-27
 
 This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.

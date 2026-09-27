@@ -435,6 +435,7 @@ test("bundle detail links both ways and saving a reference adopts nothing", asyn
   await expect(backlinks.getByRole("link", { name: /Clear writing kit/ })).toBeVisible();
   await skillPanel.getByRole("combobox", { name: "Release version" }).selectOption("1.1.0");
   await expect(page).toHaveURL(/\/skills\/release-notes-helper\?version=1\.1\.0$/);
+  await skillPanel.locator("summary").filter({ hasText: "Release notes" }).click();
   await expect(skillPanel.getByText("Release notes for Release notes helper 1.1.0.")).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/skills\/release-notes-helper$/);
@@ -443,11 +444,11 @@ test("bundle detail links both ways and saving a reference adopts nothing", asyn
   await expect(page.getByRole("complementary", { name: "Clear writing kit", exact: true })).toBeVisible();
 
   await page.goto("/libraries");
-  await expect(page.getByText("Clear writing kit", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Clear writing kit", exact: true }).click();
   await expect(page.getByRole("link", { name: "Open in registry", exact: true })).toHaveAttribute("href", "/registry?bundle=writing");
   await expect(page.getByText("Saved at revision 7 · now revision 8")).toBeVisible();
-  await expect(page.getByText("Unavailable bundle", { exact: true })).toBeVisible();
-  await expect(page.getByText("You no longer have access to this bundle, or it was removed.")).toBeVisible();
+  await page.getByRole("button", { name: "Unavailable bundle", exact: true }).click();
+  await expect(page.getByText(/^You no longer have access to this bundle, or it was removed\./)).toBeVisible();
   await expect(page.getByRole("button", { name: /adopt/i })).toHaveCount(0);
   await expect(page.getByText("Connect an existing target")).toHaveCount(0);
   expect(api.writes.filter((write) => /adoption|binding/.test(write.path))).toEqual([]);

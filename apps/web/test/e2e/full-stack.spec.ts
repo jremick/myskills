@@ -117,7 +117,8 @@ test("owner creates and reads a real architecture revision from a seeded release
   await expect(page.getByRole("heading", { name: "Skill architectures" })).toBeVisible();
 
   const architectureName = `Full-stack architecture ${testInfo.retry}`;
-  const createCard = page.locator('[aria-label="Create architecture"]');
+  const createCard = page.getByRole("region", { name: "New architecture", exact: true });
+  if (!await createCard.isVisible()) await page.getByRole("button", { name: "New architecture", exact: true }).click();
   await createCard.getByLabel("Architecture name").fill(architectureName);
   await createCard.getByLabel("Architecture pattern").selectOption("flat");
 
@@ -161,7 +162,8 @@ test("owner creates and reads a real architecture revision from a seeded release
   expect(revisionId).toBeTruthy();
   expect(saveBody.revision?.revisionNumber).toBe(1);
 
-  await expect(page.getByRole("heading", { name: "Revision history" })).toBeVisible();
+  await page.locator("summary").filter({ hasText: /^Revision history/ }).click();
+  await expect(page.getByRole("region", { name: "Revision history" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Current · Revision 1/ })).toBeVisible();
   await expect(page.getByText("Current revision selected")).toBeVisible();
 
@@ -211,6 +213,7 @@ test("owner invites a user through captured email and the invitee registers and 
 
   await page.locator(".side-nav").getByRole("link", { name: "Admin" }).click();
   await expect(page.getByRole("heading", { name: "Admin console" })).toBeVisible();
+  await page.getByRole("button", { name: "Invite user", exact: true }).click();
   const inviteForm = page.getByRole("form", { name: "Invite user" });
   await inviteForm.getByLabel("Email").fill(inviteeEmail);
   await inviteForm.getByLabel(/Name/).fill("Beta 2 Invitee");

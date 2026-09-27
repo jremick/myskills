@@ -55,6 +55,7 @@ test("registry plan, local CLI evaluation, exact candidate publication and evide
     const revision = (await api(`/v1/improvements/releases/${slug}/0.1.0/declarations`, { declaration, expectedRevisionNumber: 0 })).revision;
     await api(`/v1/improvements/releases/${slug}/0.1.0/declarations/${revision.id}/review`, { decision: "approve", artifactSha256: source.artifactSha256, declarationSha256: revision.declarationSha256 });
     await page.goto(`/skills/${slug}`);
+    await page.getByRole("button", { name: "Compatibility and improvement", exact: true }).click();
     const panel = page.getByRole("region", { name: "Skill improvement" });
     await expect(panel.getByText("The author declared these targets. A declaration is not evaluation evidence.")).toBeVisible();
     await expect(panel.getByText("No accepted evaluation evidence.")).toBeVisible();
@@ -91,6 +92,7 @@ test("registry plan, local CLI evaluation, exact candidate publication and evide
     expect(compatibility.evidence[0].claim).toBe("locally-reported-improvement");
     expect(compatibility.evidence[0].provenance).toBe("local-report");
     await page.goto(`/skills/${slug}`);
+    await page.getByRole("button", { name: "Compatibility and improvement", exact: true }).click();
     await expect(panel.getByText(/locally reported improvement · local-report · current/)).toBeVisible();
     checks.push("published candidate bytes match evaluation and accepted evidence stays local-report");
     await page.screenshot({ path: info.outputPath("improvement-evidence-accepted.png"), fullPage: true });

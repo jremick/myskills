@@ -1,6 +1,6 @@
 # Compatibility
 
-Version: 0.1.0-beta.10
+Version: 0.1.0-beta.11
 Last updated: 2026-09-05
 
 This is the supported public-beta evaluation surface. MySkills remains prerelease software, so compatibility is intentionally narrower than a stable `v1.0` contract.
