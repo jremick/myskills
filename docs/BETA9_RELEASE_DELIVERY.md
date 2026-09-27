@@ -81,7 +81,8 @@ release; its beta selector remains beta.8.
 ## Published release and production
 
 - [Tagged release workflow](https://github.com/jremick/myskills/actions/runs/36288168999)
-  passed the canonical gate and API, MCP, web, Railway and backup image smokes.
+  passed the canonical gate, API/MCP/web/Railway image builds and backup image
+  build with credential-free entrypoint smoke checks.
 - [GitHub prerelease](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.9)
   is published. All five uploaded assets matched their local byte sizes and
   SHA-256 digests: source archive, CLI archive, metadata and both checksum files.
