@@ -100,8 +100,7 @@ test("owner creates a private draft without a preview and the narrow layout rema
 
   await expect(page.getByRole("heading", { name: "Private experiment" })).toBeVisible();
   await expect(page.getByRole("main", { name: "Skill architectures" })).toBeVisible();
-  await expect(page.getByText("Create a personal or team-owned draft shell. Add its first immutable revision through the API contract.")).toBeVisible();
-  await expect(page.getByText("This draft has no revision yet. Add a validated spec through the architecture revision API before previewing it.")).toBeVisible();
+  await expect(page.getByText("This draft has no revision yet. Build the first revision in the editor below, then save it to preview the result.")).toBeVisible();
   await expect(page.getByRole("img", { name: "Skill architecture topology" })).toHaveCount(0);
   await expect.poll(() => state.draftPreviewAttempts).toBe(0);
   expect(state.createdBodies).toEqual([{
@@ -131,6 +130,7 @@ test("owner saves and confirms organization access revocation, then retries a mi
   await page.goto("/architectures");
 
   await expect(page.getByRole("heading", { name: "Review assistant", level: 2 })).toBeVisible();
+  await page.getByText("Access and migration", { exact: true }).click();
   const organizationCheckbox = page.getByRole("checkbox", { name: "Share with Phase 2 UAT Organization" });
   await expect(organizationCheckbox).toBeVisible();
   await organizationCheckbox.check();
@@ -165,6 +165,7 @@ test("owner can create a team-owned shell and unsaved editor changes guard unloa
   const state = await installMockArchitectureRoutes(page, { includeSecondArchitecture: true, includeTeamOwner: true });
   await page.goto("/architectures");
 
+  await page.getByRole("button", { name: "New architecture", exact: true }).click();
   await page.getByLabel("Architecture owner").selectOption("team:team-review");
   await page.getByLabel("Architecture name").first().fill("Team review routing");
   await page.getByRole("button", { name: "Create architecture" }).click();
@@ -199,6 +200,7 @@ test("owner registers a guided read-only target and confirms permanent revocatio
   await page.goto("/targets");
 
   await expect(page.getByRole("heading", { name: "Connected targets", level: 1 })).toBeVisible();
+  await page.getByRole("button", { name: "Register read-only target", exact: true }).click();
   await expect(page.getByLabel("Authorized target owner")).toHaveValue("user:user-owner");
   await expect(page.getByLabel("Target architecture")).toHaveValue("architecture-1");
   await page.getByLabel("Target profile").selectOption("personal");
@@ -220,6 +222,88 @@ test("owner registers a guided read-only target and confirms permanent revocatio
   await page.getByRole("button", { name: "Confirm revoke" }).click();
   await expect.poll(() => state.targetRevokeRequests).toBe(1);
   await expect(page.getByText("Revoked", { exact: true }).first()).toBeVisible();
+});
+
+// Test-first Wave 3: work is visible before setup, and mobile navigation
+// retains focus and the unsaved-draft boundary exercised above.
+for (const width of [1280, 390]) test(`architecture workspace puts saved work first and restores list focus at ${width}`, async ({ page }, info) => {
+  await installMockArchitectureRoutes(page, { includeSecondArchitecture: true });
+  await page.setViewportSize({ width, height: width === 1280 ? 720 : 844 });
+  await page.goto("/architectures");
+  const row = page.getByRole("button", { name: /Review assistant/ });
+  await expect(row).toBeInViewport();
+  await expect(page.locator(".architecture-create-form").getByLabel("Architecture name", { exact: true })).toBeHidden();
+  await row.click();
+  const title = page.getByRole("heading", { name: "Review assistant", level: 2 });
+  await expect(title).toBeInViewport();
+  if (width === 390) {
+    await expect(title).toBeFocused();
+    await expect(row).toBeHidden();
+    await page.getByRole("button", { name: "Back to architectures", exact: true }).click();
+    await expect(row).toBeFocused();
+  } else await expect(row).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  await page.screenshot({ path: info.outputPath("architecture-work-first.png") });
+});
+
+for (const width of [1280, 390]) test(`architecture draft survives New and mobile Back without weakening discard protection at ${width}`, async ({ page }, info) => {
+  await installMockArchitectureRoutes(page, { includeSecondArchitecture: true });
+  await page.setViewportSize({ width, height: 844 });
+  await page.goto("/architectures");
+  const row = page.getByRole("button", { name: /Review assistant/ });
+  await row.click();
+  await page.getByLabel("Selected node label").fill("Uncommitted review router");
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+  await page.getByRole("button", { name: "New architecture", exact: true }).click();
+  await expect(page.locator(".architecture-create-form").getByLabel("Architecture name", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByLabel("Selected node label")).toHaveValue("Uncommitted review router");
+  let dialogs = 0;
+  page.on("dialog", async dialog => { dialogs += 1; await dialog.dismiss(); });
+  if (width === 390) {
+    await page.getByRole("button", { name: "Back to architectures", exact: true }).click();
+    await expect(row).toBeFocused();
+    await row.click();
+    await expect(page.getByLabel("Selected node label")).toHaveValue("Uncommitted review router");
+    expect(dialogs).toBe(0);
+    await page.getByRole("button", { name: "Back to architectures", exact: true }).click();
+  }
+  await page.getByRole("button", { name: /Operations assistant/ }).click();
+  await expect.poll(() => dialogs).toBe(1);
+  if (width === 390) await row.click();
+  await expect(page.getByLabel("Selected node label")).toHaveValue("Uncommitted review router");
+  await info.attach("draft-safety", { body: JSON.stringify({ width, rejectedDiscard: dialogs, preservedLabel: "Uncommitted review router" }), contentType: "application/json" });
+});
+
+for (const width of [1280, 390]) test(`target registration is on demand and preserves the binding draft at ${width}`, async ({ page }, info) => {
+  const state = await installMockArchitectureRoutes(page);
+  await page.setViewportSize({ width, height: 844 });
+  await page.goto("/targets");
+  await expect(page.getByRole("heading", { name: "Connect a Codex workspace" })).toBeVisible();
+  const name = page.getByLabel("Target name", { exact: true });
+  await expect(name).toBeHidden();
+  const opener = page.getByRole("button", { name: "Register read-only target", exact: true }).first();
+  await opener.click();
+  await expect(name).toBeFocused();
+  await name.fill("Draft workstation");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(opener).toBeFocused();
+  await opener.click();
+  await expect(name).toHaveValue("Draft workstation");
+  await page.getByLabel("Target profile").selectOption("personal");
+  await page.getByLabel("Target logical environment").selectOption("personal-laptop");
+  await page.getByRole("button", { name: "Register target", exact: true }).click();
+  const heading = page.getByRole("heading", { name: "Draft workstation", level: 2 });
+  await expect(heading).toBeFocused();
+  await expect(heading).toBeInViewport();
+  expect(state.targetRegistrationBodies).toHaveLength(1);
+  expect(state.targetRegistrationBodies[0]).toMatchObject({ owner: { type: "user", id: "user-owner" }, architectureId: "architecture-1", profileId: "personal", environmentId: "personal-laptop" });
+  await expect(page.getByText("Review assistant", { exact: true })).toBeVisible();
+  if (width === 390) {
+    await page.getByRole("button", { name: "Back to targets", exact: true }).click();
+    await expect(page.getByRole("button", { name: /Draft workstation/ })).toBeFocused();
+  }
+  await info.attach("registered-binding", { body: JSON.stringify(state.targetRegistrationBodies, null, 2), contentType: "application/json" });
 });
 
 interface MockArchitectureState {

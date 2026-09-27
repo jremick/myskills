@@ -100,7 +100,7 @@ test("rollback confirms exact target and version, traps focus, cancels, and retr
   expect(state.writes[0]).toEqual(state.writes[1]);
   expect(state.writes[1]?.body).toMatchObject({ action: "rollback", slug: "release-notes-helper", version: "1.0.0", platform: "codex" });
   expect(state.writes[1]?.path).toBe(`/v1/architecture-targets/${target.id}/operations`);
-  await expect(page.getByRole("region", { name: `Operation history for ${target.name}` })).toContainText("queued");
+  await expect(page.getByRole("region", { name: `Operation history for ${target.name}` })).toContainText(/queued/i);
   await testInfo.attach("rollback-write-receipt", { body: JSON.stringify(state.writes, null, 2), contentType: "application/json" });
 });
 

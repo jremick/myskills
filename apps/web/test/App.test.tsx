@@ -1191,6 +1191,7 @@ test("signed-in users can create and inspect a multi-level skill architecture", 
   const view = render(<RegistryApp client={client} />);
 
   await view.findByRole("heading", { name: "Skill architectures", level: 1 });
+  fireEvent.click(await view.findByText("Compare patterns"));
   await view.findByRole("heading", { name: "Multi-level router", level: 3 });
   await view.findByText("No architectures yet.");
 
@@ -1222,7 +1223,7 @@ test("architecture creation offers only owned teams and submits the selected tea
   const ownerSelector = await view.findByLabelText("Architecture owner");
   await view.findByRole("option", { name: "Team · Shared Platform (shared-platform)" });
   assert.equal((ownerSelector as HTMLSelectElement).value, "user");
-  assert.deepEqual(Array.from((ownerSelector as HTMLSelectElement).options).map((option) => option.textContent), ["Personal · owner@example.com", "Team · Shared Platform (shared-platform)"]);
+  assert.deepEqual(Array.from((ownerSelector as HTMLSelectElement).options).map((option) => option.textContent), ["Personal (you)", "Team · Shared Platform (shared-platform)"]);
   assert.deepEqual(Array.from((ownerSelector as HTMLSelectElement).options).map((option) => option.value), ["user", "team:team-owned"]);
   assert.equal(view.queryByRole("option", { name: /Read Only Team/ }), null);
 
@@ -1813,12 +1814,12 @@ test("stale architecture list refreshes cannot replace the latest list response"
 
   fireEvent.click(view.getByRole("button", { name: "Refresh" }));
   resolveSecond?.([secondArchitecture]);
-  await view.findByRole("button", { name: /New architecture/ });
+  await within(await view.findByRole("list", { name: "Saved architectures" })).findByRole("button", { name: /New architecture/ });
   resolveFirst?.([firstArchitecture]);
   await Promise.resolve();
   await Promise.resolve();
   assert.equal(view.queryByRole("heading", { name: "Old architecture", level: 2 }), null);
-  assert.equal(view.getByRole("button", { name: /New architecture/ }).getAttribute("aria-pressed"), "true");
+  assert.equal(within(view.getByRole("list", { name: "Saved architectures" })).getByRole("button", { name: /New architecture/ }).getAttribute("aria-pressed"), "true");
 });
 
 test("architecture conflicts and unsupported target changes remain visible as safe read-only states", async () => {

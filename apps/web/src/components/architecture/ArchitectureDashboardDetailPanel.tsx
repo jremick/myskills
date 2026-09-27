@@ -1,11 +1,11 @@
+import type { RefObject } from "react";
 import {
+  ArrowLeft,
   CircleAlert,
-  Network,
   ShieldCheck,
 } from "lucide-react";
 import type { ArchitectureSpecV1 } from "@myskills-app/core";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { ArchitectureOrganizationGrantsCard } from "./ArchitectureOrganizationGrantsCard.js";
 import { ArchitecturePatternMigrationCard } from "./ArchitecturePatternMigrationCard.js";
 import {
@@ -22,13 +22,10 @@ import {
   type RegistryClient,
 } from "../../api.js";
 import {
-  architectureIsOrganizationOnly,
   architectureRevisionLabel,
   bootstrapArchitectureSpec,
-  boundEnvironmentForProfile,
-  environmentBelongsToProfile,
-  organizationChoices,
   patternLabel,
+  revisionLabel,
 } from "./architecture-dashboard-helpers.js";
 import { ArchitectureState, ArchitectureDetailLoading } from "./ArchitectureDashboardFeedback.js";
 import { ArchitecturePreviewPanel } from "./ArchitectureDashboardPreviewPanel.js";
@@ -85,7 +82,14 @@ export function ArchitectureDetailPanel({
   onPatternMigrationCreated,
   client,
   onRetry,
+  titleRef,
+  editorRef,
+  onBack,
 }: {
+  titleRef?: RefObject<HTMLHeadingElement | null>;
+  editorRef?: RefObject<HTMLDivElement | null>;
+  /** Shown in the stacked layout; returns to the list without unmounting the draft. */
+  onBack?: () => void;
   architecture: ArchitectureSummary | null;
   detail: ArchitectureDetail | null;
   detailState: ArchitectureLoadState;
@@ -121,15 +125,18 @@ export function ArchitectureDetailPanel({
   client: RegistryClient;
   onRetry: () => void;
 }) {
+  const back = onBack && (
+    <Button className="cp-back" type="button" variant="ghost" onClick={onBack}>
+      <ArrowLeft size={16} aria-hidden="true" />
+      Back to architectures
+    </Button>
+  );
   if (!architecture) {
     return (
-      <Card className="architecture-detail-card empty" aria-label="Architecture detail">
-        <CardContent className="architecture-detail-empty">
-          <Network size={42} aria-hidden="true" />
-          <h2>Select an architecture</h2>
-          <p>Choose a saved architecture to inspect its topology, effective skills, and dry-run sync plan.</p>
-        </CardContent>
-      </Card>
+      <div className="cp-detail">
+        {back}
+        <p className="cp-inspector-empty">Choose a saved architecture to inspect its topology, effective skills, and dry-run sync plan.</p>
+      </div>
     );
   }
 
@@ -148,23 +155,25 @@ export function ArchitectureDetailPanel({
     }
     : preview;
 
+  const currentRevision = detail?.latestRevision ?? null;
+
   return (
-    <Card className="architecture-detail-card" aria-label={`Architecture detail: ${architecture.name}`}>
-      <CardHeader className="architecture-detail-header">
-        <div>
-          <p className="architecture-kicker">Architecture detail</p>
-          <CardTitle>{architecture.name}</CardTitle>
-          <CardDescription>{architecture.description || "No description supplied."}</CardDescription>
-          <p className="architecture-access-note" data-testid="architecture-access-note">
+    <article className="cp-detail architecture-detail" aria-labelledby="architecture-detail-title">
+      <header className="cp-detail-head">
+        {back}
+        <div className="cp-title-block">
+          <h2 id="architecture-detail-title" ref={titleRef} tabIndex={-1}>{architecture.name}</h2>
+          <p className="cp-meta">{architecture.description || "No description supplied."}</p>
+          <p className="architecture-access-note cp-meta" data-testid="architecture-access-note">
             {ownerType === "team" ? "Team-owned" : "Personal owner"} · {readOnly ? "Read-only access" : "Append access enabled"}
           </p>
+          <div className="cp-chips">
+            <span className="cp-chip">{patternLabel(architecture.patternId)}</span>
+            <span className="cp-chip">{architectureRevisionLabel(architecture)}</span>
+          </div>
         </div>
-        <div className="architecture-detail-badges">
-          <Badge variant="outline">{patternLabel(architecture.patternId)}</Badge>
-          <Badge variant="secondary">{architectureRevisionLabel(architecture)}</Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="architecture-detail-content">
+      </header>
+      <div className="cp-detail-body">
         {(profiles.length > 0 && environments.length > 0) || (organizationOnly && allowedOrganizationIds.length > 0) ? (
           <div className="architecture-context-bar" aria-label="Preview context">
             {profiles.length > 0 && <label>
@@ -195,83 +204,105 @@ export function ArchitectureDetailPanel({
             )}
           </div>
         ) : (
-          <div className="architecture-empty-inline" role="status"><CircleAlert size={17} aria-hidden="true" /> This draft has no revision yet. Add a validated spec through the architecture revision API before previewing it.</div>
+          <div className="architecture-empty-inline" role="status"><CircleAlert size={17} aria-hidden="true" /> {readOnly
+            ? "This architecture has no revision yet. A preview is available after the owner saves its first revision."
+            : "This draft has no revision yet. Build the first revision in the editor below, then save it to preview the result."}</div>
         )}
 
-        {detailState === "loading" && <ArchitectureDetailLoading />}
-        {detailState !== "loading" && message && (
-          <ArchitectureState state={detailState} message={message} onRetry={onRetry} compact />
-        )}
-        {detail && <RevisionHistoryPanel
-          detail={detail}
-          selectedRevisionId={historyRevisionId}
-          selectedRevision={historyRevision}
-          state={historyState}
-          message={historyMessage}
-          readOnly={readOnly}
-          revisionDetailsAvailable={!organizationOnly}
-          onSelect={onHistorySelect}
-          onUseAsDraft={onUseRevisionAsDraft}
-        />}
-        {detail && canManage && (
-          <>
-            <ArchitectureOrganizationGrantsCard
-              key={`organization-grants:${architecture.id}:${detail.latestRevision?.id ?? "empty"}`}
-              architectureId={architecture.id}
-              currentRevisionId={detail.latestRevision?.id ?? architecture.currentRevisionId ?? null}
-              client={client}
-              onSaved={() => onRetry()}
+        <section className="cp-section architecture-result" aria-label="Effective result">
+          {detailState === "loading" && <ArchitectureDetailLoading />}
+          {detailState !== "loading" && message && (
+            <ArchitectureState state={detailState} message={message} onRetry={onRetry} compact />
+          )}
+          {detailState !== "loading" && !message && activePreview && (
+            <>
+              {draftPreview && <div className="architecture-draft-preview-note" role="status"><strong>Unsaved draft preview · noncanonical</strong><span>The API compiled this editor draft. The latest saved revision is unchanged until you save it.</span></div>}
+              <ArchitecturePreviewPanel detail={detail} preview={activePreview} />
+            </>
+          )}
+          {detailState !== "loading" && !message && preview && (
+            <ObservedFixturePreviewCard
+              key={`${architecture.id}:${selectedProfileId}:${selectedEnvironmentId}`}
+              onPreview={onFixturePreview}
             />
-            <ArchitecturePatternMigrationCard
-              key={`pattern-migration:${architecture.id}:${detail.latestRevision?.id ?? "empty"}`}
-              architectureId={architecture.id}
-              architectureName={architecture.name}
-              currentPatternId={architecture.patternId}
-              currentRevisionId={detail.latestRevision?.id ?? architecture.currentRevisionId ?? null}
+          )}
+        </section>
+
+        {/* "Use as new draft" in the history below focuses this wrapper so the
+            replaced draft is not changed off-screen. */}
+        <div className="cp-section architecture-draft-section" ref={editorRef} tabIndex={-1}>
+          {detail && (detail.latestRevision || !readOnly) && (
+            <ArchitectureEditorCard
+              key={`editor:${architecture.id}:${detail.latestRevision?.id ?? "bootstrap"}:${editorSeed?.revisionId ?? "current"}`}
               detail={detail}
-              patterns={patterns}
-              client={client}
-              onCreated={onPatternMigrationCreated}
+              readOnly={readOnly}
+              initialSpec={editorSeed?.spec ?? detail.latestRevision?.spec ?? bootstrapArchitectureSpec(architecture, detail)}
+              expectedRevisionId={detail.latestRevision?.id ?? null}
+              seededFromRevision={editorSeed?.revisionId ?? null}
+              onPreview={readOnly || !detail.latestRevision ? undefined : onDraftPreview}
+              onSave={readOnly ? undefined : onDraftSave}
+              onDraftChange={onDraftChange}
+              onSearchRegistrySkills={readOnly ? undefined : onSearchRegistrySkills}
+              onLoadRegistryReleases={readOnly ? undefined : onLoadRegistryReleases}
             />
-          </>
+          )}
+          {detail && !readOnly && (
+            <AddArchitectureRevisionCard
+              key={`json:${architecture.id}:${detail.latestRevision?.id ?? "draft"}`}
+              architectureId={architecture.id}
+              client={client}
+              detail={detail}
+              onSaved={onRetry}
+            />
+          )}
+        </div>
+
+        {/* Native disclosures keep closed content mounted, which preserves
+            grant drafts and the migration retry idempotency key. */}
+        {detail && (
+          <details className="cp-details cp-section architecture-history-disclosure">
+            <summary>Revision history · {currentRevision ? `${revisionLabel(currentRevision)} is current` : "no saved revision yet"}</summary>
+            <div className="cp-details-body">
+              <RevisionHistoryPanel
+                detail={detail}
+                selectedRevisionId={historyRevisionId}
+                selectedRevision={historyRevision}
+                state={historyState}
+                message={historyMessage}
+                readOnly={readOnly}
+                revisionDetailsAvailable={!organizationOnly}
+                onSelect={onHistorySelect}
+                onUseAsDraft={onUseRevisionAsDraft}
+              />
+            </div>
+          </details>
         )}
-        {detailState !== "loading" && !message && activePreview && (
-          <>
-            {draftPreview && <div className="architecture-draft-preview-note" role="status"><strong>Unsaved draft preview · noncanonical</strong><span>The API compiled this editor draft. The latest saved revision is unchanged until you save it.</span></div>}
-            <ArchitecturePreviewPanel detail={detail} preview={activePreview} />
-          </>
+        {detail && canManage && (
+          <details className="cp-details cp-section architecture-access-disclosure">
+            <summary>Access and migration</summary>
+            <div className="cp-details-body">
+              <ArchitectureOrganizationGrantsCard
+                key={`organization-grants:${architecture.id}:${detail.latestRevision?.id ?? "empty"}`}
+                architectureId={architecture.id}
+                currentRevisionId={detail.latestRevision?.id ?? architecture.currentRevisionId ?? null}
+                client={client}
+                onSaved={() => onRetry()}
+              />
+              <ArchitecturePatternMigrationCard
+                key={`pattern-migration:${architecture.id}:${detail.latestRevision?.id ?? "empty"}`}
+                architectureId={architecture.id}
+                architectureName={architecture.name}
+                currentPatternId={architecture.patternId}
+                currentRevisionId={detail.latestRevision?.id ?? architecture.currentRevisionId ?? null}
+                detail={detail}
+                patterns={patterns}
+                client={client}
+                onCreated={onPatternMigrationCreated}
+              />
+            </div>
+          </details>
         )}
-        {detailState !== "loading" && !message && preview && (
-          <ObservedFixturePreviewCard
-            key={`${architecture.id}:${selectedProfileId}:${selectedEnvironmentId}`}
-            onPreview={onFixturePreview}
-          />
-        )}
-        {detail && (detail.latestRevision || !readOnly) && (
-          <ArchitectureEditorCard
-            key={`editor:${architecture.id}:${detail.latestRevision?.id ?? "bootstrap"}:${editorSeed?.revisionId ?? "current"}`}
-            detail={detail}
-            readOnly={readOnly}
-            initialSpec={editorSeed?.spec ?? detail.latestRevision?.spec ?? bootstrapArchitectureSpec(architecture, detail)}
-            expectedRevisionId={detail.latestRevision?.id ?? null}
-            seededFromRevision={editorSeed?.revisionId ?? null}
-            onPreview={readOnly || !detail.latestRevision ? undefined : onDraftPreview}
-            onSave={readOnly ? undefined : onDraftSave}
-            onDraftChange={onDraftChange}
-            onSearchRegistrySkills={readOnly ? undefined : onSearchRegistrySkills}
-            onLoadRegistryReleases={readOnly ? undefined : onLoadRegistryReleases}
-          />
-        )}
-        {detail && !readOnly && (
-          <AddArchitectureRevisionCard
-            key={`json:${architecture.id}:${detail.latestRevision?.id ?? "draft"}`}
-            architectureId={architecture.id}
-            client={client}
-            detail={detail}
-            onSaved={onRetry}
-          />
-        )}
-      </CardContent>
-    </Card>
+      </div>
+    </article>
   );
 }

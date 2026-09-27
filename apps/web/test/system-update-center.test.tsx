@@ -135,7 +135,7 @@ for (const [name, patch] of [...unsupportedWorkspaceTargets, ["non-Codex platfor
     assert.equal(queue.disabled, true);
     fireEvent.click(queue);
     assert.equal(queued, 0);
-    assert.match(view.getByRole("region", { name: `Operation history for ${target.name}` }).textContent ?? "", /succeeded/);
+    assert.match(view.getByRole("region", { name: `Operation history for ${target.name}` }).textContent ?? "", /succeeded/i);
   });
 }
 
