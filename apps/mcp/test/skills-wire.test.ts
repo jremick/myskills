@@ -31,7 +31,7 @@ for (const declared of [false, true]) {
       assert.deepEqual(caps?.extensions?.[SKILLS_EXTENSION], {});
       assert.ok(caps?.resources);
       assert.deepEqual((await client.listResourceTemplates()).resourceTemplates, []);
-      assert.equal((await client.listTools()).tools.length, 6);
+      assert.equal((await client.listTools()).tools.length, 8);
       if (!declared) {
         await assert.rejects(client.request({ method: "skills/list", params: {} }, listResult), /Declare the io.modelcontextprotocol\/skills/);
         assert.equal(fixture.calls.some((call) => call.method === "skills/list"), false);

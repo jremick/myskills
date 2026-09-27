@@ -23,7 +23,7 @@ import {
   type VisibilityScope,
 } from "@myskills-app/core";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
-import type { Database } from "../db/client.js";
+import type { Database, DatabaseTransaction } from "../db/client.js";
 import {
   auditEvents,
   instanceSettings,
@@ -53,7 +53,7 @@ const DEFAULT_SHARING_SETTINGS: SharingSettings = {
 };
 
 export class PostgresSkillRepository implements SkillRepository {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: Database | DatabaseTransaction) {}
 
   async searchVisibleSkills(filters: SkillSearchFilters = {}): Promise<PublicSkill[]> {
     const sharing = await this.getSharingSettings();

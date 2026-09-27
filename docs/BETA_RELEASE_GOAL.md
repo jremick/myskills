@@ -1,9 +1,9 @@
 # Operational Beta Delivery Brief
 
-Version: 0.1.0-beta.9
+Version: 0.1.0-beta.10
 Last updated: 2026-09-27
 
-Target release: `v0.1.0-beta.9`.
+Target release: `v0.1.0-beta.10`.
 
 ## Beta.9 Release Record
 

@@ -19,7 +19,7 @@ test("anonymous visitor browses the seeded registry through the production proxy
   page.on("pageerror", (error) => browserErrors.push(error.message));
 
   const skillsResponse = page.waitForResponse((response) => (
-    response.url().endsWith("/api/v1/skills") && response.request().method() === "GET"
+    new URL(response.url()).pathname === "/api/v1/registry/catalog" && response.request().method() === "GET"
   ));
 
   await page.goto("/registry");

@@ -150,3 +150,5 @@ export { ImprovementContractError, improvementDigest } from "./improvement-share
 export * from "./improvement-declaration.js";
 export * from "./improvement-policy.js";
 export * from "./improvement-run.js";
+export * from "./bundle-contracts.js";
+export * from "./bundle-request.js";

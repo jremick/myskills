@@ -45,7 +45,7 @@ import {
   Workflow,
   X,
 } from "lucide-react";
-import { parseSemanticVersion, type PublicSkill, type SkillSharingDetails, type TeamSharedSkillGroup, type VisibilityScope } from "@myskills-app/core";
+import { parseSemanticVersion, type PublicSkill, type RegistryView, type SkillSharingDetails, type TeamSharedSkillGroup, type VisibilityScope } from "@myskills-app/core";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,6 +61,7 @@ import { PackageFileViewer } from "@/components/registry/PackageFileViewer";
 import { ManagedSkillsDashboard } from "@/components/registry/ManagedSkillsDashboard";
 import { SubmissionEvidencePanel } from "@/components/registry/SubmissionEvidencePanel";
 import { SkillImprovementPanel } from "@/components/registry/SkillImprovementPanel";
+import { BundleWorkspace } from "@/components/registry/BundleWorkspace";
 import {
   createRegistryClient,
   exportCommand,
@@ -116,6 +117,13 @@ interface AppLocation {
   query: string;
   platform: string;
   version: string | null;
+  catalog: CatalogLocation;
+}
+
+/** Registry catalog state kept in the URL beside the existing skill parameters. */
+interface CatalogLocation {
+  view: RegistryView;
+  bundle: string | null;
 }
 
 type ArchitectureNavigationGuard = (action: string) => boolean;
@@ -184,6 +192,16 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const [view, setView] = useState<AppView>(initialLocation.view);
   const [session, setSession] = useState<WebSession | null>(() => readStoredSession());
   const registryClient = useMemo(() => client ?? createRegistryClient(), [client]);
+  // Bundle catalog, when the client and server provide it. A 404 from the
+  // catalog falls back to the flat registry for this session.
+  const [catalogAvailable, setCatalogAvailable] = useState(() => Boolean(registryClient.bundles));
+  const [catalogView, setCatalogView] = useState<RegistryView>(initialLocation.catalog.view);
+  const [selectedBundleId, setSelectedBundleId] = useState<string | null>(initialLocation.catalog.bundle);
+  const catalogLocationRef = useRef<CatalogLocation>(initialLocation.catalog);
+  const browseUrl = (slug: string | null, nextQuery: string, nextPlatform: string, version: string | null = null) => (
+    registryUrl(slug, nextQuery, nextPlatform, version, catalogLocationRef.current)
+  );
+  const bundleCatalog = catalogAvailable ? registryClient.bundles : undefined;
   const [siteState, setSiteState] = useState<{ view: AppView; enabled?: boolean; failed?: boolean } | null>(null);
   const [siteRetry, setSiteRetry] = useState(0);
   useEffect(() => {
@@ -347,6 +365,9 @@ export function RegistryApp({ client }: RegistryAppProps) {
       setSelectedVersion(next.version);
       setQuery(next.query);
       setPlatform(next.platform);
+      catalogLocationRef.current = next.catalog;
+      setCatalogView(next.catalog.view);
+      setSelectedBundleId(next.catalog.bundle);
       setMobileMoreOpen(false);
     }
     window.addEventListener("popstate", syncFromBrowserHistory);
@@ -452,7 +473,8 @@ export function RegistryApp({ client }: RegistryAppProps) {
 
   useEffect(() => {
     const requestEpoch = ++listEpoch.current;
-    if (activeView !== "browse") {
+    // The bundle catalog owns registry rows while it is mounted.
+    if (activeView !== "browse" || catalogAvailable) {
       setListState("idle");
       return;
     }
@@ -496,7 +518,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
     return () => {
       active = false;
     };
-  }, [activeView, registryClient, query, refreshKey]);
+  }, [activeView, catalogAvailable, registryClient, query, refreshKey]);
 
   useEffect(() => {
     if (activeView !== "browse" || listState !== "ready") {
@@ -658,7 +680,28 @@ export function RegistryApp({ client }: RegistryAppProps) {
       setDetailState("loading");
     }
     setSelectedSlug(slug);
+    catalogLocationRef.current = { ...catalogLocationRef.current, bundle: null };
+    setSelectedBundleId(null);
     pushAppHistory(browseUrl(slug, query, platform, slug === selectedSlug ? selectedVersion : null));
+  }
+
+  /** Selecting a bundle (or nothing) clears the skill so no release is fetched. */
+  function selectBundle(bundleId: string | null) {
+    searchSelectionQuery.current = null;
+    setView("browse");
+    setSelectedSlug(null);
+    setSelectedVersion(null);
+    setSelectedSkill(null);
+    setRelease(null);
+    catalogLocationRef.current = { ...catalogLocationRef.current, bundle: bundleId };
+    setSelectedBundleId(bundleId);
+    pushAppHistory(browseUrl(null, query, platform));
+  }
+
+  function changeCatalogView(nextView: RegistryView) {
+    catalogLocationRef.current = { ...catalogLocationRef.current, view: nextView };
+    setCatalogView(nextView);
+    pushAppHistory(browseUrl(selectedSlug, query, platform, selectedVersion));
   }
 
   function selectVersion(version: string) {
@@ -934,6 +977,63 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const mobilePrimaryViews = new Set(mobilePrimaryItems.map((item) => item.view));
   const mobileOverflowItems = navItems.filter((item) => !mobilePrimaryViews.has(item.view));
 
+  // Existing skill detail (release history, export, trust panels). The bundle
+  // workspace renders it in its inspector and adds bundle backlinks.
+  const renderSkillDetail = (bundles: ReactNode) => (
+    <>
+      {historyControls && <CardContent className="shadcn-detail-content registry-detail-content">{historyControls}</CardContent>}
+      {detailMessage && (
+        <CardContent className="registry-state-content">
+          <div className="safe-message panel-state" role="status" aria-live="polite">
+            <CircleAlert size={24} aria-hidden="true" />
+            <strong>{detailMessage}</strong>
+            <span>{selectedVersion !== null
+              ? "The requested exact version was not substituted. Choose a published version or return to latest."
+              : "The selected skill could not load. Retry the request or choose a different approved skill."}</span>
+            <Button className="state-action shadcn-action-button" size="sm" type="button" variant="outline" onClick={retryRegistry}>
+              <RotateCw size={15} aria-hidden="true" />
+              Retry
+            </Button>
+            {selectedVersion !== null && !selectedSkill && <Button size="sm" type="button" variant="outline" onClick={returnToLatest}>Return to latest</Button>}
+          </div>
+        </CardContent>
+      )}
+      {detailState === "loading" && <DetailSkeleton />}
+      {detailState === "ready" && !detailMessage && selectedSkill && selectedSkill.slug === selectedSlug && release && (
+        <SkillDetail
+          bundles={bundles}
+          command={selectedCommand}
+          client={registryClient}
+          platform={detailPlatform}
+          release={release}
+          selectedSkill={selectedSkill}
+          session={session}
+          setPlatform={updatePlatform}
+          onChanged={() => setRefreshKey((value) => value + 1)}
+        />
+      )}
+      {detailState === "ready" && selectedSkill && !release && !detailMessage && (
+        <CardContent className="registry-state-content">
+          <div className="empty-detail">
+            <FileCode2 size={42} aria-hidden="true" />
+            <h2>No default stable release</h2>
+            <p>Choose an exact version from release history when no approved stable release is available.</p>
+          </div>
+          {bundles}
+        </CardContent>
+      )}
+      {detailState !== "loading" && !selectedSkill && !detailMessage && (
+        <CardContent className="registry-state-content">
+          <div className="empty-detail">
+            <FileCode2 size={42} aria-hidden="true" />
+            <h2>Select a skill</h2>
+            <p>Choose an approved skill to inspect release metadata and export guidance.</p>
+          </div>
+        </CardContent>
+      )}
+    </>
+  );
+
   return (
     <div className={sidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
       <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -1000,11 +1100,11 @@ export function RegistryApp({ client }: RegistryAppProps) {
               <Search size={18} aria-hidden="true" />
               <input
                 id="skill-search"
-                aria-label="Search skills"
+                aria-label={bundleCatalog ? "Search skills and bundles" : "Search skills"}
                 name="skill-search"
                 value={query}
                 onChange={(event) => updateSearch(event.target.value)}
-                placeholder="Search skills…"
+                placeholder={bundleCatalog ? "Search skills and bundles…" : "Search skills…"}
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -1039,6 +1139,26 @@ export function RegistryApp({ client }: RegistryAppProps) {
               client={registryClient}
               onSessionInvalidated={handleSessionInvalidated}
               session={session}
+            />
+          ) : bundleCatalog ? (
+            <BundleWorkspace
+              api={bundleCatalog}
+              bundleHref={(bundleId) => registryUrl(null, query, platform, null, { view: catalogView, bundle: bundleId })}
+              canCreate={canUseSubmit}
+              libraries={session ? registryClient.libraries : undefined}
+              listTeams={session ? () => registryClient.listTeams() : undefined}
+              onClearQuery={() => updateSearch("")}
+              onClearSelection={() => selectBundle(null)}
+              onSelectBundle={selectBundle}
+              onSelectSkill={selectSkill}
+              onUnavailable={() => setCatalogAvailable(false)}
+              onViewChange={changeCatalogView}
+              query={query}
+              renderSkillDetail={renderSkillDetail}
+              selection={selectedSlug ? { kind: "skill", slug: selectedSlug } : selectedBundleId ? { kind: "bundle", id: selectedBundleId } : null}
+              signedIn={Boolean(session)}
+              skillHref={(slug) => browseUrl(slug, query, platform, slug === selectedSlug ? selectedVersion : null)}
+              view={catalogView}
             />
           ) : (
             <main className="workspace shadcn-registry-workspace shadcn-registry-layout">
@@ -1116,54 +1236,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
               </Card>
 
               <Card className="detail-panel registry-detail-panel shadcn-console-card" aria-label="Selected skill detail">
-                {historyControls && <CardContent className="shadcn-detail-content registry-detail-content">{historyControls}</CardContent>}
-                {detailMessage && (
-                  <CardContent className="registry-state-content">
-                    <div className="safe-message panel-state" role="status" aria-live="polite">
-                      <CircleAlert size={24} aria-hidden="true" />
-                      <strong>{detailMessage}</strong>
-                      <span>{selectedVersion !== null
-                        ? "The requested exact version was not substituted. Choose a published version or return to latest."
-                        : "The selected skill could not load. Retry the request or choose a different approved skill."}</span>
-                      <Button className="state-action shadcn-action-button" size="sm" type="button" variant="outline" onClick={retryRegistry}>
-                        <RotateCw size={15} aria-hidden="true" />
-                        Retry
-                      </Button>
-                      {selectedVersion !== null && !selectedSkill && <Button size="sm" type="button" variant="outline" onClick={returnToLatest}>Return to latest</Button>}
-                    </div>
-                  </CardContent>
-                )}
-                {detailState === "loading" && <DetailSkeleton />}
-                {detailState === "ready" && !detailMessage && selectedSkill && selectedSkill.slug === selectedSlug && release && (
-                  <SkillDetail
-                    command={selectedCommand}
-                    client={registryClient}
-                    platform={detailPlatform}
-                    release={release}
-                    selectedSkill={selectedSkill}
-                    session={session}
-                    setPlatform={updatePlatform}
-                    onChanged={() => setRefreshKey((value) => value + 1)}
-                  />
-                )}
-                {detailState === "ready" && selectedSkill && !release && !detailMessage && (
-                  <CardContent className="registry-state-content">
-                    <div className="empty-detail">
-                      <FileCode2 size={42} aria-hidden="true" />
-                      <h2>No default stable release</h2>
-                      <p>Choose an exact version from release history when no approved stable release is available.</p>
-                    </div>
-                  </CardContent>
-                )}
-                {detailState !== "loading" && !selectedSkill && !detailMessage && (
-                  <CardContent className="registry-state-content">
-                    <div className="empty-detail">
-                      <FileCode2 size={42} aria-hidden="true" />
-                      <h2>Select a skill</h2>
-                      <p>Choose an approved skill to inspect release metadata and export guidance.</p>
-                    </div>
-                  </CardContent>
-                )}
+                {renderSkillDetail(null)}
               </Card>
             </main>
           )}
@@ -4468,6 +4541,7 @@ function ReleaseHistoryControls({
 }
 
 function SkillDetail({
+  bundles,
   command,
   client,
   platform,
@@ -4477,6 +4551,8 @@ function SkillDetail({
   setPlatform,
   onChanged,
 }: {
+  /** Optional bundle backlinks, shown after the summary. */
+  bundles?: ReactNode;
   command: string;
   client: RegistryClient;
   platform: string;
@@ -4516,6 +4592,7 @@ function SkillDetail({
       </CardHeader>
       <CardContent className="shadcn-detail-content registry-detail-content">
         <p className="summary">{selectedSkill.summary}</p>
+        {bundles}
         {!hasSupportedPlatform && <div className="control-plane-inline-message" role="status">No supported export platform is available for this release. Export and install are unavailable.</div>}
         <dl className="metadata-grid shadcn-metadata-grid registry-metadata-grid">
           <Metadata label="Platforms" value={hasSupportedPlatform
@@ -5281,12 +5358,17 @@ function pathForView(view: AppView): string {
 function appLocationFromWindow(): AppLocation {
   const params = new URLSearchParams(window.location.search);
   const slug = skillSlugFromPath(window.location.pathname);
+  const catalogView = params.get("view");
   return {
     view: initialViewFromPath(window.location.pathname),
     slug,
     query: params.get("q") ?? "",
     platform: params.get("platform") ?? "codex",
     version: slug ? params.get("version") : null,
+    catalog: {
+      view: catalogView === "list" || catalogView === "outline" ? catalogView : "grouped",
+      bundle: slug ? null : params.get("bundle") || null,
+    },
   };
 }
 
@@ -5310,7 +5392,7 @@ function appHistoryState(index: number): Record<string, unknown> {
   return { ...base, [APP_HISTORY_INDEX_KEY]: index };
 }
 
-function browseUrl(slug: string | null, query: string, platform: string, version: string | null = null): string {
+function registryUrl(slug: string | null, query: string, platform: string, version: string | null = null, catalog?: CatalogLocation): string {
   const params = new URLSearchParams();
   if (query.trim()) {
     params.set("q", query);
@@ -5320,6 +5402,12 @@ function browseUrl(slug: string | null, query: string, platform: string, version
   }
   if (slug && version !== null) {
     params.set("version", version);
+  }
+  if (catalog && catalog.view !== "grouped") {
+    params.set("view", catalog.view);
+  }
+  if (catalog?.bundle && !slug) {
+    params.set("bundle", catalog.bundle);
   }
   const pathname = slug ? `/skills/${slug}` : "/registry";
   const search = params.toString();

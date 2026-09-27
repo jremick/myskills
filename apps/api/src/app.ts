@@ -1,3 +1,5 @@
+import { registerBundleRoutes } from "./bundles/routes.js";
+import type { BundleService } from "./bundles/service.js";
 import { parseChronologicalPageQuery } from "./repositories/chronological-pagination.js";
 import { parseSkillPageQuery, searchVisibleSkillPage } from "./repositories/skill-pagination.js";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyServerOptions } from "fastify";
@@ -124,6 +126,8 @@ export interface BuildAppOptions {
   architecturePatternMigrationService?: ArchitecturePatternMigrationService;
   /** Postgres-backed libraries, source imports and tracking. Routes answer 503 when absent. */
   libraryService?: LibraryService;
+  bundleService?: BundleService;
+  bundlesEnabled?: boolean;
   /** Per-user bound on provider-backed library source requests. Defaults to an in-memory limiter. */
   librarySourceLimiter?: AuthRateLimiter;
   architectureProjectionLimiter?: AuthRateLimiter;
@@ -2328,6 +2332,8 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     improvementService: options.improvementService,
     requestAuthorization,
   });
+
+  registerBundleRoutes(app, options, { requestAuthorization, readActor: authenticateOptionalRegistryReader, requireScope, requiresMfaForRole });
 
   registerLibraryRoutes(app, options, {
     requestAuthorization,
