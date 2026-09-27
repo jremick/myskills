@@ -1,3 +1,4 @@
+import { createBundleClient, type BundleClient } from "./bundle-api.js";
 import { createImprovementClient, type ImprovementClient } from "./improvement-api";
 import { createLibraryClient, type LibraryClient } from "./library-api.js";
 import type {
@@ -789,6 +790,7 @@ export interface ReviewSubmissionDetail extends ReviewSubmissionSummary, Submiss
 export interface RegistryClient {
   improvements?: ImprovementClient;
   libraries?: LibraryClient;
+  bundles?: BundleClient;
   searchSkillPage?(input: RegistryPageInput): Promise<RegistryPage<PublicSkill>>;
   listManagedSkills?(input: RegistryPageInput): Promise<RegistryPage<SkillManagementSummary>>;
   getUserSubmissionDetail?(submissionId: string): Promise<UserSubmissionDetail>;
@@ -977,6 +979,7 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
   return {
     improvements: createImprovementClient(<T,>(url: string, init?: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown }) => requestJson<T>(fetchImpl, `${root}${url}`, { ...init, token })),
     libraries: createLibraryClient(root, fetchImpl, token),
+    bundles: createBundleClient(root, fetchImpl, token),
     async searchSkillPage(input) {
       const params = registryPageQuery(input);
       return requestJson<RegistryPage<PublicSkill>>(fetchImpl, `${root}/v1/skills${params}`, { token });

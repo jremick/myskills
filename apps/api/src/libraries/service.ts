@@ -1,3 +1,4 @@
+import type { BundleService } from "../bundles/service.js";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { posix } from "node:path";
 import type { Role } from "@myskills-app/auth";
@@ -72,6 +73,7 @@ export interface LibraryActor {
 }
 
 export interface LibraryServiceOptions {
+  bundles?: BundleService;
   store: PostgresLibraryStore;
   submissions: SubmissionService;
   skillRepository: SkillRepository;
@@ -123,9 +125,11 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
   private readonly clock: () => Date;
   private readonly slugSuffix: (seed: string) => string;
   private workerRunning = false;
+  private readonly bundles?: BundleService;
 
   constructor(options: LibraryServiceOptions) {
     this.store = options.store;
+    this.bundles = options.bundles;
     this.submissions = options.submissions;
     this.skills = options.skillRepository;
     this.provider = options.sourceProvider;
@@ -1127,6 +1131,14 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
     };
+    if (entry.kind === "bundle") {
+      let bundle;
+      try { bundle = entry.bundleId && this.bundles ? (await this.bundles.get(entry.bundleId, actor.id)).bundle : null; }
+      catch (error) { if (!(error instanceof AppError) || error.statusCode !== 404) throw error; }
+      return { ...base, title: bundle?.name ?? "Unavailable bundle", adoption: null,
+        bundle: { id: entry.bundleId ?? "", revisionSaved: entry.bundleRevisionSaved ?? 1,
+          revision: bundle?.revision ?? null, state: bundle ? "available" : "unavailable", memberCount: bundle?.memberCount ?? null } };
+    }
     if (entry.kind === "source") {
       const source = await this.requireSource(entry);
       const lastGood = await this.store.getSnapshot(entry.lastGoodSnapshotId);

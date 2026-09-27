@@ -2,6 +2,18 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
+## 0.1.0-beta.10 - 2026-09-27
+
+Target release: `v0.1.0-beta.10`.
+
+- Browse related skills as expandable bundles, a unique skill list, or an outline. Search keeps bundle context, overlapping memberships and accurate authorized counts.
+- Create and revise curated collections or source groups grounded in reviewed imports. Skills keep their own releases, access rules and provenance.
+- Save bundle references into Libraries without adopting, installing or following their members. Current permissions and revision checks apply to every write.
+- Add bundle API routes, CLI commands and MCP tools, plus responsive detail navigation and access-loss recovery.
+- Apply additive migration `0033_skill_bundles.sql`. Retain bundle-aware Library readers during rollback; `MYSKILLS_BUNDLES_ENABLED=false` disables bundle discovery and writes without deleting references.
+
+This release targets GitHub and the hosted app. npm publication is excluded; the CLI archive is available with the GitHub release.
+
 ## 0.1.0-beta.9 - 2026-09-27
 
 Target release: `v0.1.0-beta.9`.

@@ -335,7 +335,7 @@ test("HTTP MCP transport executes tools with the request bearer token", async (t
     const tools = await client.listTools();
     assert.deepEqual(
       tools.tools.map((tool) => tool.name).sort(),
-      ["get_architecture_projection", "get_install_instructions", "get_skill_info", "list_architecture_patterns", "list_architectures", "search_skills"],
+      ["browse_bundles", "curate_bundle", "get_architecture_projection", "get_install_instructions", "get_skill_info", "list_architecture_patterns", "list_architectures", "search_skills"],
     );
 
     const result = await client.callTool({
@@ -430,10 +430,10 @@ test("HTTP MCP transport negotiates modern discovery and preserves the six tools
     assert.ok(client.getDiscoverResult());
     const tools = await client.listTools();
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
-      "get_architecture_projection", "get_install_instructions", "get_skill_info",
+      "browse_bundles", "curate_bundle", "get_architecture_projection", "get_install_instructions", "get_skill_info",
       "list_architecture_patterns", "list_architectures", "search_skills",
     ]);
-    assert.equal(tools.tools.every((tool) => tool.annotations?.readOnlyHint === true), true);
+    assert.equal(tools.tools.filter(tool => tool.name !== "curate_bundle").every((tool) => tool.annotations?.readOnlyHint === true), true);
     const result = await client.callTool({ name: "search_skills", arguments: { query: "release" } });
     assert.equal(result.isError, undefined);
     assert.match(JSON.stringify(result), /release-notes-helper/);

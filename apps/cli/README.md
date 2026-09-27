@@ -459,3 +459,26 @@ header only; `expectedDigestVerified` reports this distinction in JSON output.
 ## Skill improvement
 
 Prepare local skill reviews with `myskills improve`, inspect the report, export a draft, and submit it through normal review. Registry plans pin source/reviewer versions and apply user, team or organization policy. Execution requires the exact local plan digest and explicit cloud consent. See [the feature guide](../../docs/SKILL_IMPROVEMENT.md) for commands, JSON bodies, evaluation suites and current adapter limits. The first runner is Claude Code 2.1.283 or newer. Use an exact model ID and an existing Claude sign-in. Codex improvement execution remains disabled pending its isolation gate; final release verification is recorded in the feature guide.
+
+### Skill bundles
+
+Browse related skills without installing them:
+
+```bash
+myskills bundles list --view grouped --query engineering
+myskills bundles show <bundle-id>
+myskills bundles members <bundle-id> --limit 25
+myskills bundles memberships <skill-slug>
+myskills bundles sources
+```
+
+Create or edit with `myskills bundles create --input reviewed-bundle.json` or
+`myskills bundles edit <bundle-id> --input reviewed-bundle.json`. The request
+contains `kind`, `name`, `purpose`, `owner`, `visibility` and `memberSlugs`.
+Source groups also require `sourceEntryId`; edits require `expectedRevision`.
+The API validates current ownership, author privileges and member access.
+
+Save with `myskills bundles save <bundle-id> --input save-reference.json`, where
+the file contains `libraryId` and `expectedRevision`. This saves one reference;
+it does not adopt, install or follow any skill. Use `--cursor` with list/member
+reads. Refresh from the first page if the authorized catalog changes.

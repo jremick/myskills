@@ -1,3 +1,4 @@
+import { bundleRequest } from "@myskills-app/core";
 import { libraryCommandHelp, libraryCommandRequest } from "./library-command.js";
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
@@ -283,6 +284,9 @@ async function dispatchCli(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
         return await skillsCommand(parsed, runtime);
       case "releases":
         return await releasesCommand(parsed, runtime);
+      case "bundles":
+      case "bundle":
+        return await libraryCommand(parsed, runtime, true);
       case "library":
       case "libraries":
         return await libraryCommand(parsed, runtime);
@@ -1777,9 +1781,9 @@ async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   return 0;
 }
 
-async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
-  if (!parsed.args[0] || parsed.args[0] === "help") { runtime.io.stdout(libraryCommandHelp); return 0; }
-  if (parsed.args[0] === "unbind-local") {
+async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {
+  if (!parsed.args[0] || parsed.args[0] === "help") { runtime.io.stdout(bundles ? "myskills bundles <list|show|members|memberships|sources|create|edit|save> [id] [--input reviewed.json] [--query text] [--view grouped|list|outline] [--limit 1-100] [--cursor value]\nSaving stores a reference only. Nothing is adopted or installed. Writes require the API skills:submit or libraries:write scope and skills:read." : libraryCommandHelp); return 0; }
+  if (!bundles && parsed.args[0] === "unbind-local") {
     if (!parsed.args[1]) throw new CliError("Usage: myskills libraries unbind-local <skill-slug> --dir <install-root>", 2);
     const slug = parseInstallSlug(parsed.args[1]);
     const root = installRoot(parsed, runtime);
@@ -1802,13 +1806,14 @@ async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<
     catch { throw new CliError("Library input must contain a JSON object.", 2, "CLI_ARGUMENTS_INVALID"); }
   }
   let request;
-  try { request = libraryCommandRequest(parsed.args[0], parsed.args[1], parsed.options, payload); }
+  try { request = bundles ? bundleRequest(parsed.args[0], parsed.args[1], parsed.options, payload) : libraryCommandRequest(parsed.args[0], parsed.args[1], parsed.options, payload); }
   catch (error) { throw new CliError(error instanceof Error ? error.message : "Invalid library command.", 2, "CLI_ARGUMENTS_INVALID"); }
-  const token = await requireToken(parsed, runtime);
-  if (parsed.args[0] === "review-bundle") return await verifiedLibraryReviewBundle(request.pathname, parsed, runtime, token);
+  const publicRead = bundles && ["list", "show", "members", "memberships"].includes(parsed.args[0]);
+  const token = publicRead ? await tokenOption(parsed, runtime) : await requireToken(parsed, runtime);
+  if (!bundles && parsed.args[0] === "review-bundle") return await verifiedLibraryReviewBundle(request.pathname, parsed, runtime, token!);
   const response = await apiJsonRequest(request.pathname, parsed, runtime, {
     method: request.method,
-    headers: { authorization: `Bearer ${token}`, ...(request.payload ? { "content-type": "application/json" } : {}) },
+    headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(request.payload ? { "content-type": "application/json" } : {}) },
     ...(request.payload ? { body: JSON.stringify(request.payload) } : {}),
   });
   runtime.io.stdout(JSON.stringify(response, null, 2));

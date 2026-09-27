@@ -50,7 +50,9 @@ export interface SourceRecord {
 export interface EntryRecord {
   id: string;
   libraryId: string;
-  kind: "source" | "skill";
+  kind: "source" | "skill" | "bundle";
+  bundleId: string | null;
+  bundleRevisionSaved: number | null;
   revision: number;
   title: string;
   sourceId: string | null;
@@ -268,7 +270,7 @@ export interface RemovalEffects {
 const LIBRARY_COLUMNS = sql`l.id, l.owner_user_id, l.owner_team_id, t.name AS owner_team_name, l.name, l.description, l.revision, l.created_at, l.updated_at`;
 const ENTRY_COLUMNS = sql`e.id, e.library_id, e.kind, e.revision, e.title, e.source_id, e.source_path, e.ref_kind, e.ref_value,
   e.acknowledged_full_name, e.pending_full_name, e.tracking_mode, e.health, e.next_check_at, e.last_attempt_at, e.last_successful_check_at, e.last_error_code, e.attempt_count,
-  e.lease_id, e.last_good_snapshot_id, e.skill_slug, e.lineage_id, e.source_entry_id, e.current_adoption_id, e.created_at, e.updated_at`;
+  e.lease_id, e.last_good_snapshot_id, e.skill_slug, e.lineage_id, e.source_entry_id, e.current_adoption_id, e.bundle_id, e.bundle_revision_saved, e.created_at, e.updated_at`;
 const CANDIDATE_COLUMNS = sql`c.id, c.source_entry_id, c.skill_entry_id, c.lineage_id, c.owner_user_id, c.snapshot_id, c.preview_id,
   c.origin, c.state, c.source_path, c.native_name, c.profile_digest, c.expected_prior_revision, c.expected_version, c.order_status, c.source_digest,
   c.package_digest, c.files, c.file_digests, c.mapping, c.findings, c.changes, c.submission_id, c.order_acknowledgement,
@@ -276,7 +278,7 @@ const CANDIDATE_COLUMNS = sql`c.id, c.source_entry_id, c.skill_entry_id, c.linea
 const CURSOR_AT = (column: SQL) => sql`to_char(${column} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
 /** Effective team role at read time, including organization-parent rules. */
-function effectiveTeamRole(teamId: SQL, actorId: string): SQL {
+export function effectiveTeamRole(teamId: SQL, actorId: string): SQL {
   return sql`(
     SELECT tm.role::text FROM team_memberships tm
     JOIN teams team ON team.id = tm.team_id
@@ -1644,7 +1646,9 @@ function entryRecord(row: Row): EntryRecord {
   return {
     id: String(row.id),
     libraryId: String(row.library_id),
-    kind: row.kind === "skill" ? "skill" : "source",
+    kind: row.kind === "bundle" ? "bundle" : row.kind === "skill" ? "skill" : "source",
+    bundleId: nullableString(row.bundle_id),
+    bundleRevisionSaved: row.bundle_revision_saved == null ? null : Number(row.bundle_revision_saved),
     revision: Number(row.revision),
     title: String(row.title),
     sourceId: nullableString(row.source_id),

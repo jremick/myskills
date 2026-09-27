@@ -1,3 +1,4 @@
+import { registerBundleTools } from "./bundles.js";
 import { McpServer, ProtocolError, type ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { createRegistryApiClient, type RegistryApiClientOptions } from "./api-client.js";
@@ -14,7 +15,9 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
     name: options.name ?? "myskills-app",
     version: options.version ?? "0.1.0",
   });
-  const handlers = createAiSkillsMcpHandlers(createRegistryApiClient(options));
+  const client = createRegistryApiClient(options);
+  const handlers = createAiSkillsMcpHandlers(client);
+  registerBundleTools(server, client);
   const skills = createNativeSkillsHandlers(options);
   server.server.registerCapabilities({ resources: {}, extensions: { [SKILLS_EXTENSION]: {} } });
   const requireSkills = (ctx: ServerContext) => {

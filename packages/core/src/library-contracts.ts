@@ -9,7 +9,7 @@ import { skillReleaseChangeKinds, MAX_SKILL_RELEASE_NOTES_LENGTH } from "./skill
  */
 
 export const libraryOwnerTypes = ["user", "team"] as const;
-export const libraryEntryKinds = ["source", "skill"] as const;
+export const libraryEntryKinds = ["source", "skill", "bundle"] as const;
 export const librarySourceRefKinds = ["default-branch", "branch", "tag", "commit", "latest-release", "tag-prefix"] as const;
 export const libraryTrackingModes = ["off", "manual", "daily", "weekly"] as const;
 export const librarySourceHealthStates = [
@@ -223,6 +223,7 @@ export interface LibraryEntry {
   source?: LibraryEntrySource;
   tracking?: LibraryEntryTracking;
   skill?: LibraryEntrySkill;
+  bundle?: import("./bundle-contracts.js").LibraryBundleReference;
   adoption: LibraryAdoption | null;
   createdAt: string;
   updatedAt: string;

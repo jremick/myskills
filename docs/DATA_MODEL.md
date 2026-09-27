@@ -1,6 +1,6 @@
 # Data Model
 
-Version: 0.1.0-beta.9
+Version: 0.1.0-beta.10
 Document revision: 0.2.0-draft
 Last updated: 2026-09-26
 

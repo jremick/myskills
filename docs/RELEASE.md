@@ -1,11 +1,24 @@
 # Release Process
 
-Version: 0.1.0-beta.9
+Version: 0.1.0-beta.10
 Last updated: 2026-09-27
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
+
+## Beta.10 release candidate
+
+Skill bundles add Grouped, List and Outline registry views, curated collections,
+reviewed source groups and Library references. The approved release scope is
+GitHub and the hosted application; npm publication is excluded. The CLI archive
+is still built and verified. See [Beta.10 release delivery](BETA10_RELEASE_DELIVERY.md)
+and [Skill bundles](plans/2026-09-27-skill-bundles.md).
+
+Migration `0033_skill_bundles.sql` is additive. After bundle references are saved,
+retain a bundle-aware Library reader. Use `MYSKILLS_BUNDLES_ENABLED=false` to stop
+new bundle discovery and writes while preserving those readers and records.
+Do not downgrade to beta.9 or remove the tables as a rollback shortcut.
 
 ## Beta.9 Release Record
 
@@ -126,7 +139,7 @@ Draft public release text in a file and use `--notes-file` or the GitHub UI if a
 
 ## CLI Package Candidate
 
-The candidate source version is `0.1.0-beta.9`, with `publishConfig.tag=beta`. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle. Candidate preparation does not change the published npm version.
+The candidate source version is `0.1.0-beta.10`, with `publishConfig.tag=beta`. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle. Candidate preparation does not change the published npm version.
 
 The canonical gate proves:
 
