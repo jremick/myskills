@@ -16,31 +16,21 @@ MySkills is an open-source beta platform for publishing, reviewing, discovering,
 
 ## Release Status
 
-Current target: **v0.1.0-beta.8**.
+Current target: **v0.1.0-beta.9**.
 
-The beta.8 candidate adds [Libraries](docs/LIBRARIES.md) for saved sources,
-reviewed imports, source tracking and adopted versions. Implementation and
-verification are in progress in the [candidate evidence record](docs/plans/2026-09-26-library-build-evidence.md).
+The beta.9 candidate adds a marketing homepage for people managing their own AI
+skills and administrators managing shared skills. Owners can disable it so root
+visitors go straight to login. See [homepage behavior](docs/LANDING_PAGE.md) and
+[beta.9 delivery evidence](docs/BETA9_RELEASE_DELIVERY.md).
 
-GitHub prerelease: **[v0.1.0-beta.7](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.7)**.
+The published baseline is [v0.1.0-beta.8](https://github.com/jremick/myskills/releases/tag/v0.1.0-beta.8),
+including Libraries and governed skill improvement. npm `beta` resolves to
+`0.1.0-beta.8`; this website release does not publish a new npm package.
+Production remains beta.8 until beta.9 promotion is verified in the delivery record.
 
-npm `beta`: **v0.1.0-beta.6**; beta.7 npm publication awaits maintainer passkey authentication.
-Hosted production: **v0.1.0-beta.7** at candidate
-`6912d3f9490c6f002431f3064e8a9db417df3d7f`.
-
-The beta.7 candidate is merged and tagged at
-`6912d3f9490c6f002431f3064e8a9db417df3d7f`. Its Windows canonical gate,
-candidate CI, tagged release workflow, and public staging checks passed.
-Dedicated staging acceptance passed at `2026-09-25T07:26:28.111262Z` with 20
-real Windows API/CLI checks and zero supplied-session cleanup failures. Separate
-native Comet acceptance passed. Production API/web promotion and readback
-passed. GitHub publication is complete; npm publication is the remaining
-release blocker. Native model-selected host activation, imports, browser drafts,
-and guided self-hosting setup remain open roadmap work.
-
-This beta is intended for real external trial use with documented compatibility, support, and upgrade expectations. It is still prerelease software and not yet the business-safe production release: API contracts, package formats, deployment defaults, and operational guidance may still change before `v1.0`.
-
-Beta.7 evidence is tracked in [docs/BETA7_RELEASE_DELIVERY.md](docs/BETA7_RELEASE_DELIVERY.md). The historical operational beta ledger is [docs/OPERATIONAL_BETA_DELIVERY.md](docs/OPERATIONAL_BETA_DELIVERY.md); the canonical executable release gate is `npm run release:verify`.
+MySkills is prerelease software for external trial use. API contracts, package
+formats and deployment guidance may change before v1.0. Hosted registration
+remains owner-controlled. The canonical release gate is `npm run release:verify`.
 
 ## Name
 

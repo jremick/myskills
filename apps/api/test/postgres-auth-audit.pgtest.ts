@@ -34,7 +34,7 @@ test("Postgres privileged changes and their audits roll back together on audit f
     END $$;
   `);
 
-  for (const mutation of ["status", "roles", "token", "registration", "provider"] as const) {
+  for (const mutation of ["status", "roles", "token", "registration", "site", "provider"] as const) {
     const created = await store.createUserWithPassword({ email: `${mutation}@example.test`, name: mutation, passwordHash });
     assert.ok(created.user);
     const target = await store.updateUserStatus({ userId: created.user.id, status: "active", emailVerifiedAt: new Date() });
@@ -50,6 +50,7 @@ test("Postgres privileged changes and their audits roll back together on audit f
         case "roles": return service.updateAdminUserRoles(actor, { userId: target.id, roles: ["author"], reason: "fixture" });
         case "token": return service.revokeAdminApiToken(actor, token.id);
         case "registration": return service.updateRegistrationSettings(actor, { mode: "open" });
+        case "site": return service.updateSiteSettings(actor, { landingPageEnabled: false });
         case "provider": return service.upsertAdminProviderConfig(actor, {
           key: "fixture", type: "oidc", displayName: "Fixture", enabled: false,
           roleMappings: [{ claim: "groups", value: "authors", role: "author" }],
@@ -63,6 +64,7 @@ test("Postgres privileged changes and their audits roll back together on audit f
     assert.ok(await store.findUserBySessionTokenHash(sessionHash), `${mutation}: session was revoked despite audit failure`);
     assert.ok(await store.findUserByApiTokenHash(apiHash), `${mutation}: token was revoked despite audit failure`);
     if (mutation === "registration") assert.equal(await store.getRegistrationMode(), "closed");
+    if (mutation === "site") assert.deepEqual(await service.getPublicSiteSettings(), { landingPageEnabled: true });
     if (mutation === "provider") assert.deepEqual(await store.listProviderConfigs(), []);
     assert.deepEqual(await store.listAuditEvents({ limit: 100 }), auditBefore);
 
@@ -81,6 +83,12 @@ test("Postgres privileged changes and their audits roll back together on audit f
     if (mutation === "roles") assert.deepEqual((await store.findUserById(target.id))?.roles, ["author"]);
     if (mutation === "token") assert.equal(await store.findUserByApiTokenHash(apiHash), null);
     if (mutation === "registration") assert.equal(await store.getRegistrationMode(), "open");
+    if (mutation === "site") {
+      const restartedService = new AuthService(new PostgresAuthStore(createDb(pool)));
+      assert.deepEqual(await restartedService.getPublicSiteSettings(), { landingPageEnabled: false });
+      assert.equal(auditAfter[0].details.oldLandingPageEnabled, true);
+      assert.equal(auditAfter[0].details.newLandingPageEnabled, false);
+    }
     if (mutation === "provider") assert.equal((await store.listProviderConfigs())[0].roleMappings.length, 1);
   }
 });

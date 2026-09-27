@@ -281,7 +281,13 @@ export interface ListAuditEventsInput {
   stableOrder?: boolean;
 }
 
+export interface SiteSettings {
+  landingPageEnabled: boolean;
+}
+
 export interface AuthStore {
+  getSiteSettings(): Promise<SiteSettings>;
+  setSiteSettings(settings: SiteSettings, audit?: CreateAuditEventInput): Promise<SiteSettings>;
   getRegistrationMode(): Promise<RegistrationMode>;
   setRegistrationMode(mode: RegistrationMode, audit?: CreateAuditEventInput): Promise<RegistrationMode>;
   createUserWithPassword(input: CreateUserWithPasswordInput): Promise<CreateUserWithPasswordResult>;

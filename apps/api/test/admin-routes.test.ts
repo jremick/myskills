@@ -7,6 +7,49 @@ import { AuthService, type AuthNotificationSink } from "../src/auth/service.js";
 import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
 import { MemorySkillRepository } from "../src/repositories/memory-skill-repository.js";
 
+test("site settings are public, fresh, strictly validated and writable only by MFA admins", async (t) => {
+  const store = new MemoryAuthStore("closed");
+  const app = buildAdminApp(store);
+  t.after(() => app.close());
+  const read = await app.inject({ method: "GET", url: "/v1/site" });
+  assert.equal(read.statusCode, 200);
+  assert.deepEqual(read.json(), { site: { landingPageEnabled: true } });
+  assert.equal(read.headers["cache-control"], "no-store");
+  const owner = await addAndLoginWithMfa(app, store, { id: "site-owner", email: "site-owner@example.test", roles: ["owner"] });
+  const member = await addAndLoginWithMfa(app, store, { id: "site-member", email: "site-member@example.test", roles: ["user"] });
+  const noMfa = await addAndLogin(app, store, { id: "site-admin", email: "site-admin@example.test", roles: ["admin"] });
+  const apiToken = await createApiToken(app, owner, ["profile:read"]);
+  for (const [token, status, code] of [
+    [undefined, 401, "AUTHENTICATION_REQUIRED"],
+    [member, 403, "ADMIN_ROLE_REQUIRED"],
+    [noMfa, 403, "MFA_VERIFICATION_REQUIRED"],
+    [apiToken, 403, "SESSION_AUTH_REQUIRED"],
+  ] as const) {
+    for (const method of ["GET", "PUT"] as const) {
+      const response = await app.inject({ method, url: "/v1/admin/site", headers: token ? { authorization: `Bearer ${token}` } : {}, ...(method === "PUT" ? { payload: { landingPageEnabled: false } } : {}) });
+      assert.equal(response.statusCode, status);
+      assert.equal(response.json().error.code, code);
+    }
+  }
+  for (const payload of [{}, { landingPageEnabled: "false" }, { landingPageEnabled: null }]) {
+    const invalid = await app.inject({ method: "PUT", url: "/v1/admin/site", headers: { authorization: `Bearer ${owner}` }, payload });
+    assert.equal(invalid.statusCode, 400);
+  }
+  assert.deepEqual((await app.inject({ method: "GET", url: "/v1/site" })).json(), { site: { landingPageEnabled: true } });
+  for (const enabled of [false, true]) {
+    const result = await app.inject({ method: "PUT", url: "/v1/admin/site", headers: { authorization: `Bearer ${owner}` }, payload: { landingPageEnabled: enabled } });
+    assert.equal(result.statusCode, 200);
+    assert.deepEqual(result.json(), { site: { landingPageEnabled: enabled } });
+    assert.deepEqual((await app.inject({ method: "GET", url: "/v1/site" })).json(), result.json());
+    assert.deepEqual((await app.inject({ method: "GET", url: "/v1/admin/site", headers: { authorization: `Bearer ${owner}` } })).json(), result.json());
+    assert.equal(await store.getRegistrationMode(), "closed");
+  }
+  const audit = (await store.listAuditEvents({ limit: 100 })).filter((event) => event.action === "admin.site.update");
+  assert.equal(audit.length, 2);
+  assert.deepEqual(audit.map((event) => event.details.newLandingPageEnabled).sort(), [false, true]);
+  assert.deepEqual(audit.map((event) => event.details.oldLandingPageEnabled).sort(), [false, true]);
+});
+
 test("MFA-verified admins can manage registration mode", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const app = buildAdminApp(authStore);

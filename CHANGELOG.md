@@ -2,14 +2,30 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
-## 0.1.0-beta.8 - unreleased
+## 0.1.0-beta.9 - 2026-09-27
+
+Target release: `v0.1.0-beta.9`.
+
+- Redesign the public homepage around relatable AI-skill examples, with paths
+  for individuals and administrators, an interactive library preview, lifecycle
+  guidance and self-hosting information.
+- Add an instance-wide landing-page switch for owners and administrators with
+  MFA. Disabling it sends root visitors to login without changing registration,
+  permissions, public skill links, API, CLI or MCP access.
+- Persist setting changes with audit history and preserve the saved value when
+  auditing fails. Keep retry and sign-in paths available if settings cannot load.
+- Improve mobile navigation, keyboard controls and reduced-motion behavior.
+- No schema migration. Email configuration and outbox reliability are a separate
+  workstream; this release does not claim a fix for the local outbox test failures.
+
+## 0.1.0-beta.8 - 2026-09-26
 
 Target release: `v0.1.0-beta.8`.
 
-Libraries candidate: public GitHub sources, provenance, private imports,
-source tracking, in-app subscriptions, and team curation. Implementation and
-focused verification are complete; the canonical release gate and publication
-remain separate steps.
+Libraries: public GitHub sources, provenance, private imports, source tracking,
+in-app subscriptions and team curation, alongside governed skill improvement.
+GitHub, hosted production and npm publication are recorded in
+[the beta.8 delivery ledger](docs/BETA8_RELEASE_DELIVERY.md).
 
 - Add an administrator-controlled private import self-review policy, disabled
   by default. Shared and published content still requires instance review.

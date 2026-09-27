@@ -1,3 +1,4 @@
+import type { SiteSettings } from "./types.js";
 import { chronologicalKey, chronologicalPagePosition, chronologicalPageResult } from "../repositories/chronological-pagination.js";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { AppError } from "@myskills-app/core";
@@ -924,6 +925,30 @@ export class AuthService {
       },
     });
     return { status: "disabled", disabledFactors };
+  }
+
+  async getPublicSiteSettings(): Promise<SiteSettings> {
+    const { landingPageEnabled } = await this.store.getSiteSettings();
+    return { landingPageEnabled };
+  }
+
+  async getSiteSettings(actor: AuthResponseUser): Promise<SiteSettings> {
+    assertAdmin(actor);
+    return this.getPublicSiteSettings();
+  }
+
+  async updateSiteSettings(actor: AuthResponseUser, input: SiteSettings): Promise<SiteSettings> {
+    assertAdmin(actor);
+    if (typeof input.landingPageEnabled !== "boolean") {
+      throw new AppError("Choose whether to show the landing page.", "INVALID_SITE_SETTINGS", 400);
+    }
+    return this.store.setSiteSettings({ landingPageEnabled: input.landingPageEnabled }, {
+      actorUserId: actor.id,
+      action: "admin.site.update",
+      decision: "allow",
+      resourceType: "instance_setting",
+      details: { setting: "site" },
+    });
   }
 
   async getRegistrationSettings(actor: AuthResponseUser): Promise<AdminRegistrationSettings> {

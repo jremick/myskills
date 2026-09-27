@@ -45,16 +45,83 @@ test("landing page explains public beta status and opens the login page", async 
 
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByRole("heading", { name: "MySkills" });
-  assert.equal(document.body.textContent?.includes("Public beta. Hosted signups are owner-gated."), true);
+  await view.findByRole("heading", { name: "Your AI's best skills, kept in order." });
+  assert.equal(document.body.textContent?.includes("Public beta"), true);
   assert.equal(client.searchCalls.length, 0);
 
-  fireEvent.click(view.getAllByRole("link", { name: "Login" })[0]!);
+  fireEvent.click(view.getAllByRole("link", { name: "Sign in" })[0]!);
 
   await view.findByRole("heading", { name: "Login" });
   assert.deepEqual(client.searchCalls, []);
   assert.equal(document.body.textContent?.includes("Release Notes Helper"), false);
   assert.equal(window.location.pathname, "/login");
+});
+
+test("root waits for fresh site configuration, replaces disabled root, and hides the return-home link", async () => {
+  setupDom("http://localhost/");
+  const client = mockClient();
+  let resolveSite!: (site: { landingPageEnabled: boolean }) => void;
+  client.getSiteSettings = () => new Promise((resolve) => { resolveSite = resolve; });
+  const view = render(<RegistryApp client={client} />);
+  assert.equal(view.queryByRole("heading", { name: /Your AI/ }), null);
+  await act(async () => resolveSite({ landingPageEnabled: false }));
+  await view.findByRole("heading", { name: "Login" });
+  assert.equal(window.location.pathname, "/login");
+  assert.equal(view.queryByRole("link", { name: "Public site" }), null);
+  assert.equal(view.queryByRole("link", { name: "MySkills" }), null);
+});
+
+test("site configuration failure offers retry and sign-in without exposing the homepage", async () => {
+  setupDom("http://localhost/");
+  const client = mockClient();
+  client.getSiteSettings = async () => { throw new Error("private server detail"); };
+  const view = render(<RegistryApp client={client} />);
+  await view.findByText("We couldn’t load this page.");
+  assert.equal(document.body.textContent?.includes("private server detail"), false);
+  assert.equal(view.queryByRole("heading", { name: /Your AI/ }), null);
+  client.getSiteSettings = async () => ({ landingPageEnabled: true });
+  fireEvent.click(view.getByRole("button", { name: "Try again" }));
+  await view.findByRole("heading", { name: /Your AI/ });
+});
+
+test("disabled landing leaves direct invitation, recovery and registry routes reachable", async () => {
+  for (const [path, heading] of [["/auth/register#token=fixture", "Complete registration"], ["/auth/reset-password#token=fixture", "Reset password"], ["/registry", "Registry"]]) {
+    setupDom(`http://localhost${path}`);
+    const client = mockClient();
+    client.getSiteSettings = async () => ({ landingPageEnabled: false });
+    const view = render(<RegistryApp client={client} />);
+    if (path === "/registry") await view.findByLabelText("Search skills");
+    else await view.findByRole("heading", { name: heading });
+    assert.equal(window.location.pathname, path.split("#")[0]);
+    cleanup();
+  }
+});
+
+test("landing setting keeps a failed draft, discards it, and confirms a successful save", async () => {
+  const user = authUser({ roles: ["owner"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/admin", user);
+  const client = mockClient({ user });
+  let saved = true;
+  let fail = true;
+  client.getAdminSiteSettings = async () => ({ landingPageEnabled: saved });
+  client.updateAdminSiteSettings = async (site) => { if (fail) throw new Error("network failed"); saved = site.landingPageEnabled; return site; };
+  const view = render(<RegistryApp client={client} />);
+  const toggle = await view.findByRole("switch", { name: "Show landing page" });
+  fireEvent.click(toggle);
+  fireEvent.click(view.getByRole("button", { name: "Save landing setting" }));
+  await view.findByText("Couldn’t save the landing setting. Try again.");
+  assert.equal(toggle.getAttribute("aria-checked"), "false");
+  assert.equal(saved, true);
+  fireEvent.click(view.getByRole("button", { name: "Discard" }));
+  assert.equal(toggle.getAttribute("aria-checked"), "true");
+  fail = false;
+  fireEvent.click(toggle);
+  fireEvent.click(view.getByRole("button", { name: "Save landing setting" }));
+  await view.findByText("Landing setting saved.");
+  assert.equal(saved, false);
+  cleanup();
+  render(<RegistryApp client={client} />);
+  await waitFor(() => assert.equal(document.querySelector('[role="switch"][aria-label="Show landing page"]')?.getAttribute("aria-checked"), "false"));
 });
 
 test("invited users complete registration without leaving the token in browser history", async () => {
@@ -2657,6 +2724,9 @@ function mockClient(input: {
       apiTokens = apiTokens.map((token) => token.id === tokenId ? { ...token, revokedAt: "2026-06-14T00:00:00.000Z" } : token);
       return apiTokens.find((token) => token.id === tokenId) ?? defaultApiTokens()[0];
     },
+    async getSiteSettings() { return { landingPageEnabled: true }; },
+    async getAdminSiteSettings() { return { landingPageEnabled: true }; },
+    async updateAdminSiteSettings(site) { return site; },
     async getAdminRegistration() {
       return { mode: registrationMode };
     },

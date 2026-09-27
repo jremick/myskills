@@ -29,6 +29,7 @@ import type {
   AuthActionTokenPurpose,
   AuthActionTokenWithUser,
   AuthStore,
+  SiteSettings,
   AuthUserRecord,
   AuthUserWithApiToken,
   AuthUserWithSession,
@@ -69,6 +70,27 @@ const INSTANCE_ROLE_SCOPE = {
 
 export class PostgresAuthStore implements AuthStore {
   constructor(private readonly db: Database) {}
+
+  async getSiteSettings(): Promise<SiteSettings> {
+    const [setting] = await this.db.select({ value: instanceSettings.value }).from(instanceSettings)
+      .where(eq(instanceSettings.key, "site")).limit(1);
+    return parseSiteSettings(setting?.value);
+  }
+
+  async setSiteSettings(settings: SiteSettings, audit?: CreateAuditEventInput): Promise<SiteSettings> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('myskills-site-settings'))`);
+      const [previous] = await tx.select().from(instanceSettings).where(eq(instanceSettings.key, "site")).limit(1);
+      const old = parseSiteSettings(previous?.value);
+      await tx.insert(instanceSettings).values({ key: "site", value: settings })
+        .onConflictDoUpdate({ target: instanceSettings.key, set: { value: settings, updatedAt: new Date() } });
+      if (audit) await recordAuditEvent(tx, {
+        ...audit,
+        details: { ...audit.details, oldLandingPageEnabled: old.landingPageEnabled, newLandingPageEnabled: settings.landingPageEnabled },
+      });
+      return { ...settings };
+    });
+  }
 
   async getRegistrationMode(): Promise<RegistrationMode> {
     const [setting] = await this.db
@@ -1449,4 +1471,12 @@ function parseAuditDetails(input: unknown): Record<string, unknown> {
 
 function isUuid(input: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input);
+}
+
+function parseSiteSettings(value: unknown): SiteSettings {
+  if (value === undefined) return { landingPageEnabled: true };
+  if (!value || typeof value !== "object" || !("landingPageEnabled" in value) || typeof value.landingPageEnabled !== "boolean") {
+    throw new Error("Site settings are invalid.");
+  }
+  return { landingPageEnabled: value.landingPageEnabled };
 }
