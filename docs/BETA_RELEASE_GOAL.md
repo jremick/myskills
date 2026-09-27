@@ -5,17 +5,20 @@ Last updated: 2026-09-27
 
 Target release: `v0.1.0-beta.12`.
 
-## Beta.12 candidate
+Status: released on GitHub and deployed to production.
 
-The owner authorized all four application redesign waves through push, deployment
-and release. The candidate aligns Registry, author/review workspaces, runtime
-management, teams, administration and account screens with the approved Libraries
-design. Existing exact-version, authorization and mutation contracts remain.
+## Beta.12 Release Record
 
-This record is preparation, not deployment proof. The final source must pass
-`npm run release:verify`, required CI, Opus visual review and staging acceptance
-before production. See [Beta.12 release delivery](BETA12_RELEASE_DELIVERY.md).
-GitHub and hosted services are in scope; npm remains beta.8.
+All four Opus-led application redesign waves are published on GitHub and live
+at myskills.sh. The immutable tag and production API/web pair use source
+`c280795e6f0bd54533514ab6c58af7a584cbd3a4`. Visual acceptance, protected-branch
+CI, clean canonical verification, tagged verification, staging and production
+checks passed. Existing exact-version, authorization and mutation contracts
+remain. See [Beta.12 release delivery](BETA12_RELEASE_DELIVERY.md).
+
+Beta.12 supersedes the unpublished beta.11 candidate after correcting browser
+test synchronization. No application source changed after Opus acceptance.
+GitHub and hosted delivery are complete; npm remains beta.8.
 
 ## Beta.10 Release Record
 

@@ -6,6 +6,8 @@ All notable user-facing changes will be tracked here. MySkills is still prerelea
 
 Target release: `v0.1.0-beta.12`.
 
+GitHub and hosted delivery verified; npm remains beta.8. See [delivery evidence](docs/BETA12_RELEASE_DELIVERY.md).
+
 - Deliver the four-wave application redesign described in the beta.11 candidate below.
 - Make the Admin keyboard browser test wait for confirmation closure and restored focus before checking tab navigation.
 - Preserve the immutable beta.11 tag after its tagged verification failed; no beta.11 production release was published.
