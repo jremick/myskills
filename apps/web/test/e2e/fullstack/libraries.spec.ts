@@ -34,6 +34,8 @@ test("owner curates a persistent library, changes private-import policy, and rem
   await expect.poll(async () => (await (await page.request.get(`${baseURL}/api/v1/admin/library-settings`)).json()).settings.privateSelfReviewEnabled).toBe(false);
 
   const name = `Release library ${randomUUID().slice(0, 8)}`;
+  const newLibrary = page.getByRole("button", { name: "New library", exact: true });
+  if (await newLibrary.isVisible()) await newLibrary.click();
   await page.getByLabel("Library name").fill(name);
   await page.getByRole("button", { name: "Create library", exact: true }).click();
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();

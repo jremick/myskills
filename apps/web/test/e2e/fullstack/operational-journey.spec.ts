@@ -64,7 +64,7 @@ test("author feedback, immutable publication, upgrade policy, real CLI install/u
       async afterPolicyBlocked({ slug, actor, targetName, releases }) {
         await useSession(page, actor, "/updates");
         await expect(page.getByRole("heading", { name: "System update centre", exact: true })).toBeVisible();
-        const target = page.locator(".target-update-card").filter({ has: page.getByRole("heading", { name: targetName, exact: true }) });
+        const target = page.getByRole("article", { name: targetName, exact: true });
         const update = target.locator(".target-update-row").filter({ hasText: slug });
         await expect(update.getByText("The upgrade crosses a release change kind that your policy does not allow.", { exact: true })).toBeVisible();
         await expect(update.getByRole("checkbox")).toBeDisabled();
@@ -73,7 +73,8 @@ test("author feedback, immutable publication, upgrade policy, real CLI install/u
         await expect(review.getByRole("heading", { name: `Review blocked update for ${slug}`, exact: true })).toBeVisible();
         for (const release of releases) {
           const included = review.locator("article").filter({ has: page.getByText(release.version, { exact: true }) });
-          await expect(included.getByText(release.changeKind, { exact: true })).toBeVisible();
+          const labels: Record<string, string> = { fix: "Fix", feature: "Feature", breaking: "Breaking change", security: "Security fix", maintenance: "Maintenance" };
+          await expect(included.getByText(labels[release.changeKind] ?? release.changeKind, { exact: true })).toBeVisible();
           await expect(included.getByText(release.releaseNotes, { exact: true })).toBeVisible();
         }
         await expect(review.getByRole("button", { name: "Queue exact update", exact: true })).toBeDisabled();
