@@ -73,7 +73,7 @@ test("route-mocked registry uses push navigation and restores URL-backed state w
 
   await expect(page.getByLabel("Search skills")).toHaveValue("release");
   await expect(page.getByText(/--platform 'generic'/)).toBeVisible();
-  await expect(page.locator(".side-nav-label")).toHaveText(["Library", "Build", "Govern", "Observe", "Account"]);
+  await expect(page.locator(".side-nav-label")).toHaveText(["Skills", "Publish", "Deploy", "People", "Account"]);
   await expect(page.locator(".side-nav").getByRole("link", { name: "Registry" })).toHaveAttribute("aria-current", "page");
 
   await page.getByLabel("Search skills").fill("smoke");
