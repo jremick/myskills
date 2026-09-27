@@ -7,13 +7,18 @@ MySkills beta releases are verification-first and approval-gated. A passing comm
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
 
-## Beta.10 release candidate
+## Beta.10 release record
 
 Skill bundles add Grouped, List and Outline registry views, curated collections,
 reviewed source groups and Library references. The approved release scope is
 GitHub and the hosted application; npm publication is excluded. The CLI archive
 is still built and verified. See [Beta.10 release delivery](BETA10_RELEASE_DELIVERY.md)
 and [Skill bundles](plans/2026-09-27-skill-bundles.md).
+
+The GitHub prerelease and production API/web pair are verified on source
+`084b48e4bce0e8693357f7a4f89d7aabf8ff89f4`. Required CI, the canonical gate,
+tagged workflow, staging acceptance and production checks passed. npm remains
+beta.8; the verified beta.10 CLI archive is attached to the GitHub release.
 
 Migration `0033_skill_bundles.sql` is additive. After bundle references are saved,
 retain a bundle-aware Library reader. Use `MYSKILLS_BUNDLES_ENABLED=false` to stop

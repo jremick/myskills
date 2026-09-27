@@ -5,6 +5,16 @@ Last updated: 2026-09-27
 
 Target release: `v0.1.0-beta.10`.
 
+## Beta.10 Release Record
+
+Skill bundles are published on GitHub and live at myskills.sh. The immutable tag
+and production API/web pair use `084b48e4bce0e8693357f7a4f89d7aabf8ff89f4`.
+Required CI, clean canonical verification, the tagged workflow, staging
+acceptance and production checks passed. Grouped, List and Outline views,
+curated/source relationships and reference-only Library saving are included.
+See [Beta.10 release delivery](BETA10_RELEASE_DELIVERY.md) for evidence, migration
+and rollback limits. npm remains beta.8.
+
 ## Beta.9 Release Record
 
 The optional marketing homepage is published on GitHub and live at myskills.sh.

@@ -4,10 +4,27 @@ Version: 0.1.0-beta.10
 Last updated: 2026-09-27
 
 This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.
-The current beta.9 release is tracked in [Beta.9 Release Delivery](BETA9_RELEASE_DELIVERY.md).
+The current beta.10 release is tracked in [Beta.10 Release Delivery](BETA10_RELEASE_DELIVERY.md).
 The historical operational beta evidence remains in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
 
-## Beta.9 production status
+## Beta.10 production status
+
+On 27 September 2026, production API `a73367e7-94c5-4f31-a6aa-917f8002e5f0`
+and web `77cdfa45-cd97-4564-8f34-f4487edfc499` succeeded from
+`084b48e4bce0e8693357f7a4f89d7aabf8ff89f4` in API-ready-then-web order.
+The additive `0033_skill_bundles.sql` migration ran through normal API startup.
+Direct API, web and same-origin identity, health/readiness, catalog views,
+preserved owner session, private export response and anonymous denial passed.
+The fresh beta.10 CLI passed doctor and anonymous bundle browsing. GitHub assets
+are published with verified checksums; npm remains beta.8.
+
+The existing recovery point passed the 26-hour freshness policy before
+promotion. No new capture or restore is claimed. After bundle references exist,
+retain the beta.10 Library reader: disable bundle discovery/writes with
+`MYSKILLS_BUNDLES_ENABLED=false` and fix forward. Do not downgrade to beta.9 or
+remove bundle tables. See the delivery record for exact evidence and limits.
+
+## Historical beta.9 production status
 
 On 27 September 2026, production API `7ccb9f32-10bf-4efa-8f24-fcad805e6476`
 and web `d8e6fc04-d028-4579-aaaa-c69af7758394` succeeded from
