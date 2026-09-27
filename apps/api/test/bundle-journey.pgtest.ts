@@ -167,6 +167,18 @@ test(
       422,
     );
     const first = (await call("POST", "/v1/bundles", a, input, 201)).bundle;
+    // An owner can still see their public skill after public sharing is disabled.
+    // That exception must not allow publishing it to an authenticated audience.
+    await pool.query("UPDATE instance_settings SET value=jsonb_set(value,'{publicVisibilityEnabled}','false') WHERE key='sharing'");
+    try {
+      assert.equal((await call("GET", `/v1/skills/${slugs[0]}`, a)).skill.visibility, "public");
+      const denied = await call("POST", "/v1/bundles", a, { ...input, visibility: "authenticated" }, 422);
+      assert.equal(denied.error.code, "BUNDLE_MEMBER_NOT_AUTHORIZED");
+      await call("PATCH", `/v1/bundles/${first.id}`, a, { ...input, visibility: "authenticated", expectedRevision: 1 }, 422);
+      assert.equal((await call("GET", `/v1/bundles/${first.id}`, a)).bundle.revision, 1);
+    } finally {
+      await pool.query("UPDATE instance_settings SET value=jsonb_set(value,'{publicVisibilityEnabled}','true') WHERE key='sharing'");
+    }
     const second = (
       await call(
         "POST",

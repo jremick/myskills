@@ -7,6 +7,41 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { runCli, type CliRuntime } from "../src/cli.js";
+
+// Public reads must reach the API without credentials; sources and writes must
+// fail before sending anything. Optional credentials must still be forwarded.
+test("public bundle CLI reads work anonymously while private operations require login", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "bundle-public-cli-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const calls: Array<{ url: string; authorization: string | undefined }> = [];
+  const server = createServer((req, res) => {
+    calls.push({ url: req.url!, authorization: req.headers.authorization });
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ rows: [], bundle: {}, skills: [], bundles: [] }));
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  t.after(() => new Promise<void>((r) => server.close(() => r())));
+  const addr = server.address();
+  assert.ok(addr && typeof addr !== "string");
+  const runtime: CliRuntime = { env: {}, fetch: (i, n) => fetch(i, n), io: { stdout() {}, stderr() {} } };
+  const run = (args: string[]) => runCli(["bundles", ...args, "--api-url", `http://127.0.0.1:${addr.port}`], runtime);
+  const id = "11111111-1111-4111-8111-111111111111";
+  for (const args of [["list"], ["show", id], ["members", id], ["memberships", "planner"]]) {
+    assert.equal(await run(args), 0);
+  }
+  assert.deepEqual(calls.map((c) => c.url), ["/v1/registry/catalog", `/v1/bundles/${id}`, `/v1/bundles/${id}/members`, "/v1/skills/planner/bundles"]);
+  assert.ok(calls.every((c) => c.authorization === undefined));
+  const input = join(root, "reviewed.json");
+  await writeFile(input, "{}");
+  for (const args of [["sources"], ["create", "--input", input], ["edit", id, "--input", input], ["save", id, "--input", input]]) {
+    assert.notEqual(await run(args), 0);
+  }
+  assert.equal(calls.length, 4);
+  runtime.env.MYSKILLS_TOKEN = "fixture-token";
+  assert.equal(await run(["list"]), 0);
+  assert.equal(calls[4]!.authorization, "Bearer fixture-token");
+});
+
 test("bundle CLI browses pages, creates a reviewed set, saves only a reference and reports conflict", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "bundle-cli-"));
   t.after(() => rm(root, { recursive: true, force: true }));

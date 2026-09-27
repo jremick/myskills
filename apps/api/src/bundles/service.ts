@@ -276,7 +276,8 @@ export class BundleService {
             (input.visibility === "public"
               ? skill.visibility === "public"
               : input.visibility === "authenticated"
-                ? ["public", "authenticated"].includes(skill.visibility)
+                ? skill.visibility === "authenticated" ||
+                  (skill.visibility === "public" && sharing.publicVisibilityEnabled)
                 : input.owner.type === "team" &&
                   Boolean(
                     await repo.getSkillVisibleToTeamBySlug(

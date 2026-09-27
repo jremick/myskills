@@ -1808,11 +1808,12 @@ async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles =
   let request;
   try { request = bundles ? bundleRequest(parsed.args[0], parsed.args[1], parsed.options, payload) : libraryCommandRequest(parsed.args[0], parsed.args[1], parsed.options, payload); }
   catch (error) { throw new CliError(error instanceof Error ? error.message : "Invalid library command.", 2, "CLI_ARGUMENTS_INVALID"); }
-  const token = await requireToken(parsed, runtime);
-  if (!bundles && parsed.args[0] === "review-bundle") return await verifiedLibraryReviewBundle(request.pathname, parsed, runtime, token);
+  const publicRead = bundles && ["list", "show", "members", "memberships"].includes(parsed.args[0]);
+  const token = publicRead ? await tokenOption(parsed, runtime) : await requireToken(parsed, runtime);
+  if (!bundles && parsed.args[0] === "review-bundle") return await verifiedLibraryReviewBundle(request.pathname, parsed, runtime, token!);
   const response = await apiJsonRequest(request.pathname, parsed, runtime, {
     method: request.method,
-    headers: { authorization: `Bearer ${token}`, ...(request.payload ? { "content-type": "application/json" } : {}) },
+    headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(request.payload ? { "content-type": "application/json" } : {}) },
     ...(request.payload ? { body: JSON.stringify(request.payload) } : {}),
   });
   runtime.io.stdout(JSON.stringify(response, null, 2));
