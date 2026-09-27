@@ -38,7 +38,7 @@ const user = { id: "user-sam", email: "sam@example.test", name: "Sam Rivera", st
 const docsTeam = { id: "team-docs", name: "Docs guild", slug: "docs-guild", role: "owner", members: [], invitations: [], createdAt: "2026-09-01T00:00:00Z", updatedAt: "2026-09-01T00:00:00Z" };
 
 function publicSkill(slug: string, title: string, summary: string, visibility: Visibility = "public") {
-  return { slug, title, summary, lifecycleStatus: "approved", visibility, latestVersion: "1.2.0", reviewStatus: "approved", securityStatus: "passed", platforms, tags: [] as string[] };
+  return { slug, title, summary, lifecycleStatus: "approved", visibility, latestVersion: "1.2.0" as string | null, reviewStatus: "approved", securityStatus: "passed", platforms, tags: [] as string[] };
 }
 type FixtureSkill = ReturnType<typeof publicSkill>;
 
@@ -74,8 +74,13 @@ function seed() {
   return { skills, bundles };
 }
 
-async function installBundleFixture(page: Page, options: { catalogAvailable?: boolean } = {}) {
+async function installBundleFixture(page: Page, options: { catalogAvailable?: boolean; longDescription?: boolean } = {}) {
   const { skills, bundles } = seed();
+  if (options.longDescription) {
+    const skill = skills.get("code-review-checklist")!;
+    skill.latestVersion = null;
+    skill.summary = "Review a substantial change across its user flows, API contracts, data handling and failure paths. Check that permissions remain enforced and that unavailable releases never become a different version. Follow each affected caller and explain what users will observe. Record concrete evidence for every finding, distinguish blockers from optional improvements, and include a repeatable verification path. Finish with the release decision and the remaining risks so that the next reviewer can understand the change without reconstructing the entire investigation.";
+  }
   const state = {
     writes: [] as Write[],
     catalogRequests: [] as Array<{ q: string; view: string; cursor: string | null }>,
@@ -94,7 +99,7 @@ async function installBundleFixture(page: Page, options: { catalogAvailable?: bo
     held: [] as Array<() => void>,
     savedEntry: null as null | Record<string, unknown>,
   };
-  await page.addInitScript((session) => localStorage.setItem("myskills-app:web-session", JSON.stringify(session)), { expiresAt: "2027-09-26T00:00:00.000Z", user });
+  await page.addInitScript((session) => { if (location.origin !== "null") localStorage.setItem("myskills-app:web-session", JSON.stringify(session)); }, { expiresAt: "2027-09-26T00:00:00.000Z", user });
 
   const visible = () => bundles.filter((bundle) => !state.revoked.has(bundle.id));
   const membershipsOf = (slug: string) => visible().filter((bundle) => bundle.members.includes(slug)).map(({ id, name, kind }) => ({ id, name, kind }));
@@ -435,6 +440,7 @@ test("bundle detail links both ways and saving a reference adopts nothing", asyn
   await expect(backlinks.getByRole("link", { name: /Clear writing kit/ })).toBeVisible();
   await skillPanel.getByRole("combobox", { name: "Release version" }).selectOption("1.1.0");
   await expect(page).toHaveURL(/\/skills\/release-notes-helper\?version=1\.1\.0$/);
+  await skillPanel.locator("summary").filter({ hasText: "Release notes" }).click();
   await expect(skillPanel.getByText("Release notes for Release notes helper 1.1.0.")).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/skills\/release-notes-helper$/);
@@ -443,11 +449,11 @@ test("bundle detail links both ways and saving a reference adopts nothing", asyn
   await expect(page.getByRole("complementary", { name: "Clear writing kit", exact: true })).toBeVisible();
 
   await page.goto("/libraries");
-  await expect(page.getByText("Clear writing kit", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Clear writing kit", exact: true }).click();
   await expect(page.getByRole("link", { name: "Open in registry", exact: true })).toHaveAttribute("href", "/registry?bundle=writing");
   await expect(page.getByText("Saved at revision 7 · now revision 8")).toBeVisible();
-  await expect(page.getByText("Unavailable bundle", { exact: true })).toBeVisible();
-  await expect(page.getByText("You no longer have access to this bundle, or it was removed.")).toBeVisible();
+  await page.getByRole("button", { name: "Unavailable bundle", exact: true }).click();
+  await expect(page.getByText(/^You no longer have access to this bundle, or it was removed\./)).toBeVisible();
   await expect(page.getByRole("button", { name: /adopt/i })).toHaveCount(0);
   await expect(page.getByText("Connect an existing target")).toHaveCount(0);
   expect(api.writes.filter((write) => /adoption|binding/.test(write.path))).toEqual([]);
@@ -699,4 +705,77 @@ test("a server without the bundle catalog keeps the flat registry", async ({ pag
   await expect(page.getByRole("group", { name: "Catalog view" })).toHaveCount(0);
   await expect.poll(() => api.legacySearches).toBeGreaterThan(0);
   expect(api.writes).toEqual([]);
+});
+
+// Follow-up acceptance written before implementation: the previous bundle grid
+// leaves release metadata in a separate column and cancels inspector spacing.
+for (const width of [1440, 390]) test(`skill row refinements preserve descriptions and exact releases at ${width}`, async ({ page }, info) => {
+  const state = await installBundleFixture(page, { longDescription: true });
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto("/registry");
+  await expect(disclosure(page, "Engineering toolkit")).toHaveAttribute("aria-expanded", "true");
+  const row = region(page, "Engineering toolkit").locator(".bundle-member").filter({ has: page.getByRole("link", { name: "Code review checklist", exact: true }) });
+  await expect(row).toBeVisible();
+  await page.screenshot({ path: info.outputPath("registry-grouped.png"), fullPage: true });
+  const name = row.locator(".bundle-skill-name");
+  const version = row.getByText("No release", { exact: true });
+  const titleBox = (await name.boundingBox())!;
+  const versionBox = (await version.boundingBox())!;
+  expect(versionBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+  expect(Math.abs(versionBox.x - titleBox.x)).toBeLessThanOrEqual(2);
+  const more = row.getByRole("button", { name: /Show more/ });
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  const description = page.locator(`[id="${await more.getAttribute("aria-controls")}"]`);
+  const collapsedHeight = (await description.boundingBox())!.height;
+  const lineHeight = await description.evaluate(el => parseFloat(getComputedStyle(el).lineHeight));
+  expect(Math.abs(collapsedHeight - lineHeight * 3)).toBeLessThanOrEqual(2);
+  await more.focus();
+  await page.keyboard.press("Enter");
+  const less = row.getByRole("button", { name: /Show less/ });
+  await expect(less).toHaveAttribute("aria-expanded", "true");
+  await expect.poll(async () => (await description.boundingBox())!.height).toBeGreaterThan(collapsedHeight);
+  await expect(less).toBeFocused();
+  await expect(page).toHaveURL(/\/registry/);
+  await page.keyboard.press("Space");
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  await expect.poll(async () => (await description.boundingBox())!.height).toBe(collapsedHeight);
+  await expect(page.locator(".bundle-member").filter({ has: page.getByRole("link", { name: "SQL style guide", exact: true }) }).getByRole("button", { name: /Show more/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "List", exact: true }).click();
+  const listRow = page.locator(".bundle-list-row").filter({ has: page.getByRole("link", { name: "Code review checklist", exact: true }) });
+  await expect(listRow.getByRole("button", { name: /Show more/ })).toBeVisible();
+  const listName = (await listRow.locator(".bundle-skill-name").boundingBox())!;
+  const listVersion = (await listRow.getByText("No release", { exact: true }).boundingBox())!;
+  expect(listVersion.y).toBeGreaterThanOrEqual(listName.y + listName.height);
+  expect(Math.abs(listVersion.x - listName.x)).toBeLessThanOrEqual(2);
+  await page.screenshot({ path: info.outputPath("registry-list.png"), fullPage: true });
+  await listRow.getByRole("link", { name: "Code review checklist", exact: true }).click();
+  const inspector = page.getByRole("complementary", { name: "Selected skill detail" });
+  await expect(inspector.getByRole("heading", { name: "No default stable release" })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("registry-no-release.png"), fullPage: true });
+  await inspector.getByRole("combobox", { name: "Release version", exact: true }).selectOption("1.1.0");
+  await expect(page.getByText(/myskills export 'code-review-checklist' --version '1.1.0'/)).toBeVisible();
+  expect(state.releaseFetches).toContain("code-review-checklist@1.1.0");
+  expect(state.writes).toEqual([]);
+  await expectNoHorizontalOverflow(page);
+});
+
+for (const width of [1440, 1280, 390, 320]) test(`skill inspector spacing separates the no-release state at ${width}`, async ({ page }, info) => {
+  await installBundleFixture(page, { longDescription: true });
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto("/skills/code-review-checklist");
+  const inspector = page.getByRole("complementary", { name: "Selected skill detail" });
+  await expect(inspector.getByRole("heading", { name: "No default stable release" })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("registry-inspector-spacing.png"), fullPage: true });
+  const header = (await inspector.locator(".registry-inspector-head").boundingBox())!;
+  const notice = (await inspector.locator(".registry-inspector-state").boundingBox())!;
+  const panel = (await inspector.boundingBox())!;
+  expect(header.x - panel.x).toBeGreaterThanOrEqual(15);
+  expect(notice.y - header.y - header.height).toBeGreaterThanOrEqual(16);
+  if (width === 1280) {
+    const row = region(page, "Engineering toolkit").locator(".bundle-member").filter({ has: page.getByRole("link", { name: "Code review checklist", exact: true }) });
+    const name = (await row.locator(".bundle-member-name").boundingBox())!;
+    const description = (await row.locator(".bundle-description").boundingBox())!;
+    expect(description.y).toBeGreaterThanOrEqual(name.y + name.height);
+    expect(description.width).toBeGreaterThanOrEqual((await row.boundingBox())!.width - 22);
+  }
 });

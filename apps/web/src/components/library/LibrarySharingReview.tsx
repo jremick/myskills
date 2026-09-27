@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PackageFileViewer } from "../registry/PackageFileViewer.js";
 import { libraryError, type LibraryClient, type SelfReviewedRelease } from "../../library-api.js";
 
@@ -14,13 +13,13 @@ export function LibrarySharingReview({ api, mfaVerified }: { api: LibraryClient;
     catch (e) { setError(libraryError(e)); }
     finally { setBusy(false); }
   }
-  return <Card><CardHeader><CardTitle>Sharing reviews</CardTitle></CardHeader><CardContent className="library-stack">
-    <p className="control-plane-muted">Owners request instance review before sharing a privately approved import.</p>
-    <Button size="sm" variant="outline" disabled={busy || !mfaVerified} onClick={() => void load()}>Review sharing requests</Button>
-    {error && <p role="alert">{error}</p>}
-    {requests?.length === 0 && <p>No sharing reviews requested.</p>}
+  return <section className="library-admin-panel" aria-labelledby="library-sharing-title">
+    <header><h2 id="library-sharing-title">Sharing requests</h2><p className="library-muted">Owners request instance review before sharing a privately approved import.</p></header>
+    <div className="library-actions"><Button size="sm" variant="outline" disabled={busy || !mfaVerified} onClick={() => void load()}>Review sharing requests</Button></div>
+    {error && <p role="alert" className="library-alert">{error}</p>}
+    {requests?.length === 0 && <p className="library-muted">No sharing reviews requested.</p>}
     {requests?.map((request) => <SharingReview key={`${request.submissionId}:${request.artifactSha256}`} api={api} request={request} onDone={load} />)}
-  </CardContent></Card>;
+  </section>;
 }
 
 function SharingReview({ api, request, onDone }: { api: LibraryClient; request: SelfReviewedRelease; onDone: () => Promise<void> }) {
@@ -28,18 +27,18 @@ function SharingReview({ api, request, onDone }: { api: LibraryClient; request: 
   const [attested, setAttested] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  return <article className="library-stack library-inset">
-    <h3>{request.slug}@{request.version}</h3>
+  return <article className="library-candidate">
+    <header className="library-candidate-head"><h3>{request.slug}@{request.version}</h3></header>
     <code className="library-digest">{request.artifactSha256}</code>
     <PackageFileViewer resourceKey={request.submissionId} label="Inspect private artifact" loadBundle={async () => {
       const bundle = await api.reviewBundle(request.submissionId, request.artifactSha256);
       setInspected(true); return bundle;
     }} />
-    <label className="library-checkbox"><input type="checkbox" checked={attested} disabled={!inspected || busy} onChange={(event) => setAttested(event.target.checked)} />I reviewed this artifact for shared use</label>
-    <Button disabled={!inspected || !attested || busy} onClick={() => {
+    <label className="library-check"><input type="checkbox" checked={attested} disabled={!inspected || busy} onChange={(event) => setAttested(event.target.checked)} />I reviewed this artifact for shared use</label>
+    <div className="library-form-actions"><Button size="sm" disabled={!inspected || !attested || busy} onClick={() => {
       setBusy(true); setError(null);
       void api.elevate(request.submissionId, request.artifactSha256).then(onDone).catch((e) => setError(libraryError(e))).finally(() => setBusy(false));
-    }}>Approve artifact for sharing</Button>
-    {error && <p role="alert">{error}</p>}
+    }}>Approve artifact for sharing</Button></div>
+    {error && <p role="alert" className="library-alert">{error}</p>}
   </article>;
 }

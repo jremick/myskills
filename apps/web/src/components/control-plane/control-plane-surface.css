@@ -1,0 +1,308 @@
+/* Control-plane surfaces: Connected targets, Skill architectures and the
+   System update centre. They follow the Registry workspace: a quiet page head,
+   then one surface with a list and an inspector. The split follows the
+   surface's measured width (data-layout), not the viewport.
+   Every rule is scoped to .app-shell main.cp-page, which only the three
+   route <main> elements carry, so older app-wide rules with shared class
+   names cannot bleed in and these rules cannot leak out. */
+.app-shell main.cp-page {
+  --cp-shadow: 0 1px 2px rgba(17, 26, 38, 0.05), 0 12px 28px -14px rgba(17, 26, 38, 0.2);
+  --cp-mono: 12.5px/20px var(--font-mono);
+  display: grid;
+  align-content: start;
+  gap: 24px;
+  width: 100%;
+  min-width: 0;
+  max-width: 1420px;
+  margin: 0 auto;
+  padding: 24px 24px 40px;
+}
+.app-shell main.cp-page [hidden] { display: none !important; }
+.app-shell main.cp-page code { font: var(--cp-mono); overflow-wrap: anywhere; }
+.app-shell main.cp-page [data-slot="button"][data-variant="outline"] { border-color: var(--line); color: var(--ink-soft); background: var(--surface); box-shadow: none; }
+.app-shell main.cp-page [data-slot="button"][data-variant="outline"]:hover { border-color: var(--teal); color: var(--teal-dark); background: var(--teal-soft); }
+
+/* Page head: the h1 stays at 20px; actions sit on the right. */
+.app-shell main.cp-page .cp-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+.app-shell main.cp-page .cp-page-head > div:first-child { min-width: 0; }
+.app-shell main.cp-page .cp-page-head h1 { margin: 0; color: var(--ink); font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: 0; }
+.app-shell main.cp-page .cp-page-head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; line-height: 18px; }
+.app-shell main.cp-page .cp-page-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* Surface, list and inspector */
+.app-shell main.cp-page .cp-surface {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--cp-shadow);
+}
+.app-shell main.cp-page .cp-body { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.app-shell main.cp-page:is(.target-workspace, .update-centre-workspace) .cp-surface[data-layout="split"]:not([data-empty]) .cp-body { grid-template-columns: clamp(260px, 32%, 340px) minmax(0, 1fr); }
+.app-shell main.architecture-workspace.cp-page .cp-surface[data-layout="split"] .cp-body { grid-template-columns: clamp(240px, 26%, 300px) minmax(0, 1fr); }
+.app-shell main.cp-page .cp-surface[data-layout="split"]:not([data-empty]) .cp-list { border-right: 1px solid var(--line-soft); }
+.app-shell main.cp-page .cp-surface[data-empty] .cp-list { border-bottom: 1px solid var(--line-soft); }
+
+.app-shell main.cp-page .cp-list { display: grid; align-content: start; gap: 4px; min-width: 0; padding: 12px 12px 16px; }
+.app-shell main.cp-page .cp-list-label { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 12px 4px; }
+.app-shell main.cp-page .cp-list-label h2 { margin: 0; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.app-shell main.cp-page .cp-list-label span { color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.app-shell main.cp-page .cp-rows { display: grid; gap: 2px; }
+.app-shell main.cp-page .cp-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.app-shell main.cp-page .cp-row:hover { background: var(--surface-soft); }
+.app-shell main.cp-page .cp-row[aria-pressed="true"] { background: var(--teal-soft); box-shadow: inset 2px 0 0 var(--teal); }
+.app-shell main.cp-page .cp-surface[data-layout="stack"] .cp-row[aria-pressed="true"] { background: none; box-shadow: none; }
+.app-shell main.cp-page .cp-row:focus-visible { outline: 2px solid var(--ring); outline-offset: -3px; }
+.app-shell main.cp-page .cp-row-text { display: grid; gap: 2px; min-width: 0; }
+.app-shell main.cp-page .cp-row-title { font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.app-shell main.cp-page .cp-row-meta { color: var(--muted); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.app-shell main.cp-page .cp-row-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.app-shell main.cp-page .cp-list-state { display: grid; justify-items: start; gap: 8px; padding: 12px; }
+.app-shell main.cp-page .cp-list-state strong { color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 600; }
+.app-shell main.cp-page .cp-list-state p { margin: 0; color: var(--ink-soft); font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.app-shell main.cp-page .cp-list-state[role="alert"] strong { color: var(--danger); }
+
+.app-shell main.cp-page .cp-inspector { display: grid; align-content: start; gap: 20px; min-width: 0; padding: 20px 24px 24px; }
+.app-shell main.cp-page .cp-panel { display: grid; align-content: start; gap: 20px; min-width: 0; }
+.app-shell main.cp-page .cp-panel-bar { display: flex; justify-content: flex-end; }
+.app-shell main.cp-page .cp-back {
+  justify-self: start;
+  min-height: 44px;
+  margin: -10px 0 -4px -12px;
+  padding: 0 12px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 600;
+}
+.app-shell main.cp-page .cp-inspector-empty { display: grid; place-items: center; min-height: 240px; margin: 0; color: var(--muted); font-size: 13px; line-height: 18px; text-align: center; }
+.app-shell main.cp-page .cp-inspector-state {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+.app-shell main.cp-page .cp-inspector-state > svg { margin-top: 2px; color: var(--danger); }
+.app-shell main.cp-page .cp-inspector-state strong { display: block; color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.app-shell main.cp-page .cp-inspector-state p { margin: 4px 0 12px; color: var(--ink-soft); font-size: 14px; line-height: 20px; }
+
+/* Detail content */
+.app-shell main.cp-page .cp-detail,
+.app-shell main.cp-page .cp-detail-body { display: grid; align-content: start; gap: 20px; min-width: 0; }
+.app-shell main.cp-page .cp-detail-head { display: grid; gap: 12px; min-width: 0; }
+.app-shell main.cp-page .cp-title-block { display: grid; gap: 4px; min-width: 0; }
+.app-shell main.cp-page .cp-title-block h2 { margin: 0; color: var(--ink); font-size: 18px; line-height: 26px; font-weight: 600; letter-spacing: 0; overflow-wrap: anywhere; }
+.app-shell main.cp-page :is(.cp-title-block h2, .cp-review h3, .cp-tray h2, .architecture-draft-section):focus { outline: none; }
+.app-shell main.cp-page :is(.cp-title-block h2, .cp-review h3, .cp-tray h2, .architecture-draft-section):focus-visible { border-radius: 4px; outline: 2px solid var(--ring); outline-offset: 2px; }
+.app-shell main.cp-page .cp-meta { display: flex; flex-wrap: wrap; gap: 0 8px; margin: 0; color: var(--muted); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.app-shell main.cp-page .cp-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.app-shell main.cp-page .cp-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  color: var(--ink-soft);
+  background: var(--surface-sunken);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.app-shell main.cp-page .cp-chip[data-tone="teal"] { color: var(--teal-dark); background: var(--teal-soft); }
+.app-shell main.cp-page .cp-chip[data-tone="amber"] { color: var(--warning); background: var(--warning-soft); }
+.app-shell main.cp-page .cp-chip[data-tone="danger"] { color: var(--danger); background: var(--danger-soft); }
+.app-shell main.cp-page .cp-section { display: grid; align-content: start; gap: 12px; min-width: 0; padding-top: 20px; border-top: 1px solid var(--line-soft); }
+.app-shell main.cp-page .cp-section:empty { display: none; }
+.app-shell main.cp-page .cp-section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.app-shell main.cp-page :is(.cp-section, .cp-summary) h3 { margin: 0; color: var(--ink); font-size: 15px; line-height: 22px; font-weight: 600; }
+.app-shell main.cp-page .cp-muted { margin: 0; color: var(--muted); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.app-shell main.cp-page .cp-mono { color: var(--ink-soft); font: var(--cp-mono); overflow-wrap: anywhere; }
+.app-shell main.cp-page .cp-footnote { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: var(--muted); font-size: 12px; line-height: 18px; }
+.app-shell main.cp-page .cp-footnote > svg { flex: none; margin-top: 2px; }
+.app-shell main.cp-page .cp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.app-shell main.cp-page .cp-facts { display: grid; gap: 8px; margin: 0; }
+.app-shell main.cp-page .cp-facts > div { display: grid; grid-template-columns: minmax(0, 136px) minmax(0, 1fr); align-items: baseline; gap: 12px; }
+.app-shell main.cp-page .cp-facts dt { color: var(--muted); font-size: 13px; line-height: 20px; }
+.app-shell main.cp-page .cp-facts dd { min-width: 0; margin: 0; color: var(--ink); font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.app-shell main.cp-page .cp-facts dd.cp-mono { color: var(--ink-soft); font: var(--cp-mono); }
+.app-shell main.cp-page .cp-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink-soft);
+  background: var(--surface-soft);
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+.app-shell main.cp-page .cp-notice[data-tone="danger"] { border-color: rgba(180, 35, 24, 0.3); color: var(--danger); background: var(--danger-soft); }
+.app-shell main.cp-page .cp-surface-alert { margin: 12px 12px 0; padding: 10px 12px; border: 1px solid rgba(180, 35, 24, 0.3); border-radius: 8px; color: var(--danger); background: var(--danger-soft); font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
+.app-shell main.cp-page .cp-danger-button[data-variant="outline"] { border-color: rgba(180, 35, 24, 0.35); color: var(--danger); background: var(--surface); }
+.app-shell main.cp-page .cp-danger-button[data-variant="outline"]:hover { border-color: var(--danger); background: var(--danger-soft); }
+
+/* Disclosures use native <details>; closed content stays mounted. */
+.app-shell main.cp-page :is(.cp-details, .target-advanced-settings) { display: grid; min-width: 0; }
+.app-shell main.cp-page :is(.cp-details, .target-advanced-settings) > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 36px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+.app-shell main.cp-page :is(.cp-details, .target-advanced-settings) > summary::-webkit-details-marker { display: none; }
+.app-shell main.cp-page :is(.cp-details, .target-advanced-settings) > summary::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin: 0 2px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 120ms ease;
+}
+.app-shell main.cp-page :is(.cp-details, .target-advanced-settings)[open] > summary::before { transform: rotate(45deg); }
+.app-shell main.cp-page :is(.cp-details, .target-advanced-settings) > summary:hover { color: var(--ink); }
+.app-shell main.cp-page .cp-details-body { display: grid; gap: 12px; min-width: 0; padding: 4px 0 4px 16px; }
+.app-shell main.cp-page .target-advanced-settings[open] > :not(summary) { margin-top: 8px; }
+
+/* Nested cards from shared panels become plain bands inside the inspector. */
+.app-shell main.cp-page .cp-inspector [data-slot="card"] { gap: 12px; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; overflow: visible; }
+.app-shell main.cp-page .cp-inspector [data-slot="card"] + [data-slot="card"] { padding-top: 20px; border-top: 1px solid var(--line-soft); }
+.app-shell main.cp-page .cp-inspector :is([data-slot="card-header"], [data-slot="card-content"]) { padding-right: 0; padding-left: 0; border-bottom: 0; }
+
+/* Connected targets */
+.app-shell main.target-workspace.cp-page .target-register { display: grid; gap: 16px; min-width: 0; }
+.app-shell main.target-workspace.cp-page .cp-summary { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--surface-soft); }
+.app-shell main.target-workspace.cp-page .target-observation-list { border-color: var(--line-soft); background: var(--surface); }
+.app-shell main.target-workspace.cp-page .target-observation-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+.app-shell main.target-workspace.cp-page .target-health-form { flex-wrap: wrap; }
+.app-shell main.target-workspace.cp-page .codex-workspace-guide { display: grid; gap: 12px; min-width: 0; color: var(--ink-soft); font-size: 14px; line-height: 22px; }
+.app-shell main.target-workspace.cp-page .codex-workspace-guide a { color: var(--teal-dark); font-weight: 600; text-underline-offset: 2px; }
+.app-shell main.target-workspace.cp-page .codex-workspace-guide ol { display: grid; gap: 16px; margin: 0; padding-left: 20px; }
+.app-shell main.target-workspace.cp-page .codex-workspace-guide li + li { margin-top: 0; }
+.app-shell main.target-workspace.cp-page .codex-workspace-guide pre { margin: 8px 0 0; border: 1px solid var(--line); background: #fafbfc; }
+.app-shell main.target-workspace.cp-page .codex-workspace-guide pre code { white-space: pre; overflow-wrap: normal; }
+
+/* Skill architectures */
+.app-shell main.architecture-workspace.cp-page .architecture-create-panel { display: grid; gap: 16px; min-width: 0; }
+.app-shell main.architecture-workspace.cp-page .architecture-create-form { max-width: 560px; }
+.app-shell main.architecture-workspace.cp-page .architecture-create-button { justify-self: auto; margin-top: 0; }
+.app-shell main.architecture-workspace.cp-page .cp-pattern-list { display: grid; gap: 12px; margin: 0; }
+.app-shell main.architecture-workspace.cp-page .cp-pattern-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.app-shell main.architecture-workspace.cp-page .cp-pattern-list h3 { margin: 0; color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 600; }
+.app-shell main.architecture-workspace.cp-page .cp-pattern-list p { margin: 2px 0 0; color: var(--ink-soft); font-size: 13px; line-height: 18px; }
+.app-shell main.architecture-workspace.cp-page .architecture-access-note { font-weight: 400; }
+.app-shell main.architecture-workspace.cp-page .architecture-draft-section { outline-offset: 4px; }
+.app-shell main.architecture-workspace.cp-page .architecture-history-disclosure .architecture-history-heading > div { display: none; }
+.app-shell main.architecture-workspace.cp-page :is(.architecture-editor-card, .architecture-history-panel) { padding: 0; border: 0; background: none; box-shadow: none; }
+
+/* System update centre */
+.app-shell main.update-centre-workspace.cp-page .cp-tray { display: grid; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--line-soft); border-radius: 12px 12px 0 0; background: var(--teal-soft); }
+.app-shell main.update-centre-workspace.cp-page .cp-tray-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.app-shell main.update-centre-workspace.cp-page .cp-tray h2 { margin: 0; color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 600; }
+.app-shell main.update-centre-workspace.cp-page .cp-tray-list { display: grid; gap: 4px; margin: 0; padding-left: 18px; color: var(--ink-soft); font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
+.app-shell main.update-centre-workspace.cp-page .target-update-policy-summary { margin: 0; font-size: 13px; }
+.app-shell main.update-centre-workspace.cp-page .target-update-list { display: grid; }
+.app-shell main.update-centre-workspace.cp-page :is(.target-update-row, .target-operation-row) {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.app-shell main.update-centre-workspace.cp-page .target-operation-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+.app-shell main.update-centre-workspace.cp-page :is(.target-update-row label, .target-operation-row > span:first-child) { align-items: flex-start; }
+.app-shell main.update-centre-workspace.cp-page .target-update-row label > span { display: grid; gap: 3px; min-width: 0; }
+.app-shell main.update-centre-workspace.cp-page .target-update-row input[type="checkbox"] { flex: none; width: 16px; height: 16px; margin-top: 2px; accent-color: var(--teal); }
+.app-shell main.update-centre-workspace.cp-page :is(.target-update-row, .target-operation-row) small { color: var(--muted); font-size: 13px; line-height: 18px; }
+/* Older .target-operation-row > span rules stack their children; keep actions in a row. */
+.app-shell main.update-centre-workspace.cp-page .cp-row-actions { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.app-shell main.update-centre-workspace.cp-page .target-operation-row > .cp-chip { flex-direction: row; }
+.app-shell main.update-centre-workspace.cp-page .cp-surface[data-layout="stack"] .target-update-row { grid-template-columns: minmax(0, 1fr); }
+.app-shell main.update-centre-workspace.cp-page .cp-surface[data-layout="stack"] .target-update-row > .cp-row-actions { justify-content: flex-start; padding-left: 26px; }
+.app-shell main.update-centre-workspace.cp-page .cp-surface[data-layout="stack"] .target-operation-row { grid-template-columns: minmax(0, 1fr) auto; }
+.app-shell main.update-centre-workspace.cp-page .cp-surface[data-layout="stack"] .target-operation-row > .cp-row-actions { grid-column: 1 / -1; justify-content: flex-start; }
+.app-shell main.update-centre-workspace.cp-page .cp-row-actions:empty { display: none; }
+.app-shell main.update-centre-workspace.cp-page .cp-review { display: grid; gap: 12px; margin: 0 0 12px; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); }
+.app-shell main.update-centre-workspace.cp-page .cp-review h3 { margin: 0; color: var(--ink); font-size: 15px; line-height: 22px; font-weight: 600; overflow-wrap: anywhere; }
+.app-shell main.update-centre-workspace.cp-page .release-review-list article { padding: 12px 0; border-top: 1px solid var(--line-soft); }
+.app-shell main.update-centre-workspace.cp-page .release-review-list article p { margin: 6px 0; color: var(--ink-soft); font-size: 14px; line-height: 20px; }
+.app-shell main.update-centre-workspace.cp-page .target-operation-history { margin-top: 0; }
+.app-shell main.update-centre-workspace.cp-page .cp-band { display: grid; min-width: 0; }
+.app-shell main.update-centre-workspace.cp-page .cp-band + .cp-band { margin-top: 12px; }
+.app-shell main.update-centre-workspace.cp-page .cp-band h3 { margin: 0 0 4px; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+
+/* Loading */
+.app-shell main.cp-page .cp-loading { display: grid; gap: 6px; padding: 4px 0; }
+.app-shell main.cp-page .cp-loading span:not(.sr-only) { display: block; height: 44px; border-radius: 8px; background: var(--surface-sunken); }
+@keyframes cp-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: no-preference) {
+  .app-shell main.cp-page .cp-loading span:not(.sr-only) { animation: cp-pulse 1.4s ease-in-out infinite; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell main.cp-page :is(.cp-details, .target-advanced-settings) > summary::before { transition: none; }
+}
+
+@media (max-width: 680px) {
+  .app-shell main.cp-page { gap: 16px; padding: 16px 16px 32px; }
+  .app-shell main.cp-page .cp-list { padding: 8px; }
+  .app-shell main.cp-page .cp-inspector { padding: 16px 16px 20px; }
+  .app-shell main.cp-page .cp-facts > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .app-shell main.update-centre-workspace.cp-page .cp-tray { padding: 12px 16px; }
+  .app-shell main.cp-page .target-health-form { align-items: stretch; flex-direction: column; }
+}
+
+@media (pointer: coarse), (any-pointer: coarse), (max-width: 680px) {
+  .app-shell main.cp-page .cp-row { min-height: 64px; }
+  .app-shell main.cp-page :is(.cp-details, .target-advanced-settings) > summary { min-height: 44px; }
+}
+
+@media (forced-colors: active) {
+  .app-shell main.cp-page .cp-row[aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
+  .app-shell main.cp-page .cp-chip { border: 1px solid CanvasText; }
+}
+
+.app-shell main.cp-page .architecture-diagram-kind { font-size: 11px; }
+.app-shell main.cp-page .architecture-diagram-shell:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
+
+.app-shell main.cp-page :is(.architecture-preview-stack, .architecture-panel-section) { min-width: 0; grid-template-columns: minmax(0, 1fr); }

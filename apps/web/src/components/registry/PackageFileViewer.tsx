@@ -5,10 +5,12 @@ import { safeErrorMessage, type SkillPackageBundle } from "../../api.js";
 const MAX_VISIBLE_FILES = 1_000;
 const MAX_VISIBLE_CHARACTERS = 128_000;
 
-export function PackageFileViewer({ resourceKey, loadBundle, label = "Inspect package files" }: {
+export function PackageFileViewer({ resourceKey, loadBundle, label = "Inspect package files", autoInspect = false }: {
   resourceKey: string;
   loadBundle: () => Promise<SkillPackageBundle>;
   label?: string;
+  /** Load on mount and on each resourceKey change; the caller owns the trigger. */
+  autoInspect?: boolean;
 }) {
   const [bundle, setBundle] = useState<SkillPackageBundle | null>(null);
   const [selectedPath, setSelectedPath] = useState("");
@@ -21,6 +23,7 @@ export function PackageFileViewer({ resourceKey, loadBundle, label = "Inspect pa
     setSelectedPath("");
     setState("idle");
     setMessage(null);
+    if (autoInspect) void inspect();
     return () => { epoch.current += 1; };
   }, [resourceKey]);
 
@@ -51,7 +54,8 @@ export function PackageFileViewer({ resourceKey, loadBundle, label = "Inspect pa
   return <section className="package-file-viewer control-plane-section" aria-label="Package files">
     <h2>Package contents</h2>
     <p className="control-plane-muted">Read the instructions, prerequisites, examples, and supporting files before using this package. Files are displayed as text; nothing is executed.</p>
-    {state !== "ready" && <Button type="button" size="sm" variant="outline" disabled={state === "loading"} onClick={() => void inspect()}>{state === "loading" ? "Loading package files…" : label}</Button>}
+    {state !== "ready" && !autoInspect && <Button type="button" size="sm" variant="outline" disabled={state === "loading"} onClick={() => void inspect()}>{state === "loading" ? "Loading package files…" : label}</Button>}
+    {autoInspect && state === "loading" && <p className="control-plane-muted" role="status">Loading package files…</p>}
     {message && <p role="alert">{message}</p>}
     {state === "ready" && bundle && <>
       {bundle.files.length === 0 ? <p role="status">This package contains no readable files.</p> : <>

@@ -1,49 +1,35 @@
-import {
-  ChevronRight,
-  GitBranch,
-  Layers3,
-} from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { patternLabel, architectureRevisionLabel } from "./architecture-dashboard-helpers.js";
 import type { ArchitectureSummary } from "../../api.js";
 
-export function ArchitectureList({ architectures, selectedId, onSelect }: { architectures: ArchitectureSummary[]; selectedId: string | null; onSelect: (id: string) => void }) {
+export function ArchitectureList({ architectures, selectedId, onSelect, hidden = false }: { architectures: ArchitectureSummary[]; selectedId: string | null; onSelect: (id: string) => void; hidden?: boolean }) {
   return (
-    <Card className="architecture-list-card" aria-label="Saved architectures">
-      <CardHeader className="architecture-card-heading">
-        <div className="architecture-card-heading-icon"><Layers3 size={17} aria-hidden="true" /></div>
-        <div>
-          <CardTitle>Your architectures</CardTitle>
-          <CardDescription>{architectures.length} saved {architectures.length === 1 ? "architecture" : "architectures"}</CardDescription>
+    <section className="cp-list" aria-labelledby="architecture-list-heading" hidden={hidden}>
+      <div className="cp-list-label">
+        <h2 id="architecture-list-heading">Saved architectures</h2>
+        <span aria-live="polite">{architectures.length}</span>
+      </div>
+      {architectures.length === 0 ? (
+        <div className="cp-list-state">
+          <strong>No architectures yet.</strong>
+          <p>Use New architecture to create a draft, then inspect its compiled router and leaf graph.</p>
         </div>
-      </CardHeader>
-      <CardContent className="architecture-list-content">
-        {architectures.length === 0 ? (
-          <div className="architecture-empty-list">
-            <GitBranch size={22} aria-hidden="true" />
-            <strong>No architectures yet.</strong>
-            <span>Create one to inspect a compiled router and leaf graph.</span>
-          </div>
-        ) : (
-          <div className="architecture-list" role="list" aria-label="Saved architectures">
-            {architectures.map((architecture) => {
-              const selected = architecture.id === selectedId;
-              return (
-                <div key={architecture.id} role="listitem">
-                  <button aria-current={selected ? "true" : undefined} aria-pressed={selected} className={selected ? "architecture-list-row selected" : "architecture-list-row"} type="button" onClick={() => onSelect(architecture.id)}>
-                    <span className="architecture-list-icon"><GitBranch size={16} aria-hidden="true" /></span>
-                    <span className="architecture-list-main">
-                      <strong>{architecture.name}</strong>
-                      <small>{patternLabel(architecture.patternId)} · {architectureRevisionLabel(architecture)}</small>
-                    </span>
-                    <ChevronRight size={16} aria-hidden="true" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      ) : (
+        <div className="cp-rows" role="list" aria-label="Saved architectures">
+          {architectures.map((architecture) => {
+            const selected = architecture.id === selectedId;
+            return (
+              <div key={architecture.id} role="listitem">
+                <button aria-current={selected ? "true" : undefined} aria-pressed={selected} className="cp-row" data-architecture-id={architecture.id} type="button" onClick={() => onSelect(architecture.id)}>
+                  <span className="cp-row-text">
+                    <span className="cp-row-title">{architecture.name}</span>
+                    <span className="cp-row-meta">{patternLabel(architecture.patternId)} · {architectureRevisionLabel(architecture)}</span>
+                  </span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }

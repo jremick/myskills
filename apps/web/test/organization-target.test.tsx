@@ -44,9 +44,9 @@ test("organization management loads a scoped detail and keeps member/policy acti
   const view = render(<OrganizationsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
 
   await view.findByRole("heading", { name: "Acme Skills" });
-  await view.findByText(/owner@example\.com/);
   assert.equal(view.getByText("Organization is a sharing boundary. Personal, work, and team labels do not grant access.").textContent?.includes("labels do not grant access"), true);
 
+  fireEvent.click(view.getByRole("button", { name: "Invite member" }));
   fireEvent.input(view.getByLabelText("Organization member email"), { target: { value: "member@example.com" } });
   fireEvent.click(view.getByRole("button", { name: "Invite" }));
   await waitFor(() => assert.deepEqual(calls, ["invite:member@example.com"]));
@@ -56,6 +56,7 @@ test("organization management loads a scoped detail and keeps member/policy acti
   fireEvent.click(await view.findByRole("button", { name: "Confirm role change" }));
   await waitFor(() => assert.equal(calls.includes("role:user-2:admin"), true));
 
+  fireEvent.click(view.getByRole("button", { name: "Change policy" }));
   fireEvent.click(view.getByRole("button", { name: "Review append and activate" }));
   fireEvent.click(await view.findByRole("button", { name: "Confirm append and activate" }));
   await waitFor(() => assert.equal(calls.includes("append-policy"), true));
@@ -141,6 +142,7 @@ test("organization policy controls stay disabled while a revision is being saved
   } as unknown as RegistryClient;
   const view = render(<OrganizationsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
   await view.findByRole("heading", { name: "Acme Skills" });
+  fireEvent.click(view.getByRole("button", { name: "Change policy" }));
   fireEvent.click(view.getByRole("button", { name: "Review append and activate" }));
   fireEvent.click(await view.findByRole("button", { name: "Confirm append and activate" }));
   await waitFor(() => assert.ok(finishSave));
@@ -195,6 +197,10 @@ test("target registry guides the owner and current architecture context and neve
   await view.findByText("1 skills · 0 config findings · prompt detected: no");
   assert.equal(document.body.textContent?.includes("secret-store-token"), false);
 
+  fireEvent.click(view.getByRole("button", { name: "Setup guide" }));
+  await view.findByRole("heading", { name: "Connect a Codex workspace" });
+  assert.match(view.container.textContent ?? "", /myskills codex enroll/);
+  fireEvent.click(view.getByRole("button", { name: "Register read-only target" }));
   fireEvent.input(view.getByLabelText("Target name"), { target: { value: "Work Codex" } });
   const architecture = await view.findByLabelText("Target architecture");
   await waitFor(() => assert.equal((architecture as HTMLSelectElement).value, "architecture-1"));
@@ -217,8 +223,6 @@ test("target registry guides the owner and current architecture context and neve
   assert.deepEqual(registered[0]?.capabilities, { "inventory.read": true, "health.read": true, "plan.read": true });
   assert.deepEqual(Array.from((view.getByLabelText("Target adapter") as HTMLSelectElement).options).map((option) => option.value), ["codex-readonly"]);
   assert.equal(view.queryByRole("checkbox", { name: "Apply" }), null);
-  await view.findByRole("heading", { name: "Connect a Codex workspace" });
-  assert.match(view.container.textContent ?? "", /myskills codex enroll/);
   assert.equal(document.body.textContent?.includes("secret-store-token"), false);
 
   // Registration replaces the detail controls; act on the refreshed target.
@@ -226,7 +230,8 @@ test("target registry guides the owner and current architecture context and neve
   await view.findByText("1 skills · 0 config findings · prompt detected: no");
   fireEvent.click(view.getByRole("button", { name: "Grant consent" }));
   await waitFor(() => assert.deepEqual(consent, ["grant"]));
-  await view.findByText("consent: granted");
+  await view.findAllByText("Consent granted");
+  fireEvent.click(view.getByText("Report health manually"));
   await view.findByRole("button", { name: "Update health" });
   fireEvent.change(view.getByLabelText("Target health status"), { target: { value: "healthy" } });
   fireEvent.click(view.getByRole("button", { name: "Update health" }));
@@ -248,6 +253,7 @@ test("target registration prefers the selected user's personal context regardles
 
   const view = render(<ArchitectureTargetsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
   await view.findByText("No connected targets");
+  fireEvent.click(view.getByRole("button", { name: "Register read-only target" }));
   await waitFor(() => assert.equal((view.getByLabelText("Target profile") as HTMLSelectElement).value, "personal"));
   await waitFor(() => assert.equal((view.getByLabelText("Target logical environment") as HTMLSelectElement).value, "personal-laptop"));
   assert.equal(view.getByText(/User-owned targets prefer a matching user profile and personal environment/).textContent?.includes("explicit selections remain authoritative"), true);
@@ -277,6 +283,7 @@ test("target registration prefers a team profile and team environment for a team
 
   const view = render(<ArchitectureTargetsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
   await view.findByText("No connected targets");
+  fireEvent.click(view.getByRole("button", { name: "Register read-only target" }));
   await waitFor(() => assert.equal((view.getByLabelText("Authorized target owner") as HTMLSelectElement).value, "team:team-1"));
   await waitFor(() => assert.equal((view.getByLabelText("Target profile") as HTMLSelectElement).value, "team"));
   await waitFor(() => assert.equal((view.getByLabelText("Target logical environment") as HTMLSelectElement).value, "team-runtime"));
@@ -307,6 +314,7 @@ test("target registration uses stable name and ID fallback when the preferred co
 
   const view = render(<ArchitectureTargetsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
   await view.findByText("No connected targets");
+  fireEvent.click(view.getByRole("button", { name: "Register read-only target" }));
   await waitFor(() => assert.equal((view.getByLabelText("Target profile") as HTMLSelectElement).value, "fallback-profile"));
   await waitFor(() => assert.equal((view.getByLabelText("Target logical environment") as HTMLSelectElement).value, "a-work"));
   const summary = view.getByRole("region", { name: "Binding and consent summary" });

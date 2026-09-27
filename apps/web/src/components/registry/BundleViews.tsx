@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import type { BundleMember, BundleSummary, PublicSkill, RegistryCatalogRow } from "@myskills-app/core";
 import { Button } from "@/components/ui/button";
@@ -41,20 +41,50 @@ function MemberLine({ member, context, props }: { member: { skill: PublicSkill; 
   const { skill } = member;
   return (
     <div className="bundle-member">
-      <SkillLink
-        current={props.selection?.kind === "skill" && props.selection.slug === skill.slug}
-        href={props.skillHref(skill.slug)}
-        id={domId("skill", context, skill.slug)}
-        onOpen={(from) => props.onOpenSkill(skill.slug, from)}
-        query={props.query}
-        skill={skill}
-      />
-      <span className="bundle-member-summary">
-        <Highlight text={skill.summary} query={props.query} />
+      <div className="bundle-member-name">
+        <SkillLink
+          current={props.selection?.kind === "skill" && props.selection.slug === skill.slug}
+          href={props.skillHref(skill.slug)}
+          id={domId("skill", context, skill.slug)}
+          onOpen={(from) => props.onOpenSkill(skill.slug, from)}
+          query={props.query}
+          skill={skill}
+        />
+        <span className="bundle-version">{skill.latestVersion ?? "No release"}</span>
+      </div>
+      <div className="bundle-member-summary">
+        <SkillSummary skill={skill} query={props.query} />
         {member.memberships && <AlsoIn memberships={member.memberships} exclude={context} />}
-      </span>
-      <span className="bundle-version">{skill.latestVersion ?? "No release"}</span>
+      </div>
     </div>
+  );
+}
+
+function SkillSummary({ skill, query }: { skill: PublicSkill; query: string }) {
+  const id = useId();
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    let active = true;
+    const measure = () => { if (active) setOverflows(element.scrollHeight > parseFloat(window.getComputedStyle(element).lineHeight) * 3 + 1); };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    void document.fonts?.ready.then(measure);
+    return () => { active = false; observer.disconnect(); };
+  }, [skill.summary, query]);
+  return (
+    <>
+      <p className="bundle-description" data-expanded={expanded} id={id} ref={ref}><Highlight text={skill.summary} query={query} /></p>
+      {(overflows || expanded) && (
+        <button aria-controls={id} aria-expanded={expanded} aria-label={`${expanded ? "Show less" : "Show more"} description for ${skill.title}`} className="bundle-description-toggle" onClick={() => setExpanded(value => !value)} type="button">
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
+    </>
   );
 }
 
@@ -168,7 +198,7 @@ export function ListView(props: CatalogViewProps) {
   const rows = props.rows.filter((row): row is Extract<RegistryCatalogRow, { kind: "skill" }> => row.kind === "skill");
   return (
     <div className="bundle-list-view">
-      <div aria-hidden="true" className="bundle-list-head"><span>Skill</span><span>What it does</span><span>Bundles</span><span>Version</span></div>
+      <div aria-hidden="true" className="bundle-list-head"><span>Skill</span><span>What it does</span><span>Bundles</span></div>
       <ul aria-label="Skills" className="bundle-list">
         {rows.map((row) => (
           <li className="bundle-list-row" key={row.skill.slug}>
@@ -181,12 +211,13 @@ export function ListView(props: CatalogViewProps) {
                 query={props.query}
                 skill={row.skill}
               />
+              <span className="bundle-version">{row.skill.latestVersion ?? "No release"}</span>
               <span className="bundle-mono bundle-slug"><Highlight text={row.skill.slug} query={props.query} /></span>
             </div>
-            <p className="bundle-member-summary">
-              <Highlight text={row.skill.summary} query={props.query} />
+            <div className="bundle-member-summary">
+              <SkillSummary skill={row.skill} query={props.query} />
               {props.query && row.match === "bundle" && <span className="bundle-also">Listed because its bundle matches</span>}
-            </p>
+            </div>
             <div className="bundle-chips">
               {row.memberships.length === 0 ? <span className="bundle-chip is-none">No bundle</span> : row.memberships.map((membership) => (
                 <a className={`bundle-chip is-${membership.kind}`} href={props.bundleHref(membership.id)} id={domId("chip", row.skill.slug, membership.id)} key={membership.id} onClick={(event) => inAppClick(event, () => props.onOpenBundle(membership.id, event.currentTarget))}>
@@ -194,7 +225,6 @@ export function ListView(props: CatalogViewProps) {
                 </a>
               ))}
             </div>
-            <span className="bundle-version">{row.skill.latestVersion ?? "No release"}</span>
           </li>
         ))}
       </ul>

@@ -23,7 +23,7 @@ interface MockArchitectureOptions {
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(({ expiresAt: storedExpiry, user }) => {
-    window.localStorage.setItem("myskills-app:web-session", JSON.stringify({ expiresAt: storedExpiry, user }));
+    if (location.origin !== "null") window.localStorage.setItem("myskills-app:web-session", JSON.stringify({ expiresAt: storedExpiry, user }));
   }, { expiresAt, user: owner });
 });
 
@@ -76,6 +76,18 @@ test("signed-in owner inspects the same profile-filtered nodes in the diagram an
   const [, , viewBoxWidth, viewBoxHeight] = (viewBox ?? "").split(/\s+/).map(Number);
   expect(viewBoxWidth).toBeGreaterThan(900);
   expect(viewBoxHeight).toBeGreaterThan(400);
+  const mapMetrics = await diagram.evaluate((element) => {
+    const svg = element as SVGSVGElement;
+    const scale = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+    return { scale, labelSize: parseFloat(getComputedStyle(svg.querySelector(".architecture-diagram-label")!).fontSize) * scale };
+  });
+  expect(mapMetrics.scale).toBeGreaterThanOrEqual(0.9);
+  expect(mapMetrics.labelSize).toBeGreaterThanOrEqual(11);
+  const mapRegion = page.getByRole("region", { name: "Scrollable architecture topology" });
+  await mapRegion.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => mapRegion.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+
 
   await page.getByText("Compare observed-state fixture").click();
   await page.getByLabel("Observed-state fixture JSON").fill('{"targetId":"codex-personal","nodes":[]}');
@@ -100,8 +112,7 @@ test("owner creates a private draft without a preview and the narrow layout rema
 
   await expect(page.getByRole("heading", { name: "Private experiment" })).toBeVisible();
   await expect(page.getByRole("main", { name: "Skill architectures" })).toBeVisible();
-  await expect(page.getByText("Create a personal or team-owned draft shell. Add its first immutable revision through the API contract.")).toBeVisible();
-  await expect(page.getByText("This draft has no revision yet. Add a validated spec through the architecture revision API before previewing it.")).toBeVisible();
+  await expect(page.getByText("This draft has no revision yet. Build the first revision in the editor below, then save it to preview the result.")).toBeVisible();
   await expect(page.getByRole("img", { name: "Skill architecture topology" })).toHaveCount(0);
   await expect.poll(() => state.draftPreviewAttempts).toBe(0);
   expect(state.createdBodies).toEqual([{
@@ -131,6 +142,7 @@ test("owner saves and confirms organization access revocation, then retries a mi
   await page.goto("/architectures");
 
   await expect(page.getByRole("heading", { name: "Review assistant", level: 2 })).toBeVisible();
+  await page.getByText("Access and migration", { exact: true }).click();
   const organizationCheckbox = page.getByRole("checkbox", { name: "Share with Phase 2 UAT Organization" });
   await expect(organizationCheckbox).toBeVisible();
   await organizationCheckbox.check();
@@ -165,6 +177,7 @@ test("owner can create a team-owned shell and unsaved editor changes guard unloa
   const state = await installMockArchitectureRoutes(page, { includeSecondArchitecture: true, includeTeamOwner: true });
   await page.goto("/architectures");
 
+  await page.getByRole("button", { name: "New architecture", exact: true }).click();
   await page.getByLabel("Architecture owner").selectOption("team:team-review");
   await page.getByLabel("Architecture name").first().fill("Team review routing");
   await page.getByRole("button", { name: "Create architecture" }).click();
@@ -199,6 +212,7 @@ test("owner registers a guided read-only target and confirms permanent revocatio
   await page.goto("/targets");
 
   await expect(page.getByRole("heading", { name: "Connected targets", level: 1 })).toBeVisible();
+  await page.getByRole("button", { name: "Register read-only target", exact: true }).click();
   await expect(page.getByLabel("Authorized target owner")).toHaveValue("user:user-owner");
   await expect(page.getByLabel("Target architecture")).toHaveValue("architecture-1");
   await page.getByLabel("Target profile").selectOption("personal");
@@ -220,6 +234,88 @@ test("owner registers a guided read-only target and confirms permanent revocatio
   await page.getByRole("button", { name: "Confirm revoke" }).click();
   await expect.poll(() => state.targetRevokeRequests).toBe(1);
   await expect(page.getByText("Revoked", { exact: true }).first()).toBeVisible();
+});
+
+// Test-first Wave 3: work is visible before setup, and mobile navigation
+// retains focus and the unsaved-draft boundary exercised above.
+for (const width of [1280, 390]) test(`architecture workspace puts saved work first and restores list focus at ${width}`, async ({ page }, info) => {
+  await installMockArchitectureRoutes(page, { includeSecondArchitecture: true });
+  await page.setViewportSize({ width, height: width === 1280 ? 720 : 844 });
+  await page.goto("/architectures");
+  const row = page.getByRole("button", { name: /Review assistant/ });
+  await expect(row).toBeInViewport();
+  await expect(page.locator(".architecture-create-form").getByLabel("Architecture name", { exact: true })).toBeHidden();
+  await row.click();
+  const title = page.getByRole("heading", { name: "Review assistant", level: 2 });
+  await expect(title).toBeInViewport();
+  if (width === 390) {
+    await expect(title).toBeFocused();
+    await expect(row).toBeHidden();
+    await page.getByRole("button", { name: "Back to architectures", exact: true }).click();
+    await expect(row).toBeFocused();
+  } else await expect(row).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  await page.screenshot({ path: info.outputPath("architecture-work-first.png") });
+});
+
+for (const width of [1280, 390]) test(`architecture draft survives New and mobile Back without weakening discard protection at ${width}`, async ({ page }, info) => {
+  await installMockArchitectureRoutes(page, { includeSecondArchitecture: true });
+  await page.setViewportSize({ width, height: 844 });
+  await page.goto("/architectures");
+  const row = page.getByRole("button", { name: /Review assistant/ });
+  await row.click();
+  await page.getByLabel("Selected node label").fill("Uncommitted review router");
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+  await page.getByRole("button", { name: "New architecture", exact: true }).click();
+  await expect(page.locator(".architecture-create-form").getByLabel("Architecture name", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByLabel("Selected node label")).toHaveValue("Uncommitted review router");
+  let dialogs = 0;
+  page.on("dialog", async dialog => { dialogs += 1; await dialog.dismiss(); });
+  if (width === 390) {
+    await page.getByRole("button", { name: "Back to architectures", exact: true }).click();
+    await expect(row).toBeFocused();
+    await row.click();
+    await expect(page.getByLabel("Selected node label")).toHaveValue("Uncommitted review router");
+    expect(dialogs).toBe(0);
+    await page.getByRole("button", { name: "Back to architectures", exact: true }).click();
+  }
+  await page.getByRole("button", { name: /Operations assistant/ }).click();
+  await expect.poll(() => dialogs).toBe(1);
+  if (width === 390) await row.click();
+  await expect(page.getByLabel("Selected node label")).toHaveValue("Uncommitted review router");
+  await info.attach("draft-safety", { body: JSON.stringify({ width, rejectedDiscard: dialogs, preservedLabel: "Uncommitted review router" }), contentType: "application/json" });
+});
+
+for (const width of [1280, 390]) test(`target registration is on demand and preserves the binding draft at ${width}`, async ({ page }, info) => {
+  const state = await installMockArchitectureRoutes(page);
+  await page.setViewportSize({ width, height: 844 });
+  await page.goto("/targets");
+  await expect(page.getByRole("heading", { name: "Connect a Codex workspace" })).toBeVisible();
+  const name = page.getByLabel("Target name", { exact: true });
+  await expect(name).toBeHidden();
+  const opener = page.getByRole("button", { name: "Register read-only target", exact: true }).first();
+  await opener.click();
+  await expect(name).toBeFocused();
+  await name.fill("Draft workstation");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(opener).toBeFocused();
+  await opener.click();
+  await expect(name).toHaveValue("Draft workstation");
+  await page.getByLabel("Target profile").selectOption("personal");
+  await page.getByLabel("Target logical environment").selectOption("personal-laptop");
+  await page.getByRole("button", { name: "Register target", exact: true }).click();
+  const heading = page.getByRole("heading", { name: "Draft workstation", level: 2 });
+  await expect(heading).toBeFocused();
+  await expect(heading).toBeInViewport();
+  expect(state.targetRegistrationBodies).toHaveLength(1);
+  expect(state.targetRegistrationBodies[0]).toMatchObject({ owner: { type: "user", id: "user-owner" }, architectureId: "architecture-1", profileId: "personal", environmentId: "personal-laptop" });
+  await expect(page.getByText("Review assistant", { exact: true })).toBeVisible();
+  if (width === 390) {
+    await page.getByRole("button", { name: "Back to targets", exact: true }).click();
+    await expect(page.getByRole("button", { name: /Draft workstation/ })).toBeFocused();
+  }
+  await info.attach("registered-binding", { body: JSON.stringify(state.targetRegistrationBodies, null, 2), contentType: "application/json" });
 });
 
 interface MockArchitectureState {
@@ -790,3 +886,90 @@ function json(route: Route, status: number, body: unknown) {
     body: JSON.stringify(body),
   });
 }
+
+// Full-screen viewer acceptance, authored before the implementation. Existing
+// outline parity tests do not exercise modal focus or viewport interactions.
+for (const width of [1440, 390, 320]) test(`architecture diagram overlay supports zoom pan and keyboard return at ${width}`, async ({ page }, info) => {
+  await installMockArchitectureRoutes(page);
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto("/architectures");
+  await page.getByRole("button", { name: /Review assistant/ }).click();
+  await page.getByLabel("Preview profile").selectOption("personal");
+  await page.getByLabel("Preview environment").selectOption("personal-laptop");
+  await expect(page.getByRole("img", { name: "Skill architecture topology" })).toContainText("Release Notes Helper");
+  await page.screenshot({ path: info.outputPath("architecture-inline.png") });
+  const open = page.getByRole("button", { name: "Expand diagram", exact: true });
+  await expect(open).toBeVisible();
+  await open.click();
+  const dialog = page.getByRole("dialog", { name: "Architecture diagram", exact: true });
+  await expect(dialog).toBeVisible();
+  const close = dialog.getByRole("button", { name: "Close diagram", exact: true });
+  await expect(close).toBeFocused();
+  const bounds = (await dialog.boundingBox())!;
+  expect(bounds.x).toBeLessThanOrEqual(1);
+  expect(bounds.y).toBeLessThanOrEqual(1);
+  expect(bounds.width).toBeGreaterThanOrEqual(width - 1);
+  expect(bounds.height).toBeGreaterThanOrEqual(899);
+  const image = dialog.getByRole("img", { name: "Skill architecture topology" });
+  await expect(image).toContainText("Personal review router");
+  await expect(image).not.toContainText("Work Deploy Helper");
+  await page.screenshot({ path: info.outputPath("architecture-overlay-open.png") });
+  const initialWidth = (await image.boundingBox())!.width;
+  await dialog.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await expect.poll(async () => (await image.boundingBox())!.width).toBeGreaterThan(initialWidth);
+  await dialog.getByRole("button", { name: "Actual size, 1:1", exact: true }).click();
+  const viewport = dialog.getByRole("region", { name: "Diagram viewport", exact: true });
+  await viewport.focus();
+  await page.keyboard.press("+");
+  await page.keyboard.press("+");
+  const scroll = () => viewport.evaluate(el => ({ x: el.scrollLeft, y: el.scrollTop }));
+  await viewport.hover();
+  const beforeWheel = await scroll();
+  await page.mouse.wheel(500, 500);
+  await expect.poll(async () => { const p = await scroll(); return p.x > beforeWheel.x || p.y > beforeWheel.y; }).toBe(true);
+  const beforeDrag = await scroll();
+  const canvasBox = (await viewport.boundingBox())!;
+  const x = canvasBox.x + canvasBox.width / 2;
+  const y = canvasBox.y + canvasBox.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 75, y + 50, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => { const p = await scroll(); return p.x < beforeDrag.x || p.y < beforeDrag.y; }).toBe(true);
+  await viewport.focus();
+  const keyboardStart = await scroll();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(async () => (await scroll()).x).toBeGreaterThan(keyboardStart.x);
+  const beforePinch = (await image.boundingBox())!.width;
+  await viewport.hover();
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -150);
+  await page.keyboard.up("Control");
+  await expect.poll(async () => (await image.boundingBox())!.width).toBeGreaterThan(beforePinch);
+  expect((await dialog.boundingBox())!.width).toBe(width);
+  await dialog.getByRole("button", { name: "Fit diagram", exact: true }).click();
+  await expect.poll(() => viewport.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+  await expect.poll(() => viewport.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: info.outputPath("architecture-overlay.png") });
+  await page.setViewportSize({ width: 900, height: 600 });
+  await expect.poll(() => viewport.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+  await expect.poll(() => viewport.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+  await page.setViewportSize({ width, height: 900 });
+  const lockedScroll = await page.evaluate(() => window.scrollY);
+  await viewport.hover();
+  await page.mouse.wheel(0, 800);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(lockedScroll);
+  // Native modal focus must stay inside the overlay when tabbing past the end.
+  for (let i = 0; i < 9; i++) {
+    await page.keyboard.press("Tab");
+    expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+  }
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(open).toBeFocused();
+  await open.click();
+  await close.click();
+  await expect(dialog).toBeHidden();
+  await expect(open).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});

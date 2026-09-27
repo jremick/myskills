@@ -6,9 +6,11 @@ import {
   CircleAlert,
   Clipboard,
   Download,
+  Maximize2,
   ShieldCheck,
   TerminalSquare,
 } from "lucide-react";
+import { ArchitectureDiagram } from "./ArchitectureDiagram.js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,11 +23,11 @@ import {
 import {
   isLeafNodeKind,
   runtimeExposureLabel,
-  truncateSvgLabel,
 } from "./architecture-dashboard-helpers.js";
 
 export function ArchitecturePreviewPanel({ detail, preview }: { detail: ArchitectureDetail | null; preview: ArchitecturePreview }) {
   const topology = topologyForPreview(preview);
+  const [diagramExpanded, setDiagramExpanded] = useState(false);
   const diagramJson = canonicalArchitectureDiagramArtifactJson(preview.diagram);
   const conflict = preview.plan?.items.some((item) => item.action === "conflict") ?? false;
   const unsupported = preview.plan?.items.some((item) => item.action === "unsupported") ?? false;
@@ -47,9 +49,12 @@ export function ArchitecturePreviewPanel({ detail, preview }: { detail: Architec
             <p className="architecture-kicker">Topology</p>
             <h2 id="architecture-diagram-heading">Router and leaf map</h2>
           </div>
-          <Badge variant="outline">{topology.nodes.length} nodes · {topology.edges.length} links</Badge>
+          <div className="architecture-diagram-actions">
+            <Badge variant="outline">{topology.nodes.length} nodes · {topology.edges.length} links</Badge>
+            <Button aria-haspopup="dialog" disabled={topology.nodes.length === 0} onClick={() => setDiagramExpanded(true)} size="sm" type="button" variant="outline"><Maximize2 size={14} aria-hidden="true" />Expand diagram</Button>
+          </div>
         </div>
-        <ArchitectureDiagram topology={topology} />
+        <ArchitectureDiagram topology={topology} expanded={diagramExpanded} onClose={() => setDiagramExpanded(false)} />
         <ArchitectureOutline outline={preview.outline} />
       </section>
 
@@ -130,65 +135,6 @@ export function ArchitecturePreviewPanel({ detail, preview }: { detail: Architec
           </details>
         </div>
       </section>
-    </div>
-  );
-}
-
-function ArchitectureDiagram({ topology }: { topology: { nodes: ArchitectureTopologyNode[]; edges: ArchitectureTopologyEdge[] } }) {
-  const nodeWidth = 184;
-  const nodeHeight = 60;
-  const rowHeight = 102;
-  const padding = 32;
-  const columns = 3;
-  const positions = new Map(topology.nodes.map((node, index) => {
-    const serverPosition = node.position && Number.isFinite(node.position.x) && Number.isFinite(node.position.y)
-      ? node.position
-      : { x: 40 + (index % columns) * 246, y: 22 + Math.floor(index / columns) * rowHeight };
-    return [node.id, serverPosition] as const;
-  }));
-  const coordinates = Array.from(positions.values());
-  const minX = Math.min(0, ...coordinates.map((position) => position.x));
-  const minY = Math.min(0, ...coordinates.map((position) => position.y));
-  const maxX = Math.max(nodeWidth, ...coordinates.map((position) => position.x + nodeWidth));
-  const maxY = Math.max(nodeHeight, ...coordinates.map((position) => position.y + nodeHeight));
-  const viewBoxX = minX - padding;
-  const viewBoxY = minY - padding;
-  const width = Math.max(760, maxX - minX + padding * 2);
-  const height = Math.max(260, maxY - minY + padding * 2);
-  return (
-    <div className="architecture-diagram-shell">
-      {topology.nodes.length === 0 ? (
-        <div className="architecture-empty-inline"><CircleAlert size={17} aria-hidden="true" /> No topology nodes were returned.</div>
-      ) : (
-        <svg className="architecture-diagram" role="img" aria-labelledby="architecture-diagram-title architecture-diagram-description" viewBox={`${viewBoxX} ${viewBoxY} ${width} ${height}`}>
-          <title id="architecture-diagram-title">Skill architecture topology</title>
-          <desc id="architecture-diagram-description">A deterministic map of routers, sub-routers, and leaf skills returned by the API.</desc>
-          <g className="architecture-diagram-edges" aria-hidden="true">
-            {topology.edges.map((edge, index) => {
-              const from = positions.get(edge.from);
-              const to = positions.get(edge.to);
-              if (!from || !to) {
-                return null;
-              }
-              return <line key={edge.id ?? `${edge.from}:${edge.to}:${index}`} markerEnd="url(#architecture-arrow)" x1={from.x + 92} x2={to.x + 92} y1={from.y + 30} y2={to.y + 30} />;
-            })}
-          </g>
-          <defs><marker id="architecture-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="6" refY="3"><path d="M0,0 L0,6 L6,3 z" /></marker></defs>
-          <g className="architecture-diagram-nodes">
-            {topology.nodes.map((node) => {
-              const position = positions.get(node.id)!;
-              const leaf = isLeafNodeKind(node.kind);
-              return (
-                <g key={node.id} transform={`translate(${position.x}, ${position.y})`}>
-                  <rect className={leaf ? "architecture-diagram-node skill" : "architecture-diagram-node router"} height="60" rx="9" width="184" />
-                  <text className="architecture-diagram-kind" x="14" y="19">{leaf ? "LEAF SKILL" : "ROUTER"}</text>
-                  <text className="architecture-diagram-label" x="14" y="41">{truncateSvgLabel(node.label)}</text>
-                </g>
-              );
-            })}
-          </g>
-        </svg>
-      )}
     </div>
   );
 }

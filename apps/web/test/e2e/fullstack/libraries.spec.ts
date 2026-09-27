@@ -21,17 +21,21 @@ test("owner curates a persistent library, changes private-import policy, and rem
   await page.goto("/libraries");
   await page.waitForLoadState("networkidle");
   await expect(page.getByRole("heading", { name: "Libraries", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Library administration", exact: true }).click();
   const policy = page.getByLabel("Allow private import self-review");
   await expect(policy).toBeEnabled();
   await expect(policy).not.toBeChecked();
   await policy.check();
   await expect.poll(async () => (await (await page.request.get(`${baseURL}/api/v1/admin/library-settings`)).json()).settings.privateSelfReviewEnabled).toBe(true);
   await page.reload();
+  await page.getByRole("button", { name: "Library administration", exact: true }).click();
   await expect(policy).toBeChecked();
   await policy.uncheck();
   await expect.poll(async () => (await (await page.request.get(`${baseURL}/api/v1/admin/library-settings`)).json()).settings.privateSelfReviewEnabled).toBe(false);
 
   const name = `Release library ${randomUUID().slice(0, 8)}`;
+  const newLibrary = page.getByRole("button", { name: "New library", exact: true });
+  if (await newLibrary.isVisible()) await newLibrary.click();
   await page.getByLabel("Library name").fill(name);
   await page.getByRole("button", { name: "Create library", exact: true }).click();
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
@@ -60,6 +64,7 @@ test("owner curates a persistent library, changes private-import policy, and rem
   expect(resolution.resolution).toMatchObject({ state: "adopted", slug: "release-notes-helper", version: "0.1.0" });
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: savedEntry.entry.title, exact: true }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("persistent-library-mobile.png"), fullPage: true });
   await page.getByRole("button", { name: "Remove entry", exact: true }).click();

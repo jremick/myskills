@@ -1,13 +1,32 @@
 # Railway Deployment
 
-Version: 0.1.0-beta.10
+Version: 0.1.0-beta.12
 Last updated: 2026-09-27
 
 This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.
-The current beta.10 release is tracked in [Beta.10 Release Delivery](BETA10_RELEASE_DELIVERY.md).
+The current beta.12 release is tracked in [Beta.12 Release Delivery](BETA12_RELEASE_DELIVERY.md).
 The historical operational beta evidence remains in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
 
-## Beta.10 production status
+## Beta.12 production status
+
+On 27 September 2026, production API `9cf1264b-6903-4806-abed-23a446d580ee`
+and web `fb7a2b03-ea8c-4698-84f5-396d5b5c6ccc` succeeded from
+`c280795e6f0bd54533514ab6c58af7a584cbd3a4` in API-ready-then-web order.
+Both serve beta.12. No schema change or owner seeding was required.
+
+Direct API, web and same-origin identity, health/readiness, catalog views,
+existing owner/MFA session, exact private package response and anonymous denial
+passed. Live Admin keyboard navigation and account sections passed with no
+browser console errors. The fresh CLI passed doctor and anonymous browsing.
+The tagged workflow and release-asset checksum checks passed; npm remains beta.8.
+
+The existing completed recovery point passed the 26-hour policy before
+promotion. Rollback uses the matching beta.10 API/web source while retaining
+its bundle-aware schema and readers. Do not downgrade the database or reseed.
+See the delivery record for exact evidence, the superseded beta.11 candidate,
+and verification limits. Documentation-only commits do not alter live identity.
+
+## Historical beta.10 production status
 
 On 27 September 2026, production API `a73367e7-94c5-4f31-a6aa-917f8002e5f0`
 and web `77cdfa45-cd97-4564-8f34-f4487edfc499` succeeded from

@@ -31,6 +31,7 @@ test("skill optimisation distinguishes declarations from evidence, rejects a blo
     return reply({ error: { code: "NOT_FOUND", message: "Unavailable fixture endpoint." } }, 404);
   });
   await page.goto("/skills/notes-helper");
+  await page.getByRole("button", { name: "Compatibility and improvement", exact: true }).click();
   const panel = page.getByRole("region", { name: "Skill improvement" });
   await expect(panel.getByText("No optimisation targets declared.")).toBeVisible();
   await expect(panel.getByText("No accepted evaluation evidence.")).toBeVisible();
@@ -80,6 +81,7 @@ test("metadata edits preserve multiple model, app and environment targets and bi
     return reply({ error: { code: "NOT_FOUND", message: "Unavailable fixture endpoint." } }, 404);
   });
   await page.goto("/skills/notes-helper");
+  await page.getByRole("button", { name: "Compatibility and improvement", exact: true }).click();
   const panel = page.getByRole("region", { name: "Skill improvement" });
   await expect(panel.getByText("Environments: windows")).toBeVisible();
   await panel.getByText("Manage optimisation metadata").click();

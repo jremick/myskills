@@ -1,19 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import {
   Activity,
+  ArrowLeft,
+  BookOpen,
   Check,
   CircleAlert,
   Eye,
-  Link2,
   Plus,
   RefreshCw,
   ShieldCheck,
   Trash2,
   X,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   safeArchitectureErrorMessage,
@@ -32,6 +31,19 @@ import type {
 } from "@myskills-app/core";
 import { architectureDigest, type ArchitectureSpecV1 } from "@myskills-app/core";
 import { CodexWorkspaceGuide } from "./CodexWorkspaceGuide.js";
+import { useSplitLayout } from "../registry/useSplitLayout.js";
+import {
+  adapterLabel,
+  consentLabel,
+  healthLabel,
+  ownerLabel,
+  shortId,
+  targetStatusLabel,
+  toneOf,
+} from "../control-plane/control-plane-display.js";
+
+type TargetPanel = "detail" | "register" | "guide";
+type PendingFocus = { kind: "title"; id: string } | { kind: "row"; id: string } | { kind: "register" } | { kind: "guide" };
 
 interface TargetSession {
   user: {
@@ -245,8 +257,34 @@ export function ArchitectureTargetsDashboard({ client, session }: { client: Regi
   const [detailState, setDetailState] = useState<LoadState>("ready");
   const [detailMessage, setDetailMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [panel, setPanel] = useState<TargetPanel>("detail");
+  const [opened, setOpened] = useState(false);
+  const [architectureNames, setArchitectureNames] = useState<ReadonlyMap<string, string>>(() => new Map());
+  const [organizationNames, setOrganizationNames] = useState<ReadonlyMap<string, string>>(() => new Map());
   const listEpoch = useRef(0);
   const detailEpoch = useRef(0);
+  const selectedRef = useRef(selectedId);
+  selectedRef.current = selectedId;
+  const { layout, ref: measureSurface } = useSplitLayout();
+  const surfaceNode = useRef<HTMLDivElement | null>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const guideHeadingRef = useRef<HTMLHeadingElement>(null);
+  const registerNameRef = useRef<HTMLInputElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const pendingFocus = useRef<PendingFocus | null>(null);
+  const stacked = layout === "stack";
+
+  const surfaceRef = useCallback((node: HTMLDivElement | null) => {
+    surfaceNode.current = node;
+    measureSurface(node);
+  }, [measureSurface]);
+
+  // The register form already loads architectures and organizations; reuse
+  // those rows for binding labels instead of requesting them again.
+  const handleRegisterDataLoaded = useCallback((architectures: readonly ArchitectureSummary[], organizations: ReadonlyArray<{ id: string; name: string }>) => {
+    setArchitectureNames(new Map(architectures.map((architecture) => [architecture.id, architecture.name])));
+    setOrganizationNames(new Map(organizations.map((organization) => [organization.id, organization.name])));
+  }, []);
 
   const refreshTargets = useCallback(async () => {
     const requestEpoch = listEpoch.current + 1;
@@ -267,13 +305,19 @@ export function ArchitectureTargetsDashboard({ client, session }: { client: Regi
     try {
       const nextTargets = await client.listArchitectureTargets();
       if (requestEpoch !== listEpoch.current) return;
+      const current = selectedRef.current;
+      const kept = current !== null && nextTargets.some((item) => item.id === current);
+      // A selection that left the list (for example after revocation of
+      // access) closes the phone detail instead of opening another target.
+      if (!kept) setOpened(false);
       setTargets([...nextTargets]);
-      setSelectedId((current) => current && nextTargets.some((item) => item.id === current) ? current : nextTargets[0]?.id ?? null);
+      setSelectedId(kept ? current : nextTargets[0]?.id ?? null);
       setState("ready");
     } catch (error) {
       if (requestEpoch !== listEpoch.current) return;
       setTargets([]);
       setSelectedId(null);
+      setOpened(false);
       setState("error");
       setMessage(safeArchitectureTargetErrorMessage(error));
     }
@@ -317,12 +361,58 @@ export function ArchitectureTargetsDashboard({ client, session }: { client: Regi
     setDetail(null);
     setObservations([]);
     setSelectedId(targetId);
+    setPanel("detail");
+    if (stacked) {
+      setOpened(true);
+      pendingFocus.current = { kind: "title", id: targetId };
+    }
     if (isCurrent) {
       // Selecting the active row again is an explicit refresh. Without this
       // branch, React keeps the same ID and no effect would refetch detail.
       void refreshDetail(targetId);
     }
-  }, [refreshDetail, selectedId]);
+  }, [refreshDetail, selectedId, stacked]);
+
+  function openPanel(next: "register" | "guide", opener: HTMLElement) {
+    openerRef.current = opener;
+    setPanel(next);
+    pendingFocus.current = { kind: next };
+  }
+
+  // Cancel and Close keep the panel mounted, so a register draft survives.
+  function closePanel() {
+    setPanel("detail");
+    const opener = openerRef.current;
+    openerRef.current = null;
+    pendingFocus.current = null;
+    opener?.focus();
+  }
+
+  function backToTargets() {
+    setOpened(false);
+    if (selectedId) pendingFocus.current = { kind: "row", id: selectedId };
+  }
+
+  const handleRegistered = useCallback((target: ArchitectureTargetRecord) => {
+    openerRef.current = null;
+    setPanel("detail");
+    setOpened(true);
+    setSelectedId(target.id);
+    pendingFocus.current = { kind: "title", id: target.id };
+    setRefreshKey((value) => value + 1);
+  }, []);
+
+  useEffect(() => {
+    const next = pendingFocus.current;
+    if (!next) return;
+    const element = next.kind === "title" ? (detail?.id === next.id ? titleRef.current : null)
+      : next.kind === "register" ? registerNameRef.current
+        : next.kind === "guide" ? guideHeadingRef.current
+          : Array.from(surfaceNode.current?.querySelectorAll<HTMLElement>("[data-target-id]") ?? []).find((item) => item.dataset.targetId === next.id) ?? null;
+    if (!element || element.closest("[hidden]")) return;
+    pendingFocus.current = null;
+    element.focus();
+  });
 
   useEffect(() => {
     if (!selectedId || state !== "ready") {
@@ -336,32 +426,73 @@ export function ArchitectureTargetsDashboard({ client, session }: { client: Regi
   // new list identity still reloads detail when the selected ID is unchanged.
   }, [refreshDetail, selectedId, state, targets]);
 
-  return <main className="control-plane-workspace target-workspace" aria-label="Connected targets">
-    <section className="control-plane-hero" aria-labelledby="targets-heading">
-      <div><p className="control-plane-kicker">Physical runtime boundaries</p><h1 id="targets-heading">Connected targets</h1><p>{session.user.email} · {state === "loading" ? "Refreshing target access…" : `${targets.length} registered targets`}</p></div>
-      <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw size={16} aria-hidden="true" />Refresh</Button>
-    </section>
-    {message && <div className="safe-message control-plane-message" role="alert" tabIndex={-1}>{message}</div>}
-    <CodexWorkspaceGuide />
-    <section className="target-layout">
-      <div className="target-sidebar">
-        <RegisterTargetCard client={client} session={session} onRegistered={(target) => { setSelectedId(target.id); setRefreshKey((value) => value + 1); }} />
-        <Card className="control-plane-card" aria-label="Connected target list">
-          <CardHeader className="control-plane-card-heading"><div className="control-plane-card-icon"><Link2 size={17} aria-hidden="true" /></div><div><CardTitle>Registered targets</CardTitle><CardDescription>Each target is bound to one architecture, profile, and logical environment.</CardDescription></div></CardHeader>
-          <CardContent className="target-list-content">
-            {state === "loading" && <TargetLoadingRows />}
-            {state === "error" && <TargetEmptyState icon={<CircleAlert size={22} aria-hidden="true" />} title="Targets unavailable" copy="Retry when the target service is ready." action={<Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw size={15} aria-hidden="true" />Retry</Button>} />}
-            {state === "ready" && targets.length === 0 && <TargetEmptyState icon={<Link2 size={22} aria-hidden="true" />} title="No connected targets" copy="Use the workspace setup guide to enroll Codex, or register an adapter target below." />}
-            {state === "ready" && targets.length > 0 && <div className="target-list" role="list">{targets.map((target) => <div key={target.id} role="listitem"><button aria-current={target.id === selectedId ? "true" : undefined} aria-pressed={target.id === selectedId} className={target.id === selectedId ? "target-list-row selected" : "target-list-row"} type="button" onClick={() => selectTarget(target.id)}><span className="target-list-icon"><Activity size={15} aria-hidden="true" /></span><span className="target-list-main"><strong>{target.name}</strong><small>{target.adapter.kind} · {target.owner.type} · {target.consent.status}</small></span><Badge variant={target.status === "connected" ? "secondary" : target.status === "revoked" ? "destructive" : "outline"}>{target.status}</Badge></button></div>)}</div>}
-          </CardContent>
-        </Card>
+  const noTargets = state === "ready" && targets.length === 0;
+  const inspectorPanel: TargetPanel = panel === "register" ? "register" : panel === "guide" || noTargets ? "guide" : "detail";
+  const showList = !stacked || noTargets || (!opened && panel === "detail");
+  const showInspector = !stacked || noTargets || opened || panel !== "detail";
+
+  return <main className="control-plane-workspace target-workspace cp-page" aria-label="Connected targets">
+    <header className="cp-page-head app-page-header">
+      <div><h1 id="targets-heading">Connected targets</h1></div>
+      <div className="cp-page-actions">
+        <Button aria-controls="target-guide-panel" aria-expanded={inspectorPanel === "guide"} size="sm" type="button" variant="outline" onClick={(event) => openPanel("guide", event.currentTarget)}><BookOpen size={15} aria-hidden="true" />Setup guide</Button>
+        <Button aria-controls="target-register-panel" aria-expanded={panel === "register"} size="sm" type="button" variant="outline" onClick={(event) => openPanel("register", event.currentTarget)}><Plus size={15} aria-hidden="true" />Register read-only target</Button>
+        <Button aria-label="Refresh" size="icon-sm" title="Refresh" type="button" variant="outline" onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw size={16} aria-hidden="true" /></Button>
       </div>
-      <TargetDetailPanel client={client} detail={detail} observations={observations} state={detailState} message={detailMessage} onRefresh={() => selectedId && void refreshDetail(selectedId)} />
-    </section>
+    </header>
+    <div className="cp-surface" data-layout={layout} data-empty={noTargets ? "true" : undefined} ref={surfaceRef}>
+      <div className="cp-body">
+        <section className="cp-list" aria-label="Connected target list" hidden={!showList}>
+          <div className="cp-list-label"><h2>Targets</h2><span aria-live="polite">{state === "ready" ? targets.length : ""}</span></div>
+          {state === "loading" && <TargetLoadingRows />}
+          {state === "error" && <div className="cp-list-state" role="alert"><strong>Targets unavailable</strong><p>{message ?? "Retry when the target service is ready."}</p><Button size="sm" type="button" variant="outline" onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw size={15} aria-hidden="true" />Retry</Button></div>}
+          {noTargets && <div className="cp-list-state"><strong>No connected targets</strong><p>Enroll a Codex workspace with the CLI setup guide, or register a read-only target.</p></div>}
+          {state === "ready" && targets.length > 0 && <div className="cp-rows" role="list">{targets.map((target) => {
+            const status = targetStatusLabel(target.status);
+            return <div key={target.id} role="listitem"><button aria-current={target.id === selectedId ? "true" : undefined} aria-pressed={target.id === selectedId} className="cp-row" data-target-id={target.id} type="button" onClick={() => selectTarget(target.id)}>
+              <span className="cp-row-text"><span className="cp-row-title">{target.name}</span><span className="cp-row-meta">{adapterLabel(target.adapter.kind)} · {ownerLabel(target.owner, session.user.id, organizationNames)} · {consentLabel(target.consent.status).label}</span></span>
+              <span className="cp-chip" data-tone={toneOf(status)}>{status.label}</span>
+            </button></div>;
+          })}</div>}
+        </section>
+        <div className="cp-inspector" hidden={!showInspector}>
+          <div className="cp-panel" hidden={inspectorPanel !== "detail"}>
+            <TargetDetailPanel
+              client={client}
+              detail={detail}
+              observations={observations}
+              state={detailState}
+              message={detailMessage}
+              selectedId={selectedId}
+              currentUserId={session.user.id}
+              architectureNames={architectureNames}
+              organizationNames={organizationNames}
+              titleRef={titleRef}
+              onBack={stacked ? backToTargets : undefined}
+              onRefresh={() => selectedId && void refreshDetail(selectedId)}
+            />
+          </div>
+          <div className="cp-panel" id="target-register-panel" hidden={inspectorPanel !== "register"}>
+            <RegisterTargetCard client={client} session={session} nameRef={registerNameRef} onCancel={closePanel} onLoaded={handleRegisterDataLoaded} onRegistered={handleRegistered} />
+          </div>
+          <div className="cp-panel" id="target-guide-panel" hidden={inspectorPanel !== "guide"}>
+            {!noTargets && <div className="cp-panel-bar"><Button size="sm" type="button" variant="outline" onClick={closePanel}><X size={15} aria-hidden="true" />Close</Button></div>}
+            <CodexWorkspaceGuide headingRef={guideHeadingRef} />
+          </div>
+        </div>
+      </div>
+    </div>
   </main>;
 }
 
-function RegisterTargetCard({ client, session, onRegistered }: { client: RegistryClient; session: TargetSession; onRegistered: (target: ArchitectureTargetRecord) => void }) {
+function RegisterTargetCard({ client, session, nameRef, onRegistered, onCancel, onLoaded }: {
+  client: RegistryClient;
+  session: TargetSession;
+  nameRef: RefObject<HTMLInputElement | null>;
+  onRegistered: (target: ArchitectureTargetRecord) => void;
+  onCancel: () => void;
+  onLoaded: (architectures: readonly ArchitectureSummary[], organizations: ReadonlyArray<{ id: string; name: string }>) => void;
+}) {
   const [name, setName] = useState("");
   const [architectures, setArchitectures] = useState<ArchitectureSummary[]>([]);
   const [organizations, setOrganizations] = useState<Array<{ id: string; name: string; role?: string }>>([]);
@@ -423,16 +554,21 @@ function RegisterTargetCard({ client, session, onRegistered }: { client: Registr
         const rows = await client.listArchitectures();
         if (cancelled) return;
         setArchitectures(rows);
+        let visibleOrganizations: Array<{ id: string; name: string; role?: string }> = [];
         if (client.listOrganizations) {
           try {
             const orgs = await client.listOrganizations();
-            if (!cancelled) setOrganizations(orgs.map((organization) => ({ id: organization.id, name: organization.name, role: organization.role })));
+            visibleOrganizations = orgs.map((organization) => ({ id: organization.id, name: organization.name, role: organization.role }));
+            if (!cancelled) setOrganizations(visibleOrganizations);
           } catch {
             // Organization names improve the selector, but architecture-owner
             // registration remains usable if the optional list is unavailable.
           }
         }
-        if (!cancelled) setArchitectureState("ready");
+        if (!cancelled) {
+          setArchitectureState("ready");
+          onLoaded(rows, visibleOrganizations);
+        }
       } catch (error) {
         if (cancelled) return;
         setArchitectures([]);
@@ -441,7 +577,7 @@ function RegisterTargetCard({ client, session, onRegistered }: { client: Registr
       }
     })();
     return () => { cancelled = true; };
-  }, [client]);
+  }, [client, onLoaded]);
 
   useEffect(() => {
     const architectureId = selectedArchitectureId;
@@ -595,34 +731,86 @@ function RegisterTargetCard({ client, session, onRegistered }: { client: Registr
     }
   }
 
-  return <Card className="control-plane-card" aria-label="Register connected target"><CardHeader className="control-plane-card-heading"><div className="control-plane-card-icon"><Plus size={17} aria-hidden="true" /></div><div><CardTitle>Register connected target</CardTitle><CardDescription>Register a read-only observer against an architecture, profile, and logical environment. For installs and updates, use Connect a Codex workspace above to enroll the directory with the CLI.</CardDescription></div></CardHeader><CardContent><form className="control-plane-form target-register-form" onSubmit={(event) => void submit(event)}>
-    <label><span>Name</span><Input aria-invalid={errorField === "name"} aria-label="Target name" aria-describedby={message && errorField === "name" ? "target-registration-error" : undefined} disabled={state === "saving"} onChange={(event) => { setName(event.target.value); clearFieldError(); }} placeholder="Personal Codex" value={name} /></label>
+  return <section className="target-register" aria-labelledby="target-register-heading"><div className="cp-title-block"><h2 id="target-register-heading">Register read-only target</h2><p className="cp-meta">Register a read-only observer against an architecture, profile, and logical environment. To install and update skills, enroll a Codex workspace with the CLI setup guide instead.</p></div><form className="control-plane-form target-register-form" onSubmit={(event) => void submit(event)}>
+    <label><span>Name</span><Input ref={nameRef} aria-invalid={errorField === "name"} aria-label="Target name" aria-describedby={message && errorField === "name" ? "target-registration-error" : undefined} disabled={state === "saving"} onChange={(event) => { setName(event.target.value); clearFieldError(); }} placeholder="Personal Codex" value={name} /></label>
     <fieldset className="target-capability-fieldset"><legend>1. Owner context</legend><p className="control-plane-muted">Choose a server-authorized architecture owner or organization sharing scope. The next selector shows only architectures available through that context. IDs are not entered manually.</p><label><span>Authorized owner</span><select aria-invalid={errorField === "owner"} aria-label="Authorized target owner" disabled={state === "saving" || ownerOptions.length === 0} onChange={(event) => { setOwnerKey(event.target.value); clearFieldError(); }} value={ownerKey}><option value="">Select an owner context</option>{ownerOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></label>{selectedOwner && <p className="control-plane-muted">{selectedOwner.detail}</p>}</fieldset>
-    <fieldset className="target-capability-fieldset"><legend>2. Architecture context</legend><label><span>Architecture</span><select aria-invalid={errorField === "architecture"} aria-label="Target architecture" disabled={state === "saving" || architectureState !== "ready" || !selectedOwner} onChange={(event) => { setSelectedArchitectureId(event.target.value); clearFieldError(); }} value={selectedArchitectureId}><option value="">Select an architecture</option>{ownerArchitectures.map((architecture) => <option key={architecture.id} value={architecture.id}>{architecture.name} · {targetPatternLabel(architecture.patternId)} · {architectureRevisionLabel(architecture)}</option>)}</select></label>{architectureState === "loading" && <p className="control-plane-muted" role="status">Loading architectures…</p>}{architectureState === "error" && <div className="safe-message control-plane-inline-message" id="target-architecture-error" role="alert" tabIndex={-1}>{architectureMessage ?? "Architecture data is unavailable."}<Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => { setArchitectureState("loading"); setArchitectureMessage(null); setArchitectures([]); void client.listArchitectures().then((rows) => { setArchitectures(rows); setArchitectureState("ready"); }).catch((error: unknown) => { setArchitectureState("error"); setArchitectureMessage(safeArchitectureErrorMessage(error)); }); }}><RefreshCw size={15} aria-hidden="true" />Retry</Button></div>}{detailState === "loading" && <p className="control-plane-muted" role="status">Loading current revision…</p>}{detailState === "error" && <div className="safe-message control-plane-inline-message" id="target-detail-error" role="alert" tabIndex={-1}>{detailMessage ?? "Current revision is unavailable."}<Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={retryArchitectureDetail}><RefreshCw size={15} aria-hidden="true" />Retry</Button></div>}{selectedContext && <p className="control-plane-muted">Current revision {selectedContext.revisionNumber} is ready. Its digest is available under Advanced settings.</p>}</fieldset>
+    <fieldset className="target-capability-fieldset"><legend>2. Architecture context</legend><label><span>Architecture</span><select aria-invalid={errorField === "architecture"} aria-label="Target architecture" disabled={state === "saving" || architectureState !== "ready" || !selectedOwner} onChange={(event) => { setSelectedArchitectureId(event.target.value); clearFieldError(); }} value={selectedArchitectureId}><option value="">Select an architecture</option>{ownerArchitectures.map((architecture) => <option key={architecture.id} value={architecture.id}>{architecture.name} · {targetPatternLabel(architecture.patternId)} · {architectureRevisionLabel(architecture)}</option>)}</select></label>{architectureState === "loading" && <p className="control-plane-muted" role="status">Loading architectures…</p>}{architectureState === "error" && <div className="safe-message control-plane-inline-message" id="target-architecture-error" role="alert" tabIndex={-1}>{architectureMessage ?? "Architecture data is unavailable."}<Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => { setArchitectureState("loading"); setArchitectureMessage(null); setArchitectures([]); void client.listArchitectures().then((rows) => { setArchitectures(rows); setArchitectureState("ready"); onLoaded(rows, organizations); }).catch((error: unknown) => { setArchitectureState("error"); setArchitectureMessage(safeArchitectureErrorMessage(error)); }); }}><RefreshCw size={15} aria-hidden="true" />Retry</Button></div>}{detailState === "loading" && <p className="control-plane-muted" role="status">Loading current revision…</p>}{detailState === "error" && <div className="safe-message control-plane-inline-message" id="target-detail-error" role="alert" tabIndex={-1}>{detailMessage ?? "Current revision is unavailable."}<Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={retryArchitectureDetail}><RefreshCw size={15} aria-hidden="true" />Retry</Button></div>}{selectedContext && <p className="control-plane-muted">Current revision {selectedContext.revisionNumber} is ready. Its digest is available under Advanced settings.</p>}</fieldset>
     <fieldset className="target-capability-fieldset"><legend>3. Logical environment</legend><div className="control-plane-form-grid"><label><span>Profile</span><select aria-invalid={errorField === "profile"} aria-label="Target profile" disabled={state === "saving" || !selectedContext} onChange={(event) => { setProfileId(event.target.value); clearFieldError(); }} value={profileId}><option value="">Select a profile</option>{profileOptions.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label><label><span>Environment</span><select aria-invalid={errorField === "environment"} aria-label="Target logical environment" disabled={state === "saving" || !selectedProfile} onChange={(event) => { setEnvironmentId(event.target.value); clearFieldError(); }} value={environmentId}><option value="">Select a logical environment</option>{environmentOptions.map((environment) => <option key={environment.id} value={environment.id}>{environment.name} · {environment.kind}</option>)}</select></label></div><p className="control-plane-muted">These are logical architecture environments. User-owned targets prefer a matching user profile and personal environment; team-owned targets prefer a matching team profile and team environment. If that preference is unavailable, the stable name then ID order is used. Your explicit selections remain authoritative.</p></fieldset>
     <fieldset className="target-capability-fieldset"><legend>4. Adapter</legend><label><span>Adapter</span><select aria-invalid={errorField === "adapter"} aria-label="Target adapter" disabled={state === "saving"} onChange={(event) => { setAdapterKind(event.target.value); clearFieldError(); }} value={adapterKind}>{SUPPORTED_ADAPTERS.map((adapter) => <option key={adapter.kind} value={adapter.kind}>{adapter.label}</option>)}</select></label><p className="control-plane-muted">Contract version {selectedAdapter.contractVersion} · adapter version {selectedAdapter.version}. This observer cannot execute installs, updates, or rollbacks. Use the CLI workspace enrollment guide for those actions.</p></fieldset>
-    <section className="control-plane-section" aria-labelledby="target-registration-summary-heading"><div className="control-plane-section-heading"><div><p className="control-plane-kicker">Review before saving</p><h2 id="target-registration-summary-heading">Binding and consent summary</h2></div><Badge variant="outline">consent: pending</Badge></div><dl className="target-binding-grid"><div><dt>Owner</dt><dd>{selectedOwner?.label ?? "Select owner context"}</dd></div><div><dt>Architecture</dt><dd>{selectedArchitecture?.name ?? "Select architecture"}</dd></div><div><dt>Revision</dt><dd>{selectedContext ? `Current revision ${selectedContext.revisionNumber}` : "Select architecture"}</dd></div><div><dt>Profile</dt><dd>{selectedProfile?.name ?? "Select profile"}</dd></div><div><dt>Logical environment</dt><dd>{selectedEnvironment?.name ?? "Select environment"}</dd></div><div><dt>Adapter</dt><dd>{selectedAdapter.label}</dd></div></dl><p className="control-plane-muted">Registration creates a pending target. Grant consent only after confirming the adapter and exact binding.</p></section>
+    <section className="cp-summary" aria-labelledby="target-registration-summary-heading"><div className="cp-section-head"><h3 id="target-registration-summary-heading">Binding and consent summary</h3><span className="cp-chip" data-tone="amber">Consent pending</span></div><dl className="cp-facts"><div><dt>Owner</dt><dd>{selectedOwner?.label ?? "Select owner context"}</dd></div><div><dt>Architecture</dt><dd>{selectedArchitecture ? `${selectedArchitecture.name}${selectedContext ? `, current revision ${selectedContext.revisionNumber}` : ""}` : "Select architecture"}</dd></div><div><dt>Profile</dt><dd>{selectedProfile?.name ?? "Select profile"}</dd></div><div><dt>Logical environment</dt><dd>{selectedEnvironment?.name ?? "Select environment"}</dd></div><div><dt>Adapter</dt><dd>{selectedAdapter.label}</dd></div></dl><p className="control-plane-muted">Registration creates a pending target. Grant consent only after confirming the adapter and exact binding.</p></section>
     <fieldset className="target-capability-fieldset"><legend>Capabilities</legend>{READ_CAPABILITY_OPTIONS.map((option) => <label className="control-plane-checkbox" key={option.key}><input checked={capabilities[option.key] === true} disabled={state === "saving"} type="checkbox" onChange={(event) => toggleCapability(option.key, event.target.checked)} /><span><strong>{option.label}</strong><small>{option.description}</small></span></label>)}</fieldset>
     <details className="target-advanced-settings"><summary>Advanced target settings</summary><p className="control-plane-muted">Use these only when you have an approved opaque value. Secrets and machine paths are not rendered after save.</p><div className="control-plane-form"><label><span>Current revision digest <small>(read-only, computed from the selected spec)</small></span><Input aria-label="Current revision digest" readOnly value={selectedContext?.revisionDigest ?? ""} /></label><label><span>Target identity digest <small>(optional opaque SHA-256)</small></span><Input aria-label="Target identity digest" disabled={state === "saving"} onChange={(event) => { setIdentityDigest(event.target.value); clearFieldError(); }} placeholder="64 lowercase hex characters" value={identityDigest} /></label><label><span>Credential reference <small>(write-only opaque reference)</small></span><Input aria-label="Credential reference" autoComplete="off" disabled={state === "saving"} onChange={(event) => { setCredentialReference(event.target.value); clearFieldError(); }} placeholder="Opaque secret-store reference" type="password" value={credentialReference} /></label><label><span>Freeform metadata <small>(optional JSON; keys only are shown after save)</small></span><textarea aria-label="Target metadata JSON" disabled={state === "saving"} onChange={(event) => { setMetadataJson(event.target.value); clearFieldError(); }} placeholder='{"label":"personal"}' value={metadataJson} /></label></div></details>
     {message && <div className="control-plane-inline-message" id="target-registration-error" ref={errorRef} role="alert" tabIndex={-1}>{message}</div>}
-    <Button className="shadcn-action-button" disabled={state === "saving" || architectureState !== "ready" || detailState !== "ready"} size="sm" type="submit"><Plus size={15} aria-hidden="true" />{state === "saving" ? "Registering…" : "Register target"}</Button>
-  </form></CardContent></Card>;
+    <div className="cp-actions"><Button disabled={state === "saving" || architectureState !== "ready" || detailState !== "ready"} size="sm" type="submit"><Plus size={15} aria-hidden="true" />{state === "saving" ? "Registering…" : "Register target"}</Button><Button disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={onCancel}>Cancel</Button></div>
+  </form></section>;
 }
 
-function TargetDetailPanel({ client, detail, observations, state, message, onRefresh }: { client: RegistryClient; detail: ArchitectureTargetRecord | null; observations: ArchitectureTargetObservationRecord[]; state: LoadState; message: string | null; onRefresh: () => void }) {
-  if (!detail && state === "loading") return <Card className="control-plane-card target-detail-card empty" aria-label="Connected target detail"><CardContent className="control-plane-empty-detail"><TargetLoadingRows /></CardContent></Card>;
-  if (!detail && state === "error") return <Card className="control-plane-card target-detail-card empty" aria-label="Connected target detail"><CardContent className="control-plane-empty-detail"><div className="safe-message control-plane-message" role="alert"><CircleAlert size={24} aria-hidden="true" /><strong>{message ?? "The connected target detail is unavailable."}</strong><span>The selected target could not load. Retry the request or choose a different target.</span><Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={onRefresh}><RefreshCw size={15} aria-hidden="true" />Retry</Button></div></CardContent></Card>;
-  if (!detail) return <Card className="control-plane-card target-detail-card empty" aria-label="Connected target detail"><CardContent className="control-plane-empty-detail"><Link2 size={42} aria-hidden="true" /><h2>Select a connected target</h2><p>Choose a registered target to inspect its exact binding, consent, health, and bounded observations.</p></CardContent></Card>;
-  return <Card className="control-plane-card target-detail-card" aria-label={`Connected target detail: ${detail.name}`}><CardHeader className="control-plane-detail-header"><div><p className="control-plane-kicker">Target detail</p><CardTitle>{detail.name}</CardTitle><CardDescription>{detail.adapter.kind} v{detail.adapter.version} · contract v{detail.adapter.contractVersion}</CardDescription><p className="control-plane-context-note"><ShieldCheck size={15} aria-hidden="true" /> Target access is separate from architecture ownership and organization membership.</p></div><div className="control-plane-detail-actions"><Badge variant={detail.status === "connected" ? "secondary" : detail.status === "revoked" ? "destructive" : "outline"}>{detail.status}</Badge><Badge variant="outline">consent: {detail.consent.status}</Badge></div></CardHeader><CardContent className="control-plane-detail-content">
+function TargetDetailPanel({ client, detail, observations, state, message, selectedId, currentUserId, architectureNames, organizationNames, titleRef, onBack, onRefresh }: {
+  client: RegistryClient;
+  detail: ArchitectureTargetRecord | null;
+  observations: ArchitectureTargetObservationRecord[];
+  state: LoadState;
+  message: string | null;
+  selectedId: string | null;
+  currentUserId: string;
+  architectureNames: ReadonlyMap<string, string>;
+  organizationNames: ReadonlyMap<string, string>;
+  titleRef: RefObject<HTMLHeadingElement | null>;
+  onBack?: () => void;
+  onRefresh: () => void;
+}) {
+  const back = onBack && <Button className="cp-back" type="button" variant="ghost" onClick={onBack}><ArrowLeft size={16} aria-hidden="true" />Back to targets</Button>;
+  if (!detail && state === "loading") return <div className="cp-detail">{back}<TargetLoadingRows /></div>;
+  if (!detail && state === "error") return <div className="cp-detail">{back}<div className="cp-inspector-state" role="alert"><CircleAlert size={18} aria-hidden="true" /><div><strong>{message ?? "The connected target detail is unavailable."}</strong><p>The selected target could not load. Retry the request or choose a different target.</p><div className="cp-actions"><Button size="sm" type="button" variant="outline" onClick={onRefresh}><RefreshCw size={15} aria-hidden="true" />Retry</Button></div></div></div></div>;
+  // Details render only for the loaded selection, never from a stale response.
+  if (!detail || detail.id !== selectedId) return <div className="cp-detail">{back}<p className="cp-inspector-empty">Choose a registered target to inspect its exact binding, consent, health, and bounded observations.</p></div>;
+  const status = targetStatusLabel(detail.status);
+  const consent = consentLabel(detail.consent.status);
+  return <article className="cp-detail" aria-labelledby="target-detail-title">
+    <header className="cp-detail-head">
+      {back}
+      <div className="cp-title-block">
+        <h2 id="target-detail-title" ref={titleRef} tabIndex={-1}>{detail.name}</h2>
+        <p className="cp-meta">{adapterLabel(detail.adapter.kind)} · adapter v{detail.adapter.version} · contract v{detail.adapter.contractVersion}</p>
+        <div className="cp-chips"><span className="cp-chip" data-tone={toneOf(status)}>{status.label}</span><span className="cp-chip" data-tone={toneOf(consent)}>{consent.label}</span></div>
+      </div>
+    </header>
     {state === "loading" && <TargetLoadingRows />}
-    {state === "error" && message && <div className="safe-message control-plane-message" role="alert">{message}<Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={onRefresh}><RefreshCw size={15} aria-hidden="true" />Retry</Button></div>}
-    {state === "ready" && <><TargetBindingCard target={detail} /><TargetConsentCard client={client} target={detail} onChanged={onRefresh} /><TargetHealthCard client={client} target={detail} onChanged={onRefresh} /><TargetObservationCard target={detail} observations={observations} /><TargetRevokeCard client={client} target={detail} onRevoked={onRefresh} /></>}
-  </CardContent></Card>;
+    {state === "error" && message && <div className="cp-notice" data-tone="danger" role="alert">{message}<Button size="sm" type="button" variant="outline" onClick={onRefresh}><RefreshCw size={15} aria-hidden="true" />Retry</Button></div>}
+    {state === "ready" && <div className="cp-detail-body" key={detail.id}>
+      <TargetBindingFacts target={detail} currentUserId={currentUserId} architectureNames={architectureNames} organizationNames={organizationNames} />
+      <TargetConsentCard client={client} target={detail} onChanged={onRefresh} />
+      <TargetObservationCard target={detail} observations={observations} />
+      <TargetHealthCard client={client} target={detail} onChanged={onRefresh} />
+      <TargetRevokeCard client={client} target={detail} onRevoked={onRefresh} />
+    </div>}
+  </article>;
 }
 
-function TargetBindingCard({ target }: { target: ArchitectureTargetRecord }) {
+function TargetBindingFacts({ target, currentUserId, architectureNames, organizationNames }: { target: ArchitectureTargetRecord; currentUserId: string; architectureNames: ReadonlyMap<string, string>; organizationNames: ReadonlyMap<string, string> }) {
   const metadataKeys = Object.keys(target.metadata ?? {}).sort();
-  return <section className="control-plane-section" aria-labelledby="target-binding-heading"><div className="control-plane-section-heading"><div><p className="control-plane-kicker">Exact binding</p><h2 id="target-binding-heading">Architecture context</h2></div><Badge variant="outline">generation {target.generation}</Badge></div><dl className="target-binding-grid"><div><dt>Owner</dt><dd>{target.owner.type} · {target.owner.id}</dd></div><div><dt>Architecture</dt><dd>{target.architectureId}</dd></div><div><dt>Logical environment</dt><dd>{target.environmentId}</dd></div><div><dt>Profile</dt><dd>{target.profileId}</dd></div><div><dt>Identity</dt><dd>{target.identityDigest.slice(0, 12)}…</dd></div><div><dt>Metadata keys</dt><dd>{metadataKeys.length ? metadataKeys.join(", ") : "None"}</dd></div></dl><div className="target-capability-summary"><strong>Advertised capabilities</strong><div>{READ_CAPABILITY_OPTIONS.map((option) => <Badge key={option.key} variant={target.capabilities[option.key] ? "secondary" : "outline"}>{option.label}: {target.capabilities[option.key] ? "on" : "off"}</Badge>)}{target.adapter.contractVersion === 2 && <><Badge variant={target.capabilities.apply ? "secondary" : "outline"}>Apply: {target.capabilities.apply ? "on" : "off"}</Badge><Badge variant={target.capabilities.rollback ? "secondary" : "outline"}>Rollback: {target.capabilities.rollback ? "on" : "off"}</Badge></>}</div><span>{target.adapter.contractVersion === 2 ? "Mutation requires consent and companion claim fencing." : "This target is read-only."}</span></div></section>;
+  const mutable = target.adapter.contractVersion === 2;
+  const capabilities = [
+    ...READ_CAPABILITY_OPTIONS.filter((option) => target.capabilities[option.key]).map((option) => option.label),
+    ...(mutable && target.capabilities.apply ? ["Apply"] : []),
+    ...(mutable && target.capabilities.rollback ? ["Rollback"] : []),
+  ];
+  const architectureName = architectureNames.get(target.architectureId);
+  return <section className="cp-section" aria-labelledby="target-binding-heading">
+    <h3 id="target-binding-heading">Binding</h3>
+    <dl className="cp-facts">
+      <div><dt>Owner</dt><dd>{ownerLabel(target.owner, currentUserId, organizationNames)}</dd></div>
+      <div><dt>Architecture</dt>{architectureName ? <dd>{architectureName}</dd> : <dd className="cp-mono">{shortId(target.architectureId)}</dd>}</div>
+      <div><dt>Profile ID</dt><dd className="cp-mono">{target.profileId}</dd></div>
+      <div><dt>Environment ID</dt><dd className="cp-mono">{target.environmentId}</dd></div>
+      <div><dt>Health</dt><dd>{healthLabel(target.health?.status).label}</dd></div>
+      <div><dt>Generation</dt><dd>{target.generation}</dd></div>
+      <div><dt>Identity</dt><dd className="cp-mono">{target.identityDigest ? `${target.identityDigest.slice(0, 12)}…` : "None"}</dd></div>
+      <div><dt>Metadata keys</dt><dd>{metadataKeys.length ? metadataKeys.join(", ") : "None"}</dd></div>
+      <div><dt>Capabilities</dt><dd>{capabilities.join(", ") || "None"} · {mutable ? "Mutation requires consent and companion claim fencing." : "This target is read-only."}</dd></div>
+    </dl>
+    <p className="cp-footnote"><ShieldCheck size={14} aria-hidden="true" /> Target access is separate from architecture ownership and organization membership.</p>
+  </section>;
 }
 
 function TargetConsentCard({ client, target, onChanged }: { client: RegistryClient; target: ArchitectureTargetRecord; onChanged: () => void }) {
@@ -641,7 +829,12 @@ function TargetConsentCard({ client, target, onChanged }: { client: RegistryClie
       setMessage(safeArchitectureTargetErrorMessage(error));
     }
   }
-  return <section className="control-plane-section" aria-labelledby="target-consent-heading"><div className="control-plane-section-heading"><div><p className="control-plane-kicker">Explicit consent</p><h2 id="target-consent-heading">Consent state</h2></div><Badge variant={target.consent.status === "granted" ? "secondary" : "outline"}>{target.consent.status}</Badge></div><p className="control-plane-muted">Observation is available only after an explicit grant. Deny keeps the target registered but blocks observation.</p><div className="target-action-row"><Button className="shadcn-action-button" disabled={state === "saving" || target.status === "revoked"} size="sm" type="button" onClick={() => void setConsent("grant")}><Check size={15} aria-hidden="true" />Grant consent</Button><Button className="shadcn-action-button" disabled={state === "saving" || target.status === "revoked"} size="sm" type="button" variant="outline" onClick={() => void setConsent("deny")}><X size={15} aria-hidden="true" />Deny consent</Button></div>{message && <div className="control-plane-inline-message" role={state === "error" ? "alert" : "status"}>{message}</div>}</section>;
+  const consent = consentLabel(target.consent.status);
+  const granted = target.consent.status === "granted";
+  const denied = target.consent.status === "denied";
+  const locked = state === "saving" || target.status === "revoked";
+  // Keep the current decision disabled and denial visually secondary.
+  return <section className="cp-section" aria-labelledby="target-consent-heading"><div className="cp-section-head"><h3 id="target-consent-heading">Consent</h3><span className="cp-chip" data-tone={toneOf(consent)}>{consent.label}</span></div><p className="cp-muted">Observation is available only after an explicit grant. Deny keeps the target registered but blocks observation.</p><div className="cp-actions"><Button disabled={locked || granted} size="sm" type="button" variant={granted ? "outline" : "default"} onClick={() => void setConsent("grant")}><Check size={15} aria-hidden="true" />Grant consent</Button><Button className="cp-danger-button" disabled={locked || denied} size="sm" type="button" variant="outline" onClick={() => void setConsent("deny")}><X size={15} aria-hidden="true" />Deny consent</Button></div>{message && <div className="cp-notice" data-tone={state === "error" ? "danger" : undefined} role={state === "error" ? "alert" : "status"}>{message}</div>}</section>;
 }
 
 function TargetHealthCard({ client, target, onChanged }: { client: RegistryClient; target: ArchitectureTargetRecord; onChanged: () => void }) {
@@ -663,11 +856,11 @@ function TargetHealthCard({ client, target, onChanged }: { client: RegistryClien
       setMessage(safeArchitectureTargetErrorMessage(error));
     }
   }
-  return <section className="control-plane-section" aria-labelledby="target-health-heading"><div className="control-plane-section-heading"><div><p className="control-plane-kicker">Read-only status</p><h2 id="target-health-heading">Health</h2></div><Badge variant="outline">{target.health?.status ?? "not checked"}</Badge></div><form className="target-health-form" onSubmit={(event) => void updateHealth(event)}><label><span>Reported state</span><select aria-label="Target health status" disabled={state === "saving" || target.status === "revoked"} onChange={(event) => setStatus(event.target.value as ArchitectureTargetHealth["status"])} value={status}><option value="healthy">Healthy</option><option value="degraded">Degraded</option><option value="unavailable">Unavailable</option></select></label><Button className="shadcn-action-button" disabled={state === "saving" || target.status === "revoked"} size="sm" type="submit"><Activity size={15} aria-hidden="true" />{state === "saving" ? "Updating…" : "Update health"}</Button></form>{message && <div className="control-plane-inline-message" role={state === "error" ? "alert" : "status"}>{message}</div>}</section>;
+  return <section className="cp-section" aria-labelledby="target-health-heading"><details className="cp-details"><summary id="target-health-heading">Report health manually</summary><div className="cp-details-body"><p className="cp-muted">Current health: {healthLabel(target.health?.status).label}. A manual report replaces it until the adapter reports again.</p><form className="target-health-form" onSubmit={(event) => void updateHealth(event)}><label><span>Reported state</span><select aria-label="Target health status" disabled={state === "saving" || target.status === "revoked"} onChange={(event) => setStatus(event.target.value as ArchitectureTargetHealth["status"])} value={status}><option value="healthy">Healthy</option><option value="degraded">Degraded</option><option value="unavailable">Unavailable</option></select></label><Button disabled={state === "saving" || target.status === "revoked"} size="sm" type="submit" variant="outline"><Activity size={15} aria-hidden="true" />{state === "saving" ? "Updating…" : "Update health"}</Button></form>{message && <div className="cp-notice" data-tone={state === "error" ? "danger" : undefined} role={state === "error" ? "alert" : "status"}>{message}</div>}</div></details></section>;
 }
 
 function TargetObservationCard({ target, observations }: { target: ArchitectureTargetRecord; observations: ArchitectureTargetObservationRecord[] }) {
-  return <section className="control-plane-section" aria-labelledby="target-observations-heading"><div className="control-plane-section-heading"><div><p className="control-plane-kicker">Metadata-only readback</p><h2 id="target-observations-heading">Observations</h2></div><span>{observations.length} recent</span></div><p className="control-plane-muted">Only bounded counts and status metadata are shown here. Configuration contents, paths, prompts, and credentials are never rendered.</p><div className="target-observation-list">{observations.map((observation) => <div className="target-observation-row" key={observation.id ?? observation.observedDigest}><Eye size={16} aria-hidden="true" /><span><strong>{formatTargetDate(observation.observedAt)}</strong><small>{observation.skills.length} skills · {observation.configFindings.length} config findings · prompt detected: {observation.promptAwareness.detected ? "yes" : "no"}</small></span><Badge variant="outline">generation {observation.targetGeneration}</Badge></div>)}{observations.length === 0 && <div className="control-plane-empty-state"><Eye size={22} aria-hidden="true" /><strong>No observations yet</strong><span>{target.consent.status === "granted" ? "A read-only adapter can report bounded state after consent." : "Grant consent before an adapter can report state."}</span></div>}</div></section>;
+  return <section className="cp-section" aria-labelledby="target-observations-heading"><div className="cp-section-head"><h3 id="target-observations-heading">Observations</h3><span className="cp-muted">{observations.length} recent</span></div><p className="cp-muted">Only bounded counts and status metadata are shown here. Configuration contents, paths, prompts, and credentials are never rendered.</p>{observations.length > 0 ? <div className="target-observation-list">{observations.map((observation) => <div className="target-observation-row" key={observation.id ?? observation.observedDigest}><Eye size={16} aria-hidden="true" /><span><strong>{formatTargetDate(observation.observedAt)}</strong><small>{observation.skills.length} skills · {observation.configFindings.length} config findings · prompt detected: {observation.promptAwareness.detected ? "yes" : "no"}</small></span><span className="cp-chip">Generation {observation.targetGeneration}</span></div>)}</div> : <p className="cp-muted"><strong>No observations yet.</strong> {target.consent.status === "granted" ? "A read-only adapter can report bounded state after consent." : "Grant consent before an adapter can report state."}</p>}</section>;
 }
 
 function TargetRevokeCard({ client, target, onRevoked }: { client: RegistryClient; target: ArchitectureTargetRecord; onRevoked: () => void }) {
@@ -688,11 +881,7 @@ function TargetRevokeCard({ client, target, onRevoked }: { client: RegistryClien
       setMessage(safeArchitectureTargetErrorMessage(error));
     }
   }
-  return <section className="control-plane-section target-revoke-section" aria-labelledby="target-revoke-heading"><div className="control-plane-section-heading"><div><p className="control-plane-kicker">Terminal action</p><h2 id="target-revoke-heading">Revoke connected target</h2></div></div><p className="control-plane-muted">Revocation blocks consent changes, health updates, and future observations. The target remains visible to authorized readers as audit history.</p>{target.status === "revoked" ? <Badge variant="destructive">Revoked</Badge> : <div className="target-action-row">{confirm && <p className="control-plane-muted" role="alert">This is permanent for the target binding. Confirm only if you intend to stop future observations.</p>}<Button className="shadcn-action-button" size="sm" type="button" variant={confirm ? "destructive" : "outline"} onClick={() => void revoke()}><Trash2 size={15} aria-hidden="true" />{confirm ? "Confirm revoke" : "Revoke target"}</Button>{confirm && <Button className="shadcn-action-button" size="sm" type="button" variant="outline" onClick={() => setConfirm(false)}>Cancel</Button>}</div>}{message && <div className="control-plane-inline-message" role="alert">{message}</div>}</section>;
-}
-
-function TargetEmptyState({ icon, title, copy, action }: { icon: ReactNode; title: string; copy: string; action?: ReactNode }) {
-  return <div className="control-plane-empty-state">{icon}<strong>{title}</strong><span>{copy}</span>{action}</div>;
+  return <section className="cp-section target-revoke-section" aria-labelledby="target-revoke-heading"><div className="cp-section-head"><h3 id="target-revoke-heading">Revoke connected target</h3></div><p className="cp-muted">Revocation blocks consent changes, health updates, and future observations. The target remains visible to authorized readers as audit history.</p>{target.status === "revoked" ? <div className="cp-chips"><span className="cp-chip" data-tone="danger">Revoked</span></div> : <>{confirm && <p className="cp-notice" data-tone="danger" role="alert">This is permanent for the target binding. Confirm only if you intend to stop future observations.</p>}<div className="cp-actions"><Button className="cp-danger-button" size="sm" type="button" variant={confirm ? "destructive" : "outline"} onClick={() => void revoke()}><Trash2 size={15} aria-hidden="true" />{confirm ? "Confirm revoke" : "Revoke target"}</Button>{confirm && <Button size="sm" type="button" variant="outline" onClick={() => setConfirm(false)}>Cancel</Button>}</div></>}{message && <div className="cp-notice" data-tone="danger" role="alert">{message}</div>}</section>;
 }
 
 function TargetLoadingRows() {

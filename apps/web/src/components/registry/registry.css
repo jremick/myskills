@@ -1,0 +1,424 @@
+/* Registry workspace: one surface with a search toolbar, the skill list and an
+   exact-release inspector. Values follow the Libraries workspace, and the tile
+   tones match it so a skill keeps its colour in both places. Rules are scoped
+   to .registry-workspace because older app-wide rules share some class names. */
+.registry-workspace {
+  --tile-teal: #14b8a6;
+  --tile-amber: #f5b53d;
+  --tile-navy: #2b3a4e;
+  --registry-shadow: 0 1px 2px rgba(17, 26, 38, 0.05), 0 12px 28px -14px rgba(17, 26, 38, 0.2);
+  --registry-mono: 12.5px/18px var(--font-mono);
+  display: grid;
+  align-content: start;
+  gap: 24px;
+  width: 100%;
+  min-width: 0;
+  max-width: 1420px;
+  margin: 0 auto;
+  padding: 24px 24px 40px;
+}
+.registry-workspace [hidden] { display: none !important; }
+.registry-workspace code { font: var(--registry-mono); overflow-wrap: anywhere; }
+.registry-workspace .registry-inspector a { color: var(--teal-dark); font-weight: 600; text-underline-offset: 2px; }
+.registry-workspace .registry-inspector a:hover { text-decoration: underline; }
+.registry-workspace select {
+  height: 32px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 8px;
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: 14px;
+}
+.registry-workspace :is(.registry-row, .registry-disclosure-button, .registry-back, .registry-search input):focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Page header */
+.registry-workspace .registry-page-head { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.registry-workspace .registry-page-head h1 { color: var(--ink); font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: 0; }
+
+/* Surface and toolbar */
+.registry-workspace .registry-surface {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--registry-shadow);
+}
+.registry-workspace .registry-toolbar {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 12px 12px 0 0;
+  background: var(--surface-soft);
+}
+.registry-workspace .registry-search { position: relative; display: flex; align-items: center; flex: 1 1 240px; max-width: 420px; min-width: 0; }
+.registry-workspace .registry-search > svg { position: absolute; left: 10px; color: var(--muted); pointer-events: none; }
+.registry-workspace .registry-search input {
+  width: 100%;
+  height: 32px;
+  padding: 0 38px 0 34px;
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: 14px;
+}
+.registry-workspace .registry-search input::placeholder { color: var(--muted); }
+.registry-workspace .registry-search kbd {
+  position: absolute;
+  right: 7px;
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font: 12px/1 var(--font-mono);
+  pointer-events: none;
+}
+
+/* Body: list and inspector. The split follows the surface's measured width. */
+.registry-workspace .registry-body { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="split"] .registry-body { grid-template-columns: minmax(0, 1fr) clamp(460px, 56%, 620px); }
+
+/* List */
+.registry-workspace .registry-list { display: grid; align-content: start; gap: 4px; min-width: 0; padding: 12px 12px 16px; container-type: inline-size; }
+.registry-workspace .registry-list-label { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 12px 4px; }
+.registry-workspace .registry-list-label h2 {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.registry-workspace .registry-list-label span { color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.registry-workspace .registry-rows { display: grid; gap: 2px; }
+.registry-workspace .registry-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  min-height: 56px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.registry-workspace .registry-row:hover { background: var(--surface-soft); }
+.registry-workspace .registry-row[aria-current="true"] { background: var(--teal-soft); box-shadow: inset 2px 0 0 var(--teal); }
+.registry-workspace .registry-rows .registry-row:focus-visible { outline-width: 2px; outline-offset: -3px; }
+.registry-workspace .registry-row > .registry-tile { align-self: start; margin-top: 2px; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-row { min-height: 64px; }
+.registry-workspace .registry-row-text { display: grid; gap: 2px; min-width: 0; }
+.registry-workspace .registry-row-title { font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.registry-workspace .registry-row-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; min-width: 0; color: var(--muted); font-size: 13px; line-height: 18px; }
+.registry-workspace .registry-row-meta > * + *::before { content: "·"; margin-right: 6px; color: var(--line-strong); font-family: var(--font-sans); }
+.registry-workspace .registry-row-meta code { color: var(--ink-soft); }
+.registry-workspace .registry-version-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  color: var(--ink-soft);
+  background: var(--surface-sunken);
+  font: 600 12px/16px var(--font-mono);
+  white-space: nowrap;
+}
+@container (max-width: 300px) {
+  .registry-workspace .registry-row { grid-template-columns: auto minmax(0, 1fr); }
+  .registry-workspace .registry-version-chip { grid-column: 2; justify-self: start; }
+}
+.registry-workspace .registry-list-state { display: grid; justify-items: start; gap: 8px; padding: 20px 12px; }
+.registry-workspace .registry-list-state strong { color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 600; }
+.registry-workspace .registry-list-state p { color: var(--ink-soft); font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.registry-workspace .registry-list-foot { display: flex; justify-content: flex-end; margin-top: 8px; padding: 10px 12px 0; border-top: 1px solid var(--line-soft); }
+.registry-workspace .registry-alert { padding: 0 12px; color: var(--danger); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+
+/* Tiles and chips */
+.registry-workspace .registry-tile { display: inline-block; flex: none; width: 16px; height: 16px; border-radius: 4px; background: var(--tile-teal); }
+.registry-workspace .registry-tile[data-tone="amber"] { background: var(--tile-amber); }
+.registry-workspace .registry-tile[data-tone="navy"] { background: var(--tile-navy); }
+.registry-workspace .registry-tile[data-size="32"] { width: 32px; height: 32px; border-radius: 8px; }
+.registry-workspace .registry-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  color: var(--ink-soft);
+  background: var(--surface-sunken);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.registry-workspace .registry-chip[data-tone="teal"] { color: var(--teal-dark); background: var(--teal-soft); }
+.registry-workspace .registry-chip[data-tone="amber"] { color: var(--warning); background: var(--warning-soft); }
+.registry-workspace .registry-change-kind { text-transform: capitalize; }
+
+/* Inspector */
+.registry-workspace .registry-inspector { display: grid; align-content: start; gap: 20px; min-width: 0; padding: 20px 24px 24px; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="split"] .registry-inspector { border-left: 1px solid var(--line-soft); }
+.registry-workspace .registry-back {
+  justify-self: start;
+  min-height: 44px;
+  margin: -10px 0 -10px -12px;
+  padding: 0 12px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 600;
+}
+.registry-workspace .registry-inspector-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 12px 14px; }
+.registry-workspace .registry-inspector-title { display: grid; gap: 2px; min-width: 0; }
+.registry-workspace .registry-inspector-title h2 { color: var(--ink); font-size: 18px; line-height: 26px; font-weight: 600; overflow-wrap: anywhere; }
+.registry-workspace .registry-inspector-title h2:focus { outline: none; }
+.registry-workspace .registry-inspector-title h2:focus-visible { border-radius: 4px; outline: 2px solid var(--ring); outline-offset: 2px; }
+.registry-workspace .registry-ref { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; color: var(--muted); }
+.registry-workspace .registry-ref code { color: var(--muted); }
+.registry-workspace .registry-ref span { font: var(--registry-mono); }
+.registry-workspace .registry-ref span + code { color: var(--ink-soft); font-weight: 600; }
+.registry-workspace .registry-inspector-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; color: var(--muted); font-size: 13px; line-height: 18px; }
+.registry-workspace .registry-version-slot { min-width: 0; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="split"] .registry-version-slot { max-width: 260px; }
+.registry-workspace .registry-version-control { display: grid; justify-items: end; gap: 8px; }
+.registry-workspace .registry-version-control label { display: grid; gap: 4px; max-width: 100%; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
+.registry-workspace .registry-version-control select { min-width: 176px; }
+.registry-workspace .registry-version-control .control-plane-muted { color: var(--muted); font-size: 13px; line-height: 18px; text-align: right; }
+.registry-workspace .registry-version-control [role="status"] { display: grid; justify-items: end; gap: 6px; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-inspector-head { grid-template-columns: auto minmax(0, 1fr); }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-slot { grid-column: 1 / -1; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-control,
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-control [role="status"] { justify-items: start; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-control label { width: min(100%, 320px); }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-control select { width: 100%; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-control .control-plane-muted { text-align: left; }
+.registry-workspace .registry-inspector-state {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+.registry-workspace .registry-inspector-state > svg { margin-top: 2px; color: var(--muted); }
+.registry-workspace .registry-inspector-state[role="status"] > svg { color: var(--warning); }
+.registry-workspace .registry-inspector-state :is(strong, h3) { display: block; color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.registry-workspace .registry-inspector-state p { margin-top: 4px; color: var(--ink-soft); font-size: 14px; line-height: 20px; }
+.registry-workspace .registry-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.registry-workspace .registry-inspector-empty { display: grid; place-items: center; min-height: 240px; color: var(--muted); font-size: 13px; line-height: 18px; text-align: center; }
+
+/* Inspector body */
+.registry-workspace .registry-inspector-body { display: grid; gap: 20px; min-width: 0; }
+.registry-workspace .registry-summary { max-width: 64ch; color: var(--ink-soft); font-size: 15px; line-height: 24px; overflow-wrap: anywhere; }
+.registry-workspace .registry-section { display: grid; gap: 12px; min-width: 0; padding-top: 20px; border-top: 1px solid var(--line-soft); }
+.registry-workspace .registry-facts { display: grid; gap: 8px; }
+.registry-workspace .registry-facts > div { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: baseline; gap: 12px; }
+.registry-workspace .registry-facts[data-labels="wide"] > div { grid-template-columns: minmax(0, 176px) minmax(0, 1fr); }
+.registry-workspace .registry-facts dt { color: var(--muted); font-size: 13px; line-height: 20px; }
+.registry-workspace .registry-facts dd { min-width: 0; color: var(--ink); font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.registry-workspace .registry-facts dd.registry-mono { color: var(--ink-soft); font: var(--registry-mono); line-height: 20px; }
+.registry-workspace .registry-use h3 { color: var(--ink); font-size: 15px; line-height: 22px; font-weight: 600; }
+.registry-workspace .registry-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(122, 75, 0, 0.18);
+  border-radius: 8px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+.registry-workspace .registry-callout > svg { flex: none; margin-top: 2px; }
+.registry-workspace .registry-platforms { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.registry-workspace .registry-platforms > span { color: var(--ink-soft); font-size: 13px; line-height: 18px; font-weight: 600; }
+.registry-workspace .registry-platforms > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.registry-workspace .platform-button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--ink-soft);
+  background: var(--surface);
+  font: 600 12.5px/1 var(--font-mono);
+  box-shadow: none;
+}
+.registry-workspace .platform-button:hover { border-color: var(--teal); color: var(--teal-dark); }
+.registry-workspace .platform-button[aria-pressed="true"] { border-color: var(--teal); color: var(--teal-dark); background: var(--teal-soft); }
+
+/* The CLI command keeps its .command-panel hook but uses the light Libraries style. */
+.registry-workspace .registry-command.command-panel { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; border-radius: 0; color: inherit; background: none; box-shadow: none; }
+.registry-workspace .registry-command-label { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-soft); font-size: 13px; line-height: 18px; font-weight: 600; }
+.registry-workspace .registry-command-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px 12px;
+  padding: 8px 8px 8px 30px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fafbfc;
+}
+.registry-workspace .registry-command-row::before { content: "$"; position: absolute; top: 15px; left: 14px; color: var(--muted); font: var(--registry-mono); }
+.registry-workspace .registry-command code { align-self: center; padding: 7px 0; overflow: visible; color: var(--ink); font: var(--registry-mono); white-space: pre-wrap; }
+.registry-workspace .registry-command button { position: static; }
+.registry-workspace .registry-muted { color: var(--muted); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+
+/* Exact install sub-block */
+.registry-workspace .release-install-panel { display: grid; gap: 10px; min-width: 0; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.registry-workspace .release-install-panel h4 { color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 600; }
+.registry-workspace .release-install-panel .control-plane-muted { color: var(--muted); font-size: 13px; line-height: 18px; }
+.registry-workspace .release-install-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 10px; }
+.registry-workspace .release-install-controls label { display: grid; flex: 1 1 200px; gap: 4px; max-width: 360px; min-width: 0; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .release-install-controls { display: grid; grid-template-columns: minmax(0, 1fr); }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .release-install-controls label { max-width: none; width: 100%; }
+.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .release-install-controls > button { justify-self: start; }
+.registry-workspace .release-install-review {
+  display: grid;
+  flex-basis: 100%;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+.registry-workspace .release-install-review small { color: var(--muted); font: var(--registry-mono); }
+
+/* Disclosures */
+.registry-workspace .registry-more { gap: 4px; }
+.registry-workspace .registry-details > summary,
+.registry-workspace .registry-disclosure-button {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  color: var(--ink-soft);
+  background: none;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  text-align: left;
+  list-style: none;
+  cursor: pointer;
+}
+.registry-workspace .registry-details > summary::-webkit-details-marker { display: none; }
+.registry-workspace .registry-details > summary::before,
+.registry-workspace .registry-disclosure-button::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin: 0 2px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 120ms ease;
+}
+.registry-workspace .registry-details[open] > summary::before,
+.registry-workspace .registry-disclosure-button[aria-expanded="true"]::before { transform: rotate(45deg); }
+.registry-workspace :is(.registry-details > summary, .registry-disclosure-button):hover { color: var(--ink); }
+.registry-workspace .registry-details-body { display: grid; gap: 12px; padding: 4px 0 12px 16px; }
+.registry-workspace .registry-notes { max-width: 64ch; color: var(--ink-soft); font-size: 14px; line-height: 22px; white-space: pre-line; overflow-wrap: anywhere; }
+.registry-workspace .registry-disclosure { display: grid; min-width: 0; }
+.registry-workspace .registry-disclosure-body { min-width: 0; padding: 4px 0 12px; }
+.registry-workspace .package-file-viewer { display: grid; gap: 6px; padding: 8px 0 12px; }
+.registry-workspace .package-file-viewer h2 { color: var(--ink-soft); font-size: 13px; line-height: 18px; font-weight: 600; }
+.registry-workspace .package-file-viewer .control-plane-muted { max-width: 64ch; color: var(--muted); font-size: 13px; line-height: 18px; }
+.registry-workspace .package-file-viewer [data-slot="button"] { justify-self: start; }
+.registry-workspace .package-file-content { max-height: 20rem; background: var(--surface); font: 12.5px/1.6 var(--font-mono); }
+.registry-workspace .skill-improvement-panel { padding-top: 0; }
+.registry-workspace .skill-improvement-panel .control-plane-section-heading h2 { margin-top: 2px; font-size: 15px; line-height: 22px; font-weight: 600; }
+
+/* Owner controls: last, collapsed, and flattened into the surface. */
+.registry-workspace .registry-owner { gap: 4px; }
+.registry-workspace .registry-owner-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
+.registry-workspace .registry-owner-hint { display: inline-flex; align-items: center; gap: 5px; color: var(--warning); font-size: 12px; line-height: 16px; font-weight: 600; }
+.registry-workspace .registry-owner-panel { display: grid; gap: 20px; padding-top: 8px; }
+.registry-workspace .registry-owner-panel [data-slot="frame"] { display: grid; gap: 0; margin: 0; padding: 0; overflow: visible; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.registry-workspace .registry-owner-panel [data-slot="frame-panel"] { padding: 0; overflow: visible; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.registry-workspace .registry-owner-panel [data-slot="frame-panel"]::before { display: none; }
+.registry-workspace .registry-owner-panel [data-slot="frame-panel-header"] { padding: 0; }
+.registry-workspace .registry-owner-panel .reui-registry-panel > :is(.metadata-edit-grid, .lifecycle-actions, .release-lifecycle-list, .sharing-editor) { margin: 12px 0 0; }
+.registry-workspace .registry-owner-panel .reui-registry-panel > :is(.safe-message.compact, .inline-message) { margin: 12px 0 0; }
+.registry-workspace .registry-owner-panel .reui-registry-panel .sharing-panel-head { padding: 0 0 12px; }
+.registry-workspace .registry-owner-panel .sharing-panel { padding-top: 20px; border-top: 1px solid var(--line-soft); }
+.registry-workspace .registry-owner-panel .registry-danger-button[data-variant="outline"] { border-color: rgba(180, 35, 24, 0.35); color: var(--danger); background: var(--surface); }
+.registry-workspace .registry-owner-panel .registry-danger-button[data-variant="outline"]:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+
+/* Loading */
+.registry-workspace .registry-skeleton { display: grid; gap: 6px; }
+.registry-workspace .registry-skeleton-row { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 12px; }
+.registry-workspace .registry-skeleton-row span:first-child { width: 16px; height: 16px; border-radius: 4px; }
+.registry-workspace .registry-skeleton-row span:last-child { width: min(280px, 60%); height: 12px; border-radius: 4px; }
+.registry-workspace .registry-skeleton-detail { gap: 14px; }
+.registry-workspace .registry-skeleton-head { display: flex; align-items: center; gap: 14px; padding-bottom: 6px; }
+.registry-workspace .registry-skeleton-head span:first-child { width: 32px; height: 32px; border-radius: 8px; }
+.registry-workspace .registry-skeleton-head span:last-child { width: min(240px, 60%); height: 16px; border-radius: 4px; }
+.registry-workspace .registry-skeleton-line { height: 12px; border-radius: 4px; }
+.registry-workspace .registry-skeleton-line + .registry-skeleton-line { width: 70%; }
+.registry-workspace .registry-skeleton-block { height: 120px; border-radius: 10px; }
+.registry-workspace :is(.registry-skeleton span:not(.sr-only), .registry-skeleton-line, .registry-skeleton-block) { display: block; background: var(--surface-sunken); }
+
+@keyframes registry-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: no-preference) {
+  .registry-workspace :is(.registry-skeleton span:not(.sr-only), .registry-skeleton-line, .registry-skeleton-block) { animation: registry-pulse 1.4s ease-in-out infinite; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .registry-workspace :is(.registry-details > summary, .registry-disclosure-button)::before { transition: none; }
+}
+
+@media (max-width: 680px) {
+  .registry-workspace { gap: 16px; padding: 16px 16px 32px; }
+  .registry-workspace .registry-toolbar { padding: 10px 16px; }
+  .registry-workspace .registry-search { max-width: none; }
+  .registry-workspace .registry-list { padding: 8px; }
+  .registry-workspace .registry-inspector { padding: 16px 16px 20px; }
+  .registry-workspace .registry-facts > div { grid-template-columns: 80px minmax(0, 1fr); }
+  .registry-workspace .registry-facts[data-labels="wide"] > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}
+
+@media (max-width: 480px) {
+  .registry-workspace .registry-command-row { grid-template-columns: minmax(0, 1fr); }
+  .registry-workspace .registry-command button { justify-self: start; }
+}
+
+@media (pointer: coarse), (any-pointer: coarse), (max-width: 680px) {
+  .registry-workspace .registry-row { min-height: 64px; }
+  .registry-workspace .registry-search input { height: 44px; }
+  .registry-workspace .registry-search kbd { display: none; }
+  .registry-workspace :is(.registry-details > summary, .registry-disclosure-button) { min-height: 44px; }
+}
+
+@media (forced-colors: active) {
+  .registry-workspace .registry-row[aria-current="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
+  .registry-workspace :is(.registry-chip, .registry-version-chip) { border: 1px solid CanvasText; }
+  .registry-workspace .registry-tile { forced-color-adjust: none; }
+}

@@ -1,11 +1,24 @@
 # Release Process
 
-Version: 0.1.0-beta.10
+Version: 0.1.0-beta.12
 Last updated: 2026-09-27
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
+
+## Beta.12 release record
+
+The four-wave application redesign is published on GitHub and live at
+myskills.sh. Immutable tag `v0.1.0-beta.12` and production API/web use source
+`c280795e6f0bd54533514ab6c58af7a584cbd3a4`. Opus visual acceptance, canonical
+verification, protected-branch CI, staging, tagged verification and production
+checks passed. See [Beta.12 release delivery](BETA12_RELEASE_DELIVERY.md).
+
+Beta.11 remains a superseded immutable candidate after a browser-test timing
+failure. Beta.12 corrects test synchronization without changing the approved
+application design. No new database migration or npm publication is included;
+npm remains beta.8, and the verified beta.12 CLI archive is attached to GitHub.
 
 ## Beta.10 release record
 
@@ -144,7 +157,7 @@ Draft public release text in a file and use `--notes-file` or the GitHub UI if a
 
 ## CLI Package Candidate
 
-The candidate source version is `0.1.0-beta.10`, with `publishConfig.tag=beta`. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle. Candidate preparation does not change the published npm version.
+The repository and GitHub archive version is `0.1.0-beta.12`, with `publishConfig.tag=beta`. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle. GitHub publication does not change the published npm version.
 
 The canonical gate proves:
 

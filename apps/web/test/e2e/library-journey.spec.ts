@@ -128,6 +128,7 @@ test("reviewer inspects the exact private artifact before approving it for shari
     return route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } });
   });
   await page.goto("/libraries");
+  await page.getByRole("button", { name: "Library administration", exact: true }).click();
   await page.getByRole("button", { name: "Review sharing requests", exact: true }).click();
   const approve = page.getByRole("button", { name: "Approve artifact for sharing", exact: true });
   await expect(approve).toBeDisabled();
@@ -439,6 +440,7 @@ test("private-import policy keeps a pending choice and rereads an uncertain writ
   });
   await page.goto("/libraries");
   await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Library administration", exact: true }).click();
   const policy = page.getByLabel("Allow private import self-review");
   await expect(policy).not.toBeChecked();
   const attempt = policy.check().then(() => null, (error: unknown) => error);

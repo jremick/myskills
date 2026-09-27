@@ -1,7 +1,7 @@
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { useLayoutEffect, useRef } from "react";
 import { createArchitectureDiagramArtifact, type PublicSkill, type SkillSharingDetails, type TeamSharedSkillGroup } from "@myskills-app/core";
 import { unsupportedWorkspaceTargets, workspaceTarget } from "./workspace-target-fixture.js";
@@ -106,6 +106,7 @@ test("landing setting keeps a failed draft, discards it, and confirms a successf
   client.getAdminSiteSettings = async () => ({ landingPageEnabled: saved });
   client.updateAdminSiteSettings = async (site) => { if (fail) throw new Error("network failed"); saved = site.landingPageEnabled; return site; };
   const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("tab", { name: "Instance" }));
   const toggle = await view.findByRole("switch", { name: "Show landing page" });
   fireEvent.click(toggle);
   fireEvent.click(view.getByRole("button", { name: "Save landing setting" }));
@@ -216,7 +217,7 @@ test("anonymous registry routes load approved public skills without a session", 
   await view.findByText("Release Notes Helper");
   assert.deepEqual(client.searchCalls, [""]);
   assert.equal(document.body.textContent?.includes("owner@example.com"), false);
-  await waitFor(() => assert.equal(window.location.pathname, "/skills/release-notes-helper"));
+  await waitFor(() => assert.equal(window.location.pathname, "/registry"));
 });
 
 test("an explicit authorized skill URL survives a result page that excludes it", async () => {
@@ -243,7 +244,7 @@ test("registry pagination reaches later skills without replacing the selected de
   fireEvent.click(await view.findByRole("button", { name: "Load more skills" }));
   await view.findByRole("link", { name: /Second helper/ });
   assert.deepEqual(cursors, [undefined, "opaque-next-page"]);
-  assert.equal(window.location.pathname, "/skills/first-helper");
+  assert.equal(window.location.pathname, "/registry");
   fireEvent.click(view.getByRole("link", { name: /Second helper/ }));
   await waitFor(() => assert.equal(window.location.pathname, "/skills/second-helper"));
 });
@@ -390,7 +391,7 @@ test("public release history selects exact metadata and a supported platform wit
   assert.notEqual(view.getByText("Released").parentElement?.textContent, latestDate);
   assert.equal(view.getByText("fix").textContent, "fix");
   assert.match(view.getByText("Minimum MySkills").parentElement?.textContent ?? "", /1\.0\.0/);
-  assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /bbbbbbbbbb…bbbbbbbb/);
+  assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /b{64}/);
   assert.match(view.getByText("Byte size").parentElement?.textContent ?? "", /513/);
   assert.equal(view.getByText("Platforms").parentElement?.textContent?.includes("codex"), false);
   assert.equal(view.queryByRole("button", { name: "codex" }), null);
@@ -585,7 +586,7 @@ test("a release without supported platforms keeps its metadata but offers no exp
   await view.findByText(older.releaseNotes!);
   assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, older.version);
   assert.match(view.getByText("Platforms").parentElement?.textContent ?? "", /generic \(planned\).*codex \(deprecated\)/);
-  assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /bbbbbbbbbb…bbbbbbbb/);
+  assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /b{64}/);
   assert.match(view.getByText("Byte size").parentElement?.textContent ?? "", /513/);
   assert.match(view.getByText(/No supported export platform is available for this release/).textContent ?? "", /Export and install are unavailable/);
   assert.equal(view.queryByRole("heading", { name: "Install this exact release" }), null);
@@ -712,6 +713,7 @@ test("privileged skill controls stay locked without an MFA-verified session and 
 
   const view = render(<RegistryApp client={client} />);
 
+  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
   await view.findByRole("heading", { name: "Lifecycle and sharing controls are locked", level: 2 });
   assert.equal(view.queryByRole("region", { name: "Skill lifecycle controls" }), null);
   assert.equal(view.queryByRole("region", { name: "Sharing controls" }), null);
@@ -728,6 +730,7 @@ test("MFA-verified managers can load lifecycle and sharing controls", async () =
 
   const view = render(<RegistryApp client={client} />);
 
+  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
   await view.findByRole("region", { name: "Skill lifecycle controls" });
   await view.findByRole("region", { name: "Sharing controls" });
   assert.deepEqual(client.releaseHistoryCalls, [managedSkill.slug]);
@@ -745,6 +748,7 @@ test("metadata saves refresh the parent registry detail", async () => {
     return { ...skill, lifecycleStatus: "approved", allowedActions: ["edit"] };
   };
   const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
   await view.findByRole("region", { name: "Skill lifecycle controls" });
   fireEvent.input(view.getByRole("textbox", { name: "Title" }), { target: { value: "Updated registry title" } });
   fireEvent.input(view.getByRole("textbox", { name: "Summary" }), { target: { value: "Updated registry summary" } });
@@ -764,6 +768,7 @@ test("skill deletion clears the parent detail and its stale export actions", asy
   } });
   client.performSkillAction = async () => { deleted = true; return { ...skill, lifecycleStatus: "deleted", allowedActions: [] }; };
   const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
   await view.findByRole("region", { name: "Skill lifecycle controls" });
   const deleteButton = view.getByRole("button", { name: "Delete skill" }) as HTMLButtonElement;
   await waitFor(() => assert.equal(deleteButton.disabled, false));
@@ -785,6 +790,7 @@ test("release mutation refreshes parent history before offering the old artifact
   const client = historyClient(fixture, { user: owner, releaseListLoader: () => revoked ? [{ ...current, lifecycleStatus: "revoked" }] : [current] });
   client.performReleaseAction = async () => { revoked = true; return { ...current, lifecycleStatus: "revoked", allowedActions: [] }; };
   const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
   fireEvent.click(await view.findByRole("button", { name: "Revoke" }));
   const dialog = await view.findByRole("dialog");
   fireEvent.input(dialog.querySelector("textarea")!, { target: { value: "Withdraw this artifact" } });
@@ -903,7 +909,7 @@ test("out-of-order exact release responses cannot replace the current version", 
   await act(async () => { pendingRelease.resolve(fixture.older); await pendingRelease.promise; });
   assert.equal(window.location.search, "");
   assert.equal(view.queryByText(fixture.older.releaseNotes!), null);
-  assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /aaaaaaaaaa…aaaaaaaa/);
+  assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /a{64}/);
   assert.equal(client.releaseCalls.at(-1), "release-notes-helper@0.2.0");
 });
 
@@ -1003,8 +1009,8 @@ test("login stores session metadata without persisting bearer tokens and logout 
   fireEvent.click(view.getByRole("button", { name: /sign in/i }));
 
   await view.findByText("reader@example.com");
-  await view.findByText("Release Notes Helper");
-  assert.equal(window.location.pathname, "/skills/release-notes-helper");
+  await view.findByRole("link", { name: /Release Notes Helper/ });
+  assert.equal(window.location.pathname, "/registry");
   assert.equal(document.body.textContent?.includes("web-session-token"), false);
   const stored = JSON.parse(window.localStorage.getItem("myskills-app:web-session") ?? "{}") as Record<string, unknown>;
   assert.equal("token" in stored, false);
@@ -1062,7 +1068,7 @@ test("signed-in users can set up MFA and save recovery codes", async () => {
 
   await view.findByText("owner@example.com");
   fireEvent.click(view.getAllByRole("link", { name: "Settings" })[0]!);
-  await view.findByText("Authenticator app not set");
+  await view.findByText("Authenticator app MFA is not set.");
   fireEvent.input(view.getAllByLabelText("Current password").at(-1)!, { target: { value: "correct horse battery staple" } });
   fireEvent.click(view.getByRole("button", { name: /continue/i }));
 
@@ -1081,7 +1087,7 @@ test("settings can request email change and password change", async () => {
   const client = mockClient({ user: authUser({ email: "owner@example.com", roles: ["owner"] }) });
 
   const view = render(<RegistryApp client={client} />);
-  await view.findByText("Change email");
+  await view.findByRole("region", { name: "Email" });
   await view.findByRole("heading", { name: "Security and access", level: 1 });
   await view.findByText("Authenticator app MFA is enabled.");
   assert.equal(document.body.textContent?.includes("Authenticator setup"), false);
@@ -1156,7 +1162,7 @@ test("role-gated deep links normalize to the public registry when access is deni
   const view = render(<RegistryApp client={client} />);
 
   await view.findByText("Release Notes Helper");
-  await waitFor(() => assert.equal(window.location.pathname, "/skills/release-notes-helper"));
+  await waitFor(() => assert.equal(window.location.pathname, "/registry"));
   assert.equal(view.queryByRole("heading", { name: "Admin console" }), null);
 });
 
@@ -1186,6 +1192,7 @@ test("signed-in users can create and inspect a multi-level skill architecture", 
   const view = render(<RegistryApp client={client} />);
 
   await view.findByRole("heading", { name: "Skill architectures", level: 1 });
+  fireEvent.click(await view.findByText("Compare patterns"));
   await view.findByRole("heading", { name: "Multi-level router", level: 3 });
   await view.findByText("No architectures yet.");
 
@@ -1217,7 +1224,7 @@ test("architecture creation offers only owned teams and submits the selected tea
   const ownerSelector = await view.findByLabelText("Architecture owner");
   await view.findByRole("option", { name: "Team · Shared Platform (shared-platform)" });
   assert.equal((ownerSelector as HTMLSelectElement).value, "user");
-  assert.deepEqual(Array.from((ownerSelector as HTMLSelectElement).options).map((option) => option.textContent), ["Personal · owner@example.com", "Team · Shared Platform (shared-platform)"]);
+  assert.deepEqual(Array.from((ownerSelector as HTMLSelectElement).options).map((option) => option.textContent), ["Personal (you)", "Team · Shared Platform (shared-platform)"]);
   assert.deepEqual(Array.from((ownerSelector as HTMLSelectElement).options).map((option) => option.value), ["user", "team:team-owned"]);
   assert.equal(view.queryByRole("option", { name: /Read Only Team/ }), null);
 
@@ -1784,7 +1791,7 @@ test("unsaved architecture edits guard browser back without duplicate prompts", 
     },
   });
   window.history.back();
-  await waitFor(() => assert.equal(window.location.pathname, "/skills/release-notes-helper"));
+  await waitFor(() => assert.equal(window.location.pathname, "/registry"));
   assert.equal(confirmCalls, 2);
 });
 
@@ -1808,12 +1815,12 @@ test("stale architecture list refreshes cannot replace the latest list response"
 
   fireEvent.click(view.getByRole("button", { name: "Refresh" }));
   resolveSecond?.([secondArchitecture]);
-  await view.findByRole("button", { name: /New architecture/ });
+  await within(await view.findByRole("list", { name: "Saved architectures" })).findByRole("button", { name: /New architecture/ });
   resolveFirst?.([firstArchitecture]);
   await Promise.resolve();
   await Promise.resolve();
   assert.equal(view.queryByRole("heading", { name: "Old architecture", level: 2 }), null);
-  assert.equal(view.getByRole("button", { name: /New architecture/ }).getAttribute("aria-pressed"), "true");
+  assert.equal(within(view.getByRole("list", { name: "Saved architectures" })).getByRole("button", { name: /New architecture/ }).getAttribute("aria-pressed"), "true");
 });
 
 test("architecture conflicts and unsupported target changes remain visible as safe read-only states", async () => {
@@ -2024,22 +2031,24 @@ test("admin sessions can manage registration, users, and provider metadata", asy
 
   await view.findByRole("heading", { name: "Admin console", level: 1 });
   await view.findByRole("button", { name: "Refresh" });
-  await waitFor(() => assert.equal(view.getAllByText("Cloudflare Access").length >= 1, true));
-  await view.findByText("API keys");
+  await view.findByRole("tab", { name: "API keys" });
   assert.equal(document.body.textContent?.includes("clientSecret"), false);
   assert.equal(document.body.textContent?.includes("private_key"), false);
   assert.equal((view.getByLabelText("Set author@example.com author role") as HTMLInputElement).disabled, true);
 
+  fireEvent.click(view.getByRole("button", { name: "Invite user" }));
   fireEvent.input(view.getByLabelText("Email", { selector: "input[name='invitation-email']" }), { target: { value: "new-author@example.com" } });
   fireEvent.input(view.getByLabelText(/Name/, { selector: "input[name='invitation-name']" }), { target: { value: "New Author" } });
   fireEvent.click(view.getByRole("button", { name: "Send invitation" }));
   await view.findByText(/Invitation sent to new-author@example\.com\./);
   assert.deepEqual(client.registrationInvitations, [{ email: "new-author@example.com", name: "New Author" }]);
 
+  fireEvent.click(view.getByRole("tab", { name: "API keys" }));
   fireEvent.click(view.getByLabelText("Revoke CLI"));
   fireEvent.click(await view.findByRole("button", { name: "Revoke key" }));
   await waitFor(() => assert.deepEqual(client.adminTokenRevokes, ["api-token-1"]));
 
+  fireEvent.click(view.getByRole("tab", { name: "Instance" }));
   fireEvent.click(view.getByRole("button", { name: "Request" }));
   await waitFor(() => assert.deepEqual(client.registrationUpdates, ["request"]));
 
@@ -2051,6 +2060,7 @@ test("admin sessions can manage registration, users, and provider metadata", asy
   fireEvent.click(await view.findByRole("button", { name: "Open registration" }));
   await waitFor(() => assert.deepEqual(client.registrationUpdates, ["request", "open"]));
 
+  fireEvent.click(view.getByRole("tab", { name: "People" }));
   fireEvent.click(view.getByLabelText("Disable user"));
   fireEvent.input(view.getByLabelText("Reason (required)"), { target: { value: "Access review failed" } });
   fireEvent.click((await view.findAllByRole("button", { name: "Disable user" })).at(-1)!);
@@ -2062,6 +2072,8 @@ test("admin sessions can manage registration, users, and provider metadata", asy
   await waitFor(() => assert.deepEqual(client.roleUpdates, ["user-2:maintainer,author:Maintainer promotion approved"]));
   await waitFor(() => assert.equal((view.getByLabelText("Set author@example.com maintainer role") as HTMLInputElement).checked, true));
 
+  fireEvent.click(view.getByRole("tab", { name: "Sign-in providers" }));
+  await waitFor(() => assert.equal(view.getAllByText("Cloudflare Access").length >= 1, true));
   fireEvent.input(view.getByLabelText("Display name"), { target: { value: "Cloudflare Main" } });
   fireEvent.click(view.getByRole("button", { name: /save provider/i }));
 
@@ -2153,9 +2165,8 @@ test("maintainer sessions download an artifact hash before approving review subm
   assert.equal(document.body.textContent?.includes("storageKey"), false);
   assert.equal(document.body.textContent?.includes("Summarize release notes."), false);
   assert.equal(client.bundleCalls, 0);
-  assert.equal((view.getByRole("button", { name: /approve/i }) as HTMLButtonElement).disabled, true);
-
-  fireEvent.input(view.getByLabelText("Reason"), { target: { value: "checked" } });
+  assert.equal(view.queryByRole("button", { name: /^approve$/i }), null);
+  assert.equal((view.getByRole("button", { name: "Inspect artifact" }) as HTMLButtonElement).disabled, false);
   fireEvent.click(view.getByRole("button", { name: /download artifact/i }));
   await waitFor(() => assert.deepEqual(client.reviewBundleCalls, ["submission-1"]));
   assert.equal(document.body.textContent?.includes("Summarize release notes."), false);
@@ -2163,6 +2174,7 @@ test("maintainer sessions download an artifact hash before approving review subm
   const downloadedText = await downloadedBlob!.text();
   assert.equal(artifactTextSha256(downloadedText), expectedArtifactHash);
   fireEvent.click(view.getByRole("button", { name: /approve/i }));
+  fireEvent.input(view.getByLabelText("Reason (optional)"), { target: { value: "checked" } });
   fireEvent.click(await view.findByRole("button", { name: "Approve submission" }));
   await waitFor(() => assert.deepEqual(client.reviewActions, [`submission-1:approve:checked:${expectedArtifactHash}`]));
 
@@ -2373,6 +2385,7 @@ test("audit pagination appends unique events on request and resets after admin r
     return input?.cursor ? { events: [first, older, older], nextCursor: null } : { events: [first], nextCursor: "audit-next" };
   };
   const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("tab", { name: "Audit" }));
   const more = await view.findByRole("button", { name: "Load more audit events" });
   assert.deepEqual(cursors, [undefined]);
   fireEvent.click(more);
@@ -2400,6 +2413,7 @@ test("audit refresh ignores a delayed previous page and permits retry after a pa
     return { events: [{ ...first, id: "retry-event", action: "retried.audit.event" }], nextCursor: null };
   };
   const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("tab", { name: "Audit" }));
   fireEvent.click(await view.findByRole("button", { name: "Load more audit events" }));
   fireEvent.click(view.getByRole("button", { name: "Refresh" }));
   await view.findByRole("button", { name: "Load more audit events" });
@@ -2427,6 +2441,7 @@ for (const surface of ["review", "admin"] as const) {
     currentClient.listReviewSubmissionPage = async () => ({ submissions: [{ ...submission, id: "current-review", title: "Current review" }], nextCursor: null });
     currentClient.listAdminAuditPage = async () => ({ events: [{ ...event, id: "current-audit", action: "current.audit" }], nextCursor: null });
     const view = render(<RegistryApp client={oldClient} />);
+    if (surface === "admin") fireEvent.click(await view.findByRole("tab", { name: "Audit" }));
     fireEvent.click(await view.findByRole("button", { name: surface === "review" ? "Load more submissions" : "Load more audit events" }));
     view.rerender(<RegistryApp client={currentClient} />);
     if (surface === "review") await view.findByRole("button", { name: /Current review/ });
