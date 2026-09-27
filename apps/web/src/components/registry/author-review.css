@@ -8,6 +8,9 @@
 .registry-workspace.author-review [tabindex="-1"]:focus { outline: none; }
 .registry-workspace.author-review [tabindex="-1"]:focus-visible { border-radius: 4px; outline: 2px solid var(--ring); outline-offset: 2px; }
 
+.registry-workspace.author-review [data-slot="button"][data-variant="outline"] { border-color: var(--line); color: var(--ink-soft); background: var(--surface); box-shadow: none; }
+.registry-workspace.author-review [data-slot="button"][data-variant="outline"]:hover { border-color: var(--teal); color: var(--teal-dark); background: var(--teal-soft); }
+
 /* Page head: the h1 and at most one icon action. */
 .registry-workspace.author-review .registry-page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
