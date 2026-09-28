@@ -293,8 +293,6 @@ export function effectiveTeamRole(teamId: SQL, actorId: string): SQL {
       ON om.organization_id = team.organization_id AND om.user_id = ${actorId}::uuid AND om.removed_at IS NULL
     WHERE tm.team_id = ${teamId} AND tm.user_id = ${actorId}::uuid
       AND EXISTS (SELECT 1 FROM users WHERE id = tm.user_id AND status = 'active')
-      AND coalesce((SELECT value->>'teamsEnabled' FROM instance_settings WHERE key = 'sharing'), 'true') = 'true'
-      AND coalesce((SELECT value->>'teamVisibilityEnabled' FROM instance_settings WHERE key = 'sharing'), 'true') = 'true'
       AND (
         team.organization_id IS NULL
         OR (
@@ -304,6 +302,14 @@ export function effectiveTeamRole(teamId: SQL, actorId: string): SQL {
       )
     LIMIT 1
   )`;
+}
+
+/** Library access follows the instance team switches; shared membership roles do not. */
+function libraryTeamRole(teamId: SQL, actorId: string): SQL {
+  return sql`CASE WHEN
+    coalesce((SELECT value->>'teamsEnabled' FROM instance_settings WHERE key = 'sharing'), 'true') = 'true'
+    AND coalesce((SELECT value->>'teamVisibilityEnabled' FROM instance_settings WHERE key = 'sharing'), 'true') = 'true'
+    THEN ${effectiveTeamRole(teamId, actorId)} ELSE NULL::text END`;
 }
 
 export class PostgresLibraryStore {
@@ -386,13 +392,13 @@ export class PostgresLibraryStore {
 
   async teamRole(teamId: string, actorId: string): Promise<"owner" | "member" | null> {
     if (!isUuid(teamId)) return null;
-    const result = await this.db.execute<{ role: string | null }>(sql`SELECT ${effectiveTeamRole(sql`${teamId}::uuid`, actorId)} AS role`);
+    const result = await this.db.execute<{ role: string | null }>(sql`SELECT ${libraryTeamRole(sql`${teamId}::uuid`, actorId)} AS role`);
     const role = result.rows[0]?.role;
     return role === "owner" || role === "member" ? role : null;
   }
 
   async listLibrariesForActor(actorId: string, page: { limit: number; cursor: PageCursor | null }): Promise<Array<LibraryRecord & { role: "owner" | "member"; cursorAt: string }>> {
-    const teamRole = effectiveTeamRole(sql`l.owner_team_id`, actorId);
+    const teamRole = libraryTeamRole(sql`l.owner_team_id`, actorId);
     const result = await this.db.execute<Row>(sql`
       SELECT ${LIBRARY_COLUMNS}, ${CURSOR_AT(sql`l.created_at`)} AS cursor_at,
         CASE WHEN l.owner_user_id IS NOT NULL THEN 'owner' ELSE ${teamRole} END AS role
