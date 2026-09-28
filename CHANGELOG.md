@@ -2,19 +2,19 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
-## 0.1.0-beta.16 - candidate
+## 0.1.0-beta.16 - 2026-09-29
 
 Target release: `v0.1.0-beta.16`.
 
-Work pilot candidate; publication and deployment verification are pending.
+Work pilot release; GitHub, npm beta, and hosted delivery are verified.
 
 - Enroll separate Codex and Claude global or project skill inventories. Resolve project ownership and exclusions without changing native skill inheritance.
-- Preview and apply local scope migration with stale-plan checks and backups, preserving existing managed workspace bindings.
+- Preview and apply local scope migration with stale-plan checks and backups, preserving existing managed workspace bindings. Require explicit acknowledgment before upgrading legacy inode-only root identities.
 - Select an isolated named CLI configuration for work and personal registries/accounts while retaining the existing default configuration.
 - Guide provider and scope setup in Connected targets, and show inventory completeness and bounded omission reasons.
 - Accept valid skill names in observations with structural privacy validation; retain safe upload behavior against older servers.
 
-This release includes the matching npm CLI. Existing skill files and target identities must be preserved during upgrade. See [work pilot delivery plan](docs/plans/2026-09-29-work-pilot-release.md).
+Frozen candidate: `acfb7c8c7f8bc560f6fdba13cf0414033ab6d00e`. It includes the matching CLI and excludes later GitHub authentication and team Library changes on main. Verified macOS upgrade and legacy acknowledgment preserved skill files and target identities. See [delivery evidence](docs/BETA16_RELEASE_DELIVERY.md).
 
 ## 0.1.0-beta.15 - 2026-09-28
 
