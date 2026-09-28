@@ -44,7 +44,7 @@ test("anonymous visitor browses the seeded registry through the production proxy
     return {
       body: await response.json() as {
         ok: boolean;
-        checks: { postgres: string; artifactStorage: string; phase2Architecture: string };
+        checks: { postgres: string; artifactStorage: string; phase2Architecture: string; architectureObservationPrivacy: string };
       },
       status: response.status,
     };
@@ -53,7 +53,7 @@ test("anonymous visitor browses the seeded registry through the production proxy
     body: {
       ok: true,
       service: "myskills-app-api",
-      checks: { postgres: "ready", artifactStorage: "ready", phase2Architecture: "ready" },
+      checks: { postgres: "ready", artifactStorage: "ready", phase2Architecture: "ready", architectureObservationPrivacy: "ready" },
     },
     status: 200,
   });
