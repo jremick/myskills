@@ -1223,6 +1223,13 @@ test("signed-in users can open the teams workspace", async () => {
   assert.equal(window.location.pathname, "/teams");
 });
 
+// Editing happens in the full-page Workbench; tests reach it through the
+// overview launcher, as a user would.
+async function openArchitectureWorkbench(view: ReturnType<typeof render>, launcher = "Open workbench") {
+  fireEvent.click(await view.findByRole("link", { name: launcher }));
+  await view.findByRole("tablist", { name: "Workbench sections" });
+}
+
 test("signed-in users can create and inspect a multi-level skill architecture", async () => {
   setupAuthenticatedDom("http://localhost/architectures");
   const client = mockClient({
@@ -1242,7 +1249,8 @@ test("signed-in users can create and inspect a multi-level skill architecture", 
   fireEvent.click(view.getByRole("button", { name: "Create architecture" }));
 
   await view.findByRole("heading", { name: "Work assistant" });
-  await view.findByText(/This draft has no revision yet/);
+  await view.findByRole("heading", { name: "Build the first revision" });
+  await view.findByText("No revision yet. Build and save the first revision in the workbench.");
   assert.equal(client.architectureCreates.length, 1);
   assert.deepEqual(client.architectureCreates[0]?.owner, { type: "user" });
   assert.equal(client.architecturePreviewCalls.length, 0);
@@ -1437,6 +1445,7 @@ test("diagram exports use the authorized artifact and tolerate organization-only
   await view.findByText("Select one authorized organization to preview this shared architecture.");
   fireEvent.change(view.getByLabelText("Preview organization"), { target: { value: "org-1" } });
   await view.findByText("Skills available in this context");
+  fireEvent.click(view.getByText("Technical details"));
   await view.findByText("Revision unavailable");
   await view.findByRole("button", { name: "Copy canonical diagram JSON" });
   await view.findByRole("button", { name: "Download canonical diagram JSON" });
@@ -1544,6 +1553,8 @@ test("architecture revisions parse JSON before the API and refresh after a valid
   const view = render(<RegistryApp client={client} />);
 
   await view.findByText("Skills available in this context");
+  await openArchitectureWorkbench(view);
+  fireEvent.click(view.getByRole("tab", { name: "Advanced" }));
   fireEvent.click(view.getByText("Add immutable revision"));
   fireEvent.input(view.getByLabelText("Revision message"), { target: { value: "Bind the work context" } });
   const validSpec = defaultArchitecturePreview().revision.spec;
@@ -1570,6 +1581,8 @@ test("architecture revision form rejects invalid JSON without calling the API", 
   const view = render(<RegistryApp client={client} />);
 
   await view.findByText("Skills available in this context");
+  await openArchitectureWorkbench(view);
+  fireEvent.click(view.getByRole("tab", { name: "Advanced" }));
   fireEvent.click(view.getByText("Add immutable revision"));
   fireEvent.input(view.getByLabelText("Architecture spec JSON"), { target: { value: "{not-json" } });
   fireEvent.click(view.getByRole("button", { name: "Save immutable revision" }));
@@ -1587,6 +1600,7 @@ test("architecture editor previews an unsaved draft through the API with its rev
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Edited review router" } });
   fireEvent.click(view.getByRole("button", { name: "Preview draft" }));
 
@@ -1624,7 +1638,7 @@ test("the editor preserves input delivered before its initial passive effects", 
   await waitFor(() => assert.deepEqual(previewedLabels, ["Immediate edit"]));
   const nextSpec = { ...spec, nodes: [{ ...spec.nodes[0]!, label: "New server revision" }, ...spec.nodes.slice(1)] };
   await act(async () => { view.rerender(<EarlyInputEditor initialSpec={nextSpec} />); });
-  await view.findByText("All changes saved");
+  await view.findByText("No unsaved changes");
   assert.equal((view.getByLabelText("Selected node label") as HTMLInputElement).value, "New server revision");
 });
 
@@ -1640,6 +1654,7 @@ test("an initial server preview settling around an edit preserves the unsaved ed
     client.previewArchitecture = async () => initialPreview;
     const view = render(<RegistryApp client={client} />);
     await view.findByTestId("architecture-editor");
+    await openArchitectureWorkbench(view);
     assert.equal(view.queryByText("Skills available in this context"), null);
 
     await act(async () => {
@@ -1679,7 +1694,10 @@ test("team members receive a read-only architecture editor without revision cont
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  assert.equal(view.queryByRole("link", { name: "Open workbench" }), null);
+  await openArchitectureWorkbench(view, "Inspect in workbench");
   assert.equal(view.getByRole("heading", { name: "Inspect this architecture" }).textContent, "Inspect this architecture");
+  assert.equal(view.queryByLabelText("Draft revision message"), null);
   assert.equal(view.queryByRole("button", { name: "Save revision" }), null);
   assert.equal(view.queryByText("Add immutable revision"), null);
   const editorName = view.getByTestId("architecture-editor").querySelector<HTMLInputElement>('input[aria-label="Architecture name"]');
@@ -1699,6 +1717,7 @@ test("architecture editor preserves its draft when the optimistic save conflicts
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
   const label = view.getByLabelText("Selected node label") as HTMLInputElement;
   fireEvent.input(label, { target: { value: "Draft kept after conflict" } });
   fireEvent.click(view.getByRole("button", { name: "Save revision" }));
@@ -1726,6 +1745,7 @@ test("architecture editor sends the immutable revision token and refreshes after
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Saved review router" } });
   fireEvent.input(view.getByLabelText("Draft revision message"), { target: { value: "Clarify review routing" } });
   fireEvent.click(view.getByRole("button", { name: "Save revision" }));
@@ -1760,7 +1780,7 @@ test("architecture selection clears stale detail before previewing a new draft",
   fireEvent.click(view.getByRole("button", { name: /Draft assistant/ }));
 
   await view.findByRole("heading", { name: "Draft assistant", level: 2 });
-  await view.findByText(/This draft has no revision yet/);
+  await view.findByText("No revision yet. Build and save the first revision in the workbench.");
   assert.equal(client.architecturePreviewCalls.some((call) => call.architectureId === "architecture-2"), false);
 });
 
@@ -1779,6 +1799,7 @@ test("unsaved architecture edits guard selection and beforeunload navigation", a
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Unsaved router" } });
   await view.findByText("Unsaved changes");
 
@@ -1786,6 +1807,9 @@ test("unsaved architecture edits guard selection and beforeunload navigation", a
   window.dispatchEvent(navigation);
   assert.equal(navigation.defaultPrevented, true);
 
+  // The same architecture's overview keeps the draft; switching asks first.
+  fireEvent.click(view.getByRole("link", { name: "Architecture overview" }));
+  await view.findByRole("link", { name: "Resume draft" });
   fireEvent.click(view.getByRole("button", { name: /Draft assistant/ }));
   assert.equal(view.getByRole("heading", { name: "Review assistant", level: 2 }).isConnected, true);
 
@@ -1815,8 +1839,15 @@ test("unsaved architecture edits guard browser back without duplicate prompts", 
   await view.findByText("Release Notes Helper");
   fireEvent.click(view.getAllByRole("link", { name: "Architectures" })[0]!);
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Unsaved browser draft" } });
   await view.findByText("Unsaved changes");
+
+  // Back to the same architecture's overview keeps the draft without a prompt.
+  window.history.back();
+  await view.findByRole("link", { name: "Resume draft" });
+  assert.equal(window.location.pathname, "/architectures");
+  assert.equal(confirmCalls, 0);
 
   window.history.back();
   await waitFor(() => {
@@ -1922,6 +1953,7 @@ test("architecture history loads older revisions, shows semantic counts, and see
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-history-panel");
+  fireEvent.click(view.getByRole("tab", { name: "History" }));
   fireEvent.click(view.getByRole("button", { name: /Revision 2/ }));
   await waitFor(() => assert.deepEqual(client.architectureRevisionFetches, ["architecture-1:revision-older"]));
   await view.findByText(/Semantic changes from this older revision to the current revision/);
@@ -1935,7 +1967,7 @@ test("architecture history loads older revisions, shows semantic counts, and see
   assert.equal(history.textContent?.includes("private-marker"), false);
 
   fireEvent.click(view.getByRole("button", { name: "Use as new draft" }));
-  await view.findByRole("heading", { name: "Draft from revision revision-older" });
+  await view.findByRole("heading", { name: "Draft from Revision 2" });
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Draft from history" } });
   fireEvent.click(view.getByRole("button", { name: "Save revision" }));
   await waitFor(() => assert.equal(client.architectureRevisionCreates.length, 1));
@@ -1983,6 +2015,7 @@ test("exact registry release picker supports a first flat revision and rejects d
   });
   const view = render(<RegistryApp client={client} />);
 
+  await openArchitectureWorkbench(view, "Build first revision");
   await view.findByRole("heading", { name: "Build the first revision" });
   fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "audit" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
@@ -2020,6 +2053,8 @@ test("stale exact-release responses cannot replace the release selected for a ne
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
+  fireEvent.click(view.getByText("Add exact release"));
   fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "skill" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
   const skillSelector = await view.findByLabelText("Skill");
@@ -2043,6 +2078,8 @@ test("router release picker requires an explicit parent and creates a routes edg
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
+  fireEvent.click(view.getByText("Add exact release"));
   fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "audit" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
   fireEvent.change(await view.findByLabelText("Skill"), { target: { value: "audit-helper" } });

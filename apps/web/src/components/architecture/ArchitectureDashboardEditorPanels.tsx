@@ -1,6 +1,5 @@
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { ArchitectureSpecV1 } from "@myskills-app/core";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,26 +18,38 @@ import {
 } from "../../api.js";
 import { formatArchitectureSpec } from "./architecture-dashboard-helpers.js";
 
+/**
+ * One mounted draft session per architecture revision. The overview hides the
+ * Workbench instead of unmounting it, so the spec and the revision message
+ * survive moves between the two surfaces of the same architecture.
+ */
 export function ArchitectureEditorCard({
   detail,
   initialSpec,
   expectedRevisionId,
-  seededFromRevision,
   readOnly,
+  heading,
+  previewPanel,
+  advancedPanel,
   onPreview,
   onSave,
   onDraftChange,
+  onMessageDirtyChange,
   onSearchRegistrySkills,
   onLoadRegistryReleases,
 }: {
   detail: ArchitectureDetail;
   initialSpec?: ArchitectureSpecV1;
   expectedRevisionId?: string | null;
-  seededFromRevision?: string | null;
   readOnly: boolean;
+  heading?: ReactNode;
+  previewPanel?: ReactNode;
+  advancedPanel?: ReactNode;
   onPreview?: (request: ArchitectureEditorPreviewRequest) => Promise<void>;
   onSave?: (request: ArchitectureEditorSaveRequest) => Promise<void>;
   onDraftChange?: (status: ArchitectureEditorStatus) => void;
+  /** A message-only change is still unsaved work for the navigation guard. */
+  onMessageDirtyChange?: (dirty: boolean) => void;
   onSearchRegistrySkills?: (query: string) => Promise<ArchitectureRegistrySkillOption[]>;
   onLoadRegistryReleases?: (skill: ArchitectureRegistrySkillOption) => Promise<ArchitectureRegistryReleaseOption[]>;
 }) {
@@ -46,40 +57,33 @@ export function ArchitectureEditorCard({
   const handleEditorDraftChange = useCallback((_spec: unknown, status: ArchitectureEditorStatus) => {
     onDraftChange?.(status);
   }, [onDraftChange]);
+  const messageDirty = !readOnly && revisionMessage.trim().length > 0;
+
+  useEffect(() => {
+    onMessageDirtyChange?.(messageDirty);
+  }, [messageDirty, onMessageDirtyChange]);
+
+  // An unmounted session has nothing left to protect.
+  const statusCallbacks = useRef({ onDraftChange, onMessageDirtyChange });
+  statusCallbacks.current = { onDraftChange, onMessageDirtyChange };
+  useEffect(() => () => {
+    statusCallbacks.current.onDraftChange?.({ dirty: false, valid: true, validationIssues: [] });
+    statusCallbacks.current.onMessageDirtyChange?.(false);
+  }, []);
 
   const effectiveSpec = initialSpec ?? detail.latestRevision?.spec;
   if (!effectiveSpec) {
     return null;
   }
-  const bootstrap = !detail.latestRevision;
 
   return (
     <section className="architecture-editor-card" aria-label={readOnly ? "Read-only architecture editor" : "Edit architecture draft"}>
-      <div className="architecture-editor-card-heading">
-        <div>
-          <p className="architecture-kicker">{readOnly ? "Read-only workbench" : bootstrap ? "Bootstrap workbench" : "Draft workbench"}</p>
-          <h2>{readOnly ? "Inspect this architecture" : bootstrap ? "Build the first revision" : seededFromRevision ? `Draft from revision ${seededFromRevision}` : "Edit the current revision"}</h2>
-        </div>
-        <Badge variant="outline">{readOnly ? "Member view" : bootstrap ? "First revision" : "Local draft"}</Badge>
-      </div>
-      <p className="architecture-editor-card-copy">
-        {readOnly
-          ? "This team architecture is available for inspection. Only the owner can append an immutable revision."
-          : bootstrap
-            ? "Start from this local bootstrap shell, choose exact skill releases, then save one immutable first revision. Canvas positions are visual only and are not persisted."
-            : seededFromRevision
-              ? `This draft starts from immutable revision ${seededFromRevision}; saving appends a new revision against the latest concurrency token. Canvas positions are visual only and are not persisted.`
-              : "Changes stay in this browser until you preview or save them. Canvas positions are visual only and are not persisted."}
-      </p>
-      {!readOnly && (
-        <label className="architecture-editor-message-field">
-          <span>Revision message <small>(optional)</small></span>
-          <Input aria-label="Draft revision message" onChange={(event) => setRevisionMessage(event.target.value)} placeholder="Describe this architecture change" value={revisionMessage} />
-        </label>
-      )}
       <ArchitectureEditor
         expectedRevisionId={expectedRevisionId ?? detail.latestRevision?.id ?? null}
         initialSpec={effectiveSpec}
+        heading={heading}
+        previewPanel={previewPanel}
+        advancedPanel={advancedPanel}
         onDraftChange={handleEditorDraftChange}
         onPreview={onPreview}
         onSave={onSave}
@@ -87,6 +91,7 @@ export function ArchitectureEditorCard({
         onLoadRegistryReleases={onLoadRegistryReleases}
         readOnly={readOnly}
         revisionMessage={revisionMessage}
+        onRevisionMessageChange={readOnly ? undefined : setRevisionMessage}
       />
     </section>
   );

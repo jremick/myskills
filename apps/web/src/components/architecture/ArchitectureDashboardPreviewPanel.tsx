@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { canonicalArchitectureDiagramArtifactJson } from "@myskills-app/core";
 import {
   AlertTriangle,
@@ -14,7 +14,6 @@ import { ArchitectureDiagram } from "./ArchitectureDiagram.js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  type ArchitectureDetail,
   type ArchitecturePreview,
   type ArchitecturePreviewPlan,
   type ArchitectureTopologyEdge,
@@ -25,79 +24,108 @@ import {
   runtimeExposureLabel,
 } from "./architecture-dashboard-helpers.js";
 
-export function ArchitecturePreviewPanel({ detail, preview }: { detail: ArchitectureDetail | null; preview: ArchitecturePreview }) {
-  const topology = topologyForPreview(preview);
-  const [diagramExpanded, setDiagramExpanded] = useState(false);
-  const diagramJson = canonicalArchitectureDiagramArtifactJson(preview.diagram);
-  const conflict = preview.plan?.items.some((item) => item.action === "conflict") ?? false;
-  const unsupported = preview.plan?.items.some((item) => item.action === "unsupported") ?? false;
+/** The full API result stack, used for the Workbench's unsaved draft preview. */
+export function ArchitecturePreviewPanel({ preview }: { preview: ArchitecturePreview }) {
   return (
     <div className="architecture-preview-stack">
-      {(conflict || unsupported) && (
-        <div className={conflict ? "architecture-banner conflict" : "architecture-banner unsupported"} role="alert">
-          {conflict ? <AlertTriangle size={18} aria-hidden="true" /> : <CircleAlert size={18} aria-hidden="true" />}
-          <span>
-            <strong>{conflict ? "Conflict needs review" : "Target capability is incomplete"}</strong>
-            <small>{conflict ? "The observed target differs from the selected revision. Review the dry-run plan before changing anything." : "The selected target cannot apply every desired operation. No live apply is available from this view."}</small>
-          </span>
+      <ArchitecturePlanBanner preview={preview} />
+      <ArchitectureTopologySection preview={preview} title="Router and leaf map" />
+      <ArchitectureSkillsSection preview={preview} />
+      <ArchitectureSyncPlan plan={preview.plan} />
+      <ArchitectureCompiledSection preview={preview} />
+    </div>
+  );
+}
+
+export function ArchitecturePlanBanner({ preview }: { preview: ArchitecturePreview }) {
+  const conflict = preview.plan?.items.some((item) => item.action === "conflict") ?? false;
+  const unsupported = preview.plan?.items.some((item) => item.action === "unsupported") ?? false;
+  if (!conflict && !unsupported) return null;
+  return (
+    <div className={conflict ? "architecture-banner conflict" : "architecture-banner unsupported"} role="alert">
+      {conflict ? <AlertTriangle size={18} aria-hidden="true" /> : <CircleAlert size={18} aria-hidden="true" />}
+      <span>
+        <strong>{conflict ? "Conflict needs review" : "Target capability is incomplete"}</strong>
+        <small>{conflict ? "The observed target differs from the selected revision. Review the dry-run plan before changing anything." : "The selected target cannot apply every desired operation. No live apply is available from this view."}</small>
+      </span>
+    </div>
+  );
+}
+
+export function ArchitectureTopologySection({ preview, title }: { preview: ArchitecturePreview; title: string }) {
+  const headingId = useId();
+  const topology = topologyForPreview(preview);
+  const [diagramExpanded, setDiagramExpanded] = useState(false);
+  return (
+    <section className="architecture-panel-section" aria-labelledby={headingId}>
+      <div className="architecture-panel-section-heading">
+        <h3 id={headingId}>{title}</h3>
+        <div className="architecture-diagram-actions">
+          <span className="architecture-section-note">{topology.nodes.length} nodes · {topology.edges.length} links</span>
+          <Button aria-haspopup="dialog" disabled={topology.nodes.length === 0} onClick={() => setDiagramExpanded(true)} size="sm" type="button" variant="outline"><Maximize2 size={14} aria-hidden="true" />Expand diagram</Button>
+        </div>
+      </div>
+      <ArchitectureDiagram topology={topology} expanded={diagramExpanded} onClose={() => setDiagramExpanded(false)} />
+      <ArchitectureOutline outline={preview.outline} />
+    </section>
+  );
+}
+
+export function ArchitectureSkillsSection({ preview }: { preview: ArchitecturePreview }) {
+  const headingId = useId();
+  return (
+    <section className="architecture-panel-section" aria-labelledby={headingId}>
+      <div className="architecture-panel-section-heading">
+        <h3 id={headingId}>Skills available in this context</h3>
+        <span className="architecture-section-note">Authorization is resolved server-side.</span>
+      </div>
+      {preview.compiled.skills.length === 0 ? (
+        <div className="architecture-empty-inline"><CircleAlert size={17} aria-hidden="true" /> No skills are effective for this profile and environment.</div>
+      ) : (
+        <div className="architecture-skill-table-wrap">
+          <table className="architecture-skill-table">
+            <thead><tr><th scope="col">Skill</th><th scope="col">Version</th><th scope="col">Exposure</th><th scope="col">Reason</th></tr></thead>
+            <tbody>
+              {preview.compiled.skills.map((skill) => {
+                const node = preview.compiled.nodes.find((candidate) => candidate.skillRefId === skill.skillRefId);
+                return (
+                <tr key={`${skill.skillRefId}:${skill.version}`}>
+                  <th scope="row"><strong>{skill.title || skill.slug}</strong><small>{skill.slug}</small></th>
+                  <td>{skill.version}</td>
+                  <td><span className="architecture-exposure">{runtimeExposureLabel(node?.runtimeExposure)}</span></td>
+                  <td>Enabled by profile {preview.compiled.profileId} for {preview.compiled.environmentId}; package access remains {skill.packageVisibility}.</td>
+                </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
+    </section>
+  );
+}
 
-      <section className="architecture-panel-section" aria-labelledby="architecture-diagram-heading">
+/** Saved-revision technical output: sync plan, observed fixture and exports. */
+export function ArchitectureTechnicalDetails({ preview, fixture }: { preview: ArchitecturePreview; fixture?: ReactNode }) {
+  return (
+    <details className="cp-details architecture-technical-details">
+      <summary>Technical details</summary>
+      <div className="cp-details-body">
+        <ArchitectureSyncPlan plan={preview.plan} />
+        {fixture}
+        <ArchitectureCompiledSection preview={preview} />
+      </div>
+    </details>
+  );
+}
+
+function ArchitectureCompiledSection({ preview }: { preview: ArchitecturePreview }) {
+  const headingId = useId();
+  const diagramJson = canonicalArchitectureDiagramArtifactJson(preview.diagram);
+  return (
+      <section className="architecture-panel-section architecture-compile-section" aria-labelledby={headingId}>
         <div className="architecture-panel-section-heading">
-          <div>
-            <p className="architecture-kicker">Topology</p>
-            <h2 id="architecture-diagram-heading">Router and leaf map</h2>
-          </div>
-          <div className="architecture-diagram-actions">
-            <Badge variant="outline">{topology.nodes.length} nodes · {topology.edges.length} links</Badge>
-            <Button aria-haspopup="dialog" disabled={topology.nodes.length === 0} onClick={() => setDiagramExpanded(true)} size="sm" type="button" variant="outline"><Maximize2 size={14} aria-hidden="true" />Expand diagram</Button>
-          </div>
-        </div>
-        <ArchitectureDiagram topology={topology} expanded={diagramExpanded} onClose={() => setDiagramExpanded(false)} />
-        <ArchitectureOutline outline={preview.outline} />
-      </section>
-
-      <section className="architecture-panel-section" aria-labelledby="architecture-effective-heading">
-        <div className="architecture-panel-section-heading">
-          <div>
-            <p className="architecture-kicker">Effective result</p>
-            <h2 id="architecture-effective-heading">Skills available in this context</h2>
-          </div>
-          <span className="architecture-section-note">Authorization is resolved server-side.</span>
-        </div>
-        {preview.compiled.skills.length === 0 ? (
-          <div className="architecture-empty-inline"><CircleAlert size={17} aria-hidden="true" /> No skills are effective for this profile and environment.</div>
-        ) : (
-          <div className="architecture-skill-table-wrap">
-            <table className="architecture-skill-table">
-              <thead><tr><th scope="col">Skill</th><th scope="col">Version</th><th scope="col">Exposure</th><th scope="col">Reason</th></tr></thead>
-              <tbody>
-                {preview.compiled.skills.map((skill) => {
-                  const node = preview.compiled.nodes.find((candidate) => candidate.skillRefId === skill.skillRefId);
-                  return (
-                  <tr key={`${skill.skillRefId}:${skill.version}`}>
-                    <th scope="row"><strong>{skill.title || skill.slug}</strong><small>{skill.slug}</small></th>
-                    <td>{skill.version}</td>
-                    <td><span className="architecture-exposure">{runtimeExposureLabel(node?.runtimeExposure)}</span></td>
-                    <td>Enabled by profile {preview.compiled.profileId} for {preview.compiled.environmentId}; package access remains {skill.packageVisibility}.</td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <ArchitectureSyncPlan plan={preview.plan} />
-
-      <section className="architecture-panel-section architecture-compile-section" aria-labelledby="architecture-compile-heading">
-        <div className="architecture-panel-section-heading">
-          <div>
-            <p className="architecture-kicker">Portable output</p>
-            <h2 id="architecture-compile-heading">Compiled projection</h2>
-          </div>
+          <h3 id={headingId}>Compiled projection</h3>
           <Badge variant="secondary"><TerminalSquare size={13} aria-hidden="true" /> Read-only</Badge>
         </div>
         <div className="architecture-compile-grid">
@@ -135,18 +163,20 @@ export function ArchitecturePreviewPanel({ detail, preview }: { detail: Architec
           </details>
         </div>
       </section>
-    </div>
   );
 }
 
 function ArchitectureOutline({ outline }: { outline: ArchitecturePreview["outline"] }) {
   return (
     <div className="architecture-outline">
-      <div className="architecture-outline-heading"><h3>Accessible outline</h3><span>Same nodes as the diagram</span></div>
+      <div className="architecture-outline-heading"><h4>Accessible outline</h4><span>Same nodes as the diagram</span></div>
       {outline.tree.length === 0 ? <p className="architecture-muted">No outline is available.</p> : (
-        <ol aria-label="Architecture topology outline">
-          {outline.tree.map((node) => <ArchitectureOutlineItem key={node.id} node={node} />)}
-        </ol>
+        // Large outlines scroll inside a keyboard-focusable region.
+        <div className="architecture-outline-scroll" role="region" aria-label="Accessible outline" tabIndex={0}>
+          <ol aria-label="Architecture topology outline">
+            {outline.tree.map((node) => <ArchitectureOutlineItem key={node.id} node={node} />)}
+          </ol>
+        </div>
       )}
     </div>
   );
@@ -182,14 +212,12 @@ function topologyForPreview(preview: ArchitecturePreview): { nodes: Architecture
 }
 
 function ArchitectureSyncPlan({ plan }: { plan?: ArchitecturePreviewPlan }) {
+  const headingId = useId();
   if (!plan) {
     return (
-      <section className="architecture-panel-section" aria-labelledby="architecture-sync-heading">
+      <section className="architecture-panel-section" aria-labelledby={headingId}>
         <div className="architecture-panel-section-heading">
-          <div>
-            <p className="architecture-kicker">Target reconciliation</p>
-            <h2 id="architecture-sync-heading">Dry-run sync plan</h2>
-          </div>
+          <h3 id={headingId}>Dry-run sync plan</h3>
           <span className="architecture-sync-status">Not generated</span>
         </div>
         <div className="architecture-empty-inline" role="status">
@@ -204,12 +232,9 @@ function ArchitectureSyncPlan({ plan }: { plan?: ArchitecturePreviewPlan }) {
   const changes = plan.items.filter((item) => item.action !== "noop");
   const status = conflict ? "Conflict" : unsupported ? "Unsupported" : changes.length === 0 ? "No changes" : `${changes.length} dry-run changes`;
   return (
-    <section className="architecture-panel-section" aria-labelledby="architecture-sync-heading">
+    <section className="architecture-panel-section" aria-labelledby={headingId}>
       <div className="architecture-panel-section-heading">
-        <div>
-          <p className="architecture-kicker">Target reconciliation</p>
-          <h2 id="architecture-sync-heading">Dry-run sync plan</h2>
-        </div>
+        <h3 id={headingId}>Dry-run sync plan</h3>
         <span className={`architecture-sync-status ${conflict ? "conflict" : unsupported ? "unsupported" : ""}`}>{status}</span>
       </div>
       <p className="architecture-sync-note"><ShieldCheck size={15} aria-hidden="true" /> No target is changed by this preview. Target: {plan.targetId}.</p>

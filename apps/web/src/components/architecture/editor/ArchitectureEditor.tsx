@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -23,6 +24,7 @@ import {
   type NodeChange,
   type NodeProps,
   type NodeTypes,
+  type ReactFlowInstance,
 } from "@xyflow/react";
 import {
   Check,
@@ -33,6 +35,7 @@ import {
   GitBranch,
   GripVertical,
   Layers3,
+  ListTree,
   Minus,
   Plus,
   RotateCcw,
@@ -42,6 +45,7 @@ import {
   Trash2,
   Workflow,
 } from "lucide-react";
+import { ArchitectureTabList, ArchitectureTabPanel, type ArchitectureTab } from "../ArchitectureTabs.js";
 import {
   validateArchitectureSpec,
   resolveArchitectureProfileBinding,
@@ -77,6 +81,8 @@ import {
   updateArchitectureProfileName,
 } from "./draft.js";
 import {
+  ARCHITECTURE_NODE_HEIGHT,
+  ARCHITECTURE_NODE_WIDTH,
   layoutArchitectureGraph,
   projectArchitectureToFlow,
   type ArchitectureFlowNode,
@@ -91,6 +97,15 @@ import type {
   ArchitectureTreeNode,
 } from "./types.js";
 
+type EditorTab = "design" | "context" | "preview" | "advanced";
+
+// A whole-topology fit is used only when labels stay readable; larger graphs
+// open on the selected node instead. Zooming out still reaches every node.
+const FIT_VIEW_OPTIONS = { padding: 0.18, minZoom: 0.38, maxZoom: 1.3 } as const;
+const READABLE_FIT_ZOOM = 0.6;
+const FOCUS_ZOOM = 0.9;
+const OVERVIEW_FIT_OPTIONS = { padding: 0.08, minZoom: 0.05, maxZoom: 1.3 } as const;
+
 export function ArchitectureEditor({
   initialSpec,
   expectedRevisionId = null,
@@ -100,9 +115,20 @@ export function ArchitectureEditor({
   onSearchRegistrySkills,
   onLoadRegistryReleases,
   revisionMessage,
+  onRevisionMessageChange,
+  heading,
+  previewPanel,
+  advancedPanel,
   readOnly = false,
   className,
 }: ArchitectureEditorProps) {
+  const idPrefix = useId();
+  const [tab, setTab] = useState<EditorTab>("design");
+  // Narrow layouts show one design pane at a time; wider layouts show both.
+  const [mobilePane, setMobilePane] = useState<"canvas" | "outline">("canvas");
+  const [pickerOpen, setPickerOpen] = useState(() => initialSpec.skills.length === 0);
+  const flowRef = useRef<ReactFlowInstance<ArchitectureFlowNode, Edge> | null>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
   const initialSpecKey = useMemo(() => architectureSpecKey(initialSpec), [initialSpec]);
   const [draft, setDraft] = useState<ArchitectureSpecV1>(() => cloneArchitectureSpec(initialSpec));
   const [baselineKey, setBaselineKey] = useState(initialSpecKey);
@@ -171,6 +197,76 @@ export function ArchitectureEditor({
   }, [draft]);
   const issues = useMemo(() => validation.valid ? [] : validation.errors, [validation]);
   const dirty = architectureSpecKey(draft) !== baselineKey;
+  const messageDirty = Boolean(onRevisionMessageChange && revisionMessage?.trim());
+  const selectedNodeIdRef = useRef(selectedNodeId);
+  selectedNodeIdRef.current = selectedNodeId;
+
+  const focusFlowNode = useCallback((nodeId: string, zoom: number) => {
+    const node = flowRef.current?.getNode(nodeId);
+    if (!node) return;
+    const width = node.width ?? ARCHITECTURE_NODE_WIDTH;
+    const height = node.height ?? ARCHITECTURE_NODE_HEIGHT;
+    void flowRef.current?.setCenter(node.position.x + width / 2, node.position.y + height / 2, { zoom });
+  }, []);
+
+  // Orient a visible canvas: fit the whole topology when it stays readable,
+  // otherwise centre the selected node at a readable scale.
+  const orientCanvas = useCallback(() => {
+    const flow = flowRef.current;
+    const element = canvasRef.current;
+    if (!flow || !element || element.clientWidth === 0 || element.clientHeight === 0) return;
+    const nodes = flow.getNodes();
+    if (nodes.length === 0) return;
+    const bounds = flow.getNodesBounds(nodes);
+    const padding = 1 + FIT_VIEW_OPTIONS.padding * 2;
+    const fitZoom = Math.min(element.clientWidth / (bounds.width * padding), element.clientHeight / (bounds.height * padding));
+    if (fitZoom >= READABLE_FIT_ZOOM) {
+      void flow.fitView(FIT_VIEW_OPTIONS);
+      return;
+    }
+    focusFlowNode(selectedNodeIdRef.current ?? nodes[0]!.id, FOCUS_ZOOM);
+  }, [focusFlowNode]);
+
+  // A canvas mounted while hidden (another tab, the overview, or the other
+  // narrow-layout pane) has no size to orient; orient again once it is shown.
+  useEffect(() => {
+    const element = canvasRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    let visible = element.clientWidth > 0 && element.clientHeight > 0;
+    let frame = 0;
+    const observer = new ResizeObserver(([entry]) => {
+      const nowVisible = (entry?.contentRect.width ?? 0) > 0 && (entry?.contentRect.height ?? 0) > 0;
+      if (nowVisible && !visible) {
+        cancelAnimationFrame(frame);
+        // Wait a frame so React Flow has measured its own viewport first.
+        frame = requestAnimationFrame(orientCanvas);
+      }
+      visible = nowVisible;
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [orientCanvas]);
+
+  // Bring a node selected from the outline or inspector into view when it is
+  // outside the visible canvas; nodes already in view keep the viewport.
+  useEffect(() => {
+    const flow = flowRef.current;
+    const element = canvasRef.current;
+    if (!flow || !element || !selectedNodeId || element.clientWidth === 0) return;
+    const node = flow.getNode(selectedNodeId);
+    if (!node) return;
+    const { x, y, zoom } = flow.getViewport();
+    const left = node.position.x * zoom + x;
+    const top = node.position.y * zoom + y;
+    const right = left + (node.width ?? ARCHITECTURE_NODE_WIDTH) * zoom;
+    const bottom = top + (node.height ?? ARCHITECTURE_NODE_HEIGHT) * zoom;
+    if (left >= 0 && top >= 0 && right <= element.clientWidth && bottom <= element.clientHeight) return;
+    focusFlowNode(selectedNodeId, Math.max(zoom, FOCUS_ZOOM));
+  }, [focusFlowNode, selectedNodeId]);
+
   const editorStatus = useMemo<ArchitectureEditorStatus>(() => ({
     dirty,
     valid: issues.length === 0,
@@ -221,8 +317,14 @@ export function ArchitectureEditor({
     setSelectedEnvironmentId(draft.environments[0]?.id ?? "");
   }, [draft.environments, selectedEnvironmentId]);
 
+  // Semantic edits pause while a save is pending: a successful save reloads
+  // the saved revision, which would otherwise drop edits typed meanwhile.
+  // The ref also rejects late UI events queued before the controls disable.
+  const saving = busy === "save";
+  const savingRef = useRef(false);
+
   const commitDraft = useCallback((mutator: (current: ArchitectureSpecV1) => ArchitectureSpecV1) => {
-    if (readOnly) return;
+    if (readOnly || savingRef.current) return;
     setOperation(null);
     setDraft((current) => {
       return mutator(current);
@@ -368,6 +470,7 @@ export function ArchitectureEditor({
       spec: cloneArchitectureSpec(draft),
       expectedRevisionId,
     };
+    if (previewPanel) setTab("preview");
     setBusy("preview");
     setOperation(null);
     try {
@@ -378,7 +481,7 @@ export function ArchitectureEditor({
     } finally {
       setBusy(null);
     }
-  }, [busy, draft, expectedRevisionId, onPreview, validation.valid]);
+  }, [busy, draft, expectedRevisionId, onPreview, previewPanel, validation.valid]);
 
   const handleSave = useCallback(async () => {
     if (!onSave || readOnly || !validation.valid || busy) return;
@@ -387,47 +490,59 @@ export function ArchitectureEditor({
       expectedRevisionId,
       ...(revisionMessage?.trim() ? { message: revisionMessage.trim() } : {}),
     };
+    savingRef.current = true;
     setBusy("save");
     setOperation(null);
     try {
       await onSave(request);
       setBaselineKey(architectureSpecKey(draft));
+      onRevisionMessageChange?.("");
       setOperation({ kind: "success", message: "Draft saved as an immutable revision." });
     } catch (error) {
       setOperation({ kind: "error", message: error instanceof Error ? error.message : "Save failed. Your draft is still available." });
     } finally {
+      savingRef.current = false;
       setBusy(null);
     }
-  }, [busy, draft, expectedRevisionId, onSave, readOnly, revisionMessage, validation.valid]);
+  }, [busy, draft, expectedRevisionId, onRevisionMessageChange, onSave, readOnly, revisionMessage, validation.valid]);
 
   const handleReset = useCallback(() => {
-    if (readOnly || !dirty) return;
+    if (readOnly || savingRef.current || (!dirty && !messageDirty)) return;
     if (!confirmEditorAction("Discard all unsaved architecture changes?")) return;
-    setDraft(cloneArchitectureSpec(initialSpec));
-    setBaselineKey(initialSpecKey);
-    setSelectedNodeId(initialSpec.nodes[0]?.id ?? null);
+    if (dirty) {
+      setDraft(cloneArchitectureSpec(initialSpec));
+      setBaselineKey(initialSpecKey);
+      setSelectedNodeId(initialSpec.nodes[0]?.id ?? null);
+    }
+    onRevisionMessageChange?.("");
     setOperation({ kind: "success", message: "Unsaved changes were discarded." });
-  }, [dirty, initialSpec, initialSpecKey, readOnly]);
+  }, [dirty, initialSpec, initialSpecKey, messageDirty, onRevisionMessageChange, readOnly]);
 
-  const statusText = dirty ? "Unsaved changes" : "All changes saved";
+  const unsaved = dirty || messageDirty;
+  const statusText = readOnly ? "Read-only" : unsaved ? "Unsaved changes" : "No unsaved changes";
   const OperationIcon = operation?.kind === "error" ? CircleAlert : Check;
+  const tabs: Array<ArchitectureTab<EditorTab>> = [
+    { id: "design", label: "Design" },
+    { id: "context", label: "Profiles & environments" },
+    ...(previewPanel ? [{ id: "preview" as const, label: "Preview" }] : []),
+    ...(advancedPanel ? [{ id: "advanced" as const, label: "Advanced" }] : []),
+  ];
 
   return (
     <section className={`architecture-editor ${className ?? ""}`.trim()} aria-label="Architecture editor" data-testid="architecture-editor">
       <header className="architecture-editor-header">
-        <div className="architecture-editor-heading">
-          <span className="architecture-editor-mark" aria-hidden="true"><Workflow size={18} /></span>
-          <div>
-            <p className="architecture-editor-eyebrow">Architecture workbench</p>
-            <h2>Design the routing surface</h2>
-            <p>Build the semantic outline first. The canvas is a navigable projection for orientation.</p>
-          </div>
-        </div>
-        <div className="architecture-editor-header-actions">
-          <span className={dirty ? "architecture-editor-save-state dirty" : "architecture-editor-save-state"} role="status" aria-live="polite">
+        {heading}
+        <div className="architecture-editor-header-actions" role="group" aria-label="Draft actions">
+          <span className={unsaved ? "architecture-editor-save-state dirty" : "architecture-editor-save-state"} role="status" aria-live="polite">
             <span className="architecture-editor-status-dot" aria-hidden="true" /> {statusText}
           </span>
-          {dirty && !readOnly && <button className="architecture-editor-button quiet" type="button" onClick={handleReset} disabled={busy !== null}><RotateCcw size={15} aria-hidden="true" /> Discard</button>}
+          {!readOnly && onRevisionMessageChange && (
+            <label className="architecture-editor-message">
+              <span className="sr-only">Revision message (optional)</span>
+              <input aria-label="Draft revision message" disabled={busy === "save"} placeholder="Revision message (optional)" value={revisionMessage ?? ""} onChange={(event) => { if (!savingRef.current) onRevisionMessageChange(event.target.value); }} />
+            </label>
+          )}
+          {unsaved && !readOnly && <button className="architecture-editor-button quiet" type="button" onClick={handleReset} disabled={busy !== null}><RotateCcw size={15} aria-hidden="true" /> Discard</button>}
           <button className="architecture-editor-button outline" type="button" onClick={() => void handlePreview()} disabled={!onPreview || !validation.valid || busy !== null}>
             <Eye size={15} aria-hidden="true" /> {busy === "preview" ? "Previewing…" : "Preview draft"}
           </button>
@@ -437,47 +552,46 @@ export function ArchitectureEditor({
         </div>
       </header>
 
-      <div className="architecture-editor-meta-grid">
-        <label className="architecture-editor-field architecture-editor-title-field">
-          <span>Architecture name</span>
-          <input aria-label="Architecture name" disabled={readOnly} value={draft.name} onChange={(event) => commitDraft((current) => updateArchitectureName(current, event.target.value))} />
-        </label>
-        <label className="architecture-editor-field architecture-editor-description-field">
-          <span>Description <small>(optional)</small></span>
-          <input aria-label="Architecture description" disabled={readOnly} value={draft.description ?? ""} onChange={(event) => commitDraft((current) => updateArchitectureName(current, current.name, event.target.value))} />
-        </label>
-        <div className="architecture-editor-pattern-lock" aria-label={`Pattern ${draft.pattern.id} is immutable`}>
-          <span>Pattern</span>
-          <strong><GitBranch size={15} aria-hidden="true" /> {draft.pattern.id}</strong>
-          <small>Immutable in this shell — derive a new pattern to change it.</small>
-        </div>
-      </div>
-
       {operation && <div className={`architecture-editor-operation ${operation.kind}`} role={operation.kind === "error" ? "alert" : "status"}><OperationIcon size={16} aria-hidden="true" /> {operation.message}</div>}
 
-      <div className="architecture-editor-workbench">
+      <ArchitectureTabList className="architecture-editor-tabs" idPrefix={idPrefix} label="Workbench sections" selected={tab} tabs={tabs} onSelect={setTab} />
+
+      <ArchitectureTabPanel className="architecture-editor-design" id="design" idPrefix={idPrefix} selected={tab}>
+      <div className="architecture-editor-pane-switch" role="group" aria-label="Design view">
+        <button type="button" aria-pressed={mobilePane === "canvas"} onClick={() => setMobilePane("canvas")}><Workflow size={15} aria-hidden="true" /> Canvas</button>
+        <button type="button" aria-pressed={mobilePane === "outline"} onClick={() => setMobilePane("outline")}><ListTree size={15} aria-hidden="true" /> Outline &amp; details</button>
+      </div>
+      <div className="architecture-editor-workbench" data-pane={mobilePane}>
         <aside className="architecture-editor-outline-pane" aria-label="Semantic architecture outline">
           <div className="architecture-editor-pane-heading">
-            <div>
-              <p className="architecture-editor-eyebrow">Canonical view</p>
-              <h3>Architecture outline</h3>
-            </div>
+            <h3>Outline</h3>
             <span className="architecture-editor-count">{draft.nodes.length} nodes</span>
           </div>
-          <p className="architecture-editor-pane-copy">Use the tree and its controls to make semantic changes. Dragging in the canvas only moves its visual layout.</p>
+          <details className="architecture-editor-disclosure">
+            <summary>Architecture details</summary>
+            <div className="architecture-editor-meta-grid">
+              <label className="architecture-editor-field architecture-editor-title-field">
+                <span>Architecture name</span>
+                <input aria-label="Architecture name" disabled={readOnly || saving} value={draft.name} onChange={(event) => commitDraft((current) => updateArchitectureName(current, event.target.value))} />
+              </label>
+              <label className="architecture-editor-field architecture-editor-description-field">
+                <span>Description <small>(optional)</small></span>
+                <input aria-label="Architecture description" disabled={readOnly || saving} value={draft.description ?? ""} onChange={(event) => commitDraft((current) => updateArchitectureName(current, current.name, event.target.value))} />
+              </label>
+              <div className="architecture-editor-pattern-lock" aria-label={`Pattern ${draft.pattern.id} is immutable`}>
+                <span>Pattern</span>
+                <strong><GitBranch size={15} aria-hidden="true" /> {draft.pattern.id}</strong>
+                <small>Immutable in this shell — derive a new pattern to change it.</small>
+              </div>
+            </div>
+          </details>
           {!readOnly && <div className="architecture-editor-add-actions" aria-label="Add architecture node">
-            <button type="button" className="architecture-editor-add-button" onClick={() => handleAddNode("router")} disabled={draft.pattern.id !== "multi-level-router"} title={draft.pattern.id === "multi-level-router" ? "Add a router" : "This pattern does not allow nested routers"}><Plus size={14} aria-hidden="true" /> Router</button>
-            <button type="button" className="architecture-editor-add-button" onClick={() => handleAddNode("leaf")} disabled={draft.skills.length === 0}><Plus size={14} aria-hidden="true" /> Leaf</button>
+            <button type="button" className="architecture-editor-add-button" onClick={() => handleAddNode("router")} disabled={saving || draft.pattern.id !== "multi-level-router"} title={draft.pattern.id === "multi-level-router" ? "Add a router" : "This pattern does not allow nested routers"}><Plus size={14} aria-hidden="true" /> Router</button>
+            <button type="button" className="architecture-editor-add-button" onClick={() => handleAddNode("leaf")} disabled={saving || draft.skills.length === 0}><Plus size={14} aria-hidden="true" /> Leaf</button>
             <label className="architecture-editor-add-skill"><span>Leaf source</span><select aria-label="Skill for new leaf" value={newLeafSkillId} onChange={(event) => setNewLeafSkillId(event.target.value)} disabled={draft.skills.length === 0}>{draft.skills.map((skill) => <option key={skill.id} value={skill.id}>{skill.title ?? skill.slug}</option>)}</select></label>
           </div>}
-          {!readOnly && onSearchRegistrySkills && onLoadRegistryReleases && <section className="architecture-editor-registry-picker" aria-labelledby="architecture-editor-registry-heading">
-            <div className="architecture-editor-picker-heading">
-              <div>
-                <p className="architecture-editor-eyebrow">Authorized skills</p>
-                <h4 id="architecture-editor-registry-heading">Add an exact release</h4>
-              </div>
-              <span className="architecture-editor-picker-badge">Immutable ref</span>
-            </div>
+          {!readOnly && onSearchRegistrySkills && onLoadRegistryReleases && <details className="architecture-editor-disclosure architecture-editor-registry-picker" open={pickerOpen} onToggle={(event) => setPickerOpen(event.currentTarget.open)}>
+            <summary>Add exact release</summary>
             <p className="architecture-editor-picker-copy">Search API-authorized metadata, choose one exact version and digest, then place it in the semantic draft. The picker never accepts a hand-entered package reference.</p>
             <form className="architecture-editor-registry-search" onSubmit={(event) => void handleRegistrySearch(event)}>
               <label className="architecture-editor-field"><span>Search skills</span><input aria-label="Search skills" value={registryQuery} onChange={(event) => setRegistryQuery(event.target.value)} placeholder="release notes or slug" /></label>
@@ -493,9 +607,9 @@ export function ArchitectureEditor({
               <div><dt>Digest</dt><dd>{selectedRegistryRelease.digest}</dd></div>
               <div><dt>Package visibility</dt><dd>{selectedRegistryRelease.packageVisibility}</dd></div>
             </dl>}
-            <button type="button" className="architecture-editor-add-button" onClick={handleAddRegistryRelease} disabled={!selectedRegistryRelease || (draft.pattern.id !== "flat" && !registryParentId)}><Plus size={14} aria-hidden="true" /> Add selected exact release</button>
+            <button type="button" className="architecture-editor-add-button" onClick={handleAddRegistryRelease} disabled={saving || !selectedRegistryRelease || (draft.pattern.id !== "flat" && !registryParentId)}><Plus size={14} aria-hidden="true" /> Add selected exact release</button>
             {registryMessage && <div className="architecture-editor-picker-message" role={registryState === "error" ? "alert" : "status"}>{registryMessage}</div>}
-          </section>}
+          </details>}
           <ArchitectureOutline
             tree={tree}
             expanded={expanded}
@@ -519,23 +633,25 @@ export function ArchitectureEditor({
             node={selectedNode}
             onLabelChange={(label) => commitDraft((current) => updateArchitectureNodeLabel(current, selectedNode.id, label))}
             onMove={handleMoveNode}
+            disabled={saving}
             onRemove={handleRemoveNode}
           />}
         </aside>
 
         <section className="architecture-editor-canvas-pane" aria-label="Architecture canvas projection">
           <div className="architecture-editor-pane-heading canvas-heading">
-            <div>
-              <p className="architecture-editor-eyebrow">Projection</p>
-              <h3>Topology canvas</h3>
-            </div>
+            <h3>Canvas</h3>
             <span className="architecture-editor-canvas-note"><GripVertical size={14} aria-hidden="true" /> Drag to arrange this view</span>
           </div>
-          <div className="architecture-editor-canvas" data-testid="architecture-canvas">
+          <div className="architecture-editor-canvas" data-testid="architecture-canvas" ref={canvasRef}>
             <ReactFlow<ArchitectureFlowNode, Edge>
               nodes={canvasNodes}
               edges={flowProjection.edges}
               nodeTypes={ARCHITECTURE_NODE_TYPES}
+              onInit={(instance) => {
+                flowRef.current = instance;
+                requestAnimationFrame(orientCanvas);
+              }}
               onNodesChange={handleNodesChange}
               onNodeClick={handleFlowNodeClick}
               nodesConnectable={false}
@@ -543,14 +659,14 @@ export function ArchitectureEditor({
               nodesFocusable={false}
               elementsSelectable={false}
               nodesDraggable
-              fitView
-              fitViewOptions={{ padding: 0.18, minZoom: 0.38, maxZoom: 1.3 }}
+              minZoom={OVERVIEW_FIT_OPTIONS.minZoom}
               aria-label="Architecture topology canvas"
               proOptions={{ hideAttribution: true }}
             >
               <Background color="#c6d5de" gap={24} size={1} />
-              <Controls showInteractive={false} aria-label="Canvas zoom controls" />
-              <MiniMap nodeColor={(node) => node.data.kind === "router" ? "#0e7490" : "#e2a34d"} nodeStrokeColor="#eff6f8" maskColor="rgba(12, 42, 57, 0.12)" aria-label="Topology minimap" />
+              {/* Fit view shows every node; the initial view favours readable labels. */}
+              <Controls showInteractive={false} position="top-right" orientation="horizontal" fitViewOptions={OVERVIEW_FIT_OPTIONS} aria-label="Canvas zoom controls" />
+              <MiniMap pannable zoomable style={{ width: 136, height: 92 }} nodeColor={(node) => node.data.kind === "router" ? "#0e7490" : "#e2a34d"} nodeStrokeColor="#eff6f8" maskColor="rgba(12, 42, 57, 0.12)" aria-label="Topology minimap" />
               <Panel position="bottom-left" className="architecture-editor-canvas-panel">
                 <SquareArrowOutUpRight size={13} aria-hidden="true" /> Visual layout is ephemeral
               </Panel>
@@ -559,7 +675,9 @@ export function ArchitectureEditor({
           <ValidationSummary issues={issues} />
         </section>
       </div>
+      </ArchitectureTabPanel>
 
+      <ArchitectureTabPanel id="context" idPrefix={idPrefix} selected={tab}>
       <ProfileEnvironmentPanel
         spec={draft}
         selectedProfileId={selectedProfileId}
@@ -596,7 +714,14 @@ export function ArchitectureEditor({
         onEnvironmentChange={(update) => selectedEnvironmentId && commitDraft((current) => updateArchitectureEnvironment(current, selectedEnvironmentId, update))}
         onBindingChange={(nodeId, update) => selectedProfileId && commitDraft((current) => updateArchitectureProfileBinding(current, selectedProfileId, nodeId, update))}
         readOnly={readOnly}
+        locked={saving}
       />
+      </ArchitectureTabPanel>
+      {previewPanel && <ArchitectureTabPanel id="preview" idPrefix={idPrefix} selected={tab}>{previewPanel}</ArchitectureTabPanel>}
+      {advancedPanel && <ArchitectureTabPanel id="advanced" idPrefix={idPrefix} selected={tab}>
+        {/* The JSON form is also reset by the save reload, so it pauses too. */}
+        <fieldset className="architecture-editor-advanced" disabled={saving}>{advancedPanel}</fieldset>
+      </ArchitectureTabPanel>}
     </section>
   );
 }
@@ -828,12 +953,14 @@ function ArchitectureTreeItem({
 function NodeInspector({
   spec,
   node,
+  disabled,
   onLabelChange,
   onMove,
   onRemove,
 }: {
   spec: ArchitectureSpecV1;
   node: ArchitectureNode;
+  disabled: boolean;
   onLabelChange: (label: string) => void;
   onMove: (parentId: string | null) => void;
   onRemove: () => void;
@@ -846,15 +973,15 @@ function NodeInspector({
       <div className="architecture-editor-inspector-heading"><Settings2 size={15} aria-hidden="true" /><h4 id="architecture-editor-inspector-heading">Selected node</h4><span>{node.kind}</span></div>
       <label className="architecture-editor-field">
         <span>Label</span>
-        <input aria-label="Selected node label" value={node.label} onChange={(event) => onLabelChange(event.target.value)} />
+        <input aria-label="Selected node label" disabled={disabled} value={node.label} onChange={(event) => onLabelChange(event.target.value)} />
       </label>
       <label className="architecture-editor-field">
         <span>Move selected under</span>
-        <select aria-label="Move selected node" value={currentParent ?? ""} onChange={(event) => onMove(event.target.value || null)}>
+        <select aria-label="Move selected node" disabled={disabled} value={currentParent ?? ""} onChange={(event) => onMove(event.target.value || null)}>
           {targets.map((target) => <option key={target.id ?? "top-level"} value={target.id ?? ""} disabled={target.disabled}>{target.label}</option>)}
         </select>
       </label>
-      <button type="button" className="architecture-editor-danger-button" onClick={onRemove}><Trash2 size={14} aria-hidden="true" /> Remove {node.kind}{descendantCount > 0 ? ` and ${descendantCount} descendant${descendantCount === 1 ? "" : "s"}` : ""}</button>
+      <button type="button" className="architecture-editor-danger-button" disabled={disabled} onClick={onRemove}><Trash2 size={14} aria-hidden="true" /> Remove {node.kind}{descendantCount > 0 ? ` and ${descendantCount} descendant${descendantCount === 1 ? "" : "s"}` : ""}</button>
     </section>
   );
 }
@@ -882,6 +1009,7 @@ function ProfileEnvironmentPanel({
   onEnvironmentChange,
   onBindingChange,
   readOnly,
+  locked,
 }: {
   spec: ArchitectureSpecV1;
   selectedProfileId: string;
@@ -896,7 +1024,10 @@ function ProfileEnvironmentPanel({
   onEnvironmentChange: (update: { name?: string; kind?: ArchitectureEnvironmentKind; profileId?: string; parentId?: string | null }) => void;
   onBindingChange: (nodeId: string, update: Partial<Pick<ArchitectureProfileBinding, "enabled" | "runtimeExposure" | "environmentIds">>) => void;
   readOnly: boolean;
+  /** True while a save is pending; edits are paused, not hidden. */
+  locked: boolean;
 }) {
+  const editDisabled = readOnly || locked;
   const profile = spec.profiles.find((candidate) => candidate.id === selectedProfileId);
   const environment = spec.environments.find((candidate) => candidate.id === selectedEnvironmentId);
   const allEnvironmentIds = spec.environments.map((candidate) => candidate.id);
@@ -918,12 +1049,12 @@ function ProfileEnvironmentPanel({
       </div>
       <div className="architecture-editor-context-grid">
         <div className="architecture-editor-context-card">
-          <div className="architecture-editor-context-card-heading"><div><span className="architecture-editor-label">Profiles</span><strong>{spec.profiles.length} declared</strong></div><button type="button" className="architecture-editor-icon-button" aria-label="Add profile" onClick={onAddProfile} disabled={readOnly}><Plus size={15} aria-hidden="true" /></button></div>
+          <div className="architecture-editor-context-card-heading"><div><span className="architecture-editor-label">Profiles</span><strong>{spec.profiles.length} declared</strong></div><button type="button" className="architecture-editor-icon-button" aria-label="Add profile" onClick={onAddProfile} disabled={editDisabled}><Plus size={15} aria-hidden="true" /></button></div>
           <label className="architecture-editor-field"><span>Active profile</span><select aria-label="Active architecture profile" disabled={!profile} value={selectedProfileId} onChange={(event) => onProfileSelect(event.target.value)}>{spec.profiles.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></label>
           {profile && <>
-            <label className="architecture-editor-field"><span>Profile name</span><input aria-label="Profile name" disabled={readOnly} value={profile.name} onChange={(event) => onProfileNameChange(event.target.value)} /></label>
+            <label className="architecture-editor-field"><span>Profile name</span><input aria-label="Profile name" disabled={editDisabled} value={profile.name} onChange={(event) => onProfileNameChange(event.target.value)} /></label>
             <div className="architecture-editor-context-subline"><span>Subject</span><code>{profile.subject.type}:{profile.subject.id}</code></div>
-            <button type="button" className="architecture-editor-danger-button subtle" onClick={onRemoveProfile} disabled={readOnly || spec.profiles.length <= 1}><Minus size={14} aria-hidden="true" /> Remove profile</button>
+            <button type="button" className="architecture-editor-danger-button subtle" onClick={onRemoveProfile} disabled={editDisabled || spec.profiles.length <= 1}><Minus size={14} aria-hidden="true" /> Remove profile</button>
           </>}
         </div>
 
@@ -931,17 +1062,17 @@ function ProfileEnvironmentPanel({
           <div className="architecture-editor-context-card-heading"><div><span className="architecture-editor-label">Logical environments</span><strong>{spec.environments.length} connected contexts</strong></div></div>
           <label className="architecture-editor-field"><span>Active environment</span><select aria-label="Active architecture environment" disabled={!environment} value={selectedEnvironmentId} onChange={(event) => onEnvironmentSelect(event.target.value)}>{spec.environments.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.kind}</option>)}</select></label>
           {environment && <>
-            <label className="architecture-editor-field"><span>Environment name</span><input aria-label="Environment name" disabled={readOnly} value={environment.name} onChange={(event) => onEnvironmentChange({ name: event.target.value })} /></label>
-            <label className="architecture-editor-field"><span>Environment kind</span><select aria-label="Environment kind" disabled={readOnly} value={environment.kind} onChange={(event) => onEnvironmentChange({ kind: event.target.value as ArchitectureEnvironmentKind })}><option value="personal">Personal</option><option value="work">Work</option><option value="team">Team</option></select></label>
-            <label className="architecture-editor-field"><span>Uses profile</span><select aria-label="Environment profile" disabled={readOnly} value={environment.profileId} onChange={(event) => onEnvironmentChange({ profileId: event.target.value })}>{spec.profiles.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></label>
-            <label className="architecture-editor-field"><span>Parent environment <small>(optional)</small></span><select aria-label="Environment parent" disabled={readOnly} value={environment.parentId ?? ""} onChange={(event) => onEnvironmentChange({ parentId: event.target.value || null })}>{environmentParents.map((option) => <option key={option.id ?? "no-parent"} value={option.id ?? ""}>{option.label}</option>)}</select></label>
-            <button type="button" className="architecture-editor-danger-button subtle" onClick={onRemoveEnvironment} disabled={readOnly || spec.environments.length <= 1}><Minus size={14} aria-hidden="true" /> Remove environment</button>
+            <label className="architecture-editor-field"><span>Environment name</span><input aria-label="Environment name" disabled={editDisabled} value={environment.name} onChange={(event) => onEnvironmentChange({ name: event.target.value })} /></label>
+            <label className="architecture-editor-field"><span>Environment kind</span><select aria-label="Environment kind" disabled={editDisabled} value={environment.kind} onChange={(event) => onEnvironmentChange({ kind: event.target.value as ArchitectureEnvironmentKind })}><option value="personal">Personal</option><option value="work">Work</option><option value="team">Team</option></select></label>
+            <label className="architecture-editor-field"><span>Uses profile</span><select aria-label="Environment profile" disabled={editDisabled} value={environment.profileId} onChange={(event) => onEnvironmentChange({ profileId: event.target.value })}>{spec.profiles.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></label>
+            <label className="architecture-editor-field"><span>Parent environment <small>(optional)</small></span><select aria-label="Environment parent" disabled={editDisabled} value={environment.parentId ?? ""} onChange={(event) => onEnvironmentChange({ parentId: event.target.value || null })}>{environmentParents.map((option) => <option key={option.id ?? "no-parent"} value={option.id ?? ""}>{option.label}</option>)}</select></label>
+            <button type="button" className="architecture-editor-danger-button subtle" onClick={onRemoveEnvironment} disabled={editDisabled || spec.environments.length <= 1}><Minus size={14} aria-hidden="true" /> Remove environment</button>
           </>}
           {!readOnly && <div className="architecture-editor-environment-create">
             <div className="architecture-editor-context-card-heading"><div><span className="architecture-editor-label">Add context</span><strong>Declare a new environment</strong></div></div>
             <label className="architecture-editor-field"><span>New environment kind</span><select aria-label="New environment kind" value={newEnvironmentKind} onChange={(event) => setNewEnvironmentKind(event.target.value as ArchitectureEnvironmentKind)}><option value="personal">Personal</option><option value="work">Work</option><option value="team">Team</option></select></label>
             <label className="architecture-editor-field"><span>New environment parent <small>(optional)</small></span><select aria-label="New environment parent" value={newEnvironmentParentId ?? ""} onChange={(event) => setNewEnvironmentParentId(event.target.value || null)}><option value="">No parent (top level)</option>{spec.environments.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.kind}</option>)}</select></label>
-            <button type="button" className="architecture-editor-add-button" aria-label="Add environment" onClick={() => onAddEnvironment(newEnvironmentKind, newEnvironmentParentId)} disabled={spec.profiles.length === 0}><Plus size={14} aria-hidden="true" /> Add environment</button>
+            <button type="button" className="architecture-editor-add-button" aria-label="Add environment" onClick={() => onAddEnvironment(newEnvironmentKind, newEnvironmentParentId)} disabled={locked || spec.profiles.length === 0}><Plus size={14} aria-hidden="true" /> Add environment</button>
           </div>}
         </div>
       </div>
@@ -954,9 +1085,9 @@ function ProfileEnvironmentPanel({
             const scoped = binding.environmentIds !== undefined;
             const resolution = resolveBindingForEditor(spec, profile.id, environment.id, node.id);
             return <div className="architecture-editor-binding-row" key={node.id}>
-              <label className="architecture-editor-binding-enable"><input type="checkbox" aria-label={`Enable ${node.label} in ${profile.name}`} disabled={readOnly} checked={binding.enabled} onChange={(event) => onBindingChange(node.id, { enabled: event.target.checked })} /><span><strong>{node.label}</strong><small>{node.kind}</small>{resolution && <small className={resolution.decision === "disabled" ? "architecture-editor-binding-explanation denied" : "architecture-editor-binding-explanation"}>{bindingResolutionLabel(resolution, spec)}</small>}</span></label>
-              <label className="architecture-editor-binding-exposure"><span>Exposure</span><select aria-label={`${node.label} runtime exposure`} disabled={readOnly || !binding.enabled} value={binding.enabled ? binding.runtimeExposure : "disabled"} onChange={(event) => onBindingChange(node.id, { enabled: event.target.value !== "disabled", runtimeExposure: event.target.value as "disabled" | "router" | "leaf" })}><option value="disabled">Disabled</option><option value="router" disabled={node.kind !== "router"}>Router</option><option value="leaf" disabled={node.kind !== "leaf"}>Leaf</option></select></label>
-              <fieldset className="architecture-editor-binding-scope"><legend>Environment scope</legend><label><input type="checkbox" aria-label={`Use all environments for ${node.label}`} disabled={readOnly || !binding.enabled} checked={!scoped} onChange={(event) => onBindingChange(node.id, { environmentIds: event.target.checked ? undefined : [] })} /> All</label>{spec.environments.map((candidate) => <label key={candidate.id}><input type="checkbox" aria-label={`${candidate.name} binding for ${node.label}`} disabled={readOnly || !binding.enabled} checked={!scoped || binding.environmentIds?.includes(candidate.id) === true} onChange={(event) => {
+              <label className="architecture-editor-binding-enable"><input type="checkbox" aria-label={`Enable ${node.label} in ${profile.name}`} disabled={editDisabled} checked={binding.enabled} onChange={(event) => onBindingChange(node.id, { enabled: event.target.checked })} /><span><strong>{node.label}</strong><small>{node.kind}</small>{resolution && <small className={resolution.decision === "disabled" ? "architecture-editor-binding-explanation denied" : "architecture-editor-binding-explanation"}>{bindingResolutionLabel(resolution, spec)}</small>}</span></label>
+              <label className="architecture-editor-binding-exposure"><span>Exposure</span><select aria-label={`${node.label} runtime exposure`} disabled={editDisabled || !binding.enabled} value={binding.enabled ? binding.runtimeExposure : "disabled"} onChange={(event) => onBindingChange(node.id, { enabled: event.target.value !== "disabled", runtimeExposure: event.target.value as "disabled" | "router" | "leaf" })}><option value="disabled">Disabled</option><option value="router" disabled={node.kind !== "router"}>Router</option><option value="leaf" disabled={node.kind !== "leaf"}>Leaf</option></select></label>
+              <fieldset className="architecture-editor-binding-scope"><legend>Environment scope</legend><label><input type="checkbox" aria-label={`Use all environments for ${node.label}`} disabled={editDisabled || !binding.enabled} checked={!scoped} onChange={(event) => onBindingChange(node.id, { environmentIds: event.target.checked ? undefined : [] })} /> All</label>{spec.environments.map((candidate) => <label key={candidate.id}><input type="checkbox" aria-label={`${candidate.name} binding for ${node.label}`} disabled={editDisabled || !binding.enabled} checked={!scoped || binding.environmentIds?.includes(candidate.id) === true} onChange={(event) => {
                 const current = new Set(binding.environmentIds ?? allEnvironmentIds);
                 if (event.target.checked) current.add(candidate.id); else current.delete(candidate.id);
                 const values = [...current].sort();
