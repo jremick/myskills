@@ -18,6 +18,35 @@ export function BrandingProvider({ client, children }: { client: RegistryClient;
     }).catch(() => { /* Keep navigation and sign-in usable when branding is unavailable. */ });
     return () => { epoch.current += 1; };
   }, [client]);
+  useEffect(() => {
+    const originalTitle = document.title;
+    document.title = branding.text === DEFAULT_BRANDING.text ? originalTitle : branding.text;
+    return () => { document.title = originalTitle; };
+  }, [branding.text]);
+  useEffect(() => {
+    if (!branding.logoDataUrl) return;
+    const originalIcons = Array.from(document.head.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]'));
+    const icon = document.createElement("link");
+    icon.rel = "icon";
+    icon.type = branding.logoDataUrl.slice(5, branding.logoDataUrl.indexOf(";"));
+    icon.href = branding.logoDataUrl;
+    const image = new Image();
+    image.src = branding.logoDataUrl;
+    let cancelled = false;
+    image.decode().then(() => {
+      if (cancelled) return;
+      // Remove competing defaults so the browser uses the saved logo.
+      originalIcons.forEach(original => original.remove());
+      document.head.append(icon);
+    }).catch(() => { /* Keep the default icons if this browser cannot decode the logo. */ });
+    return () => {
+      cancelled = true;
+      if (icon.isConnected) {
+        icon.remove();
+        document.head.append(...originalIcons);
+      }
+    };
+  }, [branding.logoDataUrl]);
   const value = useMemo(() => ({ branding, saveBranding }), [branding, saveBranding]);
   return <BrandingContext value={value}>{children}</BrandingContext>;
 }

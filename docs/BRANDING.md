@@ -4,8 +4,8 @@ An owner or administrator with an MFA-verified session can open **Admin → Bran
 to change the logo and brand text. These settings are visible to everyone, including
 visitors on the landing, login, invitation and account-action pages.
 
-- **Brand text:** 1–80 characters on one line. This is also the accessible name when text is hidden.
-- **Logo image:** a still PNG, JPEG or WebP image up to 256 KB and 2048 × 2048 pixels. SVG, external URLs and animated images are rejected.
+- **Brand text:** 1–80 characters on one line. This is also the browser tab title and accessible name when text is hidden.
+- **Logo image:** a still PNG, JPEG or WebP image up to 256 KB and 2048 × 2048 pixels. The saved image also becomes the browser tab icon (favicon). SVG, external URLs and animated images are rejected.
 - **Show brand text:** turn this off if the image already includes lettering.
 - **Remove custom logo:** restore the MySkills mark while keeping the current text.
 - **Save branding:** save the preview and update the current page. Other pages read the latest branding when loaded.
@@ -16,10 +16,18 @@ Failed saves keep the draft. Switching admin tabs keeps unsaved changes; leaving
 Admin discards an unsaved draft. A save already in progress can finish after
 navigation and updates the current page when its response arrives. If the public
 branding read fails, the interface uses the MySkills defaults and remains usable.
-Unreadable custom images fall back to the built-in mark.
+Unreadable custom images fall back to the built-in mark and default tab icons.
+
+Tab branding updates after a successful save and after saved settings load on a
+new page. Unsaved previews and failed saves do not change it. Removing a logo
+restores the default tab icons while retaining the custom title. Restoring
+MySkills text restores the original title, including its tagline. Other open
+tabs pick up changes on reload. The initial HTML uses the defaults until settings
+load; browsers and bookmarks can retain cached icons.
 
 Branding does not change the landing-page toggle, permissions, marketing copy,
-favicon, browser title, emails, CLI/MCP identity, package names or URLs.
+social metadata, installed-app names/icons, emails, CLI/MCP identity, package
+names or URLs. Apple touch icons and the web app manifest remain unchanged.
 
 ## API and storage
 
@@ -66,6 +74,10 @@ approved local browser.
 The test saves desktop/mobile screenshots and a verification attachment. It
 covers persistence after reload, anonymous pages, live navigation during save,
 drafts, save failures, invalid files, wide logos in collapsed navigation, keyboard
-save, removal/discard and defaults. API tests cover all accepted formats, denied
-roles/sessions/MFA, origin checks and malformed input. The Postgres audit test
+save, removal/discard and defaults.
+The same journey checks tab titles and decoded favicon selection across saves,
+reloads, anonymous pages, hidden text, logo replacement/removal, failed saves,
+read outages and reset.
+API tests cover all accepted formats, denied roles/sessions/MFA, origin checks
+and malformed input. The Postgres audit test
 covers rollback, fresh-store persistence and concurrent writes.
