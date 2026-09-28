@@ -242,7 +242,7 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
       const urlRef: LibrarySourceRef = parsedUrl.value.ref ? { kind: "branch", value: parsedUrl.value.ref } : { kind: "default-branch" };
       const ref = normalizeRef(input.ref ?? urlRef);
       const path = normalizeSourcePath(input.path ?? parsedUrl.value.path);
-      const repository = await this.provider.getRepositoryByName(parsedUrl.value.owner, parsedUrl.value.repo, this.requestContext());
+      const repository = await this.provider.getRepositoryByName(parsedUrl.value.owner, parsedUrl.value.repo, this.requestContext(actor.id));
       const source = await this.store.upsertSource(repository);
       const created = await this.store.createEntry({
         libraryId,
@@ -314,7 +314,7 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
 
   async discover(actor: LibraryActor, entryId: string): Promise<{ discovery: SourceDiscovery }> {
     const { entry, library } = await this.sourceEntry(entryId, actor);
-    const context = this.requestContext();
+    const context = this.requestContext(actor.id);
     const source = await this.requireSource(entry);
     const repository = await this.currentRepository(entry, source, context, actor.id);
     const resolved = await this.provider.resolveRef(repository, entryRef(entry), context);
@@ -360,7 +360,7 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
     const unknownMapping = Object.keys(input.mappings).find((path) => !paths.includes(normalizeSourcePath(path)));
     if (unknownMapping !== undefined) throw new AppError("Mappings must name selected paths.", "LIBRARY_PREVIEW_SELECTION_INVALID", 400);
     const source = await this.requireSource(entry);
-    const context = this.requestContext();
+    const context = this.requestContext(actor.id);
     const repository = await this.currentRepository(entry, source, context, actor.id);
     const previewId = randomUUID();
     const candidates: LibraryCandidate[] = [];
@@ -747,7 +747,15 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
   // ---- Tracking -----------------------------------------------------------
 
   async checkNow(actor: LibraryActor, entryId: string): Promise<{ check: SourceCheckResult }> {
-    const { entry } = await this.sourceEntry(entryId, actor);
+    const { entry, library } = await this.sourceEntry(entryId, actor);
+    if (entry.health === "paused") throw new AppError("Resume tracking before checking this source.", "SOURCE_TRACKING_PAUSED", 409);
+    const cooldown = await this.provider.retryAvailableAt?.(library.ownerUserId ?? undefined);
+    if (cooldown && cooldown.getTime() > this.clock().getTime()) {
+      return { check: {
+        ...failedCheck("rate-limited", "rate-limited", Math.ceil((cooldown.getTime() - this.clock().getTime()) / 1000), entry.nextCheckAt ? new Date(entry.nextCheckAt) : null),
+        retryAvailableAt: cooldown.toISOString(),
+      } };
+    }
     const leaseId = await this.store.acquireLease({ entryId: entry.id, actorId: actor.id, now: this.clock(), leaseMs: CHECK_LEASE_MS });
     if (!leaseId) throw new AppError("A check for this source is already running.", "SOURCE_CHECK_IN_PROGRESS", 409);
     return { check: await this.runCheck(entry.id, leaseId) };
@@ -780,7 +788,7 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
       if (entry) await this.store.finishCheck({ entryId, leaseId, health: entry.health, lastErrorCode: entry.lastErrorCode, attemptCount: entry.attemptCount, nextCheckAt: null, succeededAt: null, lastGoodSnapshotId: null });
       return failedCheck(entry?.health ?? "unavailable", "tracking-unsupported", null, null);
     }
-    const context = this.requestContext();
+    const context = this.requestContext(library.ownerUserId ?? undefined);
     const lease: CheckLease = {
       leaseId,
       renew: async () => {
@@ -845,6 +853,7 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
         errorCode: null,
         retryAfterSeconds: null,
         nextCheckAt: next?.toISOString() ?? null,
+        retryAvailableAt: null,
       };
     } catch (error) {
       if (error instanceof AppError && error.code === "TRACKING_AUTHORITY_UNAVAILABLE") {
@@ -865,7 +874,8 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
 
   private async failCheck(library: LibraryRecord, entry: EntryRecord, leaseId: string, error: unknown, now: Date): Promise<SourceCheckResult> {
     const code = error instanceof AppError ? error.code : "SOURCE_PROVIDER_UNAVAILABLE";
-    const health: LibrarySourceHealth = code === "SOURCE_RATE_LIMITED" ? "rate-limited" : code === "SOURCE_ACCESS_LOST" ? "access-lost" : "unavailable";
+    const health: LibrarySourceHealth = code === "SOURCE_RATE_LIMITED" ? "rate-limited"
+      : code === "SOURCE_ACCESS_LOST" || code === "SOURCE_AUTH_REQUIRED" || code.startsWith("GITHUB_") ? "access-lost" : "unavailable";
     const errorCode = code.replace(/^SOURCE_/, "").toLowerCase().replace(/_/g, "-").slice(0, 64);
     const attemptCount = Math.min(entry.attemptCount + 1, 100);
     const details = error instanceof AppError && error.details && typeof error.details === "object" ? error.details as { retryAfterSeconds?: number; rateLimitResetEpochSeconds?: number } : {};
@@ -877,12 +887,16 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
       retryAt = Math.max(retryAt, scheduledAfter(entry.trackingMode, now)?.getTime() ?? retryAt);
     }
     const next = new Date(retryAt);
+    const cooldown = health === "rate-limited" && typeof details.rateLimitResetEpochSeconds === "number"
+      ? new Date(details.rateLimitResetEpochSeconds * 1000) : null;
     const finished = await this.store.finishCheck({
       entryId: entry.id, leaseId, health, lastErrorCode: errorCode, attemptCount, nextCheckAt: next, succeededAt: null, lastGoodSnapshotId: null,
       events: health !== entry.health ? [healthEvent(library, entry, health)] : [],
     });
     if (!finished) return leaseLost(entry);
-    return failedCheck(health, errorCode, Math.max(0, Math.ceil((retryAt - now.getTime()) / 1000)), next, finished.eventKinds);
+    return { ...failedCheck(health, errorCode, Math.max(0, Math.ceil((retryAt - now.getTime()) / 1000)),
+      entry.trackingMode === "daily" || entry.trackingMode === "weekly" ? next : null, finished.eventKinds),
+    retryAvailableAt: cooldown?.toISOString() ?? null };
   }
 
   private async captureSnapshot(
@@ -1179,6 +1193,8 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
     if (entry.kind === "source") {
       const source = await this.requireSource(entry);
       const lastGood = await this.store.getSnapshot(entry.lastGoodSnapshotId);
+      const library = await this.store.getLibrary(entry.libraryId);
+      const cooldown = await this.provider.retryAvailableAt?.(library?.ownerUserId ?? undefined);
       return {
         ...base,
         source: {
@@ -1194,8 +1210,9 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
         },
         tracking: {
           mode: entry.trackingMode,
-          health: entry.health,
+          health: cooldown && !entry.pendingFullName && entry.health !== "paused" ? "rate-limited" : entry.health,
           nextCheckAt: entry.nextCheckAt,
+          retryAvailableAt: cooldown?.toISOString() ?? null,
           lastAttemptAt: entry.lastAttemptAt,
           lastSuccessfulCheckAt: entry.lastSuccessfulCheckAt,
           lastErrorCode: entry.lastErrorCode,
@@ -1476,8 +1493,8 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
     return this.targets;
   }
 
-  private requestContext(): SourceRequestContext {
-    return { deadline: Date.now() + LIBRARY_LIMITS.checkDeadlineMs };
+  private requestContext(userId?: string): SourceRequestContext {
+    return { deadline: Date.now() + LIBRARY_LIMITS.checkDeadlineMs, userId };
   }
 }
 

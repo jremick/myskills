@@ -25,6 +25,9 @@
  * T14 Ordinary registry management routes let a team curator with no MFA mutate
  *     sharing, metadata, lifecycle or draft state. A later import must not restore
  *     an explicitly removed owning-team grant or insert a version without it.
+ * T15 Per-user GitHub auth captures a departed curator's credentials for durable
+ *     team tracking, or a viewer's personal cooldown controls team checks/display.
+ *     A shared cooldown must not conceal paused tracking or bypass explicit resume.
  *
  * Evidence is written to a unique owner-only directory. It contains IDs, status
  * codes and digests, never credentials or package contents.
@@ -46,6 +49,7 @@ import { PostgresAuthStore } from "../src/auth/postgres-auth-store.js";
 import { BundleService } from "../src/bundles/service.js";
 import { createDb, createPgPool, type Database, type DatabaseTransaction } from "../src/db/client.js";
 import { FixtureGithubSource, LibraryService, LibrarySourceWorker, PostgresLibraryStore, PublicGithubSourceProvider } from "../src/libraries/index.js";
+import { PostgresSourceCooldownStore } from "../src/libraries/source-cooldown.js";
 import { PostgresSkillRepository } from "../src/repositories/postgres-skill-repository.js";
 import { SubmissionService } from "../src/submissions/service.js";
 import { PostgresSubmissionStore } from "../src/submissions/postgres-submission-store.js";
@@ -102,12 +106,29 @@ test("team Library: owned imports, curator continuity, tracking and revocation",
   const skillRepository = new PostgresSkillRepository(db);
   const libraryStore = new PostgresLibraryStore(db);
   const bundleService = new BundleService(db);
+  const credentialUsers: (string | undefined)[] = [];
+  const credentialKey = (userId?: string) => userId === undefined ? "github:anonymous" : `github:user:${userId}`;
+  const cooldowns = new PostgresSourceCooldownStore(db);
+  const assertCredentialContext = (start: number, expected: string | undefined) => {
+    const observed = credentialUsers.slice(start);
+    assert.ok(observed.length > 0, "the check must reach the real provider's credential resolver");
+    assert.deepEqual([...new Set(observed)], [expected]);
+  };
   const service = new LibraryService({
     store: libraryStore,
     submissions: submissionService,
     skillRepository,
     bundles: bundleService,
-    sourceProvider: new PublicGithubSourceProvider({ transport: github.transport() }),
+    sourceProvider: new PublicGithubSourceProvider({
+      transport: github.transport(), cooldowns, now: () => new Date(nowMs),
+      credentials: {
+        credentialKey: async (userId) => credentialKey(userId),
+        resolve: async (userId) => {
+          credentialUsers.push(userId);
+          return { key: credentialKey(userId), kind: "anonymous" };
+        },
+      },
+    }),
     now: () => new Date(nowMs),
     slugSuffix: (seed) => sha256(seed).slice(0, 10),
   });
@@ -148,9 +169,11 @@ test("team Library: owned imports, curator continuity, tracking and revocation",
   }
   const library = ok(await call("POST", "/v1/libraries", alice, { name: "Engineering", owner: { type: "team", id: ids.team } }), 201).library;
   const source = ok(await call("POST", `/v1/libraries/${library.id}/entries`, alice, { kind: "source", url: `https://github.com/${repository}` }), 201).entry;
+  const aliceInteractiveStart = credentialUsers.length;
   const discover = ok(await call("POST", `/v1/library-entries/${source.id}/discoveries`, alice)).discovery;
   assert.deepEqual(discover.skills.map((root: Json) => root.path).sort(), ["skills/ce-code-review", "skills/ce-plan"]);
   const preview = ok(await call("POST", `/v1/library-entries/${source.id}/previews`, alice, { snapshotId: discover.snapshot.id, paths: ["skills/ce-plan", "skills/ce-code-review"] })).preview;
+  assertCredentialContext(aliceInteractiveStart, ids.alice);
   const plan = preview.candidates.find((candidate: Json) => candidate.sourcePath === "skills/ce-plan");
   const review = preview.candidates.find((candidate: Json) => candidate.sourcePath === "skills/ce-code-review");
   assert.equal(plan.state, "ready-for-review");
@@ -305,7 +328,9 @@ test("team Library: owned imports, curator continuity, tracking and revocation",
   // Sibling Libraries share the team's lineage, but keep independent adoption pins.
   const sibling = ok(await call("POST", "/v1/libraries", bob, { name: "Engineering experiments", owner: { type: "team", id: ids.team } }), 201).library;
   const siblingSource = ok(await call("POST", `/v1/libraries/${sibling.id}/entries`, bob, { kind: "source", url: `https://github.com/${repository}` }), 201).entry;
+  const bobInteractiveStart = credentialUsers.length;
   const siblingDiscovery = ok(await call("POST", `/v1/library-entries/${siblingSource.id}/discoveries`, bob)).discovery;
+  assertCredentialContext(bobInteractiveStart, ids.bob);
   assert.equal(siblingDiscovery.skills.find((root: Json) => root.path === "skills/ce-plan").lineage.slug, slug);
   const siblingEntry = ok(await call("POST", `/v1/libraries/${sibling.id}/entries`, bob, { kind: "skill", slug }), 201).entry;
   assert.equal(siblingEntry.skill.lineageId, plan.lineage.id);
@@ -315,6 +340,40 @@ test("team Library: owned imports, curator continuity, tracking and revocation",
   assert.equal((await pool.query("SELECT count(*)::int AS count FROM skill_release_provenance WHERE skill_version_id = $1", [imported.submission.id])).rows[0].count, 1);
   record("T08", { personalOwner, personalSlug: personalImport.submission.slug, teamSlug: slug, siblingLineage: slug, teamDeletionDenied: true });
 
+  // Alice's departure affects team authority, not her own source credentials.
+  const personalBeforeTracking = ok(await call("GET", `/v1/library-entries/${personalSource.id}`, alice)).entry;
+  ok(await call("PATCH", `/v1/library-entries/${personalSource.id}/tracking`, alice, { expectedRevision: personalBeforeTracking.revision, mode: "daily" }));
+  nowMs += 25 * 3_600_000;
+  const personalCheckStart = credentialUsers.length;
+  assert.equal(await workerA.runOnce(), 1);
+  assertCredentialContext(personalCheckStart, ids.alice);
+  const personalAfterCheck = ok(await call("GET", `/v1/library-entries/${personalSource.id}`, alice)).entry;
+  assert.equal(personalAfterCheck.tracking.health, "healthy");
+  assert.equal(personalAfterCheck.tracking.lastSuccessfulCheckAt, new Date(nowMs).toISOString());
+  ok(await call("PATCH", `/v1/library-entries/${personalSource.id}/tracking`, alice, { expectedRevision: personalAfterCheck.revision, mode: "off" }));
+
+  // Bob's private rate-limit bucket must not block the team's durable source.
+  const cooldownUntil = new Date(nowMs + 3_600_000);
+  await cooldowns.extend(credentialKey(ids.bob), cooldownUntil);
+  for (const token of [bob, member]) {
+    assert.equal(ok(await call("GET", `/v1/library-entries/${source.id}`, token)).entry.tracking.retryAvailableAt, null);
+  }
+  const manualTeamCheckStart = credentialUsers.length;
+  assert.equal(ok(await call("POST", `/v1/library-entries/${source.id}/checks`, bob)).check.health, "healthy");
+  assertCredentialContext(manualTeamCheckStart, undefined);
+  await cooldowns.extend(credentialKey(), cooldownUntil);
+  const requestsBeforeCooldown = github.requests.length;
+  for (const token of [bob, member]) {
+    const tracking = ok(await call("GET", `/v1/library-entries/${source.id}`, token)).entry.tracking;
+    assert.equal(tracking.health, "rate-limited");
+    assert.equal(tracking.retryAvailableAt, cooldownUntil.toISOString());
+  }
+  const cooledCheck = ok(await call("POST", `/v1/library-entries/${source.id}/checks`, bob)).check;
+  assert.equal(cooledCheck.health, "rate-limited");
+  assert.equal(cooledCheck.retryAvailableAt, cooldownUntil.toISOString());
+  assert.equal(github.requests.length, requestsBeforeCooldown);
+  await pool.query("DELETE FROM github_source_cooldowns WHERE bucket = ANY($1::text[])", [[credentialKey(ids.bob), credentialKey()]]);
+
   for (const token of [bob, member]) ok(await call("PUT", `/v1/libraries/${library.id}/subscription`, token, {}));
   for (const token of [bob, member]) ok(await call("PUT", `/v1/libraries/${sibling.id}/subscription`, token, {}));
   const currentSource = ok(await call("GET", `/v1/library-entries/${source.id}`, bob)).entry;
@@ -323,7 +382,10 @@ test("team Library: owned imports, curator continuity, tracking and revocation",
   ok(await call("PATCH", `/v1/library-entries/${siblingSource.id}/tracking`, bob, { expectedRevision: currentSiblingSource.revision, mode: "daily" }));
   const commit = github.commit(repository, { files: { "skills/ce-plan/references/guide.md": "# Guide\nRecord acceptance criteria and revocation failures.\n" } });
   nowMs += 25 * 3_600_000;
+  const backgroundTeamCheckStart = credentialUsers.length;
   await Promise.all([workerA.runOnce(), workerB.runOnce()]);
+  assertCredentialContext(backgroundTeamCheckStart, undefined);
+  record("T15", { interactiveActors: [ids.alice, ids.bob], personalWorkerOwner: ids.alice, teamWorkerUserIdOmitted: true, teamManualUserIdOmitted: true, viewerCooldownIgnored: true, sharedCooldownHonored: true });
   const candidates = ok(await call("GET", `/v1/library-entries/${source.id}/candidates?state=ready-for-review`, bob)).candidates;
   assert.equal(candidates.length, 1);
   const update = candidates[0];
@@ -601,13 +663,18 @@ test("team Library: owned imports, curator continuity, tracking and revocation",
   nowMs += 25 * 3_600_000;
   await workerA.runOnce();
   assert.equal(github.requests.length, requestsBeforePause);
+  await cooldowns.extend(credentialKey(), new Date(nowMs + 3_600_000));
   const paused = ok(await call("GET", `/v1/library-entries/${source.id}`, bob)).entry;
+  assert.equal(paused.tracking.health, "paused");
+  error(await call("POST", `/v1/library-entries/${source.id}/checks`, bob), 409, "SOURCE_TRACKING_PAUSED");
+  assert.equal(github.requests.length, requestsBeforePause);
+  await pool.query("DELETE FROM github_source_cooldowns WHERE bucket = $1", [credentialKey()]);
   ok(await call("PATCH", `/v1/library-entries/${source.id}/tracking`, bob, { expectedRevision: paused.revision, mode: "daily" }));
   nowMs += 25 * 3_600_000;
   await workerA.runOnce();
   assert.ok(github.requests.length > requestsBeforePause);
   assert.equal(ok(await call("GET", `/v1/library-entries/${source.id}/candidates?state=ready-for-review`, bob)).candidates.length, 1);
-  record("T07", { pausedWithoutFetch: true, restoredCuratorDidNotResume: true, explicitResumptionChecked: true });
+  record("T07", { pausedWithoutFetch: true, restoredCuratorDidNotResume: true, cooldownDidNotBypassPause: true, explicitResumptionChecked: true });
 
   const libraryBeforeDelete = ok(await call("GET", `/v1/libraries/${library.id}`, bob)).library;
   ok(await call("DELETE", `/v1/libraries/${library.id}?expectedRevision=${libraryBeforeDelete.revision}`, bob));
@@ -618,7 +685,7 @@ test("team Library: owned imports, curator continuity, tracking and revocation",
   const target = process.env.TEAM_LIBRARY_JOURNEY_EVIDENCE_PATH;
   const directory = mkdtempSync(join(target ? dirname(target) : tmpdir(), "myskills-team-library-"));
   const path = join(directory, target ? basename(target) : "team-library-evidence.json");
-  assert.deepEqual(evidence.map((item) => item.id).sort(), ["T01", "T02", "T03-demoted", "T03-organization-removed", "T03-removed", "T04", "T05", "T06", "T07", "T08", "T14-grant", "T14-ignored", "T14-locks", "T14-mfa", "T14-org-locks", "T14-quota", "T14-sharing", "T14-sibling-locks", "T14-skew"]);
+  assert.deepEqual(evidence.map((item) => item.id).sort(), ["T01", "T02", "T03-demoted", "T03-organization-removed", "T03-removed", "T04", "T05", "T06", "T07", "T08", "T14-grant", "T14-ignored", "T14-locks", "T14-mfa", "T14-org-locks", "T14-quota", "T14-sharing", "T14-sibling-locks", "T14-skew", "T15"]);
   writeFileSync(path, `${JSON.stringify({ schemaVersion: 1, journey: "team-library", scenarios: evidence }, null, 2)}\n`, { flag: "wx", mode: 0o600 });
   assert.equal(statSync(directory).mode & 0o777, 0o700);
   assert.equal(statSync(path).mode & 0o777, 0o600);

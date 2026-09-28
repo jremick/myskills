@@ -153,6 +153,7 @@ import { MemoryAuthRateLimiter } from "../src/auth/rate-limit.js";
 import { AuthService } from "../src/auth/service.js";
 import { PostgresAuthStore } from "../src/auth/postgres-auth-store.js";
 import { createDb, createPgPool } from "../src/db/client.js";
+import { PostgresSourceCooldownStore } from "../src/libraries/source-cooldown.js";
 import {
   FixtureGithubSource,
   LibraryService,
@@ -205,7 +206,9 @@ test("library first-release journey: import, self-review, curation, tracking and
   const record = (id: string, observed: Json) => { evidence.push({ id, outcome: "pass", observed }); };
 
   // Deterministic clock for library scheduling and expiry. Auth uses wall time.
-  let nowMs = Date.parse("2026-09-26T00:00:00.000Z");
+  // Anchor ahead of the database clock so the upgrade cooldown remains future
+  // whenever this deterministic elapsed-time journey is run.
+  let nowMs = Date.now();
   const clock = { now: () => new Date(nowMs), advanceHours: (hours: number) => { nowMs += hours * 3_600_000; } };
 
   const github = new FixtureGithubSource();
@@ -254,7 +257,7 @@ test("library first-release journey: import, self-review, curation, tracking and
     submissions: submissionService,
     skillRepository,
     targets: architectureTargetService,
-    sourceProvider: new PublicGithubSourceProvider({ transport: github.transport() }),
+    sourceProvider: new PublicGithubSourceProvider({ transport: github.transport(), cooldowns: new PostgresSourceCooldownStore(db), now: clock.now }),
     now: clock.now,
     slugSuffix: (seed: string) => createHash("sha256").update(seed).digest("hex").slice(0, 10),
   });
@@ -827,10 +830,33 @@ test("library first-release journey: import, self-review, curation, tracking and
   github.failNext(/api\.github\.com\/repositories\/424242$/, { status: 403, headers: { "x-ratelimit-remaining": "0", "x-ratelimit-reset": String(resetEpoch) } });
   clock.advanceHours(25);
   await workerA.runOnce();
+  // Upgrade regression: pre-auth releases recorded the anonymous cooldown only
+  // in entry scheduling. Recreate the new quota table from that legacy state.
+  await pool.query("DROP TABLE github_source_cooldowns");
+  await pool.query(readFileSync(join(migrationsDir, "0035_github_source_cooldown.sql"), "utf8"));
   const limited = expectOk(await call("GET", `/v1/library-entries/${sourceEntry.id}`, alice)).entry.tracking;
   assert.equal(limited.health, "rate-limited");
   assert.equal(limited.lastSuccessfulCheckAt, beforeLimit.lastSuccessfulCheckAt);
   assert.ok(Date.parse(limited.nextCheckAt) >= resetEpoch * 1000);
+  // Authored before cooldown implementation: manual sources retain retry timing
+  // across a mode change/reload, and a repeated check never reaches GitHub.
+  assert.equal(limited.retryAvailableAt, limited.nextCheckAt);
+  const limitedEntry = expectOk(await call("GET", `/v1/library-entries/${sourceEntry.id}`, alice)).entry;
+  const manualLimited = expectOk(await call("PATCH", `/v1/library-entries/${sourceEntry.id}/tracking`, alice, {
+    expectedRevision: limitedEntry.revision, mode: "manual",
+  })).entry;
+  assert.equal(manualLimited.tracking.nextCheckAt, null);
+  assert.equal(manualLimited.tracking.retryAvailableAt, limited.retryAvailableAt);
+  const providerCallsBeforeCooldown = github.requests.length;
+  const blockedManual = expectOk(await call("POST", `/v1/library-entries/${sourceEntry.id}/checks`, alice)).check;
+  assert.equal(blockedManual.health, "rate-limited");
+  assert.equal(blockedManual.nextCheckAt, null);
+  assert.equal(github.requests.length, providerCallsBeforeCooldown);
+  const stillLimited = expectOk(await call("GET", `/v1/library-entries/${sourceEntry.id}`, alice)).entry;
+  assert.equal(stillLimited.tracking.lastSuccessfulCheckAt, beforeLimit.lastSuccessfulCheckAt);
+  expectOk(await call("PATCH", `/v1/library-entries/${sourceEntry.id}/tracking`, alice, {
+    expectedRevision: stillLimited.revision, mode: "daily",
+  }));
   const inboxAfterLimit = expectOk(await call("GET", "/v1/library-inbox", alice)).items.filter((item: Json) => item.kind === "source-health-changed");
   assert.equal(inboxAfterLimit.length, 1);
   clock.advanceHours(1);

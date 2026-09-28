@@ -1,5 +1,6 @@
 import { createBundleClient, type BundleClient } from "./bundle-api.js";
 import { createImprovementClient, type ImprovementClient } from "./improvement-api";
+import { createGithubClient, type GithubClient } from "./github-api.js";
 import { createLibraryClient, type LibraryClient } from "./library-api.js";
 import { MAX_BRAND_LOGO_BYTES, MAX_BRAND_TEXT_LENGTH } from "@myskills-app/core";
 import type {
@@ -804,6 +805,7 @@ export interface ReviewSubmissionDetail extends ReviewSubmissionSummary, Submiss
 export interface RegistryClient {
   improvements?: ImprovementClient;
   libraries?: LibraryClient;
+  github?: GithubClient;
   bundles?: BundleClient;
   searchSkillPage?(input: RegistryPageInput): Promise<RegistryPage<PublicSkill>>;
   listManagedSkills?(input: RegistryPageInput): Promise<RegistryPage<SkillManagementSummary>>;
@@ -996,6 +998,7 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
   return {
     improvements: createImprovementClient(<T,>(url: string, init?: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown }) => requestJson<T>(fetchImpl, `${root}${url}`, { ...init, token })),
     libraries: createLibraryClient(root, fetchImpl, token),
+    github: createGithubClient(root, fetchImpl, token),
     bundles: createBundleClient(root, fetchImpl, token),
     async searchSkillPage(input) {
       const params = registryPageQuery(input);

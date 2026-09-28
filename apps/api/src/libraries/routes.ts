@@ -78,8 +78,8 @@ export function registerLibraryRoutes(app: FastifyInstance, options: LibraryRout
     }
     return { id: context.user.id, roles: context.user.roles, mfaVerified: context.user.mfaVerified };
   };
-  // Provider requests share the instance's unauthenticated GitHub budget, so one user's
-  // source requests are bounded before any provider call.
+  // Bound each user's source operations independently of the upstream credential
+  // budget. GitHub cooldowns are also enforced in the provider across workers.
   const sourceLimiter = options.librarySourceLimiter
     ?? new MemoryAuthRateLimiter({ maxAttempts: LIBRARY_LIMITS.maxSourceOperationsPerHour, windowMs: 3_600_000 });
   const allowSourceRequest = async (actor: LibraryActor, reply: FastifyReply): Promise<boolean> => {

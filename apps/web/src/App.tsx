@@ -4,6 +4,8 @@ import { LandingSettings } from "./components/marketing/LandingSettings.js";
 import { QRCodeSVG } from "qrcode.react";
 import { BrandingProvider } from "./components/branding/BrandingProvider.js";
 import { BrandIdentity } from "./components/branding/BrandIdentity.js";
+import { GithubAccountConnection } from "./components/github/GithubAccountConnection.js";
+import { GithubSettings } from "./components/github/GithubSettings.js";
 import { BrandingSettings } from "./components/branding/BrandingSettings.js";
 import {
   Fragment,
@@ -3043,11 +3045,12 @@ function TeamSkillSection({ empty, skills, title }: { empty: string; skills: Pub
   );
 }
 
-type AdminTab = "people" | "instance" | "branding" | "keys" | "providers" | "audit";
+type AdminTab = "people" | "instance" | "github" | "branding" | "keys" | "providers" | "audit";
 const ADMIN_TABS: ReadonlyArray<{ id: AdminTab; label: string }> = [
   { id: "people", label: "People" },
   { id: "instance", label: "Instance" },
   { id: "branding", label: "Branding" },
+  { id: "github", label: "GitHub" },
   { id: "keys", label: "API keys" },
   { id: "providers", label: "Sign-in providers" },
   { id: "audit", label: "Audit" },
@@ -3523,6 +3526,11 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
             <div><h2>Landing page</h2><p>First visit to this instance</p></div>
           </div>
           <LandingSettings key={`${session.user.id}:${session.expiresAt}`} client={client} canEdit={session.user.mfaVerified} onSaved={() => { void refreshAudit().catch(() => setMessage("Landing setting saved. Refresh to load the audit history.")); }} />
+        </section>
+
+        <section {...panelProps("github")}>
+          <div className="account-panel-head"><div><h2>GitHub</h2><p>Authenticated source checks for users and organization instances</p></div></div>
+          {client.github && <GithubSettings key={`${session.user.id}:${session.expiresAt}`} api={client.github} canEdit={session.user.mfaVerified} onSaved={() => { void refreshAudit().catch(() => setMessage("GitHub settings changed. Refresh to load the audit history.")); }} />}
         </section>
 
         <section {...panelProps("branding")}>
@@ -4250,6 +4258,8 @@ function AccountSettings({
             {rowNotice("password")}
           </form>
         </section>
+
+        {client.github && <GithubAccountConnection key={`${session.user.id}:${session.expiresAt}`} api={client.github} />}
 
         <section aria-labelledby={`${baseId}-mfa`} className="account-row">
           <div className="account-row-intro">
