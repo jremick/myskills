@@ -6,6 +6,8 @@ All notable user-facing changes will be tracked here. MySkills is still prerelea
 
 Target release: `v0.1.0-beta.13`.
 
+GitHub and hosted delivery are verified. See [delivery evidence](docs/BETA13_RELEASE_DELIVERY.md).
+
 - Show a QR code during authenticator enrollment after password verification. The browser renders the exact setup URL locally, with manual secret and URL fallbacks.
 - Keep six-digit confirmation, invalid-code retry and one-time recovery-code display in the existing enrollment flow.
 - Verify desktop and mobile QR decoding and the real API enrollment journey without retaining enrollment secrets in browser evidence.

@@ -4,10 +4,34 @@ Version: 0.1.0-beta.13
 Last updated: 2026-09-28
 
 This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.
-The current beta.12 release is tracked in [Beta.12 Release Delivery](BETA12_RELEASE_DELIVERY.md).
+The current beta.13 delivery is tracked in [Beta.13 Release Delivery](BETA13_RELEASE_DELIVERY.md).
 The historical operational beta evidence remains in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
 
-## Current maintenance deployment
+## Current beta.13 deployment
+
+On 28 September 2026, staging and production were promoted from
+`48273d5ff401ddcfd9046c448b1b38a58ee12337` in API-ready-then-web order.
+The release adds local authenticator enrollment QR codes without a schema change.
+
+| Environment | API deployment | Web deployment |
+| --- | --- | --- |
+| Staging | `6cabe522-353b-462c-9a41-5c8edcf6a7c9` | `eef82722-a4fa-486e-8773-53f3d2f401ed` |
+| Production | `89cc870c-a3bb-4f2f-a2b0-d1defa931a98` | `2d47a504-8b65-4d5d-b38f-2a96db71842d` |
+
+All four deployments report SUCCESS, beta.13 and the same revision. Direct and
+same-origin API checks, HTML revalidation, fresh CLI checks and live Comet
+authentication/package inspection passed. Production's existing owner session
+and enabled MFA were preserved. The completed recovery point from
+`2026-09-27T16:01:29.347Z` passed the 26-hour policy before promotion.
+
+Rollback uses the matching maintenance pair below at source
+`d8775d6b07e2de06b7af4cbdc6bee1a33455902d`: API
+`49a2bc94-2db8-432f-8611-4339c2cdd124`, web
+`77bf8274-c816-4095-ba14-38ad3c061f9b`. Retain database and artifact data.
+Physical authenticator-app scans remain unverified in issue #49; no live account
+MFA enrollment was performed. See the delivery record for checks and limitations.
+
+## Historical beta.12 maintenance deployment
 
 On 28 September 2026, staging and production were promoted from
 `d8775d6b07e2de06b7af4cbdc6bee1a33455902d` in API-ready-then-web order.
