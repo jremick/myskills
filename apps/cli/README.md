@@ -34,7 +34,7 @@ CLI tokens should be stored in the platform secret store where possible.
 
 ## Current Slice
 
-This document describes the `0.1.0-beta.16` source candidate, including named
+This document describes the `0.1.0-beta.17` source candidate, including named
 CLI configuration profiles and global/project inventory scopes. Source,
 GitHub releases, npm publication, and hosted deployment are separate states;
 see [release verification](../../docs/RELEASE.md) for their checks. Historical

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { PackageFileViewer } from "../src/components/registry/PackageFileViewer.js";
-import { ManagedSkillsDashboard } from "../src/components/registry/ManagedSkillsDashboard.js";
+import { SkillManagePanel } from "../src/components/registry/SkillManagePanel.js";
 import { SubmissionEvidencePanel } from "../src/components/registry/SubmissionEvidencePanel.js";
 import { UpgradePolicyEditor } from "../src/components/update/UpgradePolicyEditor.js";
 import type { ArchitectureTargetRecord, RegistryClient, SkillManagementSummary, SkillReleaseSummary, SkillUpgradePolicyRevisionRecord, UserSubmissionDetail } from "../src/api.js";
@@ -36,24 +36,26 @@ test("a stale package response cannot replace another selected release", async (
   assert.equal(view.queryByText("Old release"), null);
 });
 
-test("managed inventory restores an archived skill and an exact historical release", async () => {
+// The Skills workspace owns selection and reloads; the Manage panel acts only
+// on the record and exact version it is given.
+test("managed lifecycle restores an archived skill and an exact historical release", async () => {
   let skill: SkillManagementSummary = { slug: "archived-helper", title: "Archived helper", summary: "Kept for recovery", lifecycleStatus: "archived", visibility: "private", tags: [], allowedActions: ["restore"] };
   const calls: string[] = [];
+  let reloads = 0;
   const releases: SkillReleaseSummary[] = [release("2.0.0", "approved", ["unpublish"]), release("1.0.0", "unpublished", ["restore"])];
   const client = {
-    async listManagedSkills() { return { skills: [skill], nextCursor: null }; },
-    async listSkillReleases() { return releases; },
     async performSkillAction(slug: string, action: string) { calls.push(`${slug}:${action}`); skill = { ...skill, lifecycleStatus: "approved", allowedActions: ["archive"] }; return skill; },
     async performReleaseAction(slug: string, version: string, action: string) { calls.push(`${slug}:${version}:${action}`); return releases[1]; },
   } as unknown as RegistryClient;
-  const view = render(<ManagedSkillsDashboard client={client} mfaVerified />);
-  await view.findByLabelText("Managed release version");
+  const panel = (version: string) => <SkillManagePanel client={client} historyState="ready" mfaVerified onChanged={() => { reloads++; }} onRetryRecord={() => undefined} record={skill} recordState="ready" releases={releases} sharing={null} version={version} />;
+  const view = render(panel("2.0.0"));
   fireEvent.click(await view.findByRole("button", { name: "Restore skill" }));
   fireEvent.click(view.getByRole("button", { name: "Confirm restore" }));
   await waitFor(() => assert.equal(calls[0], "archived-helper:restore"));
-  await view.findByRole("button", { name: "Archive skill" });
+  await view.findByText(/Lifecycle change saved/);
+  assert.equal(reloads, 1);
+  view.rerender(panel("1.0.0"));
   await waitFor(() => assert.equal((view.getByRole("button", { name: "Archive skill" }) as HTMLButtonElement).disabled, false));
-  fireEvent.change(view.getByLabelText("Managed release version"), { target: { value: "1.0.0" } });
   fireEvent.click(view.getByRole("button", { name: "Restore 1.0.0" }));
   fireEvent.click(view.getByRole("button", { name: "Confirm restore" }));
   await waitFor(() => assert.equal(calls[1], "archived-helper:1.0.0:restore"));

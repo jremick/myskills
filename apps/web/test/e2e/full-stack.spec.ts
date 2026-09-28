@@ -165,7 +165,9 @@ test("owner creates and reads a real architecture revision from a seeded release
   expect(revisionId).toBeTruthy();
   expect(saveBody.revision?.revisionNumber).toBe(1);
 
-  await page.locator("summary").filter({ hasText: /^Revision history/ }).click();
+  await expect(page.getByText("Revision 1 saved.", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Architecture overview" }).click();
+  await page.getByRole("tab", { name: "History", exact: true }).click();
   await expect(page.getByRole("region", { name: "Revision history" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Current · Revision 1/ })).toBeVisible();
   await expect(page.getByText("Current revision selected")).toBeVisible();

@@ -101,7 +101,7 @@ Record the original attempt before helping; do not relabel a coached retry.
    original package text. Upload another observation. Explain which version is
    active and why. Do not edit managed files to simulate a successful rollback.
 8. **Reviewer and consumer — revoke.** After recovery is verified, the reviewer
-   uses **Manage skills** to revoke both published releases, `0.1.1` and `0.2.0`,
+   opens **Skills → Can manage → Manage** to revoke both published releases, `0.1.1` and `0.2.0`,
    with a pilot-completion reason. The consumer refreshes discovery and attempts
    an export of `0.1.1` into the unused directory: it must be denied with no
    package delivered. Explain that revocation blocks future registry delivery;

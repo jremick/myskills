@@ -2,6 +2,18 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
+## 0.1.0-beta.17 - candidate
+
+Target release: `v0.1.0-beta.17`.
+
+- Open architecture editing in a full-page Workbench, with saved Overview, Skills, History, and Access tabs, responsive editing, draft protection, and direct links.
+- Browse and manage skills in one workspace, preserving the selected skill and exact version across scopes and detail tabs.
+- Save Library references through skill and release pickers. Open exact entries and source candidates from links, with reload, history, and return navigation preserved.
+- Keep archived and unpublished skills available to authorized managers. Exclude archived parent skills from Library adoption choices.
+- Include GitHub source authentication and retry scheduling, plus team-owned Library sourcing, tracking, and instance review.
+
+This release targets the regular GitHub update artifacts for operator-managed instances. Apply the GitHub integration, source cooldown, and team Library ownership migrations before starting the API; preserve the database, artifact storage, and existing configuration. GitHub authentication requires the documented instance configuration. Keep API and web on the same release. Hosted deployment and npm publication are separate actions; the published beta.16 CLI remains available.
+
 ## 0.1.0-beta.16 - 2026-09-29
 
 Target release: `v0.1.0-beta.16`.

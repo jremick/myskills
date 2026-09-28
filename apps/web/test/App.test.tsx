@@ -29,6 +29,7 @@ import type {
   ProviderRoleMappingInput,
   RegistryClient,
   ReleaseMetadata,
+  SkillManagementSummary,
   SkillReleaseSummary,
   ReviewSubmissionSummary,
   SafeApiError,
@@ -728,36 +729,44 @@ for (const releaseKind of ["prerelease", "deprecated"] as const) {
   });
 }
 
-test("privileged skill controls stay locked without an MFA-verified session and do not request management data", async () => {
+// Lifecycle, metadata and sharing live in the skill's Manage section. The
+// management record is the lifecycle authority; sharing keeps its own gate.
+test("privileged skill controls stay locked without an MFA-verified session and do not request sharing data", async () => {
   const owner = authUser({ email: "owner@example.com", roles: ["owner"], mfaVerified: false });
   setupAuthenticatedDom("http://localhost/skills/release-notes-helper", owner);
   const managedSkill: PublicSkill = { ...publicSkill(), access: { canManageSharing: true, reasons: ["owner", "public"] } };
   const client = mockClient({ skills: [managedSkill], user: owner });
+  const managedReads: string[] = [];
+  client.getManagedSkill = async (slug) => { managedReads.push(slug); return managedSummary(managedSkill); };
 
   const view = render(<RegistryApp client={client} />);
 
-  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
-  await view.findByRole("heading", { name: "Lifecycle and sharing controls are locked", level: 2 });
-  assert.equal(view.queryByRole("region", { name: "Skill lifecycle controls" }), null);
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  await view.findByText(/MFA-verified session is required/);
+  assert.equal((view.getByRole("button", { name: "Archive skill" }) as HTMLButtonElement).disabled, true);
+  assert.equal((view.getByRole("button", { name: "Save metadata" }) as HTMLButtonElement).disabled, true);
   assert.equal(view.queryByRole("region", { name: "Sharing controls" }), null);
   assert.deepEqual(client.releaseHistoryCalls, [managedSkill.slug]);
   assert.equal(client.releaseManagementCalls, 0);
   assert.equal(client.sharingDetailCalls, 0);
+  assert.deepEqual(managedReads, [managedSkill.slug]);
 });
 
-test("MFA-verified managers can load lifecycle and sharing controls", async () => {
+test("MFA-verified managers load lifecycle and sharing controls without a second release read", async () => {
   const owner = authUser({ email: "owner@example.com", roles: ["owner"], mfaVerified: true });
   setupAuthenticatedDom("http://localhost/skills/release-notes-helper", owner);
   const managedSkill: PublicSkill = { ...publicSkill(), access: { canManageSharing: true, reasons: ["owner", "public"] } };
   const client = mockClient({ skills: [managedSkill], user: owner });
+  client.getManagedSkill = async () => managedSummary(managedSkill);
 
   const view = render(<RegistryApp client={client} />);
 
-  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
-  await view.findByRole("region", { name: "Skill lifecycle controls" });
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  await view.findByRole("heading", { name: "Release lifecycle" });
   await view.findByRole("region", { name: "Sharing controls" });
+  assert.equal((view.getByRole("button", { name: "Archive skill" }) as HTMLButtonElement).disabled, false);
   assert.deepEqual(client.releaseHistoryCalls, [managedSkill.slug]);
-  assert.equal(client.releaseManagementCalls, 1);
+  assert.equal(client.releaseManagementCalls, 0);
   assert.equal(client.sharingDetailCalls, 1);
 });
 
@@ -766,17 +775,20 @@ test("metadata saves refresh the parent registry detail", async () => {
   setupAuthenticatedDom("http://localhost/skills/release-notes-helper", owner);
   let skill = { ...publicSkill(), access: { canManageSharing: true, reasons: ["owner", "public"] } } as PublicSkill;
   const client = mockClient({ user: owner, skills: [skill], skillLoader: () => skill });
+  client.getManagedSkill = async () => managedSummary(skill);
   client.updateSkillMetadata = async (input) => {
     skill = { ...skill, title: input.title ?? skill.title, summary: input.summary ?? skill.summary };
     return { ...skill, lifecycleStatus: "approved", allowedActions: ["edit"] };
   };
   const view = render(<RegistryApp client={client} />);
-  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
-  await view.findByRole("region", { name: "Skill lifecycle controls" });
-  fireEvent.input(view.getByRole("textbox", { name: "Title" }), { target: { value: "Updated registry title" } });
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  const title = await view.findByRole("textbox", { name: "Title" }) as HTMLInputElement;
+  assert.equal(title.value, "Release Notes Helper");
+  fireEvent.input(title, { target: { value: "Updated registry title" } });
   fireEvent.input(view.getByRole("textbox", { name: "Summary" }), { target: { value: "Updated registry summary" } });
   fireEvent.click(view.getByRole("button", { name: "Save metadata" }));
   await view.findByRole("heading", { name: "Updated registry title" });
+  fireEvent.click(view.getByRole("tab", { name: "Overview" }));
   await view.findByText("Updated registry summary");
 });
 
@@ -789,18 +801,22 @@ test("skill deletion clears the parent detail and its stale export actions", asy
     if (deleted) throw safeApiError(404, "NOT_FOUND", "Deleted");
     return skill;
   } });
-  client.performSkillAction = async () => { deleted = true; return { ...skill, lifecycleStatus: "deleted", allowedActions: [] }; };
+  client.getManagedSkill = async () => {
+    if (deleted) throw safeApiError(404, "SKILL_NOT_FOUND", "Deleted");
+    return managedSummary(skill);
+  };
+  client.performSkillAction = async () => { deleted = true; return { ...managedSummary(skill), lifecycleStatus: "deleted", allowedActions: [] }; };
   const view = render(<RegistryApp client={client} />);
-  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
-  await view.findByRole("region", { name: "Skill lifecycle controls" });
-  const deleteButton = view.getByRole("button", { name: "Delete skill" }) as HTMLButtonElement;
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  const deleteButton = await view.findByRole("button", { name: "Delete skill" }) as HTMLButtonElement;
   await waitFor(() => assert.equal(deleteButton.disabled, false));
   fireEvent.click(deleteButton);
-  const dialog = await view.findByRole("dialog");
-  fireEvent.input(dialog.querySelector("textarea")!, { target: { value: "Remove obsolete skill" } });
-  fireEvent.click(Array.from(dialog.querySelectorAll("button")).find((button) => button.textContent === "Delete skill")!);
+  const confirm = await view.findByRole("region", { name: "Confirm lifecycle change" });
+  fireEvent.input(within(confirm).getByRole("textbox", { name: "Lifecycle reason" }), { target: { value: "Remove obsolete skill" } });
+  fireEvent.click(within(confirm).getByRole("button", { name: "Confirm delete" }));
   await view.findByText("Skill or release not found.");
   assert.equal(document.querySelector(".command-panel"), null);
+  assert.equal(view.queryByRole("tab", { name: "Manage" }), null);
 });
 
 test("release mutation refreshes parent history before offering the old artifact", async () => {
@@ -811,13 +827,16 @@ test("release mutation refreshes parent history before offering the old artifact
   let revoked = false;
   const current = { ...releaseSummary(fixture.latest), allowedActions: ["revoke" as const] };
   const client = historyClient(fixture, { user: owner, releaseListLoader: () => revoked ? [{ ...current, lifecycleStatus: "revoked" }] : [current] });
+  client.getManagedSkill = async () => managedSummary(fixture.skill);
   client.performReleaseAction = async () => { revoked = true; return { ...current, lifecycleStatus: "revoked", allowedActions: [] }; };
   const view = render(<RegistryApp client={client} />);
-  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
-  fireEvent.click(await view.findByRole("button", { name: "Revoke" }));
-  const dialog = await view.findByRole("dialog");
-  fireEvent.input(dialog.querySelector("textarea")!, { target: { value: "Withdraw this artifact" } });
-  fireEvent.click(Array.from(dialog.querySelectorAll("button")).find((button) => button.textContent === "Revoke release")!);
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  fireEvent.click(await view.findByRole("button", { name: "Revoke 0.2.0" }));
+  const confirm = await view.findByRole("region", { name: "Confirm lifecycle change" });
+  fireEvent.input(within(confirm).getByRole("textbox", { name: "Lifecycle reason" }), { target: { value: "Withdraw this artifact" } });
+  fireEvent.click(within(confirm).getByRole("button", { name: "Confirm revoke" }));
+  await view.findByText(/Lifecycle change saved/);
+  fireEvent.click(view.getByRole("tab", { name: "Overview" }));
   await view.findByText("This exact release is unavailable.");
   assert.equal(document.querySelector(".command-panel"), null);
 });
@@ -1204,6 +1223,13 @@ test("signed-in users can open the teams workspace", async () => {
   assert.equal(window.location.pathname, "/teams");
 });
 
+// Editing happens in the full-page Workbench; tests reach it through the
+// overview launcher, as a user would.
+async function openArchitectureWorkbench(view: ReturnType<typeof render>, launcher = "Open workbench") {
+  fireEvent.click(await view.findByRole("link", { name: launcher }));
+  await view.findByRole("tablist", { name: "Workbench sections" });
+}
+
 test("signed-in users can create and inspect a multi-level skill architecture", async () => {
   setupAuthenticatedDom("http://localhost/architectures");
   const client = mockClient({
@@ -1223,7 +1249,8 @@ test("signed-in users can create and inspect a multi-level skill architecture", 
   fireEvent.click(view.getByRole("button", { name: "Create architecture" }));
 
   await view.findByRole("heading", { name: "Work assistant" });
-  await view.findByText(/This draft has no revision yet/);
+  await view.findByRole("heading", { name: "Build the first revision" });
+  await view.findByText("No revision yet. Build and save the first revision in the workbench.");
   assert.equal(client.architectureCreates.length, 1);
   assert.deepEqual(client.architectureCreates[0]?.owner, { type: "user" });
   assert.equal(client.architecturePreviewCalls.length, 0);
@@ -1418,6 +1445,7 @@ test("diagram exports use the authorized artifact and tolerate organization-only
   await view.findByText("Select one authorized organization to preview this shared architecture.");
   fireEvent.change(view.getByLabelText("Preview organization"), { target: { value: "org-1" } });
   await view.findByText("Skills available in this context");
+  fireEvent.click(view.getByText("Technical details"));
   await view.findByText("Revision unavailable");
   await view.findByRole("button", { name: "Copy canonical diagram JSON" });
   await view.findByRole("button", { name: "Download canonical diagram JSON" });
@@ -1525,6 +1553,8 @@ test("architecture revisions parse JSON before the API and refresh after a valid
   const view = render(<RegistryApp client={client} />);
 
   await view.findByText("Skills available in this context");
+  await openArchitectureWorkbench(view);
+  fireEvent.click(view.getByRole("tab", { name: "Advanced" }));
   fireEvent.click(view.getByText("Add immutable revision"));
   fireEvent.input(view.getByLabelText("Revision message"), { target: { value: "Bind the work context" } });
   const validSpec = defaultArchitecturePreview().revision.spec;
@@ -1551,6 +1581,8 @@ test("architecture revision form rejects invalid JSON without calling the API", 
   const view = render(<RegistryApp client={client} />);
 
   await view.findByText("Skills available in this context");
+  await openArchitectureWorkbench(view);
+  fireEvent.click(view.getByRole("tab", { name: "Advanced" }));
   fireEvent.click(view.getByText("Add immutable revision"));
   fireEvent.input(view.getByLabelText("Architecture spec JSON"), { target: { value: "{not-json" } });
   fireEvent.click(view.getByRole("button", { name: "Save immutable revision" }));
@@ -1568,6 +1600,7 @@ test("architecture editor previews an unsaved draft through the API with its rev
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Edited review router" } });
   fireEvent.click(view.getByRole("button", { name: "Preview draft" }));
 
@@ -1605,7 +1638,7 @@ test("the editor preserves input delivered before its initial passive effects", 
   await waitFor(() => assert.deepEqual(previewedLabels, ["Immediate edit"]));
   const nextSpec = { ...spec, nodes: [{ ...spec.nodes[0]!, label: "New server revision" }, ...spec.nodes.slice(1)] };
   await act(async () => { view.rerender(<EarlyInputEditor initialSpec={nextSpec} />); });
-  await view.findByText("All changes saved");
+  await view.findByText("No unsaved changes");
   assert.equal((view.getByLabelText("Selected node label") as HTMLInputElement).value, "New server revision");
 });
 
@@ -1621,6 +1654,7 @@ test("an initial server preview settling around an edit preserves the unsaved ed
     client.previewArchitecture = async () => initialPreview;
     const view = render(<RegistryApp client={client} />);
     await view.findByTestId("architecture-editor");
+    await openArchitectureWorkbench(view);
     assert.equal(view.queryByText("Skills available in this context"), null);
 
     await act(async () => {
@@ -1660,7 +1694,10 @@ test("team members receive a read-only architecture editor without revision cont
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  assert.equal(view.queryByRole("link", { name: "Open workbench" }), null);
+  await openArchitectureWorkbench(view, "Inspect in workbench");
   assert.equal(view.getByRole("heading", { name: "Inspect this architecture" }).textContent, "Inspect this architecture");
+  assert.equal(view.queryByLabelText("Draft revision message"), null);
   assert.equal(view.queryByRole("button", { name: "Save revision" }), null);
   assert.equal(view.queryByText("Add immutable revision"), null);
   const editorName = view.getByTestId("architecture-editor").querySelector<HTMLInputElement>('input[aria-label="Architecture name"]');
@@ -1680,6 +1717,7 @@ test("architecture editor preserves its draft when the optimistic save conflicts
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
   const label = view.getByLabelText("Selected node label") as HTMLInputElement;
   fireEvent.input(label, { target: { value: "Draft kept after conflict" } });
   fireEvent.click(view.getByRole("button", { name: "Save revision" }));
@@ -1707,6 +1745,7 @@ test("architecture editor sends the immutable revision token and refreshes after
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Saved review router" } });
   fireEvent.input(view.getByLabelText("Draft revision message"), { target: { value: "Clarify review routing" } });
   fireEvent.click(view.getByRole("button", { name: "Save revision" }));
@@ -1741,7 +1780,7 @@ test("architecture selection clears stale detail before previewing a new draft",
   fireEvent.click(view.getByRole("button", { name: /Draft assistant/ }));
 
   await view.findByRole("heading", { name: "Draft assistant", level: 2 });
-  await view.findByText(/This draft has no revision yet/);
+  await view.findByText("No revision yet. Build and save the first revision in the workbench.");
   assert.equal(client.architecturePreviewCalls.some((call) => call.architectureId === "architecture-2"), false);
 });
 
@@ -1760,6 +1799,7 @@ test("unsaved architecture edits guard selection and beforeunload navigation", a
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Unsaved router" } });
   await view.findByText("Unsaved changes");
 
@@ -1767,6 +1807,9 @@ test("unsaved architecture edits guard selection and beforeunload navigation", a
   window.dispatchEvent(navigation);
   assert.equal(navigation.defaultPrevented, true);
 
+  // The same architecture's overview keeps the draft; switching asks first.
+  fireEvent.click(view.getByRole("link", { name: "Architecture overview" }));
+  await view.findByRole("link", { name: "Resume draft" });
   fireEvent.click(view.getByRole("button", { name: /Draft assistant/ }));
   assert.equal(view.getByRole("heading", { name: "Review assistant", level: 2 }).isConnected, true);
 
@@ -1796,8 +1839,15 @@ test("unsaved architecture edits guard browser back without duplicate prompts", 
   await view.findByText("Release Notes Helper");
   fireEvent.click(view.getAllByRole("link", { name: "Architectures" })[0]!);
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Unsaved browser draft" } });
   await view.findByText("Unsaved changes");
+
+  // Back to the same architecture's overview keeps the draft without a prompt.
+  window.history.back();
+  await view.findByRole("link", { name: "Resume draft" });
+  assert.equal(window.location.pathname, "/architectures");
+  assert.equal(confirmCalls, 0);
 
   window.history.back();
   await waitFor(() => {
@@ -1903,6 +1953,7 @@ test("architecture history loads older revisions, shows semantic counts, and see
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-history-panel");
+  fireEvent.click(view.getByRole("tab", { name: "History" }));
   fireEvent.click(view.getByRole("button", { name: /Revision 2/ }));
   await waitFor(() => assert.deepEqual(client.architectureRevisionFetches, ["architecture-1:revision-older"]));
   await view.findByText(/Semantic changes from this older revision to the current revision/);
@@ -1916,7 +1967,7 @@ test("architecture history loads older revisions, shows semantic counts, and see
   assert.equal(history.textContent?.includes("private-marker"), false);
 
   fireEvent.click(view.getByRole("button", { name: "Use as new draft" }));
-  await view.findByRole("heading", { name: "Draft from revision revision-older" });
+  await view.findByRole("heading", { name: "Draft from Revision 2" });
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Draft from history" } });
   fireEvent.click(view.getByRole("button", { name: "Save revision" }));
   await waitFor(() => assert.equal(client.architectureRevisionCreates.length, 1));
@@ -1964,6 +2015,7 @@ test("exact registry release picker supports a first flat revision and rejects d
   });
   const view = render(<RegistryApp client={client} />);
 
+  await openArchitectureWorkbench(view, "Build first revision");
   await view.findByRole("heading", { name: "Build the first revision" });
   fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "audit" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
@@ -2001,6 +2053,8 @@ test("stale exact-release responses cannot replace the release selected for a ne
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
+  fireEvent.click(view.getByText("Add exact release"));
   fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "skill" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
   const skillSelector = await view.findByLabelText("Skill");
@@ -2024,6 +2078,8 @@ test("router release picker requires an explicit parent and creates a routes edg
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
+  fireEvent.click(view.getByText("Add exact release"));
   fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "audit" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
   fireEvent.change(await view.findByLabelText("Skill"), { target: { value: "audit-helper" } });
@@ -3656,6 +3712,10 @@ function publicRelease(): ReleaseMetadata {
       contentType: "application/vnd.myskills-app.package+json",
     },
   };
+}
+
+function managedSummary(skill: PublicSkill, allowedActions: SkillManagementSummary["allowedActions"] = ["edit", "archive", "delete"]): SkillManagementSummary {
+  return { slug: skill.slug, title: skill.title, summary: skill.summary, lifecycleStatus: "approved", visibility: skill.visibility, tags: skill.tags, allowedActions };
 }
 
 function releaseSummary(release: ReleaseMetadata): SkillReleaseSummary {

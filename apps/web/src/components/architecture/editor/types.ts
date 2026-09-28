@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type {
   ArchitectureEnvironment,
   ArchitectureNode,
@@ -65,6 +66,17 @@ export interface ArchitectureEditorProps {
   onLoadRegistryReleases?: (skill: ArchitectureRegistrySkillOption) => Promise<ArchitectureRegistryReleaseOption[]>;
   /** Optional revision note forwarded with save. */
   revisionMessage?: string;
+  /**
+   * Renders the revision message field in the toolbar. The caller owns the
+   * value; the editor clears it after a save or an accepted discard.
+   */
+  onRevisionMessageChange?: (message: string) => void;
+  /** Title block shown beside the toolbar actions. */
+  heading?: ReactNode;
+  /** Caller-owned content for the Preview tab (API draft preview). */
+  previewPanel?: ReactNode;
+  /** Caller-owned content for the Advanced tab. */
+  advancedPanel?: ReactNode;
   /** Team members can inspect a draft without being offered write controls. */
   readOnly?: boolean;
   className?: string;

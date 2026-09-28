@@ -251,13 +251,15 @@ test("copying is exact and honest, and platform, user-action, unsupported and ow
   expect(await copied()).toEqual([expected, LONG]);
   await page.screenshot({ path: info.outputPath("skill-pane-copy-failure.png"), fullPage: true });
 
-  const ownerControls = page.getByRole("button", { name: "Owner controls", exact: true });
-  await expect(ownerControls).toHaveAccessibleDescription("Locked until MFA");
-  const compatibility = (await card(page).getByRole("button", { name: "Compatibility and improvement", exact: true }).boundingBox())!;
-  expect((await ownerControls.boundingBox())!.y).toBeGreaterThan(compatibility.y);
-  await ownerControls.click();
-  await expect(page.getByRole("heading", { name: "Lifecycle and sharing controls are locked" })).toBeVisible();
+  // Owner tools live in the Skills Manage section: Overview opens first, and
+  // Manage stays locked without MFA.
+  const overviewTab = page.getByRole("tab", { name: "Overview", exact: true });
+  const manageTab = page.getByRole("tab", { name: "Manage", exact: true });
+  await expect(overviewTab).toHaveAttribute("aria-selected", "true");
+  await manageTab.click();
+  await expect(page.getByText(/MFA-verified session is required/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Delete skill", exact: true })).toHaveCount(0);
+  await overviewTab.click();
 
   await versionsToggle(page).click();
   await versionRow(page, OLDEST).click();
@@ -274,5 +276,5 @@ test("copying is exact and honest, and platform, user-action, unsupported and ow
   await expect(details).toHaveAttribute("aria-expanded", "true");
   await expect(card(page).getByText("generic · planned")).toBeVisible();
   await expect(card(page).getByText("SHA-256").locator("..")).toContainText("e".repeat(64));
-  await expect(ownerControls).toBeVisible();
+  await expect(manageTab).toBeVisible();
 });
