@@ -73,7 +73,7 @@ import { ManagedSkillsDashboard } from "@/components/registry/ManagedSkillsDashb
 import { SubmissionEvidencePanel } from "@/components/registry/SubmissionEvidencePanel";
 import { SkillImprovementPanel } from "@/components/registry/SkillImprovementPanel";
 import { BundleWorkspace } from "@/components/registry/BundleWorkspace";
-import { chipTone, findingsLabel, lifecycleLabel, reviewStatusLabel, securityStatusLabel, severityLabel, visibilityLabel } from "@/components/registry/status-display";
+import { isBootstrapVersion, releaseVersionLabel, chipTone, findingsLabel, lifecycleLabel, reviewStatusLabel, securityStatusLabel, severityLabel, visibilityLabel } from "@/components/registry/status-display";
 import { useSplitLayout } from "@/components/registry/useSplitLayout";
 import {
   createRegistryClient,
@@ -1063,11 +1063,11 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
                             <h2 ref={inspectorTitleRef} tabIndex={-1}>{selectedSkill.title}</h2>
                             <p className="registry-ref">
                               <code>{selectedSkill.slug}</code>
-                              {releaseReady && release && <><span aria-hidden="true">@</span><code>{release.version}</code></>}
+                              {releaseReady && release && <><span aria-hidden="true">@</span><code title={release.version}>{releaseVersionLabel(release.version)}</code></>}
                             </p>
                             {releaseReady && release && ((selectedVersion !== null && selectedSkill.latestVersion && selectedSkill.latestVersion !== release.version) || release.lifecycleStatus === "deprecated") && (
                               <p className="registry-inspector-meta">
-                                {selectedVersion !== null && selectedSkill.latestVersion && selectedSkill.latestVersion !== release.version && <span>Latest is {selectedSkill.latestVersion}</span>}
+                                {selectedVersion !== null && selectedSkill.latestVersion && selectedSkill.latestVersion !== release.version && <span>Latest is {releaseVersionLabel(selectedSkill.latestVersion)}</span>}
                                 {release.lifecycleStatus === "deprecated" && <span className="registry-chip" data-tone="amber">Deprecated</span>}
                               </p>
                             )}
@@ -1331,7 +1331,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
                                   {skill.platforms.length > 0 && <span>{skill.platforms.slice(0, 2).map((item) => item.name).join(", ")}</span>}
                                 </span>
                               </span>
-                              {skill.latestVersion && <span className="registry-version-chip">{skill.latestVersion}</span>}
+                              {skill.latestVersion && <span className="registry-version-chip" title={skill.latestVersion}>{releaseVersionLabel(skill.latestVersion)}</span>}
                             </a>
                           ))}
                         </div>
@@ -3015,7 +3015,7 @@ function TeamSkillSection({ empty, skills, title }: { empty: string; skills: Pub
             <li key={skill.slug}>
               <span className="people-person">
                 <strong>{skill.title}</strong>
-                <small><code>{skill.slug}</code>{skill.latestVersion ? ` · ${skill.latestVersion}` : ""}</small>
+                <small><code>{skill.slug}</code>{skill.latestVersion ? ` · ${releaseVersionLabel(skill.latestVersion)}` : ""}</small>
               </span>
             </li>
           ))}
@@ -4936,7 +4936,7 @@ function ReleaseHistoryControls({
             {selectedVersion !== null && missingPin && <option value={selectedVersion} disabled>Unavailable exact version</option>}
             {releases.map((item) => (
               <option key={item.version} value={item.version}>
-                {item.version}{item.version === latestVersion ? " (latest)" : item.lifecycleStatus === "deprecated" ? " (deprecated)" : ""}
+                {releaseVersionLabel(item.version, releases)}{item.version === latestVersion ? " (latest)" : item.lifecycleStatus === "deprecated" ? " (deprecated)" : ""}
               </option>
             ))}
           </select>
@@ -4995,6 +4995,7 @@ function SkillDetail({
       {bundles}
 
       <dl className="registry-facts registry-section">
+        {isBootstrapVersion(release.version) && <RegistryFact label="Exact version" mono>{release.version}</RegistryFact>}
         <RegistryFact label="Released">{release.publishedAt ? formatDate(release.publishedAt) : "Not published"}</RegistryFact>
         <RegistryFact label="Review"><RegistryStatus value={release.reviewStatus} /></RegistryFact>
         <RegistryFact label="Security"><RegistryStatus value={release.securityStatus} /></RegistryFact>
@@ -5066,7 +5067,7 @@ function SkillDetail({
             event.preventDefault();
             setDisclosure("notes", !disclosures.notes);
           }}>
-            <span>Release notes for {release.version}</span>
+            <span>Release notes for {releaseVersionLabel(release.version)}</span>
             {release.changeKind && <span className="registry-chip registry-change-kind">{release.changeKind}</span>}
           </summary>
           <div className="registry-details-body">

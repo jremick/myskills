@@ -115,3 +115,40 @@ test("selecting an older release survives its exact URL and browser history", as
   await expect(selector).toBeFocused();
   await expect(page).toHaveURL(/\/skills\/release-notes-helper\?q=writing&platform=generic&version=0\.2\.0$/);
 });
+
+// Protect readable imported versions without changing exact URL/export identity.
+// Two imports deliberately share their first six hash characters.
+test("bootstrap releases have distinct display labels and retain exact pins", async ({ page }, info) => {
+  const versions = ["0.0.0-bootstrap.118b105a185a", "0.0.0-bootstrap.118b105a185b"];
+  const imports = versions.map((version, i) => ({ ...latest, version, publishedAt: `2026-08-${31 - i}T00:00:00.000Z` }));
+  const importedSkill = { ...skill, latestVersion: versions[0] };
+  await page.route("**/api/v1/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/v1/skills") return route.fulfill({ json: { skills: [importedSkill], nextCursor: null } });
+    if (path === `/api/v1/skills/${skill.slug}`) return route.fulfill({ json: { skill: importedSkill } });
+    if (path === `/api/v1/skills/${skill.slug}/releases`) return route.fulfill({ json: { releases: [...imports.map(summary), summary(latest)] } });
+    const release = [...imports, latest].find(item => path === `/api/v1/skills/${skill.slug}/releases/${item.version}`);
+    if (release) return route.fulfill({ json: { release } });
+    return route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } });
+  });
+  await page.goto(`/skills/${skill.slug}`);
+  const selector = page.getByRole("combobox", { name: "Release version", exact: true });
+  await expect(selector.locator(`option[value="${versions[0]}"]`)).toHaveText("Initial import · 118b105a185a (latest)");
+  await expect(selector.locator(`option[value="${versions[1]}"]`)).toHaveText("Initial import · 118b105a185b");
+  await expect(page.locator(".registry-version-chip").first()).toHaveText("Initial import");
+  await selector.selectOption(versions[1]);
+  await expect(page).toHaveURL(new RegExp(`version=${versions[1].replaceAll(".", "\\.")}$`));
+  await expect(page.getByText("Exact version", { exact: true }).locator("..")).toContainText(versions[1]);
+  await expect(page.getByText(`Release notes for Initial import`, { exact: true })).toBeVisible();
+  await expect(page.locator(".registry-command-row code")).toContainText(`--version '${versions[1]}'`);
+  await page.reload();
+  await expect(selector).toHaveValue(versions[1]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await selector.scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  await page.screenshot({ path: info.outputPath("bootstrap-release-mobile.png"), fullPage: true });
+  await selector.selectOption("0.2.0");
+  await expect(selector.locator('option[value="0.2.0"]')).toHaveText("0.2.0");
+  await expect(page.getByText("Release notes for 0.2.0", { exact: true })).toBeVisible();
+  await expect(page.getByText("Exact version", { exact: true })).toHaveCount(0);
+});
