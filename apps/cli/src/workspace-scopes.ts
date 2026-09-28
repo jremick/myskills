@@ -33,7 +33,7 @@ export type ScopeProvider = (typeof scopeProviders)[number];
 export type ScopeKind = "global" | "project";
 export type ScopeBindingStatus = "registering" | "registered" | "active";
 
-export const SCOPE_STATE_SCHEMA_VERSION = 1 as const;
+export const SCOPE_STATE_SCHEMA_VERSION = 2 as const;
 const SCOPE_STATE_KIND = "myskills.workspace-scopes";
 const SCOPE_STATE_FILE = "workspace-scopes.json";
 const SCOPE_MIGRATION_SCHEMA = "myskills.workspace-scopes-migration.v1";
@@ -82,7 +82,8 @@ export class ScopeError extends Error {
 }
 
 export interface ScopeProvenance { origin: string; instanceId: string }
-export interface ScopeRootIdentity { ino: string }
+export interface ScopeRootIdentity { ino: string; dev: string | null }
+export interface CurrentScopeRootIdentity extends ScopeRootIdentity { dev: string }
 
 export interface ScopeBinding {
   status: ScopeBindingStatus;
@@ -187,7 +188,7 @@ async function broadPaths(): Promise<Set<string>> {
 export async function canonicalScopeDirectory(
   input: unknown,
   options: { allowFinalSymlink?: boolean; allowBroad?: boolean; label?: string } = {},
-): Promise<{ path: string; identity: ScopeRootIdentity }> {
+): Promise<{ path: string; identity: CurrentScopeRootIdentity }> {
   const label = options.label ?? "The directory";
   if (typeof input !== "string" || !input || CONTROL_CHARACTER_PATTERN.test(input) || !path.isAbsolute(input)) {
     throw new ScopeError("SCOPE_ROOT_INVALID", `${label} must be an absolute directory path.`, 2);
@@ -217,20 +218,31 @@ export async function canonicalScopeDirectory(
   }
   const resolved = await lstat(canonical, { bigint: true });
   if (!resolved.isDirectory()) throw new ScopeError("SCOPE_ROOT_INVALID", `${label} must be a directory.`, 2);
-  return { path: canonical, identity: { ino: String(resolved.ino) } };
+  return { path: canonical, identity: { ino: String(resolved.ino), dev: String(resolved.dev) } };
+}
+
+/** A null device is unknown historical identity, never a match inferred from today. */
+export function assertScopeRootIdentityMatches(stored: ScopeRootIdentity, current: CurrentScopeRootIdentity, acceptLegacy = false): void {
+  if (stored.ino !== current.ino || (stored.dev !== null && stored.dev !== current.dev)) {
+    throw new ScopeError("SCOPE_ROOT_CHANGED", "The enrolled directory device or inode changed. Run scopes unbind, then enroll the directory again.");
+  }
+  if (stored.dev === null && !acceptLegacy) {
+    throw new ScopeError("SCOPE_ROOT_IDENTITY_LEGACY", "This scope has an older inode-only identity. Confirm the current directory, then repeat its scopes enroll command with --accept-current-root to preserve its existing target.");
+  }
 }
 
 /** Recheck a stored root before reading it. */
 export async function assertScopeRootUnchanged(root: string, identity: ScopeRootIdentity): Promise<void> {
-  let current: { path: string; identity: ScopeRootIdentity };
+  let current: { path: string; identity: CurrentScopeRootIdentity };
   try {
     current = await canonicalScopeDirectory(root, { allowBroad: true });
   } catch {
     throw new ScopeError("SCOPE_ROOT_CHANGED", "The enrolled directory is missing, replaced by a symlink, or unreadable. Run scopes unbind, then enroll the directory again.");
   }
-  if (current.path !== root || current.identity.ino !== identity.ino) {
+  if (current.path !== root) {
     throw new ScopeError("SCOPE_ROOT_CHANGED", "The enrolled directory was replaced since enrollment. Run scopes unbind, then enroll the directory again.");
   }
+  assertScopeRootIdentityMatches(identity, current.identity);
 }
 
 // ---------------------------------------------------------------------------
@@ -308,21 +320,21 @@ export function parseScopeState(text: string): ScopeState {
   if (typeof record.schemaVersion === "number" && record.schemaVersion > SCOPE_STATE_SCHEMA_VERSION) {
     throw new ScopeError("SCOPE_STATE_UNSUPPORTED", "The workspace scope state was written by a newer MySkills CLI and was not changed. Upgrade the CLI.");
   }
-  if (record.schemaVersion !== SCOPE_STATE_SCHEMA_VERSION || record.kind !== SCOPE_STATE_KIND || !exactKeys(record, ["schemaVersion", "kind", "providers"])) invalid();
+  if ((record.schemaVersion !== 1 && record.schemaVersion !== SCOPE_STATE_SCHEMA_VERSION) || record.kind !== SCOPE_STATE_KIND || !exactKeys(record, ["schemaVersion", "kind", "providers"])) invalid();
   const providersInput = record.providers;
   if (!isRecord(providersInput) || Object.keys(providersInput).some((key) => !isScopeProvider(key))) invalid();
   const state = emptyScopeState();
   for (const provider of scopeProviders) {
     const input = (providersInput as Record<string, unknown>)[provider];
     if (input === undefined) continue;
-    const parsed = parseProviderScopes(input);
+    const parsed = parseProviderScopes(input, record.schemaVersion === 1);
     if (!parsed) invalid();
     state.providers[provider] = parsed as ProviderScopes;
   }
   return state;
 }
 
-function parseProviderScopes(input: unknown): ProviderScopes | undefined {
+function parseProviderScopes(input: unknown, legacy: boolean): ProviderScopes | undefined {
   if (!isRecord(input) || !exactKeys(input, ["global", "projects", "exclusions"])) return undefined;
   if (!Array.isArray(input.projects) || !Array.isArray(input.exclusions)) return undefined;
   if (input.projects.length > MAX_RULES_PER_PROVIDER || input.exclusions.length > MAX_RULES_PER_PROVIDER) return undefined;
@@ -330,7 +342,7 @@ function parseProviderScopes(input: unknown): ProviderScopes | undefined {
   if (input.global !== null) {
     if (!isRecord(input.global) || !exactKeys(input.global, ["root", "rootIdentity", "binding"])) return undefined;
     const root = storedPath(input.global.root);
-    const rootIdentity = storedIdentity(input.global.rootIdentity);
+    const rootIdentity = storedIdentity(input.global.rootIdentity, legacy);
     const binding = parseBinding(input.global.binding);
     if (!root || !rootIdentity || !binding) return undefined;
     global = { root, rootIdentity, binding };
@@ -339,7 +351,7 @@ function parseProviderScopes(input: unknown): ProviderScopes | undefined {
   for (const item of input.projects) {
     if (!isRecord(item)) return undefined;
     const root = storedPath(item.root);
-    const rootIdentity = storedIdentity(item.rootIdentity);
+    const rootIdentity = storedIdentity(item.rootIdentity, legacy);
     if (!root || !rootIdentity || projects.some((project) => project.root === root)) return undefined;
     if (item.mode === "inventory" && exactKeys(item, ["root", "rootIdentity", "mode", "binding"])) {
       const binding = parseBinding(item.binding);
@@ -431,8 +443,10 @@ function storedPath(value: unknown): string | undefined {
   return typeof value === "string" && path.isAbsolute(value) && path.resolve(value) === value && !CONTROL_CHARACTER_PATTERN.test(value) ? value : undefined;
 }
 
-function storedIdentity(value: unknown): ScopeRootIdentity | undefined {
-  return isRecord(value) && exactKeys(value, ["ino"]) && typeof value.ino === "string" && /^\d{1,24}$/.test(value.ino) ? { ino: value.ino } : undefined;
+function storedIdentity(value: unknown, legacy: boolean): ScopeRootIdentity | undefined {
+  if (!isRecord(value) || !exactKeys(value, legacy ? ["ino"] : ["ino", "dev"]) || typeof value.ino !== "string" || !/^\d{1,24}$/.test(value.ino)) return undefined;
+  if (!legacy && value.dev !== null && (typeof value.dev !== "string" || !/^\d{1,24}$/.test(value.dev))) return undefined;
+  return { ino: value.ino, dev: legacy ? null : value.dev as string | null };
 }
 
 function isTimestamp(value: unknown): value is string {
@@ -448,6 +462,7 @@ export interface ScopeResolution {
   mode?: "inventory" | "managed";
   targetId?: string;
   status?: ScopeBindingStatus | "managed";
+  rootIdentityStatus?: "legacy" | "pinned";
 }
 
 /**
@@ -480,11 +495,12 @@ export function resolveScopeOwner(state: ScopeState, provider: ScopeProvider, ca
       mode: project.mode,
       ...(targetId ? { targetId } : {}),
       status: project.mode === "managed" ? "managed" : project.binding!.status,
+      rootIdentityStatus: project.rootIdentity.dev === null ? "legacy" : "pinned",
     };
   }
   if (scopes.global) {
     const targetId = scopes.global.binding.target?.id;
-    return { owner: "global", matchedRoot: scopes.global.root, ...(targetId ? { targetId } : {}), status: scopes.global.binding.status };
+    return { owner: "global", matchedRoot: scopes.global.root, ...(targetId ? { targetId } : {}), status: scopes.global.binding.status, rootIdentityStatus: scopes.global.rootIdentity.dev === null ? "legacy" : "pinned" };
   }
   return { owner: "unowned" };
 }
@@ -894,7 +910,7 @@ export interface ScopeMigrationPlan {
  * the exact local state bytes, the existing binding bytes, and the install
  * registry bytes, so any intervening change makes the preview stale.
  */
-export async function planScopeMigration(snapshot: ScopeStateSnapshot, provider: ScopeProvider, project: { path: string; identity: ScopeRootIdentity }): Promise<{ plan: ScopeMigrationPlan; adoption?: ManagedWorkspaceReference }> {
+export async function planScopeMigration(snapshot: ScopeStateSnapshot, provider: ScopeProvider, project: { path: string; identity: CurrentScopeRootIdentity }): Promise<{ plan: ScopeMigrationPlan; adoption?: ManagedWorkspaceReference }> {
   const scopes = snapshot.state.providers[provider];
   const actions: ScopeMigrationAction[] = [];
   const blockers: string[] = [];
@@ -937,7 +953,7 @@ export async function planScopeMigration(snapshot: ScopeStateSnapshot, provider:
     stateDigest: snapshot.bytes === null ? "absent" : sha256Hex(snapshot.bytes),
     bindingDigest,
     installRegistryDigest,
-    projectIdentity: project.identity.ino,
+    projectIdentity: sha256Hex(canonicalizeJson(project.identity)),
   };
   const sortedBlockers = [...new Set(blockers)].sort(compareOrdinal);
   const planDigest = sha256Hex(canonicalizeJson({ schema: SCOPE_MIGRATION_SCHEMA, provider, project: project.path, preconditions, actions, blockers: sortedBlockers }));
@@ -958,7 +974,7 @@ export async function planScopeMigration(snapshot: ScopeStateSnapshot, provider:
   };
 }
 
-export function applyScopeMigration(state: ScopeState, provider: ScopeProvider, project: { path: string; identity: ScopeRootIdentity }, plan: ScopeMigrationPlan, adoption?: ManagedWorkspaceReference): ScopeState {
+export function applyScopeMigration(state: ScopeState, provider: ScopeProvider, project: { path: string; identity: CurrentScopeRootIdentity }, plan: ScopeMigrationPlan, adoption?: ManagedWorkspaceReference): ScopeState {
   const next = JSON.parse(JSON.stringify(state)) as ScopeState;
   const scopes = next.providers[provider];
   for (const action of plan.actions) {

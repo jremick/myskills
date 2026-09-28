@@ -267,6 +267,21 @@ discarded.
 
 `config get api-url`, `config set api-url <url>`, `config reset api-url`, and `config list` manage the saved API URL. `doctor` checks the CLI version, Node version, resolved API URL, `/health`, auth status, token-store backend, install-directory writability, and `/v1/capabilities`. If the CLI is pointed at the web app instead of the API, or a newer command is sent to an older server, command errors include concrete next steps and `--json` returns structured error codes.
 
+### Older workspace scope identities
+
+Scope state now records both device and inode. Existing inode-only state stays
+readable, but observation and ordinary re-enrollment stop with
+`SCOPE_ROOT_IDENTITY_LEGACY`. After confirming the same directory, repeat its
+original `scopes enroll` command with `--accept-current-root` and the original
+configuration profile. The command verifies the account, registry, architecture,
+and existing target, then backs up local state and updates only the root identity.
+It does not register targets, grant consent, or upload inventory. Pending
+enrollments retain their recovery identity and can resume with normal enrollment
+after acknowledgment. A repeated acknowledgment is a no-op; it cannot override
+a known device/inode mismatch. Device and inode do not detect every same-device
+inode reuse. See [scope identity migration](../../docs/WORKSPACE_SCOPES.md#upgrade-an-inode-only-scope-identity)
+for the exact upgrade and recovery behavior.
+
 ### Separate work and personal configuration
 
 Every command accepts `--config-profile <name>` before or after the command.

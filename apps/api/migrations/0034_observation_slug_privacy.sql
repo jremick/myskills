@@ -2,6 +2,24 @@
 -- codex-config-sync. Exempt only bounded skills[].slug identifiers, after
 -- checking the complete observation shape. Keep the existing text guard for
 -- every other value, and reject free-form/nested metadata at the DB boundary.
+-- Match the shared printable-text exclusions and raw-string path heuristic.
+-- A slash alone does not make a printable label such as "CI/CD, nightly" a
+-- path. The existing whole-record guards below still reject private content.
+CREATE FUNCTION architecture_observation_printable_value_safe(value text, maximum integer) RETURNS boolean
+LANGUAGE sql IMMUTABLE STRICT AS $$
+  -- JavaScript \s has an explicit Unicode set; POSIX space varies by locale.
+  -- Normalize only the string used for path matching, preserving its bytes.
+  WITH normalized AS (
+    SELECT regexp_replace(value, U&'[\0009-\000d\0020\00a0\1680\2000-\200a\2028\2029\202f\205f\3000\feff]', ' ', 'g') AS text_value
+  )
+  SELECT length(value) BETWEEN 1 AND maximum
+    AND value !~ U&'[\0001-\001f\007f-\009f\2028\2029]'
+    AND text_value !~* '(^|[ (])(//|\\\\|~[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|/([A-Za-z0-9._-]+[\\/])|/(Users|home|root|private|var|tmp|etc|opt|workspace|mnt|Volumes)([\\/]|$))'
+    AND text_value !~* '(^|[ (])([A-Za-z0-9._-]+[\\/])+[A-Za-z0-9._-]+($|[ )])'
+    AND text_value !~* '(^|[ (])(localhost|127\.0\.0\.1)(:[0-9]+)?([\\/]|$)'
+  FROM normalized;
+$$;
+
 CREATE FUNCTION architecture_observation_metadata_valid(value jsonb) RETURNS boolean
 LANGUAGE plpgsql IMMUTABLE AS $$
 DECLARE
@@ -16,10 +34,7 @@ BEGIN
     normalized_key := lower(regexp_replace(regexp_replace(item.key, '([a-z0-9])([A-Z])', '\1-\2', 'g'), '[[:space:]_]+', '-', 'g'));
     IF normalized_key ~ '(^|[^a-z0-9])(api-key|authorization|credential|cookie|password|private-key|secret|token|prompt|path|endpoint|url|package|content|config|root|body|source|raw|snapshot|payload|file|filename|directory|home|host|machine)($|[^a-z0-9])' THEN RETURN false; END IF;
     IF jsonb_typeof(item.val) NOT IN ('null', 'string', 'number', 'boolean') THEN RETURN false; END IF;
-    IF jsonb_typeof(item.val) = 'string' AND (
-      length(item.val #>> '{}') NOT BETWEEN 1 AND 256
-      OR (item.val #>> '{}') ~ '[[:cntrl:]\\/]'
-    ) THEN RETURN false; END IF;
+    IF jsonb_typeof(item.val) = 'string' AND NOT architecture_observation_printable_value_safe(item.val #>> '{}', 256) THEN RETURN false; END IF;
   END LOOP;
   RETURN true;
 END;
@@ -55,7 +70,7 @@ BEGIN
     IF item - ARRAY['skillRefId', 'slug', 'version', 'digest', 'kind', 'enabled', 'runtimeExposure', 'configurationDigest', 'configured', 'managed', 'supported', 'metadata']::text[] <> '{}'::jsonb THEN RETURN false; END IF;
     IF jsonb_typeof(item -> 'slug') IS DISTINCT FROM 'string' OR (item ->> 'slug') !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' THEN RETURN false; END IF;
     IF item ? 'skillRefId' AND (jsonb_typeof(item -> 'skillRefId') IS DISTINCT FROM 'string' OR (item ->> 'skillRefId') !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$') THEN RETURN false; END IF;
-    IF item ? 'version' AND (jsonb_typeof(item -> 'version') IS DISTINCT FROM 'string' OR length(item ->> 'version') NOT BETWEEN 1 AND 64 OR (item ->> 'version') ~ '[[:cntrl:]\\/]') THEN RETURN false; END IF;
+    IF item ? 'version' AND (jsonb_typeof(item -> 'version') IS DISTINCT FROM 'string' OR NOT architecture_observation_printable_value_safe(item ->> 'version', 64)) THEN RETURN false; END IF;
     FOREACH field IN ARRAY ARRAY['digest', 'configurationDigest'] LOOP
       IF item ? field AND (jsonb_typeof(item -> field) IS DISTINCT FROM 'string' OR (item ->> field) !~ '^[0-9a-f]{64}$') THEN RETURN false; END IF;
     END LOOP;

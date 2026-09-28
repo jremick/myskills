@@ -187,8 +187,9 @@ target identity before it uploads. Commands that change scope state wait up to
 ### Revocation and recovery
 
 A revoked, deleted, or inaccessible target fails with `SCOPE_TARGET_REVOKED` or
-`SCOPE_TARGET_UNAVAILABLE`. A replaced or relinked directory fails with
-`SCOPE_ROOT_CHANGED`. In each case run `scopes unbind` for that scope and then
+`SCOPE_TARGET_UNAVAILABLE`. A detected path, device, or inode change fails
+with `SCOPE_ROOT_CHANGED`. Device and inode checks do not detect every
+same-device inode reuse after deletion and recreation. In each case run `scopes unbind` for that scope and then
 `scopes enroll` again; this creates a new target. `unbind` changes only local
 state. It prints the target ID so you can revoke the old target in the browser
 if it is still active. Exclusions are kept.
@@ -206,7 +207,9 @@ final named-profile directory.
 - The directory must be private to you (mode `700`). Files are written with
   mode `600` through a temporary file and an atomic rename, under the same root
   lock the installer uses.
-- The file is versioned (`schemaVersion: 1`). A malformed file fails with
+- New writes use `schemaVersion: 2` and record each root’s device and inode.
+  Schema 1 is read without changing the file; its unknown device is represented
+  as `dev: null` until explicit acknowledgment. A malformed file fails with
   `SCOPE_STATE_INVALID` and a file from a newer CLI fails with
   `SCOPE_STATE_UNSUPPORTED`. Neither is rewritten.
 - The file is limited to 512 KiB and 256 project scopes and 256 exclusions per
@@ -216,21 +219,69 @@ final named-profile directory.
 
 ## Migration
 
+### Upgrade an inode-only scope identity
+
+`scopes list` and `scopes resolve` report `rootIdentityStatus: "legacy"` for
+an inode-only root and `"pinned"` for a recorded device/inode pair. These
+read-only commands describe stored ownership; `pinned` is not a fresh check
+of the directory. Legacy roots refuse both local observation and upload with
+`SCOPE_ROOT_IDENTITY_LEGACY`. Ordinary re-enrollment also refuses them.
+
+Confirm that the current directory is the one you intend to retain, then
+repeat its original enrollment command with `--accept-current-root`:
+
+```bash
+myskills scopes enroll --provider codex --scope global \
+  --root <same-absolute-skills-dir> --architecture-id <same-id> \
+  --environment-id <same-id> --profile-id <same-id> --accept-current-root
+```
+
+For a project, use `--scope project --project <same-absolute-project-dir>`.
+Include the original `--config-profile` when the binding belongs to a named
+configuration. This acknowledgment records today's device; it does not prove
+which device held the historical inode. It requires the same canonical root
+and inode, account, registry, architecture coordinates, and target identity.
+A known device or inode mismatch cannot be overridden by the flag.
+
+The command makes registry reads only. It stores an exact-byte private backup
+under `scopes/backups/`, rechecks the root under the state lock, then changes
+only the selected root identity. Target IDs, consent, generations, registration
+identity digests, and other bindings stay unchanged. The file becomes schema 2;
+other legacy roots retain `dev: null` and still require acknowledgment. Restore
+the backup over `workspace-scopes.json` while no scope command is running if
+needed. Do not use an older CLI to write schema 2 state.
+
+An interrupted enrollment can also be acknowledged. A pending registration
+checks the registry's complete target list for its persisted identity digest;
+a malformed or ambiguous result, another owner, or a revoked target fails
+without changing state. A list with 500 or more targets may be truncated and
+fails with `SCOPE_TARGET_LIST_INCOMPLETE`, even when it contains one matching
+target. Resolve excessive target counts with registry support and retry; keep
+the pending enrollment intact. Normal pending recovery uses the same guard.
+The pending binding is preserved even when the list confirms no target yet exists. `enrollmentPending: true` means to repeat normal
+`scopes enroll` without the flag afterward; this resumes the original intent.
+The acknowledgment itself never registers a target or grants consent. Repeating
+it after a successful upgrade is a local no-op and creates no new backup.
+
+Managed Codex project references remain separate from inventory enrollment;
+new `migrate apply` adoptions record device and inode without changing the
+managed workspace binding.
+
 ### Existing local formats
 
 | Format | Location | Handling |
 |---|---|---|
 | Managed Codex workspace binding, schema 1 | `<project>/.agents/skills/.myskills-app/codex-workspace.json` | Can be adopted as a managed project scope by reference. The file is never changed. |
 | Install registry, version 1 | `<root>/.myskills-app/installed.json` | Read only to count installations without registry provenance. Never attached. |
-| Earlier scope state | none | `workspace-scopes.json` schema 1 is the first scope format. |
+| Scope state, schema 1 | `<config>/scopes/workspace-scopes.json` | Read without changes; inode-only identities require explicit acknowledgment before observation or re-enrollment. Existing target identities are retained. |
 | Claude bindings | none | No earlier MySkills format exists. |
 
 ### Plan and apply
 
 `scopes migrate plan` is read-only. For one project it reports the current
 owner, the actions, any blockers, and a plan digest. The digest covers the
-exact bytes of the scope state, the workspace binding, and the install
-registry. Actions are:
+exact bytes of the scope state, the workspace binding, the install
+registry, and the current project device/inode identity. Actions are:
 
 - `add-exclusion`: stop the project from falling back to the global scope;
 - `adopt-managed-binding` (Codex only): record an existing valid managed

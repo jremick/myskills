@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, mkdir, mkdtemp, open, readFile, readdir, readlink, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, readlink, realpath, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test, { after, type TestContext } from "node:test";
@@ -16,6 +16,7 @@ import { ArchitectureTargetBindingAuthorizer } from "../../api/src/targets/archi
 import { MemoryArchitectureTargetStore } from "../../api/src/targets/memory-target-store.js";
 import { ArchitectureTargetService } from "../../api/src/targets/service.js";
 import { runCli, type FetchLike } from "../src/cli.js";
+import { canonicalScopeDirectory, planScopeMigration, readScopeState } from "../src/workspace-scopes.js";
 
 // Written before the workspace-scope implementation. Every step drives the
 // real CLI entry point against a real loopback API (memory stores, password
@@ -53,7 +54,7 @@ interface Journey {
   configDir: string;
   api: ApiFixture;
   requests: Array<{ origin: string; method: string; path: string; body: string }>;
-  faults: Array<{ method: string; path: RegExp; when: "before-send" | "after-send" | "malformed-response" | "hook"; run?: () => Promise<void> }>;
+  faults: Array<{ method: string; path: RegExp; when: "before-send" | "after-send" | "malformed-response" | "hook"; run?: () => Promise<void>; response?: Json }>;
   observationSlugCapability?: boolean | "absent" | "invalid";
   /** Ordered request starts plus markers pushed by concurrent steps. */
   timeline: string[];
@@ -151,7 +152,7 @@ async function cli(j: Journey, step: string, args: string[], options: { token?: 
     const fault = index >= 0 ? j.faults.splice(index, 1)[0] : undefined;
     if (fault?.when === "before-send") throw new Error("synthetic network interruption before send");
     if (fault?.when === "malformed-response") {
-      return new Response(JSON.stringify({ targets: { unexpected: true } }), { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify(fault.response ?? { targets: { unexpected: true } }), { status: 200, headers: { "content-type": "application/json" } });
     }
     if (fault?.when === "hook") await fault.run?.();
     j.timeline.push(`${record.method} ${record.path}`);
@@ -173,7 +174,7 @@ async function cli(j: Journey, step: string, args: string[], options: { token?: 
     fetch: fetchImpl,
     io: { stdout: (line) => stdout.push(line), stderr: (line) => stderr.push(line) },
   });
-  receipts.push({ test: j.name, step, args: args.map((value) => redact(j, value)), exitCode: code });
+  receipts.push({ test: j.name, step, args: args.map((value, index) => args[index - 1] === "--token" ? "<token>" : redact(j, value)), exitCode: code });
   const out = stdout.join("\n");
   const err = stderr.join("\n");
   return {
@@ -627,6 +628,10 @@ test("migration adopts an existing managed Codex workspace through a previewed, 
   assert.notEqual(fresh.planDigest, plan.planDigest);
   const applied = await ok(j, "migration apply", ["scopes", "migrate", "apply", "--provider", "codex", "--project", managed, "--plan-digest", fresh.planDigest]);
   assert.equal(applied.applied, true);
+  const migratedState = JSON.parse(await readFile(stateFile, "utf8"));
+  const managedInfo = await stat(managed, { bigint: true });
+  assert.equal(migratedState.schemaVersion, 2);
+  assert.deepEqual(migratedState.providers.codex.projects[0].rootIdentity, { ino: String(managedInfo.ino), dev: String(managedInfo.dev) });
   assert.equal(await readFile(path.join(j.configDir, "scopes", "backups", applied.backup), "utf8"), stateAfterChange);
   const adopted = await ok(j, "managed workspace resolves to its own target", ["scopes", "resolve", "--provider", "codex", "--path", managed]);
   assert.deepEqual([adopted.owner, adopted.mode, adopted.targetId], ["project", "managed", workspaceTarget.id]);
@@ -688,4 +693,198 @@ test("validated sensitive-word slugs upload only when the server explicitly supp
   assert.equal(observations.filter((observation) => observation.skills.length === 4).length, 1);
   assertPayloadsPrivate(j, []);
   assert.equal(await treeDigest(root), before);
+});
+
+
+// Authored before the device-identity correction. CLI/API scenarios protect
+// existing remote IDs and exact local bytes; a focused migration-plan check
+// varies only dev because remounting filesystems is outside this test's authority.
+async function legacyScopeBytes(j: Journey): Promise<{ file: string; bytes: string; state: Json }> {
+  const file = path.join(j.configDir, "scopes", "workspace-scopes.json");
+  const state = JSON.parse(await readFile(file, "utf8"));
+  state.schemaVersion = 1;
+  for (const provider of ["codex", "claude"]) {
+    const scopes = state.providers[provider];
+    for (const record of [...(scopes.global ? [scopes.global] : []), ...scopes.projects]) record.rootIdentity = { ino: record.rootIdentity.ino };
+  }
+  const bytes = `${JSON.stringify(state, null, 2)}\n`;
+  await writeFile(file, bytes);
+  return { file, bytes, state };
+}
+
+test("legacy inode-only scopes require explicit acknowledgment and keep both existing target identities", async (t) => {
+  const j = await journey(t, "root-identity-legacy");
+  const roots = { codex: await codexGlobalFixture(j.base), claude: await claudeGlobalFixture(j.base) };
+  for (const provider of ["codex", "claude"] as const) await ok(j, `${provider} original enrollment`, enrollArgs(j, provider, "global", roots[provider]));
+  const targetsBefore = await serverTargets(j);
+  const legacy = await legacyScopeBytes(j);
+  const requestsBefore = j.requests.length;
+  const list = await ok(j, "list shows pending identities without upgrading", ["scopes", "list"]);
+  for (const provider of ["codex", "claude"] as const) {
+    assert.equal(list.providers[provider].global.rootIdentityStatus, "legacy");
+    assert.equal((await ok(j, `${provider} legacy resolve`, ["scopes", "resolve", "--provider", provider, "--path", roots[provider]])).rootIdentityStatus, "legacy");
+    for (const upload of [false, true]) await fails(j, `${provider} legacy observation refused ${upload}`, ["scopes", "observe", "--provider", provider, "--scope", "global", ...(upload ? ["--upload"] : [])], "SCOPE_ROOT_IDENTITY_LEGACY");
+    await fails(j, `${provider} ordinary re-enroll refuses legacy`, enrollArgs(j, provider, "global", roots[provider]), "SCOPE_ROOT_IDENTITY_LEGACY");
+  }
+  assert.equal(j.requests.length, requestsBefore, "legacy checks fail before API calls");
+  assert.equal(await readFile(legacy.file, "utf8"), legacy.bytes);
+
+  const ackArgs = (provider: "codex" | "claude") => [...enrollArgs(j, provider, "global", roots[provider]), "--accept-current-root"];
+  await fails(j, "another account cannot acknowledge", ackArgs("codex"), "SCOPE_ACCOUNT_MISMATCH", { token: j.api.otherSession });
+  await fails(j, "another architecture profile cannot acknowledge", ackArgs("codex").map((value) => value === j.api.architecture.profileId ? "other-profile" : value), "SCOPE_BINDING_CONFLICT");
+  const other = await startApi(t, randomUUID());
+  await fails(j, "another registry cannot acknowledge", [...ackArgs("codex"), "--api-url", other.url, "--token", other.session], "SCOPE_REGISTRY_MISMATCH");
+  j.faults.push({ method: "GET", path: /^\/v1\/architecture-targets\/[^/]+$/, when: "malformed-response" });
+  await fails(j, "unverifiable target cannot acknowledge", ackArgs("codex"), "SCOPE_TARGET_INVALID");
+  assert.equal(await readFile(legacy.file, "utf8"), legacy.bytes);
+  const writesBefore = j.requests.filter((request) => request.method !== "GET").length;
+
+  for (const provider of ["codex", "claude"] as const) {
+    const before = await readFile(legacy.file, "utf8");
+    const result = await ok(j, `${provider} explicitly acknowledge same root`, ackArgs(provider));
+    assert.equal(result.rootIdentityUpgraded, true);
+    assert.equal(result.created, false);
+    assert.equal(result.targetId, legacy.state.providers[provider].global.binding.target.id);
+    assert.equal(await readFile(path.join(j.configDir, "scopes", "backups", result.backup), "utf8"), before);
+    assert.equal((await stat(path.join(j.configDir, "scopes", "backups", result.backup))).mode & 0o077, 0);
+    const upgraded = JSON.parse(await readFile(legacy.file, "utf8"));
+    assert.equal(upgraded.schemaVersion, 2);
+    const info = await stat(roots[provider], { bigint: true });
+    assert.deepEqual(upgraded.providers[provider].global.rootIdentity, { ino: String(info.ino), dev: String(info.dev) });
+    assert.deepEqual(upgraded.providers[provider].global.binding, legacy.state.providers[provider].global.binding);
+    if (provider === "codex") {
+      assert.equal(upgraded.providers.claude.global.rootIdentity.dev, null, "unknown historical device remains unknown");
+      await fails(j, "other legacy root still cannot upload", ["scopes", "observe", "--provider", "claude", "--scope", "global", "--upload"], "SCOPE_ROOT_IDENTITY_LEGACY");
+    }
+    const pinnedBytes = await readFile(legacy.file, "utf8");
+    const retry = await ok(j, `${provider} acknowledgment retry is no-op`, ackArgs(provider));
+    assert.equal(retry.rootIdentityUpgraded, false);
+    assert.equal(retry.backup, null);
+    assert.equal(await readFile(legacy.file, "utf8"), pinnedBytes);
+  }
+  assert.equal(j.requests.filter((request) => request.method !== "GET").length, writesBefore, "acknowledgment makes no remote writes");
+  assert.deepEqual(await serverTargets(j), targetsBefore);
+  for (const provider of ["codex", "claude"] as const) {
+    assert.equal((await ok(j, `${provider} pinned listing`, ["scopes", "list", "--provider", provider])).providers[provider].global.rootIdentityStatus, "pinned");
+    await ok(j, `${provider} observation works after explicit upgrade`, ["scopes", "observe", "--provider", provider, "--scope", "global", "--upload"]);
+  }
+  assert.equal((await serverTargets(j)).length, 2);
+  assertPayloadsPrivate(j, []);
+});
+
+test("device pinning rejects same-inode device changes, malformed identities and roots replaced during acknowledgment", async (t) => {
+  const j = await journey(t, "root-identity-device");
+  const root = await codexGlobalFixture(j.base);
+  const enrolled = await ok(j, "enroll device fixture", enrollArgs(j, "codex", "global", root));
+  const file = path.join(j.configDir, "scopes", "workspace-scopes.json");
+  const pinnedBytes = await readFile(file, "utf8");
+  const pinned = JSON.parse(pinnedBytes);
+  const info = await stat(root, { bigint: true });
+  assert.equal(pinned.schemaVersion, 2);
+  assert.deepEqual(pinned.providers.codex.global.rootIdentity, { ino: String(info.ino), dev: String(info.dev) });
+  pinned.providers.codex.global.rootIdentity.dev = String(info.dev + 1n);
+  const wrongDevice = `${JSON.stringify(pinned)}\n`;
+  await writeFile(file, wrongDevice);
+  const requestsBefore = j.requests.length;
+  for (const upload of [false, true]) await fails(j, `equal inode wrong device observe ${upload}`, ["scopes", "observe", "--provider", "codex", "--scope", "global", ...(upload ? ["--upload"] : [])], "SCOPE_ROOT_CHANGED");
+  for (const accept of [false, true]) await fails(j, `known mismatch cannot enroll ${accept}`, [...enrollArgs(j, "codex", "global", root), ...(accept ? ["--accept-current-root"] : [])], "SCOPE_ROOT_CHANGED");
+  assert.equal(j.requests.length, requestsBefore);
+  assert.equal(await readFile(file, "utf8"), wrongDevice);
+  for (const invalid of [undefined, "bad-device", "-1", 123]) {
+    pinned.providers.codex.global.rootIdentity.dev = invalid;
+    const bytes = JSON.stringify(pinned);
+    await writeFile(file, bytes);
+    await fails(j, "malformed device identity is preserved", ["scopes", "list"], "SCOPE_STATE_INVALID");
+    assert.equal(await readFile(file, "utf8"), bytes);
+  }
+  await writeFile(file, pinnedBytes);
+  const legacy = await legacyScopeBytes(j);
+  j.faults.push({ method: "GET", path: new RegExp(`^/v1/architecture-targets/${enrolled.targetId}$`), when: "hook", run: async () => {
+    await rename(root, `${root}-original`);
+    await mkdir(root);
+  } });
+  await fails(j, "replacement during remote validation cannot be acknowledged", [...enrollArgs(j, "codex", "global", root), "--accept-current-root"], "SCOPE_ROOT_CHANGED");
+  assert.equal(await readFile(file, "utf8"), legacy.bytes);
+  assert.equal((await serverTargets(j)).length, 1);
+  assert.equal(j.requests.slice(requestsBefore).some((request) => request.method !== "GET"), false);
+});
+
+test("scope migration digest pins the device as well as inode and adopted records preserve that identity", async (t) => {
+  const j = await journey(t, "root-identity-migration");
+  const projectRoot = path.join(j.base, "project");
+  await mkdir(projectRoot);
+  const project = await canonicalScopeDirectory(projectRoot);
+  const snapshot = await readScopeState(path.join(j.configDir, "scopes"));
+  const plan = await planScopeMigration(snapshot, "claude", project);
+  const changedDevice = await planScopeMigration(snapshot, "claude", { ...project, identity: { ...project.identity, dev: String((await stat(projectRoot, { bigint: true })).dev + 1n) } });
+  assert.notEqual(plan.plan.planDigest, changedDevice.plan.planDigest, "same path and inode on another device must invalidate the plan");
+  const result = await cli(j, "old-device migration digest is stale", ["scopes", "migrate", "apply", "--provider", "claude", "--project", projectRoot, "--plan-digest", changedDevice.plan.planDigest]);
+  assert.notEqual(result.code, 0);
+  assert.equal(result.errorCode(), "SCOPE_MIGRATION_STALE");
+  assert.equal((await readScopeState(path.join(j.configDir, "scopes"))).bytes, null);
+});
+
+
+test("legacy pending enrollment acknowledgment preserves its recovery identity without registering or granting consent", async (t) => {
+  for (const phase of ["before-register", "after-register", "before-consent"] as const) {
+    const j = await journey(t, `root-identity-pending-${phase}`);
+    const root = path.join(j.base, "skills");
+    await writeSkill(path.join(root, "sample-skill"), "sample-skill");
+    const registrationPath = /^\/v1\/architecture-targets$/;
+    j.faults.push({ method: "POST", path: phase === "before-consent" ? /^\/v1\/architecture-targets\/[^/]+\/consent$/ : registrationPath,
+      when: phase === "after-register" ? "after-send" : "before-send" });
+    const interrupted = await cli(j, "interrupt enrollment", enrollArgs(j, "codex", "global", root));
+    assert.notEqual(interrupted.code, 0);
+    const legacy = await legacyScopeBytes(j);
+    const pendingBinding = legacy.state.providers.codex.global.binding;
+    assert.equal(pendingBinding.status, phase === "before-consent" ? "registered" : "registering");
+    const targetsBefore = await serverTargets(j);
+    assert.equal(targetsBefore.length, phase === "before-register" ? 0 : 1);
+    const ack = [...enrollArgs(j, "codex", "global", root), "--accept-current-root"];
+    const writesBefore = j.requests.filter((request) => request.method !== "GET").length;
+    if (phase === "after-register") {
+      const target = targetsBefore[0]!;
+      const capped = Array.from({ length: 500 }, (_, index) => ({ ...target, id: `target-cap-${index}`, identityDigest: String(index).padStart(64, "0") }));
+      const cases = [
+        ["capped list cannot prove absence", { targets: capped }, "SCOPE_TARGET_LIST_INCOMPLETE"],
+        ["capped list cannot prove unique match", { targets: [target, ...capped.slice(1)] }, "SCOPE_TARGET_LIST_INCOMPLETE"],
+        ["malformed target list", { targets: {} }, "SCOPE_TARGET_LIST_INVALID"],
+        ["ambiguous target list", { targets: [target, target] }, "SCOPE_TARGET_AMBIGUOUS"],
+        ["revoked pending target", { targets: [{ ...target, status: "revoked", consent: { ...target.consent, status: "revoked", revokedAt: new Date().toISOString() } }] }, "SCOPE_TARGET_REVOKED"],
+        ["wrong pending owner", { targets: [{ ...target, owner: { type: "user", id: "wrong-owner" } }] }, "SCOPE_TARGET_OWNER_INVALID"],
+        ["wrong pending architecture", { targets: [{ ...target, profileId: "wrong-profile" }] }, "SCOPE_BINDING_CONFLICT"],
+      ] as const;
+      for (const [label, response, code] of cases) {
+        j.faults.push({ method: "GET", path: registrationPath, when: "malformed-response", response });
+        await fails(j, label, ack, code);
+        assert.equal(await readFile(legacy.file, "utf8"), legacy.bytes);
+      }
+    }
+    const result = await ok(j, "explicitly acknowledge pending root", ack);
+    assert.equal(result.rootIdentityUpgraded, true);
+    assert.equal(result.enrollmentPending, true);
+    assert.equal(result.created, false);
+    assert.equal(await readFile(path.join(j.configDir, "scopes/backups", result.backup), "utf8"), legacy.bytes);
+    const updated = JSON.parse(await readFile(legacy.file, "utf8"));
+    assert.deepEqual(updated.providers.codex.global.binding, pendingBinding);
+    const retry = await ok(j, "pending acknowledgment retry is no-op", ack);
+    assert.equal(retry.rootIdentityUpgraded, false);
+    assert.equal(retry.enrollmentPending, true);
+    assert.equal(j.requests.filter((request) => request.method !== "GET").length, writesBefore);
+    assert.deepEqual(await serverTargets(j), targetsBefore);
+    if (phase === "after-register") {
+      const capped = Array.from({ length: 500 }, (_, index) => ({ ...targetsBefore[0], id: `target-cap-${index}`, identityDigest: String(index).padStart(64, "0") }));
+      const beforeRetry = await readFile(legacy.file, "utf8");
+      j.faults.push({ method: "GET", path: registrationPath, when: "malformed-response", response: { targets: capped } });
+      await fails(j, "normal pending recovery also refuses capped lists", enrollArgs(j, "codex", "global", root), "SCOPE_TARGET_LIST_INCOMPLETE");
+      assert.equal(await readFile(legacy.file, "utf8"), beforeRetry);
+      assert.equal(j.requests.filter((request) => request.method !== "GET").length, writesBefore);
+    }
+    const resumed = await ok(j, "normal enrollment resumes original intent", enrollArgs(j, "codex", "global", root));
+    const finalTargets = await serverTargets(j);
+    assert.equal(finalTargets.length, 1);
+    assert.equal(finalTargets[0]!.identityDigest, pendingBinding.identityDigest);
+    assert.equal(resumed.targetId, finalTargets[0]!.id);
+    if (targetsBefore[0]) assert.equal(finalTargets[0]!.id, targetsBefore[0].id);
+  }
 });

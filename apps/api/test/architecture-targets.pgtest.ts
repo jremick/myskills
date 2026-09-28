@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { readdirSync, readFileSync } from "node:fs";
 import test, { type TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
+import { assertValidArchitectureTargetObservation } from "@myskills-app/core";
 import { createDb, createPgPool } from "../src/db/client.js";
 import { users } from "../src/db/schema.js";
 
@@ -354,7 +355,40 @@ test("observation privacy upgrade accepts bounded slugs and preserves immutable 
   assert.equal(constraint.convalidated, false, "historical rows were intentionally not revalidated");
   await insertObservation(pool, { id: observationTwoId, observedState: valid });
   assert.deepEqual((await pool.query("SELECT observed_state FROM skill_architecture_observations WHERE id = $1", [observationTwoId])).rows[0].observed_state, valid);
+  // The public validator distinguishes path-like strings from punctuation in
+  // printable labels. Exercise the same accepted text in all three locations
+  // that the new database string guard protects, then read back its exact bytes.
+  // Explicit ECMAScript whitespace that remains printable under the public
+  // contract. Path boundaries must not depend on the database locale.
+  const printableWhitespace = [0x20, 0x00a0, 0x1680, ...Array.from({ length: 11 }, (_, index) => 0x2000 + index), 0x202f, 0x205f, 0x3000, 0xfeff]
+    .map((codePoint) => String.fromCodePoint(codePoint));
+  const printableLabels = [
+    "CI/CD, nightly", "blue / green", "Input\\output, nightly",
+    ...printableWhitespace.map((separator) => `blue${separator}/${separator}green`),
+  ];
+  for (const [index, label] of printableLabels.entries()) {
+    const observedState = assertValidArchitectureTargetObservation({
+      ...valid, observedDigest: undefined,
+      metadata: { ...valid.metadata, label },
+      skills: [{ slug: "codex-config-sync", version: label, metadata: { label } }],
+    });
+    const id = `aaaaaaaa-aaaa-4aaa-8aaa-${String(index).padStart(12, "0")}`;
+    await insertObservation(pool, { id, observedState });
+    assert.deepEqual((await pool.query("SELECT observed_state FROM skill_architecture_observations WHERE id = $1", [id])).rows[0].observed_state, observedState);
+  }
+  const privateLabels = printableWhitespace.flatMap((separator) => [
+    `label${separator}relative/item`, `relative/item${separator}label`,
+    `label${separator}/sensitive/item`, `label${separator}localhost`,
+  ]);
+  for (const label of privateLabels) {
+    assert.throws(() => assertValidArchitectureTargetObservation({ ...valid, observedDigest: undefined, metadata: { label } }));
+  }
   const invalid = [
+    ...privateLabels.flatMap((label) => [
+      { ...valid, metadata: { label } },
+      { ...valid, skills: [{ slug: "valid-helper", metadata: { label } }] },
+      { ...valid, skills: [{ slug: "valid-helper", version: label }] },
+    ]),
     { ...valid, extra: "unrecognized" },
     { ...valid, body: "BODY-CANARY" },
     { ...valid, skills: [{ slug: "/Users/example/private" }] },
@@ -378,6 +412,12 @@ test("observation privacy upgrade accepts bounded slugs and preserves immutable 
     { ...valid, metadata: { note: "./private" } },
     { ...valid, metadata: { note: "/sensitive/item" } },
     { ...valid, metadata: { note: "relative/item" } },
+    { ...valid, metadata: { note: "C:\\sensitive\\item" } },
+    { ...valid, metadata: { note: "\\\\server\\share" } },
+    ...["before\u0085after", "before\u2028after", "before\u2029after"].flatMap((label) => [
+      { ...valid, metadata: { label } },
+      { ...valid, skills: [{ slug: "valid-helper", version: label }] },
+    ]),
     { ...valid, promptAwareness: { detected: false, count: 0, body: "BODY-CANARY" } },
     { ...valid, promptAwareness: { detected: "false", count: 0 } },
     { ...valid, configFindings: [{ code: "skill-linked", severity: "warning", count: -1 }] },
@@ -388,7 +428,7 @@ test("observation privacy upgrade accepts bounded slugs and preserves immutable 
     await assert.rejects(insertObservation(pool, { id: "abababab-abab-4bab-8bab-abababababab", observedState }),
       (error) => isConstraintError(error, "skill_architecture_observations_observed_state_safe_check"), `unsafe case ${index}`);
   }
-  assert.equal((await pool.query("SELECT count(*)::int AS count FROM skill_architecture_observations")).rows[0].count, 2);
+  assert.equal((await pool.query("SELECT count(*)::int AS count FROM skill_architecture_observations")).rows[0].count, 2 + printableLabels.length);
   await assert.rejects(pool.query("UPDATE skill_architecture_observations SET observed_digest = $1 WHERE id = $2", ["f".repeat(64), observationOneId]), isImmutableObservationError);
   await assert.rejects(pool.query("DELETE FROM skill_architecture_observations WHERE id = $1", [observationTwoId]), isImmutableObservationError);
 });

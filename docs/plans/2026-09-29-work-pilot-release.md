@@ -62,9 +62,10 @@ missing recovery point, incompatible migration, or unresolved account mismatch.
 Resolve uncertain writes by remote readback before retrying. No reseeding,
 database downgrade, or destructive restore is part of normal release delivery.
 
-The destination for the later work rollout and the second participant's OS and
-provider setup are deployment inputs, not permission to upload work content to
-the existing personal test instance.
+The later work rollout will use a separate work-hosted instance. Both
+participants will use macOS with Codex and Claude Code. Infrastructure details
+and work-instance authorization remain deployment inputs; this release does not
+create that instance or upload work content to the personal test instance.
 
 ## Evidence
 

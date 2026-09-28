@@ -50,7 +50,7 @@ import {
 } from "./install-filesystem.js";
 import { codexWorkspaceCapabilities, codexWorkspaceDescriptor, parseWorkspaceTarget, validateCodexSkill, workspaceRootDigest } from "./codex-workspace.js";
 import {
-  applyScopeMigration, assertExclusionAllowed, assertGlobalRootAllowed, assertProjectRootAllowed, assertScopeRootUnchanged,
+  applyScopeMigration, assertExclusionAllowed, assertGlobalRootAllowed, assertProjectRootAllowed, assertScopeRootIdentityMatches, assertScopeRootUnchanged,
   buildScopeObservation, canonicalScopeDirectory, inventoryForObservationServer, inventoryHealth, inventorySkillsDirectory, isScopeProvider,
   managedWorkspaceBindingPresent, newScopeIdentityDigest, parseScopeTarget, planScopeMigration, projectSkillsDirectory,
   readScopeState, resolveScopeOwner, scopeAdapterDescriptor, scopeInventoryCapabilities, scopeProviders, scopeStateDirectory,
@@ -76,6 +76,8 @@ import {
 import { packageSkill, SkillPackageDestinationError } from "./author-package.js";
 
 const DEFAULT_API_URL = "http://localhost:3001";
+// The registry target-list endpoint caps the current PostgreSQL backend at 500.
+const SCOPE_TARGET_LIST_LIMIT = 500;
 const CLI_VERSION = process.env.MYSKILLS_CLI_VERSION ?? "0.0.0-dev";
 const CLI_VISIBILITY_SCOPES = ["public", "authenticated", "organization", "team", "private", "explicit-users"] as const;
 const LOGIN_AUTH_METHODS = ["password", "api-key"] as const;
@@ -2415,7 +2417,7 @@ async function observeWorkspace(root: string, binding: WorkspaceBinding): Promis
 
 const SCOPE_COMMAND_OPTIONS: Record<string, readonly string[]> = {
   inventory: ["provider", "root"],
-  enroll: ["provider", "scope", "root", "project", "architecture-id", "environment-id", "profile-id", "name", "api-url", "token"],
+  enroll: ["provider", "scope", "root", "project", "architecture-id", "environment-id", "profile-id", "name", "api-url", "token", "accept-current-root"],
   observe: ["provider", "scope", "project", "upload", "api-url", "token"],
   list: ["provider"],
   resolve: ["provider", "path"],
@@ -2463,8 +2465,8 @@ function scopesUsage(): string {
   return [
     "Usage:",
     "  myskills scopes inventory --provider codex|claude --root <absolute-skills-dir>",
-    "  myskills scopes enroll --provider codex|claude --scope global --root <absolute-skills-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>]",
-    "  myskills scopes enroll --provider codex|claude --scope project --project <absolute-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>]",
+    "  myskills scopes enroll --provider codex|claude --scope global --root <absolute-skills-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>] [--accept-current-root]",
+    "  myskills scopes enroll --provider codex|claude --scope project --project <absolute-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>] [--accept-current-root]",
     "  myskills scopes observe --provider codex|claude --scope global|project [--project <absolute-dir>] [--upload]",
     "  myskills scopes list [--provider codex|claude]",
     "  myskills scopes resolve --provider codex|claude --path <absolute-dir>",
@@ -2598,15 +2600,40 @@ async function currentScopeTarget(parsed: ParsedArgs, runtime: CliRuntime, token
   if (current.id !== stored.id || current.identityDigest !== binding.identityDigest || current.owner.id !== stored.owner.id) {
     throw new CliError("The registry target identity changed. The binding was not rebound; run scopes unbind, then enroll again.", 1, "SCOPE_TARGET_IDENTITY_CHANGED");
   }
-  if (current.status === "revoked" || current.consent.status === "revoked") {
-    throw new CliError("The registry target was revoked. Run scopes unbind, then enroll again to create a new target.", 1, "SCOPE_TARGET_REVOKED");
-  }
+  assertScopeTargetBinding(current, binding);
   return current;
+}
+
+function assertScopeTargetBinding(target: ArchitectureTarget, binding: ScopeBinding): void {
+  if (target.identityDigest !== binding.identityDigest) throw new CliError("The registry returned a different target identity. Nothing was bound.", 1, "SCOPE_TARGET_IDENTITY_CHANGED");
+  if (target.owner.id !== binding.actorId) throw new CliError("The registry target is not owned by the enrolling account. Nothing was bound.", 1, "SCOPE_TARGET_OWNER_INVALID");
+  if (target.architectureId !== binding.architectureId || target.environmentId !== binding.environmentId || target.profileId !== binding.profileId) {
+    throw new CliError("The registry target has different architecture, environment, or profile IDs. Nothing was changed.", 1, "SCOPE_BINDING_CONFLICT");
+  }
+  if (target.status === "revoked" || target.consent.status === "revoked") throw new CliError("The registry target was revoked. Nothing was changed.", 1, "SCOPE_TARGET_REVOKED");
+}
+
+async function pendingScopeTarget(parsed: ParsedArgs, runtime: CliRuntime, token: string, binding: ScopeBinding, provider: ScopeProvider, scope: ScopeKind): Promise<ArchitectureTarget | undefined> {
+  // An unreadable list is not evidence of absence after an uncertain registration.
+  const listed = (await apiGet("/v1/architecture-targets", parsed, runtime, token)).targets;
+  if (!Array.isArray(listed) || listed.some((candidate) => !isPlainRecord(candidate) || typeof candidate.identityDigest !== "string")) {
+    throw new CliError("The registry returned an unreadable target list. Nothing was registered; retry the same command.", 1, "SCOPE_TARGET_LIST_INVALID");
+  }
+  if (listed.length >= SCOPE_TARGET_LIST_LIMIT) {
+    throw new CliError("The registry target list may be truncated. Resolve excessive target counts with registry support, then retry. Keep the pending enrollment intact; do not unbind it.", 1, "SCOPE_TARGET_LIST_INCOMPLETE");
+  }
+  const matches = (listed as Record<string, unknown>[]).filter((candidate) => candidate.identityDigest === binding.identityDigest);
+  if (matches.length > 1) throw new CliError("More than one registry target claims this enrollment identity. Nothing was changed.", 1, "SCOPE_TARGET_AMBIGUOUS");
+  if (!matches.length) return undefined;
+  const target = parseScopeTarget(matches[0], provider, scope);
+  assertScopeTargetBinding(target, binding);
+  return target;
 }
 
 async function scopesEnroll(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const provider = scopeProviderOption(parsed);
   const scope = scopeKindOption(parsed);
+  const acceptCurrentRoot = parsed.options["accept-current-root"] === true;
   const ids = {
     architectureId: parseArchitectureReference(stringOption(parsed, "architecture-id"), "architecture"),
     environmentId: parseArchitectureReference(stringOption(parsed, "environment-id"), "environment"),
@@ -2619,7 +2646,11 @@ async function scopesEnroll(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
     : await canonicalScopeDirectory(stringOption(parsed, "project"), { label: "The project directory" });
   const stateDirectory = scopeStateDirectory(runtime.env);
   // Local rules are checked before any registry contact.
-  preflightScopeEnrollment((await readScopeState(stateDirectory)).state, provider, scope, location.path);
+  const initialState = (await readScopeState(stateDirectory)).state;
+  preflightScopeEnrollment(initialState, provider, scope, location.path);
+  const initialRecord = scopeRecordFor(initialState.providers[provider], scope, location.path);
+  if (acceptCurrentRoot && !initialRecord) throw new CliError("--accept-current-root requires an existing scope. Enroll a new scope without this flag.", 2, "SCOPE_USAGE");
+  if (initialRecord) assertScopeRootIdentityMatches(initialRecord.rootIdentity, location.identity, acceptCurrentRoot);
   if (scope === "project" && provider === "codex" && await managedWorkspaceBindingPresent(location.path)) {
     throw new CliError("This project already has a managed Codex workspace binding. Adopt it with scopes migrate plan/apply instead of adding an inventory target.", 1, "SCOPE_BINDING_CONFLICT");
   }
@@ -2627,17 +2658,17 @@ async function scopesEnroll(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
   const provenance = await registryProvenance(parsed, runtime, token);
   const actorId = await currentScopeActor(parsed, runtime, token);
 
-  return withScopeStateLock(stateDirectory, async ({ snapshot, write }) => {
+  return withScopeStateLock(stateDirectory, async ({ snapshot, write, backup }) => {
     const state = snapshot.state;
+    // The root may have changed while waiting for API reads or the state lock.
+    await assertScopeRootUnchanged(location.path, location.identity);
     preflightScopeEnrollment(state, provider, scope, location.path);
     const scopes = state.providers[provider];
     const existing = scopeRecordFor(scopes, scope, location.path);
     let record: GlobalScopeRecord | ProjectScopeRecord;
     let binding: ScopeBinding;
     if (existing) {
-      if (existing.rootIdentity.ino !== location.identity.ino) {
-        throw new CliError("The enrolled directory was replaced since enrollment. Run scopes unbind, then enroll it again.", 1, "SCOPE_ROOT_CHANGED");
-      }
+      assertScopeRootIdentityMatches(existing.rootIdentity, location.identity, acceptCurrentRoot);
       record = existing;
       binding = existing.binding!;
       assertScopeProvenance(binding.provenance, provenance);
@@ -2651,6 +2682,7 @@ async function scopesEnroll(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
       }
       if (binding.target) parseScopeTarget(binding.target, provider, scope);
     } else {
+      if (acceptCurrentRoot) throw new CliError("The scope was removed before acknowledgment. Nothing was changed.", 1, "SCOPE_NOT_ENROLLED");
       // Persist the intent, with its opaque identity, before registration so a
       // retry after an interrupted request finds the target instead of duplicating it.
       binding = { status: "registering", identityDigest: newScopeIdentityDigest(), provenance, actorId, ...ids, name };
@@ -2664,6 +2696,34 @@ async function scopesEnroll(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
       }
       await write(state);
     }
+    if (acceptCurrentRoot) {
+      const target = binding.status === "registering"
+        ? await pendingScopeTarget(parsed, runtime, token, binding, provider, scope)
+        : await currentScopeTarget(parsed, runtime, token, binding, provider, scope);
+      if (target) assertScopeTargetBinding(target, binding);
+      const current = await canonicalScopeDirectory(location.path, { allowBroad: true });
+      if (current.path !== location.path) throw new CliError("The enrolled directory changed while it was checked. Nothing was changed.", 1, "SCOPE_ROOT_CHANGED");
+      assertScopeRootIdentityMatches(location.identity, current.identity);
+      assertScopeRootIdentityMatches(record.rootIdentity, current.identity, true);
+      const upgraded = record.rootIdentity.dev === null;
+      let backupName: string | null = null;
+      if (upgraded) {
+        // Preserve exact source bytes, including all still-unacknowledged roots.
+        backupName = await backup(`workspace-scopes.root-identity.${new Date().toISOString().replace(/[:.]/g, "-")}.${createHash("sha256").update(snapshot.bytes!).digest("hex").slice(0, 12)}.json`, snapshot.bytes!);
+        await assertScopeRootUnchanged(location.path, current.identity);
+        record.rootIdentity = current.identity;
+        await write(state);
+      }
+      const enrollmentPending = binding.status !== "active" || target?.consent.status !== "granted";
+      return writeScopeOutput(parsed, runtime, {
+        provider, scope, ...(target ? { targetId: target.id } : {}), created: false,
+        rootIdentityUpgraded: upgraded, backup: backupName, enrollmentPending,
+        serverTargetChanged: false, nativeInheritance: "unchanged",
+      }, [
+        terminalText`root-identity\t${upgraded ? "upgraded" : "unchanged"}\tprovider=${provider}\tscope=${scope}\ttarget=${target?.id ?? "pending"}\tbackup=${backupName ?? "none"}`,
+        ...(enrollmentPending ? ["next\tRepeat the same scopes enroll command without --accept-current-root to resume the existing enrollment."] : []),
+      ]);
+    }
     const resumed = Boolean(existing) && binding.status !== "active";
     const persist = async (next: ScopeBinding) => {
       binding = next;
@@ -2673,17 +2733,9 @@ async function scopesEnroll(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
     let created = false;
     let target: ArchitectureTarget;
     if (binding.status === "registering") {
-      // A list that cannot be read in full is not evidence of absence: treating
-      // it as empty could register a duplicate of a committed target.
-      const listed = (await apiGet("/v1/architecture-targets", parsed, runtime, token)).targets;
-      if (!Array.isArray(listed) || listed.some((candidate) => !isPlainRecord(candidate) || typeof candidate.identityDigest !== "string")) {
-        throw new CliError("The registry returned an unreadable target list. Nothing was registered; retry the same command.", 1, "SCOPE_TARGET_LIST_INVALID");
-      }
-      const pendingDigest = binding.identityDigest;
-      const matches = (listed as Record<string, unknown>[]).filter((candidate) => candidate.identityDigest === pendingDigest);
-      if (matches.length > 1) throw new CliError("More than one registry target claims this enrollment identity. Nothing was changed.", 1, "SCOPE_TARGET_AMBIGUOUS");
-      if (matches.length === 1) {
-        target = parseScopeTarget(matches[0], provider, scope);
+      const pending = await pendingScopeTarget(parsed, runtime, token, binding, provider, scope);
+      if (pending) {
+        target = pending;
       } else {
         target = parseScopeTarget((await apiPost("/v1/architecture-targets", {
           name: binding.name,
@@ -2697,12 +2749,7 @@ async function scopesEnroll(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
         }, parsed, runtime, token)).target, provider, scope);
         created = true;
       }
-      if (target.identityDigest !== binding.identityDigest) {
-        throw new CliError("The registry returned a different target identity. Nothing was bound.", 1, "SCOPE_TARGET_IDENTITY_CHANGED");
-      }
-      if (target.owner.id !== binding.actorId) {
-        throw new CliError("The registry target is not owned by the enrolling account. Nothing was bound.", 1, "SCOPE_TARGET_OWNER_INVALID");
-      }
+      assertScopeTargetBinding(target, binding);
       await persist({ ...binding, status: "registered", target });
     } else {
       target = await currentScopeTarget(parsed, runtime, token, binding, provider, scope);
@@ -2804,10 +2851,11 @@ async function scopesObserve(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
 function describeProviderScopes(scopes: ProviderScopes): Record<string, unknown> {
   return {
     global: scopes.global
-      ? { root: scopes.global.root, mode: "inventory", status: scopes.global.binding.status, ...(scopes.global.binding.target ? { targetId: scopes.global.binding.target.id } : {}) }
+      ? { root: scopes.global.root, rootIdentityStatus: scopes.global.rootIdentity.dev === null ? "legacy" : "pinned", mode: "inventory", status: scopes.global.binding.status, ...(scopes.global.binding.target ? { targetId: scopes.global.binding.target.id } : {}) }
       : null,
     projects: scopes.projects.map((project) => ({
       root: project.root,
+      rootIdentityStatus: project.rootIdentity.dev === null ? "legacy" : "pinned",
       mode: project.mode,
       status: project.mode === "managed" ? "managed" : project.binding!.status,
       ...(project.mode === "managed" ? { targetId: project.managed!.targetId } : project.binding?.target ? { targetId: project.binding.target.id } : {}),
@@ -2823,13 +2871,13 @@ async function scopesList(parsed: ParsedArgs, runtime: CliRuntime): Promise<numb
   const lines: string[] = [];
   for (const provider of selected) {
     const scopes = state.providers[provider];
-    if (scopes.global) lines.push(terminalText`${provider}\tglobal\t${scopes.global.binding.status}\t${scopes.global.binding.target?.id ?? "-"}\t${scopes.global.root}`);
+    if (scopes.global) lines.push(terminalText`${provider}\tglobal\t${scopes.global.binding.status}\t${scopes.global.binding.target?.id ?? "-"}\t${scopes.global.root}\troot-identity=${scopes.global.rootIdentity.dev === null ? "legacy" : "pinned"}`);
     for (const project of scopes.projects) {
-      lines.push(terminalText`${provider}\tproject\t${project.mode === "managed" ? "managed" : project.binding!.status}\t${project.managed?.targetId ?? project.binding?.target?.id ?? "-"}\t${project.root}`);
+      lines.push(terminalText`${provider}\tproject\t${project.mode === "managed" ? "managed" : project.binding!.status}\t${project.managed?.targetId ?? project.binding?.target?.id ?? "-"}\t${project.root}\troot-identity=${project.rootIdentity.dev === null ? "legacy" : "pinned"}`);
     }
     for (const exclusion of scopes.exclusions) lines.push(terminalText`${provider}\texcluded\t-\t-\t${exclusion.path}`);
   }
-  return writeScopeOutput(parsed, runtime, { schemaVersion: 1, providers, nativeInheritance: "unchanged" }, lines.length ? lines : ["No workspace scopes are enrolled."]);
+  return writeScopeOutput(parsed, runtime, { schemaVersion: state.schemaVersion, providers, nativeInheritance: "unchanged" }, lines.length ? lines : ["No workspace scopes are enrolled."]);
 }
 
 async function scopesResolve(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
@@ -2838,7 +2886,7 @@ async function scopesResolve(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   const { state } = await readScopeState(scopeStateDirectory(runtime.env));
   const resolution = resolveScopeOwner(state, provider, target.path);
   return writeScopeOutput(parsed, runtime, { provider, path: target.path, ...resolution, nativeInheritance: "unchanged" }, [
-    terminalText`${resolution.owner}\tprovider=${provider}\ttarget=${resolution.targetId ?? "-"}\tmode=${resolution.mode ?? "-"}\t${target.path}`,
+    terminalText`${resolution.owner}\tprovider=${provider}\ttarget=${resolution.targetId ?? "-"}\tmode=${resolution.mode ?? "-"}\t${target.path}\troot-identity=${resolution.rootIdentityStatus ?? "none"}`,
   ]);
 }
 
@@ -2916,7 +2964,8 @@ async function scopesMigrate(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   const expected = stringOption(parsed, "plan-digest");
   if (!/^[a-f0-9]{64}$/.test(expected)) throw new CliError("--plan-digest must be the SHA-256 printed by migrate plan.", 2, "SCOPE_USAGE");
   return withScopeStateLock(stateDirectory, async ({ snapshot, write, backup }) => {
-    const { plan, adoption } = await planScopeMigration(snapshot, provider, project);
+    const currentProject = await canonicalScopeDirectory(project.path, { label: "The project directory" });
+    const { plan, adoption } = await planScopeMigration(snapshot, provider, currentProject);
     if (plan.planDigest !== expected) {
       throw new CliError("The local state, workspace binding, or install registry changed since this plan. Nothing was changed; run migrate plan again.", 1, "SCOPE_MIGRATION_STALE");
     }
@@ -2927,7 +2976,8 @@ async function scopesMigrate(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     const backupName = snapshot.bytes === null
       ? null
       : await backup(`workspace-scopes.${new Date().toISOString().replace(/[:.]/g, "-")}.${plan.planDigest.slice(0, 12)}.json`, snapshot.bytes);
-    await write(applyScopeMigration(snapshot.state, provider, project, plan, adoption));
+    await assertScopeRootUnchanged(currentProject.path, currentProject.identity);
+    await write(applyScopeMigration(snapshot.state, provider, currentProject, plan, adoption));
     return writeScopeOutput(parsed, runtime, { applied: true, planDigest: plan.planDigest, backup: backupName, actions: plan.actions, nativeInheritance: "unchanged" }, [
       terminalText`applied\t${plan.planDigest}\tactions=${plan.actions.map((action) => action.type).join(",")}\tbackup=${backupName ?? "none"}`,
       "note\tRestore by copying the backup over workspace-scopes.json while no scopes command is running.",
@@ -5945,6 +5995,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       || key === "requires-user-action"
       || key === "accept-user-action"
       || key === "allow-cloud"
+      || key === "accept-current-root"
     ) {
       options[key] = true;
       continue;

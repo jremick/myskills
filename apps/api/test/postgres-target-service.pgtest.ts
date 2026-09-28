@@ -180,10 +180,20 @@ test("Postgres observation append accepts config and token slugs after privacy u
   });
   const target = await service.grantConsent(ownerId, registered.id);
   const base = makeObservation(target.id, "observation-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
-  const input = { ...base, skills: ["codex-config-sync", "token-budget"].map((slug) => ({ slug, managed: false })) };
+  const input = {
+    ...base,
+    metadata: { label: "CI/CD, nightly", spacing: "blue\u00a0/\ufeffgreen" },
+    skills: ["codex-config-sync", "token-budget"].map((slug) => ({
+      slug, managed: false, version: "2026/09, nightly", metadata: { label: "Input\\output, nightly" },
+    })),
+  };
   const observation = { ...input, observedDigest: architectureTargetObservationDigest(input) };
   const accepted = await service.appendObservation({ actor: ownerId, targetId: target.id, observation });
   assert.deepEqual(accepted.skills.map((skill) => skill.slug).sort(), ["codex-config-sync", "token-budget"]);
+  assert.equal(accepted.metadata?.label, "CI/CD, nightly");
+  assert.equal(accepted.metadata?.spacing, "blue\u00a0/\ufeffgreen");
+  assert.equal(accepted.skills[0]?.version, "2026/09, nightly");
+  assert.equal(accepted.skills[0]?.metadata?.label, "Input\\output, nightly");
   assert.deepEqual((await service.listObservations(ownerId, target.id))[0], accepted);
   await assert.rejects(service.appendObservation({ actor: outsiderId, targetId: target.id, observation }),
     (error: unknown) => error instanceof Error && "code" in error && error.code === "ARCHITECTURE_TARGET_NOT_FOUND");
