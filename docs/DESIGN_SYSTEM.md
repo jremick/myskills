@@ -1,6 +1,6 @@
 # MySkills Design System
 
-Version: 0.1.0-beta.16
+Version: 0.1.0-beta.17
 Last updated: 2026-09-29
 
 MySkills should feel like a truthful operational console, not a marketing shell. Preserve the core surfaces: Skills, Review Dashboard, Submit Skill, compact admin overview, persistent rail, and real API state only.
