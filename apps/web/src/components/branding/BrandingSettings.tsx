@@ -94,10 +94,10 @@ export function BrandingSettings({ client, canEdit, onSaved }: { client: Registr
     </> : <form onSubmit={event => { event.preventDefault(); void save(); }}>
       <fieldset disabled={busy || reading} className="branding-fields">
         <label className="account-field"><span id={`${fieldId}-text-label`}>Brand text</span><Input aria-labelledby={`${fieldId}-text-label`} aria-describedby={`${fieldId}-text-help`} value={draft.text} maxLength={MAX_BRAND_TEXT_LENGTH} required onChange={event => { setDraft({ ...draft, text: event.target.value }); notice(""); }} />
-          <small id={`${fieldId}-text-help`}>Up to 80 characters. Also used as the accessible name for your logo.</small>
+          <small id={`${fieldId}-text-help`}>Up to 80 characters. Also used as the browser tab title and accessible name for your logo.</small>
         </label>
         <label className="account-field"><span id={`${fieldId}-logo-label`}>Logo image</span><Input aria-labelledby={`${fieldId}-logo-label`} aria-describedby={`${fieldId}-logo-help`} ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" onChange={event => void chooseLogo(event.target.files?.[0])} />
-          <small id={`${fieldId}-logo-help`}>Still PNG, JPEG or WebP · 256 KB maximum · up to 2048 × 2048 pixels. Transparent backgrounds work well.</small>
+          <small id={`${fieldId}-logo-help`}>Still PNG, JPEG or WebP · 256 KB maximum · up to 2048 × 2048 pixels. Also used as the browser tab icon. Transparent backgrounds work well.</small>
         </label>
         {draft.logoDataUrl && <Button className="branding-remove" type="button" variant="outline" onClick={() => replaceDraft({ ...draft, logoDataUrl: null })}>Remove custom logo</Button>}
         <label className="branding-checkbox"><input type="checkbox" checked={draft.showText} onChange={event => { setDraft({ ...draft, showText: event.target.checked }); notice(""); }} />Show brand text</label>

@@ -1,11 +1,18 @@
 # Operational Beta Delivery Brief
 
-Version: 0.1.0-beta.14
+Version: 0.1.0-beta.15
 Last updated: 2026-09-28
 
-Target release: `v0.1.0-beta.14`.
+Target release: `v0.1.0-beta.15`.
 
-Status: beta.14 GitHub prerelease and hosted delivery verified on 28 September 2026.
+Status: beta.15 browser-branding candidate; beta.14 remains the verified hosted release.
+
+## Beta.15 Candidate
+
+Extend saved instance branding to the browser tab title and favicon. Verify
+save, draft/failure isolation, reload, public pages, hidden text, all three image
+formats, removal and reset. Preserve the beta.14 API and storage contracts.
+See [Beta.15 release delivery](BETA15_RELEASE_DELIVERY.md).
 
 ## Beta.14 Release Record
 

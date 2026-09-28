@@ -2,6 +2,16 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
+## 0.1.0-beta.15 - 2026-09-28
+
+Target release: `v0.1.0-beta.15`.
+
+- Use the saved brand text as the browser tab title, including when visible brand text is hidden.
+- Use the saved logo as the favicon. Replace it on save, restore the default icons when removing it, and retain defaults if the browser cannot decode it.
+- Keep unsaved drafts and failed saves out of tab branding. Reloads and public pages use saved settings; restoring MySkills defaults restores the original tab identity.
+
+No API, schema or dependency change. npm remains beta.8. See [branding](docs/BRANDING.md) and [delivery record](docs/BETA15_RELEASE_DELIVERY.md).
+
 ## 0.1.0-beta.14 - 2026-09-28
 
 Target release: `v0.1.0-beta.14`.
