@@ -62,3 +62,17 @@ export const findingsLabel = (count: number): Label => ({
 
 /** registry-chip tone attribute; neutral chips carry none. */
 export const chipTone = (tone: Tone) => (tone === "neutral" ? undefined : tone);
+
+/** Display only: keep the stored version for requests, pins and confirmations. */
+export function isBootstrapVersion(version: string): boolean {
+  return /^0\.0\.0-bootstrap\.[0-9a-f]+$/.test(version);
+}
+
+export function releaseVersionLabel(version: string, releases: readonly { version: string }[] = []): string {
+  if (!isBootstrapVersion(version)) return version;
+  // Use the full import suffix when more than one import is selectable.
+  // Truncating again can make distinct imports look identical.
+  return releases.filter((release) => isBootstrapVersion(release.version)).length > 1
+    ? `Initial import · ${version.slice("0.0.0-bootstrap.".length)}`
+    : "Initial import";
+}
