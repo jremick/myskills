@@ -958,6 +958,16 @@ test("a modified click on the launcher opens a separate tab without prompting or
   await page.getByLabel("Draft revision message").fill("Stay in the first tab");
   await page.getByRole("link", { name: "Architecture overview" }).click();
 
+  const navigationEvents: Array<Record<string, unknown>> = [];
+  context.on("request", (request) => {
+    if (request.isNavigationRequest()) navigationEvents.push({ event: "request", url: request.url() });
+  });
+  context.on("response", (response) => {
+    if (response.request().isNavigationRequest()) navigationEvents.push({ event: "response", url: response.url(), status: response.status(), contentType: response.headers()["content-type"] });
+  });
+  context.on("requestfailed", (request) => {
+    if (request.isNavigationRequest()) navigationEvents.push({ event: "failed", url: request.url(), failure: request.failure()?.errorText });
+  });
   const [popup] = await Promise.all([
     context.waitForEvent("page"),
     page.getByRole("link", { name: "Resume draft", exact: true }).click({ modifiers: ["ControlOrMeta"] }),
@@ -966,7 +976,17 @@ test("a modified click on the launcher opens a separate tab without prompting or
   // Activate it and wait for the link destination, not that document's load event.
   await popup.bringToFront();
   const workbenchUrl = new RegExp(`/architectures/${LARGE_ID}/workbench\\?profile=personal&environment=personal-laptop$`);
-  await popup.waitForURL(workbenchUrl, { waitUntil: "domcontentloaded" });
+  try {
+    await popup.waitForURL(workbenchUrl, { waitUntil: "domcontentloaded" });
+  } catch (error) {
+    console.error("Workbench popup navigation", JSON.stringify({
+      node: process.version,
+      browser: context.browser()?.version(),
+      pages: context.pages().map((tab) => ({ url: tab.url(), closed: tab.isClosed() })),
+      navigationEvents: navigationEvents.slice(-20),
+    }));
+    throw error;
+  }
   await expect(popup).toHaveURL(workbenchUrl);
   await expect(popup.getByRole("heading", { name: LARGE_NAME, level: 1 })).toBeVisible();
   await expect(popup.getByLabel("Draft revision message")).toHaveValue("");
