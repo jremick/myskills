@@ -949,7 +949,12 @@ for (const width of [1024, 390, 320]) test(`the Workbench stays usable without h
   expect(dialogs.messages).toEqual([]);
 });
 
-test("a modified click on the launcher opens a separate tab without prompting or disturbing the draft", async ({ page, context }) => {
+// Use the full browser for a native tab interaction. The headless shell can
+// leave Ctrl-click tabs at about:blank on Linux after their HTML completes.
+// https://playwright.dev/docs/browsers#chromium-new-headless-mode
+const nativeTabTest = test.extend({ channel: browserExecutable ? undefined : "chromium" });
+
+nativeTabTest("a modified click on the launcher opens a separate tab without prompting or disturbing the draft", async ({ page, context }) => {
   await installWorkbenchMock(context);
   // This navigation check does not need web fonts. A pending external stylesheet
   // also blocks DOMContentLoaded in the new tab, even after its HTML has arrived.
