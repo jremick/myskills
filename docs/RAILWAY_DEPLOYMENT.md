@@ -21,7 +21,7 @@ Saved branding now updates the browser tab title and favicon. No migration is re
 All four report SUCCESS, beta.15 and the same source revision. Each environment
 passed 19 HTTP checks and fresh CLI doctor/catalog checks. Production retained
 the owner/MFA session and rendered private package contents. Its browser title
-is Axon Skills, matching the preserved saved text; the default favicon remains
+matches the preserved saved custom text; the default favicon remains
 because no custom logo is saved. The recovery point from
 `2026-09-27T16:01:29.347Z` passed the 26-hour freshness policy before promotion.
 Rollback uses the matching beta.14 pair below while retaining all application data.

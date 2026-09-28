@@ -69,7 +69,7 @@ with the default MySkills title and four default icon links.
 
 Production's existing owner session survived reload and retained MFA verification.
 The private package rendered its four files and SKILL.md contents. The browser
-title is now **Axon Skills**, matching the saved brand text. The existing branding
+title now matches the saved custom brand text. The existing branding
 record was preserved: visible text and no custom logo. The default favicon
 therefore remains. No live branding or MFA settings were changed for testing;
 saved custom-image behavior was verified through the isolated real-API journey.
