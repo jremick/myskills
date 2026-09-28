@@ -3,7 +3,7 @@ import { ArrowLeft, LockKeyhole, RotateCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { safeReviewErrorMessage, type RegistryClient, type ReleaseLifecycleActionName, type SkillLifecycleActionName, type SkillManagementSummary, type SkillReleaseSummary } from "../../api.js";
-import { changeKindLabel, chipTone, findingsLabel, lifecycleLabel, reviewStatusLabel, securityStatusLabel, shortDate, tileTone, visibilityLabel } from "./status-display.js";
+import { isBootstrapVersion, releaseVersionLabel, changeKindLabel, chipTone, findingsLabel, lifecycleLabel, reviewStatusLabel, securityStatusLabel, shortDate, tileTone, visibilityLabel } from "./status-display.js";
 import { useSplitLayout } from "./useSplitLayout.js";
 
 type PendingAction = { kind: "skill"; action: SkillLifecycleActionName } | { kind: "release"; action: ReleaseLifecycleActionName; version: string };
@@ -314,7 +314,7 @@ export function ManagedSkillsDashboard({ client, mfaVerified }: { client: Regist
                   <label className="manage-version">
                     <span>Release version</span>
                     <select aria-label="Managed release version" value={version} disabled={busy} onChange={(event) => { setPending(null); setReason(""); setVersion(event.target.value); }}>
-                      {releases.map((item) => <option key={item.id} value={item.version}>{item.version} · {lifecycleLabel(item.lifecycleStatus).label}</option>)}
+                      {releases.map((item) => <option key={item.id} value={item.version}>{releaseVersionLabel(item.version, releases)} · {lifecycleLabel(item.lifecycleStatus).label}</option>)}
                     </select>
                   </label>
                 )}
@@ -328,7 +328,7 @@ export function ManagedSkillsDashboard({ client, mfaVerified }: { client: Regist
                 )}
                 {release && release.allowedActions.length > 0 && (
                   <div className="registry-actions">
-                    {release.allowedActions.map((action) => <Button className={isDestructive(action) ? "author-danger" : undefined} data-action={`release:${action}:${release.version}`} key={action} size="sm" type="button" variant="outline" disabled={busy || !mfaVerified} onClick={() => openPending({ kind: "release", action, version: release.version })}>{label(action)} {release.version}</Button>)}
+                    {release.allowedActions.map((action) => <Button className={isDestructive(action) ? "author-danger" : undefined} data-action={`release:${action}:${release.version}`} key={action} size="sm" type="button" variant="outline" disabled={busy || !mfaVerified} onClick={() => openPending({ kind: "release", action, version: release.version })}>{label(action)} {releaseVersionLabel(release.version)}</Button>)}
                   </div>
                 )}
                 {confirmation("release")}
@@ -359,6 +359,7 @@ function ReleaseFacts({ release }: { release: SkillReleaseSummary }) {
   const review = reviewStatusLabel(release.reviewStatus);
   const security = securityStatusLabel(release.securityStatus);
   return <dl className="registry-facts">
+    {isBootstrapVersion(release.version) && <div><dt>Exact version</dt><dd className="registry-mono">{release.version}</dd></div>}
     <div><dt>Status</dt><dd><span className="registry-chip" data-tone={chipTone(status.tone)}>{status.label}</span></dd></div>
     <div><dt>Review</dt><dd><span className="registry-chip" data-tone={chipTone(review.tone)}>{review.label}</span></dd></div>
     <div><dt>Security</dt><dd><span className="registry-chip" data-tone={chipTone(security.tone)}>{security.label}</span></dd></div>

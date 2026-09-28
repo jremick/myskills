@@ -76,7 +76,7 @@ import { ManagedSkillsDashboard } from "@/components/registry/ManagedSkillsDashb
 import { SubmissionEvidencePanel } from "@/components/registry/SubmissionEvidencePanel";
 import { SkillImprovementPanel } from "@/components/registry/SkillImprovementPanel";
 import { BundleWorkspace } from "@/components/registry/BundleWorkspace";
-import { chipTone, findingsLabel, lifecycleLabel, reviewStatusLabel, securityStatusLabel, severityLabel, visibilityLabel } from "@/components/registry/status-display";
+import { isBootstrapVersion, releaseVersionLabel, chipTone, findingsLabel, lifecycleLabel, reviewStatusLabel, securityStatusLabel, severityLabel, visibilityLabel } from "@/components/registry/status-display";
 import { useSplitLayout } from "@/components/registry/useSplitLayout";
 import {
   createRegistryClient,
@@ -1348,7 +1348,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
                                   {skill.platforms.length > 0 && <span>{skill.platforms.slice(0, 2).map((item) => item.name).join(", ")}</span>}
                                 </span>
                               </span>
-                              {skill.latestVersion && <span className="registry-version-chip">{skill.latestVersion}</span>}
+                              {skill.latestVersion && <span className="registry-version-chip" title={skill.latestVersion}>{releaseVersionLabel(skill.latestVersion)}</span>}
                             </a>
                           ))}
                         </div>
@@ -3032,7 +3032,7 @@ function TeamSkillSection({ empty, skills, title }: { empty: string; skills: Pub
             <li key={skill.slug}>
               <span className="people-person">
                 <strong>{skill.title}</strong>
-                <small><code>{skill.slug}</code>{skill.latestVersion ? ` · ${skill.latestVersion}` : ""}</small>
+                <small><code>{skill.slug}</code>{skill.latestVersion ? ` · ${releaseVersionLabel(skill.latestVersion)}` : ""}</small>
               </span>
             </li>
           ))}
@@ -3715,21 +3715,22 @@ function SidebarAccount({
 }) {
   return (
     <div className={collapsed ? "sidebar-account collapsed" : "sidebar-account"}>
-      <a className="sidebar-account-main" href="/settings" aria-label="Account settings" onClick={(event) => {
+      <a className="sidebar-account-main" href="/settings" aria-label="Account settings" aria-description={session.user.mfaVerified ? "MFA verified" : "MFA not verified. Set up or verify MFA."} onClick={(event) => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
           return;
         }
         event.preventDefault();
         onSettings();
       }} title={session.user.email}>
-        <UserRound size={18} aria-hidden="true" />
+        {session.user.mfaVerified ? (
+          <ShieldCheck className="sidebar-account-status" data-verified="true" size={20} role="img" aria-label="MFA verified" />
+        ) : (
+          <CircleAlert className="sidebar-account-status" size={20} role="img" aria-label="MFA not verified" />
+        )}
         <span>
           <strong>{session.user.email}</strong>
           <small>{session.user.roles.join(" · ") || "user"}</small>
-          <Badge variant="secondary" className="sidebar-account-status" data-verified={session.user.mfaVerified}>
-            {session.user.mfaVerified && <Check aria-hidden="true" />}
-            {session.user.mfaVerified ? "MFA verified" : "MFA pending"}
-          </Badge>
+          {!session.user.mfaVerified && <small className="sidebar-account-warning">MFA unverified</small>}
         </span>
       </a>
       <IconButton label="Sign out" onClick={() => void onLogout()}>
@@ -5079,7 +5080,7 @@ function SkillReleaseCard({
               <li key={item.version}>
                 <button aria-current={item.version === currentVersion ? "true" : undefined} className="registry-version-row" type="button" onClick={() => pick(item.version)}>
                   <Check size={14} aria-hidden="true" />
-                  <code>{item.version}</code>
+                  <code title={item.version}>{releaseVersionLabel(item.version, releases)}</code>
                   <span className="registry-version-meta">
                     {item.version === latest && <span className="registry-chip" data-tone="line">Latest</span>}
                     {item.lifecycleStatus === "deprecated" && <span className="registry-chip" data-tone="amber">Deprecated</span>}
@@ -5100,14 +5101,14 @@ function SkillReleaseCard({
           </div>
         ) : version ? (
           <div className="registry-release-id">
-            <h3 ref={headingRef} tabIndex={-1}><span className="sr-only">Release</span>{" "}<span ref={versionRef}>{version}</span></h3>
+            <h3 ref={headingRef} tabIndex={-1} title={version}><span className="sr-only">Release</span>{" "}<span ref={versionRef}>{releaseVersionLabel(version)}</span></h3>
             <CopyButton
               className="registry-icon-copy"
-              failureHint="Copy failed. The version is selected for manual copying."
+              failureHint={isBootstrapVersion(version) ? `Copy failed. Exact version: ${version}` : "Copy failed. The version is selected for manual copying."}
               iconOnly
               key={version}
               label="Copy version"
-              selectOnFailure={versionRef}
+              selectOnFailure={isBootstrapVersion(version) ? undefined : versionRef}
               text={version}
               variant="ghost"
             />
@@ -5342,6 +5343,7 @@ function SkillDetail({
           onToggle={() => setDisclosure("details", !disclosures.details)}
         >
           <dl className="registry-facts">
+            {isBootstrapVersion(release.version) && <RegistryFact label="Exact version" mono>{release.version}</RegistryFact>}
             <RegistryFact label="Platforms">{release.platforms.map((item) => `${item.name} · ${item.status}`).join(", ") || "None declared"}</RegistryFact>
             <RegistryFact label="Size">{`${new Intl.NumberFormat().format(release.artifact.byteSize)} bytes`}</RegistryFact>
             <RegistryFact label="Content type" mono>{release.artifact.contentType}</RegistryFact>

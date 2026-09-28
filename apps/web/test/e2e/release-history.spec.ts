@@ -154,3 +154,49 @@ test("selecting an older release survives its exact URL and browser history", as
   await expect(heading("0.2.0")).toBeFocused();
   await expect(page).toHaveURL(/\/skills\/release-notes-helper\?q=writing&platform=generic$/);
 });
+
+// Protect readable imported versions without changing exact URL/export identity.
+// Two imports deliberately share their first six hash characters.
+test("bootstrap releases have distinct display labels and retain exact pins", async ({ page }, info) => {
+  const versions = ["0.0.0-bootstrap.118b105a185a", "0.0.0-bootstrap.118b105a185b"];
+  const imports = versions.map((version, i) => ({ ...latest, version, publishedAt: `2026-08-${31 - i}T00:00:00.000Z` }));
+  const importedSkill = { ...skill, latestVersion: versions[0] };
+  await page.route("**/api/v1/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/v1/skills") return route.fulfill({ json: { skills: [importedSkill], nextCursor: null } });
+    if (path === `/api/v1/skills/${skill.slug}`) return route.fulfill({ json: { skill: importedSkill } });
+    if (path === `/api/v1/skills/${skill.slug}/releases`) return route.fulfill({ json: { releases: [...imports.map(summary), summary(latest)] } });
+    const release = [...imports, latest].find(item => path === `/api/v1/skills/${skill.slug}/releases/${item.version}`);
+    if (release) return route.fulfill({ json: { release } });
+    return route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } });
+  });
+  await page.goto(`/skills/${skill.slug}`);
+  const card = page.getByRole("region", { name: "Release", exact: true });
+  const toggle = card.getByRole("button", { name: /^Versions/ });
+  const list = card.getByRole("list", { name: "Published versions" });
+  await toggle.click();
+  const firstImport = list.getByRole("button", { name: /^Initial import · 118b105a185a/ });
+  const secondImport = list.getByRole("button", { name: /^Initial import · 118b105a185b/ });
+  await expect(firstImport).toContainText("Latest");
+  await expect(secondImport).toBeVisible();
+  await expect(page.locator(".registry-version-chip").first()).toHaveText("Initial import");
+  await secondImport.click();
+  await expect(page).toHaveURL(new RegExp(`version=${versions[1].replaceAll(".", "\\.")}$`));
+  await card.getByRole("button", { name: "Package details", exact: true }).click();
+  await expect(card.getByText("Exact version", { exact: true }).locator("..")).toContainText(versions[1]);
+  await expect(card.getByRole("heading", { name: "Release Initial import", exact: true })).toHaveAttribute("title", versions[1]);
+  await expect(page.locator(".registry-command code")).toContainText(`--version '${versions[1]}'`);
+  await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (text: string) => { document.body.dataset.copiedVersion = text; } } }));
+  await card.getByRole("button", { name: "Copy version", exact: true }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-copied-version", versions[1]);
+  await page.reload();
+  await toggle.click();
+  await expect(secondImport).toHaveAttribute("aria-current", "true");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await toggle.scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  await page.screenshot({ path: info.outputPath("bootstrap-release-mobile.png"), fullPage: true });
+  await list.getByRole("button", { name: /^0\.2\.0/ }).click();
+  await expect(card.getByRole("heading", { name: "Release 0.2.0", exact: true })).toBeVisible();
+  await expect(card.getByText("Exact version", { exact: true })).toHaveCount(0);
+});
