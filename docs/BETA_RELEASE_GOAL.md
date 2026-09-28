@@ -1,11 +1,18 @@
 # Operational Beta Delivery Brief
 
-Version: 0.1.0-beta.12
-Last updated: 2026-09-27
+Version: 0.1.0-beta.13
+Last updated: 2026-09-28
 
-Target release: `v0.1.0-beta.12`.
+Target release: `v0.1.0-beta.13`.
 
-Status: released on GitHub and deployed to production.
+Status: beta.13 candidate verification is in progress.
+
+## Beta.13 Candidate
+
+Add locally rendered authenticator enrollment QR codes with manual setup fallbacks.
+GitHub and hosted publication are authorized; npm remains beta.8. No database
+migration or API contract change is included. Physical authenticator-app scans
+remain outstanding. See [Beta.13 release delivery](BETA13_RELEASE_DELIVERY.md).
 
 ## Beta.12 Release Record
 

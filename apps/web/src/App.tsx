@@ -1,6 +1,7 @@
 import { ConfirmationDialog, type ConfirmationRequest } from "@/components/ui/confirmation-dialog";
 import { MarketingLanding } from "./components/marketing/MarketingLanding.js";
 import { LandingSettings } from "./components/marketing/LandingSettings.js";
+import { QRCodeSVG } from "qrcode.react";
 import {
   useCallback,
   useEffect,
@@ -4757,6 +4758,7 @@ function MfaSetupPanel({
   onComplete: (result: ConfirmMfaResult) => void;
   session: WebSession;
 }) {
+  const instructionsId = useId();
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [enrollment, setEnrollment] = useState<{ factorId: string; secret: string; otpauthUrl: string } | null>(null);
@@ -4836,6 +4838,23 @@ function MfaSetupPanel({
         }}>
           <div className="mfa-secret">
             <span>Authenticator setup</span>
+            <p className="mfa-instructions" id={instructionsId}>
+              Scan this QR code with your authenticator app, then enter its six-digit code.
+              You can also use the manual secret or setup URL below.
+            </p>
+            <QRCodeSVG
+              aria-describedby={instructionsId}
+              aria-label="Authenticator setup QR code"
+              bgColor="#ffffff"
+              className="mfa-qr"
+              fgColor="#000000"
+              level="M"
+              marginSize={4}
+              role="img"
+              size={240}
+              value={enrollment.otpauthUrl}
+            />
+            <span>Setup URL</span>
             <code>{enrollment.otpauthUrl}</code>
             <small>Manual secret: {enrollment.secret}</small>
           </div>
