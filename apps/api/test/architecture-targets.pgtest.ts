@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { readdirSync, readFileSync } from "node:fs";
 import test, { type TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
+import { assertValidArchitectureTargetObservation } from "@myskills-app/core";
 import { createDb, createPgPool } from "../src/db/client.js";
 import { users } from "../src/db/schema.js";
 
@@ -320,6 +321,116 @@ test("observations are append-only and indexed for bounded latest reads", { time
     }),
     (error) => isConstraintError(error, "skill_architecture_observations_adapter_contract_version_check"),
   );
+});
+
+// Privacy repair cases are authored before the production migration. The old
+// check is the failing control; upgrade and direct SQL bypass share one database.
+test("observation privacy upgrade accepts bounded slugs and preserves immutable history while rejecting unsafe direct writes", { timeout: 60_000 }, async (t) => {
+  const pool = await freshPool(t);
+  await insertUser(pool, ownerId, "privacy-upgrade@example.com");
+  await insertArchitecture(pool);
+  await insertTarget(pool, { id: userTargetId });
+  await insertObservation(pool);
+  const priorTargets = (await pool.query("SELECT to_jsonb(t) AS row FROM skill_architecture_targets t ORDER BY id")).rows;
+  const priorObservations = (await pool.query("SELECT to_jsonb(o) AS row FROM skill_architecture_observations o ORDER BY id")).rows;
+  const valid = {
+    schemaVersion: 1, targetId: userTargetId, targetGeneration: 4,
+    adapterDigest: "d".repeat(64), capabilitiesDigest: "a".repeat(64), observedDigest: "b".repeat(64),
+    observedAt: "2026-09-29T00:00:00.000Z",
+    skills: ["codex-config-sync", "token-budget", "path-helper"].map((slug) => ({ slug, managed: false, metadata: { definitionDigest: "e".repeat(64) } })),
+    configFindings: [{ code: "skill-linked", severity: "warning", count: 1 }],
+    promptAwareness: { detected: false, count: 0, redacted: true },
+    metadata: { provider: "codex", scope: "global", inventoryComplete: false },
+  };
+  await assert.rejects(insertObservation(pool, { id: observationTwoId, observedState: valid }),
+    (error) => isConstraintError(error, "skill_architecture_observations_observed_state_safe_check"));
+  const { createPostgresObservationPrivacyReadinessProbe } = await import("../src/targets/observation-privacy-readiness.js");
+  const ready = createPostgresObservationPrivacyReadinessProbe(createDb(pool));
+  await assert.rejects(ready(), /privacy migration/);
+  await applyMigration(pool, "0034_observation_slug_privacy");
+  await ready();
+  assert.deepEqual((await pool.query("SELECT to_jsonb(t) AS row FROM skill_architecture_targets t ORDER BY id")).rows, priorTargets);
+  assert.deepEqual((await pool.query("SELECT to_jsonb(o) AS row FROM skill_architecture_observations o ORDER BY id")).rows, priorObservations);
+  const constraint = (await pool.query("SELECT convalidated FROM pg_constraint WHERE conname = 'skill_architecture_observations_observed_state_safe_check'")).rows[0];
+  assert.equal(constraint.convalidated, false, "historical rows were intentionally not revalidated");
+  await insertObservation(pool, { id: observationTwoId, observedState: valid });
+  assert.deepEqual((await pool.query("SELECT observed_state FROM skill_architecture_observations WHERE id = $1", [observationTwoId])).rows[0].observed_state, valid);
+  // The public validator distinguishes path-like strings from punctuation in
+  // printable labels. Exercise the same accepted text in all three locations
+  // that the new database string guard protects, then read back its exact bytes.
+  // Explicit ECMAScript whitespace that remains printable under the public
+  // contract. Path boundaries must not depend on the database locale.
+  const printableWhitespace = [0x20, 0x00a0, 0x1680, ...Array.from({ length: 11 }, (_, index) => 0x2000 + index), 0x202f, 0x205f, 0x3000, 0xfeff]
+    .map((codePoint) => String.fromCodePoint(codePoint));
+  const printableLabels = [
+    "CI/CD, nightly", "blue / green", "Input\\output, nightly",
+    ...printableWhitespace.map((separator) => `blue${separator}/${separator}green`),
+  ];
+  for (const [index, label] of printableLabels.entries()) {
+    const observedState = assertValidArchitectureTargetObservation({
+      ...valid, observedDigest: undefined,
+      metadata: { ...valid.metadata, label },
+      skills: [{ slug: "codex-config-sync", version: label, metadata: { label } }],
+    });
+    const id = `aaaaaaaa-aaaa-4aaa-8aaa-${String(index).padStart(12, "0")}`;
+    await insertObservation(pool, { id, observedState });
+    assert.deepEqual((await pool.query("SELECT observed_state FROM skill_architecture_observations WHERE id = $1", [id])).rows[0].observed_state, observedState);
+  }
+  const privateLabels = printableWhitespace.flatMap((separator) => [
+    `label${separator}relative/item`, `relative/item${separator}label`,
+    `label${separator}/sensitive/item`, `label${separator}localhost`,
+  ]);
+  for (const label of privateLabels) {
+    assert.throws(() => assertValidArchitectureTargetObservation({ ...valid, observedDigest: undefined, metadata: { label } }));
+  }
+  const invalid = [
+    ...privateLabels.flatMap((label) => [
+      { ...valid, metadata: { label } },
+      { ...valid, skills: [{ slug: "valid-helper", metadata: { label } }] },
+      { ...valid, skills: [{ slug: "valid-helper", version: label }] },
+    ]),
+    { ...valid, extra: "unrecognized" },
+    { ...valid, body: "BODY-CANARY" },
+    { ...valid, skills: [{ slug: "/Users/example/private" }] },
+    { ...valid, skills: [{ slug: "../private" }] },
+    { ...valid, skills: [{ slug: "C:\\private\\item" }] },
+    { ...valid, skills: [{ slug: "x".repeat(129) }] },
+    { ...valid, skills: [{ slug: { token: "SECRET-CANARY" } }] },
+    { ...valid, skills: [{ slug: "valid-helper", body: "BODY-CANARY" }] },
+    { ...valid, skills: [{ slug: "valid-helper", extra: "unrecognized" }] },
+    { ...valid, skills: [{ slug: "valid-helper", version: "Bearer abcdefghijklmnop" }] },
+    { ...valid, skills: [{ slug: "valid-helper", version: "./private" }] },
+    { ...valid, skills: [{ slug: "valid-helper", version: "/sensitive/item" }] },
+    { ...valid, skills: [{ slug: "valid-helper", version: "relative/item" }] },
+    { ...valid, skills: [{ slug: "valid-helper", managed: "false" }] },
+    { ...valid, skills: [{ slug: "valid-helper", metadata: { note: { safe: "nested" } } }] },
+    { ...valid, skills: [{ slug: "valid-helper", metadata: { sourcePath: "/private/item" } }] },
+    { ...valid, metadata: { body: "BODY-CANARY" } },
+    { ...valid, metadata: { note: "https://example.invalid/private" } },
+    { ...valid, metadata: { note: "Bearer abcdefghijklmnop" } },
+    { ...valid, metadata: { note: "password=SECRET-CANARY" } },
+    { ...valid, metadata: { note: "./private" } },
+    { ...valid, metadata: { note: "/sensitive/item" } },
+    { ...valid, metadata: { note: "relative/item" } },
+    { ...valid, metadata: { note: "C:\\sensitive\\item" } },
+    { ...valid, metadata: { note: "\\\\server\\share" } },
+    ...["before\u0085after", "before\u2028after", "before\u2029after"].flatMap((label) => [
+      { ...valid, metadata: { label } },
+      { ...valid, skills: [{ slug: "valid-helper", version: label }] },
+    ]),
+    { ...valid, promptAwareness: { detected: false, count: 0, body: "BODY-CANARY" } },
+    { ...valid, promptAwareness: { detected: "false", count: 0 } },
+    { ...valid, configFindings: [{ code: "skill-linked", severity: "warning", count: -1 }] },
+    { ...valid, targetGeneration: "4" },
+    { ...valid, adapterDigest: "not-a-digest" },
+  ];
+  for (const [index, observedState] of invalid.entries()) {
+    await assert.rejects(insertObservation(pool, { id: "abababab-abab-4bab-8bab-abababababab", observedState }),
+      (error) => isConstraintError(error, "skill_architecture_observations_observed_state_safe_check"), `unsafe case ${index}`);
+  }
+  assert.equal((await pool.query("SELECT count(*)::int AS count FROM skill_architecture_observations")).rows[0].count, 2 + printableLabels.length);
+  await assert.rejects(pool.query("UPDATE skill_architecture_observations SET observed_digest = $1 WHERE id = $2", ["f".repeat(64), observationOneId]), isImmutableObservationError);
+  await assert.rejects(pool.query("DELETE FROM skill_architecture_observations WHERE id = $1", [observationTwoId]), isImmutableObservationError);
 });
 
 type TargetOverrides = Partial<{

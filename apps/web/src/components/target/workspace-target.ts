@@ -19,3 +19,10 @@ export function canQueueWorkspaceOperation(
     && target.capabilities["sync.write"] === true
     && target.capabilities[action === "rollback" ? "rollback" : "apply"] === true;
 }
+
+export function targetInventoryLabels(target: ArchitectureTargetRecord) {
+  const provider = target.adapter.kind === "codex-inventory" ? "Codex" : target.adapter.kind === "claude-inventory" ? "Claude" : null;
+  if (!provider) return null;
+  const scope = target.metadata?.scope === "global" ? "Global inventory" : target.metadata?.scope === "project" ? "Project inventory" : "Inventory scope not reported";
+  return { provider, scope, label: `${provider} · ${scope.toLowerCase()}` };
+}
