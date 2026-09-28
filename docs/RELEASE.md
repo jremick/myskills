@@ -7,12 +7,14 @@ MySkills beta releases are verification-first and approval-gated. A passing comm
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
 
-## Beta.14 candidate
+## Beta.14 release record
 
-The candidate adds instance logo and brand-text controls, with preview, safe
-image validation and audited persistence. It includes the published beta.13 QR
-enrollment feature. No database migration or new dependency is required. GitHub
-and hosted delivery are authorized; npm remains beta.8. See
+Instance logo and brand-text controls are published on GitHub and live at
+myskills.sh, together with beta.13 QR enrollment. Tag `v0.1.0-beta.14` and staging
+and production API/web use `5647be19f15a8f9bb2c6b0ecfb067478b7528ed0`.
+Canonical verification, protected CI, tagged verification, deployed acceptance
+and remote asset checksums passed. No database migration or new dependency is
+required. npm remains beta.8. See
 [Beta.14 release delivery](BETA14_RELEASE_DELIVERY.md).
 
 ## Beta.13 release record

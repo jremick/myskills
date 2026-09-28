@@ -5,14 +5,17 @@ Last updated: 2026-09-28
 
 Target release: `v0.1.0-beta.14`.
 
-Status: beta.14 candidate preparation; beta.13 remains the verified hosted release.
+Status: beta.14 GitHub prerelease and hosted delivery verified on 28 September 2026.
 
-## Beta.14 Candidate
+## Beta.14 Release Record
 
-Add owner/admin branding controls with safe image upload, editable text,
-preview, reset and audit history. Retain beta.13 authenticator QR enrollment.
-See [Beta.14 release delivery](BETA14_RELEASE_DELIVERY.md) for acceptance and
-promotion status. No schema migration is required; npm remains beta.8.
+Owner/admin branding controls are live at myskills.sh, with safe image upload,
+editable text, preview, reset and audit history. The release includes beta.13
+QR enrollment. Tag, staging and production use
+`5647be19f15a8f9bb2c6b0ecfb067478b7528ed0`. Canonical and tagged verification,
+protected CI, live acceptance and remote archive checksums passed. No schema
+migration is required; npm remains beta.8. See
+[Beta.14 release delivery](BETA14_RELEASE_DELIVERY.md).
 
 ## Beta.13 Release Record
 
