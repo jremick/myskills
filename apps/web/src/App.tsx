@@ -15,23 +15,25 @@ import {
 import {
   ArrowLeft,
   ArrowRight,
-  Boxes,
   Building2,
   Check,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
-  ClipboardList,
   Copy,
   Download,
   Ellipsis,
   FileCode2,
   KeyRound,
+  Layers,
+  LayoutGrid,
+  Library,
   Link2,
   LockKeyhole,
   LogIn,
   LogOut,
   Mail,
+  Monitor,
   PackageCheck,
   PackageOpen,
   Plus,
@@ -40,17 +42,20 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Shield,
+  SlidersHorizontal,
+  SquareCheckBig,
   TerminalSquare,
   Trash2,
   Upload,
   UserCog,
   UserRound,
   UsersRound,
-  Workflow,
   X,
 } from "lucide-react";
 import { parseSemanticVersion, type PublicSkill, type RegistryView, type SkillSharingDetails, type TeamSharedSkillGroup, type VisibilityScope } from "@myskills-app/core";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Frame, FrameDescription, FrameHeader, FramePanel, FrameTitle } from "@/components/reui/frame";
 import { ArchitecturesDashboard } from "@/components/architecture/ArchitecturesDashboard";
@@ -1012,21 +1017,21 @@ export function RegistryApp({ client }: RegistryAppProps) {
   }
 
   const navItems = [
-    { view: "libraries" as const, label: "Libraries", group: "Library" as const, icon: <PackageOpen size={18} aria-hidden="true" />, enabled: Boolean(session && registryClient.libraries) },
-    { view: "browse" as const, label: "Registry", group: "Library" as const, icon: <Boxes size={18} aria-hidden="true" />, enabled: true },
-    { view: "architectures" as const, label: "Architectures", group: "Build" as const, icon: <Workflow size={18} aria-hidden="true" />, enabled: Boolean(session) },
-    { view: "submit" as const, label: "Submit", group: "Build" as const, icon: <Upload size={18} aria-hidden="true" />, enabled: canUseSubmit },
-    { view: "manage" as const, label: "Manage skills", group: "Govern" as const, icon: <PackageCheck size={18} aria-hidden="true" />, enabled: Boolean(session && registryClient.listManagedSkills) },
-    { view: "review" as const, label: "Review", group: "Govern" as const, icon: <ClipboardList size={18} aria-hidden="true" />, enabled: canUseReview },
-    { view: "teams" as const, label: "Teams", group: "Govern" as const, icon: <UsersRound size={18} aria-hidden="true" />, enabled: canUseTeams },
-    { view: "organizations" as const, label: "Organizations", group: "Govern" as const, icon: <Building2 size={18} aria-hidden="true" />, enabled: canUseOrganizations },
-    { view: "targets" as const, label: "Connected targets", group: "Observe" as const, icon: <Link2 size={18} aria-hidden="true" />, enabled: canUseTargets },
-    { view: "updates" as const, label: "Updates", group: "Observe" as const, icon: <RotateCw size={18} aria-hidden="true" />, enabled: canUseTargets },
-    { view: "admin" as const, label: "Admin", group: "Account" as const, icon: <Settings size={18} aria-hidden="true" />, enabled: canUseAdmin },
+    { view: "libraries" as const, label: "Libraries", group: "Skills" as const, icon: <Library size={18} aria-hidden="true" />, enabled: Boolean(session && registryClient.libraries) },
+    { view: "browse" as const, label: "Registry", group: "Skills" as const, icon: <LayoutGrid size={18} aria-hidden="true" />, enabled: true },
+    { view: "submit" as const, label: "Submit", group: "Publish" as const, icon: <Upload size={18} aria-hidden="true" />, enabled: canUseSubmit },
+    { view: "review" as const, label: "Review", group: "Publish" as const, icon: <SquareCheckBig size={18} aria-hidden="true" />, enabled: canUseReview },
+    { view: "manage" as const, label: "Manage skills", group: "Publish" as const, icon: <SlidersHorizontal size={18} aria-hidden="true" />, enabled: Boolean(session && registryClient.listManagedSkills) },
+    { view: "architectures" as const, label: "Architectures", group: "Deploy" as const, icon: <Layers size={18} aria-hidden="true" />, enabled: Boolean(session) },
+    { view: "targets" as const, label: "Connected targets", group: "Deploy" as const, icon: <Monitor size={18} aria-hidden="true" />, enabled: canUseTargets },
+    { view: "updates" as const, label: "Updates", group: "Deploy" as const, icon: <RotateCw size={18} aria-hidden="true" />, enabled: canUseTargets },
+    { view: "teams" as const, label: "Teams", group: "People" as const, icon: <UsersRound size={18} aria-hidden="true" />, enabled: canUseTeams },
+    { view: "organizations" as const, label: "Organizations", group: "People" as const, icon: <Building2 size={18} aria-hidden="true" />, enabled: canUseOrganizations },
+    { view: "admin" as const, label: "Admin", group: "Account" as const, icon: <Shield size={18} aria-hidden="true" />, enabled: canUseAdmin },
     { view: "settings" as const, label: "Settings", group: "Account" as const, icon: <UserCog size={18} aria-hidden="true" />, enabled: Boolean(session) },
     { view: "login" as const, label: "Login", group: "Account" as const, icon: <LogIn size={18} aria-hidden="true" />, enabled: !session },
   ].filter((item) => item.enabled);
-  const navGroups = (["Library", "Build", "Govern", "Observe", "Account"] as const)
+  const navGroups = (["Skills", "Publish", "Deploy", "People", "Account"] as const)
     .map((label) => ({ label, items: navItems.filter((item) => item.group === label) }))
     .filter((group) => group.items.length > 0);
   // Mobile keeps Libraries and Registry, plus one shortcut for the reader's
@@ -3693,7 +3698,11 @@ function SidebarAccount({
         <UserRound size={18} aria-hidden="true" />
         <span>
           <strong>{session.user.email}</strong>
-          <small>{session.user.roles.join(", ") || "user"} · {session.user.mfaVerified ? "MFA verified" : "MFA pending"}</small>
+          <small>{session.user.roles.join(" · ") || "user"}</small>
+          <Badge variant="secondary" className="sidebar-account-status" data-verified={session.user.mfaVerified}>
+            {session.user.mfaVerified && <Check aria-hidden="true" />}
+            {session.user.mfaVerified ? "MFA verified" : "MFA pending"}
+          </Badge>
         </span>
       </a>
       <IconButton label="Sign out" onClick={() => void onLogout()}>

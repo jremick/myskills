@@ -70,9 +70,28 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Build web workspace dependencies
         run: npm run build -w @myskills-app/core
-      - run: npm run test:e2e -w @myskills-app/web
+      - name: Run browser scenarios
+        id: mocked-browser
+        run: npm run test:e2e -w @myskills-app/web -- --reporter=line,json
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/mocked-report.json
+      - name: Collect reviewed browser evidence
+        if: always() && steps.mocked-browser.outcome != 'skipped'
+        run: node scripts/collect-browser-evidence.mjs apps/web/test-results/mocked-report.json apps/web/test-results dist/browser-evidence/mocked
       - name: Run production-like API and web journey
+        id: fullstack-browser
         run: npm run test:e2e:fullstack
+      - name: Collect reviewed full-stack evidence
+        if: always() && steps.fullstack-browser.outcome != 'skipped'
+        run: node scripts/collect-browser-evidence.mjs apps/web/test-results/fullstack-report.json apps/web/test-results dist/browser-evidence/fullstack
+      - name: Upload reviewed browser evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-evidence-node-${{ matrix.node-version }}
+          path: dist/browser-evidence/
+          retention-days: 7
+          if-no-files-found: error
 
   # Preserve the protected-branch context while testing both supported Node lines.
   web-e2e:

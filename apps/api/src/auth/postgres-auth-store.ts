@@ -621,7 +621,9 @@ export class PostgresAuthStore implements AuthStore {
       }
       const [token] = await tx.insert(authActionTokens).values(tokenInput).returning();
       if (!token) throw new Error("Auth action token insert failed.");
-      if (notification) await tx.insert(authNotificationOutbox).values({ ...notification, actionTokenId: token.id });
+      // Admission, claims and retries must use the same application clock.
+      // Postgres now() can be ahead, even within one JavaScript millisecond.
+      if (notification) await tx.insert(authNotificationOutbox).values({ ...notification, actionTokenId: token.id, availableAt: new Date() });
       return toAuthActionTokenRecord(token);
     });
   }

@@ -449,7 +449,11 @@ export function ArchitecturesDashboard({ client, session, onNavigationGuardChang
               selectedId={selectedArchitectureId}
               onSelect={openArchitecture}
             />
-            <div className="cp-inspector" hidden={!showInspector}>
+            <div className="cp-inspector" hidden={!showInspector} onFocusCapture={() => {
+              // Preserve the active detail (and its diagram dialog) when a
+              // desktop inspector becomes a stacked layout during resize.
+              if (!stacked && !newVisible) setOpened(true);
+            }}>
               <div className="cp-panel" id="architecture-new-panel" hidden={!newVisible}>
                 <CreateArchitectureCard
                   client={client}

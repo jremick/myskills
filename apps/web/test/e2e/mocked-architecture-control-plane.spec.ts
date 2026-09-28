@@ -23,7 +23,7 @@ interface MockArchitectureOptions {
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(({ expiresAt: storedExpiry, user }) => {
-    window.localStorage.setItem("myskills-app:web-session", JSON.stringify({ expiresAt: storedExpiry, user }));
+    if (location.origin !== "null") window.localStorage.setItem("myskills-app:web-session", JSON.stringify({ expiresAt: storedExpiry, user }));
   }, { expiresAt, user: owner });
 });
 
@@ -886,3 +886,90 @@ function json(route: Route, status: number, body: unknown) {
     body: JSON.stringify(body),
   });
 }
+
+// Full-screen viewer acceptance, authored before the implementation. Existing
+// outline parity tests do not exercise modal focus or viewport interactions.
+for (const width of [1440, 390, 320]) test(`architecture diagram overlay supports zoom pan and keyboard return at ${width}`, async ({ page }, info) => {
+  await installMockArchitectureRoutes(page);
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto("/architectures");
+  await page.getByRole("button", { name: /Review assistant/ }).click();
+  await page.getByLabel("Preview profile").selectOption("personal");
+  await page.getByLabel("Preview environment").selectOption("personal-laptop");
+  await expect(page.getByRole("img", { name: "Skill architecture topology" })).toContainText("Release Notes Helper");
+  await page.screenshot({ path: info.outputPath("architecture-inline.png") });
+  const open = page.getByRole("button", { name: "Expand diagram", exact: true });
+  await expect(open).toBeVisible();
+  await open.click();
+  const dialog = page.getByRole("dialog", { name: "Architecture diagram", exact: true });
+  await expect(dialog).toBeVisible();
+  const close = dialog.getByRole("button", { name: "Close diagram", exact: true });
+  await expect(close).toBeFocused();
+  const bounds = (await dialog.boundingBox())!;
+  expect(bounds.x).toBeLessThanOrEqual(1);
+  expect(bounds.y).toBeLessThanOrEqual(1);
+  expect(bounds.width).toBeGreaterThanOrEqual(width - 1);
+  expect(bounds.height).toBeGreaterThanOrEqual(899);
+  const image = dialog.getByRole("img", { name: "Skill architecture topology" });
+  await expect(image).toContainText("Personal review router");
+  await expect(image).not.toContainText("Work Deploy Helper");
+  await page.screenshot({ path: info.outputPath("architecture-overlay-open.png") });
+  const initialWidth = (await image.boundingBox())!.width;
+  await dialog.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await expect.poll(async () => (await image.boundingBox())!.width).toBeGreaterThan(initialWidth);
+  await dialog.getByRole("button", { name: "Actual size, 1:1", exact: true }).click();
+  const viewport = dialog.getByRole("region", { name: "Diagram viewport", exact: true });
+  await viewport.focus();
+  await page.keyboard.press("+");
+  await page.keyboard.press("+");
+  const scroll = () => viewport.evaluate(el => ({ x: el.scrollLeft, y: el.scrollTop }));
+  await viewport.hover();
+  const beforeWheel = await scroll();
+  await page.mouse.wheel(500, 500);
+  await expect.poll(async () => { const p = await scroll(); return p.x > beforeWheel.x || p.y > beforeWheel.y; }).toBe(true);
+  const beforeDrag = await scroll();
+  const canvasBox = (await viewport.boundingBox())!;
+  const x = canvasBox.x + canvasBox.width / 2;
+  const y = canvasBox.y + canvasBox.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 75, y + 50, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => { const p = await scroll(); return p.x < beforeDrag.x || p.y < beforeDrag.y; }).toBe(true);
+  await viewport.focus();
+  const keyboardStart = await scroll();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(async () => (await scroll()).x).toBeGreaterThan(keyboardStart.x);
+  const beforePinch = (await image.boundingBox())!.width;
+  await viewport.hover();
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -150);
+  await page.keyboard.up("Control");
+  await expect.poll(async () => (await image.boundingBox())!.width).toBeGreaterThan(beforePinch);
+  expect((await dialog.boundingBox())!.width).toBe(width);
+  await dialog.getByRole("button", { name: "Fit diagram", exact: true }).click();
+  await expect.poll(() => viewport.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+  await expect.poll(() => viewport.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: info.outputPath("architecture-overlay.png") });
+  await page.setViewportSize({ width: 900, height: 600 });
+  await expect.poll(() => viewport.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+  await expect.poll(() => viewport.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+  await page.setViewportSize({ width, height: 900 });
+  const lockedScroll = await page.evaluate(() => window.scrollY);
+  await viewport.hover();
+  await page.mouse.wheel(0, 800);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(lockedScroll);
+  // Native modal focus must stay inside the overlay when tabbing past the end.
+  for (let i = 0; i < 9; i++) {
+    await page.keyboard.press("Tab");
+    expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+  }
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(open).toBeFocused();
+  await open.click();
+  await close.click();
+  await expect(dialog).toBeHidden();
+  await expect(open).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});
