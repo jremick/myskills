@@ -5792,9 +5792,9 @@ code {
 
 .sidebar-account-main strong { font-weight: 600; }
 .sidebar-account-main small { color: var(--muted); text-transform: capitalize; }
-.sidebar-account:not(.collapsed) .sidebar-account-main > svg { display: none; }
-.app-shell .sidebar-account-status[data-slot="badge"] { margin-top: 3px; color: var(--warning); background: var(--warning-soft); }
-.app-shell .sidebar-account-status[data-verified="true"] { color: var(--teal); background: var(--teal-soft); }
+.sidebar-account-main .sidebar-account-warning { color: var(--warning); text-transform: none; }
+.sidebar-account-status { flex-shrink: 0; color: var(--warning); }
+.sidebar-account-status[data-verified="true"] { color: var(--teal); }
 
 .sidebar-account.collapsed {
   grid-template-columns: 1fr;

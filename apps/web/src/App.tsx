@@ -3698,21 +3698,22 @@ function SidebarAccount({
 }) {
   return (
     <div className={collapsed ? "sidebar-account collapsed" : "sidebar-account"}>
-      <a className="sidebar-account-main" href="/settings" aria-label="Account settings" onClick={(event) => {
+      <a className="sidebar-account-main" href="/settings" aria-label={session.user.mfaVerified ? "Account settings" : "Set up or verify MFA"} onClick={(event) => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
           return;
         }
         event.preventDefault();
         onSettings();
-      }} title={session.user.email}>
-        <UserRound size={18} aria-hidden="true" />
+      }} title={session.user.mfaVerified ? "MFA verified · Account settings" : "MFA not verified · Set up or verify MFA"}>
+        {session.user.mfaVerified ? (
+          <ShieldCheck className="sidebar-account-status" data-verified="true" size={20} role="img" aria-label="MFA verified" />
+        ) : (
+          <CircleAlert className="sidebar-account-status" size={20} role="img" aria-label="MFA not verified" />
+        )}
         <span>
           <strong>{session.user.email}</strong>
           <small>{session.user.roles.join(" · ") || "user"}</small>
-          <Badge variant="secondary" className="sidebar-account-status" data-verified={session.user.mfaVerified}>
-            {session.user.mfaVerified && <Check aria-hidden="true" />}
-            {session.user.mfaVerified ? "MFA verified" : "MFA pending"}
-          </Badge>
+          {!session.user.mfaVerified && <small className="sidebar-account-warning">MFA unverified</small>}
         </span>
       </a>
       <IconButton label="Sign out" onClick={() => void onLogout()}>
