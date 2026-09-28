@@ -62,6 +62,7 @@ export type LibraryClient = ReturnType<typeof createLibraryClient>;
 export function libraryError(error: unknown): string {
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
   const messages: Record<string, string> = {
+    LIBRARY_SELF_REVIEW_UNSUPPORTED: "Team imports require instance review before adoption.",
     PRIVATE_SELF_REVIEW_DISABLED: "Private self-review is disabled. Ask an instance reviewer to review this import.",
     PRIVATE_SELF_REVIEW_SCOPE_INVALID: "Private self-review requires your own private import with no sharing grants.",
     PRIVATE_SELF_REVIEW_SCAN_NOT_CLEAN: "This import needs an instance reviewer because its scan is not clean.",

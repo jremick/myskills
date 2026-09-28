@@ -573,7 +573,7 @@ test("library first-release journey: import, self-review, curation, tracking and
   // F22: a self-reviewed release cannot enter a team library.
   const teamLibrary = expectOk(await call("POST", "/v1/libraries", alice, { name: "Platform picks", owner: { type: "team", id: ids.team } }), 201).library;
   assert.equal(teamLibrary.access.role, "curator");
-  assert.equal(teamLibrary.access.canImport, false);
+  assert.equal(teamLibrary.access.canImport, true);
   expectError(await call("POST", `/v1/libraries/${teamLibrary.id}/entries`, alice, { kind: "skill", slug: cePlanSlug }), 422, "LIBRARY_RELEASE_NOT_AUTHORIZED");
   record("F22", { status: 422 });
 
@@ -1337,7 +1337,7 @@ test("library remediation journey: per-entry identity, tracking dedup, leases, s
   // for a write that stalled past it; nothing sleeps.
   const takeOver = async (): Promise<string> => {
     await pool.query("UPDATE library_entries SET lease_expires_at = $2 WHERE id = $1", [fenceId, new Date(nowMs - 1).toISOString()]);
-    const winner = await libraryStore.acquireLease({ entryId: fenceId, now: new Date(nowMs), leaseMs: 120_000 });
+    const winner = await libraryStore.acquireLease({ entryId: fenceId, actorId: users.alice, now: new Date(nowMs), leaseMs: 120_000 });
     assert.ok(winner, "the second worker must claim the expired lease");
     return winner;
   };

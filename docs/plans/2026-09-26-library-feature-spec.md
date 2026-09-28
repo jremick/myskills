@@ -2,6 +2,8 @@
 
 Status: first-release implementation authorized on 2026-09-26. The user approved strictly private import self-review with an administrator enable/disable switch. Release scope is phases 1A–1C; later phases remain specified but are not part of this release.
 
+Extension approved on 2026-09-29: [team-owned public-source imports and tracking](2026-09-29-team-library-sources.md). That bounded plan supersedes the first-release personal-only sourcing restriction. Organization-owned Libraries, private GitHub authentication, ownership transfers, and unattended updates remain outside the extension.
+
 Date: 2026-09-26. Authors: Codex, with a requested Claude Opus design and review pass. Repository baseline: GitHub `main` at `7a0fc44e6a1cabaabfdcf494c3cc96db4cf7d3cc`. Implementation evidence is source-level; this investigation did not test production behavior.
 
 ## 1. Product decision

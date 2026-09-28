@@ -725,7 +725,9 @@ async function fixture(t: test.TestContext, teamOwned = false, skillSlug = "rele
   scoped.searchParams.set("options", `-csearch_path=${schema},public`);
   const pool = createPgPool(scoped.toString());
   t.after(async () => { await pool.end(); await admin.query(`DROP SCHEMA ${schema} CASCADE`); await admin.end(); });
-  for (const name of readdirSync(migrationDirectory).filter((name) => name.endsWith(".sql") && name <= "0025_target_operation_safety.sql").sort()) await pool.query(readFileSync(`${migrationDirectory}/${name}`, "utf8"));
+  // These service journeys use the current registry stores, so provision the
+  // current schema rather than a historical target-operation migration cutoff.
+  for (const name of readdirSync(migrationDirectory).filter((name) => name.endsWith(".sql")).sort()) await pool.query(readFileSync(`${migrationDirectory}/${name}`, "utf8"));
   await pool.query("INSERT INTO users (id, email, normalized_email, name, status, email_verified_at) VALUES ($1, 'owner@example.test', 'owner@example.test', 'Owner', 'active', $3), ($2, 'member@example.test', 'member@example.test', 'Member', 'active', $3)", [owner, member, now]);
   if (teamOwned) {
     await pool.query("INSERT INTO teams (id, slug, name, created_by_user_id) VALUES ($1, 'test-team', 'Team', $2)", [team, owner]);

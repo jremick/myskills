@@ -297,7 +297,7 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
   }
 
   async updateTracking(actor: LibraryActor, entryId: string, input: { expectedRevision: number; mode: LibraryTrackingMode; acknowledgeIdentityChange: boolean }) {
-    const { entry } = await this.personalSourceEntry(entryId, actor);
+    const { entry } = await this.sourceEntry(entryId, actor);
     const now = this.clock();
     await this.store.updateTracking({
       entryId: entry.id,
@@ -313,18 +313,20 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
   // ---- Discovery, preview, import ----------------------------------------
 
   async discover(actor: LibraryActor, entryId: string): Promise<{ discovery: SourceDiscovery }> {
-    const { entry } = await this.personalSourceEntry(entryId, actor);
+    const { entry, library } = await this.sourceEntry(entryId, actor);
     const context = this.requestContext();
     const source = await this.requireSource(entry);
-    const repository = await this.currentRepository(entry, source, context);
+    const repository = await this.currentRepository(entry, source, context, actor.id);
     const resolved = await this.provider.resolveRef(repository, entryRef(entry), context);
     const lastGood = await this.store.getSnapshot(entry.lastGoodSnapshotId);
     const snapshot = lastGood && lastGood.complete && lastGood.commitSha === resolved.commitSha
       ? lastGood
-      : await this.captureSnapshot(entry, source, repository, resolved, lastGood, context, { setLastGood: lastGood === null });
+      : await this.captureSnapshot(entry, source, repository, resolved, lastGood, context, { setLastGood: lastGood === null, actorId: actor.id });
+    // Provider I/O may outlive membership; recheck before returning private lineage metadata.
+    await this.store.assertEntryWriter(entry.id, actor.id);
     const discovered = discoverSkillRoots(snapshot.inventory, entry.sourcePath);
     const describe = async (root: ReturnType<typeof discoverSkillRoots>["skills"][number], excluded: boolean) => {
-      const lineage = await this.store.findLineage({ ownerUserId: actor.id, sourceId: source.id, sourcePath: root.path, refKind: entryRef(entry).kind, refValue: entry.refValue });
+      const lineage = await this.store.findLineage({ ownerUserId: library.ownerUserId, ownerTeamId: library.ownerTeamId, sourceId: source.id, sourcePath: root.path, refKind: entryRef(entry).kind, refValue: entry.refValue });
       return {
         path: root.path,
         directoryName: root.directoryName,
@@ -347,7 +349,7 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
   }
 
   async preview(actor: LibraryActor, entryId: string, input: { snapshotId: string; paths: string[]; mappings: Record<string, MappingOverrides> }) {
-    const { entry } = await this.personalSourceEntry(entryId, actor);
+    const { entry, library } = await this.sourceEntry(entryId, actor);
     const snapshot = await this.store.getSnapshot(input.snapshotId);
     if (!snapshot || snapshot.entryId !== entry.id) throw new AppError("Snapshot not found.", "SNAPSHOT_NOT_FOUND", 404);
     if (!snapshot.complete) throw new AppError("The snapshot inventory is incomplete; nothing can be imported from it.", "INVENTORY_INCOMPLETE", 422);
@@ -359,15 +361,15 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
     if (unknownMapping !== undefined) throw new AppError("Mappings must name selected paths.", "LIBRARY_PREVIEW_SELECTION_INVALID", 400);
     const source = await this.requireSource(entry);
     const context = this.requestContext();
-    const repository = await this.currentRepository(entry, source, context);
+    const repository = await this.currentRepository(entry, source, context, actor.id);
     const previewId = randomUUID();
     const candidates: LibraryCandidate[] = [];
     const orderCache = new Map<string, SnapshotRecord["orderStatus"]>();
     for (const path of paths) {
-      const lineage = await this.reserveLineage(actor.id, entry, source, path);
+      const lineage = await this.reserveLineage(library, actor.id, entry, source, path);
       const requested = input.mappings[path] ?? {};
       const overrides: MappingOverrides = Object.keys(requested).length > 0 ? requested : lineage.mappingOverrides;
-      const { candidate } = await this.buildCandidate({ origin: "preview", previewId, lineage, entry, source, repository, snapshot, overrides, context, ttlMs: PREVIEW_TTL_MS, orderCache });
+      const { candidate } = await this.buildCandidate({ origin: "preview", previewId, lineage, entry, source, repository, snapshot, overrides, context, ttlMs: PREVIEW_TTL_MS, orderCache, actorId: actor.id });
       candidates.push(await this.toCandidate(candidate, source, false));
     }
     return {
@@ -381,7 +383,7 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
   }
 
   async listCandidates(actor: LibraryActor, entryId: string, query: { state?: LibraryCandidate["state"]; limit: number; cursor: PageCursor | null }) {
-    const { entry } = await this.personalSourceEntry(entryId, actor);
+    const { entry } = await this.sourceEntry(entryId, actor);
     const source = await this.requireSource(entry);
     const rows = await this.store.listCandidates(entry.id, query);
     const page = rows.slice(0, query.limit);
@@ -396,7 +398,8 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
   }
 
   async ignoreCandidate(actor: LibraryActor, candidateId: string) {
-    const { candidate, source } = await this.ownedCandidate(candidateId, actor);
+    const { candidate, source, access } = await this.ownedCandidate(candidateId, actor);
+    requireWrite(access, actor);
     if (!await this.store.transitionCandidate({ id: candidate.id, from: ["ready-for-review", "blocked"], to: "ignored", actorId: actor.id, purgeFiles: true })) {
       throw new AppError("Only a pending candidate can be ignored.", "CANDIDATE_NOT_IMPORTABLE", 409);
     }
@@ -409,7 +412,9 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
     acknowledgeUnverifiedOrder: { reason: string } | null;
     clientMutationId: string | null;
   }) {
-    const { candidate, library, source } = await this.ownedCandidate(candidateId, actor);
+    const { candidate, library, source, access } = await this.ownedCandidate(candidateId, actor);
+    requireWrite(access, actor);
+    if (!canImport(actor)) throw new AppError("Submission requires author permissions.", "SUBMISSION_ROLE_REQUIRED", 403);
     const snapshot = await this.requireSnapshot(candidate.snapshotId);
     if (input.release === undefined || input.release === null) {
       throw new AppError("Import release metadata is required. Use { classification: \"unclassified\" } or a reviewed classification.", "IMPORT_RELEASE_METADATA_REQUIRED", 400);
@@ -451,7 +456,7 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
     const { classification, ...metadata } = release.value;
     let skillEntryId: string | null = null;
     const submission = await this.submissions.createSubmission({
-      actor: { id: actor.id, roles: actor.roles },
+      actor: { id: actor.id, roles: actor.roles, mfaVerified: actor.mfaVerified },
       manifest,
       files: candidate.files.map((file) => ({ path: file.path, content: file.content })),
       release: metadata,
@@ -477,7 +482,8 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
   }
 
   async selfReview(actor: LibraryActor, candidateId: string, input: { artifactSha256: string; reason?: string }) {
-    const { candidate, source } = await this.ownedCandidate(candidateId, actor);
+    const { candidate, source, library } = await this.ownedCandidate(candidateId, actor);
+    if (library.ownerTeamId) throw new AppError("Team imports require instance review.", "LIBRARY_SELF_REVIEW_UNSUPPORTED", 409);
     requireMfa(actor);
     if (candidate.state !== "accepted" || !candidate.submissionId) {
       throw new AppError("Import the candidate before reviewing it.", "SUBMISSION_NOT_REVIEWABLE", 409);
@@ -504,7 +510,8 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
   }
 
   async requestInstanceReview(actor: LibraryActor, candidateId: string) {
-    const { candidate } = await this.ownedCandidate(candidateId, actor);
+    const { candidate, library } = await this.ownedCandidate(candidateId, actor);
+    if (library.ownerTeamId) throw new AppError("Team imports use the instance review queue.", "LIBRARY_SELF_REVIEW_UNSUPPORTED", 409);
     if (candidate.state !== "accepted" || !candidate.submissionId) {
       throw new AppError("Only an imported, self-reviewed release can request instance review.", "SELF_REVIEW_ELEVATION_NOT_APPLICABLE", 409);
     }
@@ -740,8 +747,8 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
   // ---- Tracking -----------------------------------------------------------
 
   async checkNow(actor: LibraryActor, entryId: string): Promise<{ check: SourceCheckResult }> {
-    const { entry } = await this.personalSourceEntry(entryId, actor);
-    const leaseId = await this.store.acquireLease({ entryId: entry.id, now: this.clock(), leaseMs: CHECK_LEASE_MS });
+    const { entry } = await this.sourceEntry(entryId, actor);
+    const leaseId = await this.store.acquireLease({ entryId: entry.id, actorId: actor.id, now: this.clock(), leaseMs: CHECK_LEASE_MS });
     if (!leaseId) throw new AppError("A check for this source is already running.", "SOURCE_CHECK_IN_PROGRESS", 409);
     return { check: await this.runCheck(entry.id, leaseId) };
   }
@@ -769,7 +776,7 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
     const now = this.clock();
     const entry = await this.store.getEntry(entryId);
     const library = entry ? await this.store.getLibrary(entry.libraryId) : null;
-    if (!entry || entry.kind !== "source" || !library?.ownerUserId) {
+    if (!entry || entry.kind !== "source" || !library) {
       if (entry) await this.store.finishCheck({ entryId, leaseId, health: entry.health, lastErrorCode: entry.lastErrorCode, attemptCount: entry.attemptCount, nextCheckAt: null, succeededAt: null, lastGoodSnapshotId: null });
       return failedCheck(entry?.health ?? "unavailable", "tracking-unsupported", null, null);
     }
@@ -840,8 +847,19 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
         nextCheckAt: next?.toISOString() ?? null,
       };
     } catch (error) {
+      if (error instanceof AppError && error.code === "TRACKING_AUTHORITY_UNAVAILABLE") {
+        await this.store.pauseUnauthorizedTracking(entry.id, leaseId);
+        return failedCheck("paused", "tracking-authority-unavailable", null, null);
+      }
       if (error instanceof AppError && error.code === CHECK_LEASE_LOST) return leaseLost(entry);
-      return this.failCheck(library, entry, leaseId, error, now);
+      try { return await this.failCheck(library, entry, leaseId, error, now); }
+      catch (failure) {
+        if (failure instanceof AppError && failure.code === "TRACKING_AUTHORITY_UNAVAILABLE") {
+          await this.store.pauseUnauthorizedTracking(entry.id, leaseId);
+          return failedCheck("paused", "tracking-authority-unavailable", null, null);
+        }
+        throw failure;
+      }
     }
   }
 
@@ -874,7 +892,7 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
     resolved: ResolvedSourceRef,
     lastGood: SnapshotRecord | null,
     context: SourceRequestContext,
-    options: { setLastGood: boolean; lease?: CheckLease },
+    options: { setLastGood: boolean; lease?: CheckLease; actorId?: string },
   ): Promise<SnapshotRecord> {
     const identity = {
       entryId: entry.id,
@@ -888,7 +906,7 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
     // Retries and repeated discovery of the newest upstream state reuse its snapshot and cost no tree request.
     const reusable = await this.store.findReusableSnapshot(identity);
     if (reusable) {
-      if (options.setLastGood) await this.store.markLastGoodSnapshot(entry.id, reusable.id);
+      if (options.setLastGood) await this.store.markLastGoodSnapshot(entry.id, reusable.id, options.actorId);
       return reusable;
     }
     const tree = await this.provider.getTree(repository, resolved.treeSha, context);
@@ -905,6 +923,7 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
       observedAt: this.clock(),
       setLastGood: options.setLastGood,
       leaseId: options.lease?.leaseId ?? null,
+      actorId: options.actorId,
     });
   }
 
@@ -991,9 +1010,23 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
     for (const lineage of await this.store.lineagesForSourceEntry(entry.id)) {
       if (lineage.refKind !== entryRef(entry).kind || lineage.refValue !== entry.refValue) continue;
       const digest = computeSourceDigest(snapshot.inventory, lineage.sourcePath);
-      // Unrelated repository changes and already-proposed bytes (including ignored ones) create nothing.
-      // The skip is safe because a tracked candidate and its inbox item commit in one transaction.
-      if (!digest || digest === lineage.headSourceDigest || await this.store.hasProposedCandidateForSource(lineage.id, digest)) continue;
+      if (!digest || await this.store.hasProposedCandidateForSource(lineage.id, digest, entry.id)) continue;
+      if (digest === lineage.headSourceDigest) {
+        // Another Library may import before this Library's next scheduled check.
+        // Notify its curators about the canonical revision without creating another import.
+        if (library.ownerTeamId && lineage.revisionCounter > 0) {
+          const version = importRevisionVersion(lineage.revisionCounter);
+          const skillEntryId = await this.store.unadoptedLineageEntry(entry.id, lineage.id, version);
+          if (skillEntryId) {
+            const notified = await this.store.insertCheckEvents(entry.id, lease.leaseId, [{
+              libraryId: library.id, entryId: skillEntryId, candidateId: null, kind: "candidate-ready", audience: "curators",
+              semanticKey: `candidate-source:${entry.id}:${lineage.id}:${digest}`, version, path: lineage.sourcePath,
+            }]);
+            for (const kind of notified) if (!eventKinds.includes(kind)) eventKinds.push(kind);
+          }
+        }
+        continue;
+      }
       const { candidate, notified } = await this.buildCandidate({
         origin: "tracking",
         previewId: null,
@@ -1006,7 +1039,7 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
         context,
         ttlMs: TRACKING_TTL_MS,
         lease,
-        notify: { libraryId: library.id, semanticKey: `candidate-source:${lineage.id}:${digest}`, path: lineage.sourcePath },
+        notify: { libraryId: library.id, semanticKey: `candidate-source:${entry.id}:${lineage.id}:${digest}`, path: lineage.sourcePath },
         orderCache,
       });
       candidateIds.push(candidate.id);
@@ -1030,12 +1063,14 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
     lease?: CheckLease;
     notify?: CandidateNotification;
     orderCache?: Map<string, SnapshotRecord["orderStatus"]>;
+    actorId?: string;
   }): Promise<{ candidate: CandidateRecord; notified: LibraryEventKind | null }> {
     const ownership = await this.store.skillOwnership(input.lineage.slug);
-    const visibility = ownership?.visibility ?? "private";
+    const visibility = ownership?.visibility ?? (input.lineage.ownerTeamId ? "team" : "private");
     const profileDigest = importProfileDigest({ overrides: input.overrides, visibility });
     const existing = await this.store.findActiveCandidate(input.lineage.id, input.snapshot.id, profileDigest);
     if (existing) {
+      if (input.actorId) await this.store.assertEntryWriter(input.entry.id, input.actorId);
       // Tracking reaches this only when an owner preview of the same snapshot raced the check.
       // The check did not write that candidate; only its notification is a check write.
       const notified = input.lease && input.notify
@@ -1071,6 +1106,8 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
       sourceEntryId: input.entry.id,
       lineageId: input.lineage.id,
       ownerUserId: input.lineage.ownerUserId,
+      ownerTeamId: input.lineage.ownerTeamId,
+      actorId: input.actorId,
       snapshotId: input.snapshot.id,
       snapshotSequence: input.snapshot.sequence,
       snapshotObservedAt: input.snapshot.observedAt,
@@ -1113,7 +1150,7 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
         : { type: "team", id: library.ownerTeamId ?? "", name: library.ownerTeamName ?? "" },
       status: "active",
       revision: library.revision,
-      access: { role: access.role, canWrite: access.canWrite, canTrackSources: access.personal, canImport: access.personal },
+      access: { role: access.role, canWrite: access.canWrite, canTrackSources: access.canWrite, canImport: access.canWrite && canImport(actor) },
       subscription: await this.store.getSubscription(library.id, actor.id),
       createdAt: library.createdAt,
       updatedAt: library.updatedAt,
@@ -1185,7 +1222,9 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
         sourceEntryId: entry.sourceEntryId,
         sourcePath: lineage?.sourcePath ?? null,
         lineageId: entry.lineageId,
-        ownership: { type: "user", isCaller: ownership?.ownerUserId === actor.id },
+        ownership: ownership?.ownerTeamId
+          ? { type: "team", id: ownership.ownerTeamId, name: ownership.ownerTeamName ?? "", isCaller: false }
+          : { type: "user", isCaller: ownership?.ownerUserId === actor.id },
       },
       adoption: adoption ? toAdoption(adoption) : null,
     };
@@ -1304,12 +1343,9 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
     return result;
   }
 
-  private async personalSourceEntry(entryId: string, actor: LibraryActor) {
+  private async sourceEntry(entryId: string, actor: LibraryActor) {
     const result = await this.writableEntry(entryId, actor);
     if (result.entry.kind !== "source") throw new AppError("This action needs a source entry.", "INVALID_REQUEST_BODY", 400);
-    if (!result.access.personal) {
-      throw new AppError("Tracking, discovery and imports are available in personal libraries in this release.", "LIBRARY_TRACKING_UNSUPPORTED", 409);
-    }
     return result;
   }
 
@@ -1317,10 +1353,12 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
     const candidate = await this.store.getCandidate(candidateId);
     const entry = candidate ? await this.store.getEntry(candidate.sourceEntryId) : null;
     const library = entry ? await this.store.getLibrary(entry.libraryId) : null;
-    if (!candidate || candidate.ownerUserId !== actor.id || !entry || !library || library.ownerUserId !== actor.id) {
+    const access = library ? await this.libraryAccess(library, actor) : null;
+    if (!candidate || !entry || !library || !access?.canWrite
+      || candidate.ownerUserId !== library.ownerUserId || candidate.ownerTeamId !== library.ownerTeamId) {
       throw new AppError("Import candidate not found.", "LIBRARY_CANDIDATE_NOT_FOUND", 404);
     }
-    return { candidate, entry, library, source: await this.requireSource(entry) };
+    return { candidate, entry, library, access, source: await this.requireSource(entry) };
   }
 
   /**
@@ -1329,7 +1367,10 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
    */
   private async canReadSkillEntry(entry: EntryRecord, access: LibraryAccess, actor: Pick<LibraryActor, "id">): Promise<boolean> {
     if (!entry.skillSlug) return false;
-    if (access.canWrite && (await this.store.skillOwnership(entry.skillSlug))?.ownerUserId === actor.id) return true;
+    if (access.canWrite) {
+      const ownership = await this.store.skillOwnership(entry.skillSlug);
+      if (ownership?.ownerUserId === actor.id || (ownership?.ownerTeamId && await this.store.teamRole(ownership.ownerTeamId, actor.id) === "owner")) return true;
+    }
     if (entry.currentAdoptionId) {
       const adoption = await this.store.getAdoption(entry.currentAdoptionId);
       return Boolean(adoption && await this.submissions.getPublicRelease({ slug: entry.skillSlug, version: adoption.version, actorId: actor.id }));
@@ -1371,26 +1412,29 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
     return release && release.artifact.sha256 === row.adoption.artifactSha256 ? row.adoption.version : null;
   }
 
-  private async reserveLineage(ownerUserId: string, entry: EntryRecord, source: SourceRecord, path: string): Promise<LineageRecord> {
+  private async reserveLineage(library: LibraryRecord, actorId: string, entry: EntryRecord, source: SourceRecord, path: string): Promise<LineageRecord> {
     const ref = entryRef(entry);
     const directory = path ? posix.basename(path) : source.fullName.split("/")[1] ?? "skill";
     return this.store.reserveLineage({
-      ownerUserId,
+      ownerUserId: library.ownerUserId,
+      ownerTeamId: library.ownerTeamId,
+      actorId,
+      sourceEntryId: entry.id,
       sourceId: source.id,
       sourcePath: path,
       refKind: ref.kind,
       refValue: entry.refValue,
       // Informational only; an over-long native name blocks the candidate itself.
       nativeName: directory.slice(0, 200),
-      slugForAttempt: (attempt) => allocateImportedSkillSlug(directory, this.slugSuffix(`${ownerUserId}:github:${source.repositoryId}:${path}:${ref.kind}:${entry.refValue}:${attempt}`)),
+      slugForAttempt: (attempt) => allocateImportedSkillSlug(directory, this.slugSuffix(`${library.ownerUserId ?? `team:${library.ownerTeamId}`}:github:${source.repositoryId}:${path}:${ref.kind}:${entry.refValue}:${attempt}`)),
     });
   }
 
-  private async currentRepository(entry: EntryRecord, source: SourceRecord, context: SourceRequestContext): Promise<GithubRepositoryInfo> {
+  private async currentRepository(entry: EntryRecord, source: SourceRecord, context: SourceRequestContext, actorId: string): Promise<GithubRepositoryInfo> {
     const repository = await this.provider.getRepositoryById(source.repositoryId, context);
     if (repository.fullName.toLowerCase() !== source.fullName.toLowerCase()) {
       // Pending on this entry only, so its owner sees the review without waiting for a check.
-      await this.store.markIdentityChange(entry.id, null, repository);
+      await this.store.markIdentityChange(entry.id, null, repository, undefined, actorId);
       throw new AppError("The source repository was renamed or transferred. Review it before continuing.", "SOURCE_IDENTITY_CHANGED", 409);
     }
     await this.store.upsertSource(repository);
@@ -1445,6 +1489,10 @@ function requireAdmin(actor: LibraryActor): void {
 
 function requireMfa(actor: LibraryActor): void {
   if (!actor.mfaVerified) throw new AppError("MFA verification is required.", "MFA_VERIFICATION_REQUIRED", 403);
+}
+
+function canImport(actor: LibraryActor): boolean {
+  return actor.roles.some((role) => role === "owner" || role === "admin" || role === "maintainer" || role === "author");
 }
 
 function requireWrite(access: LibraryAccess, actor: LibraryActor): void {

@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { sql, type SQL } from "drizzle-orm";
 import {
   AppError,
+  LIBRARY_LIMITS,
   type LibraryAttestation,
   type LibraryCandidateFile,
   type LibraryCandidateMapping,
@@ -16,6 +17,7 @@ import {
   type SecurityStatus,
   type VisibilityScope,
 } from "@myskills-app/core";
+import { assertCurrentTeamOwner, effectiveTeamOwnerPredicate } from "../repositories/team-ownership.js";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type { Database, DatabaseTransaction } from "../db/client.js";
 import type { SubmissionImportBinding } from "../submissions/types.js";
@@ -100,7 +102,8 @@ export interface SnapshotRecord {
 
 export interface LineageRecord {
   id: string;
-  ownerUserId: string;
+  ownerUserId: string | null;
+  ownerTeamId: string | null;
   sourceId: string;
   sourcePath: string;
   refKind: LibrarySourceRefKind;
@@ -120,7 +123,8 @@ export interface CandidateRecord {
   sourceEntryId: string;
   skillEntryId: string | null;
   lineageId: string;
-  ownerUserId: string;
+  ownerUserId: string | null;
+  ownerTeamId: string | null;
   snapshotId: string;
   previewId: string | null;
   origin: "preview" | "tracking";
@@ -271,7 +275,7 @@ const LIBRARY_COLUMNS = sql`l.id, l.owner_user_id, l.owner_team_id, t.name AS ow
 const ENTRY_COLUMNS = sql`e.id, e.library_id, e.kind, e.revision, e.title, e.source_id, e.source_path, e.ref_kind, e.ref_value,
   e.acknowledged_full_name, e.pending_full_name, e.tracking_mode, e.health, e.next_check_at, e.last_attempt_at, e.last_successful_check_at, e.last_error_code, e.attempt_count,
   e.lease_id, e.last_good_snapshot_id, e.skill_slug, e.lineage_id, e.source_entry_id, e.current_adoption_id, e.bundle_id, e.bundle_revision_saved, e.created_at, e.updated_at`;
-const CANDIDATE_COLUMNS = sql`c.id, c.source_entry_id, c.skill_entry_id, c.lineage_id, c.owner_user_id, c.snapshot_id, c.preview_id,
+const CANDIDATE_COLUMNS = sql`c.id, c.source_entry_id, c.skill_entry_id, c.lineage_id, c.owner_user_id, c.owner_team_id, c.snapshot_id, c.preview_id,
   c.origin, c.state, c.source_path, c.native_name, c.profile_digest, c.expected_prior_revision, c.expected_version, c.order_status, c.source_digest,
   c.package_digest, c.files, c.file_digests, c.mapping, c.findings, c.changes, c.submission_id, c.order_acknowledgement,
   c.expires_at, c.decided_at, c.created_at`;
@@ -288,6 +292,9 @@ export function effectiveTeamRole(teamId: SQL, actorId: string): SQL {
     LEFT JOIN organization_memberships om
       ON om.organization_id = team.organization_id AND om.user_id = ${actorId}::uuid AND om.removed_at IS NULL
     WHERE tm.team_id = ${teamId} AND tm.user_id = ${actorId}::uuid
+      AND EXISTS (SELECT 1 FROM users WHERE id = tm.user_id AND status = 'active')
+      AND coalesce((SELECT value->>'teamsEnabled' FROM instance_settings WHERE key = 'sharing'), 'true') = 'true'
+      AND coalesce((SELECT value->>'teamVisibilityEnabled' FROM instance_settings WHERE key = 'sharing'), 'true') = 'true'
       AND (
         team.organization_id IS NULL
         OR (
@@ -343,6 +350,7 @@ export class PostgresLibraryStore {
     maxPerOwner: number;
   }): Promise<{ id: string; replayed: boolean }> {
     return this.db.transaction(async (tx) => {
+      if (input.ownerTeamId) await assertCurrentTeamOwner(tx, input.ownerTeamId, input.actorId);
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`library-create:${input.ownerUserId ?? input.ownerTeamId}`}, 0))`);
       if (input.clientMutationId) {
         const replay = await replayMutation(tx, sql`libraries`, input.actorId, input.clientMutationId, input.clientMutationDigest);
@@ -400,6 +408,7 @@ export class PostgresLibraryStore {
 
   async updateLibrary(input: { id: string; expectedRevision: number; name?: string; description?: string; actorId: string }): Promise<LibraryRecord> {
     await this.db.transaction(async (tx) => {
+      await assertLibraryWriter(tx, input.id, input.actorId);
       const current = await tx.execute<{ revision: number }>(sql`SELECT revision FROM libraries WHERE id = ${input.id}::uuid AND status = 'active' FOR UPDATE`);
       const revision = current.rows[0]?.revision;
       if (revision === undefined) throw notFound("LIBRARY_NOT_FOUND", "Library not found.");
@@ -420,6 +429,7 @@ export class PostgresLibraryStore {
 
   async deleteLibrary(input: { id: string; expectedRevision: number; actorId: string }): Promise<RemovalEffects> {
     return this.db.transaction(async (tx) => {
+      await assertLibraryWriter(tx, input.id, input.actorId);
       const current = await tx.execute<{ revision: number }>(sql`SELECT revision FROM libraries WHERE id = ${input.id}::uuid AND status = 'active' FOR UPDATE`);
       const revision = current.rows[0]?.revision;
       if (revision === undefined) throw notFound("LIBRARY_NOT_FOUND", "Library not found.");
@@ -484,6 +494,7 @@ export class PostgresLibraryStore {
     maxPerLibrary: number;
   }): Promise<{ id: string; replayed: boolean }> {
     return this.db.transaction(async (tx) => {
+      await assertLibraryWriter(tx, input.libraryId, input.actorId);
       const library = await tx.execute<{ id: string }>(sql`SELECT id FROM libraries WHERE id = ${input.libraryId}::uuid AND status = 'active' FOR UPDATE`);
       if (!library.rows[0]) throw notFound("LIBRARY_NOT_FOUND", "Library not found.");
       if (input.clientMutationId) {
@@ -512,6 +523,7 @@ export class PostgresLibraryStore {
         RETURNING id
       `);
       const id = inserted.rows[0]!.id;
+      await attachTeamLineages(tx, input.libraryId);
       await audit(tx, { actorUserId: input.actorId, action: "library.entry.create", resourceType: "library_entry", resourceId: id, details: { libraryId: input.libraryId, kind: input.kind } });
       return { id, replayed: false };
     });
@@ -537,6 +549,7 @@ export class PostgresLibraryStore {
 
   async removeEntry(entryId: string, actorId: string): Promise<RemovalEffects & { trackingStopped: boolean }> {
     return this.db.transaction(async (tx) => {
+      await assertEntryWriter(tx, entryId, actorId);
       const effects = await removeEntryInTransaction(tx, entryId, actorId);
       return { ...effects, entriesRemoved: 1, subscriptionsEnded: 0 };
     });
@@ -551,6 +564,7 @@ export class PostgresLibraryStore {
     actorId: string;
   }): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await assertEntryWriter(tx, input.entryId, input.actorId);
       const current = await tx.execute<{ revision: number; health: string; acknowledged_full_name: string | null; pending_full_name: string | null }>(sql`
         SELECT revision, health, acknowledged_full_name, pending_full_name FROM library_entries
         WHERE id = ${input.entryId}::uuid AND status = 'active' AND kind = 'source' FOR UPDATE
@@ -568,13 +582,14 @@ export class PostgresLibraryStore {
       }
       const health = pending && !input.acknowledgeIdentityChange ? "identity-change-review"
         : input.mode === "off" ? "not-tracked"
-          : row.health === "not-tracked" || row.health === "identity-change-review" ? "healthy" : row.health;
+          : row.health === "not-tracked" || row.health === "identity-change-review" || row.health === "paused" ? "healthy" : row.health;
       await tx.execute(sql`
         UPDATE library_entries SET tracking_mode = ${input.mode}, next_check_at = ${input.nextCheckAt ? input.nextCheckAt.toISOString() : null}::timestamptz,
           health = ${health}, attempt_count = 0,
           acknowledged_full_name = CASE WHEN ${input.acknowledgeIdentityChange}::boolean THEN pending_full_name ELSE acknowledged_full_name END,
           pending_full_name = CASE WHEN ${input.acknowledgeIdentityChange}::boolean THEN NULL ELSE pending_full_name END,
-          last_error_code = CASE WHEN ${input.acknowledgeIdentityChange}::boolean THEN NULL ELSE last_error_code END,
+          last_error_code = CASE WHEN ${input.acknowledgeIdentityChange}::boolean OR health = 'paused' THEN NULL ELSE last_error_code END,
+          lease_id = NULL, lease_expires_at = NULL,
           revision = revision + 1, updated_at = now()
         WHERE id = ${input.entryId}::uuid
       `);
@@ -599,8 +614,9 @@ export class PostgresLibraryStore {
    * by it and releases it, and the check's alert commits in the same
    * transaction; `marked` is false when the lease was lost.
    */
-  async markIdentityChange(entryId: string, leaseId: string | null, source: GithubRepositoryInfo, alert?: LibraryEventInput): Promise<{ marked: boolean; alerted: boolean }> {
+  async markIdentityChange(entryId: string, leaseId: string | null, source: GithubRepositoryInfo, alert?: LibraryEventInput, actorId?: string): Promise<{ marked: boolean; alerted: boolean }> {
     return this.db.transaction(async (tx) => {
+      if (actorId) await assertEntryWriter(tx, entryId, actorId);
       if (!await lockEntryForWrite(tx, entryId, leaseId)) return { marked: false, alerted: false };
       const updated = await tx.execute<{ source_id: string }>(sql`
         UPDATE library_entries SET health = 'identity-change-review', last_error_code = 'source-identity-changed',
@@ -643,8 +659,10 @@ export class PostgresLibraryStore {
     setLastGood: boolean;
     /** A check's lease; the snapshot commits only while it is held. Discovery passes none. */
     leaseId?: string | null;
+    actorId?: string;
   }): Promise<SnapshotRecord> {
     return this.db.transaction(async (tx) => {
+      if (input.actorId) await assertEntryWriter(tx, input.entryId, input.actorId);
       if (!await lockEntryForWrite(tx, input.entryId, input.leaseId ?? null)) {
         throw input.leaseId ? leaseLostError() : notFound("LIBRARY_ENTRY_NOT_FOUND", "Library entry not found.");
       }
@@ -679,11 +697,14 @@ export class PostgresLibraryStore {
     return selectReusableSnapshot(this.db, input);
   }
 
-  async markLastGoodSnapshot(entryId: string, snapshotId: string): Promise<void> {
-    await this.db.execute(sql`
-      UPDATE library_entries SET last_good_snapshot_id = ${snapshotId}::uuid, updated_at = now()
-      WHERE id = ${entryId}::uuid AND last_good_snapshot_id IS NULL
-    `);
+  async markLastGoodSnapshot(entryId: string, snapshotId: string, actorId?: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      if (actorId) await assertEntryWriter(tx, entryId, actorId);
+      await tx.execute(sql`
+        UPDATE library_entries SET last_good_snapshot_id = ${snapshotId}::uuid, updated_at = now()
+        WHERE id = ${entryId}::uuid AND last_good_snapshot_id IS NULL
+      `);
+    });
   }
 
   async getSnapshot(id: string | null): Promise<SnapshotRecord | null> {
@@ -698,10 +719,10 @@ export class PostgresLibraryStore {
 
   // ---- Lineages -----------------------------------------------------------
 
-  async findLineage(input: { ownerUserId: string; sourceId: string; sourcePath: string; refKind: LibrarySourceRefKind; refValue: string }): Promise<LineageRecord | null> {
+  async findLineage(input: { ownerUserId: string | null; ownerTeamId: string | null; sourceId: string; sourcePath: string; refKind: LibrarySourceRefKind; refValue: string }): Promise<LineageRecord | null> {
     const result = await this.db.execute<Row>(sql`
       SELECT * FROM library_import_lineages
-      WHERE owner_user_id = ${input.ownerUserId}::uuid AND source_id = ${input.sourceId}::uuid AND source_path = ${input.sourcePath}
+      WHERE (owner_user_id = ${input.ownerUserId}::uuid OR owner_team_id = ${input.ownerTeamId}::uuid) AND source_id = ${input.sourceId}::uuid AND source_path = ${input.sourcePath}
         AND ref_kind = ${input.refKind} AND ref_value = ${input.refValue}
     `);
     return result.rows[0] ? lineageRecord(result.rows[0]) : null;
@@ -719,28 +740,33 @@ export class PostgresLibraryStore {
    * with a new suffix and disclose nothing about the other owner.
    */
   async reserveLineage(input: {
-    ownerUserId: string;
+    ownerUserId: string | null;
+    ownerTeamId: string | null;
     sourceId: string;
     sourcePath: string;
     refKind: LibrarySourceRefKind;
     refValue: string;
     nativeName: string | null;
     slugForAttempt: (attempt: number) => string;
+    actorId: string;
+    sourceEntryId: string;
   }): Promise<LineageRecord> {
     const existing = await this.findLineage(input);
     if (existing) return existing;
     for (let attempt = 0; attempt < 6; attempt += 1) {
       const slug = input.slugForAttempt(attempt);
       const reserved = await this.db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT key FROM instance_settings WHERE key = 'sharing' FOR SHARE`);
         await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`submission:${slug}`}, 0))`);
+        await assertEntryWriter(tx, input.sourceEntryId, input.actorId);
         const taken = await tx.execute<{ taken: boolean }>(sql`
           SELECT EXISTS (SELECT 1 FROM skills WHERE slug = ${slug}) OR EXISTS (SELECT 1 FROM library_import_lineages WHERE slug = ${slug}) AS taken
         `);
         if (taken.rows[0]?.taken) return null;
         const inserted = await tx.execute<Row>(sql`
-          INSERT INTO library_import_lineages (owner_user_id, source_id, source_path, ref_kind, ref_value, native_name, slug)
-          VALUES (${input.ownerUserId}::uuid, ${input.sourceId}::uuid, ${input.sourcePath}, ${input.refKind}, ${input.refValue}, ${input.nativeName}, ${slug})
-          ON CONFLICT ON CONSTRAINT library_import_lineages_identity_unique DO NOTHING
+          INSERT INTO library_import_lineages (owner_user_id, owner_team_id, source_id, source_path, ref_kind, ref_value, native_name, slug)
+          VALUES (${input.ownerUserId}::uuid, ${input.ownerTeamId}::uuid, ${input.sourceId}::uuid, ${input.sourcePath}, ${input.refKind}, ${input.refValue}, ${input.nativeName}, ${slug})
+          ON CONFLICT DO NOTHING
           RETURNING *
         `);
         return inserted.rows[0] ? lineageRecord(inserted.rows[0]) : "raced" as const;
@@ -766,10 +792,27 @@ export class PostgresLibraryStore {
     return result.rows.map(lineageRecord);
   }
 
-  async skillOwnership(slug: string): Promise<{ ownerUserId: string | null; visibility: VisibilityScope } | null> {
-    const result = await this.db.execute<{ owner_user_id: string | null; visibility: string }>(sql`SELECT owner_user_id, visibility::text AS visibility FROM skills WHERE slug = ${slug}`);
+  async unadoptedLineageEntry(sourceEntryId: string, lineageId: string, version: string): Promise<string | null> {
+    const result = await this.db.execute<{ id: string }>(sql`
+      SELECT e.id FROM library_entries e LEFT JOIN library_adoptions a ON a.id = e.current_adoption_id
+      WHERE e.source_entry_id = ${sourceEntryId}::uuid AND e.lineage_id = ${lineageId}::uuid
+        AND e.kind = 'skill' AND e.status = 'active' AND a.version IS DISTINCT FROM ${version}::text
+      LIMIT 1
+    `);
+    return result.rows[0]?.id ?? null;
+  }
+
+  async skillOwnership(slug: string): Promise<{ ownerUserId: string | null; ownerTeamId: string | null; ownerTeamName: string | null; visibility: VisibilityScope } | null> {
+    const result = await this.db.execute<{ owner_user_id: string | null; owner_team_id: string | null; owner_team_name: string | null; visibility: string }>(sql`
+      SELECT s.owner_user_id, s.owner_team_id, t.name AS owner_team_name, s.visibility::text AS visibility
+      FROM skills s LEFT JOIN teams t ON t.id = s.owner_team_id WHERE s.slug = ${slug}
+    `);
     const row = result.rows[0];
-    return row ? { ownerUserId: row.owner_user_id, visibility: row.visibility as VisibilityScope } : null;
+    return row ? { ownerUserId: row.owner_user_id, ownerTeamId: row.owner_team_id, ownerTeamName: row.owner_team_name, visibility: row.visibility as VisibilityScope } : null;
+  }
+
+  async assertEntryWriter(entryId: string, actorId: string): Promise<void> {
+    await this.db.transaction(async (tx) => { await assertEntryWriter(tx, entryId, actorId); });
   }
 
   // ---- Candidates ---------------------------------------------------------
@@ -777,7 +820,8 @@ export class PostgresLibraryStore {
   async insertCandidate(input: {
     sourceEntryId: string;
     lineageId: string;
-    ownerUserId: string;
+    ownerUserId: string | null;
+    ownerTeamId: string | null;
     snapshotId: string;
     snapshotSequence: number;
     snapshotObservedAt: string;
@@ -802,9 +846,11 @@ export class PostgresLibraryStore {
     /** A tracking check's lease; the candidate and its notification commit only while it is held. */
     leaseId?: string | null;
     notify?: CandidateNotification | null;
+    actorId?: string;
   }): Promise<{ candidate: CandidateRecord; created: boolean; notified: LibraryEventKind | null }> {
     return this.db.transaction(async (tx) => {
-      // Tracking locks the source entry before the lineage and candidates, as entry removal does. Previews take no entry lock.
+      if (input.actorId) await assertEntryWriter(tx, input.sourceEntryId, input.actorId);
+      // Source authority and lease remain locked until held bytes and inbox events commit.
       if (input.leaseId && !await lockEntryForWrite(tx, input.sourceEntryId, input.leaseId)) throw leaseLostError();
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`library-lineage:${input.lineageId}`}, 0))`);
       const existing = await tx.execute<Row>(sql`
@@ -817,10 +863,10 @@ export class PostgresLibraryStore {
         return { candidate, created: false, notified: await notifyCandidate(tx, candidate, input.notify ?? null) };
       }
       const inserted = await tx.execute<Row>(sql`
-        INSERT INTO library_import_candidates (source_entry_id, lineage_id, owner_user_id, snapshot_id, snapshot_sequence, preview_id, origin, state,
+        INSERT INTO library_import_candidates (source_entry_id, lineage_id, owner_user_id, owner_team_id, snapshot_id, snapshot_sequence, preview_id, origin, state,
           source_path, native_name, profile_digest, expected_prior_revision, expected_version, order_status, source_digest, package_digest,
           files, file_digests, mapping, findings, changes, expires_at)
-        VALUES (${input.sourceEntryId}::uuid, ${input.lineageId}::uuid, ${input.ownerUserId}::uuid, ${input.snapshotId}::uuid,
+        VALUES (${input.sourceEntryId}::uuid, ${input.lineageId}::uuid, ${input.ownerUserId}::uuid, ${input.ownerTeamId}::uuid, ${input.snapshotId}::uuid,
           ${input.snapshotSequence}, ${input.previewId}::uuid, ${input.origin}, ${input.state}, ${input.sourcePath}, ${input.nativeName},
           ${input.profileDigest}, ${input.expectedPriorRevision}, ${input.expectedVersion}, ${input.orderStatus}, ${input.sourceDigest}, ${input.packageDigest},
           ${input.files ? JSON.stringify(input.files) : null}::jsonb, ${JSON.stringify(input.fileDigests)}::jsonb,
@@ -833,7 +879,7 @@ export class PostgresLibraryStore {
         await tx.execute(sql`
           UPDATE library_import_candidates c SET state = 'superseded', files = NULL, updated_at = now()
           FROM library_source_snapshots s
-          WHERE s.id = c.snapshot_id AND c.lineage_id = ${input.lineageId}::uuid AND c.id <> ${id}::uuid
+          WHERE s.id = c.snapshot_id AND c.lineage_id = ${input.lineageId}::uuid AND c.source_entry_id = ${input.sourceEntryId}::uuid AND c.id <> ${id}::uuid
             AND c.state IN ('ready-for-review', 'blocked') AND s.observed_at < ${input.snapshotObservedAt}::timestamptz
         `);
       }
@@ -869,19 +915,25 @@ export class PostgresLibraryStore {
     return result.rows.map((row) => ({ ...candidateRecord(row), cursorAt: String(row.cursor_at) }));
   }
 
-  /** Tracking proposes given bytes once per lineage: pending, accepted and ignored candidates all count. */
-  async hasProposedCandidateForSource(lineageId: string, sourceDigest: string): Promise<boolean> {
+  /** Each source entry proposes given lineage bytes once; pending, accepted and ignored candidates all count. */
+  async hasProposedCandidateForSource(lineageId: string, sourceDigest: string, sourceEntryId: string): Promise<boolean> {
     const result = await this.db.execute<{ present: boolean }>(sql`
       SELECT EXISTS (
         SELECT 1 FROM library_import_candidates
-        WHERE lineage_id = ${lineageId}::uuid AND source_digest = ${sourceDigest} AND state IN ('ready-for-review', 'blocked', 'accepted', 'ignored')
+        WHERE lineage_id = ${lineageId}::uuid AND source_entry_id = ${sourceEntryId}::uuid AND source_digest = ${sourceDigest} AND state IN ('ready-for-review', 'blocked', 'accepted', 'ignored')
       ) AS present
     `);
     return result.rows[0]?.present === true;
   }
 
   async transitionCandidate(input: { id: string; from: LibraryCandidateState[]; to: LibraryCandidateState; actorId: string | null; purgeFiles: boolean }): Promise<boolean> {
-    const result = await this.db.execute<{ id: string }>(sql`
+    return this.db.transaction(async (tx) => {
+      if (input.actorId) {
+        const row = (await tx.execute<{ source_entry_id: string }>(sql`SELECT source_entry_id FROM library_import_candidates WHERE id = ${input.id}::uuid`)).rows[0];
+        if (!row) return false;
+        await assertEntryWriter(tx, row.source_entry_id, input.actorId);
+      }
+      const result = await tx.execute<{ id: string }>(sql`
       UPDATE library_import_candidates SET state = ${input.to},
         files = CASE WHEN ${input.purgeFiles} THEN NULL ELSE files END,
         decided_by_user_id = coalesce(${input.actorId}::uuid, decided_by_user_id),
@@ -890,7 +942,8 @@ export class PostgresLibraryStore {
       WHERE id = ${input.id}::uuid AND state IN (SELECT jsonb_array_elements_text(${JSON.stringify(input.from)}::jsonb))
       RETURNING id
     `);
-    return result.rows.length > 0;
+      return result.rows.length > 0;
+    });
   }
 
   /**
@@ -913,11 +966,20 @@ export class PostgresLibraryStore {
   }): SubmissionImportBinding {
     const candidate = input.candidate;
     return {
+      owner: candidate.ownerTeamId ? { type: "team", id: candidate.ownerTeamId } : { type: "user", id: candidate.ownerUserId! },
       beforeVersionInsert: async (tx, context) => {
-        const lineage = (await tx.execute<{ owner_user_id: string; slug: string; revision_counter: number; head_observed_at: unknown }>(sql`
-          SELECT owner_user_id, slug, revision_counter, head_observed_at FROM library_import_lineages WHERE id = ${candidate.lineageId}::uuid FOR UPDATE
+        await assertEntryWriter(tx, candidate.sourceEntryId, input.actorId);
+        const capacity = (await tx.execute<{ count: number; saved: boolean }>(sql`
+          SELECT count(*)::int AS count, coalesce(bool_or(kind = 'skill' AND skill_slug = ${candidate.mapping.slug}), false) AS saved
+          FROM library_entries WHERE library_id = ${input.libraryId}::uuid AND status = 'active'
+        `)).rows[0]!;
+        if (!capacity.saved && capacity.count >= LIBRARY_LIMITS.maxEntriesPerLibrary) {
+          throw new AppError("The library has reached its entry limit.", "LIBRARY_LIMIT_EXCEEDED", 422, { limit: LIBRARY_LIMITS.maxEntriesPerLibrary });
+        }
+        const lineage = (await tx.execute<{ owner_user_id: string | null; owner_team_id: string | null; slug: string; revision_counter: number; head_observed_at: unknown }>(sql`
+          SELECT owner_user_id, owner_team_id, slug, revision_counter, head_observed_at FROM library_import_lineages WHERE id = ${candidate.lineageId}::uuid FOR UPDATE
         `)).rows[0];
-        if (!lineage || lineage.owner_user_id !== input.actorId) throw notFound("LIBRARY_CANDIDATE_NOT_FOUND", "Import candidate not found.");
+        if (!lineage || lineage.owner_user_id !== candidate.ownerUserId || lineage.owner_team_id !== candidate.ownerTeamId) throw notFound("LIBRARY_CANDIDATE_NOT_FOUND", "Import candidate not found.");
         if (lineage.slug !== candidate.mapping.slug) throw new AppError("The import slug no longer matches its lineage.", "SLUG_CONFLICT", 409);
         if (lineage.revision_counter !== candidate.expectedPriorRevision
           || (lineage.head_observed_at && Date.parse(input.snapshot.observedAt) < Date.parse(iso(lineage.head_observed_at)))) {
@@ -926,7 +988,7 @@ export class PostgresLibraryStore {
         // Never attach a first import to an existing registry skill; later
         // revisions must continue the lineage owner's own skill.
         if ((lineage.revision_counter === 0 && context.skillId !== null)
-          || (lineage.revision_counter > 0 && context.skillOwnerUserId !== input.actorId)) {
+          || (lineage.revision_counter > 0 && (context.skillOwnerUserId !== candidate.ownerUserId || context.skillOwnerTeamId !== candidate.ownerTeamId))) {
           throw new AppError("The import slug is unavailable.", "SLUG_CONFLICT", 409);
         }
         const state = (await tx.execute<{ state: string; package_digest: string | null; expires_at: unknown; held: boolean; entry_status: string; library_status: string }>(sql`
@@ -949,11 +1011,11 @@ export class PostgresLibraryStore {
         }
         const provenance = candidate.mapping.provenance;
         await tx.execute(sql`
-          INSERT INTO skill_release_provenance (skill_version_id, lineage_id, candidate_id, owner_user_id, imported_by_user_id, provider,
+          INSERT INTO skill_release_provenance (skill_version_id, lineage_id, candidate_id, owner_user_id, owner_team_id, imported_by_user_id, provider,
             repository_id, repository_full_name, repository_url, ref_kind, ref_value, upstream_label, release_id, commit_sha, tree_sha,
             source_path, native_name, source_digest, package_digest, files, notices, transforms, importer_version, import_profile_digest,
             release_classification, order_acknowledgement, retrieved_at)
-          VALUES (${context.versionId}::uuid, ${candidate.lineageId}::uuid, ${candidate.id}::uuid, ${input.actorId}::uuid, ${input.actorId}::uuid,
+          VALUES (${context.versionId}::uuid, ${candidate.lineageId}::uuid, ${candidate.id}::uuid, ${candidate.ownerUserId}::uuid, ${candidate.ownerTeamId}::uuid, ${input.actorId}::uuid,
             'github', ${input.source.repositoryId}, ${input.source.fullName}, ${input.source.htmlUrl}, ${input.snapshot.refKind},
             ${input.snapshot.refValue}, ${input.snapshot.upstreamLabel}, ${input.snapshot.releaseId}, ${input.snapshot.commitSha},
             ${input.snapshot.treeSha}, ${candidate.sourcePath}, ${candidate.nativeName}, ${candidate.sourceDigest}, ${context.artifactSha256},
@@ -1065,8 +1127,8 @@ export class PostgresLibraryStore {
   }
 
   /** Release (or the skill's default release) visible to a team through public/authenticated scope or an explicit team grant. */
-  async releaseVisibleToTeam(input: { slug: string; version: string | null; teamId: string; publicEnabled: boolean; authenticatedEnabled: boolean; teamEnabled: boolean }): Promise<boolean> {
-    const result = await this.db.execute<{ visible: boolean }>(sql`
+  async releaseVisibleToTeam(input: { slug: string; version: string | null; teamId: string; publicEnabled: boolean; authenticatedEnabled: boolean; teamEnabled: boolean }, db: Db = this.db): Promise<boolean> {
+    const result = await db.execute<{ visible: boolean }>(sql`
       SELECT EXISTS (
         SELECT 1 FROM skills s JOIN skill_versions v ON v.skill_id = s.id
         WHERE s.slug = ${input.slug} AND (${input.version}::text IS NULL OR v.version = ${input.version})
@@ -1096,50 +1158,53 @@ export class PostgresLibraryStore {
     reason: string;
   }): Promise<AdoptionRecord> {
     return this.db.transaction(async (tx) => {
-      // Keep the library-before-entry order used by deletion. Authority stays
-      // locked until the adoption, event and audit have committed together.
+      // Shared order: settings, skill/release, team authority, library, entry.
+      // Locks and live authorization outlast adoption, audit and event insertion.
+      const setting = (await tx.execute<{ value: Record<string, unknown> }>(sql`SELECT value FROM instance_settings WHERE key = 'sharing' FOR UPDATE`)).rows[0]?.value ?? {};
+      await tx.execute(sql`SELECT id FROM skills WHERE slug = ${input.slug} FOR UPDATE`);
+      const release = (await tx.execute<{ skill_id: string; owner_user_id: string | null; visibility: string; lifecycle_status: string; version_lifecycle_status: string; review_status: string; security_status: string; published_at: unknown; deleted_at: unknown; sha256: string }>(sql`
+        SELECT s.id AS skill_id, s.owner_user_id, s.visibility::text, s.lifecycle_status::text,
+          v.lifecycle_status::text AS version_lifecycle_status, v.review_status::text, v.security_status::text,
+          v.published_at, v.deleted_at, a.sha256
+        FROM skills s JOIN skill_versions v ON v.skill_id = s.id JOIN skill_artifacts a ON a.skill_version_id = v.id
+        WHERE s.slug = ${input.slug} AND v.version = ${input.version} AND v.id = ${input.skillVersionId}::uuid
+        FOR UPDATE OF s, v, a
+      `)).rows[0];
+      if (!release || release.sha256 !== input.artifactSha256 || !release.published_at || release.deleted_at
+        || release.review_status !== 'approved' || release.security_status !== 'passed'
+        || !['approved', 'deprecated'].includes(release.lifecycle_status) || !['approved', 'deprecated'].includes(release.version_lifecycle_status)) {
+        throw new AppError("Only an approved, published release with this exact artifact can be adopted.", "LIBRARY_RELEASE_NOT_ADOPTABLE", 422);
+      }
+      await assertLibraryWriter(tx, input.libraryId, input.actorId);
       const library = (await tx.execute<{ owner_user_id: string | null; owner_team_id: string | null }>(sql`
-        SELECT owner_user_id, owner_team_id FROM libraries
-        WHERE id = ${input.libraryId}::uuid AND status = 'active' FOR UPDATE
-      `)).rows[0];
-      if (!library) throw notFound("LIBRARY_ENTRY_NOT_FOUND", "Library entry not found.");
+        SELECT owner_user_id, owner_team_id FROM libraries WHERE id = ${input.libraryId}::uuid
+      `)).rows[0]!;
+      const selfReviewed = (await tx.execute<{ private_review: boolean }>(sql`
+        SELECT EXISTS (SELECT 1 FROM skill_version_review_attestations WHERE skill_version_id = ${input.skillVersionId}::uuid AND kind = 'private-self-review')
+          AND NOT EXISTS (SELECT 1 FROM skill_version_review_attestations WHERE skill_version_id = ${input.skillVersionId}::uuid AND kind = 'instance-elevation') AS private_review
+      `)).rows[0]?.private_review === true;
       if (library.owner_team_id) {
-        // Match team mutations: team, parent organization, organization
-        // membership, user, then team membership. Parent locks fence policy
-        // and lifecycle changes as well as membership revocation.
-        const team = (await tx.execute<{ organization_id: string | null }>(sql`
-          SELECT organization_id FROM teams WHERE id = ${library.owner_team_id}::uuid FOR UPDATE
-        `)).rows[0];
-        if (team?.organization_id) {
-          await tx.execute(sql`SELECT id FROM organizations WHERE id = ${team.organization_id}::uuid FOR UPDATE`);
-          await tx.execute(sql`
-            SELECT id FROM organization_memberships
-            WHERE organization_id = ${team.organization_id}::uuid AND user_id = ${input.actorId}::uuid FOR UPDATE
-          `);
+        await tx.execute(sql`SELECT skill_id FROM skill_team_grants WHERE skill_id = ${release.skill_id}::uuid AND team_id = ${library.owner_team_id}::uuid FOR SHARE`);
+        if (selfReviewed || !await this.releaseVisibleToTeam({ slug: input.slug, version: input.version, teamId: library.owner_team_id,
+          publicEnabled: setting.publicVisibilityEnabled !== false, authenticatedEnabled: setting.authenticatedVisibilityEnabled !== false,
+          teamEnabled: setting.teamsEnabled !== false && setting.teamVisibilityEnabled !== false }, tx)) {
+          throw new AppError("The team cannot read this release.", "LIBRARY_RELEASE_NOT_AUTHORIZED", 422);
         }
+      } else if (selfReviewed && (release.owner_user_id !== library.owner_user_id || release.visibility !== 'private')) {
+        throw new AppError("A self-reviewed release can only be adopted by its owner in a personal library.", "LIBRARY_RELEASE_NOT_AUTHORIZED", 422);
       }
-      const actor = (await tx.execute<{ status: string }>(sql`
-        SELECT status FROM users WHERE id = ${input.actorId}::uuid FOR UPDATE
-      `)).rows[0];
-      let ownsLibrary = library.owner_user_id === input.actorId;
-      if (library.owner_team_id) {
-        await tx.execute(sql`
-          SELECT id FROM team_memberships
-          WHERE team_id = ${library.owner_team_id}::uuid AND user_id = ${input.actorId}::uuid FOR UPDATE
-        `);
-        const authority = (await tx.execute<{ role: string | null }>(sql`
-          SELECT ${effectiveTeamRole(sql`${library.owner_team_id}::uuid`, input.actorId)} AS role
-        `)).rows[0];
-        ownsLibrary = authority?.role === "owner";
+      if (input.attestation !== (selfReviewed ? 'private-self-reviewed' : 'instance-reviewed')) {
+        throw new AppError("The release review changed. Refresh before adopting.", "LIBRARY_RELEASE_NOT_ADOPTABLE", 422);
       }
-      if (!ownsLibrary || actor?.status !== "active") {
-        throw new AppError("Library write access is required.", "LIBRARY_WRITE_FORBIDDEN", 403);
-      }
-      const entry = (await tx.execute<{ current_adoption_id: string | null }>(sql`
-        SELECT current_adoption_id FROM library_entries WHERE id = ${input.entryId}::uuid AND library_id = ${input.libraryId}::uuid
+      const entry = (await tx.execute<{ current_adoption_id: string | null; lineage_id: string | null }>(sql`
+        SELECT current_adoption_id, lineage_id FROM library_entries WHERE id = ${input.entryId}::uuid AND library_id = ${input.libraryId}::uuid
           AND skill_slug = ${input.slug} AND status = 'active' AND kind = 'skill' FOR UPDATE
       `)).rows[0];
       if (!entry) throw notFound("LIBRARY_ENTRY_NOT_FOUND", "Library entry not found.");
+      if (entry.lineage_id) {
+        const provenance = (await tx.execute<{ lineage_id: string }>(sql`SELECT lineage_id FROM skill_release_provenance WHERE skill_version_id = ${input.skillVersionId}::uuid`)).rows[0];
+        if (provenance?.lineage_id !== entry.lineage_id) throw new AppError("The release has no provenance for this imported lineage.", "LIBRARY_RELEASE_NOT_ADOPTABLE", 422);
+      }
       if ((entry.current_adoption_id ?? null) !== input.expectedCurrentAdoptionId) {
         throw new AppError("The entry adoption changed. Refresh and retry.", "LIBRARY_ADOPTION_CONFLICT", 409, { currentAdoptionId: entry.current_adoption_id ?? null });
       }
@@ -1364,7 +1429,7 @@ export class PostgresLibraryStore {
         last_attempt_at = ${now}::timestamptz, updated_at = now()
       WHERE id IN (
         SELECT e.id FROM library_entries e JOIN libraries l ON l.id = e.library_id
-        WHERE e.kind = 'source' AND e.status = 'active' AND l.status = 'active' AND l.owner_user_id IS NOT NULL
+        WHERE e.kind = 'source' AND e.status = 'active' AND l.status = 'active'
           AND e.tracking_mode IN ('daily', 'weekly') AND e.next_check_at <= ${now}::timestamptz
           AND e.health NOT IN ('identity-change-review', 'paused') AND e.pending_full_name IS NULL
           AND (e.lease_expires_at IS NULL OR e.lease_expires_at < ${now}::timestamptz)
@@ -1377,29 +1442,61 @@ export class PostgresLibraryStore {
     return result.rows.map((row) => ({ entryId: row.id, leaseId }));
   }
 
-  async acquireLease(input: { entryId: string; now: Date; leaseMs: number }): Promise<string | null> {
-    const leaseId = randomUUID();
-    const now = input.now.toISOString();
-    const result = await this.db.execute<{ id: string }>(sql`
-      UPDATE library_entries SET lease_id = ${leaseId}::uuid,
-        lease_expires_at = ${now}::timestamptz + (${input.leaseMs}::double precision * interval '1 millisecond'),
-        last_attempt_at = ${now}::timestamptz, updated_at = now()
-      WHERE id = ${input.entryId}::uuid AND status = 'active' AND kind = 'source'
-        AND (lease_expires_at IS NULL OR lease_expires_at < ${now}::timestamptz)
-      RETURNING id
-    `);
-    return result.rows[0] ? leaseId : null;
+  async acquireLease(input: { entryId: string; actorId: string; now: Date; leaseMs: number }): Promise<string | null> {
+    return this.db.transaction(async (tx) => {
+      await assertEntryWriter(tx, input.entryId, input.actorId);
+      const entry = (await tx.execute<{ health: string }>(sql`SELECT health FROM library_entries WHERE id = ${input.entryId}::uuid`)).rows[0];
+      if (entry?.health === "paused") throw new AppError("Resume tracking before checking this source.", "SOURCE_TRACKING_PAUSED", 409);
+      const leaseId = randomUUID();
+      const now = input.now.toISOString();
+      const result = await tx.execute<{ id: string }>(sql`
+        UPDATE library_entries SET lease_id = ${leaseId}::uuid,
+          lease_expires_at = ${now}::timestamptz + (${input.leaseMs}::double precision * interval '1 millisecond'),
+          last_attempt_at = ${now}::timestamptz, updated_at = now()
+        WHERE id = ${input.entryId}::uuid AND status = 'active' AND kind = 'source'
+          AND (lease_expires_at IS NULL OR lease_expires_at < ${now}::timestamptz)
+        RETURNING id
+      `);
+      return result.rows[0] ? leaseId : null;
+    });
   }
 
-  /** Extends a live lease before a check writes; false means another worker may own the entry now. */
+  /** Authority is fenced with the lease before each provider or persistence phase. */
   async renewLease(input: { entryId: string; leaseId: string; now: Date; leaseMs: number }): Promise<boolean> {
-    const now = input.now.toISOString();
-    const result = await this.db.execute<{ id: string }>(sql`
-      UPDATE library_entries SET lease_expires_at = ${now}::timestamptz + (${input.leaseMs}::double precision * interval '1 millisecond')
-      WHERE id = ${input.entryId}::uuid AND status = 'active' AND lease_id = ${input.leaseId}::uuid AND lease_expires_at > ${now}::timestamptz
-      RETURNING id
-    `);
-    return result.rows.length > 0;
+    return this.db.transaction(async (tx) => {
+      if (!await lockEntryForWrite(tx, input.entryId, input.leaseId)) return false;
+      const now = input.now.toISOString();
+      const result = await tx.execute<{ id: string }>(sql`
+        UPDATE library_entries SET lease_expires_at = ${now}::timestamptz + (${input.leaseMs}::double precision * interval '1 millisecond')
+        WHERE id = ${input.entryId}::uuid AND status = 'active' AND lease_id = ${input.leaseId}::uuid AND lease_expires_at > ${now}::timestamptz
+        RETURNING id
+      `);
+      return result.rows.length > 0;
+    });
+  }
+
+  /** Losing every effective curator pauses the saved configuration until an explicit tracking edit. */
+  async pauseUnauthorizedTracking(entryId: string, leaseId: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      if (!await lockEntryForWrite(tx, entryId, leaseId, false)) return;
+      const paused = await tx.execute<{ library_id: string; revision: number }>(sql`
+        UPDATE library_entries e SET health = 'paused', last_error_code = 'tracking-authority-unavailable',
+          next_check_at = NULL, lease_id = NULL, lease_expires_at = NULL, revision = e.revision + 1, updated_at = now()
+        FROM libraries l WHERE e.id = ${entryId}::uuid AND l.id = e.library_id AND l.owner_team_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM team_memberships tm WHERE tm.team_id = l.owner_team_id
+            AND ${effectiveTeamOwnerPredicate(sql`l.owner_team_id`, sql`tm.user_id`)})
+        RETURNING e.library_id, e.revision
+      `);
+      if (paused.rows[0]) {
+        await insertEvent(tx, { libraryId: paused.rows[0].library_id, entryId, candidateId: null,
+          kind: "source-health-changed", audience: "curators", semanticKey: `source-paused:${entryId}:${paused.rows[0].revision}`,
+          version: null, path: null });
+        await audit(tx, { actorUserId: null, action: "library.entry.tracking.paused", resourceType: "library_entry",
+          resourceId: entryId, details: { reason: "tracking-authority-unavailable" } });
+      }
+      // If another curator became available during the check, release the lease for a fresh check.
+      await tx.execute(sql`UPDATE library_entries SET lease_id = NULL, lease_expires_at = NULL WHERE id = ${entryId}::uuid AND lease_id = ${leaseId}::uuid`);
+    });
   }
 
   async finishCheck(input: {
@@ -1494,6 +1591,45 @@ async function selectReusableSnapshot(db: Db, input: SnapshotIdentity): Promise<
   return result.rows[0] ? snapshotRecord(result.rows[0]) : null;
 }
 
+async function assertLibraryWriter(tx: DatabaseTransaction, libraryId: string, actorId: string): Promise<void> {
+  const library = (await tx.execute<{ owner_user_id: string | null; owner_team_id: string | null }>(sql`
+    SELECT owner_user_id, owner_team_id FROM libraries WHERE id = ${libraryId}::uuid AND status = 'active'
+  `)).rows[0];
+  if (!library) throw notFound("LIBRARY_NOT_FOUND", "Library not found.");
+  if (library.owner_team_id) await assertCurrentTeamOwner(tx, library.owner_team_id, actorId);
+  else {
+    const actor = (await tx.execute<{ status: string }>(sql`SELECT status FROM users WHERE id = ${actorId}::uuid FOR UPDATE`)).rows[0];
+    if (library.owner_user_id !== actorId || actor?.status !== "active") throw new AppError("Library write access is required.", "LIBRARY_WRITE_FORBIDDEN", 403);
+  }
+  const locked = await tx.execute(sql`SELECT id FROM libraries WHERE id = ${libraryId}::uuid AND status = 'active' FOR UPDATE`);
+  if (!locked.rows[0]) throw notFound("LIBRARY_NOT_FOUND", "Library not found.");
+}
+
+async function assertEntryWriter(tx: DatabaseTransaction, entryId: string, actorId: string): Promise<void> {
+  const entry = (await tx.execute<{ library_id: string }>(sql`SELECT library_id FROM library_entries WHERE id = ${entryId}::uuid AND status = 'active'`)).rows[0];
+  if (!entry) throw notFound("LIBRARY_ENTRY_NOT_FOUND", "Library entry not found.");
+  await assertLibraryWriter(tx, entry.library_id, actorId);
+  if (!await lockEntryForWrite(tx, entryId, null)) throw notFound("LIBRARY_ENTRY_NOT_FOUND", "Library entry not found.");
+}
+
+/** Attach saved team imports only to one unambiguous source with the same repository and ref rule. */
+async function attachTeamLineages(tx: DatabaseTransaction, libraryId: string): Promise<void> {
+  await tx.execute(sql`
+    WITH matches AS (
+      SELECT skill.id AS skill_entry_id, li.id AS lineage_id, min(source.id::text)::uuid AS source_entry_id
+      FROM libraries l JOIN library_entries skill ON skill.library_id = l.id AND skill.kind = 'skill' AND skill.status = 'active'
+      JOIN library_import_lineages li ON li.slug = skill.skill_slug AND li.owner_team_id = l.owner_team_id
+      JOIN library_entries source ON source.library_id = l.id AND source.kind = 'source' AND source.status = 'active'
+        AND source.source_id = li.source_id AND source.ref_kind = li.ref_kind AND source.ref_value = li.ref_value
+        AND (source.source_path = '' OR li.source_path = source.source_path OR left(li.source_path, length(source.source_path) + 1) = source.source_path || '/')
+      WHERE l.id = ${libraryId}::uuid AND l.owner_team_id IS NOT NULL AND skill.source_entry_id IS NULL
+      GROUP BY skill.id, li.id HAVING count(*) = 1
+    )
+    UPDATE library_entries e SET lineage_id = matches.lineage_id, source_entry_id = matches.source_entry_id, updated_at = now()
+    FROM matches WHERE e.id = matches.skill_entry_id
+  `);
+}
+
 /**
  * Row lock for a write to an entry's check state. The library row comes first
  * (FOR KEY SHARE), the order library deletion uses, so event inserts that
@@ -1509,7 +1645,26 @@ async function selectReusableSnapshot(db: Db, input: SnapshotIdentity): Promise<
  * claimed still belongs to its check, and renewal (which does check expiry)
  * stops that check at its next phase.
  */
-async function lockEntryForWrite(tx: DatabaseTransaction, entryId: string, leaseId: string | null): Promise<boolean> {
+async function lockEntryForWrite(tx: DatabaseTransaction, entryId: string, leaseId: string | null, checkAuthority = true): Promise<boolean> {
+  if (leaseId && checkAuthority) {
+    const library = (await tx.execute<{ owner_team_id: string | null }>(sql`
+      SELECT l.owner_team_id FROM libraries l JOIN library_entries e ON e.library_id = l.id
+      WHERE e.id = ${entryId}::uuid AND l.status = 'active'
+    `)).rows[0];
+    if (!library) return false;
+    if (library.owner_team_id) {
+      const curator = (await tx.execute<{ user_id: string }>(sql`
+        SELECT tm.user_id FROM team_memberships tm WHERE tm.team_id = ${library.owner_team_id}::uuid
+          AND ${effectiveTeamOwnerPredicate(library.owner_team_id, sql`tm.user_id`)} ORDER BY tm.user_id LIMIT 1
+      `)).rows[0];
+      if (!curator) throw new AppError("Tracking needs an active team curator.", "TRACKING_AUTHORITY_UNAVAILABLE", 409);
+      try { await assertCurrentTeamOwner(tx, library.owner_team_id, curator.user_id); }
+      catch (error) {
+        if (error instanceof AppError && error.code === "LIBRARY_WRITE_FORBIDDEN") throw new AppError("Tracking needs an active team curator.", "TRACKING_AUTHORITY_UNAVAILABLE", 409);
+        throw error;
+      }
+    }
+  }
   await tx.execute(sql`
     SELECT l.id FROM libraries l JOIN library_entries e ON e.library_id = l.id
     WHERE e.id = ${entryId}::uuid
@@ -1698,7 +1853,8 @@ function snapshotRecord(row: Row): SnapshotRecord {
 function lineageRecord(row: Row): LineageRecord {
   return {
     id: String(row.id),
-    ownerUserId: String(row.owner_user_id),
+    ownerUserId: nullableString(row.owner_user_id),
+    ownerTeamId: nullableString(row.owner_team_id),
     sourceId: String(row.source_id),
     sourcePath: String(row.source_path ?? ""),
     refKind: String(row.ref_kind) as LibrarySourceRefKind,
@@ -1720,7 +1876,8 @@ function candidateRecord(row: Row): CandidateRecord {
     sourceEntryId: String(row.source_entry_id),
     skillEntryId: nullableString(row.skill_entry_id),
     lineageId: String(row.lineage_id),
-    ownerUserId: String(row.owner_user_id),
+    ownerUserId: nullableString(row.owner_user_id),
+    ownerTeamId: nullableString(row.owner_team_id),
     snapshotId: String(row.snapshot_id),
     previewId: nullableString(row.preview_id),
     origin: row.origin === "tracking" ? "tracking" : "preview",

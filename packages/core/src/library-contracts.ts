@@ -197,7 +197,7 @@ export interface LibraryEntrySkill {
   sourceEntryId: string | null;
   sourcePath: string | null;
   lineageId: string | null;
-  ownership: { type: "user"; isCaller: boolean };
+  ownership: { type: "user"; isCaller: boolean } | { type: "team"; id: string; name: string; isCaller: false };
 }
 
 export interface LibraryAdoption {
