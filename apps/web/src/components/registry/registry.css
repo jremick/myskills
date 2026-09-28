@@ -385,22 +385,98 @@
 .registry-workspace .skill-improvement-panel { padding-top: 0; }
 .registry-workspace .skill-improvement-panel .control-plane-section-heading h2 { margin-top: 2px; font-size: 15px; line-height: 22px; font-weight: 600; }
 
-/* Skill-level rows below the release card: bundle backlinks, then owner controls. */
+/* Skill-level rows below the release card: bundle backlinks. */
 .registry-workspace .registry-skill-foot { display: grid; min-width: 0; margin-top: 16px; }
 .registry-workspace .registry-skill-foot .registry-disclosure-button { padding: 8px 0; }
 .registry-workspace .registry-skill-foot .registry-disclosure-body { padding: 0 0 12px; }
-.registry-workspace .registry-owner-hint { display: inline-flex; align-items: center; gap: 6px; }
-.registry-workspace .registry-owner-panel { gap: 20px; padding-top: 8px; }
-.registry-workspace .registry-owner-panel [data-slot="frame"] { display: grid; gap: 0; margin: 0; padding: 0; overflow: visible; border: 0; border-radius: 0; background: none; box-shadow: none; }
-.registry-workspace .registry-owner-panel [data-slot="frame-panel"] { padding: 0; overflow: visible; border: 0; border-radius: 0; background: none; box-shadow: none; }
-.registry-workspace .registry-owner-panel [data-slot="frame-panel"]::before { display: none; }
-.registry-workspace .registry-owner-panel [data-slot="frame-panel-header"] { padding: 0; }
-.registry-workspace .registry-owner-panel .reui-registry-panel > :is(.metadata-edit-grid, .lifecycle-actions, .release-lifecycle-list, .sharing-editor) { margin: 12px 0 0; }
-.registry-workspace .registry-owner-panel .reui-registry-panel > :is(.safe-message.compact, .inline-message) { margin: 12px 0 0; }
-.registry-workspace .registry-owner-panel .reui-registry-panel .sharing-panel-head { padding: 0 0 12px; }
-.registry-workspace .registry-owner-panel .sharing-panel { padding-top: 20px; border-top: 1px solid var(--line-soft); }
-.registry-workspace .registry-owner-panel .registry-danger-button[data-variant="outline"] { border-color: rgba(180, 35, 24, 0.35); color: var(--danger); background: var(--surface); }
-.registry-workspace .registry-owner-panel .registry-danger-button[data-variant="outline"]:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+
+/* Skills workspace: scope switch beside the title, then one detail with
+   Overview / Versions / Manage sections. */
+.registry-workspace :is(.registry-page-head, .bundle-page-head):has(.skill-scope) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.registry-workspace .bundle-page-head .skill-scope { margin-right: auto; }
+.registry-workspace .skill-scope { display: inline-flex; gap: 2px; max-width: 100%; padding: 3px; border-radius: 8px; background: var(--surface-sunken); }
+.registry-workspace .skill-scope a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.registry-workspace .skill-scope a:hover { color: var(--ink); }
+.registry-workspace .skill-scope a[aria-current="page"] { border-color: var(--line); color: var(--ink); background: var(--surface); box-shadow: 0 1px 2px rgba(17, 26, 38, 0.06); }
+.registry-workspace :is(.skill-scope a, .skill-version-row, .skill-inline-link):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.registry-workspace .skill-detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 12px; }
+/* Management-only records have no release card, so the header carries the exact version. */
+.registry-workspace .registry-skill-pane .registry-version-slot { grid-column: 1 / -1; min-width: 0; }
+.registry-workspace .skill-managed-version { display: grid; gap: 4px; width: min(100%, 320px); color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
+.registry-workspace .skill-managed-version select { width: 100%; }
+.registry-workspace .skill-inline-link { display: inline-flex; align-items: center; gap: 4px; color: var(--teal-dark); font-size: 13px; line-height: 18px; font-weight: 600; text-underline-offset: 2px; }
+.registry-workspace .skill-tabs { display: flex; gap: 4px; margin-top: 16px; overflow-x: auto; border-bottom: 1px solid var(--line-soft); scrollbar-width: none; }
+.registry-workspace .skill-tabs [role="tab"] {
+  flex: none;
+  min-height: 36px;
+  margin-bottom: -1px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  color: var(--muted);
+  background: none;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  /* Only the selected section carries the underline; it moves without a fade. */
+  transition: color 160ms ease, background-color 160ms ease;
+}
+.registry-workspace .skill-tabs [role="tab"]:hover { color: var(--ink); background: var(--surface-soft); }
+.registry-workspace .skill-tabs [role="tab"]:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.registry-workspace .skill-tabs [role="tab"][aria-selected="true"] { border-bottom-color: var(--teal); color: var(--ink); }
+.registry-workspace .skill-tab-panel { display: grid; gap: 20px; min-width: 0; padding-top: 16px; }
+.registry-workspace .skill-version-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.registry-workspace .skill-version-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.registry-workspace .skill-version-row:hover { background: var(--surface-soft); }
+.registry-workspace .skill-version-row[aria-current="true"] { background: var(--teal-soft); box-shadow: inset 2px 0 0 var(--teal); }
+.registry-workspace .skill-version-name { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; font-weight: 600; }
+.registry-workspace .skill-version-name code { color: var(--ink); }
+.registry-workspace .skill-version-meta { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--muted); font-size: 13px; line-height: 18px; }
+.registry-workspace .skill-manage { display: grid; gap: 20px; min-width: 0; }
+.registry-workspace .skill-manage > .registry-section:first-of-type { padding-top: 0; border-top: 0; }
+.registry-workspace .skill-manage .registry-section > h3 { color: var(--ink); font-size: 15px; line-height: 22px; font-weight: 600; }
+.registry-workspace .skill-manage .registry-section > .registry-actions { margin-top: 0; }
+.registry-workspace .skill-manage .metadata-edit-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.registry-workspace .skill-manage .manage-confirm { display: grid; gap: 10px; min-width: 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); }
+.registry-workspace .skill-manage .manage-confirm h4 { color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.registry-workspace .skill-manage .manage-confirm > p { color: var(--ink-soft); font-size: 13px; line-height: 18px; }
+.registry-workspace .skill-manage .manage-confirm .registry-actions { margin-top: 0; }
+.registry-workspace .skill-manage .manage-reason { display: grid; gap: 4px; max-width: 420px; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
+/* Sharing keeps its Frame markup but is flattened into the Manage section. */
+.registry-workspace .skill-manage [data-slot="frame"] { display: grid; gap: 0; margin: 0; padding: 20px 0 0; overflow: visible; border: 0; border-top: 1px solid var(--line-soft); border-radius: 0; background: none; box-shadow: none; }
+.registry-workspace .skill-manage [data-slot="frame-panel"] { padding: 0; overflow: visible; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.registry-workspace .skill-manage [data-slot="frame-panel"]::before { display: none; }
+.registry-workspace .skill-manage .reui-registry-panel > :is(.sharing-editor, .inline-message) { margin: 12px 0 0; }
+.registry-workspace .skill-manage .reui-registry-panel .sharing-panel-head { padding: 0 0 12px; }
+.registry-workspace .review-outcome-link { font-size: 13px; line-height: 18px; }
+.registry-workspace .review-outcome-link a,
+.registry-workspace .submission-skill-link { color: var(--teal-dark); font-weight: 600; text-underline-offset: 2px; }
 
 /* Loading */
 .registry-workspace .registry-skeleton { display: grid; gap: 6px; }
@@ -461,6 +537,7 @@
   .registry-workspace .registry-link-button { min-height: 32px; }
   .registry-workspace :is(.registry-versions-toggle, .registry-copy-command) { height: 40px; }
   .registry-workspace .registry-icon-copy { width: 40px; height: 40px; }
+  .registry-workspace :is(.skill-tabs [role="tab"], .skill-scope a) { min-height: 44px; }
 }
 
 @media (forced-colors: active) {

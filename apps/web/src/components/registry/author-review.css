@@ -36,7 +36,8 @@
 /* Chips, status lines and destructive outlines */
 .registry-workspace.author-review .author-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 2px; }
 .registry-workspace.author-review .registry-chip[data-tone="danger"] { color: var(--danger); background: var(--danger-soft); }
-.registry-workspace.author-review .author-status {
+/* The Skills Manage section shares these status lines and destructive outlines. */
+:is(.registry-workspace.author-review, .registry-workspace .skill-manage) .author-status {
   padding: 8px 12px;
   border-radius: 8px;
   color: var(--ink-soft);
@@ -45,11 +46,11 @@
   line-height: 18px;
   overflow-wrap: anywhere;
 }
-.registry-workspace.author-review .author-status[data-tone="teal"] { color: var(--teal-dark); background: var(--teal-soft); }
-.registry-workspace.author-review .author-status[data-tone="amber"] { color: var(--warning); background: var(--warning-soft); }
-.registry-workspace.author-review .author-status[data-tone="danger"] { color: var(--danger); background: var(--danger-soft); }
-.registry-workspace.author-review .author-danger[data-variant="outline"] { border-color: rgba(180, 35, 24, 0.35); color: var(--danger); background: var(--surface); }
-.registry-workspace.author-review .author-danger[data-variant="outline"]:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+:is(.registry-workspace.author-review, .registry-workspace .skill-manage) .author-status[data-tone="teal"] { color: var(--teal-dark); background: var(--teal-soft); }
+:is(.registry-workspace.author-review, .registry-workspace .skill-manage) .author-status[data-tone="amber"] { color: var(--warning); background: var(--warning-soft); }
+:is(.registry-workspace.author-review, .registry-workspace .skill-manage) .author-status[data-tone="danger"] { color: var(--danger); background: var(--danger-soft); }
+:is(.registry-workspace.author-review, .registry-workspace .skill-manage) .author-danger[data-variant="outline"] { border-color: rgba(180, 35, 24, 0.35); color: var(--danger); background: var(--surface); }
+:is(.registry-workspace.author-review, .registry-workspace .skill-manage) .author-danger[data-variant="outline"]:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
 .registry-workspace.author-review .registry-section > h3 { color: var(--ink); font-size: 15px; line-height: 22px; font-weight: 600; }
 .registry-workspace.author-review .registry-section > .registry-actions { margin-top: 0; }
 .registry-workspace.author-review .registry-list-state [role="alert"] { color: var(--danger); font-size: 14px; line-height: 20px; }
@@ -170,16 +171,6 @@
   .registry-workspace.author-review .submit-feedback { margin: 2px 4px 16px; padding-left: 12px; }
 }
 
-/* Manage: exact-release inspector and inline lifecycle confirmation */
-.registry-workspace.author-review .manage-version { display: grid; justify-items: start; gap: 4px; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
-.registry-workspace.author-review .manage-version select { width: min(100%, 320px); }
-.registry-workspace.author-review .manage-notes { display: grid; gap: 4px; }
-.registry-workspace.author-review :is(.manage-notes, .manage-confirm) h4 { color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
-.registry-workspace.author-review .manage-confirm { display: grid; gap: 10px; min-width: 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); }
-.registry-workspace.author-review .manage-confirm > p { color: var(--ink-soft); font-size: 13px; line-height: 18px; }
-.registry-workspace.author-review .manage-confirm .registry-actions { margin-top: 0; }
-.registry-workspace.author-review .manage-reason { display: grid; gap: 4px; max-width: 420px; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
-
 @media (max-width: 680px) {
   .registry-workspace.author-review .submit-upload { padding: 16px; }
   .registry-workspace.author-review .review-decision { padding: 14px; }
@@ -188,7 +179,7 @@
 @media (forced-colors: active) {
   .registry-workspace.author-review button.registry-row[aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
   .registry-workspace.author-review .review-steps li::before { forced-color-adjust: none; border-color: CanvasText; }
-  .registry-workspace.author-review .author-status { border: 1px solid CanvasText; }
+  :is(.registry-workspace.author-review, .registry-workspace .skill-manage) .author-status { border: 1px solid CanvasText; }
 }
 
 @media (max-width: 480px) {

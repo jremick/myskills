@@ -44,6 +44,12 @@ async function fixture(page: Page, options: { role?: string; anonymous?: boolean
     if (version) return ["1.0.0", "1.2.0"].includes(version[2]!) ? reply({ release: release(version[1]!, version[2]!) }) : reply({ error: { code: "NOT_FOUND", message: "Exact release is unavailable." } }, 404);
     const selected = path.match(/^\/v1\/skills\/([^/]+)$/);
     if (selected) return reply({ skill: skills.find(s => s.slug === selected[1]) });
+    const managed = path.match(/^\/v1\/manage\/skills\/([^/]+)$/);
+    if (managed) {
+      const skill = skills.find(s => s.slug === managed[1]);
+      if (!skill || !user.roles.includes("owner")) return reply({ error: { code: "SKILL_MANAGEMENT_ROLE_REQUIRED", message: "Skill management requires owner or maintainer permissions." } }, 403);
+      return reply({ skill: { slug: skill.slug, title: skill.title, summary: skill.summary, lifecycleStatus: "approved", visibility: "public", tags: skill.tags, allowedActions: ["edit", "archive", "delete"] } });
+    }
     if (path.endsWith("/compatibility")) return reply({ compatibility: { schemaVersion: 1, declaration: { status: "unspecified", revision: null, targets: [] }, attestation: { status: "none", revision: null }, evidence: [], manage: { pendingRevisions: [], evidenceProposals: [] } } });
     if (path.startsWith("/v1/improvements/policies/")) return reply({ revision: null });
     if (path.endsWith("/sharing")) return reply({ sharing: { slug: skills[0]!.slug, title: skills[0]!.title, visibility: "public", settings: { publicVisibilityEnabled: true, authenticatedVisibilityEnabled: true, teamsEnabled: true, teamVisibilityEnabled: true, userVisibilityEnabled: true, organizationVisibilityEnabled: true }, availableTeams: [], teamGrants: [], userGrants: [], availableOrganizations: [], organizationGrants: [] } });
@@ -183,23 +189,26 @@ test("signed-out mobile cannot see private destinations or owner actions", async
   await page.goto("/skills/release-notes-helper?version=1.0.0&platform=generic");
   await expect(title(page)).toBeVisible();
   await expect(page.getByRole("button", { name: "Account menu", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Owner controls", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "Manage", exact: true })).toHaveCount(0);
   await expect(page.locator(".mobile-nav").getByRole("link", { name: "Libraries", exact: true })).toHaveCount(0);
   await expect(command(page)).toContainText("--version '1.0.0' --platform 'generic'");
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: test.info().outputPath("registry-reader-320.png"), fullPage: true });
 });
 
+// Owner tools moved from an Overview disclosure to the Manage section; they
+// stay secondary (Overview opens first) and locked without MFA.
 test("owner tools stay secondary and respect the existing session MFA lock", async ({ page }) => {
   await fixture(page, { mfa: false });
   await page.goto("/skills/release-notes-helper");
   await expect(command(page)).toBeVisible();
-  await page.getByRole("button", { name: "Owner controls", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Lifecycle and sharing controls are locked" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Overview", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("button", { name: "Delete skill", exact: true })).toHaveCount(0);
-  const cli = await command(page).boundingBox();
-  const lock = await page.getByRole("heading", { name: "Lifecycle and sharing controls are locked" }).boundingBox();
-  expect(cli!.y).toBeLessThan(lock!.y);
+  await page.getByRole("tab", { name: "Manage", exact: true }).click();
+  await expect(page.getByText(/MFA-verified session is required/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Delete skill", exact: true })).toBeDisabled();
+  await expect(page.getByRole("region", { name: "Sharing controls", exact: true })).toHaveCount(0);
+  await expect(command(page)).toHaveCount(0);
 });
 
 test("an unavailable pinned release never becomes a different install or export", async ({ page }) => {

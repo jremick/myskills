@@ -20,6 +20,8 @@ export interface BundleWorkspaceProps {
   listTeams?: () => Promise<TeamDashboard>;
   signedIn: boolean;
   canCreate: boolean;
+  /** Workspace controls shown beside the page title (the Skills scope switch). */
+  headerControls?: ReactNode;
   query: string;
   onClearQuery: () => void;
   onQueryChange: (query: string) => void;
@@ -242,6 +244,7 @@ export function BundleWorkspace(props: BundleWorkspaceProps) {
     <main aria-labelledby="registry-title" className="bundle-workspace registry-workspace">
       <header className="bundle-page-head">
         <h1 id="registry-title">Skills</h1>
+        {props.headerControls}
         {props.canCreate && (
           <Button ref={newButton} size="sm" type="button" variant="outline" onClick={() => { dialogReturn.current = newButton.current; setDialog({ kind: "edit", bundle: null }); }}>
             <Plus aria-hidden="true" size={15} />New bundle

@@ -29,6 +29,7 @@ import type {
   ProviderRoleMappingInput,
   RegistryClient,
   ReleaseMetadata,
+  SkillManagementSummary,
   SkillReleaseSummary,
   ReviewSubmissionSummary,
   SafeApiError,
@@ -728,36 +729,44 @@ for (const releaseKind of ["prerelease", "deprecated"] as const) {
   });
 }
 
-test("privileged skill controls stay locked without an MFA-verified session and do not request management data", async () => {
+// Lifecycle, metadata and sharing live in the skill's Manage section. The
+// management record is the lifecycle authority; sharing keeps its own gate.
+test("privileged skill controls stay locked without an MFA-verified session and do not request sharing data", async () => {
   const owner = authUser({ email: "owner@example.com", roles: ["owner"], mfaVerified: false });
   setupAuthenticatedDom("http://localhost/skills/release-notes-helper", owner);
   const managedSkill: PublicSkill = { ...publicSkill(), access: { canManageSharing: true, reasons: ["owner", "public"] } };
   const client = mockClient({ skills: [managedSkill], user: owner });
+  const managedReads: string[] = [];
+  client.getManagedSkill = async (slug) => { managedReads.push(slug); return managedSummary(managedSkill); };
 
   const view = render(<RegistryApp client={client} />);
 
-  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
-  await view.findByRole("heading", { name: "Lifecycle and sharing controls are locked", level: 2 });
-  assert.equal(view.queryByRole("region", { name: "Skill lifecycle controls" }), null);
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  await view.findByText(/MFA-verified session is required/);
+  assert.equal((view.getByRole("button", { name: "Archive skill" }) as HTMLButtonElement).disabled, true);
+  assert.equal((view.getByRole("button", { name: "Save metadata" }) as HTMLButtonElement).disabled, true);
   assert.equal(view.queryByRole("region", { name: "Sharing controls" }), null);
   assert.deepEqual(client.releaseHistoryCalls, [managedSkill.slug]);
   assert.equal(client.releaseManagementCalls, 0);
   assert.equal(client.sharingDetailCalls, 0);
+  assert.deepEqual(managedReads, [managedSkill.slug]);
 });
 
-test("MFA-verified managers can load lifecycle and sharing controls", async () => {
+test("MFA-verified managers load lifecycle and sharing controls without a second release read", async () => {
   const owner = authUser({ email: "owner@example.com", roles: ["owner"], mfaVerified: true });
   setupAuthenticatedDom("http://localhost/skills/release-notes-helper", owner);
   const managedSkill: PublicSkill = { ...publicSkill(), access: { canManageSharing: true, reasons: ["owner", "public"] } };
   const client = mockClient({ skills: [managedSkill], user: owner });
+  client.getManagedSkill = async () => managedSummary(managedSkill);
 
   const view = render(<RegistryApp client={client} />);
 
-  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
-  await view.findByRole("region", { name: "Skill lifecycle controls" });
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  await view.findByRole("heading", { name: "Release lifecycle" });
   await view.findByRole("region", { name: "Sharing controls" });
+  assert.equal((view.getByRole("button", { name: "Archive skill" }) as HTMLButtonElement).disabled, false);
   assert.deepEqual(client.releaseHistoryCalls, [managedSkill.slug]);
-  assert.equal(client.releaseManagementCalls, 1);
+  assert.equal(client.releaseManagementCalls, 0);
   assert.equal(client.sharingDetailCalls, 1);
 });
 
@@ -766,17 +775,20 @@ test("metadata saves refresh the parent registry detail", async () => {
   setupAuthenticatedDom("http://localhost/skills/release-notes-helper", owner);
   let skill = { ...publicSkill(), access: { canManageSharing: true, reasons: ["owner", "public"] } } as PublicSkill;
   const client = mockClient({ user: owner, skills: [skill], skillLoader: () => skill });
+  client.getManagedSkill = async () => managedSummary(skill);
   client.updateSkillMetadata = async (input) => {
     skill = { ...skill, title: input.title ?? skill.title, summary: input.summary ?? skill.summary };
     return { ...skill, lifecycleStatus: "approved", allowedActions: ["edit"] };
   };
   const view = render(<RegistryApp client={client} />);
-  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
-  await view.findByRole("region", { name: "Skill lifecycle controls" });
-  fireEvent.input(view.getByRole("textbox", { name: "Title" }), { target: { value: "Updated registry title" } });
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  const title = await view.findByRole("textbox", { name: "Title" }) as HTMLInputElement;
+  assert.equal(title.value, "Release Notes Helper");
+  fireEvent.input(title, { target: { value: "Updated registry title" } });
   fireEvent.input(view.getByRole("textbox", { name: "Summary" }), { target: { value: "Updated registry summary" } });
   fireEvent.click(view.getByRole("button", { name: "Save metadata" }));
   await view.findByRole("heading", { name: "Updated registry title" });
+  fireEvent.click(view.getByRole("tab", { name: "Overview" }));
   await view.findByText("Updated registry summary");
 });
 
@@ -789,18 +801,22 @@ test("skill deletion clears the parent detail and its stale export actions", asy
     if (deleted) throw safeApiError(404, "NOT_FOUND", "Deleted");
     return skill;
   } });
-  client.performSkillAction = async () => { deleted = true; return { ...skill, lifecycleStatus: "deleted", allowedActions: [] }; };
+  client.getManagedSkill = async () => {
+    if (deleted) throw safeApiError(404, "SKILL_NOT_FOUND", "Deleted");
+    return managedSummary(skill);
+  };
+  client.performSkillAction = async () => { deleted = true; return { ...managedSummary(skill), lifecycleStatus: "deleted", allowedActions: [] }; };
   const view = render(<RegistryApp client={client} />);
-  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
-  await view.findByRole("region", { name: "Skill lifecycle controls" });
-  const deleteButton = view.getByRole("button", { name: "Delete skill" }) as HTMLButtonElement;
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  const deleteButton = await view.findByRole("button", { name: "Delete skill" }) as HTMLButtonElement;
   await waitFor(() => assert.equal(deleteButton.disabled, false));
   fireEvent.click(deleteButton);
-  const dialog = await view.findByRole("dialog");
-  fireEvent.input(dialog.querySelector("textarea")!, { target: { value: "Remove obsolete skill" } });
-  fireEvent.click(Array.from(dialog.querySelectorAll("button")).find((button) => button.textContent === "Delete skill")!);
+  const confirm = await view.findByRole("region", { name: "Confirm lifecycle change" });
+  fireEvent.input(within(confirm).getByRole("textbox", { name: "Lifecycle reason" }), { target: { value: "Remove obsolete skill" } });
+  fireEvent.click(within(confirm).getByRole("button", { name: "Confirm delete" }));
   await view.findByText("Skill or release not found.");
   assert.equal(document.querySelector(".command-panel"), null);
+  assert.equal(view.queryByRole("tab", { name: "Manage" }), null);
 });
 
 test("release mutation refreshes parent history before offering the old artifact", async () => {
@@ -811,13 +827,16 @@ test("release mutation refreshes parent history before offering the old artifact
   let revoked = false;
   const current = { ...releaseSummary(fixture.latest), allowedActions: ["revoke" as const] };
   const client = historyClient(fixture, { user: owner, releaseListLoader: () => revoked ? [{ ...current, lifecycleStatus: "revoked" }] : [current] });
+  client.getManagedSkill = async () => managedSummary(fixture.skill);
   client.performReleaseAction = async () => { revoked = true; return { ...current, lifecycleStatus: "revoked", allowedActions: [] }; };
   const view = render(<RegistryApp client={client} />);
-  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
-  fireEvent.click(await view.findByRole("button", { name: "Revoke" }));
-  const dialog = await view.findByRole("dialog");
-  fireEvent.input(dialog.querySelector("textarea")!, { target: { value: "Withdraw this artifact" } });
-  fireEvent.click(Array.from(dialog.querySelectorAll("button")).find((button) => button.textContent === "Revoke release")!);
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  fireEvent.click(await view.findByRole("button", { name: "Revoke 0.2.0" }));
+  const confirm = await view.findByRole("region", { name: "Confirm lifecycle change" });
+  fireEvent.input(within(confirm).getByRole("textbox", { name: "Lifecycle reason" }), { target: { value: "Withdraw this artifact" } });
+  fireEvent.click(within(confirm).getByRole("button", { name: "Confirm revoke" }));
+  await view.findByText(/Lifecycle change saved/);
+  fireEvent.click(view.getByRole("tab", { name: "Overview" }));
   await view.findByText("This exact release is unavailable.");
   assert.equal(document.querySelector(".command-panel"), null);
 });
@@ -3656,6 +3675,10 @@ function publicRelease(): ReleaseMetadata {
       contentType: "application/vnd.myskills-app.package+json",
     },
   };
+}
+
+function managedSummary(skill: PublicSkill, allowedActions: SkillManagementSummary["allowedActions"] = ["edit", "archive", "delete"]): SkillManagementSummary {
+  return { slug: skill.slug, title: skill.title, summary: skill.summary, lifecycleStatus: "approved", visibility: skill.visibility, tags: skill.tags, allowedActions };
 }
 
 function releaseSummary(release: ReleaseMetadata): SkillReleaseSummary {

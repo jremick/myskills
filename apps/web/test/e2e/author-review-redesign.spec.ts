@@ -11,7 +11,7 @@ const base = { visibility: "private", platforms, artifact, createdAt: date, publ
 const pending = { ...base, id: "pending", slug: "release-notes-helper", title: "Release Notes Helper", summary: "Write concise release notes.", version: "1.3.0", lifecycleStatus: "submitted", reviewStatus: "pending", securityStatus: "passed", allowedActions: ["approve", "request-changes", "reject"] };
 const approved = { ...base, id: "approved", slug: "code-review-guide", title: "Code Review Guide", summary: "Check correctness before release.", version: "2.1.0", lifecycleStatus: "approved", reviewStatus: "approved", securityStatus: "passed", approvedArtifactSha256: "a".repeat(64), allowedActions: ["publish"] };
 const blocked = { ...base, id: "blocked", slug: "research-brief", title: "Research Brief", summary: "Gather cited evidence.", version: "0.8.0", lifecycleStatus: "quarantined", reviewStatus: "pending", securityStatus: "failed", findingCount: 3, allowedActions: ["request-changes", "reject"] };
-const managed = [pending, approved, blocked].map((s, i) => ({ ...s, lifecycleStatus: i === 2 ? "archived" : "approved", latestVersion: s.version, allowedActions: i === 2 ? ["restore"] : ["edit", "archive"] }));
+const managed = [pending, approved, blocked].map((s, i) => ({ ...s, tags: [], lifecycleStatus: i === 2 ? "archived" : "approved", latestVersion: s.version, allowedActions: i === 2 ? ["restore"] : ["edit", "archive"] }));
 
 async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; failReview?: boolean; bootstrap?: boolean } = {}) {
   const user = { id: "owner-1", email: "owner@example.test", name: "Example owner", status: "active", roles: ["owner"], emailVerified: true, mfaVerified: options.mfa !== false };
@@ -52,6 +52,13 @@ async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; 
     const detail = path.match(/^\/v1\/(?:review\/)?submissions\/([^/]+)$/);
     if (detail) return reply({ submission: { ...rows.find(s => s.id === detail[1]), reviewStatus: detail[1] === "blocked" ? "changes-requested" : rows.find(s => s.id === detail[1])?.reviewStatus, changeRequestReason: detail[1] === "blocked" ? "Cite the original research sources." : null, reviewHistory: [], scanRuns: [], correction: { requiresNewVersion: true, canSubmitNewVersion: true } } });
     if (path === "/v1/manage/skills") return reply({ skills: managed.filter(s => s.title.toLowerCase().includes((url.searchParams.get("q") ?? "").toLowerCase())), nextCursor: null });
+    const managedDetail = path.match(/^\/v1\/manage\/skills\/([^/]+)$/);
+    if (managedDetail) {
+      const row = managed.find(s => s.slug === managedDetail[1]);
+      return row ? reply({ skill: row }) : reply({ error: { code: "SKILL_NOT_FOUND" } }, 404);
+    }
+    // These skills have no readable published release: Skills shows the management record.
+    if (/^\/v1\/skills\/[^/]+$/.test(path)) return reply({ error: { code: "SKILL_NOT_FOUND", message: "Skill not found." } }, 404);
     const releases = path.match(/^\/v1\/skills\/([^/]+)\/releases$/);
     if (releases) return reply({ releases: [release(releases[1]!, "1.3.0"), release(releases[1]!, options.bootstrap ? "0.0.0-bootstrap.118b105a185" : "1.0.0")] });
     if (path === "/v1/teams") return reply({ teams: [], invitations: [] });
@@ -152,14 +159,16 @@ test("submission feedback opens beside its context and returns focus without an 
   await evidence(page, info, state.writes);
 });
 
+// /manage/skills is now the Skills Can manage scope; lifecycle lives in Manage.
 for (const mfa of [true, false]) test(`managed mobile exact release lifecycle respects MFA ${mfa}`, async ({ page }, info) => {
   const state = await fixture(page, { mfa });
   await page.setViewportSize({ width: 320, height: 844 });
   await page.goto("/manage/skills");
-  const row = page.getByRole("button", { name: /Release Notes Helper/ });
+  const row = page.getByRole("region", { name: "Managed skills", exact: true }).getByRole("link", { name: /Release Notes Helper/ });
   await row.click();
   await expect(page.getByRole("heading", { name: "Release Notes Helper", exact: true })).toBeFocused();
-  await page.getByRole("combobox", { name: "Managed release version", exact: true }).selectOption("1.0.0");
+  await page.getByRole("combobox", { name: "Release version", exact: true }).selectOption("1.0.0");
+  await page.getByRole("tab", { name: "Manage", exact: true }).click();
   const unpublish = page.getByRole("button", { name: "Unpublish 1.0.0", exact: true });
   if (!mfa) await expect(unpublish).toBeDisabled();
   else {
@@ -197,10 +206,11 @@ test("managed bootstrap label keeps the exact lifecycle target", async ({ page }
   const version = "0.0.0-bootstrap.118b105a185";
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/manage/skills");
-  await page.getByRole("button", { name: /Release Notes Helper/ }).click();
-  const selector = page.getByRole("combobox", { name: "Managed release version", exact: true });
-  await expect(selector.locator(`option[value="${version}"]`)).toHaveText("Initial import · Approved");
+  await page.getByRole("region", { name: "Managed skills", exact: true }).getByRole("link", { name: /Release Notes Helper/ }).click();
+  const selector = page.getByRole("combobox", { name: "Release version", exact: true });
+  await expect(selector.locator(`option[value="${version}"]`)).toHaveText("Initial import · Not published");
   await selector.selectOption(version);
+  await page.getByRole("tab", { name: "Manage", exact: true }).click();
   await expect(page.getByText("Exact version", { exact: true }).locator("..")).toContainText(version);
   await page.getByRole("button", { name: "Unpublish Initial import", exact: true }).click();
   await expect(page.getByRole("region", { name: "Confirm lifecycle change" })).toContainText(version);

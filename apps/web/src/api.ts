@@ -806,6 +806,7 @@ export interface RegistryClient {
   bundles?: BundleClient;
   searchSkillPage?(input: RegistryPageInput): Promise<RegistryPage<PublicSkill>>;
   listManagedSkills?(input: RegistryPageInput): Promise<RegistryPage<SkillManagementSummary>>;
+  getManagedSkill?(slug: string): Promise<SkillManagementSummary>;
   getUserSubmissionDetail?(submissionId: string): Promise<UserSubmissionDetail>;
   getReviewSubmissionDetail?(submissionId: string): Promise<ReviewSubmissionDetail>;
   getReleaseBundle?(slug: string, version: string, platform?: string): Promise<SkillPackageBundle>;
@@ -1002,6 +1003,10 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
     },
     async listManagedSkills(input) {
       return requestJson<RegistryPage<SkillManagementSummary>>(fetchImpl, `${root}/v1/manage/skills${registryPageQuery(input)}`, { token });
+    },
+    async getManagedSkill(slug) {
+      const body = await requestJson<{ skill: SkillManagementSummary }>(fetchImpl, `${root}/v1/manage/skills/${encodeURIComponent(slug)}`, { token });
+      return body.skill;
     },
     async getUserSubmissionDetail(submissionId) {
       const body = await requestJson<{ submission: UserSubmissionDetail }>(fetchImpl, `${root}/v1/submissions/${encodeURIComponent(submissionId)}`, { token });

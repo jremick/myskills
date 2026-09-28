@@ -39,9 +39,12 @@ test("owner curates a persistent library, changes private-import policy, and rem
   await page.getByLabel("Library name").fill(name);
   await page.getByRole("button", { name: "Create library", exact: true }).click();
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
-  await page.getByLabel("Skill slug").fill("release-notes-helper");
-  await page.getByRole("button", { name: "Save skill", exact: true }).click();
-  await page.getByLabel("Reviewed release version").fill("0.1.0");
+  // Skills and releases are chosen from authorised pickers, not typed identifiers.
+  const picker = page.getByRole("form", { name: "Save a skill" });
+  await picker.getByRole("searchbox", { name: "Search skills", exact: true }).fill("release-notes-helper");
+  await picker.getByRole("radio", { name: /release-notes-helper/ }).check();
+  await picker.getByRole("button", { name: "Save skill", exact: true }).click();
+  await page.getByLabel("Reviewed release", { exact: true }).selectOption("0.1.0");
   const note = "Reviewed for the release preparation workflow.";
   await page.getByLabel("Curator note (optional)").fill(note);
   await page.getByRole("button", { name: "Adopt skill release", exact: true }).click();

@@ -1,7 +1,7 @@
 # MySkills Design System
 
 Version: 0.1.0-beta.15
-Last updated: 2026-07-13
+Last updated: 2026-09-29
 
 MySkills should feel like a truthful operational console, not a marketing shell. Preserve the core surfaces: Skills, Review Dashboard, Submit Skill, compact admin overview, persistent rail, and real API state only.
 
@@ -16,7 +16,8 @@ The current shadcn/ReUI slice is local and workflow-first:
 - shadcn `Button`, `Card`, `Badge`, `Input`, and `Textarea` live under `apps/web/src/components/ui`.
 - `cn()` lives in `apps/web/src/lib/utils.ts`.
 - The Skills page uses shadcn `Card`, `Badge`, `Button`, and `Input` for the approved-results pane, selected-skill detail, export controls, account-action forms, and compact skill actions.
-- Skills maintainer lifecycle and sharing controls use ReUI `Frame` when they render for users with sharing-management permissions.
+- Skills keeps one selected skill and version across the All skills and Can manage scopes. The detail uses Overview, Versions, and an authorised Manage section.
+- Manage owns metadata, sharing, and lifecycle controls. Server-returned permissions and allowed actions determine which controls appear; consequential actions retain MFA checks and confirmation.
 - The Review Dashboard uses shadcn core components for its queue/detail cards, status badges, review note field, and action buttons while keeping the same list/detail format as the Skills page.
 - The Teams page uses shadcn core components for its combined teams/invitations panel, compact header metrics, shared-skills column, inputs, and action buttons.
 - The Submit Package page uses shadcn core components for upload/status/submission panels and workflow actions while preserving server-owned validation and scan state.
@@ -25,6 +26,14 @@ The current shadcn/ReUI slice is local and workflow-first:
 - CSS tokens in `apps/web/src/styles.css` bridge the existing MySkills palette into Tailwind/shadcn semantic variables.
 - ReUI registry config is present in `apps/web/components.json`; `@reui/frame` is installed under `apps/web/src/components/reui/frame.tsx`.
 - Native `select` and checkbox controls remain local for now. Install shadcn `Select`, `Checkbox`, or related ReUI controls only when the next workflow needs their interaction behavior, not for cosmetic parity alone.
+
+## Skills And Libraries
+
+Skills is the shared browse and management workspace. Can manage includes authorised archived and unpublished records even when no readable published release exists. Keep the selected skill, exact version, search, view, and section in navigation state. The legacy `/manage/skills` route opens Can manage.
+
+Libraries owns sources, saved references, tracking, and recommended versions. Add to library saves a skill reference; choosing a recommended version is a separate action. Neither action installs a skill. Use authorised skill and release pickers, and preserve the selected Library, entry, and candidate in links and browser history.
+
+Keep Review and installed Updates as distinct workflows. Link their relevant skill and release context rather than duplicating management controls.
 
 ## Component Source Order
 

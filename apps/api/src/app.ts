@@ -2133,6 +2133,23 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     });
   });
 
+  app.get("/v1/manage/skills/:slug", async (request, reply) => {
+    if (!options.authService) {
+      throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    }
+    if (!options.submissionService) {
+      throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    }
+    const user = await authenticateSessionUser(options.authService, requestAuthorization(request));
+    if (!user) return authFailureReply(options.authService, requestAuthorization(request), reply);
+    const skill = await options.submissionService.getSkillManagement({
+      actor: { id: user.id, roles: user.roles },
+      slug: parseSlugParam(request.params),
+    });
+    if (!skill) throw new AppError("Skill not found.", "SKILL_NOT_FOUND", 404);
+    return { skill };
+  });
+
   app.get("/v1/submissions/:id", async (request, reply) => {
     if (!options.authService) {
       throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
