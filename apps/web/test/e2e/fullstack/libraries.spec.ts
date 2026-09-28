@@ -67,6 +67,8 @@ test("owner curates a persistent library, changes private-import policy, and rem
   expect(resolution.resolution).toMatchObject({ state: "adopted", slug: "release-notes-helper", version: "0.1.0" });
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("heading", { name: savedEntry.entry.title, exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Back to entries", exact: true }).click();
   await page.getByRole("button", { name: savedEntry.entry.title, exact: true }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("persistent-library-mobile.png"), fullPage: true });
