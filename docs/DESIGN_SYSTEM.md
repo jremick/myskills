@@ -3,7 +3,7 @@
 Version: 0.1.0-beta.15
 Last updated: 2026-07-13
 
-MySkills should feel like a truthful operational console, not a marketing shell. Preserve the core surfaces: Skills Registry, Review Dashboard, Submit Skill, compact admin overview, persistent rail, and real API state only.
+MySkills should feel like a truthful operational console, not a marketing shell. Preserve the core surfaces: Skills, Review Dashboard, Submit Skill, compact admin overview, persistent rail, and real API state only.
 
 ## Current Adoption Mode
 
@@ -15,9 +15,9 @@ The current shadcn/ReUI slice is local and workflow-first:
 
 - shadcn `Button`, `Card`, `Badge`, `Input`, and `Textarea` live under `apps/web/src/components/ui`.
 - `cn()` lives in `apps/web/src/lib/utils.ts`.
-- The Skills Registry uses shadcn `Card`, `Badge`, `Button`, and `Input` for the approved-results pane, selected-skill detail, export controls, account-action forms, and compact registry actions.
-- Registry maintainer lifecycle and sharing controls use ReUI `Frame` when they render for users with sharing-management permissions.
-- The Review Dashboard uses shadcn core components for its queue/detail cards, status badges, review note field, and action buttons while keeping the same list/detail format as the Skills Registry.
+- The Skills page uses shadcn `Card`, `Badge`, `Button`, and `Input` for the approved-results pane, selected-skill detail, export controls, account-action forms, and compact skill actions.
+- Skills maintainer lifecycle and sharing controls use ReUI `Frame` when they render for users with sharing-management permissions.
+- The Review Dashboard uses shadcn core components for its queue/detail cards, status badges, review note field, and action buttons while keeping the same list/detail format as the Skills page.
 - The Teams page uses shadcn core components for its combined teams/invitations panel, compact header metrics, shared-skills column, inputs, and action buttons.
 - The Submit Package page uses shadcn core components for upload/status/submission panels and workflow actions while preserving server-owned validation and scan state.
 - The Admin Console uses ReUI `Frame` for structured admin panels where reusable console framing is useful without changing API-owned account, token, provider, or audit state.
@@ -56,6 +56,6 @@ Before installing additional shadcn/ReUI components, verify current docs again. 
 
 ## Migration Status
 
-The Skills Registry, Review Dashboard, Teams page, Submit Package page, Admin Console, Settings page, login form, MFA form, password reset form, and account-action forms now use the shadcn/ReUI foundation where it is useful. ReUI `Frame` is the default candidate for reusable console framing.
+The Skills page, Review Dashboard, Teams page, Submit Package page, Admin Console, Settings page, login form, MFA form, password reset form, and account-action forms now use the shadcn/ReUI foundation where it is useful. ReUI `Frame` is the default candidate for reusable console framing.
 
 Evaluate shadcn `Select`/`Checkbox`, ReUI Filters, or ReUI Data Grid only if a workflow needs richer interaction behavior such as accessible composite selects, bulk filtering, sorting, virtualization, or dense row actions beyond the current row/list contracts.

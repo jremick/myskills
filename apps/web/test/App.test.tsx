@@ -85,7 +85,7 @@ test("site configuration failure offers retry and sign-in without exposing the h
 });
 
 test("disabled landing leaves direct invitation, recovery and registry routes reachable", async () => {
-  for (const [path, heading] of [["/auth/register#token=fixture", "Complete registration"], ["/auth/reset-password#token=fixture", "Reset password"], ["/registry", "Registry"]]) {
+  for (const [path, heading] of [["/auth/register#token=fixture", "Complete registration"], ["/auth/reset-password#token=fixture", "Reset password"], ["/registry", "Skills"]]) {
     setupDom(`http://localhost${path}`);
     const client = mockClient();
     client.getSiteSettings = async () => ({ landingPageEnabled: false });
@@ -363,8 +363,11 @@ test("skill detail displays public metadata and release artifact metadata only",
   const view = render(<RegistryApp client={client} />);
 
   await view.findByText("Turns merged changes into concise release notes.");
+  // The summary is skill-level; release facts appear once the exact release loads.
+  await view.findByText("Platforms");
   assert.equal(view.getAllByText("0.1.0").length, 2);
-  assert.equal(view.getAllByText("codex, generic").length, 2);
+  assert.equal(view.getAllByText("codex, generic").length, 1);
+  assert.match(view.getByText("Platforms").parentElement?.textContent ?? "", /codex · supported, generic · supported/);
   assert.equal(view.getByText("Approved").textContent, "Approved");
   assert.equal(view.getByText("Passed").textContent, "Passed");
   assert.equal(document.body.textContent?.includes("storageKey"), false);
@@ -379,27 +382,28 @@ test("public release history selects exact metadata and a supported platform wit
   const view = render(<RegistryApp client={client} />);
 
   await view.findByText(fixture.latest.releaseNotes!);
-  const selector = view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement;
-  assert.equal(selector.value, fixture.latest.version);
-  assert.deepEqual(Array.from(selector.options).map((option) => option.value), [fixture.latest.version, fixture.older.version]);
+  releaseHeading(view, fixture.latest.version);
+  const rows = versionRows(view);
+  assert.deepEqual(rows.map((row) => row.querySelector("code")?.textContent), [fixture.latest.version, fixture.older.version]);
+  assert.deepEqual(rows.map((row) => row.getAttribute("aria-current")), ["true", null]);
   assert.equal(view.queryByText("Manager-only notes."), null);
   assert.equal(client.releaseHistoryCalls.length, 1);
   assert.equal(client.releaseManagementCalls, 0);
   assert.equal(view.getByText("feature").textContent, "feature");
   const latestDate = view.getByText("Released").parentElement?.textContent;
 
-  fireEvent.change(selector, { target: { value: fixture.older.version } });
+  selectRelease(view, fixture.older.version);
   await view.findByText(fixture.older.releaseNotes!);
   await waitFor(() => assert.equal(window.location.search, "?q=writing&platform=generic&version=0.1.0"));
-  assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, fixture.older.version);
+  releaseHeading(view, fixture.older.version);
   assert.notEqual(view.getByText("Released").parentElement?.textContent, latestDate);
   assert.equal(view.getByText("fix").textContent, "fix");
   assert.match(view.getByText("Minimum MySkills").parentElement?.textContent ?? "", /1\.0\.0/);
   assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /b{64}/);
-  assert.match(view.getByText("Byte size").parentElement?.textContent ?? "", /513/);
+  assert.match(view.getByText("Size").parentElement?.textContent ?? "", /513 bytes/);
   assert.equal(view.getByText("Platforms").parentElement?.textContent?.includes("codex"), false);
   assert.equal(view.queryByRole("button", { name: "codex" }), null);
-  await view.findByText(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/);
+  await findCommand(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/);
   assert.equal(client.releaseCalls.at(-1), "release-notes-helper@0.1.0");
   assert.equal(client.bundleCalls, 0);
   assert.equal(client.releaseManagementCalls, 0);
@@ -421,7 +425,7 @@ for (const version of ["1.02.0", "2026.09.01"]) {
       const view = render(<RegistryApp client={client} />);
 
       await view.findByText(latest.releaseNotes);
-      assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, version);
+      releaseHeading(view, version);
       assert.deepEqual(client.releaseCalls, [`release-notes-helper@${version}`]);
       assert.equal(window.location.search, pinned ? `?version=${version}` : "");
       assert.equal(view.queryByText(original.older.releaseNotes!), null);
@@ -439,19 +443,22 @@ test("release version control keeps the same focused node while an exact release
   const view = render(<RegistryApp client={client} />);
 
   await view.findByText(fixture.latest.releaseNotes!);
-  const selector = view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement;
-  selector.focus();
-  assert.equal(document.activeElement, selector);
-  fireEvent.change(selector, { target: { value: fixture.older.version } });
+  const toggle = view.getByRole("button", { name: /^Versions/ });
+  toggle.focus();
+  assert.equal(document.activeElement, toggle);
+  selectRelease(view, fixture.older.version);
   await waitFor(() => assert.equal(client.releaseCalls.at(-1), `release-notes-helper@${fixture.older.version}`));
-  assert.equal(view.getByRole("combobox", { name: "Release version" }), selector);
-  assert.equal(selector.isConnected, true);
-  assert.equal(document.activeElement, selector);
+  assert.equal(view.getByRole("button", { name: /^Versions/ }), toggle);
+  assert.equal(toggle.isConnected, true);
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  assert.equal(document.activeElement, toggle);
+  releaseHeading(view, fixture.older.version);
+  assert.equal(document.querySelector(".command-panel"), null);
 
   await act(async () => { pending.resolve(fixture.older); await pending.promise; });
   await view.findByText(fixture.older.releaseNotes!);
-  assert.equal(view.getByRole("combobox", { name: "Release version" }), selector);
-  assert.equal(document.activeElement, selector);
+  assert.equal(view.getByRole("button", { name: /^Versions/ }), toggle);
+  assert.equal(document.activeElement, toggle);
 });
 
 test("a pinned release repairs its platform URL even when the skill list fails", async () => {
@@ -461,13 +468,15 @@ test("a pinned release repairs its platform URL even when the skill list fails",
   client.searchSkillPage = async () => { throw new Error("Search list unavailable"); };
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByText("The list could not load. Retry the registry request before selecting a skill.");
+  await view.findByText("The list could not load. Retry the request before selecting a skill.");
   await view.findByText(fixture.older.releaseNotes!);
   await waitFor(() => assert.equal(window.location.search, "?q=writing&platform=generic&version=0.1.0"));
-  assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, fixture.older.version);
-  assert.equal(view.getByRole("button", { name: "generic" }).classList.contains("active"), true);
+  releaseHeading(view, fixture.older.version);
+  // A single supported platform is stated rather than offered as a choice.
+  assert.match(view.getByRole("region", { name: "Use this release" }).textContent ?? "", /Platform\s*generic/);
+  assert.equal(view.queryByRole("button", { name: "generic" }), null);
   assert.equal(view.queryByRole("button", { name: "codex" }), null);
-  await view.findByText(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/);
+  await findCommand(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/);
   assert.deepEqual(client.releaseCalls, ["release-notes-helper@0.1.0"]);
 });
 
@@ -480,12 +489,15 @@ test("manager-only history cannot be pinned and offers an explicit return to lat
   await view.findByText("This exact release is unavailable.");
   assert.equal(window.location.search, "?version=0.3.0");
   assert.deepEqual(client.releaseCalls, []);
-  assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, "0.3.0");
-  assert.equal(view.getByRole("option", { name: "Unavailable exact version" }).hasAttribute("disabled"), true);
+  releaseHeading(view, "0.3.0");
+  view.getByText("Unavailable");
+  assert.deepEqual(versionRows(view).map((row) => row.querySelector("code")?.textContent), [fixture.latest.version, fixture.older.version]);
+  assert.equal(view.getByRole("list", { name: "Published versions" }).querySelector("[aria-current='true']"), null);
   assert.equal(view.queryByText("Manager-only notes."), null);
   assert.equal(view.queryByText(fixture.latest.releaseNotes!), null);
+  assert.equal(document.querySelector(".command-panel"), null);
 
-  fireEvent.click(view.getByRole("button", { name: "Return to latest" }));
+  fireEvent.click(view.getByRole("button", { name: "View latest" }));
   await view.findByText(fixture.latest.releaseNotes!);
   assert.equal(window.location.search, "");
 });
@@ -506,7 +518,7 @@ test("return to latest retries skill detail after a pinned skill fails to load",
   await view.findByText("Skill or release not found.");
   assert.equal(window.location.search, "?q=writing&version=0.1.0");
   assert.equal(document.body.textContent?.includes("Private skill detail"), false);
-  fireEvent.click(view.getByRole("button", { name: "Return to latest" }));
+  fireEvent.click(view.getByRole("button", { name: "View latest" }));
   await view.findByText(fixture.latest.releaseNotes!);
   assert.equal(skillCalls, 2);
   assert.equal(window.location.search, "?q=writing");
@@ -543,7 +555,9 @@ test("a listed exact version returning 404 stays pinned instead of falling back"
   assert.deepEqual(client.releaseCalls, ["release-notes-helper@0.1.0"]);
   assert.equal(document.body.textContent?.includes("Private release details"), false);
   assert.equal(view.queryByText(fixture.latest.releaseNotes!), null);
-  fireEvent.click(view.getByRole("button", { name: "Return to latest" }));
+  releaseHeading(view, fixture.older.version);
+  assert.equal(document.querySelector(".command-panel"), null);
+  fireEvent.click(view.getByRole("button", { name: "View latest" }));
   await view.findByText(fixture.latest.releaseNotes!);
 });
 
@@ -588,16 +602,17 @@ test("a release without supported platforms keeps its metadata but offers no exp
 
   const view = render(<RegistryApp client={client} />);
   await view.findByText(older.releaseNotes!);
-  assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, older.version);
-  assert.match(view.getByText("Platforms").parentElement?.textContent ?? "", /generic \(planned\).*codex \(deprecated\)/);
+  releaseHeading(view, older.version);
+  assert.match(view.getByText("Platforms").parentElement?.textContent ?? "", /generic · planned.*codex · deprecated/);
   assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /b{64}/);
-  assert.match(view.getByText("Byte size").parentElement?.textContent ?? "", /513/);
+  assert.match(view.getByText("Size").parentElement?.textContent ?? "", /513 bytes/);
   assert.match(view.getByText(/No supported export platform is available for this release/).textContent ?? "", /Export and install are unavailable/);
   assert.equal(view.queryByRole("heading", { name: "Install this exact release" }), null);
   assert.equal(view.queryByRole("button", { name: "generic" }), null);
   assert.equal(view.queryByRole("button", { name: "codex" }), null);
   assert.equal(document.querySelector(".package-file-viewer"), null);
-  assert.equal(view.queryByText("CLI export"), null);
+  assert.equal(document.querySelector(".command-panel"), null);
+  assert.equal(view.queryByRole("button", { name: /^Copy command/ }), null);
   assert.equal(document.body.textContent?.includes("myskills export 'release-notes-helper'"), false);
   assert.equal(client.bundleCalls, 0);
   assert.equal(targetReads, 0);
@@ -625,7 +640,7 @@ test(`signed-in users review the ${selectedRelease} release before queueing a co
   const view = render(<RegistryApp client={client} />);
   await view.findByRole("heading", { name: "Install this exact release" });
   if (selectedRelease === "older") {
-    fireEvent.change(view.getByRole("combobox", { name: "Release version" }), { target: { value: fixture.older.version } });
+    selectRelease(view, fixture.older.version);
   }
   await view.findByText(expectedRelease.releaseNotes!);
   assert.equal(operations.length, 0);
@@ -678,7 +693,8 @@ test("generic exact releases remain readable and exportable without browser queu
   client.listArchitectureTargets = async () => [workspaceTarget()];
   client.scheduleTargetSkillOperation = async () => { queued += 1; return { operation: {} as never, replayed: false }; };
   const view = render(<RegistryApp client={client} />);
-  fireEvent.change(await view.findByRole("combobox", { name: "Release version" }), { target: { value: fixture.older.version } });
+  await view.findByRole("button", { name: /^Versions/ });
+  selectRelease(view, fixture.older.version);
   await view.findByText(fixture.older.releaseNotes!);
   await view.findByText(/Browser installs require a consented personal Codex workspace/);
   assert.equal(view.queryByRole("button", { name: "Review install" }), null);
@@ -702,10 +718,13 @@ for (const releaseKind of ["prerelease", "deprecated"] as const) {
     const view = render(<RegistryApp client={client} />);
     await view.findByRole("heading", { name: "No default stable release" });
     assert.deepEqual(client.releaseCalls, []);
-    fireEvent.change(view.getByRole("combobox", { name: "Release version" }), { target: { value: exact.version } });
+    assert.deepEqual(versionRows(view).map((row) => row.getAttribute("aria-current")), [null]);
+    selectRelease(view, exact.version);
     await view.findByText(exact.releaseNotes!);
     assert.deepEqual(client.releaseCalls, [`${skill.slug}@${exact.version}`]);
     assert.ok(document.querySelector(".command-panel")?.textContent?.includes(`--version '${exact.version}'`));
+    // With no default stable release, clearing the pin never claims a latest one.
+    assert.equal(view.queryByRole("button", { name: "View latest" }), null);
   });
 }
 
@@ -781,7 +800,7 @@ test("skill deletion clears the parent detail and its stale export actions", asy
   fireEvent.input(dialog.querySelector("textarea")!, { target: { value: "Remove obsolete skill" } });
   fireEvent.click(Array.from(dialog.querySelectorAll("button")).find((button) => button.textContent === "Delete skill")!);
   await view.findByText("Skill or release not found.");
-  assert.equal(view.queryByText("CLI export"), null);
+  assert.equal(document.querySelector(".command-panel"), null);
 });
 
 test("release mutation refreshes parent history before offering the old artifact", async () => {
@@ -800,7 +819,7 @@ test("release mutation refreshes parent history before offering the old artifact
   fireEvent.input(dialog.querySelector("textarea")!, { target: { value: "Withdraw this artifact" } });
   fireEvent.click(Array.from(dialog.querySelectorAll("button")).find((button) => button.textContent === "Revoke release")!);
   await view.findByText("This exact release is unavailable.");
-  assert.equal(view.queryByText("CLI export"), null);
+  assert.equal(document.querySelector(".command-panel"), null);
 });
 
 test("404 detail responses render generic not found state", async () => {
@@ -821,11 +840,11 @@ test("platform selection changes CLI export guidance only", async () => {
   const client = mockClient();
 
   const view = render(<RegistryApp client={client} />);
-  await view.findByText(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'codex'/);
+  await findCommand(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'codex'/);
 
   fireEvent.click(view.getByRole("button", { name: "generic" }));
 
-  await view.findByText(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/);
+  await findCommand(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/);
   assert.equal(window.location.search, "?platform=generic");
   assert.equal(client.releaseCalls.length, 1);
   assert.equal(client.bundleCalls, 0);
@@ -837,7 +856,7 @@ test("URL state and popstate restore search, selection, platform, and active nav
 
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByText(/--platform 'generic'/);
+  await findCommand(/--platform 'generic'/);
   assert.equal((view.getByLabelText("Search skills") as HTMLInputElement).value, "release");
   const selectedResult = view.getByRole("link", { name: /Release Notes Helper/ });
   assert.equal(selectedResult.getAttribute("aria-current"), "true");
@@ -845,7 +864,7 @@ test("URL state and popstate restore search, selection, platform, and active nav
   const modifiedClick = new window.MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true });
   selectedResult.dispatchEvent(modifiedClick);
   assert.equal(modifiedClick.defaultPrevented, false);
-  assert.equal(view.getAllByRole("link", { name: "Registry" })[0]?.getAttribute("aria-current"), "page");
+  assert.equal(view.getAllByRole("link", { name: /^Skills$/ })[0]?.getAttribute("aria-current"), "page");
 
   fireEvent.click(view.getAllByRole("link", { name: "Settings" })[0]!);
   await view.findByRole("heading", { name: "Security and access", level: 1 });
@@ -854,7 +873,7 @@ test("URL state and popstate restore search, selection, platform, and active nav
   window.history.replaceState({}, "", "/skills/release-notes-helper?q=release&platform=generic");
   window.dispatchEvent(new window.PopStateEvent("popstate"));
 
-  await view.findByText(/--platform 'generic'/);
+  await findCommand(/--platform 'generic'/);
   assert.equal((view.getByLabelText("Search skills") as HTMLInputElement).value, "release");
   assert.equal(window.location.pathname, "/skills/release-notes-helper");
 });
@@ -895,7 +914,7 @@ test("a late release list cannot replace another skill's history", async () => {
     await pendingHistory.promise;
   });
   assert.equal(window.location.pathname, "/skills/fast-helper");
-  assert.equal(view.queryByRole("combobox", { name: "Release version" }), null);
+  assert.equal(view.queryByRole("button", { name: /^Versions/ }), null);
   assert.equal(client.releaseManagementCalls, 0);
 });
 
@@ -908,7 +927,7 @@ test("out-of-order exact release responses cannot replace the current version", 
   });
   const view = render(<RegistryApp client={client} />);
   await waitFor(() => assert.deepEqual(client.releaseCalls, ["release-notes-helper@0.1.0"]));
-  fireEvent.click(await view.findByRole("button", { name: "Return to latest" }));
+  fireEvent.click(await view.findByRole("button", { name: "View latest" }));
   await view.findByText(fixture.latest.releaseNotes!);
   await act(async () => { pendingRelease.resolve(fixture.older); await pendingRelease.promise; });
   assert.equal(window.location.search, "");
@@ -925,7 +944,7 @@ test("popstate restores a pinned version and skill changes clear that pin", asyn
   const view = render(<RegistryApp client={client} />);
   await view.findByText(fixture.latest.releaseNotes!);
   const historyLength = window.history.length;
-  fireEvent.change(view.getByRole("combobox", { name: "Release version" }), { target: { value: fixture.older.version } });
+  selectRelease(view, fixture.older.version);
   await view.findByText(fixture.older.releaseNotes!);
   const pinnedUrl = `${window.location.pathname}${window.location.search}`;
   assert.equal(pinnedUrl, "/skills/release-notes-helper?q=writing&platform=generic&version=0.1.0");
@@ -941,9 +960,9 @@ test("popstate restores a pinned version and skill changes clear that pin", asyn
   });
   await view.findByText(fixture.older.releaseNotes!);
   assert.equal((view.getByLabelText("Search skills") as HTMLInputElement).value, "writing");
-  assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, fixture.older.version);
+  releaseHeading(view, fixture.older.version);
   assert.equal(view.getByRole("link", { name: /Release Notes Helper/ }).getAttribute("aria-current"), "true");
-  await view.findByText(/--version '0\.1\.0' --platform 'generic'/);
+  await findCommand(/--version '0\.1\.0' --platform 'generic'/);
 
   act(() => {
     window.history.replaceState(window.history.state, "", otherUrl);
@@ -973,11 +992,11 @@ test("copy actions announce success to assistive technology", async (t) => {
   t.after(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: originalClipboard }));
 
   const view = render(<RegistryApp client={mockClient()} />);
-  await view.findByText(/myskills export/);
-  fireEvent.click(view.getByRole("button", { name: "Copy" }));
+  await findCommand(/myskills export/);
+  fireEvent.click(view.getByRole("button", { name: "Copy command" }));
 
   await view.findByText("Copied to clipboard.");
-  assert.equal(writes[0]?.includes("myskills export"), true);
+  assert.deepEqual(writes, ["myskills export 'release-notes-helper' --version '0.1.0' --platform 'codex' --output './skills/release-notes-helper'"]);
 });
 
 for (const failure of [safeApiError(503, "UNAVAILABLE", "Temporary outage"), new Error("Network unavailable")]) {
@@ -1946,10 +1965,10 @@ test("exact registry release picker supports a first flat revision and rejects d
   const view = render(<RegistryApp client={client} />);
 
   await view.findByRole("heading", { name: "Build the first revision" });
-  fireEvent.input(view.getByLabelText("Search registry skills"), { target: { value: "audit" } });
+  fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "audit" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
   await waitFor(() => assert.deepEqual(client.searchCalls.at(-1), "audit"));
-  fireEvent.change(await view.findByLabelText("Registry skill"), { target: { value: "audit-helper" } });
+  fireEvent.change(await view.findByLabelText("Skill"), { target: { value: "audit-helper" } });
   await view.findByLabelText("Exact release");
   fireEvent.change(view.getByLabelText("Exact release"), { target: { value: "release-audit-123" } });
   assert.equal(view.queryByLabelText("Release parent router"), null);
@@ -1982,9 +2001,9 @@ test("stale exact-release responses cannot replace the release selected for a ne
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
-  fireEvent.input(view.getByLabelText("Search registry skills"), { target: { value: "skill" } });
+  fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "skill" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
-  const skillSelector = await view.findByLabelText("Registry skill");
+  const skillSelector = await view.findByLabelText("Skill");
   fireEvent.change(skillSelector, { target: { value: "skill-a" } });
   await waitFor(() => assert.equal(client.releaseCalls.at(-1), "skill-a@1.0.0"));
   fireEvent.change(skillSelector, { target: { value: "skill-b" } });
@@ -2005,9 +2024,9 @@ test("router release picker requires an explicit parent and creates a routes edg
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
-  fireEvent.input(view.getByLabelText("Search registry skills"), { target: { value: "audit" } });
+  fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "audit" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
-  fireEvent.change(await view.findByLabelText("Registry skill"), { target: { value: "audit-helper" } });
+  fireEvent.change(await view.findByLabelText("Skill"), { target: { value: "audit-helper" } });
   fireEvent.change(await view.findByLabelText("Exact release"), { target: { value: "release-audit-123" } });
   const addButton = view.getByRole("button", { name: "Add selected exact release" }) as HTMLButtonElement;
   assert.equal(addButton.disabled, true);
@@ -2331,7 +2350,7 @@ test("failed login shows auth-specific safe copy", async () => {
   fireEvent.click(view.getByRole("button", { name: /sign in/i }));
 
   await view.findByText("Invalid email or password.");
-  assert.equal(document.body.textContent?.includes("registry item"), false);
+  assert.equal(document.body.textContent?.includes("You do not have access to that skill or release."), false);
   assert.equal(document.body.textContent?.includes("Wrong password"), false);
   assert.equal(window.localStorage.getItem("myskills-app:web-session"), null);
 });
@@ -3695,6 +3714,26 @@ function releaseHistoryFixture() {
     older,
     history: [releaseSummary(older), hidden, unpublished, releaseSummary(latest)],
   };
+}
+
+function releaseHeading(view: ReturnType<typeof render>, version: string) {
+  return view.getByRole("heading", { name: `Release ${version}` });
+}
+
+function versionRows(view: ReturnType<typeof render>) {
+  const toggle = view.getByRole("button", { name: /^Versions/ });
+  if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
+  return within(view.getByRole("list", { name: "Published versions" })).getAllByRole("button");
+}
+
+function selectRelease(view: ReturnType<typeof render>, version: string) {
+  const row = versionRows(view).find((button) => button.querySelector("code")?.textContent === version);
+  assert.ok(row, `version row ${version}`);
+  fireEvent.click(row);
+}
+
+async function findCommand(pattern: RegExp) {
+  await waitFor(() => assert.match(document.querySelector(".command-panel code")?.textContent ?? "", pattern));
 }
 
 function historyClient(fixture: ReturnType<typeof releaseHistoryFixture>, options: Parameters<typeof mockClient>[0] = {}) {

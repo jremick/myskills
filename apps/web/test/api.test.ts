@@ -947,7 +947,7 @@ test("safe error messages do not render raw server internals", () => {
   error.status = 500;
   error.code = "INTERNAL_SERVER_ERROR";
 
-  assert.equal(safeErrorMessage(error), "The registry is not available.");
+  assert.equal(safeErrorMessage(error), "Skills are not available.");
   assert.equal(safeAdminErrorMessage(error), "Admin data is not available.");
   assert.equal(safeSubmitErrorMessage(error), "Submission service is not available.");
   assert.equal(safeReviewErrorMessage(error), "Review queue is not available.");

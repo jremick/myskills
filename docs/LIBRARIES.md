@@ -5,7 +5,7 @@ See the [release delivery record](BETA8_RELEASE_DELIVERY.md) and [build evidence
 
 Unreleased extension: [team-owned sourcing and tracking](plans/2026-09-29-team-library-sources.md). The behavior below includes that extension; the beta.8 records describe the earlier release.
 
-Libraries collect source references and reviewed registry releases. They retain source citations, track selected content, and record the exact version a person or team recommends. Saving, checking, importing, reviewing, adopting and installing are separate actions.
+Libraries collect source references and reviewed skill releases. They retain source citations, track selected content, and record the exact version a person or team recommends. Saving, checking, importing, reviewing, adopting and installing are separate actions.
 
 ## Start in the browser
 
@@ -13,8 +13,8 @@ Libraries collect source references and reviewed registry releases. They retain 
 2. Save a public GitHub repository, directory or `SKILL.md` URL. **Use ref from URL** preserves a pasted branch or tag. Use **Source selection** to override it with a branch, tag, commit, stable release or tag prefix. Saving does not run repository code or install anything.
 3. Choose **Discover skills**. Select complete skill directories, inspect blockers, and preview the selected files. The preview records a resolved commit, included notices, mapping and artifact digest. Unsupported plugin content can remain a saved reference.
 4. Inspect the included instructions and supporting files. Review the installed name and both file digests: the runtime `SKILL.md` uses the unique registry slug, while `myskills-source-skill.txt` retains the exact upstream original. Submit the preview for review. Unclassified changes are conservatively recorded as breaking and requiring user action.
-5. Use the normal registry review queue. Team imports always require instance review and publication. In a personal Library, you can instead approve your own strictly private import if the administrator enabled that option. Private approval requires MFA, a clean scan and an explicit artifact attestation. Choose **Inspect submitted artifact** first; the browser verifies its exact digest before enabling the attestation.
-6. Adopt the approved release. For a registry entry, add an optional curator note explaining the recommendation. Adoption changes the library recommendation. It does not write to local installations.
+5. Use the normal review queue. Team imports always require instance review and publication. In a personal Library, you can instead approve your own strictly private import if the administrator enabled that option. Private approval requires MFA, a clean scan and an explicit artifact attestation. Choose **Inspect submitted artifact** first; the browser verifies its exact digest before enabling the attestation.
+6. Adopt the approved release. For a skill entry, add an optional curator note explaining the recommendation. Adoption changes the library recommendation. It does not write to local installations.
 7. Set source checks to off, manual, daily or weekly. Opt into **Notify me about changes** to receive in-app events for libraries you can currently access.
 8. Install with the command shown on the adopted entry. Review required release actions before accepting an update.
 
@@ -186,6 +186,6 @@ List commands support `--limit 1..100` and `--cursor`. Removing a library requir
 
 Source checks use fixed public GitHub HTTPS endpoints, no provider credentials and no repository code execution. Scheduled checks use persistent leases and respect retries; `LIBRARY_SOURCE_WORKER=disabled` turns the source worker off. Instances without it retain manual checks and report that scheduling is unavailable.
 
-Deleting a library stops its tracking/subscriptions and makes its target bindings unavailable. Imported registry releases and installed files remain. Retained provenance describes the original source snapshot and the imported artifact separately.
+Deleting a library stops its tracking/subscriptions and makes its target bindings unavailable. Imported skill releases and installed files remain. Retained provenance describes the original source snapshot and the imported artifact separately.
 
 This implementation does not include private GitHub credentials, organization-owned Libraries, email delivery, unattended local application or native plugin execution. The complete future scope and acceptance criteria are in the [feature specification](plans/2026-09-26-library-feature-spec.md).

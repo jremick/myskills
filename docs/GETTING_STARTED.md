@@ -59,7 +59,7 @@ npm run dev:api
 npm run dev:web
 ```
 
-Open `http://localhost:3000/registry` to see the seeded **Release Notes Helper** skill. Sign in with `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` from your local `.env`. The root URL shows the public homepage by default. The API is available at `http://localhost:3001`.
+Open **Skills** at `http://localhost:3000/registry` to see the seeded **Release Notes Helper** skill. Sign in with `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` from your local `.env`. The root URL shows the public homepage by default. The API is available at `http://localhost:3001`. The Skills page keeps the `/registry` URL for existing bookmarks; skill detail links remain under `/skills/<slug>`.
 
 ## Verify The First Run
 

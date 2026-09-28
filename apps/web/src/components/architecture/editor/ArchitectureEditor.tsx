@@ -273,7 +273,7 @@ export function ArchitectureEditor({
     registryRequestEpoch.current = requestEpoch;
     if (!registryQuery.trim()) {
       setRegistryState("error");
-      setRegistryMessage("Enter a skill name or slug to search the authorized registry.");
+      setRegistryMessage("Enter a skill name or slug to search authorized skills.");
       return;
     }
     setRegistryState("searching");
@@ -288,11 +288,11 @@ export function ArchitectureEditor({
       if (requestEpoch !== registryRequestEpoch.current) return;
       setRegistrySkills(results);
       setRegistryState(results.length > 0 ? "ready" : "idle");
-      if (results.length === 0) setRegistryMessage("No authorized registry skills matched that search.");
+      if (results.length === 0) setRegistryMessage("No authorized skills matched that search.");
     } catch {
       if (requestEpoch !== registryRequestEpoch.current) return;
       setRegistryState("error");
-      setRegistryMessage("The authorized registry search is not available right now.");
+      setRegistryMessage("Skill search is not available right now.");
     }
   }, [onLoadRegistryReleases, onSearchRegistrySkills, registryQuery]);
 
@@ -316,7 +316,7 @@ export function ArchitectureEditor({
     } catch {
       if (requestEpoch !== registryRequestEpoch.current) return;
       setRegistryState("error");
-      setRegistryMessage("The selected registry skill releases are not available right now.");
+      setRegistryMessage("The selected skill releases are not available right now.");
     }
   }, [onLoadRegistryReleases, registrySkills]);
 
@@ -473,21 +473,21 @@ export function ArchitectureEditor({
           {!readOnly && onSearchRegistrySkills && onLoadRegistryReleases && <section className="architecture-editor-registry-picker" aria-labelledby="architecture-editor-registry-heading">
             <div className="architecture-editor-picker-heading">
               <div>
-                <p className="architecture-editor-eyebrow">Authorized registry</p>
+                <p className="architecture-editor-eyebrow">Authorized skills</p>
                 <h4 id="architecture-editor-registry-heading">Add an exact release</h4>
               </div>
               <span className="architecture-editor-picker-badge">Immutable ref</span>
             </div>
             <p className="architecture-editor-picker-copy">Search API-authorized metadata, choose one exact version and digest, then place it in the semantic draft. The picker never accepts a hand-entered package reference.</p>
             <form className="architecture-editor-registry-search" onSubmit={(event) => void handleRegistrySearch(event)}>
-              <label className="architecture-editor-field"><span>Search registry skills</span><input aria-label="Search registry skills" value={registryQuery} onChange={(event) => setRegistryQuery(event.target.value)} placeholder="release notes or slug" /></label>
+              <label className="architecture-editor-field"><span>Search skills</span><input aria-label="Search skills" value={registryQuery} onChange={(event) => setRegistryQuery(event.target.value)} placeholder="release notes or slug" /></label>
               <button type="submit" className="architecture-editor-add-button" disabled={registryState === "searching" || registryState === "loading-releases"}><Plus size={14} aria-hidden="true" /> {registryState === "searching" ? "Searching…" : "Search"}</button>
             </form>
-            {registrySkills.length > 0 && <label className="architecture-editor-field"><span>Registry skill</span><select aria-label="Registry skill" value={registrySkillSlug} onChange={(event) => void handleRegistrySkillChange(event.target.value)}><option value="">Choose a skill</option>{registrySkills.map((skill) => <option key={skill.slug} value={skill.slug}>{skill.title} · {skill.slug}</option>)}</select></label>}
+            {registrySkills.length > 0 && <label className="architecture-editor-field"><span>Skill</span><select aria-label="Skill" value={registrySkillSlug} onChange={(event) => void handleRegistrySkillChange(event.target.value)}><option value="">Choose a skill</option>{registrySkills.map((skill) => <option key={skill.slug} value={skill.slug}>{skill.title} · {skill.slug}</option>)}</select></label>}
             {registrySkillSlug && registryReleases.length > 0 && <label className="architecture-editor-field"><span>Exact release</span><select aria-label="Exact release" value={registryReleaseId} onChange={(event) => setRegistryReleaseId(event.target.value)}><option value="">Choose a version and digest</option>{registryReleases.map((release) => <option key={release.id} value={release.id}>{release.slug}@{release.version} · {release.digest}</option>)}</select></label>}
             {draft.pattern.id !== "flat" && <label className="architecture-editor-field"><span>Parent router <small>(required)</small></span><select aria-label="Release parent router" value={registryParentId} onChange={(event) => setRegistryParentId(event.target.value)} disabled={registryParentOptions.length === 0}><option value="">Choose a parent router</option>{registryParentOptions.map((node) => <option key={node.id} value={node.id}>{node.label}</option>)}</select></label>}
             {selectedRegistryRelease && <dl className="architecture-editor-release-facts" aria-label="Selected exact release details">
-              <div><dt>Registry id</dt><dd>{selectedRegistryRelease.id}</dd></div>
+              <div><dt>Release id</dt><dd>{selectedRegistryRelease.id}</dd></div>
               <div><dt>Slug</dt><dd>{selectedRegistryRelease.slug}</dd></div>
               <div><dt>Version</dt><dd>{selectedRegistryRelease.version}</dd></div>
               <div><dt>Digest</dt><dd>{selectedRegistryRelease.digest}</dd></div>

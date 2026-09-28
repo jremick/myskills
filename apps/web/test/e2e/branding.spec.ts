@@ -125,7 +125,7 @@ test("admin branding survives reload, navigation and anonymous reads; drafts, er
   const requested = new Promise<void>(resolve => { saveArrived = resolve; });
   await panel.getByRole("button", { name: "Save branding", exact: true }).click();
   await requested;
-  await page.locator(".app-sidebar").getByRole("link", { name: "Registry", exact: true }).click();
+  await page.locator(".app-sidebar").getByRole("link", { name: "Skills", exact: true }).click();
   releaseSave(); saveGate = undefined;
   await expect(page.locator(".app-sidebar")).toContainText("Research & Delivery");
   await expectBrowserBranding(page, "Research & Delivery", png.toString("base64"));

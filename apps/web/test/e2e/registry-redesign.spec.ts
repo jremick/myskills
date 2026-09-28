@@ -67,6 +67,12 @@ async function fixture(page: Page, options: { role?: string; anonymous?: boolean
 const firstRow = (page: Page) => page.getByRole("link", { name: /Release Notes Helper release-notes-helper/ });
 const title = (page: Page) => page.getByRole("heading", { name: "Release Notes Helper", exact: true });
 const command = (page: Page) => page.getByText(/myskills export 'release-notes-helper' --version/);
+const releaseCard = (page: Page) => page.getByRole("region", { name: "Release", exact: true });
+const releaseHeading = (page: Page, version: string) => releaseCard(page).getByRole("heading", { name: `Release ${version}`, exact: true });
+async function pickVersion(page: Page, version: string) {
+  await releaseCard(page).getByRole("button", { name: /^Versions/ }).click();
+  await releaseCard(page).getByRole("list", { name: "Published versions" }).getByRole("button", { name: new RegExp(`^${version.replaceAll(".", "\\.")}(\\s|$)`) }).click();
+}
 
 for (const width of [1440, 1280]) test(`exact-release workspace keeps selection and use action on screen at ${width}`, async ({ page }) => {
   await fixture(page);
@@ -82,6 +88,30 @@ for (const width of [1440, 1280]) test(`exact-release workspace keeps selection 
   await page.screenshot({ path: test.info().outputPath(`registry-${width}.png`), fullPage: true });
 });
 
+for (const width of [1440, 390]) test(`Skills navigation is keyboard accessible and preserves legacy deep links at ${width}`, async ({ page }) => {
+  await fixture(page);
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto("/settings");
+  const nav = page.locator(width === 1440 ? ".side-nav" : ".mobile-nav");
+  if (width === 1440) await page.getByRole("button", { name: "Collapse navigation", exact: true }).click();
+  const skillsLink = nav.getByRole("link", { name: "Skills", exact: true });
+  await expect(skillsLink).toHaveAttribute("href", "/registry");
+  if (width === 1440) await expect(skillsLink).toHaveAttribute("title", "Skills");
+  for (let step = 0; step < 40 && !await skillsLink.evaluate((link) => link === document.activeElement); step++) {
+    await page.keyboard.press("Tab");
+  }
+  await expect(skillsLink).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Skills", exact: true, level: 1 })).toBeVisible();
+  await expect(skillsLink).toHaveAttribute("aria-current", "page");
+  await expect(nav.getByRole("link", { name: "Registry", exact: true })).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath(`skills-navigation-${width}.png`), fullPage: true });
+  await page.goto("/registry/skills/release-notes-helper?version=1.0.0");
+  await expect(title(page)).toBeVisible();
+  await expect(releaseHeading(page, "1.0.0")).toBeVisible();
+  await expect(command(page)).toContainText("--version '1.0.0'");
+});
+
 test("mobile list, exact-version history and Back restore the selected row and focus", async ({ page }) => {
   await fixture(page);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -92,18 +122,18 @@ test("mobile list, exact-version history and Back restore the selected row and f
   await firstRow(page).click();
   await expect(title(page)).toBeFocused();
   await expect(page).toHaveURL(/\/skills\/release-notes-helper/);
-  await page.getByRole("combobox", { name: "Release version", exact: true }).selectOption("1.0.0");
+  await pickVersion(page, "1.0.0");
   await expect(command(page)).toContainText("--version '1.0.0'");
   await page.reload();
   await expect(title(page)).toBeInViewport();
-  await expect(page.getByRole("combobox", { name: "Release version", exact: true })).toHaveValue("1.0.0");
+  await expect(releaseHeading(page, "1.0.0")).toBeVisible();
   await page.getByRole("button", { name: "Back to skills", exact: true }).click();
   await expect(firstRow(page)).toBeFocused();
   await expect(title(page)).toBeHidden();
   await expect(page).toHaveURL(/\/registry(?:\?|$)/);
   await page.goBack();
   await expect(title(page)).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Release version", exact: true })).toHaveValue("1.0.0");
+  await expect(releaseHeading(page, "1.0.0")).toBeVisible();
   await page.goForward();
   await expect(title(page)).toBeHidden();
   await page.screenshot({ path: test.info().outputPath("registry-mobile-list.png"), fullPage: true });
@@ -115,7 +145,7 @@ for (const [role, shortcut] of [["owner", "Review"], ["admin", "Review"], ["main
   await page.goto("/registry");
   const nav = page.locator(".mobile-nav");
   await expect(nav.getByRole("link")).toHaveCount(3);
-  for (const name of ["Libraries", "Registry", shortcut!]) await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
+  for (const name of ["Libraries", "Skills", shortcut!]) await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
   const more = page.getByRole("button", { name: "More", exact: true });
   await more.click();
   const overflow = page.locator(".mobile-more-menu");
@@ -175,13 +205,20 @@ test("owner tools stay secondary and respect the existing session MFA lock", asy
 test("an unavailable pinned release never becomes a different install or export", async ({ page }) => {
   const state = await fixture(page);
   await page.goto("/skills/release-notes-helper?version=9.9.9");
-  await expect(page.getByRole("combobox", { name: "Release version", exact: true })).toHaveValue("9.9.9");
-  await expect(page.getByRole("option", { name: "Unavailable exact version", exact: true })).toHaveCount(1);
+  await expect(releaseHeading(page, "9.9.9")).toBeVisible();
+  await expect(releaseCard(page).getByText("Unavailable", { exact: true })).toBeVisible();
+  await expect(releaseCard(page).getByText("No other version was substituted.", { exact: false })).toBeVisible();
+  await releaseCard(page).getByRole("button", { name: /^Versions/ }).click();
+  await expect(releaseCard(page).getByRole("list", { name: "Published versions" }).getByRole("button")).toHaveCount(2);
+  await expect(releaseCard(page).getByRole("list", { name: "Published versions" }).locator('[aria-current="true"]')).toHaveCount(0);
   await expect(command(page)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Review install", exact: true })).toHaveCount(0);
+  await expect(releaseCard(page).getByText("Released", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Owner controls", exact: true })).toHaveCount(0);
   expect(state.installs).toHaveLength(0);
-  await page.getByRole("button", { name: "Return to latest", exact: true }).click();
+  await releaseCard(page).getByRole("button", { name: "View latest", exact: true }).click();
   await expect(command(page)).toContainText("--version '1.2.0'");
+  await expect(releaseHeading(page, "1.2.0")).toBeFocused();
 });
 
 test("platform selection and exact install preserve the selected version and confirmation", async ({ page }) => {
@@ -194,6 +231,8 @@ test("platform selection and exact install preserve the selected version and con
   await page.getByRole("button", { name: "codex", exact: true }).click();
   await expect(command(page)).toContainText("--platform 'codex'");
   await page.setViewportSize({ width: 390, height: 844 });
+  // Measure only after the surface has switched to its stacked layout.
+  await expect(page.locator(".registry-surface")).toHaveAttribute("data-layout", "stack");
   const installTarget = page.getByRole("combobox", { name: "Target", exact: true });
   const reviewInstall = page.getByRole("button", { name: "Review install", exact: true });
   const targetBox = await installTarget.boundingBox();

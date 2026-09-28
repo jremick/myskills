@@ -202,7 +202,7 @@ export function MarketingLanding({ onLogin }: { onLogin: () => void }) {
                   <div className="fp-tabs" aria-hidden="true"><span className="on">SKILL.md</span><span >brief-template.md</span></div>
 <pre className="fp-code">{"Write a one-page brief with these sections:\nGoal · Audience · Scope · Risks · Open questions\nAsk before inventing dates or budgets."}</pre>
                 </div>
-                <p className="sp-foot"><span ><svg className="i" aria-hidden="true"><use href="#i-globe" /></svg>From the public registry</span><span ><svg className="i" aria-hidden="true"><use href="#i-refresh" /></svg>Checks: manual</span></p>
+                <p className="sp-foot"><span ><svg className="i" aria-hidden="true"><use href="#i-globe" /></svg>From public skills</span><span ><svg className="i" aria-hidden="true"><use href="#i-refresh" /></svg>Checks: manual</span></p>
               </section>
 
               <section className="skill-panel" role="tabpanel" id="sp-review" aria-labelledby="st-review" hidden={skill !== "review"} inert={skill !== "review"} tabIndex={skill === "review" ? 0 : -1}>
@@ -297,7 +297,7 @@ export function MarketingLanding({ onLogin }: { onLogin: () => void }) {
         <div className="use-copy">
           <h3 >Your own library of skills you trust.</h3>
           <ul className="checks">
-            <li ><svg className="i" aria-hidden="true"><use href="#i-check" /></svg><span >Save skills from the public registry, or from a public GitHub link.</span></li>
+            <li ><svg className="i" aria-hidden="true"><use href="#i-check" /></svg><span >Save public skills, or skills from a public GitHub link.</span></li>
             <li ><svg className="i" aria-hidden="true"><use href="#i-check" /></svg><span >Read every file before you use it.</span></li>
             <li ><svg className="i" aria-hidden="true"><use href="#i-check" /></svg><span >Get an in-app notice when a source changes, then update when you're ready.</span></li>
             <li ><svg className="i" aria-hidden="true"><use href="#i-check" /></svg><span >Roll back if a new version doesn't suit you.</span></li>
@@ -378,7 +378,7 @@ export function MarketingLanding({ onLogin }: { onLogin: () => void }) {
         <li className="step">
           <div className="step-marker"><span className="tile tile-teal" aria-hidden="true"></span></div>
           <h3 >Find</h3>
-          <p >Browse the registry, or save a public GitHub link to a library. Saving doesn't run code or install anything.</p>
+          <p >Browse Skills, or save a public GitHub link to a library. Saving doesn't run code or install anything.</p>
           <div className="step-frag" aria-hidden="true">
             <span className="f-input"><svg className="i"><use href="#i-link" /></svg><span className="mono">github.com/example-org/skills</span></span>
             <span className="fake-btn" style={{"alignSelf":"flex-start"}}>Save source</span>
@@ -540,7 +540,7 @@ export function MarketingLanding({ onLogin }: { onLogin: () => void }) {
         <li className="route route-primary">
           <span className="tile tile-teal" aria-hidden="true"></span>
           <h3 >Browse public skills</h3>
-          <p >Look around the public registry and read any public skill. No account needed.</p>
+          <p >Browse Skills and read any public skill. No account needed.</p>
           <span className="route-spacer"></span>
           <a className="btn btn-primary btn-lg" href="/registry">Explore skills <svg className="i" aria-hidden="true"><use href="#i-arrow" /></svg></a>
         </li>
@@ -554,7 +554,7 @@ export function MarketingLanding({ onLogin }: { onLogin: () => void }) {
         <li className="route">
           <span className="tile tile-navy" aria-hidden="true"></span>
           <h3 >Run your own instance</h3>
-          <p >Self-host the open-source registry for yourself or your organisation. You control accounts, roles and data.</p>
+          <p >Self-host MySkills for yourself or your organisation. You control accounts, roles and data.</p>
           <span className="route-spacer"></span>
           <a className="btn btn-secondary btn-lg" href="https://github.com/jremick/myskills/blob/main/docs/GETTING_STARTED.md">Self-hosting guide</a>
         </li>

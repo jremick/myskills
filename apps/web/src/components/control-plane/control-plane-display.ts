@@ -64,7 +64,7 @@ const updateStatuses: Record<string, readonly [string, Tone]> = {
   "update-available": ["Update available", "teal"],
   pinned: ["Pinned", "neutral"],
   drifted: ["Drifted", "danger"],
-  "installed-newer": ["Newer than registry", "amber"],
+  "installed-newer": ["Newer than published release", "amber"],
   "no-compatible-release": ["No compatible release", "amber"],
   "invalid-installed-version": ["Invalid installed version", "danger"],
 };
