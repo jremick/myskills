@@ -92,6 +92,8 @@ import {
 import { freezeArchitectureRevisionAuthorizationSnapshot } from "./architectures/revision-authorization.js";
 import { registerLibraryRoutes } from "./libraries/routes.js";
 import type { LibraryService } from "./libraries/service.js";
+import { registerGithubRoutes } from "./github/routes.js";
+import type { GithubIntegrationService } from "./github/service.js";
 import { API_VERSION, readBuildRevision } from "./version.js";
 
 const SESSION_COOKIE_NAME = "myskills_session";
@@ -126,6 +128,7 @@ export interface BuildAppOptions {
   architecturePatternMigrationService?: ArchitecturePatternMigrationService;
   /** Postgres-backed libraries, source imports and tracking. Routes answer 503 when absent. */
   libraryService?: LibraryService;
+  githubService?: GithubIntegrationService;
   bundleService?: BundleService;
   bundlesEnabled?: boolean;
   /** Per-user bound on provider-backed library source requests. Defaults to an in-memory limiter. */
@@ -143,7 +146,21 @@ export interface BuildAppOptions {
 export function buildApp(options: BuildAppOptions): FastifyInstance {
   const revision = readBuildRevision();
   const app = Fastify({
-    logger: options.logger ?? false,
+    logger: options.logger ? {
+      redact: ["req.headers.authorization", "req.headers.cookie", "res.headers.set-cookie"],
+      serializers: {
+        req(request: { method?: string; url?: string; hostname?: string; ip?: string; socket?: { remotePort?: number } }) {
+          return {
+            method: request.method,
+            // OAuth codes and state are credentials; never serialize their query.
+            url: request.url?.split("?", 1)[0] === "/v1/account/github/callback" ? "/v1/account/github/callback" : request.url,
+            hostname: request.hostname,
+            remoteAddress: request.ip,
+            remotePort: request.socket?.remotePort,
+          };
+        },
+      },
+    } : false,
     bodyLimit: DEFAULT_BODY_LIMIT_BYTES,
     ...(options.trustProxy !== undefined ? { trustProxy: options.trustProxy } : {}),
   });
@@ -2364,6 +2381,8 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     requiresMfaForRole,
     artifactHashHeader: REVIEW_ARTIFACT_HASH_HEADER,
   });
+
+  registerGithubRoutes(app, { authService: options.authService, githubService: options.githubService }, { requestAuthorization, authFailureReply });
 
   return app;
 }
