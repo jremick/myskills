@@ -1,4 +1,4 @@
-import { expect, test as base, type Page, type Route } from "@playwright/test";
+import { expect, test as base, type Locator, type Page, type Route } from "@playwright/test";
 
 // Authored before the bundle UI, from .private/bundles/contract.md and
 // failure-cases.md. Browser fixtures pin UI behaviour: unique server totals,
@@ -97,6 +97,9 @@ async function installBundleFixture(page: Page, options: { catalogAvailable?: bo
     conflictNextPatch: false,
     hold: null as null | ((q: string) => boolean),
     held: [] as Array<() => void>,
+    failMemberships: false,
+    holdMemberships: false,
+    heldMemberships: [] as Array<() => void>,
     savedEntry: null as null | Record<string, unknown>,
   };
   await page.addInitScript((session) => { if (location.origin !== "null") localStorage.setItem("myskills-app:web-session", JSON.stringify(session)); }, { expiresAt: "2027-09-26T00:00:00.000Z", user });
@@ -216,7 +219,11 @@ async function installBundleFixture(page: Page, options: { catalogAvailable?: bo
     if (skillMatch && skills.has(skillMatch[1])) {
       const skill = skills.get(skillMatch[1])!;
       const releases = [release(skill, "1.2.0", "2026-09-10T00:00:00Z"), release(skill, "1.1.0", "2026-08-01T00:00:00Z")];
-      if (skillMatch[2] === "/bundles") return reply({ bundles: membershipsOf(skill.slug) });
+      if (skillMatch[2] === "/bundles") {
+        if (state.holdMemberships) await new Promise<void>((resolve) => state.heldMemberships.push(resolve));
+        if (state.failMemberships) return reply({ error: { code: "SERVICE_UNAVAILABLE", message: "Unavailable." } }, 503);
+        return reply({ bundles: membershipsOf(skill.slug) });
+      }
       if (skillMatch[3]) {
         state.releaseFetches.push(`${skill.slug}@${skillMatch[3]}`);
         const found = releases.find((item) => item.version === skillMatch[3]);
@@ -252,6 +259,12 @@ async function installBundleFixture(page: Page, options: { catalogAvailable?: bo
 const summaryText = (page: Page) => page.getByText(/unique skills? ·|Nothing matches/).first();
 const region = (page: Page, name: string) => page.getByRole("region", { name, exact: true });
 const disclosure = (page: Page, name: string) => region(page, name).getByRole("button", { name, exact: true });
+
+async function pickVersion(scope: Locator, version: string) {
+  const card = scope.getByRole("region", { name: "Release", exact: true });
+  await card.getByRole("button", { name: /^Versions/ }).click();
+  await card.getByRole("list", { name: "Published versions" }).getByRole("button", { name: new RegExp(`^${version.replaceAll(".", "\\.")}(\\s|$)`) }).click();
+}
 
 async function expectNoHorizontalOverflow(page: Page) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
@@ -439,9 +452,9 @@ test("bundle detail links both ways and saving a reference adopts nothing", asyn
   const backlinks = skillPanel.getByRole("region", { name: "Bundles containing this skill" });
   await expect(backlinks.getByRole("link", { name: /Engineering toolkit/ })).toHaveAttribute("href", "/registry?bundle=eng");
   await expect(backlinks.getByRole("link", { name: /Clear writing kit/ })).toBeVisible();
-  await skillPanel.getByRole("combobox", { name: "Release version" }).selectOption("1.1.0");
+  await pickVersion(skillPanel, "1.1.0");
   await expect(page).toHaveURL(/\/skills\/release-notes-helper\?version=1\.1\.0$/);
-  await skillPanel.locator("summary").filter({ hasText: "Release notes" }).click();
+  await skillPanel.getByRole("button", { name: "Release notes", exact: true }).click();
   await expect(skillPanel.getByText("Release notes for Release notes helper 1.1.0.")).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/skills\/release-notes-helper$/);
@@ -460,6 +473,42 @@ test("bundle detail links both ways and saving a reference adopts nothing", asyn
   expect(api.writes.filter((write) => /adoption|binding/.test(write.path))).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("library-bundle-reference.png"), fullPage: true });
   await testInfo.attach("bundle-save-receipt", { body: JSON.stringify({ writes: api.writes, releaseFetches: api.releaseFetches, unhandled: api.unhandled }, null, 2), contentType: "application/json" });
+});
+
+// Written before the second skill pane: backlinks move below the release card
+// and an empty answer must not claim the skill stands alone.
+test("skill backlinks keep none, loading, failure and retry distinct below the release", async ({ page }, testInfo) => {
+  const api = await installBundleFixture(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  api.holdMemberships = true;
+  await page.goto("/skills/sql-style-guide");
+  const skillPanel = page.getByRole("complementary", { name: "Selected skill detail" });
+  const backlinks = skillPanel.getByRole("region", { name: "Bundles containing this skill" });
+  await expect(backlinks.getByText("Checking bundles…")).toBeVisible();
+  // The exact release does not wait for bundle membership.
+  await expect(skillPanel.getByText(/myskills export 'sql-style-guide' --version '1\.2\.0'/)).toBeVisible();
+  api.holdMemberships = false;
+  api.heldMemberships.splice(0).forEach((resume) => resume());
+  await expect(backlinks).toContainText("None visible to you");
+  await expect(skillPanel.getByText(/on its own|Not in any bundle/)).toHaveCount(0);
+  const card = (await skillPanel.getByRole("region", { name: "Release", exact: true }).boundingBox())!;
+  expect((await backlinks.boundingBox())!.y).toBeGreaterThanOrEqual(card.y + card.height);
+
+  api.failMemberships = true;
+  await page.goto("/skills/release-notes-helper");
+  await expect(backlinks.getByText("Bundles couldn’t load.")).toBeVisible();
+  await expect(backlinks.getByRole("link")).toHaveCount(0);
+  await expect(backlinks).not.toContainText("None visible to you");
+  api.failMemberships = false;
+  await backlinks.getByRole("button", { name: "Retry bundles", exact: true }).click();
+  await expect(backlinks.getByRole("link", { name: "Engineering toolkit", exact: true })).toHaveAttribute("href", "/registry?bundle=eng");
+  await expect(backlinks.getByRole("listitem").filter({ hasText: "Engineering toolkit" })).toContainText("Source group");
+  await expect(backlinks.getByRole("listitem").filter({ hasText: "Clear writing kit" })).toContainText("Curated");
+  await page.screenshot({ path: testInfo.outputPath("skill-backlinks.png"), fullPage: true });
+  await backlinks.getByRole("link", { name: "Clear writing kit", exact: true }).click();
+  await expect(page).toHaveURL(/\/registry\?bundle=writing$/);
+  await expect(page.getByRole("complementary", { name: "Clear writing kit", exact: true })).toBeVisible();
+  expect(api.writes).toEqual([]);
 });
 
 test("curator creates reviewed bundles and resolves an edit conflict", async ({ page }) => {
@@ -753,7 +802,7 @@ for (const width of [1440, 390]) test(`skill row refinements preserve descriptio
   const inspector = page.getByRole("complementary", { name: "Selected skill detail" });
   await expect(inspector.getByRole("heading", { name: "No default stable release" })).toBeVisible();
   await page.screenshot({ path: info.outputPath("registry-no-release.png"), fullPage: true });
-  await inspector.getByRole("combobox", { name: "Release version", exact: true }).selectOption("1.1.0");
+  await pickVersion(inspector, "1.1.0");
   await expect(page.getByText(/myskills export 'code-review-checklist' --version '1.1.0'/)).toBeVisible();
   expect(state.releaseFetches).toContain("code-review-checklist@1.1.0");
   expect(state.writes).toEqual([]);
