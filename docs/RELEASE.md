@@ -1,11 +1,22 @@
 # Release Process
 
 Version: 0.1.0-beta.16
-Last updated: 2026-09-28
+Last updated: 2026-09-29
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
+
+## Beta.16 release record
+
+Frozen candidate and tag `v0.1.0-beta.16` use
+`acfb7c8c7f8bc560f6fdba13cf0414033ab6d00e`. Canonical, CI, tagged verification,
+staging, and production acceptance passed. GitHub assets and npm beta.16
+publication are verified; npm latest and alpha remain `0.1.0-alpha.3`. Later GitHub authentication and team Library changes on main are excluded.
+Retain forward migration
+`0034_observation_slug_privacy` and applied migration history. See
+[Beta.16 release delivery](BETA16_RELEASE_DELIVERY.md) for separate publication
+and production evidence.
 
 ## Beta.15 release record
 

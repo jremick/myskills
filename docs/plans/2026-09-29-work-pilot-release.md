@@ -1,6 +1,8 @@
 # Work pilot release
 
-Target: `v0.1.0-beta.16`. Status: implementation and verification in progress.
+Target: `v0.1.0-beta.16`. Implementation, canonical verification, staging/production
+acceptance, and GitHub/npm publication are complete. Work-instance setup remains
+a separate future deployment.
 
 ## Approved outcome
 
@@ -73,3 +75,12 @@ Implementation workers record focused evidence under ignored
 `dist/work-pilot-verification/`. The release record must distinguish the tested
 commit, merged commit, tagged artifacts, npm publication, and deployed services.
 Passing earlier scope tests or live enrollment does not replace the release gate.
+
+## Delivery evidence
+
+The frozen candidate/tag is `acfb7c8c7f8bc560f6fdba13cf0414033ab6d00e`.
+The frozen release excludes later GitHub authentication and team Library changes
+on main. Canonical, CI, tagged-artifact,
+staging, native upgrade, and observation-preservation evidence is recorded in
+[Beta.16 release delivery](../BETA16_RELEASE_DELIVERY.md). That record separates
+npm registry verification, GitHub publication, and production acceptance.
