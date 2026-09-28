@@ -13,7 +13,7 @@ const approved = { ...base, id: "approved", slug: "code-review-guide", title: "C
 const blocked = { ...base, id: "blocked", slug: "research-brief", title: "Research Brief", summary: "Gather cited evidence.", version: "0.8.0", lifecycleStatus: "quarantined", reviewStatus: "pending", securityStatus: "failed", findingCount: 3, allowedActions: ["request-changes", "reject"] };
 const managed = [pending, approved, blocked].map((s, i) => ({ ...s, lifecycleStatus: i === 2 ? "archived" : "approved", latestVersion: s.version, allowedActions: i === 2 ? ["restore"] : ["edit", "archive"] }));
 
-async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; failReview?: boolean } = {}) {
+async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; failReview?: boolean; bootstrap?: boolean } = {}) {
   const user = { id: "owner-1", email: "owner@example.test", name: "Example owner", status: "active", roles: ["owner"], emailVerified: true, mfaVerified: options.mfa !== false };
   await page.addInitScript(user => localStorage.setItem("myskills-app:web-session", JSON.stringify({ user, expiresAt: "2027-09-27T00:00:00Z" })), user);
   let rows = structuredClone([pending, approved, blocked]);
@@ -53,7 +53,7 @@ async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; 
     if (detail) return reply({ submission: { ...rows.find(s => s.id === detail[1]), reviewStatus: detail[1] === "blocked" ? "changes-requested" : rows.find(s => s.id === detail[1])?.reviewStatus, changeRequestReason: detail[1] === "blocked" ? "Cite the original research sources." : null, reviewHistory: [], scanRuns: [], correction: { requiresNewVersion: true, canSubmitNewVersion: true } } });
     if (path === "/v1/manage/skills") return reply({ skills: managed.filter(s => s.title.toLowerCase().includes((url.searchParams.get("q") ?? "").toLowerCase())), nextCursor: null });
     const releases = path.match(/^\/v1\/skills\/([^/]+)\/releases$/);
-    if (releases) return reply({ releases: [release(releases[1]!, "1.3.0"), release(releases[1]!, "1.0.0")] });
+    if (releases) return reply({ releases: [release(releases[1]!, "1.3.0"), release(releases[1]!, options.bootstrap ? "0.0.0-bootstrap.118b105a185" : "1.0.0")] });
     if (path === "/v1/teams") return reply({ teams: [], invitations: [] });
     if (path === "/v1/libraries") return reply({ libraries: [], nextCursor: null });
     if (path === "/v1/library-inbox") return reply({ items: [], unreadCount: 0, nextCursor: null });
@@ -188,5 +188,26 @@ test("review queue retries its local error without duplicating alerts", async ({
   await expect(queue.getByRole("button", { name: /Research Brief/ })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
   expect(state.writes).toHaveLength(0);
+  await evidence(page, info, state.writes);
+});
+
+// The friendly label must never enter a lifecycle request or conceal its pin.
+test("managed bootstrap label keeps the exact lifecycle target", async ({ page }, info) => {
+  const state = await fixture(page, { bootstrap: true });
+  const version = "0.0.0-bootstrap.118b105a185";
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/manage/skills");
+  await page.getByRole("button", { name: /Release Notes Helper/ }).click();
+  const selector = page.getByRole("combobox", { name: "Managed release version", exact: true });
+  await expect(selector.locator(`option[value="${version}"]`)).toHaveText("Initial import · Approved");
+  await selector.selectOption(version);
+  await expect(page.getByText("Exact version", { exact: true }).locator("..")).toContainText(version);
+  await page.getByRole("button", { name: "Unpublish Initial import", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Confirm lifecycle change" })).toContainText(version);
+  await page.getByRole("textbox", { name: "Lifecycle reason", exact: true }).fill("Replaced by a reviewed release.");
+  await page.getByRole("button", { name: "Confirm unpublish", exact: true }).click();
+  await expect(page.getByText(/Lifecycle change saved/)).toBeVisible();
+  expect(state.writes).toEqual([{ path: `/v1/skills/release-notes-helper/releases/${version}/actions`, body: { action: "unpublish", reason: "Replaced by a reviewed release." } }]);
+  expect(state.misses).toEqual([]);
   await evidence(page, info, state.writes);
 });
