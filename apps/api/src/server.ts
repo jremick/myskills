@@ -27,6 +27,7 @@ import { ArchitecturePatternMigrationService } from "./architectures/pattern-mig
 import { createExactArchitectureReleaseAuthorizer } from "./architectures/exact-release-authorizer.js";
 import { ArchitectureTargetBindingAuthorizer } from "./targets/architecture-binding-authorizer.js";
 import { PostgresArchitectureTargetStore } from "./targets/postgres-target-store.js";
+import { createPostgresObservationPrivacyReadinessProbe } from "./targets/observation-privacy-readiness.js";
 import { ArchitectureTargetService } from "./targets/service.js";
 import { PostgresTargetSkillOperationStore } from "./target-operations/postgres-store.js";
 import { TargetSkillOperationService } from "./target-operations/service.js";
@@ -159,6 +160,7 @@ const app = buildApp({
       await pool.query("SELECT 1");
     },
     phase2Architecture: createPostgresArchitectureReadinessProbe(db),
+    architectureObservationPrivacy: createPostgresObservationPrivacyReadinessProbe(db),
     artifactStorageRequired: Boolean(artifactStorage),
     artifactStorage: artifactStorage ? () => artifactStorage.checkReady() : undefined,
   },
