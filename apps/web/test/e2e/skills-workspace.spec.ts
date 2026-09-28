@@ -440,7 +440,7 @@ test("returnTo offers only a safe internal Libraries return and survives section
   const back = page.getByRole("link", { name: "Return to library", exact: true });
   await expect(back).toHaveAttribute("href", target);
   await tab(page, "Versions").click();
-  await expect(page).toHaveURL(new RegExp(`tab=versions&returnTo=${encodeURIComponent(target).replace(/[.?]/g, "\\$&")}$`));
+  await expect(page).toHaveURL((url) => url.searchParams.get("tab") === "versions" && url.searchParams.get("returnTo") === target);
   await expect(back).toHaveAttribute("href", target);
   await back.click();
   await expect(page).toHaveURL(target);
