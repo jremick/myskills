@@ -52,7 +52,7 @@ function errorCode(error: unknown): string {
 const BUNDLE_MESSAGES: Record<string, string> = {
   BUNDLE_REVISION_CONFLICT: "This bundle changed since you opened it.",
   BUNDLE_NOT_FOUND: "This bundle doesn’t exist or you no longer have access to it.",
-  BUNDLE_AUDIENCE_DISABLED: "This audience is disabled in the registry. Choose another audience.",
+  BUNDLE_AUDIENCE_DISABLED: "This audience is disabled in MySkills. Choose another audience.",
   BUNDLE_MEMBER_NOT_AUTHORIZED: "One or more selected skills are unavailable to this audience. Review the members and audience.",
   BUNDLE_SOURCE_SELECTION_INVALID: "Choose an available source and skills from its reviewed imports.",
   BUNDLE_SOURCE_DUPLICATE: "This source already has a bundle. Open that bundle to review its members.",

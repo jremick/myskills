@@ -375,7 +375,7 @@ test("scope setup with no owned architecture offers the existing creation flow w
   await page.goto("/targets");
   const guide = page.getByRole("region", { name: "Connect your skills" });
   await expect(guide.getByText("Create a personal architecture and save a revision before enrollment.", { exact: true })).toBeVisible();
-  await expect(guide).toContainText("choose at least one reviewed registry skill");
+  await expect(guide).toContainText("choose at least one reviewed skill from Skills");
   await expect(guide.getByRole("link", { name: "Create or edit an architecture" })).toHaveAttribute("href", "/architectures");
   await expect(guide.getByLabel("Enrollment commands", { exact: true })).toHaveCount(0);
   expect(state.targetRegistrationBodies).toEqual([]);

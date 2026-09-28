@@ -29,7 +29,7 @@ The product should feel like a real software registry, not a folder browser:
 
 The beta implements the core registry, first-party auth, package submission/review/publication, teams/sharing, lifecycle, web, CLI, and read-only MCP slices. Evals, background workers, external provider login/linking, private draft workspaces, analytics, broader adapters, and business-safe operations remain planned unless the beta ledger says otherwise.
 
-### Registry
+### Skills
 
 - Skill search, browse, detail, and related-skill discovery.
 - Lifecycle states: draft, private, submitted, review, approved, deprecated, unpublished, revoked, archived.

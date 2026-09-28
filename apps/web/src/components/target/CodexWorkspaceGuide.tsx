@@ -110,7 +110,7 @@ export function CodexWorkspaceGuide({ client, currentUserId, active, headingRef 
     <label><span>CLI configuration profile</span><Input aria-label="CLI configuration profile" aria-invalid={!profileValid} value={configProfile} placeholder="work" onChange={(event) => setConfigProfile(event.target.value)} /></label>
     <p className="cp-muted">A named profile such as <code>work</code> starts separate local registry, sign-in, and scope state. Leave blank to use your existing default state. This is separate from the architecture profile below; use the same <code>--config-profile</code> on every command.</p>
     {!profileValid && <p role="alert">Use 1–64 lowercase letters, digits, hyphens, or underscores, starting with a letter or digit.</p>}
-    {loading ? <p role="status">Loading your architectures…</p> : error ? <div role="alert"><p>{error}</p><Button size="sm" type="button" variant="outline" onClick={() => setRetry((value) => value + 1)}>Retry setup</Button></div> : architectures.length === 0 ? <div><p>Create a personal architecture and save a revision before enrollment.</p><p>In the architecture editor, choose at least one reviewed registry skill that your account can read, then add a profile and its logical environment. An empty architecture cannot be enrolled.</p></div> : <>
+    {loading ? <p role="status">Loading your architectures…</p> : error ? <div role="alert"><p>{error}</p><Button size="sm" type="button" variant="outline" onClick={() => setRetry((value) => value + 1)}>Retry setup</Button></div> : architectures.length === 0 ? <div><p>Create a personal architecture and save a revision before enrollment.</p><p>In the architecture editor, choose at least one reviewed skill from Skills that your account can read, then add a profile and its logical environment. An empty architecture cannot be enrolled.</p></div> : <>
       <label><span>Architecture</span><select aria-label="Setup architecture" value={selectedId ?? ""} onChange={(event) => { setArchitectureId(event.target.value); setProfileId(""); setEnvironmentId(""); setError(null); }}>{architectures.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <div className="control-plane-form-grid">
         <label><span>Architecture profile</span><select aria-label="Architecture profile" disabled={!revision} value={profile?.id ?? ""} onChange={(event) => { setProfileId(event.target.value); setEnvironmentId(""); }}>{profiles.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
@@ -122,7 +122,7 @@ export function CodexWorkspaceGuide({ client, currentUserId, active, headingRef 
     <section className="cp-section" aria-label="Local enrollment instructions">
       <h3>Run locally</h3>
       <p>Use Node.js 24. Replace the example API URL with this registry's API URL and the quoted directory placeholders with existing absolute paths. Keep the quotes, including around paths with spaces. Use a specific skills directory or project, never your home directory or filesystem root.</p>
-      <p>Sign in with your account and MFA. Review the local inventory before enrollment and upload. Directory paths, exclusions, and instruction contents stay on your machine. The browser only prepares commands.</p>
+      <p>Sign in to this MySkills instance with your account and MFA. Review the local inventory before enrollment and upload. Directory paths, exclusions, and instruction contents stay on your machine. The browser only prepares commands.</p>
       {enrollment && <pre aria-label="Enrollment commands"><code>{enrollment}</code></pre>}
       <Button disabled={!enrollment} size="sm" type="button" variant="outline" onClick={() => void copyCommands()}>Copy enrollment commands</Button>
       {copied === enrollment && enrollment && <p role="status">Enrollment commands copied.</p>}
@@ -139,7 +139,7 @@ export function CodexWorkspaceGuide({ client, currentUserId, active, headingRef 
     </details>}
     {profileValid && connection === "managed" && <>
       <details className="target-advanced-settings"><summary>Install, update, and recover managed skills</summary>
-        <p>Use the exact registry slug and version. Managed skills go in <code>.agents/skills</code> and records in <code>.myskills-app</code> inside the workspace. Confirm separately that Codex recognizes the skill.</p>
+        <p>Use the exact slug and version shown in Skills. Managed skills go in <code>.agents/skills</code> and records in <code>.myskills-app</code> inside the workspace. Confirm separately that Codex recognizes the skill.</p>
         <pre><code>{[command(`install 'SKILL_SLUG' --version 'VERSION' --workspace ${quote(workspace)}`), command(`codex observe --workspace ${quote(workspace)} --upload`), command(`update 'SKILL_SLUG' --workspace ${quote(workspace)}`), command(`rollback 'SKILL_SLUG' --workspace ${quote(workspace)}`)].join("\n")}</code></pre>
         <p>Review release notes before updating. Rollback restores a verified previous local installation when available.</p>
       </details>

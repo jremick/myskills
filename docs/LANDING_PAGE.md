@@ -9,7 +9,7 @@ An owner or administrator with an MFA-verified session can open **Admin → Land
 - On (the default): `/` shows the homepage.
 - Off: `/` replaces its history entry with `/login`. Existing authenticated-login routing still applies.
 - `/login` always works; its public-site and linked-brand controls appear only after the setting is confirmed on.
-- Public registry, exact skill URLs, invitation, recovery and verification URLs keep their existing behavior.
+- Public Skills pages, exact skill URLs, invitation, recovery and verification URLs keep their existing behavior.
 - Registration, account permissions, API, CLI and MCP access are independent of this setting. Hiding the homepage is not an access control.
 
 The browser resolves a fresh public setting before rendering the homepage. It shows a neutral loading state, then retry/sign-in options if the read fails or times out. It does not cache an enabled default in browser storage. Navigation within the homepage does not refetch the setting.

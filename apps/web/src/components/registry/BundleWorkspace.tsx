@@ -31,7 +31,7 @@ export interface BundleWorkspaceProps {
   onSelectSkill: (slug: string) => void;
   onSelectBundle: (id: string) => void;
   onClearSelection: () => void;
-  /** The server has no catalog: the App falls back to the flat registry. */
+  /** The server has no catalog: the App falls back to the flat Skills list. */
   onUnavailable: () => void;
   /** Existing skill detail (release, export, trust panels), with a slot for bundle backlinks. */
   renderSkillDetail: (bundles: ReactNode) => ReactNode;
@@ -186,7 +186,7 @@ export function BundleWorkspace(props: BundleWorkspaceProps) {
 
   const back = layout === "stack" ? (
     <Button className="bundle-back" size="sm" type="button" variant="ghost" onClick={props.onClearSelection}>
-      <ChevronLeft aria-hidden="true" size={16} />Back to registry
+      <ChevronLeft aria-hidden="true" size={16} />Back to skills
     </Button>
   ) : null;
 
@@ -241,7 +241,7 @@ export function BundleWorkspace(props: BundleWorkspaceProps) {
   return (
     <main aria-labelledby="registry-title" className="bundle-workspace registry-workspace">
       <header className="bundle-page-head">
-        <h1 id="registry-title">Skill registry</h1>
+        <h1 id="registry-title">Skills</h1>
         {props.canCreate && (
           <Button ref={newButton} size="sm" type="button" variant="outline" onClick={() => { dialogReturn.current = newButton.current; setDialog({ kind: "edit", bundle: null }); }}>
             <Plus aria-hidden="true" size={15} />New bundle
