@@ -93,6 +93,7 @@ async function libraryWorld(page: Page, options: WorldOptions = {}) {
   const holds: Array<Hold & { match: (path: string, url: URL, method: string) => boolean; gate: Promise<void> }> = [];
   const tampered = new Set<string>();
   const revokedEntries = new Set<string>();
+  const archivedSkills = new Set<string>();
   let failedSave = false;
   let listFailures = options.failLibraryList ?? 0;
   let pageTwoFailure = options.failLibraryPageTwoOnce ?? false;
@@ -190,7 +191,7 @@ async function libraryWorld(page: Page, options: WorldOptions = {}) {
     if (releaseMatch) {
       const [, slug, version] = releaseMatch;
       const summary = releasesFor(slug!).find((item) => item.version === version);
-      if (!summary || !eligible(summary)) return fail(404, "RELEASE_NOT_FOUND");
+      if (archivedSkills.has(slug!) || !summary || !eligible(summary)) return fail(404, "RELEASE_NOT_FOUND");
       const skill = catalogue.find((item) => item.slug === slug)!;
       return reply({ release: { slug, title: skill.title, summary: skill.summary, version, lifecycleStatus: summary.lifecycleStatus, reviewStatus: "approved", securityStatus: "passed", publishedAt: summary.publishedAt, platforms, requiresUserAction: false, artifact: tampered.has(`${slug}@${version}`) ? { ...summary.artifact, sha256: sha("0") } : summary.artifact } });
     }
@@ -198,7 +199,7 @@ async function libraryWorld(page: Page, options: WorldOptions = {}) {
     if (releasesMatch) return reply({ releases: releasesFor(releasesMatch[1]!) });
     if (/^\/v1\/skills\/[^/]+\/bundles$/.test(path)) return reply({ bundles: [] });
     const skillMatch = path.match(/^\/v1\/skills\/([^/]+)$/);
-    if (skillMatch) { const found = catalogue.find((item) => item.slug === skillMatch[1]); return found ? reply({ skill: found }) : fail(404, "SKILL_NOT_FOUND"); }
+    if (skillMatch) { const found = archivedSkills.has(skillMatch[1]!) ? undefined : catalogue.find((item) => item.slug === skillMatch[1]); return found ? reply({ skill: found }) : fail(404, "SKILL_NOT_FOUND"); }
     if (path.endsWith("/compatibility")) return reply({ compatibility: { schemaVersion: 1, declaration: { status: "unspecified", revision: null, targets: [] }, attestation: { status: "none", revision: null }, evidence: [], manage: { pendingRevisions: [], evidenceProposals: [] } } });
     if (path.startsWith("/v1/improvements/policies/")) return reply({ revision: null });
     if (path === "/v1/bundles") return reply({ bundles: [], nextCursor: null });
@@ -222,6 +223,8 @@ async function libraryWorld(page: Page, options: WorldOptions = {}) {
     revokeWrites: () => { writesRevoked = true; },
     revokeEntry: (entryId: string) => revokedEntries.add(entryId),
     restoreEntry: (entryId: string) => revokedEntries.delete(entryId),
+    archiveSkill: (slug: string) => archivedSkills.add(slug),
+    restoreSkill: (slug: string) => archivedSkills.delete(slug),
     replaceAdoption: (entryId: string, version: string, digest: string) => { const entry = findEntry(entryId)!; entry.adoption = adoption(entryId, entry.skill!.slug, version, digest, `adopt-${entryId}-other`); },
   };
 }
@@ -459,6 +462,39 @@ test("two libraries save and adopt the same skill at different exact versions th
   expect(exactReads).toEqual(expect.arrayContaining(["/v1/skills/planner/releases/1.2.0", "/v1/skills/planner/releases/1.1.0"]));
   await page.screenshot({ path: testInfo.outputPath("two-library-adoption-1440.png"), fullPage: true, animations: "disabled" });
   await receipt(testInfo, "two-library-adoption-receipt", { outcome: "pass", adoptions: world.adoptions, writes: world.writes, searches: world.reads.filter((read) => read.startsWith("/v1/skills?")) });
+});
+
+test("an archived parent cannot offer a managed release, and restored readability can recover after a failed read", async ({ page }, testInfo) => {
+  const world = await libraryWorld(page);
+  world.archiveSkill("project-brief");
+  await page.goto("/libraries?library=lib-personal&entry=entry-brief");
+  const detail = page.getByRole("complementary", { name: "Project brief writer", exact: true });
+  const picker = detail.getByLabel("Reviewed release", { exact: true });
+  await expect(detail.getByText("No approved, published release is available to adopt.")).toBeVisible();
+  await expect(picker.locator("option")).toHaveText(["Choose a release"]);
+  await expect(picker).toBeDisabled();
+  await expect(detail.getByRole("button", { name: "Adopt skill release", exact: true })).toBeDisabled();
+  expect(world.writes).toEqual([]);
+
+  world.restoreSkill("project-brief");
+  let unavailable = true;
+  await page.route("**/api/v1/skills/project-brief", async (route) => {
+    if (unavailable) return route.fulfill({ status: 503, json: { error: { code: "SERVICE_UNAVAILABLE", message: "Try again." } } });
+    return route.fallback();
+  });
+  await page.reload();
+  await expect(detail.getByRole("alert")).toContainText("Releases couldn’t load.");
+  await expect(picker).toBeDisabled();
+  await expect(detail.getByRole("button", { name: "Adopt skill release", exact: true })).toBeDisabled();
+  unavailable = false;
+  await detail.getByRole("button", { name: "Retry releases", exact: true }).click();
+  await expect(picker.locator("option")).toHaveText(["Choose a release", /^1\.0\.0/]);
+  await picker.selectOption("1.0.0");
+  await detail.getByRole("button", { name: "Adopt skill release", exact: true }).click();
+  await expect(detail.getByText("Adopted 1.0.0", { exact: true }).first()).toBeVisible();
+  expect(world.writes).toHaveLength(1);
+  expect(world.adoptions[0]).toMatchObject({ entryId: "entry-brief", status: 201, body: { version: "1.0.0" } });
+  await receipt(testInfo, "archived-parent-readability", { outcome: "pass", reads: world.reads, writes: world.writes });
 });
 
 test("an inbox change opens its exact library, source and candidate and survives reload, back and forward", async ({ page }, testInfo) => {

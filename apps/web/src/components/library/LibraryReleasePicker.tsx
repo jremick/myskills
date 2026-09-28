@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { RegistryClient, SkillReleaseSummary } from "../../api.js";
+import type { RegistryClient, SafeApiError, SkillReleaseSummary } from "../../api.js";
 import { shortDate } from "./library-display.js";
 
 export type AdoptableRelease = SkillReleaseSummary & { artifact: NonNullable<SkillReleaseSummary["artifact"]> };
 
 /**
- * Mirrors the server's released-release rule so the picker never offers a
- * version that cannot resolve. It grants nothing: private self-reviewed and
- * team-readability decisions stay with the adoption endpoint.
+ * Filters release state after the parent skill passes the readable-skill API.
+ * Private self-reviewed and team-readability decisions stay with the adoption
+ * endpoint, which also rechecks availability when the user confirms.
  */
 function isAdoptable(release: SkillReleaseSummary): release is AdoptableRelease {
   return Boolean(release.publishedAt && release.artifact?.sha256)
@@ -42,16 +42,26 @@ export function LibraryReleasePicker({ client, slug, currentVersion, busy, prima
   useEffect(() => {
     let active = true;
     setStatus("loading");
-    // The release list is not paginated; the whole array is read and filtered.
-    void client.listSkillReleases(slug).then((list) => {
+    setReleases([]);
+    // Managers can list published releases of an archived parent. Check the
+    // reader endpoint first; management history alone cannot grant adoption.
+    void client.getSkill(slug).then((skill) => {
+      if (!active || !["approved", "deprecated"].includes(skill.lifecycleStatus)) return [];
+      // The release list is not paginated; the whole array is read and filtered.
+      return client.listSkillReleases(slug);
+    }).then((list) => {
       if (!active) return;
       setReleases(list.filter(isAdoptable).filter((release) => release.slug === slug));
       setStatus("ready");
-    }).catch(() => { if (active) setStatus("error"); });
+    }).catch((error: unknown) => {
+      if (!active) return;
+      const status = (error as Partial<SafeApiError> | null)?.status;
+      setStatus(status === 403 || status === 404 ? "ready" : "error");
+    });
     return () => { active = false; };
   }, [client, slug, reload]);
 
-  const chosen = releases.find((release) => release.version === version && release.version !== currentVersion) ?? null;
+  const chosen = status === "ready" ? releases.find((release) => release.version === version && release.version !== currentVersion) ?? null : null;
   const submit = useCallback(async () => {
     if (!chosen || busy) return;
     if (await onAdopt(chosen, note.trim())) { setVersion(""); setNote(""); }
