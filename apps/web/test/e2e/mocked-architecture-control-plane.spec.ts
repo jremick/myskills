@@ -57,6 +57,7 @@ test("signed-in owner inspects the same profile-filtered nodes in the diagram an
   const outline = page.getByRole("list", { name: "Architecture topology outline" });
   await expect(diagram).toBeVisible();
   await expect(outline).toBeVisible();
+  await page.getByText("Technical details", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Copy canonical diagram JSON" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Download canonical diagram JSON" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy Mermaid architecture export" })).toBeVisible();
@@ -69,7 +70,9 @@ test("signed-in owner inspects the same profile-filtered nodes in the diagram an
   expect(outlineLabels).toEqual(diagramLabels);
   await expect(outline.locator("li > ol > li > ol > li > span > strong")).toHaveText("Release Notes Helper");
   await expect(page.locator(".architecture-preview-stack")).not.toContainText("Work Deploy Helper");
+  await page.getByRole("tab", { name: /^Skills/ }).click();
   await expect(page.getByRole("cell", { name: "0.1.0" })).toBeVisible();
+  await page.getByRole("tab", { name: "Overview" }).click();
   await expect(page.getByText("No sync plan generated. Provide an observed-state fixture to preview a target dry run.")).toBeVisible();
 
   const viewBox = await diagram.getAttribute("viewBox");
@@ -110,18 +113,11 @@ test("owner creates a private draft without a preview and the narrow layout rema
   await expect(create).toBeFocused();
   await page.keyboard.press("Enter");
 
+  // Creating a shell opens its bootstrap Workbench; the overview keeps the empty state.
   await expect(page.getByRole("heading", { name: "Private experiment" })).toBeVisible();
   await expect(page.getByRole("main", { name: "Skill architectures" })).toBeVisible();
-  await expect(page.getByText("This draft has no revision yet. Build the first revision in the editor below, then save it to preview the result.")).toBeVisible();
-  await expect(page.getByRole("img", { name: "Skill architecture topology" })).toHaveCount(0);
-  await expect.poll(() => state.draftPreviewAttempts).toBe(0);
-  expect(state.createdBodies).toEqual([{
-    name: "Private experiment",
-    patternId: "multi-level-router",
-    owner: { type: "user" },
-  }]);
-
-  const measurements = await page.evaluate(() => {
+  await expect(page.getByRole("heading", { name: "Build the first revision" })).toBeVisible();
+  const measure = () => page.evaluate(() => {
     const workspace = document.querySelector<HTMLElement>(".architecture-workspace")!.getBoundingClientRect();
     return {
       bodyWidth: document.body.scrollWidth,
@@ -131,10 +127,23 @@ test("owner creates a private draft without a preview and the narrow layout rema
       workspaceRight: workspace.right,
     };
   });
-  expect(measurements.bodyWidth).toBeLessThanOrEqual(measurements.viewportWidth);
-  expect(measurements.documentWidth).toBeLessThanOrEqual(measurements.viewportWidth);
-  expect(measurements.workspaceLeft).toBeGreaterThanOrEqual(0);
-  expect(measurements.workspaceRight).toBeLessThanOrEqual(375.5);
+  const workbenchMeasurements = await measure();
+  await page.getByRole("link", { name: "Architecture overview" }).click();
+  await expect(page.getByText("No revision yet. Build and save the first revision in the workbench.")).toBeVisible();
+  await expect(page.getByRole("img", { name: "Skill architecture topology" })).toHaveCount(0);
+  await expect.poll(() => state.draftPreviewAttempts).toBe(0);
+  expect(state.createdBodies).toEqual([{
+    name: "Private experiment",
+    patternId: "multi-level-router",
+    owner: { type: "user" },
+  }]);
+
+  for (const measurements of [workbenchMeasurements, await measure()]) {
+    expect(measurements.bodyWidth).toBeLessThanOrEqual(measurements.viewportWidth);
+    expect(measurements.documentWidth).toBeLessThanOrEqual(measurements.viewportWidth);
+    expect(measurements.workspaceLeft).toBeGreaterThanOrEqual(0);
+    expect(measurements.workspaceRight).toBeLessThanOrEqual(375.5);
+  }
 });
 
 test("owner saves and confirms organization access revocation, then retries a migration with the same idempotency key", async ({ page }) => {
@@ -142,7 +151,7 @@ test("owner saves and confirms organization access revocation, then retries a mi
   await page.goto("/architectures");
 
   await expect(page.getByRole("heading", { name: "Review assistant", level: 2 })).toBeVisible();
-  await page.getByText("Access and migration", { exact: true }).click();
+  await page.getByRole("tab", { name: "Access" }).click();
   const organizationCheckbox = page.getByRole("checkbox", { name: "Share with Phase 2 UAT Organization" });
   await expect(organizationCheckbox).toBeVisible();
   await organizationCheckbox.check();
@@ -183,11 +192,11 @@ test("owner can create a team-owned shell and unsaved editor changes guard unloa
   await page.getByRole("button", { name: "Create architecture" }).click();
   await expect.poll(() => state.createdBodies.length).toBe(1);
   expect(state.createdBodies[0]?.owner).toEqual({ type: "team", id: "team-review" });
-  await expect(page.getByRole("heading", { name: "Team review routing", level: 2 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Team review routing", level: 1 })).toBeVisible();
   await expect(page.getByTestId("architecture-editor")).toBeVisible();
 
   await page.getByLabel("Selected node label").fill("Unsaved team router");
-  await expect(page.getByText("Unsaved changes")).toBeVisible();
+  await expect(page.getByText("Unsaved changes", { exact: true })).toBeVisible();
   const beforeUnloadPrevented = await page.evaluate(() => {
     const event = new Event("beforeunload", { bubbles: true, cancelable: true });
     window.dispatchEvent(event);
@@ -200,6 +209,9 @@ test("owner can create a team-owned shell and unsaved editor changes guard unloa
     if (acceptDiscard) await dialog.accept();
     else await dialog.dismiss();
   });
+  // Returning to the same architecture's overview keeps the draft without a prompt.
+  await page.getByRole("link", { name: "Architecture overview" }).click();
+  await expect(page.getByRole("link", { name: "Resume draft", exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Review assistant/ }).click();
   await expect(page.getByRole("heading", { name: "Team review routing", level: 2 })).toBeVisible();
   acceptDiscard = true;
@@ -264,25 +276,36 @@ for (const width of [1280, 390]) test(`architecture draft survives New and mobil
   await page.goto("/architectures");
   const row = page.getByRole("button", { name: /Review assistant/ });
   await row.click();
+  await page.getByRole("link", { name: "Open workbench", exact: true }).click();
+  // Phones show the canvas first; node details sit behind the pane switch.
+  if (width === 390) await page.getByRole("button", { name: "Outline & details" }).click();
   await page.getByLabel("Selected node label").fill("Uncommitted review router");
-  await expect(page.getByText("Unsaved changes")).toBeVisible();
+  await expect(page.getByText("Unsaved changes", { exact: true })).toBeVisible();
+  const resume = page.getByRole("link", { name: "Resume draft", exact: true });
+  await page.getByRole("link", { name: "Architecture overview" }).click();
+  await expect(resume).toBeVisible();
   await page.getByRole("button", { name: "New architecture", exact: true }).click();
   await expect(page.locator(".architecture-create-form").getByLabel("Architecture name", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await resume.click();
   await expect(page.getByLabel("Selected node label")).toHaveValue("Uncommitted review router");
   let dialogs = 0;
   page.on("dialog", async dialog => { dialogs += 1; await dialog.dismiss(); });
+  await page.getByRole("link", { name: "Architecture overview" }).click();
   if (width === 390) {
     await page.getByRole("button", { name: "Back to architectures", exact: true }).click();
     await expect(row).toBeFocused();
     await row.click();
+    await resume.click();
     await expect(page.getByLabel("Selected node label")).toHaveValue("Uncommitted review router");
     expect(dialogs).toBe(0);
+    await page.getByRole("link", { name: "Architecture overview" }).click();
     await page.getByRole("button", { name: "Back to architectures", exact: true }).click();
   }
   await page.getByRole("button", { name: /Operations assistant/ }).click();
   await expect.poll(() => dialogs).toBe(1);
   if (width === 390) await row.click();
+  await resume.click();
   await expect(page.getByLabel("Selected node label")).toHaveValue("Uncommitted review router");
   await info.attach("draft-safety", { body: JSON.stringify({ width, rejectedDiscard: dialogs, preservedLabel: "Uncommitted review router" }), contentType: "application/json" });
 });

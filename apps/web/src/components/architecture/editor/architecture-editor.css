@@ -11,16 +11,27 @@
   --editor-amber: #ba751c;
   --editor-danger: #a13a37;
   display: grid;
-  gap: 18px;
+  gap: 12px;
   min-width: 0;
   color: var(--editor-ink);
-  font-family: "Avenir Next", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  font-family: inherit;
 }
 
 .architecture-editor *,
 .architecture-editor *::before,
 .architecture-editor *::after {
   box-sizing: border-box;
+}
+
+.architecture-editor [hidden] {
+  display: none !important;
+}
+
+.architecture-editor-advanced {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .architecture-editor button,
@@ -41,59 +52,53 @@
   outline-offset: 2px;
 }
 
+/* One compact toolbar row: the caller's title block, then draft actions. */
 .architecture-editor-header {
   display: flex;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 20px 22px;
-  border: 1px solid var(--editor-line);
-  border-radius: 8px;
-  background:
-    linear-gradient(115deg, rgba(9, 126, 157, 0.065), transparent 48%),
-    var(--editor-surface);
-  box-shadow: 0 10px 30px rgba(22, 60, 78, 0.07);
-}
-
-.architecture-editor-heading {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  gap: 12px 20px;
   min-width: 0;
 }
 
-.architecture-editor-mark {
-  display: grid;
-  flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  border: 1px solid #a8d3df;
-  border-radius: 6px;
-  color: var(--editor-cyan-dark);
-  background: #e6f3f6;
+.architecture-editor-header > :first-child:not(.architecture-editor-header-actions) {
+  flex: 1 1 240px;
+  min-width: 0;
 }
 
-.architecture-editor-heading h2,
 .architecture-editor-pane-heading h3,
 .architecture-editor-context-panel h3,
 .architecture-editor-inspector h4,
 .architecture-editor-validation h4 {
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
-.architecture-editor-heading h2 {
-  font-size: clamp(20px, 2.3vw, 27px);
-  line-height: 1.05;
+/* An explicit width, not a flex basis, so the action group's intrinsic
+   width matches the laid-out row and the group does not wrap at desktop. */
+.architecture-editor-message {
+  display: flex;
+  flex: none;
+  width: 220px;
+  min-width: 0;
 }
 
-.architecture-editor-heading p:last-child {
-  max-width: 650px;
-  margin: 7px 0 0;
-  color: var(--editor-muted);
+.architecture-editor-message input {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--editor-line);
+  border-radius: 5px;
+  color: var(--editor-ink);
+  background: var(--editor-surface);
   font-size: 13px;
-  line-height: 1.45;
+}
+
+.architecture-editor-message input:disabled {
+  cursor: not-allowed;
+  background: #f2f6f7;
 }
 
 .architecture-editor-eyebrow {
@@ -106,6 +111,8 @@
   text-transform: uppercase;
 }
 
+/* The action row keeps its one-row width beside the title and wraps only
+   when the whole row is narrower than the actions. */
 .architecture-editor-header-actions {
   display: flex;
   flex: 0 0 auto;
@@ -113,6 +120,8 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .architecture-editor-save-state {
@@ -311,48 +320,125 @@
   background: #fff6f5;
 }
 
+.architecture-editor-design {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Narrow layouts switch between the canvas and the outline with details. */
+.architecture-editor-pane-switch {
+  display: none;
+  gap: 8px;
+}
+
+.architecture-editor-pane-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--editor-line);
+  border-radius: 6px;
+  color: var(--editor-muted);
+  background: var(--editor-surface);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.architecture-editor-pane-switch button[aria-pressed="true"] {
+  border-color: var(--editor-cyan-dark);
+  color: var(--editor-cyan-dark);
+  background: #eaf6f8;
+}
+
+/* The design grid fills the viewport under the toolbar and tabs; the tree
+   and the canvas scroll or pan inside their own panes. */
 .architecture-editor-workbench {
   display: grid;
-  grid-template-columns: minmax(290px, 0.83fr) minmax(460px, 1.8fr);
-  min-height: 630px;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  height: clamp(460px, calc(100dvh - 230px), 1200px);
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--editor-line);
   border-radius: 8px;
   background: var(--editor-surface);
-  box-shadow: 0 14px 34px rgba(22, 60, 78, 0.07);
 }
 
 .architecture-editor-outline-pane {
   display: flex;
   min-width: 0;
+  min-height: 0;
   flex-direction: column;
-  gap: 13px;
-  padding: 18px;
+  gap: 12px;
+  padding: 14px;
+  overflow-y: auto;
   border-right: 1px solid var(--editor-line);
-  background:
-    linear-gradient(90deg, rgba(18, 73, 94, 0.035), transparent 18px),
-    #fbfdfd;
+  background: #fbfdfd;
 }
 
 .architecture-editor-canvas-pane {
   display: flex;
   min-width: 0;
+  min-height: 0;
   flex-direction: column;
-  gap: 13px;
-  padding: 18px;
+  gap: 10px;
+  padding: 12px;
   background: var(--editor-blueprint);
 }
 
 .architecture-editor-pane-heading {
   display: flex;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 6px 10px;
 }
 
 .architecture-editor-pane-heading h3 {
-  font-size: 18px;
-  line-height: 1.1;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 650;
+}
+
+/* The outline heading and the selected-node inspector stay in view while the
+   middle of the pane (details, add controls, tree) scrolls. */
+.architecture-editor-outline-pane > .architecture-editor-pane-heading {
+  position: sticky;
+  top: -14px;
+  z-index: 2;
+  margin: -14px -14px 0;
+  padding: 14px 14px 6px;
+  background: #fbfdfd;
+}
+
+.architecture-editor-outline-pane > .architecture-editor-inspector {
+  position: sticky;
+  bottom: -14px;
+  z-index: 2;
+  flex: none;
+  box-shadow: 0 -8px 16px -12px rgba(23, 61, 80, 0.35);
+}
+
+.architecture-editor-disclosure {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.architecture-editor-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  color: var(--editor-cyan-dark);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.architecture-editor-disclosure .architecture-editor-meta-grid {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .architecture-editor-count {
@@ -401,10 +487,11 @@
 }
 
 .architecture-editor-add-skill {
-  display: grid;
-  min-width: 145px;
-  gap: 4px;
-  margin-left: auto;
+  display: flex;
+  flex: 1 1 150px;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
 }
 
 .architecture-editor-add-skill span {
@@ -416,7 +503,9 @@
 }
 
 .architecture-editor-add-skill select {
-  max-width: 180px;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
   height: 31px;
   padding: 0 7px;
   overflow: hidden;
@@ -431,10 +520,14 @@
 .architecture-editor-registry-picker {
   display: grid;
   gap: 9px;
-  padding: 12px;
+  padding: 4px 12px;
   border: 1px solid #afd0d7;
   border-radius: 5px;
   background: #f1fafb;
+}
+
+.architecture-editor-registry-picker[open] {
+  padding-bottom: 12px;
 }
 
 .architecture-editor-picker-heading {
@@ -541,7 +634,10 @@
 }
 
 .architecture-editor-tree-wrap {
-  min-height: 0;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 150px;
   padding: 9px 7px 10px;
   border: 1px solid var(--editor-soft-line);
   border-radius: 5px;
@@ -557,8 +653,10 @@
 
 .architecture-editor-tree {
   display: grid;
+  flex: 1 1 auto;
+  align-content: start;
   gap: 2px;
-  max-height: 315px;
+  min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -751,8 +849,8 @@
 
 .architecture-editor-canvas {
   position: relative;
-  min-height: 522px;
-  flex: 1;
+  min-height: 280px;
+  flex: 1 1 auto;
   overflow: hidden;
   border: 1px solid #c0d5dc;
   border-radius: 6px;
@@ -777,9 +875,19 @@
 
 .architecture-editor-canvas .react-flow__controls {
   overflow: hidden;
+  margin: 8px;
   border: 1px solid #a9c6ce;
   border-radius: 5px;
-  box-shadow: 0 4px 12px rgba(23, 61, 80, 0.08);
+  box-shadow: 0 2px 6px rgba(23, 61, 80, 0.08);
+}
+
+.architecture-editor-canvas .react-flow__controls.horizontal .react-flow__controls-button {
+  border-right: 1px solid #d1e0e4;
+  border-bottom: 0;
+}
+
+.architecture-editor-canvas .react-flow__controls.horizontal .react-flow__controls-button:last-child {
+  border-right: 0;
 }
 
 .architecture-editor-canvas .react-flow__controls-button {
@@ -800,6 +908,7 @@
 
 .architecture-editor-canvas .react-flow__minimap {
   overflow: hidden;
+  margin: 8px;
   border: 1px solid #a9c6ce;
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.84);
@@ -1148,13 +1257,20 @@
   font-size: 10px;
 }
 
-@media (max-width: 940px) {
-  .architecture-editor-header {
-    flex-direction: column;
+@media (max-width: 1180px) {
+  .architecture-editor-message {
+    width: 170px;
   }
+}
 
+@media (max-width: 1000px) {
   .architecture-editor-header-actions {
     justify-content: flex-start;
+  }
+
+  .architecture-editor-message {
+    flex: 1 1 100%;
+    width: auto;
   }
 
   .architecture-editor-meta-grid {
@@ -1164,31 +1280,52 @@
   .architecture-editor-pattern-lock {
     grid-column: span 2;
   }
+}
+
+/* One design pane at a time, chosen with the Canvas / Outline switch. */
+@media (max-width: 720px) {
+  .architecture-editor-pane-switch {
+    display: flex;
+  }
 
   .architecture-editor-workbench {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .architecture-editor-workbench[data-pane="canvas"] > .architecture-editor-outline-pane,
+  .architecture-editor-workbench[data-pane="outline"] > .architecture-editor-canvas-pane {
+    display: none;
   }
 
   .architecture-editor-outline-pane {
+    overflow: visible;
     border-right: 0;
-    border-bottom: 1px solid var(--editor-line);
+  }
+
+  .architecture-editor-tree-wrap {
+    flex: none;
   }
 
   .architecture-editor-tree {
-    max-height: 280px;
+    max-height: 55dvh;
+  }
+
+  .architecture-editor-canvas-pane {
+    height: clamp(380px, 62dvh, 560px);
+  }
+
+  /* On a phone the minimap would cover too much of the canvas. */
+  .architecture-editor-canvas .react-flow__minimap {
+    display: none;
   }
 }
 
 @media (max-width: 680px) {
-  .architecture-editor {
-    gap: 13px;
-  }
-
-  .architecture-editor-header,
   .architecture-editor-outline-pane,
   .architecture-editor-canvas-pane,
   .architecture-editor-context-panel {
-    padding: 14px;
+    padding: 12px;
   }
 
   .architecture-editor-meta-grid,
@@ -1200,17 +1337,9 @@
     grid-column: auto;
   }
 
-  .architecture-editor-pane-heading {
-    flex-direction: column;
-  }
-
   .architecture-editor-pane-copy.compact {
     max-width: none;
     text-align: left;
-  }
-
-  .architecture-editor-canvas {
-    min-height: 430px;
   }
 
   .architecture-editor-binding-row {

@@ -233,9 +233,133 @@
 .app-shell main.architecture-workspace.cp-page .cp-pattern-list h3 { margin: 0; color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 600; }
 .app-shell main.architecture-workspace.cp-page .cp-pattern-list p { margin: 2px 0 0; color: var(--ink-soft); font-size: 13px; line-height: 18px; }
 .app-shell main.architecture-workspace.cp-page .architecture-access-note { font-weight: 400; }
-.app-shell main.architecture-workspace.cp-page .architecture-draft-section { outline-offset: 4px; }
-.app-shell main.architecture-workspace.cp-page .architecture-history-disclosure .architecture-history-heading > div { display: none; }
+.app-shell main.architecture-workspace.cp-page .architecture-history-tab .architecture-history-heading > div { display: none; }
 .app-shell main.architecture-workspace.cp-page :is(.architecture-editor-card, .architecture-history-panel) { padding: 0; border: 0; background: none; box-shadow: none; }
+
+/* Architecture overview: compact title, launcher, meta line and context row. */
+.app-shell main.architecture-workspace.cp-page .architecture-overview-head { gap: 14px; }
+.app-shell main.architecture-workspace.cp-page .architecture-overview-title { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 16px; min-width: 0; }
+.app-shell main.architecture-workspace.cp-page .architecture-overview-title > .cp-title-block { flex: 1 1 260px; }
+.app-shell main.architecture-workspace.cp-page .architecture-launcher { flex: none; text-decoration: none; }
+.app-shell main.architecture-workspace.cp-page .architecture-meta-line > span + span::before { content: "·"; margin-right: 8px; color: var(--line-strong); }
+.app-shell main.architecture-workspace.cp-page .architecture-meta-line > [data-access="append"] { color: var(--teal-dark); }
+.app-shell main.architecture-workspace.cp-page .architecture-context-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.app-shell main.architecture-workspace.cp-page .architecture-context-label { color: var(--muted); font-size: 13px; line-height: 18px; }
+.app-shell main.architecture-workspace.cp-page .architecture-context-bar select {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  height: 32px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  background-color: var(--surface);
+  font-size: 13px;
+}
+.app-shell main.architecture-workspace.cp-page .architecture-context-bar select:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.app-shell main.architecture-workspace.cp-page .architecture-context-note { justify-content: flex-start; min-height: 32px; color: var(--warning); font-size: 12px; text-align: left; }
+.app-shell main.architecture-workspace.cp-page :is(.architecture-draft-note, .architecture-context-fallback, .architecture-saved-note) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink-soft);
+  background: var(--surface-soft);
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+.app-shell main.architecture-workspace.cp-page :is(.architecture-draft-note, .architecture-context-fallback) { border-color: #f1d9a8; color: var(--warning); background: var(--warning-soft); }
+.app-shell main.architecture-workspace.cp-page .architecture-saved-note { border-color: #bfe0da; color: var(--teal-dark); background: var(--teal-soft); }
+.app-shell main.architecture-workspace.cp-page :is(.architecture-draft-note, .architecture-context-fallback, .architecture-saved-note) > svg { flex: none; }
+
+/* Tabs shared by the overview and the Workbench; hidden panels stay mounted. */
+.app-shell main.architecture-workspace.cp-page .architecture-tabs {
+  display: flex;
+  gap: 4px 20px;
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+  scrollbar-width: none;
+}
+.app-shell main.architecture-workspace.cp-page .architecture-tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  margin-bottom: -1px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-soft);
+  background: none;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.app-shell main.architecture-workspace.cp-page .architecture-tab:hover { color: var(--ink); }
+.app-shell main.architecture-workspace.cp-page .architecture-tab[aria-selected="true"] { border-bottom-color: var(--teal); color: var(--teal-dark); }
+.app-shell main.architecture-workspace.cp-page .architecture-tab:focus-visible { border-radius: 4px; outline: 2px solid var(--ring); outline-offset: -2px; }
+.app-shell main.architecture-workspace.cp-page .architecture-tab-count { color: var(--muted); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.app-shell main.architecture-workspace.cp-page [role="tabpanel"]:focus-visible { border-radius: 6px; outline: 2px solid var(--ring); outline-offset: 2px; }
+.app-shell main.architecture-workspace.cp-page .architecture-overview-panel { display: grid; align-content: start; gap: 16px; min-width: 0; }
+.app-shell main.architecture-workspace.cp-page .architecture-preview-stack { gap: 0; }
+.app-shell main.architecture-workspace.cp-page .architecture-panel-section-heading { flex-wrap: wrap; align-items: center; }
+.app-shell main.architecture-workspace.cp-page .architecture-panel-section-heading h3 { margin: 0; color: var(--ink); font-size: 15px; line-height: 22px; font-weight: 600; }
+.app-shell main.architecture-workspace.cp-page .architecture-outline h4 { margin: 0; color: var(--ink-soft); font-size: 13px; line-height: 18px; font-weight: 600; }
+.app-shell main.architecture-workspace.cp-page .architecture-outline-scroll { max-height: 320px; overflow: auto; overscroll-behavior: contain; }
+.app-shell main.architecture-workspace.cp-page .architecture-outline-scroll:focus-visible { border-radius: 6px; outline: 2px solid var(--ring); outline-offset: 2px; }
+.app-shell main.architecture-workspace.cp-page .architecture-technical-details > .cp-details-body { gap: 20px; padding: 8px 0 0; }
+.app-shell main.architecture-workspace.cp-page .architecture-text-link { color: var(--teal-dark); font-size: 14px; font-weight: 600; text-underline-offset: 2px; }
+.app-shell main.architecture-workspace.cp-page .architecture-unavailable { align-items: start; }
+
+/* Workbench: the full content width with the app rail kept. */
+.app-shell main.architecture-workspace.cp-page[data-surface="workbench"] { gap: 0; max-width: none; padding: 16px 24px 20px; }
+.app-shell main.architecture-workspace.cp-page .cp-surface[data-surface="workbench"] { border: 0; border-radius: 0; background: none; box-shadow: none; }
+.app-shell main.architecture-workspace.cp-page .cp-surface[data-surface="workbench"] .cp-body { grid-template-columns: minmax(0, 1fr); }
+.app-shell main.architecture-workspace.cp-page .cp-surface[data-surface="workbench"] .cp-inspector { gap: 0; padding: 0; }
+.app-shell main.architecture-workspace.cp-page .architecture-workbench { display: grid; align-content: start; gap: 12px; min-width: 0; }
+.app-shell main.architecture-workspace.cp-page .architecture-workbench-nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 16px; min-width: 0; }
+.app-shell main.architecture-workspace.cp-page .architecture-workbench-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.app-shell main.architecture-workspace.cp-page .architecture-workbench-back:hover { color: var(--teal-dark); }
+.app-shell main.architecture-workspace.cp-page .architecture-workbench-back:focus-visible { border-radius: 4px; outline: 2px solid var(--ring); outline-offset: 2px; }
+.app-shell main.architecture-workspace.cp-page .architecture-workbench-base { color: var(--muted); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.app-shell main.architecture-workspace.cp-page .architecture-workbench-heading { display: grid; gap: 2px; min-width: 0; }
+.app-shell main.architecture-workspace.cp-page .architecture-workbench-heading h1 { margin: 0; color: var(--ink); font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: 0; overflow-wrap: anywhere; }
+.app-shell main.architecture-workspace.cp-page .architecture-workbench-heading h2 { margin: 0; color: var(--muted); font-size: 13px; line-height: 18px; font-weight: 500; }
+.app-shell main.architecture-workspace.cp-page .architecture-workbench-heading h1:focus { outline: none; }
+.app-shell main.architecture-workspace.cp-page .architecture-workbench-heading h1:focus-visible { border-radius: 4px; outline: 2px solid var(--ring); outline-offset: 2px; }
+.app-shell main.architecture-workspace.cp-page .architecture-workbench-preview { display: grid; gap: 16px; min-width: 0; }
+.app-shell main.architecture-workspace.cp-page .architecture-workbench-preview-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.app-shell main.architecture-workspace.cp-page .architecture-workbench-preview-head h3 { margin: 0; color: var(--ink); font-size: 15px; line-height: 22px; font-weight: 600; }
+
+@media (max-width: 680px) {
+  .app-shell main.architecture-workspace.cp-page[data-surface="workbench"] { padding: 12px 12px 24px; }
+  .app-shell main.architecture-workspace.cp-page .architecture-launcher { width: 100%; }
+}
 
 /* System update centre */
 .app-shell main.update-centre-workspace.cp-page .cp-tray { display: grid; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--line-soft); border-radius: 12px 12px 0 0; background: var(--teal-soft); }

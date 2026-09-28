@@ -63,6 +63,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Frame, FrameDescription, FrameHeader, FramePanel, FrameTitle } from "@/components/reui/frame";
 import { ArchitecturesDashboard } from "@/components/architecture/ArchitecturesDashboard";
+import { isArchitecturePath } from "@/components/architecture/architecture-route";
+import type { ArchitectureNavigationGuard } from "@/components/architecture/useArchitectureNavigationGuard";
 import { OrganizationsDashboard } from "@/components/organization/OrganizationsDashboard";
 import { ArchitectureTargetsDashboard } from "@/components/target/ArchitectureTargetsDashboard";
 import { LibrariesDashboard } from "@/components/library/LibrariesDashboard";
@@ -139,7 +141,6 @@ interface CatalogLocation {
   bundle: string | null;
 }
 
-type ArchitectureNavigationGuard = (action: string) => boolean;
 type RegistryLayout = "split" | "stack";
 type MobileMenu = "more" | "account";
 type RegistryFocus = { kind: "title" } | { kind: "row"; slug: string };
@@ -208,6 +209,8 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   const architectureNavigationGuardRef = useRef<ArchitectureNavigationGuard | null>(null);
   const restoringPopstateRef = useRef(false);
   const [view, setView] = useState<AppView>(initialLocation.view);
+  // Routes that own URL state beyond the view (the architecture section) read it from here.
+  const [appUrl, setAppUrl] = useState(currentBrowserUrl);
   const [session, setSession] = useState<WebSession | null>(() => readStoredSession());
   // Bundle catalog, when the client and server provide it. A 404 from the
   // catalog falls back to the flat registry for this session.
@@ -312,6 +315,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     window.history.replaceState(appHistoryState(historyIndexRef.current), "", nextUrl);
     currentLocationRef.current = appLocationFromWindow();
     currentUrlRef.current = currentBrowserUrl();
+    setAppUrl(currentUrlRef.current);
   };
 
   const pushAppHistory = (nextUrl: string) => {
@@ -319,6 +323,12 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     window.history.pushState(appHistoryState(historyIndexRef.current), "", nextUrl);
     currentLocationRef.current = appLocationFromWindow();
     currentUrlRef.current = currentBrowserUrl();
+    setAppUrl(currentUrlRef.current);
+  };
+
+  const navigateArchitectures = (nextUrl: string, mode: "push" | "replace") => {
+    if (mode === "push") pushAppHistory(nextUrl);
+    else replaceAppHistory(nextUrl);
   };
 
   const registerArchitectureNavigationGuard = useCallback((guard: ArchitectureNavigationGuard | null) => {
@@ -362,10 +372,13 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
         }
         currentLocationRef.current = next;
         currentUrlRef.current = currentBrowserUrl();
+        setAppUrl(currentUrlRef.current);
         return;
       }
 
-      if (previous.view === "architectures" && next.view !== "architectures") {
+      // The architecture guard sees every move, including moves inside the
+      // section; it prompts only when the destination would discard a draft.
+      if (previous.view === "architectures") {
         const guard = architectureNavigationGuardRef.current;
         if (guard) {
           const action = nextHistoryIndex !== null && nextHistoryIndex < historyIndexRef.current
@@ -373,7 +386,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
             : nextHistoryIndex !== null && nextHistoryIndex > historyIndexRef.current
               ? "go forward"
               : "navigate away";
-          if (!guard(action)) {
+          if (!guard(action, currentBrowserUrl())) {
             const restoreDelta = nextHistoryIndex === null
               ? null
               : historyIndexRef.current - nextHistoryIndex;
@@ -398,6 +411,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
       }
       currentLocationRef.current = next;
       currentUrlRef.current = currentBrowserUrl();
+      setAppUrl(currentUrlRef.current);
       searchSelectionQuery.current = null;
       setView(next.view);
       // Clear eagerly only when the detail effects are certain to reload. An
@@ -1228,7 +1242,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
           ) : activeView === "teams" && session ? (
             <TeamsDashboard client={registryClient} session={session} />
           ) : activeView === "architectures" && session ? (
-            <ArchitecturesDashboard client={registryClient} onNavigationGuardChange={registerArchitectureNavigationGuard} session={session} />
+            <ArchitecturesDashboard client={registryClient} onNavigate={navigateArchitectures} onNavigationGuardChange={registerArchitectureNavigationGuard} session={session} url={appUrl} />
           ) : activeView === "organizations" && session ? (
             <OrganizationsDashboard client={registryClient} session={session} />
           ) : activeView === "targets" && session ? (
@@ -5755,7 +5769,7 @@ function initialViewFromPath(pathname: string): AppView {
   if (pathname === "/submit") {
     return "submit";
   }
-  if (pathname === "/architectures") {
+  if (isArchitecturePath(pathname)) {
     return "architectures";
   }
   if (pathname === "/organizations") {
