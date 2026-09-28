@@ -4,10 +4,30 @@ Version: 0.1.0-beta.15
 Last updated: 2026-09-28
 
 This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.
-The current beta.14 delivery is tracked in [Beta.14 Release Delivery](BETA14_RELEASE_DELIVERY.md).
+The current beta.15 delivery is tracked in [Beta.15 Release Delivery](BETA15_RELEASE_DELIVERY.md).
 The historical operational beta evidence remains in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
 
-## Current beta.14 deployment
+## Current beta.15 deployment
+
+On 28 September 2026, staging and production were promoted from
+`0415a160b56dac79900a698c8d378e7083ecd194` in API-ready-then-web order.
+Saved branding now updates the browser tab title and favicon. No migration is required.
+
+| Environment | API deployment | Web deployment |
+| --- | --- | --- |
+| Staging | `9caf12a6-70f3-46d6-905d-53c11744bb33` | `9626c294-ca19-44d4-960f-a95149bf99cd` |
+| Production | `f6ee1ba4-7af7-4dae-91dc-2f9e4fb97d70` | `1d62e0c0-0616-4c0a-8bf8-79c741d0cbe0` |
+
+All four report SUCCESS, beta.15 and the same source revision. Each environment
+passed 19 HTTP checks and fresh CLI doctor/catalog checks. Production retained
+the owner/MFA session and rendered private package contents. Its browser title
+matches the preserved saved custom text; the default favicon remains
+because no custom logo is saved. The recovery point from
+`2026-09-27T16:01:29.347Z` passed the 26-hour freshness policy before promotion.
+Rollback uses the matching beta.14 pair below while retaining all application data.
+See the delivery record for verification, archive checksums and cache limitations.
+
+## Historical beta.14 deployment
 
 On 28 September 2026, staging and production were promoted from
 `5647be19f15a8f9bb2c6b0ecfb067478b7528ed0` in API-ready-then-web order.

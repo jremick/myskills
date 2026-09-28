@@ -7,12 +7,14 @@ MySkills beta releases are verification-first and approval-gated. A passing comm
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
 
-## Beta.15 candidate
+## Beta.15 release record
 
-Saved branding now controls the browser tab title and favicon. The existing
-owner/admin controls, validation and audit boundary are unchanged. No API,
-schema or dependency change is required. GitHub and hosted delivery are approved;
-npm remains beta.8. See [Beta.15 release delivery](BETA15_RELEASE_DELIVERY.md).
+Saved branding controls the browser tab title and favicon at myskills.sh.
+Tag `v0.1.0-beta.15` and both staging/production services use
+`0415a160b56dac79900a698c8d378e7083ecd194`. Canonical verification, protected CI,
+tagged verification, deployed acceptance and remote asset checksums passed.
+No API, schema or dependency change is required. npm remains beta.8. See
+[Beta.15 release delivery](BETA15_RELEASE_DELIVERY.md).
 
 ## Beta.14 release record
 
