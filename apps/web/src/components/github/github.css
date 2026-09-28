@@ -1,0 +1,9 @@
+.github-settings, .github-settings form, .github-fields { display: grid; gap: 18px; min-width: 0; }
+.github-fields { padding: 0; margin: 0; border: 0; }
+.github-field-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.github-check { display: flex; align-items: start; gap: 10px; font-size: 14px; }
+.github-check input { margin-top: 3px; accent-color: var(--teal); }
+.github-settings textarea { width: 100%; min-width: 0; resize: vertical; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font-family: var(--font-mono, monospace); font-size: 12px; }
+.github-health { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--muted); }
+.github-health strong { color: var(--ink); }
+@media (max-width: 600px) { .github-field-pair { grid-template-columns: minmax(0, 1fr); } }

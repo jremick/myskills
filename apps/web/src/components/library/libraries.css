@@ -662,3 +662,7 @@
   .library-first-glyph span,
   .library-inbox-mark { forced-color-adjust: none; }
 }
+
+.library-check-schedule { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; color: var(--muted); font-size: 12px; line-height: 18px; }
+.library-entry-text > .library-check-schedule { margin-top: 4px; }
+.library-check-countdown { color: var(--ink-soft); font-weight: 600; white-space: nowrap; }
