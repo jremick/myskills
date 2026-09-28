@@ -27,6 +27,7 @@ async function fixture(page: Page, mfaVerified = true) {
       if (path === "/v1/admin/api-tokens/token-1") return reply({ token: { ...token, user, revokedAt: date } });
     }
     if (path === "/v1/me") return reply({ user });
+    if (path === "/v1/branding" || path === "/v1/admin/branding") return reply({ branding: { text: "MySkills", showText: true, logoDataUrl: null } });
     if (path === "/v1/site" || path === "/v1/admin/site") return reply({ site: { landingPageEnabled: true } });
     if (path === "/v1/teams") return reply({ teams, invitations });
     if (path === "/v1/teams/shared-skills") return reply({ teams: teams.slice(0, 2).map((team, i) => ({ team, sharingWithTeam: [{ slug: `skill-${i}`, title: `Shared skill ${i + 1}`, summary: "Reviewed team skill", latestVersion: "1.0.0", tags: [], visibility: "team", lifecycleStatus: "approved", platforms: [] }], sharedWithMe: [] })) });

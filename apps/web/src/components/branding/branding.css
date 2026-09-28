@@ -1,0 +1,53 @@
+.brand-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  max-width: 100%;
+  color: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.brand-identity .brand-logo {
+  display: block;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+.brand-identity[data-text-hidden="true"] .brand-logo { width: auto; max-width: 160px; }
+.brand-identity .brand-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brand-identity .brand-original-wordmark { display: block; width: 154px; height: auto; }
+.landing-brand { max-width: min(65vw, 320px); color: var(--ink); font-size: 21px; text-decoration: none; }
+.app-sidebar { grid-template-columns: minmax(0, 1fr); }
+.sidebar-brand-row { min-width: 0; }
+.app-sidebar .brand { min-width: 0; max-width: 100%; overflow: hidden; }
+.app-sidebar .brand-identity .brand-logo { width: 24px; height: 24px; }
+.app-sidebar .brand-identity[data-text-hidden="true"] .brand-logo { width: auto; max-width: 130px; }
+.app-shell.sidebar-collapsed .brand-identity .brand-logo { width: 24px; max-width: 24px; }
+.mobile-topbar .mobile-brand { min-width: 0; max-width: calc(100% - 56px); }
+.mobile-topbar .brand-identity { display: inline-flex; }
+.mobile-topbar .mobile-brand .brand-identity[data-text-hidden="true"] .brand-logo { width: auto; max-width: 160px; }
+.marketing-landing .brand { min-width: 0; max-width: 240px; }
+.marketing-landing .brand-identity { font-family: var(--font-display); font-size: 19px; }
+.marketing-landing .brand-identity .brand-logo { height: 30px; width: 30px; }
+.marketing-landing .brand-identity[data-text-hidden="true"] .brand-logo { width: auto; max-width: 160px; }
+.account-workspace .branding-settings { max-width: 680px; }
+.branding-settings form, .branding-fields { display: grid; gap: 18px; min-width: 0; }
+.branding-fields { border: 0; margin: 0; padding: 0; }
+.branding-remove { justify-self: start; }
+.branding-checkbox { display: flex; align-items: center; gap: 9px; width: fit-content; font-size: 14px; }
+.branding-checkbox input { width: 16px; height: 16px; margin: 0; }
+.branding-preview { display: grid; gap: 16px; min-width: 0; padding: 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+.branding-preview-label { color: var(--muted); font-size: 12px; }
+.branding-preview .brand-identity { font-size: 22px; }
+.branding-preview .brand-logo { height: 40px; width: 40px; }
+.account-workspace .branding-settings .admin-guidance { margin: 0; padding: 0; }
+.account-workspace .branding-settings .safe-message { display: block; min-height: 0; margin: 12px 0 0; padding: 10px 12px; text-align: left; border-radius: 6px; font-size: 13px; }
+.account-workspace .branding-settings .safe-message[role="status"] { color: var(--ink-soft); background: var(--surface-soft); border-color: var(--line); }
+@media (max-width: 719px) {
+  .marketing-landing .site-header .brand { max-width: min(38vw, 190px); }
+  .marketing-landing .site-header .brand-identity { gap: 6px; font-size: 16px; }
+  .marketing-landing .site-header .brand-logo { height: 26px; width: 26px; }
+  .branding-settings .account-actions { align-items: stretch; }
+}

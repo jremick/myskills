@@ -269,6 +269,9 @@ test("default registry client is stable between renders", async () => {
   globalThis.fetch = (async (input) => {
     const url = String(input);
     calls.push(url);
+    if (url.endsWith("/v1/branding")) {
+      return jsonResponse(200, { branding: { text: "MySkills", showText: true, logoDataUrl: null } });
+    }
     if (url.includes("/v1/me")) {
       return jsonResponse(200, { user: authUser() });
     }
@@ -298,9 +301,10 @@ test("default registry client is stable between renders", async () => {
 
     fireEvent.click(await view.findByRole("link", { name: "Release Notes Helper" }));
     await view.findByRole("heading", { name: "Release Notes Helper" });
-    await waitFor(() => assert.equal(calls.length, 8));
+    await waitFor(() => assert.equal(calls.length, 9));
     await delay(25);
     assert.deepEqual([...calls].sort(), [
+      "http://localhost:3001/v1/branding",
       "http://localhost:3001/v1/me",
       "http://localhost:3001/v1/registry/catalog?view=grouped&limit=25",
       "http://localhost:3001/v1/skills/release-notes-helper/bundles",
@@ -2748,6 +2752,9 @@ function mockClient(input: {
       return apiTokens.find((token) => token.id === tokenId) ?? defaultApiTokens()[0];
     },
     async getSiteSettings() { return { landingPageEnabled: true }; },
+    async getBranding() { return { text: "MySkills", showText: true, logoDataUrl: null }; },
+    async getAdminBranding() { return { text: "MySkills", showText: true, logoDataUrl: null }; },
+    async updateAdminBranding(branding) { return branding; },
     async getAdminSiteSettings() { return { landingPageEnabled: true }; },
     async updateAdminSiteSettings(site) { return site; },
     async getAdminRegistration() {

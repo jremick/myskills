@@ -1,5 +1,6 @@
+import { brandingAuditDetails, parseStoredBranding } from "./branding.js";
 import { getTableColumns, and, asc, desc, eq, gt, lte, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
-import { AppError } from "@myskills-app/core";
+import { AppError, type BrandSettings } from "@myskills-app/core";
 import { roles as authRoles, type RegistrationMode, type Role, type UserStatus } from "@myskills-app/auth";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import { AUTH_NOTIFICATION_BATCH_SIZE, AUTH_NOTIFICATION_LEASE_MS, AUTH_NOTIFICATION_MAX_ATTEMPTS, AUTH_NOTIFICATION_RETENTION_MS, eligibleAuthNotification, type AuthNotificationClaim, type FinishAuthNotificationInput } from "./notification-outbox.js";
@@ -70,6 +71,25 @@ const INSTANCE_ROLE_SCOPE = {
 
 export class PostgresAuthStore implements AuthStore {
   constructor(private readonly db: Database) {}
+
+  async getBranding(): Promise<BrandSettings> {
+    const [setting] = await this.db.select({ value: instanceSettings.value }).from(instanceSettings)
+      .where(eq(instanceSettings.key, "branding")).limit(1);
+    return parseStoredBranding(setting?.value);
+  }
+
+  async setBranding(settings: BrandSettings, audit?: CreateAuditEventInput): Promise<BrandSettings> {
+    return this.db.transaction(async (tx) => {
+      // Serialize even the first save, when no row exists for a row lock.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('myskills-branding-settings'))`);
+      const [previous] = await tx.select().from(instanceSettings).where(eq(instanceSettings.key, "branding")).limit(1);
+      const old = parseStoredBranding(previous?.value);
+      await tx.insert(instanceSettings).values({ key: "branding", value: settings })
+        .onConflictDoUpdate({ target: instanceSettings.key, set: { value: settings, updatedAt: new Date() } });
+      if (audit) await recordAuditEvent(tx, { ...audit, details: { ...audit.details, ...brandingAuditDetails(old, settings) } });
+      return { ...settings };
+    });
+  }
 
   async getSiteSettings(): Promise<SiteSettings> {
     const [setting] = await this.db.select({ value: instanceSettings.value }).from(instanceSettings)

@@ -1,7 +1,8 @@
+import { parseBranding } from "./branding.js";
 import type { SiteSettings } from "./types.js";
 import { chronologicalKey, chronologicalPagePosition, chronologicalPageResult } from "../repositories/chronological-pagination.js";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
-import { AppError } from "@myskills-app/core";
+import { AppError, type BrandSettings } from "@myskills-app/core";
 import {
   createApiToken,
   createRecoveryCodes,
@@ -925,6 +926,26 @@ export class AuthService {
       },
     });
     return { status: "disabled", disabledFactors };
+  }
+
+  async getPublicBranding(): Promise<BrandSettings> {
+    return this.store.getBranding();
+  }
+
+  async getBranding(actor: AuthResponseUser): Promise<BrandSettings> {
+    assertAdmin(actor);
+    return this.getPublicBranding();
+  }
+
+  async updateBranding(actor: AuthResponseUser, input: unknown): Promise<BrandSettings> {
+    assertAdmin(actor);
+    return this.store.setBranding(parseBranding(input), {
+      actorUserId: actor.id,
+      action: "admin.branding.update",
+      decision: "allow",
+      resourceType: "instance_setting",
+      details: { setting: "branding" },
+    });
   }
 
   async getPublicSiteSettings(): Promise<SiteSettings> {

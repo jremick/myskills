@@ -1288,6 +1288,28 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     return { token };
   });
 
+  app.get("/v1/branding", async (_request, reply) => {
+    reply.header("cache-control", "no-store");
+    if (!options.authService) throw new AppError("Branding settings are not available.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    return { branding: await options.authService.getPublicBranding() };
+  });
+
+  app.get("/v1/admin/branding", async (request, reply) => {
+    reply.header("cache-control", "no-store");
+    if (!options.authService) throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    const user = await authenticateSessionUser(options.authService, requestAuthorization(request));
+    if (!user) return authFailureReply(options.authService, requestAuthorization(request), reply);
+    return { branding: await options.authService.getBranding(user) };
+  });
+
+  app.put("/v1/admin/branding", async (request, reply) => {
+    reply.header("cache-control", "no-store");
+    if (!options.authService) throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
+    const user = await authenticateSessionUser(options.authService, requestAuthorization(request));
+    if (!user) return authFailureReply(options.authService, requestAuthorization(request), reply);
+    return { branding: await options.authService.updateBranding(user, request.body) };
+  });
+
   app.get("/v1/site", async (_request, reply) => {
     reply.header("cache-control", "no-store");
     if (!options.authService) {

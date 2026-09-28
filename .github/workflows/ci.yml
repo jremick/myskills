@@ -68,8 +68,8 @@ jobs:
       - run: npm install -g "$(node -p 'require("./package.json").packageManager')"
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Build web workspace dependencies
-        run: npm run build -w @myskills-app/core
+      - name: Build browser scenario dependencies
+        run: npm run build -w @myskills-app/core -w @myskills-app/auth -w @myskills-app/skill-package -w @myskills-app/api
       - name: Run browser scenarios
         id: mocked-browser
         run: npm run test:e2e -w @myskills-app/web -- --reporter=line,json

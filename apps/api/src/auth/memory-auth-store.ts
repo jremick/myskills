@@ -1,3 +1,5 @@
+import { DEFAULT_BRANDING, type BrandSettings } from "@myskills-app/core";
+import { brandingAuditDetails } from "./branding.js";
 import { chronologicalKey, compareChronological } from "../repositories/chronological-pagination.js";
 import { AppError } from "@myskills-app/core";
 import type { RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
@@ -169,6 +171,8 @@ export class MemoryAuthStore implements AuthStore {
   private adminMutationTail: Promise<void> = Promise.resolve();
   private accountActionTails = new Map<string, Promise<void>>();
 
+  private branding: BrandSettings = { ...DEFAULT_BRANDING };
+
   private siteSettings: SiteSettings = { landingPageEnabled: true };
 
   constructor(private registrationMode: RegistrationMode = "closed") {}
@@ -200,6 +204,20 @@ export class MemoryAuthStore implements AuthStore {
     };
     this.users.set(user.email, user);
     return toRecord(user);
+  }
+
+  async getBranding(): Promise<BrandSettings> {
+    return { ...this.branding };
+  }
+
+  async setBranding(settings: BrandSettings, audit?: CreateAuditEventInput): Promise<BrandSettings> {
+    return this.commitAdminMutation(() => ({
+      audit: audit ? { ...audit, details: { ...audit.details, ...brandingAuditDetails(this.branding, settings) } } : undefined,
+      commit: () => {
+        this.branding = { ...settings };
+        return { ...this.branding };
+      },
+    }));
   }
 
   async getSiteSettings(): Promise<SiteSettings> {

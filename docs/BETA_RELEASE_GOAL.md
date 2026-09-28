@@ -1,11 +1,18 @@
 # Operational Beta Delivery Brief
 
-Version: 0.1.0-beta.13
+Version: 0.1.0-beta.14
 Last updated: 2026-09-28
 
-Target release: `v0.1.0-beta.13`.
+Target release: `v0.1.0-beta.14`.
 
-Status: beta.13 GitHub prerelease and hosted delivery are verified.
+Status: beta.14 candidate preparation; beta.13 remains the verified hosted release.
+
+## Beta.14 Candidate
+
+Add owner/admin branding controls with safe image upload, editable text,
+preview, reset and audit history. Retain beta.13 authenticator QR enrollment.
+See [Beta.14 release delivery](BETA14_RELEASE_DELIVERY.md) for acceptance and
+promotion status. No schema migration is required; npm remains beta.8.
 
 ## Beta.13 Release Record
 

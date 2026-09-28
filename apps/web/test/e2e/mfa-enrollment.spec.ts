@@ -22,6 +22,7 @@ for (const width of [1280, 390]) {
       const path = new URL(request.url()).pathname.replace(/^\/api/, "");
       if (path === "/v1/me") return route.fulfill({ json: { user } });
       if (path === "/v1/site") return route.fulfill({ json: { site: { landingPageEnabled: true } } });
+      if (path === "/v1/branding") return route.fulfill({ json: { branding: { text: "MySkills", showText: true, logoDataUrl: null } } });
       if (path === "/v1/auth/api-tokens") return route.fulfill({ json: { tokens: [] } });
       if (path === "/v1/auth/mfa") return route.fulfill({ json: { mfa: { totpEnabled: enabled, recoveryCodesRemaining: enabled ? codes.length : 0, factors: enabled ? [factor] : [] } } });
       if (path === "/v1/auth/mfa/totp/enroll") {

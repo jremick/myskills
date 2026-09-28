@@ -143,6 +143,7 @@ async function installBundleFixture(page: Page, options: { catalogAvailable?: bo
     const q = url.searchParams.get("q") ?? url.searchParams.get("query") ?? "";
 
     if (path === "/v1/me") return reply({ user });
+    if (path === "/v1/branding") return reply({ branding: { text: "MySkills", showText: true, logoDataUrl: null } });
     if (path === "/v1/teams") return reply({ teams: [docsTeam], invitations: [] });
     if (path === "/v1/skills") {
       state.legacySearches++;

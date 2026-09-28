@@ -1,7 +1,9 @@
 import { createBundleClient, type BundleClient } from "./bundle-api.js";
 import { createImprovementClient, type ImprovementClient } from "./improvement-api";
 import { createLibraryClient, type LibraryClient } from "./library-api.js";
+import { MAX_BRAND_LOGO_BYTES, MAX_BRAND_TEXT_LENGTH } from "@myskills-app/core";
 import type {
+  BrandSettings,
   AccessibleArchitectureOutline,
   ArchitectureTarget,
   ArchitectureTargetAdapterDescriptor,
@@ -71,6 +73,17 @@ export type AdminRegistrationMode = "closed" | "request" | "open";
 
 export interface SiteSettings {
   landingPageEnabled: boolean;
+}
+
+function readBranding(value: unknown): BrandSettings {
+  if (!value || typeof value !== "object" || !("text" in value) || !("showText" in value) || !("logoDataUrl" in value)
+    || typeof value.text !== "string" || !value.text.trim() || value.text.length > MAX_BRAND_TEXT_LENGTH
+    || typeof value.showText !== "boolean" || (value.logoDataUrl !== null && (typeof value.logoDataUrl !== "string"
+      || value.logoDataUrl.length > Math.ceil(MAX_BRAND_LOGO_BYTES / 3) * 4 + 32
+      || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value.logoDataUrl)))) {
+    throw new Error("Branding settings are invalid.");
+  }
+  return { text: value.text, showText: value.showText, logoDataUrl: value.logoDataUrl };
 }
 
 export interface AdminRegistrationSettings {
@@ -818,6 +831,9 @@ export interface RegistryClient {
   createApiToken(input: { name: string; scopes: ApiTokenScope[]; expiresAt?: string }, token?: string): Promise<CreatedApiToken>;
   revokeApiToken(tokenId: string, token?: string): Promise<ApiToken>;
   getSiteSettings(): Promise<SiteSettings>;
+  getBranding(): Promise<BrandSettings>;
+  getAdminBranding(): Promise<BrandSettings>;
+  updateAdminBranding(branding: BrandSettings): Promise<BrandSettings>;
   getAdminSiteSettings(): Promise<SiteSettings>;
   updateAdminSiteSettings(settings: SiteSettings): Promise<SiteSettings>;
   getAdminRegistration(token?: string): Promise<AdminRegistrationSettings>;
@@ -1163,6 +1179,20 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
       const body = await response.json() as { site?: SiteSettings };
       if (typeof body.site?.landingPageEnabled !== "boolean") throw new Error("Site settings are invalid.");
       return { landingPageEnabled: body.site.landingPageEnabled };
+    },
+    async getBranding() {
+      const response = await fetchImpl(`${root}/v1/branding`, { signal: AbortSignal.timeout(10_000), cache: "no-store", credentials: "omit", headers: { accept: "application/json" } });
+      if (!response.ok) throw new Error("Branding is not available.");
+      const body = await response.json() as { branding: BrandSettings };
+      return readBranding(body.branding);
+    },
+    async getAdminBranding() {
+      const body = await requestJson<{ branding: BrandSettings }>(fetchImpl, `${root}/v1/admin/branding`, { token });
+      return readBranding(body.branding);
+    },
+    async updateAdminBranding(branding) {
+      const body = await requestJson<{ branding: BrandSettings }>(fetchImpl, `${root}/v1/admin/branding`, { method: "PUT", body: branding, token });
+      return readBranding(body.branding);
     },
     async getAdminSiteSettings() {
       const body = await requestJson<{ site: SiteSettings }>(fetchImpl, `${root}/v1/admin/site`, { token });
