@@ -147,7 +147,7 @@ function LibraryWorkspace({ api, client, user }: { api: LibraryClient; client: R
           <p className="library-lede">Keep useful skills together, retain their sources, and choose which versions you use.</p>
           {createForm()}
           <ol className="library-steps">
-            <li><Tile tone="teal" size={12} /><strong>Save</strong><span>Save a GitHub repository or a registry skill. Saving a source does not install its content.</span></li>
+            <li><Tile tone="teal" size={12} /><strong>Save</strong><span>Save a GitHub repository or a skill. Saving a source does not install its content.</span></li>
             <li><Tile tone="amber" size={12} /><strong>Check</strong><span>Preview complete skill packages before importing them.</span></li>
             <li><Tile tone="navy" size={12} /><strong>Adopt</strong><span>Adoption records the reviewed version you recommend. Installed copies change only when you update them.</span></li>
           </ol>
@@ -275,8 +275,8 @@ function LibraryDetail({ api, client, libraryId, onRemoved }: { api: LibraryClie
     let added: string | null = null;
     void action(async () => { const result = await api.addSkill(libraryId, slug.trim(), skillKey.current); skillKey.current = mutationId(); setSlug(""); added = result.entry.id; done?.(); }, setSkillError).then(() => { if (added) openEntry(added); });
   }}>
-    <label className="library-field library-grow"><span>Registry skill slug</span><Input value={slug} onChange={(event) => { setSlug(event.target.value); skillKey.current = mutationId(); }} placeholder="such as release-notes-helper" required /></label>
-    <Button variant={primary ? "default" : "outline"} disabled={busy || !slug.trim()}>Save registry skill</Button>
+    <label className="library-field library-grow"><span>Skill slug</span><Input value={slug} onChange={(event) => { setSlug(event.target.value); skillKey.current = mutationId(); }} placeholder="such as release-notes-helper" required /></label>
+    <Button variant={primary ? "default" : "outline"} disabled={busy || !slug.trim()}>Save skill</Button>
     {skillError && <p role="alert" className="library-alert">{skillError}</p>}
   </form>;
 
@@ -373,8 +373,8 @@ function LibraryDetail({ api, client, libraryId, onRemoved }: { api: LibraryClie
           </LibraryDisclosure>
           <LibraryDisclosure label="Add skill" variant={team ? "default" : "outline"} icon={<Plus size={16} aria-hidden="true" />}>
             {(close) => <div className="library-popover-body">
-              <h3 className="library-popover-title">Add a registry skill</h3>
-              <p className="library-muted">{team ? "Curate releases already shared with your team." : "Save an authorized registry skill by its slug."}</p>
+              <h3 className="library-popover-title">Add a skill</h3>
+              <p className="library-muted">{team ? "Curate releases already shared with your team." : "Save an authorized skill by its slug."}</p>
               {skillForm(true, close)}
             </div>}
           </LibraryDisclosure>
@@ -444,7 +444,7 @@ function EntryRow({ entry, sourceName, selected, register, onSelect }: { entry: 
         <span id={`${id}-title`} className="library-entry-title">{entry.title}</span>
         <span id={`${id}-meta`} className="library-entry-meta">
           {entry.kind === "bundle" ? <span>Bundle reference</span> : entry.kind === "source" ? <><span>{source?.path || "Repository root"}</span><span>{refLabel(source?.ref)}</span></>
-            : <>{slug && <code>{slug}</code>}<span>{sourceName ?? (entry.skill?.sourceEntryId ? "Library source" : "Registry")}</span></>}
+            : <>{slug && <code>{slug}</code>}<span>{sourceName ?? (entry.skill?.sourceEntryId ? "Library source" : "Skills")}</span></>}
         </span>
       </span>
       <span id={`${id}-chips`} className="library-entry-chips">
@@ -747,14 +747,14 @@ function SkillEntry({ api, client, entry, canWrite, titleId, sourceEntry, onSele
   const adoptForm = <form className="library-form" onSubmit={(event) => { event.preventDefault(); void adopt(); }}>
     <label className="library-field"><span>Reviewed release version</span><Input value={version} onChange={(event) => setVersion(event.target.value)} placeholder="0.0.1" required /></label>
     <label className="library-field"><span>Curator note (optional)</span><Input value={curatorNote} onChange={(event) => setCuratorNote(event.target.value)} maxLength={500} /></label>
-    <div className="library-form-actions"><Button size="sm" variant={adoption ? "outline" : "default"} disabled={busy || !version.trim()}>Adopt registry release</Button></div>
+    <div className="library-form-actions"><Button size="sm" variant={adoption ? "outline" : "default"} disabled={busy || !version.trim()}>Adopt skill release</Button></div>
   </form>;
   return <>
     <header className="library-inspector-head">
       <Tile tone={tileTone(slug)} size={24} />
       <div className="library-inspector-title">
         <h3 id={titleId} tabIndex={-1}>{entry.title}</h3>
-        <p><code>{slug}</code><a href={`/skills/${encodeURIComponent(slug)}`}>View in registry</a></p>
+        <p><code>{slug}</code><a href={`/skills/${encodeURIComponent(slug)}`}>View in Skills</a></p>
       </div>
     </header>
     <dl className="library-facts">
@@ -763,12 +763,12 @@ function SkillEntry({ api, client, entry, canWrite, titleId, sourceEntry, onSele
         {attestation && <Chip tone={attestation.tone}>{attestation.label}</Chip>}
         {shortDate(adoption.adoptedAt) && <span className="library-muted">{shortDate(adoption.adoptedAt)}</span>}
       </span> : <span className="library-muted">No version adopted</span>}</Fact>
-      {adoption && <Fact label="Registry">{release ? <span className="library-fact-inline">
+      {adoption && <Fact label="Skills">{release ? <span className="library-fact-inline">
         {release.lifecycleStatus === "deprecated" ? <Chip tone="amber">Deprecated</Chip> : <Chip tone="teal">{published ? `Published ${published}` : "Published"}</Chip>}
         {platforms.length > 0 && <span className="library-muted">{platforms.join(" · ")}</span>}
       </span> : <span className="library-muted">{error ? "Release unavailable" : "Checking release…"}</span>}</Fact>}
       <Fact label="From">{sourceEntry ? <button type="button" className="library-link-button" onClick={() => onSelectEntry(sourceEntry.id)}><GitBranch size={12} aria-hidden="true" />{sourceEntry.source?.fullName ?? sourceEntry.title}</button>
-        : entry.skill.sourceEntryId ? <span>A source in this library{entry.skill.sourcePath ? <> · <code>{entry.skill.sourcePath}</code></> : null}</span> : "Registry"}</Fact>
+        : entry.skill.sourceEntryId ? <span>A source in this library{entry.skill.sourcePath ? <> · <code>{entry.skill.sourcePath}</code></> : null}</span> : "Skills"}</Fact>
     </dl>
     {(release?.summary || release?.releaseNotes || adoption?.reason || !entry.skill.ownership?.isCaller) && <div className="library-section library-prose-block">
       {release?.summary && <p className="library-prose">{release.summary}</p>}
@@ -784,7 +784,7 @@ function SkillEntry({ api, client, entry, canWrite, titleId, sourceEntry, onSele
       </> : !error && <p className="library-muted">Checking the adopted artifact…</p>}
     </section>}
     {canWrite && !adoption && <section className="library-section" aria-labelledby={`${titleId}-adopt`}>
-      <h4 id={`${titleId}-adopt`}>Adopt a registry release</h4>
+      <h4 id={`${titleId}-adopt`}>Adopt a skill release</h4>
       <p className="library-muted">Adoption records the reviewed version you recommend. Installed copies change only when you update them.</p>
       {adoptForm}
     </section>}
@@ -844,7 +844,7 @@ function TargetBindings({ api, entry }: { api: LibraryClient; entry: LibraryEntr
 
 function RemoveEntry({ api, entry, onChanged }: { api: LibraryClient; entry: LibraryEntry; onChanged: () => Promise<void> }) {
   const [confirm, setConfirm] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
-  return <div className="library-remove">{confirm ? <div className="library-confirm"><p>Remove this entry? Installed files and registry releases stay intact.</p><div className="library-actions"><Button variant="destructive" size="sm" disabled={busy} onClick={() => { setBusy(true); void api.removeEntry(entry.id).then(() => onChanged()).catch((e) => setError(libraryError(e))).finally(() => setBusy(false)); }}>Confirm remove</Button><Button variant="ghost" size="sm" onClick={() => setConfirm(false)}>Cancel</Button></div></div> : <Button variant="ghost" size="sm" className="library-remove-button" onClick={() => setConfirm(true)}><Trash2 size={14} aria-hidden="true" />Remove entry</Button>}{error && <p role="alert" className="library-alert">{error}</p>}</div>;
+  return <div className="library-remove">{confirm ? <div className="library-confirm"><p>Remove this entry? Installed files and skill releases stay intact.</p><div className="library-actions"><Button variant="destructive" size="sm" disabled={busy} onClick={() => { setBusy(true); void api.removeEntry(entry.id).then(() => onChanged()).catch((e) => setError(libraryError(e))).finally(() => setBusy(false)); }}>Confirm remove</Button><Button variant="ghost" size="sm" onClick={() => setConfirm(false)}>Cancel</Button></div></div> : <Button variant="ghost" size="sm" className="library-remove-button" onClick={() => setConfirm(true)}><Trash2 size={14} aria-hidden="true" />Remove entry</Button>}{error && <p role="alert" className="library-alert">{error}</p>}</div>;
 }
 
 function LibrarySettings({ api, mfaVerified }: { api: LibraryClient; mfaVerified: boolean }) {

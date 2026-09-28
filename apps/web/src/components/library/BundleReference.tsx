@@ -25,7 +25,7 @@ export function BundleReference({ entry }: { entry: LibraryEntry }) {
         {changed && <span className="bundle-reference-changed">Updated since you saved</span>}
       </p>
       <p className="bundle-muted">Saving a bundle keeps a reference. It doesn’t adopt, install or follow updates to its skills.</p>
-      <a href={`/registry?bundle=${encodeURIComponent(reference.id)}`}>Open in registry</a>
+      <a href={`/registry?bundle=${encodeURIComponent(reference.id)}`}>Open in Skills</a>
     </div>
   );
 }

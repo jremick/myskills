@@ -66,7 +66,7 @@ export function ArchitectureEditorCard({
         {readOnly
           ? "This team architecture is available for inspection. Only the owner can append an immutable revision."
           : bootstrap
-            ? "Start from this local bootstrap shell, choose exact registry releases, then save one immutable first revision. Canvas positions are visual only and are not persisted."
+            ? "Start from this local bootstrap shell, choose exact skill releases, then save one immutable first revision. Canvas positions are visual only and are not persisted."
             : seededFromRevision
               ? `This draft starts from immutable revision ${seededFromRevision}; saving appends a new revision against the latest concurrency token. Canvas positions are visual only and are not persisted.`
               : "Changes stay in this browser until you preview or save them. Canvas positions are visual only and are not persisted."}

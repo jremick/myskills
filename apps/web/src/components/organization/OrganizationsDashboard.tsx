@@ -59,7 +59,7 @@ const ORGANIZATION_POLICY_DEFAULTS: OrganizationPolicyV1 = {
   },
 };
 
-// Organizations use the Registry list and detail layout (people.css). The list
+// Organizations use the Skills list and detail layout (people.css). The list
 // comes first; the selected organization's detail sits beside it when the
 // surface is wide, and replaces it (with Back) when the surface is narrow.
 export function OrganizationsDashboard({ client }: { client: RegistryClient; session: OrganizationSession }) {
