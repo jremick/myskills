@@ -6,6 +6,7 @@ All notable user-facing changes will be tracked here. MySkills is still prerelea
 
 Target release: `v0.1.0-beta.17`.
 
+- Open architecture editing in a full-page Workbench, with saved Overview, Skills, History, and Access tabs, responsive editing, draft protection, and direct links.
 - Browse and manage skills in one workspace, preserving the selected skill and exact version across scopes and detail tabs.
 - Save Library references through skill and release pickers. Open exact entries and source candidates from links, with reload, history, and return navigation preserved.
 - Keep archived and unpublished skills available to authorized managers. Exclude archived parent skills from Library adoption choices.

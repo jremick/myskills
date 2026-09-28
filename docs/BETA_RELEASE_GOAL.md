@@ -5,8 +5,8 @@ Last updated: 2026-09-29
 
 Target release: `v0.1.0-beta.17`.
 
-Status: beta.17 release candidate. Publish the unified Skills workspace with
-GitHub source authentication and team Library sourcing through the regular
+Status: beta.17 release candidate. Publish the unified Skills workspace and
+full-page architecture Workbench with GitHub source authentication and team Library sourcing through the regular
 GitHub release pathway. Instance operators apply the update. Required CI and
 tagged release verification remain publication gates. Broader work-pilot
 acceptance and unrelated follow-up work are outside this release.
