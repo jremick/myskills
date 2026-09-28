@@ -991,6 +991,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       const sharingActor = {
         id: sessionUser.id,
         roles: sessionUser.roles,
+        mfaVerified: sessionUser.mfaVerified,
       };
       await options.skillRepository.updateSkillSharing({
         actor: sharingActor,
@@ -1102,6 +1103,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         actor: {
           id: user.id,
           roles: user.roles,
+          mfaVerified: user.mfaVerified,
         },
         slug,
         ...input,
@@ -2431,6 +2433,7 @@ async function authenticateActor(
   return {
     id: context.user.id,
     roles: context.user.roles,
+    mfaVerified: context.user.mfaVerified,
   };
 }
 
@@ -2758,6 +2761,7 @@ async function authenticateOptionalActor(
   return {
     id: context.user.id,
     roles: context.user.roles,
+    mfaVerified: context.user.mfaVerified,
   };
 }
 
@@ -4182,6 +4186,8 @@ function rejectServerManagedSubmissionFields(body: Record<string, unknown>): voi
     "packagePath",
     "url",
     "ownerUserId",
+    "ownerTeamId",
+    "owner",
     "reviewStatus",
     "securityStatus",
     "publishedAt",

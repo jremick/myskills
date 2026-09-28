@@ -39,10 +39,13 @@ credentials; an expired refresh token or revoked authorization requires reconnec
 Disconnecting removes the stored connection from MySkills.
 
 When installation authentication is enabled, source checks use that installation.
-Otherwise they use the source owner's connection. Without either configuration,
-public checks use anonymous requests. Authentication failures are shown instead
-of silently retrying anonymously. Scheduled checks use the source owner's
-identity, not the user who happens to be viewing the page.
+Otherwise, personal Library checks use the source owner's connection, or anonymous
+requests when that owner has no connection. Team Library checks use the instance
+installation or anonymous requests, so tracking does not depend on a curator's
+personal connection. Interactive discovery and preview can use the current
+curator's connection. Authentication failures are shown instead of silently
+retrying anonymously. Viewing a source does not change its check identity or
+rate-limit allowance.
 
 ## Rate limits and retry timing
 

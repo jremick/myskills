@@ -310,6 +310,7 @@ export class MemorySubmissionStore implements SubmissionStore {
     const submission: StoredSubmission = {
       id: `submission-${this.submissions.size + 1}`,
       ownerUserId: input.actor.id,
+      ownerTeamId: null,
       skillSlug: input.manifest.name,
       title: input.manifest.title,
       summary: input.manifest.summary,

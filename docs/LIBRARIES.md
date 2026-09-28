@@ -3,6 +3,8 @@
 Version: 0.1.0-beta.8
 See the [release delivery record](BETA8_RELEASE_DELIVERY.md) and [build evidence](plans/2026-09-26-library-build-evidence.md) for verification and publication status.
 
+Unreleased extension: [team-owned sourcing and tracking](plans/2026-09-29-team-library-sources.md). The behavior below includes that extension; the beta.8 records describe the earlier release.
+
 Libraries collect source references and reviewed skill releases. They retain source citations, track selected content, and record the exact version a person or team recommends. Saving, checking, importing, reviewing, adopting and installing are separate actions.
 
 ## Start in the browser
@@ -11,7 +13,7 @@ Libraries collect source references and reviewed skill releases. They retain sou
 2. Save a public GitHub repository, directory or `SKILL.md` URL. **Use ref from URL** preserves a pasted branch or tag. Use **Source selection** to override it with a branch, tag, commit, stable release or tag prefix. Saving does not run repository code or install anything.
 3. Choose **Discover skills**. Select complete skill directories, inspect blockers, and preview the selected files. The preview records a resolved commit, included notices, mapping and artifact digest. Unsupported plugin content can remain a saved reference.
 4. Inspect the included instructions and supporting files. Review the installed name and both file digests: the runtime `SKILL.md` uses the unique registry slug, while `myskills-source-skill.txt` retains the exact upstream original. Submit the preview for review. Unclassified changes are conservatively recorded as breaking and requiring user action.
-5. Use the normal review queue, or approve your own strictly private import if the administrator enabled that option. Private approval requires MFA, a clean scan and an explicit artifact attestation. Choose **Inspect submitted artifact** first; the browser verifies its exact digest before enabling the attestation.
+5. Use the normal review queue. Team imports always require instance review and publication. In a personal Library, you can instead approve your own strictly private import if the administrator enabled that option. Private approval requires MFA, a clean scan and an explicit artifact attestation. Choose **Inspect submitted artifact** first; the browser verifies its exact digest before enabling the attestation.
 6. Adopt the approved release. For a skill entry, add an optional curator note explaining the recommendation. Adoption changes the library recommendation. It does not write to local installations.
 7. Set source checks to off, manual, daily or weekly. Opt into **Notify me about changes** to receive in-app events for libraries you can currently access.
 8. Install with the command shown on the adopted entry. Review required release actions before accepting an update.
@@ -46,7 +48,17 @@ Optimisation declarations added before private self-review follow the same publi
 
 To share such a release, choose **Request instance review for sharing**. A reviewer opens **Sharing reviews**, inspects the exact artifact and approves it for shared use. Browser inspection checks the response hash and artifact header against the requested digest. Sharing remains subject to ordinary registry grants and policy. A library does not grant access to a private release.
 
-Team libraries curate already-authorized skill releases. Imported content remains owned by its contributor. Removing membership or revoking release access takes effect on subsequent reads, inbox retrieval and delivery checks. Organization-owned imports and private GitHub connections are later phases.
+## Team sources and ownership
+
+Team owners can save public sources, select skill roots, preview and import candidates, configure checks, and adopt reviewed releases. Imports also require author permissions. Team writes require MFA. Members can read authorized recommendations, subscribe, and explicitly install or update their own copies.
+
+An import started in a team Library belongs to that team. The importer remains recorded as the person who performed the action. Another current curator can continue the same lineage after that person leaves. The first import uses team visibility and an owning-team registry grant. Later imports preserve the skill's current visibility. If it still uses team visibility, a revoked owning-team grant must be explicitly restored before another import. Instance review and publication must succeed before member delivery or adoption. Library membership never grants access to an unrelated private skill.
+
+Sources and candidates remain manageable by current curators. Upstream candidates and source health notifications go to eligible subscribed curators; adoption notifications go to eligible subscribed members. Subscription does not enable tracking, and unsubscribe does not stop it. Checks continue independently of the initiating curator while another eligible curator remains. When no eligible curator remains, tracking pauses until authority is restored and a curator explicitly resumes it.
+
+A team Library can still reference an already-authorized contributor-owned release. That reference does not transfer ownership. Personal imports remain personal; a new team import uses a separate lineage and requires explicit adoption and target rebinding. Removing membership or revoking release access takes effect on subsequent reads, inbox retrieval and delivery checks. Existing local files remain, and unavailable bindings never fall back to the latest registry release.
+
+Organization-owned Libraries, private GitHub connections, and ownership transfers are outside this extension.
 
 ## CLI workflow
 
@@ -176,4 +188,4 @@ Source checks use fixed public GitHub HTTPS endpoints, no provider credentials a
 
 Deleting a library stops its tracking/subscriptions and makes its target bindings unavailable. Imported skill releases and installed files remain. Retained provenance describes the original source snapshot and the imported artifact separately.
 
-This release does not include private GitHub credentials, company-owned imported assets, email delivery, unattended local application or native plugin execution. The complete future scope and acceptance criteria are in the [feature specification](plans/2026-09-26-library-feature-spec.md).
+This implementation does not include private GitHub credentials, organization-owned Libraries, email delivery, unattended local application or native plugin execution. The complete future scope and acceptance criteria are in the [feature specification](plans/2026-09-26-library-feature-spec.md).

@@ -22,6 +22,7 @@ import { isEffectiveTeamMembership } from "../teams/effective-membership.js";
 
 interface MemorySkill extends PublicSkill {
   ownerUserId?: string | null;
+  ownerTeamId?: string | null;
 }
 
 const DEFAULT_SHARING_SETTINGS: SharingSettings = {
@@ -271,6 +272,9 @@ export class MemorySkillRepository implements SkillRepository {
 
   async updateSkillSharing(input: UpdateSkillSharingInput): Promise<SkillSharingDetails> {
     const skill = this.findManagedSkill(input.slug, input.actor);
+    if (skill.ownerTeamId && input.actor.mfaVerified !== true) {
+      throw new AppError("MFA verification is required.", "MFA_VERIFICATION_REQUIRED", 403);
+    }
     validateVisibilityEnabled(input.visibility, this.sharingSettings);
     const currentTeamIds = this.teamGrants.get(input.slug) ?? [];
     const currentOrganizationGrants = this.organizationGrants.get(input.slug) ?? new Map<string, string>();
@@ -319,7 +323,7 @@ export class MemorySkillRepository implements SkillRepository {
       },
       sharingWithTeam: this.skills
         .filter((skill) => (
-          skill.ownerUserId === actor.id &&
+          this.isSkillOwner(skill, actor.id) &&
           skill.visibility === "team" &&
           (this.teamGrants.get(skill.slug) ?? []).includes(team.id) &&
           this.isVisibleReleasedSkill(skill, actor.id)
@@ -327,7 +331,7 @@ export class MemorySkillRepository implements SkillRepository {
         .map((skill) => this.publicSkill(skill, actor.id)),
       sharedWithMe: this.skills
         .filter((skill) => (
-          skill.ownerUserId !== actor.id &&
+          !this.isSkillOwner(skill, actor.id) &&
           skill.visibility === "team" &&
           (this.teamGrants.get(skill.slug) ?? []).includes(team.id) &&
           this.isVisibleReleasedSkill(skill, actor.id)
@@ -424,9 +428,9 @@ export class MemorySkillRepository implements SkillRepository {
       ...skill,
       access: actorId
         ? {
-          canManageSharing: skill.ownerUserId === actorId,
+          canManageSharing: this.isSkillOwner(skill, actorId),
           reasons: [
-            ...(skill.ownerUserId === actorId ? ["owner" as const] : []),
+            ...(this.isSkillOwner(skill, actorId) ? ["owner" as const] : []),
             ...(skill.visibility === "public" ? ["public" as const] : []),
             ...(skill.visibility === "authenticated" ? ["authenticated" as const] : []),
             ...(skill.visibility === "team" ? ["team" as const] : []),
@@ -441,12 +445,19 @@ export class MemorySkillRepository implements SkillRepository {
     };
   }
 
+  private isSkillOwner(skill: MemorySkill, actorId: string): boolean {
+    return skill.ownerUserId === actorId || Boolean(skill.ownerTeamId
+      && this.sharingSettings.teamsEnabled && this.sharingSettings.teamVisibilityEnabled
+      && (this.teamMemberships.get(actorId) ?? []).some((team) =>
+        team.id === skill.ownerTeamId && team.role === "owner" && this.isEffectiveTeamMembership(actorId, team)));
+  }
+
   private findManagedSkill(slug: string, actor: SkillSharingActor): MemorySkill {
     const skill = this.skills.find((item) => item.slug === slug);
     if (!skill) {
       throw new AppError("Skill not found.", "SKILL_NOT_FOUND", 404);
     }
-    if (skill.ownerUserId !== actor.id && !actor.roles.includes("owner") && !actor.roles.includes("admin")) {
+    if (!this.isSkillOwner(skill, actor.id) && !actor.roles.includes("owner") && !actor.roles.includes("admin")) {
       throw new AppError("Skill owner access is required.", "SKILL_OWNER_REQUIRED", 403);
     }
     return skill;

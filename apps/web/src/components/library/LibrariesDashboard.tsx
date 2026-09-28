@@ -343,7 +343,7 @@ function LibraryDetail({ api, client, libraryId, entryId, candidateId, filter, g
   // follows the reader's own Discover or Review choice for the selected source.
   const sourceSelection = candidateId && entryId ? { id: entryId, discover: false } : manualImport && manualImport.id === selectedId ? manualImport : null;
   const sourceEntry = byId(sourceSelection?.id ?? null);
-  const importing = Boolean(sourceSelection && library?.access.canImport && (sourceEntry ? sourceEntry.kind === "source" : !entryError));
+  const importing = Boolean(sourceSelection && library?.access.canWrite && (sourceEntry ? sourceEntry.kind === "source" : !entryError));
   const importingId = importing ? sourceSelection!.id : null;
   const candidateProblem = candidateId && selectedEntry && !importing ? CANDIDATE_UNAVAILABLE : null;
   useEffect(() => {
@@ -478,7 +478,7 @@ function LibraryDetail({ api, client, libraryId, entryId, candidateId, filter, g
       onReview={() => review(inspected.id, false)}
       onSelectEntry={crossLink}
       onChanged={() => load()}
-      importer={importing && sourceSelection && sourceSelection.id === inspected.id && <SourceImporter key={`${sourceSelection.id}:${sourceSelection.discover}:${candidateId ?? ""}`} api={api} entryId={sourceSelection.id} discoverOnOpen={sourceSelection.discover} linkedCandidateId={candidateId} entries={entries} onChanged={() => load()} onClose={closeImport} />}
+      importer={importing && sourceSelection && sourceSelection.id === inspected.id && <SourceImporter key={`${sourceSelection.id}:${sourceSelection.discover}:${candidateId ?? ""}`} api={api} library={library} entryId={sourceSelection.id} discoverOnOpen={sourceSelection.discover} linkedCandidateId={candidateId} entries={entries} onChanged={() => load()} onClose={closeImport} />}
       footer={remove(inspected)}
     /> : <SkillEntry
       api={api}
@@ -530,14 +530,14 @@ function LibraryDetail({ api, client, libraryId, entryId, candidateId, filter, g
           <Input type="search" aria-label="Filter entries" placeholder={cursor ? "Filter loaded entries" : "Filter entries"} value={query} onChange={(event) => setQuery(event.target.value)} />
         </div>
         {library.access.canWrite ? <div className="library-toolbar-actions">
-          <LibraryDisclosure label="Add source" variant={team ? "outline" : "default"} icon={<GitBranch size={16} aria-hidden="true" />}>
+          <LibraryDisclosure label="Add source" variant={library.access.canTrackSources ? "default" : "outline"} icon={<GitBranch size={16} aria-hidden="true" />}>
             {(close) => <div className="library-popover-body">
               <h3 className="library-popover-title">Add a GitHub source</h3>
               <p className="library-muted">Use a public github.com repository, directory, or SKILL.md URL. Saving a source does not install its content.</p>
               {sourceForm(true, close)}
             </div>}
           </LibraryDisclosure>
-          <LibraryDisclosure label="Add skill" variant={team ? "default" : "outline"} icon={<Plus size={16} aria-hidden="true" />}>
+          <LibraryDisclosure label="Add skill" variant={library.access.canTrackSources ? "outline" : "default"} icon={<Plus size={16} aria-hidden="true" />}>
             {(close) => <div className="library-popover-body">
               <h3 className="library-popover-title">Add a skill</h3>
               <p className="library-muted">{team ? "Curate releases already shared with your team." : "Search the skills you can use and save one as a reference."}</p>
@@ -571,11 +571,11 @@ function LibraryDetail({ api, client, libraryId, entryId, candidateId, filter, g
     </> : library.access.canWrite ? <div className="library-empty">
       <h3>Add a source or a skill</h3>
       <p>No entries yet. Save a source to discover its skills.</p>
-      {team && <p className="library-muted">Curate releases already shared with your team. Sources can be saved as references.</p>}
+      {team && <p className="library-muted">Team curators can select source skills and recommend versions after instance review. Imports belong to the team.</p>}
       <div className="library-empty-forms">
-        {team ? skillForm(true) : sourceForm(true)}
+        {library.access.canTrackSources ? sourceForm(true) : skillForm(true)}
         <div className="library-or"><span>or</span></div>
-        {team ? sourceForm(false) : skillForm(false)}
+        {library.access.canTrackSources ? skillForm(false) : sourceForm(false)}
       </div>
       <p className="library-muted">Saving a source does not install its content. Adoption records the reviewed version you recommend.</p>
     </div> : <div className="library-empty">
@@ -694,7 +694,7 @@ function SourceEntry({ api, entry, library, titleId, importing, skills, partial,
       {snapshot && <Fact label="Last snapshot"><span className="library-fact-inline"><code>{snapshot.commit.slice(0, 12)}</code>{snapshot.upstreamLabel && <span>{snapshot.upstreamLabel}</span>}{shortDate(snapshot.observedAt) && <span className="library-muted">{shortDate(snapshot.observedAt)}</span>}</span></Fact>}
       {source.archived && <Fact label="Upstream"><Chip tone="amber">Archived upstream</Chip></Fact>}
     </dl>
-    {library.access.canImport && <section className="library-section" aria-labelledby={`${titleId}-import`}>
+    {library.access.canWrite && <section className="library-section" aria-labelledby={`${titleId}-import`}>
       <h4 id={`${titleId}-import`}>Import skills</h4>
       <p className="library-muted">Inspect the frozen source and complete package before submitting. Saved candidates remain available when the source is offline.</p>
       <div className="library-actions">
@@ -746,7 +746,7 @@ function TrackingControls({ api, entry, onChanged }: { api: LibraryClient; entry
   </div>;
 }
 
-function SourceImporter({ api, entryId, discoverOnOpen, linkedCandidateId, entries, onChanged, onClose }: { api: LibraryClient; entryId: string; discoverOnOpen: boolean; linkedCandidateId: string | null; entries: LibraryEntry[]; onChanged: () => Promise<void>; onClose: () => void }) {
+function SourceImporter({ api, library, entryId, discoverOnOpen, linkedCandidateId, entries, onChanged, onClose }: { api: LibraryClient; library: LibrarySummary; entryId: string; discoverOnOpen: boolean; linkedCandidateId: string | null; entries: LibraryEntry[]; onChanged: () => Promise<void>; onClose: () => void }) {
   const [discovery, setDiscovery] = useState<SourceDiscovery | null>(null);
   const [paths, setPaths] = useState<string[]>([]);
   const [candidates, setCandidates] = useState<LibraryCandidate[]>([]);
@@ -836,14 +836,14 @@ function SourceImporter({ api, entryId, discoverOnOpen, linkedCandidateId, entri
       <div className="library-workbench-pane">
         <p className="library-pane-label">Candidates</p>
         {!busy && listed.length === 0 && <p className="library-muted">No saved candidates.</p>}
-        {listed.map((candidate) => <CandidateReview key={`${candidate.id}:${candidate.packageDigest}:${candidate.state}:${candidate.registry?.reviewStatus}`} api={api} initial={candidate} linked={candidate.id === linked?.id} entry={entries.find((entry) => entry.id === candidate.skillEntryId || entry.skill?.slug === candidate.lineage.slug)} onChanged={onChanged} />)}
+        {listed.map((candidate) => <CandidateReview key={`${candidate.id}:${candidate.packageDigest}:${candidate.state}:${candidate.registry?.reviewStatus}`} api={api} library={library} initial={candidate} linked={candidate.id === linked?.id} entry={entries.find((entry) => entry.id === candidate.skillEntryId || entry.skill?.slug === candidate.lineage.slug)} onChanged={onChanged} />)}
         {cursor && <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void loadCandidates(cursor)}>More candidates</Button>}
       </div>
     </div>
   </section>;
 }
 
-function CandidateReview({ api, initial, linked = false, entry, onChanged }: { api: LibraryClient; initial: LibraryCandidate; linked?: boolean; entry?: LibraryEntry; onChanged: () => Promise<void> }) {
+function CandidateReview({ api, library, initial, linked = false, entry, onChanged }: { api: LibraryClient; library: LibrarySummary; initial: LibraryCandidate; linked?: boolean; entry?: LibraryEntry; onChanged: () => Promise<void> }) {
   const [candidate, setCandidate] = useState(initial);
   const articleRef = useRef<HTMLElement>(null);
   // A deep-linked change takes focus once so keyboard and screen reader users start there.
@@ -894,7 +894,8 @@ function CandidateReview({ api, initial, linked = false, entry, onChanged }: { a
       <Button variant="ghost" size="sm" disabled={busy} onClick={() => void run(async () => setCandidate((await api.ignore(candidate.id)).candidate))}>Ignore candidate</Button>
       {candidate.state === "ready-for-review" && <div className="library-decision-main">
         <p className="library-muted">Unclassified changes require user action before an update. Submitting does not adopt or install this version.</p>
-        <Button size="sm" disabled={busy || expired || !candidate.packageDigest || (candidate.orderStatus === "unverified" && !reason.trim())} onClick={() => void run(async () => {
+        {!library.access.canImport && <p className="library-muted">An author role is required to submit this import.</p>}
+        <Button size="sm" disabled={busy || !library.access.canImport || expired || !candidate.packageDigest || (candidate.orderStatus === "unverified" && !reason.trim())} onClick={() => void run(async () => {
           const result = await api.import(candidate.id, { expectedPackageDigest: candidate.packageDigest!, release: { classification: "unclassified" }, clientMutationId: key.current, ...(candidate.orderStatus === "unverified" && reason.trim() ? { acknowledgeUnverifiedOrder: { reason: reason.trim() } } : {}) });
           setCandidate(result.candidate); setInspected(false); setAttested(false);
         })}>Submit import for review</Button>
@@ -908,11 +909,13 @@ function CandidateReview({ api, initial, linked = false, entry, onChanged }: { a
           const bundle = await api.submittedBundle(candidate.registry.submissionId, candidate.packageDigest);
           setInspected(true); return bundle;
         }} />
-        <label className="library-check"><input type="checkbox" checked={attested} disabled={!inspected || busy} onChange={(event) => setAttested(event.target.checked)} />I reviewed these files for my private use</label>
-        <div className="library-decision-main">
-          <p className="library-muted">Requires MFA and an enabled instance policy. This attestation does not authorize sharing.</p>
-          <Button size="sm" disabled={busy || !inspected || !attested || !candidate.packageDigest} onClick={() => void run(async () => setCandidate((await api.selfReview(candidate.id, candidate.packageDigest!)).candidate))}>Approve for my private use</Button>
-        </div>
+        {library.owner.type === "team" ? <p className="library-muted">Team imports require instance review before adoption.</p> : <>
+          <label className="library-check"><input type="checkbox" checked={attested} disabled={!inspected || busy} onChange={(event) => setAttested(event.target.checked)} />I reviewed these files for my private use</label>
+          <div className="library-decision-main">
+            <p className="library-muted">Requires MFA and an enabled instance policy. This attestation does not authorize sharing.</p>
+            <Button size="sm" disabled={busy || !inspected || !attested || !candidate.packageDigest} onClick={() => void run(async () => setCandidate((await api.selfReview(candidate.id, candidate.packageDigest!)).candidate))}>Approve for my private use</Button>
+          </div>
+        </>}
       </>}
       {(candidate.registry.attestation === "private-self-reviewed" || (candidate.registry.reviewStatus === "approved" && candidate.skillEntryId)) && <div className="library-actions">
         {candidate.registry.attestation === "private-self-reviewed" && <Button size="sm" variant="outline" disabled={busy} onClick={() => void run(async () => { await api.requestReview(candidate.id); setMessage("Instance review requested. Sharing stays restricted until review is complete."); })}>Request instance review for sharing</Button>}
@@ -1003,7 +1006,7 @@ function SkillEntry({ api, client, entry, canWrite, titleId, returnTo, sourceEnt
       {release?.summary && <p className="library-prose">{release.summary}</p>}
       {release?.releaseNotes && <details className="library-details"><summary>Release notes for {release.version ?? adoption?.version}</summary><p className="library-prose library-notes">{release.releaseNotes}</p></details>}
       {adoption?.reason && <p className="library-note">Curator note: {adoption.reason}</p>}
-      {!entry.skill.ownership?.isCaller && <p className="library-muted">This skill remains owned by its contributor. Library membership does not transfer ownership or grant release access.</p>}
+      {entry.skill.ownership?.type === "team" ? <p className="library-muted">Owned by {entry.skill.ownership.name}. Curators manage this skill on the team's behalf.</p> : !entry.skill.ownership?.isCaller && <p className="library-muted">This skill remains owned by its contributor. Library membership does not transfer ownership or grant release access.</p>}
     </div>}
     {adoption && <section className="library-section" aria-labelledby={`${titleId}-install`}>
       <h4 id={`${titleId}-install`}>Install</h4>

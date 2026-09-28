@@ -43,6 +43,7 @@ export function SubmissionEvidencePanel({ client, submissionId, mode, onCorrect,
   }, [client, mode, refresh, submissionId]);
 
   const correction = detail && "correction" in detail ? detail.correction : null;
+  const teamOwned = detail && "owner" in detail && detail.owner?.type === "team";
   const title = mode === "author" ? "Submission feedback" : "Review evidence";
   return <section className="control-plane-section submission-evidence" aria-label={title}>
     <div className="control-plane-section-heading">
@@ -56,7 +57,7 @@ export function SubmissionEvidencePanel({ client, submissionId, mode, onCorrect,
     {message && <p role="alert">{message}</p>}
     {detail && <>
       {detail.changeRequestReason && <div className="control-plane-inline-message"><strong>Requested changes</strong><p>{detail.changeRequestReason}</p></div>}
-      {correction && ["changes-requested", "rejected"].includes(detail.reviewStatus) && <div className="control-plane-section submission-correction"><h4>Submit a corrected version</h4><p>Update the package locally, give it a new semantic version in its manifest, and upload the new archive. The previous artifact and review history remain unchanged.</p>{correction.canSubmitNewVersion && onCorrect ? <Button type="button" size="sm" onClick={onCorrect}>Choose corrected package</Button> : <p>Author permission is required to submit the correction. Ask the instance administrator if your access has changed.</p>}</div>}
+      {correction && ["changes-requested", "rejected"].includes(detail.reviewStatus) && <div className="control-plane-section submission-correction"><h4>Submit a corrected version</h4>{teamOwned ? <><p>Review the corrected upstream source in Libraries, then submit a new candidate. Submitting requires an author role. The previous artifact and review history remain unchanged.</p><a href="/libraries">Open Libraries</a></> : <><p>Update the package locally, give it a new semantic version in its manifest, and upload the new archive. The previous artifact and review history remain unchanged.</p>{correction.canSubmitNewVersion && onCorrect ? <Button type="button" size="sm" onClick={onCorrect}>Choose corrected package</Button> : <p>Author permission is required to submit the correction. Ask the instance administrator if your access has changed.</p>}</>}</div>}
       <h4>Review history</h4>
       {detail.reviewHistory.length === 0 ? <p>No review decisions have been recorded.</p> : <ol>{detail.reviewHistory.map((event, index) => <li key={`${event.createdAt}:${event.action}:${index}`}><strong>{reviewEventLabel(event.action)}</strong> · <time dateTime={event.createdAt}>{displayDate(event.createdAt)}</time><p>{event.reason || "No reason was supplied."}</p></li>)}</ol>}
       <h4>Scan history</h4>

@@ -446,8 +446,12 @@ export const skills = pgTable("skills", {
   lifecycleStatus: skillLifecycleStatus("lifecycle_status").notNull().default("draft"),
   visibility: visibilityScope("visibility").notNull().default("private"),
   ownerUserId: uuid("owner_user_id").references(() => users.id, { onDelete: "set null" }),
+  ownerTeamId: uuid("owner_team_id").references(() => teams.id, { onDelete: "restrict" }),
   ...timestamps,
-});
+}, (table) => [
+  check("skills_at_most_one_owner_check", sql`num_nonnulls(${table.ownerUserId}, ${table.ownerTeamId}) <= 1`),
+  index("skills_owner_team_idx").on(table.ownerTeamId).where(sql`${table.ownerTeamId} IS NOT NULL`),
+]);
 
 export const skillVersions = pgTable("skill_versions", {
   id: uuid("id").primaryKey().defaultRandom(),

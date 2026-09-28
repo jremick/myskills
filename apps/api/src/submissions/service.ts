@@ -166,6 +166,7 @@ export class SubmissionService {
   }): Promise<UserSubmissionSummary> {
     return this.store.performSubmissionOwnerAction({
       actorId: input.actor.id,
+      mfaVerified: input.actor.mfaVerified,
       submissionId: input.submissionId,
       action: input.action,
       reason: input.reason,
