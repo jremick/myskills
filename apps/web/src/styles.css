@@ -7,6 +7,7 @@
 @import "./components/architecture/architecture-diagram.css";
 @import "./components/people/people.css";
 @import "./components/account/account.css";
+@import "./components/github/github.css";
 @import "./components/architecture/editor/architecture-editor.css";
 @import "@xyflow/react/dist/style.css";
 @import "tailwindcss";
