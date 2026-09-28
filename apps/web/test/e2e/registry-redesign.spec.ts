@@ -108,7 +108,7 @@ for (const width of [1440, 390]) test(`Skills navigation is keyboard accessible 
   await page.screenshot({ path: test.info().outputPath(`skills-navigation-${width}.png`), fullPage: true });
   await page.goto("/registry/skills/release-notes-helper?version=1.0.0");
   await expect(title(page)).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Release version", exact: true })).toHaveValue("1.0.0");
+  await expect(releaseHeading(page, "1.0.0")).toBeVisible();
   await expect(command(page)).toContainText("--version '1.0.0'");
 });
 
