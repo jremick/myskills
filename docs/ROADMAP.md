@@ -1,7 +1,7 @@
 # Roadmap
 
 Version: 0.1.0-beta.12
-Document revision: 0.3.7
+Document revision: 0.3.8
 Last updated: 2026-09-28
 
 ## Release Tracks
@@ -18,7 +18,7 @@ Last updated: 2026-09-28
   At that checkpoint npm publication awaited passkey authentication; the current
   `beta` selector now resolves to beta.8. Native host activation and guided setup remain later
   roadmap slices. See [Beta.7 Release Delivery](BETA7_RELEASE_DELIVERY.md).
-- **Hosted release record**: beta.12 at `c280795e6f0bd54533514ab6c58af7a584cbd3a4` is the verified deployment recorded on 27 September 2026. See [Beta.12 Release Delivery](BETA12_RELEASE_DELIVERY.md). Confirm subsequent runtime state by live readback; newer commits on main do not establish deployment.
+- **Hosted release record**: beta.12 at `d8775d6b07e2de06b7af4cbdc6bee1a33455902d` is the verified maintenance deployment recorded on 28 September 2026. See [Railway Deployment](RAILWAY_DEPLOYMENT.md#current-maintenance-deployment) for the current evidence and rollback pair, and [Beta.12 Release Delivery](BETA12_RELEASE_DELIVERY.md) for the original release. Confirm subsequent runtime state by live readback; newer commits on main do not establish deployment.
 - **Libraries and skill improvement (`v0.1.0-beta.8`)**: GitHub prerelease,
   hosted API/web and npm publication are complete. Libraries phases 1A–1C cover public GitHub imports, provenance, private self-review
   under an administrator policy, source checks, subscriptions, team curation and
@@ -64,7 +64,7 @@ feature.
 
 | Slice | Evidence | Remaining gate |
 | --- | --- | --- |
-| Maintenance baseline | [PR #75](https://github.com/jremick/myskills/pull/75) merged bootstrap-directory revalidation, Hono remediation, and the MinIO CI image fix after required CI passed. Duplicate Hono PR #69 is closed. | Grouped production and development updates merged in [PR #81](https://github.com/jremick/myskills/pull/81) and [PR #71](https://github.com/jremick/myskills/pull/71). Node 26 and Nodemailer 10 remain separate compatibility decisions. |
+| Maintenance baseline | [PR #75](https://github.com/jremick/myskills/pull/75) merged bootstrap-directory revalidation, Hono remediation, and the MinIO CI image fix after required CI passed. Duplicate Hono PR #69 is closed. | Grouped production and development updates merged in [PR #81](https://github.com/jremick/myskills/pull/81) and [PR #71](https://github.com/jremick/myskills/pull/71). Nodemailer 10 merged in [PR #68](https://github.com/jremick/myskills/pull/68) and passed staging and production verification. Node 26 PRs [#67](https://github.com/jremick/myskills/pull/67) and [#73](https://github.com/jremick/myskills/pull/73) are closed; declared Node 22/24 support remains. |
 | Roadmap and hosting investigation | This revision records the adoption workstreams, merged foundations, and verified setup gaps. | Prioritize the remaining delivery slices after the full review. |
 | HOST-1 build caching | [PR #77](https://github.com/jremick/myskills/pull/77) merged after required CI passed. Six Windows image targets, source and build-argument cache reuse, and runtime smokes were verified. | Release images, setup and operations remain later slices. Deployment-time improvement is unmeasured. |
 | AUTHOR-1 CLI scaffold | [PR #78](https://github.com/jremick/myskills/pull/78) merged private Codex skill scaffolding after required CI passed. Windows CLI tests, package smoke, lint, shell-guidance tests, and source review passed. | Included in the beta.7 GitHub CLI asset and the published npm beta.8 package. Browser drafts and imports remain subsequent slices. |
@@ -795,7 +795,7 @@ needed; do not schedule already-delivered work again.
 Recommended next order:
 
 1. Completed: review remediation merged in [PR #82](https://github.com/jremick/myskills/pull/82) after required checks.
-2. Completed: grouped dependency updates merged in [PR #81](https://github.com/jremick/myskills/pull/81) and [PR #71](https://github.com/jremick/myskills/pull/71). Major runtime and email-library upgrades remain separate.
+2. Completed: grouped dependency updates merged in [PR #81](https://github.com/jremick/myskills/pull/81) and [PR #71](https://github.com/jremick/myskills/pull/71), followed by Nodemailer 10 in [PR #68](https://github.com/jremick/myskills/pull/68). Node 26 upgrades were closed to retain the declared Node 22/24 support policy.
 3. CLI archive creation and native MCP server delivery are covered by
    [PR #83](https://github.com/jremick/myskills/pull/83). Keep full MCP-1 host
    activation open. The approved beta.8 Libraries slice now prioritizes
