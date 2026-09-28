@@ -550,6 +550,92 @@ test(
       "INSERT INTO libraries(id,name,owner_team_id,created_by_user_id) VALUES ($1,'Team saved',$2,$3)",
       [teamLibraryId, team, owner],
     );
+    // PR #117 regression: an audience flag was added to the shared effective-role
+    // query. Existing Library tests could not catch Bundle owner management losing
+    // its role even for public/authenticated bundles. Exercise the real consumers:
+    // disabling an audience changes delivery and Library availability, not current
+    // membership or management of a Bundle with an allowed audience.
+    await t.test("disabled team audience preserves Bundle ownership and Library write gates", async () => {
+      const priorSettings = (await pool.query("SELECT value FROM instance_settings WHERE key='sharing'")).rows[0].value;
+      const policyInput = {
+        ...teamInput,
+        name: "Audience policy collection",
+        purpose: "Exercise ownership independently of audience availability.",
+        memberSlugs: [slugs[1]],
+      };
+      const policyBundles = new Map<string, Json>();
+      for (const visibility of ["public", "authenticated", "team"]) {
+        const result = await call("POST", "/v1/bundles", teamToken, { ...policyInput, name: `Audience ${visibility}`, visibility }, 201);
+        policyBundles.set(visibility, result.bundle);
+      }
+      const publicBundle = policyBundles.get("public")!;
+      const authenticatedBundle = policyBundles.get("authenticated")!;
+      const teamOnlyBundle = policyBundles.get("team")!;
+      const savedEntries = async () => Number((await pool.query("SELECT count(*)::int AS count FROM library_entries WHERE library_id=$1 AND status='active'", [teamLibraryId])).rows[0].count);
+      const countBefore = await savedEntries();
+      try {
+        await pool.query("UPDATE instance_settings SET value=jsonb_set(value,'{teamVisibilityEnabled}','false') WHERE key='sharing'");
+        for (const bundle of policyBundles.values()) {
+          const owned = (await call("GET", `/v1/bundles/${bundle.id}`, teamToken)).bundle;
+          assert.equal(owned.owner.id, team);
+          assert.equal(owned.canEdit, true, "audience settings must not erase the current team owner's management role");
+        }
+        const ownerCatalog = await call("GET", "/v1/registry/catalog?query=Audience&limit=100", teamToken);
+        for (const bundle of policyBundles.values()) {
+          const row = ownerCatalog.rows.find((entry: Json) => entry.kind === "bundle" && entry.bundle.id === bundle.id);
+          assert.ok(row, "the owner's catalog must retain the team-owned bundle");
+          assert.equal(row.bundle.canEdit, true);
+        }
+        await call("GET", `/v1/bundles/${teamOnlyBundle.id}`, b, undefined, 404);
+        const memberCatalog = await call("GET", "/v1/registry/catalog?query=Audience&limit=100", b);
+        assert.equal(memberCatalog.rows.some((row: Json) => row.kind === "bundle" && row.bundle.id === teamOnlyBundle.id), false);
+        assert.equal((await call("GET", `/v1/bundles/${publicBundle.id}`, b)).bundle.canEdit, false);
+        assert.equal((await call("GET", `/v1/bundles/${authenticatedBundle.id}`, b)).bundle.canEdit, false);
+        await call("GET", `/v1/bundles/${publicBundle.id}`);
+        await call("GET", `/v1/bundles/${authenticatedBundle.id}`, undefined, undefined, 404);
+
+        // Both existing allowed audiences remain mutable by the actual curator.
+        for (const visibility of ["public", "authenticated"]) {
+          const bundle = policyBundles.get(visibility)!;
+          const edited = (await call("PATCH", `/v1/bundles/${bundle.id}`, teamToken, { ...policyInput, visibility, expectedRevision: bundle.revision })).bundle;
+          assert.equal(edited.revision, bundle.revision + 1);
+          assert.equal(edited.canEdit, true);
+          policyBundles.set(visibility, edited);
+        }
+        const disabledAudience = await call("PATCH", `/v1/bundles/${teamOnlyBundle.id}`, teamToken, { ...policyInput, visibility: "team", expectedRevision: teamOnlyBundle.revision }, 422);
+        assert.equal(disabledAudience.error.code, "BUNDLE_AUDIENCE_DISABLED");
+        assert.equal((await call("GET", `/v1/bundles/${teamOnlyBundle.id}`, teamToken)).bundle.revision, teamOnlyBundle.revision);
+        const switched = (await call("PATCH", `/v1/bundles/${teamOnlyBundle.id}`, teamToken, { ...policyInput, visibility: "public", expectedRevision: teamOnlyBundle.revision })).bundle;
+        assert.equal(switched.visibility, "public");
+        assert.equal(switched.revision, teamOnlyBundle.revision + 1);
+        const created = (await call("POST", "/v1/bundles", teamToken, { ...policyInput, visibility: "authenticated", name: "Created with team audience disabled" }, 201)).bundle;
+        assert.equal(created.owner.id, team);
+        assert.equal(created.canEdit, true);
+
+        // Library availability is an explicit consumer-specific policy. The
+        // Bundle.save route must enforce it even though Bundle ownership survives.
+        for (const disabledFlag of ["teamVisibilityEnabled", "teamsEnabled"]) {
+          await pool.query("UPDATE instance_settings SET value=$1::jsonb WHERE key='sharing'", [JSON.stringify({ ...priorSettings, [disabledFlag]: false })]);
+          const unreadable = await call("GET", `/v1/libraries/${teamLibraryId}`, teamToken, undefined, 404);
+          assert.equal(unreadable.error.code, "LIBRARY_NOT_FOUND");
+          const listed = (await call("GET", "/v1/libraries", teamToken)).libraries;
+          assert.equal(listed.some((candidate: Json) => candidate.id === teamLibraryId), false);
+          const forbiddenEdit = await call("PATCH", `/v1/libraries/${teamLibraryId}`, teamToken, { expectedRevision: 1, name: "Must remain unchanged" }, 404);
+          assert.equal(forbiddenEdit.error.code, "LIBRARY_NOT_FOUND");
+          const rejectedSave = await call("POST", `/v1/bundles/${created.id}/library-references`, teamToken, { libraryId: teamLibraryId, expectedRevision: created.revision }, 403);
+          assert.equal(rejectedSave.error.code, "TEAM_OWNER_REQUIRED");
+          assert.equal(await savedEntries(), countBefore);
+        }
+        const personalSave = (await call("POST", `/v1/bundles/${created.id}/library-references`, teamToken, { libraryId: library.id, expectedRevision: created.revision }, 201)).entry;
+        assert.equal(personalSave.libraryId, library.id);
+        assert.equal(personalSave.bundle.id, created.id);
+      } finally {
+        await pool.query("UPDATE instance_settings SET value=$1::jsonb WHERE key='sharing'", [JSON.stringify(priorSettings)]);
+      }
+      assert.equal((await call("GET", `/v1/libraries/${teamLibraryId}`, teamToken)).library.name, "Team saved");
+      assert.equal(await savedEntries(), countBefore);
+      assert.equal((await call("GET", `/v1/bundles/${teamBundle.id}`, b)).bundle.memberCount, 1);
+    });
     const noMfa = await login("reader");
     // A current team owner without MFA cannot use bundle saves to bypass Library writes.
     await pool.query(

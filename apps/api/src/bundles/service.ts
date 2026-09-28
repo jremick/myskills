@@ -369,6 +369,9 @@ export class BundleService {
     input: { libraryId: string; expectedRevision: number },
   ): Promise<{ entry: LibraryEntry; replayed: boolean }> {
     return this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT key FROM instance_settings WHERE key='sharing' FOR SHARE`,
+      );
       await this.lockActor(tx, actor);
       await tx.execute(
         sql`SELECT id FROM skill_bundles WHERE id=${id}::uuid FOR SHARE`,
@@ -390,6 +393,13 @@ export class BundleService {
       if (!lib)
         throw new AppError("Library is unavailable.", "LIBRARY_NOT_FOUND", 404);
       if (lib.owner_team_id) {
+        const sharing = await new PostgresSkillRepository(tx).getSharingSettings();
+        if (!sharing.teamsEnabled || !sharing.teamVisibilityEnabled)
+          throw new AppError(
+            "Team curator access is required.",
+            "TEAM_OWNER_REQUIRED",
+            403,
+          );
         await this.lockTeamOwner(tx, lib.owner_team_id, actor.id);
         if (!actor.mfaVerified)
           throw new AppError(
