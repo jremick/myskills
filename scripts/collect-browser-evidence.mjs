@@ -14,6 +14,7 @@ const reviewedScreenshots = new Set([
   "author-review-feedback.png", "consumer-published-package.png", "maintainer-unpublished-history.png",
   "maintainer-archived-inventory.png", "blocked-upgrade-policy.png", "consumer-revoked-package.png",
   "persistent-library-mobile.png",
+  "branding-desktop.png", "branding-mobile.png",
 ]);
 
 const [reportPath, resultsPath, outputPath] = process.argv.slice(2);

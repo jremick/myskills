@@ -1,4 +1,6 @@
 import test from "node:test";
+import { createHash } from "node:crypto";
+import { brandingImages, unsafeBrandingImages } from "./fixtures/branding-images.js";
 import assert from "node:assert/strict";
 import { generateTotpCode, hashPassword, type Role } from "@myskills-app/auth";
 import { AppError } from "@myskills-app/core";
@@ -6,6 +8,121 @@ import { buildApp } from "../src/app.js";
 import { AuthService, type AuthNotificationSink } from "../src/auth/service.js";
 import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
 import { MemorySkillRepository } from "../src/repositories/memory-skill-repository.js";
+
+// Authoring gate: HTTP is the primary contract; existing site settings tests do not
+// exercise logo validation or branding. The PG suite separately proves transactions,
+// fresh-store persistence and concurrent old/new audit history without test-only hooks.
+const defaultBranding = { text: "MySkills", showText: true, logoDataUrl: null };
+
+test("branding changes are public, fresh, audited and restricted to MFA admin sessions", async (t) => {
+  const store = new MemoryAuthStore("closed");
+  const app = buildAdminApp(store);
+  t.after(() => app.close());
+  const initial = await app.inject({ method: "GET", url: "/v1/branding" });
+  assert.equal(initial.statusCode, 200);
+  assert.equal(initial.headers["cache-control"], "no-store");
+  assert.deepEqual(initial.json(), { branding: defaultBranding });
+  const owner = await addAndLoginWithMfa(app, store, { id: "brand-owner", email: "brand-owner@example.test", roles: ["owner"] });
+  const admin = await addAndLoginWithMfa(app, store, { id: "brand-admin", email: "brand-admin@example.test", roles: ["admin"] });
+  const member = await addAndLoginWithMfa(app, store, { id: "brand-member", email: "brand-member@example.test", roles: ["user"] });
+  const noMfa = await addAndLogin(app, store, { id: "brand-no-mfa", email: "brand-no-mfa@example.test", roles: ["admin"] });
+  const apiToken = await createApiToken(app, owner, ["profile:read"]);
+  const custom = { text: "Team Skills", showText: false, logoDataUrl: brandingImages.png };
+  const beforeDenied = await store.listAuditEvents({ limit: 100 });
+  for (const [token, status, code] of [
+    [undefined, 401, "AUTHENTICATION_REQUIRED"], [member, 403, "ADMIN_ROLE_REQUIRED"],
+    [noMfa, 403, "MFA_VERIFICATION_REQUIRED"], [apiToken, 403, "SESSION_AUTH_REQUIRED"],
+  ] as const) {
+    for (const method of ["GET", "PUT"] as const) {
+      const result = await app.inject({ method, url: "/v1/admin/branding", headers: token ? { authorization: `Bearer ${token}` } : {}, ...(method === "PUT" ? { payload: custom } : {}) });
+      assert.equal(result.statusCode, status);
+      assert.equal(result.json().error.code, code);
+    }
+  }
+  for (const origin of [undefined, "https://untrusted.example"]) {
+    const result = await app.inject({ method: "PUT", url: "/v1/admin/branding", headers: { cookie: `myskills_session=${owner}`, ...(origin ? { origin } : {}) }, payload: custom });
+    assert.equal(result.statusCode, 403);
+    assert.equal(result.json().error.code, "COOKIE_ORIGIN_REJECTED");
+  }
+  assert.deepEqual((await app.inject({ method: "GET", url: "/v1/branding" })).json(), initial.json());
+  assert.deepEqual(await store.listAuditEvents({ limit: 100 }), beforeDenied);
+  const settings = [custom, { text: "A".repeat(80), showText: true, logoDataUrl: brandingImages.jpeg }, { text: "Skills & Research", showText: true, logoDataUrl: brandingImages.webp }, { text: "Text only", showText: false, logoDataUrl: null }, defaultBranding];
+  let previous = defaultBranding as { text: string; showText: boolean; logoDataUrl: string | null };
+  for (const branding of settings) {
+    const saved = await app.inject({ method: "PUT", url: "/v1/admin/branding", headers: { cookie: `myskills_session=${admin}`, origin: "http://localhost:3000" }, payload: branding });
+    assert.equal(saved.statusCode, 200, saved.body);
+    assert.equal(saved.headers["cache-control"], "no-store");
+    assert.deepEqual(saved.json(), { branding });
+    for (const url of ["/v1/branding", "/v1/admin/branding"]) {
+      const read = await app.inject({ method: "GET", url, headers: { authorization: `Bearer ${owner}` } });
+      assert.equal(read.headers["cache-control"], "no-store");
+      assert.deepEqual(read.json(), { branding });
+    }
+    const audit = (await store.listAuditEvents({ limit: 100 })).filter((event) => event.action === "admin.branding.update")[0];
+    assert.equal(audit.actorUserId, "brand-admin");
+    assert.deepEqual(audit.details, {
+      setting: "branding", oldText: previous.text, newText: branding.text,
+      oldShowText: previous.showText, newShowText: branding.showText,
+      logoChanged: previous.logoDataUrl !== branding.logoDataUrl,
+      oldLogoSha256: previous.logoDataUrl ? createHash("sha256").update(Buffer.from(previous.logoDataUrl.split(",")[1], "base64")).digest("hex") : null,
+      newLogoSha256: branding.logoDataUrl ? createHash("sha256").update(Buffer.from(branding.logoDataUrl.split(",")[1], "base64")).digest("hex") : null,
+    });
+    assert.ok(!JSON.stringify(audit).includes("data:image"));
+    previous = branding;
+  }
+  assert.deepEqual((await app.inject({ method: "GET", url: "/v1/site" })).json(), { site: { landingPageEnabled: true } });
+  assert.equal(await store.getRegistrationMode(), "closed");
+});
+
+test("branding rejects invalid complete settings and unsafe image uploads without changing saved state", async (t) => {
+  const store = new MemoryAuthStore("closed");
+  const app = buildAdminApp(store);
+  t.after(() => app.close());
+  const owner = await addAndLoginWithMfa(app, store, { id: "brand-validation", email: "brand-validation@example.test", roles: ["owner"] });
+  const headers = { authorization: `Bearer ${owner}` };
+  const saved = { text: "Working brand", showText: true, logoDataUrl: brandingImages.png };
+  assert.equal((await app.inject({ method: "PUT", url: "/v1/admin/branding", headers, payload: saved })).statusCode, 200);
+  const before = await store.listAuditEvents({ limit: 100 });
+  const invalidImages = [
+    "https://example.test/logo.png", "data:image/svg+xml;base64,PHN2Zy8+", "data:image/gif;base64,R0lGODlh",
+    "data:image/png;base64,!!!!", "data:image/png;base64,aGVsbG8=", "data:image/png;base64,iVBORw0KGgo=",
+    brandingImages.png.replace("image/png", "image/jpeg"), brandingImages.jpeg.replace("image/jpeg", "image/webp"),
+    brandingImages.webp.replace("image/webp", "image/png"),
+    ...[brandingImages.png, brandingImages.jpeg, brandingImages.webp].map((image) => image.slice(0, image.indexOf(",") + 1) + Buffer.from(image.split(",")[1], "base64").subarray(0, -5).toString("base64")),
+    brandingImages.widePng, brandingImages.wideJpeg, brandingImages.wideWebp,
+    "data:image/png;base64," + Buffer.alloc(256 * 1024 + 1).toString("base64"),
+  ];
+  for (const payload of [
+    {}, null, [], { ...saved, text: "" }, { ...saved, text: "   " }, { ...saved, text: "a".repeat(81) },
+    { ...saved, text: "line\nbreak" }, { ...saved, showText: "true" }, { ...saved, logoDataUrl: undefined },
+    { ...saved, logoDataUrl: 5 }, { ...saved, extra: true }, ...invalidImages.map((logoDataUrl) => ({ ...saved, logoDataUrl })),
+  ]) {
+    const result = await app.inject({ method: "PUT", url: "/v1/admin/branding", payload: JSON.stringify(payload), headers: { ...headers, "content-type": "application/json" } });
+    assert.equal(result.statusCode, 400, `Rejected payload: ${result.body}`);
+    assert.equal(result.json().error.code, "INVALID_BRANDING");
+  }
+  assert.deepEqual((await app.inject({ method: "GET", url: "/v1/branding" })).json(), { branding: saved });
+  assert.deepEqual(await store.listAuditEvents({ limit: 100 }), before);
+});
+
+// Regression gate: binary signatures must match exact bytes, and image formats
+// that add unchecked animation frames must not enter the instance branding store.
+test("branding rejects disguised binary signatures and PNG animation", async (t) => {
+  const store = new MemoryAuthStore("closed");
+  const app = buildAdminApp(store);
+  t.after(() => app.close());
+  const owner = await addAndLoginWithMfa(app, store, { id: "brand-binary", email: "brand-binary@example.test", roles: ["owner"] });
+  const before = await store.listAuditEvents({ limit: 100 });
+  for (const [name, logoDataUrl] of Object.entries(unsafeBrandingImages)) {
+    await t.test(name, async () => {
+      const result = await app.inject({ method: "PUT", url: "/v1/admin/branding", headers: { authorization: `Bearer ${owner}` }, payload: { text: "Unsafe logo", showText: false, logoDataUrl } });
+      assert.equal(result.statusCode, 400);
+      assert.equal(result.json().error.code, "INVALID_BRANDING");
+      assert.deepEqual((await app.inject({ method: "GET", url: "/v1/branding" })).json(), { branding: defaultBranding });
+      assert.deepEqual(await store.listAuditEvents({ limit: 100 }), before);
+    });
+  }
+});
 
 test("site settings are public, fresh, strictly validated and writable only by MFA admins", async (t) => {
   const store = new MemoryAuthStore("closed");

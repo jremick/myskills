@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
+import { BrandIdentity } from "../branding/BrandIdentity.js";
+import { useBranding } from "../branding/branding-context.js";
+
 const skillKeys = ["notes", "brief", "review", "release"];
 const audienceKeys = ["you", "team"];
 
 /** Illustrative product examples; no live account data is used on the public page. */
 export function MarketingLanding({ onLogin }: { onLogin: () => void }) {
+  const { branding } = useBranding();
   const [skill, setSkill] = useState("notes");
   const [audience, setAudience] = useState("you");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -82,9 +86,8 @@ export function MarketingLanding({ onLogin }: { onLogin: () => void }) {
 
 <header className={`site-header${scrolled ? " is-scrolled" : ""}`}>
   <div className="wrap header-inner">
-    <a className="brand" href="#top" aria-label="MySkills, back to top" onClick={() => setMenuOpen(false)}>
-      <svg className="mark" aria-hidden="true"><use href="#mark" /></svg>
-      <span className="wordmark">MySkills</span>
+    <a className="brand" href="#top" aria-label={`${branding.text}, back to top`} onClick={() => setMenuOpen(false)}>
+      <BrandIdentity />
     </a>
     <nav className="primary-nav" aria-label="Primary">
       <ul >
@@ -565,9 +568,8 @@ export function MarketingLanding({ onLogin }: { onLogin: () => void }) {
 <footer className="site-footer">
   <div className="wrap footer-grid">
     <div className="footer-brand">
-      <a className="brand" href="#top" aria-label="MySkills, back to top" onClick={() => setMenuOpen(false)}>
-        <svg className="mark" aria-hidden="true"><use href="#mark" /></svg>
-        <span className="wordmark">MySkills</span>
+      <a className="brand" href="#top" aria-label={`${branding.text}, back to top`} onClick={() => setMenuOpen(false)}>
+        <BrandIdentity />
       </a>
       <p >Reusable AI skills, reviewed and kept in order.</p>
     </div>

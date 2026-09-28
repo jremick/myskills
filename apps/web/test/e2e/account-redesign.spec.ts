@@ -8,6 +8,7 @@ for (const width of [1280, 390]) test(`login headings follow reset and MFA steps
     const path = new URL(route.request().url()).pathname.replace(/^\/api/, "");
     if (route.request().method() === "POST") writes.push({ path, body: route.request().postDataJSON() });
     if (path === "/v1/site") return route.fulfill({ json: { site: { landingPageEnabled: true } } });
+    if (path === "/v1/branding") return route.fulfill({ json: { branding: { text: "MySkills", showText: true, logoDataUrl: null } } });
     if (path === "/v1/auth/password-reset/request") return route.fulfill({ json: { status: "pending" } });
     if (path === "/v1/auth/login") return route.fulfill({ json: { mfaRequired: true, challengeToken: "test-only-challenge", expiresAt: "2027-09-27T00:00:00Z", user: { email: "reader@example.test" } } });
     return route.fulfill({ status: 401, json: { error: { code: "UNAUTHORIZED" } } });

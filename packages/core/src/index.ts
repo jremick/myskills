@@ -152,3 +152,5 @@ export * from "./improvement-policy.js";
 export * from "./improvement-run.js";
 export * from "./bundle-contracts.js";
 export * from "./bundle-request.js";
+
+export * from "./branding.js";

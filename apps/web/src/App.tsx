@@ -2,6 +2,9 @@ import { ConfirmationDialog, type ConfirmationRequest } from "@/components/ui/co
 import { MarketingLanding } from "./components/marketing/MarketingLanding.js";
 import { LandingSettings } from "./components/marketing/LandingSettings.js";
 import { QRCodeSVG } from "qrcode.react";
+import { BrandingProvider } from "./components/branding/BrandingProvider.js";
+import { BrandIdentity } from "./components/branding/BrandIdentity.js";
+import { BrandingSettings } from "./components/branding/BrandingSettings.js";
 import {
   useCallback,
   useEffect,
@@ -193,6 +196,11 @@ const API_TOKEN_SCOPE_OPTIONS: Array<{ scope: ApiTokenScope; label: string }> = 
 ];
 
 export function RegistryApp({ client }: RegistryAppProps) {
+  const registryClient = useMemo(() => client ?? createRegistryClient(), [client]);
+  return <BrandingProvider client={registryClient}><RegistryContent client={registryClient} /></BrandingProvider>;
+}
+
+function RegistryContent({ client: registryClient }: { client: RegistryClient }) {
   const initialLocation = appLocationFromWindow();
   const historyIndexRef = useRef(readAppHistoryIndex(window.history.state) ?? 0);
   const currentLocationRef = useRef(initialLocation);
@@ -201,7 +209,6 @@ export function RegistryApp({ client }: RegistryAppProps) {
   const restoringPopstateRef = useRef(false);
   const [view, setView] = useState<AppView>(initialLocation.view);
   const [session, setSession] = useState<WebSession | null>(() => readStoredSession());
-  const registryClient = useMemo(() => client ?? createRegistryClient(), [client]);
   // Bundle catalog, when the client and server provide it. A 404 from the
   // catalog falls back to the flat registry for this session.
   const [catalogAvailable, setCatalogAvailable] = useState(() => Boolean(registryClient.bundles));
@@ -1123,10 +1130,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
           <a className="brand" href="/registry" onClick={(event) => {
             handleAppLink(event, "browse");
           }}>
-            <span className="brand-mark" aria-hidden="true">
-              <img src="/brand/myskills-mark.svg" alt="" width={100} height={100} />
-            </span>
-            <span>MySkills</span>
+            <BrandIdentity />
           </a>
           <IconButton
             label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
@@ -1173,8 +1177,7 @@ export function RegistryApp({ client }: RegistryAppProps) {
           <a className="mobile-brand" href="/registry" onClick={(event) => {
             handleAppLink(event, "browse");
           }}>
-            <img src="/brand/myskills-mark.svg" alt="" width={100} height={100} />
-            <span>MySkills</span>
+            <BrandIdentity />
           </a>
           {session && (
             <div className="mobile-account">
@@ -1431,11 +1434,11 @@ function SiteBootstrap({ failed, onRetry, onLogin }: { failed: boolean; onRetry:
     return () => window.clearTimeout(timer);
   }, []);
   return <main className="site-bootstrap" id="main-content">
-    <img src="/brand/myskills-mark.svg" alt="MySkills" width={48} height={48} />
+    <BrandIdentity />
     {failed ? <>
       <div role="alert"><h1>We couldn’t load this page.</h1><p>Try again, or continue to sign in.</p></div>
       <Button type="button" onClick={onRetry}>Try again</Button>
-    </> : <p role="status">{showDetails ? "Loading MySkills…" : ""}</p>}
+    </> : <p role="status">{showDetails ? "Loading…" : ""}</p>}
     {(failed || showDetails) && <a href="/login" onClick={(event) => handleCallbackLink(event, onLogin)}>Sign in</a>}
   </main>;
 }
@@ -1473,8 +1476,8 @@ function LoginPage({
     <main className="login-page" id="main-content">
       <nav className="login-nav" aria-label="Login navigation">
         {showLandingLink ? <a className="landing-brand" href="/" onClick={(event) => handleCallbackLink(event, onHome)}>
-          <img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" width={360} height={110} />
-        </a> : <span className="landing-brand"><img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" width={360} height={110} /></span>}
+          <BrandIdentity horizontal />
+        </a> : <span className="landing-brand"><BrandIdentity horizontal /></span>}
         {showLandingLink && <Button asChild className="login-back shadcn-action-button" size="sm" variant="outline">
           <a href="/" onClick={(event) => handleCallbackLink(event, onHome)}>Public site</a>
         </Button>}
@@ -1575,7 +1578,7 @@ function InvitationRegistrationPage({
       <main className="login-page" id="main-content">
         <nav className="login-nav" aria-label="Registration navigation">
           <a className="landing-brand" href="/" onClick={(event) => handleCallbackLink(event, onHome)}>
-            <img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" width={360} height={110} />
+            <BrandIdentity horizontal />
           </a>
           <Button asChild className="login-back shadcn-action-button" size="sm" variant="outline">
             <a href="/login" onClick={(event) => handleCallbackLink(event, onLogin)}>Login</a>
@@ -3022,10 +3025,11 @@ function TeamSkillSection({ empty, skills, title }: { empty: string; skills: Pub
   );
 }
 
-type AdminTab = "people" | "instance" | "keys" | "providers" | "audit";
+type AdminTab = "people" | "instance" | "branding" | "keys" | "providers" | "audit";
 const ADMIN_TABS: ReadonlyArray<{ id: AdminTab; label: string }> = [
   { id: "people", label: "People" },
   { id: "instance", label: "Instance" },
+  { id: "branding", label: "Branding" },
   { id: "keys", label: "API keys" },
   { id: "providers", label: "Sign-in providers" },
   { id: "audit", label: "Audit" },
@@ -3503,6 +3507,11 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
           <LandingSettings key={`${session.user.id}:${session.expiresAt}`} client={client} canEdit={session.user.mfaVerified} onSaved={() => { void refreshAudit().catch(() => setMessage("Landing setting saved. Refresh to load the audit history.")); }} />
         </section>
 
+        <section {...panelProps("branding")}>
+          <div className="account-panel-head"><div><h2>Branding</h2><p>The logo and name shown to everyone, including visitors</p></div></div>
+          <BrandingSettings key={`${session.user.id}:${session.expiresAt}`} client={client} canEdit={session.user.mfaVerified} onSaved={() => { void refreshAudit().catch(() => setMessage("Branding saved. Refresh to load the audit history.")); }} />
+        </section>
+
         <section {...panelProps("keys")}>
           <div className="account-panel-head">
             <div><h2 id={`${baseId}-keys-heading`}>API keys</h2><p>{activeTokenCount} active</p></div>
@@ -3814,7 +3823,7 @@ function AuthTokenPage({
     <main className="login-page" id="main-content">
       <nav className="login-nav" aria-label="Account action navigation">
         <a className="landing-brand" href="/" onClick={(event) => handleCallbackLink(event, onHome)}>
-          <img src="/brand/myskills-logo-horizontal.svg" alt="MySkills" width={360} height={110} />
+          <BrandIdentity horizontal />
         </a>
         <Button asChild className="login-back shadcn-action-button" size="sm" variant="outline">
           <a href="/login" onClick={(event) => handleCallbackLink(event, onLogin)}>Login</a>

@@ -1,3 +1,4 @@
+import { brandingImages } from "./fixtures/branding-images.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { hashPassword } from "@myskills-app/auth";
@@ -34,7 +35,7 @@ test("Postgres privileged changes and their audits roll back together on audit f
     END $$;
   `);
 
-  for (const mutation of ["status", "roles", "token", "registration", "site", "provider"] as const) {
+  for (const mutation of ["status", "roles", "token", "registration", "site", "branding", "provider"] as const) {
     const created = await store.createUserWithPassword({ email: `${mutation}@example.test`, name: mutation, passwordHash });
     assert.ok(created.user);
     const target = await store.updateUserStatus({ userId: created.user.id, status: "active", emailVerifiedAt: new Date() });
@@ -51,6 +52,7 @@ test("Postgres privileged changes and their audits roll back together on audit f
         case "token": return service.revokeAdminApiToken(actor, token.id);
         case "registration": return service.updateRegistrationSettings(actor, { mode: "open" });
         case "site": return service.updateSiteSettings(actor, { landingPageEnabled: false });
+        case "branding": return service.updateBranding(actor, { text: "Team Skills", showText: false, logoDataUrl: brandingImages.png });
         case "provider": return service.upsertAdminProviderConfig(actor, {
           key: "fixture", type: "oidc", displayName: "Fixture", enabled: false,
           roleMappings: [{ claim: "groups", value: "authors", role: "author" }],
@@ -65,6 +67,7 @@ test("Postgres privileged changes and their audits roll back together on audit f
     assert.ok(await store.findUserByApiTokenHash(apiHash), `${mutation}: token was revoked despite audit failure`);
     if (mutation === "registration") assert.equal(await store.getRegistrationMode(), "closed");
     if (mutation === "site") assert.deepEqual(await service.getPublicSiteSettings(), { landingPageEnabled: true });
+    if (mutation === "branding") assert.deepEqual(await service.getPublicBranding(), { text: "MySkills", showText: true, logoDataUrl: null });
     if (mutation === "provider") assert.deepEqual(await store.listProviderConfigs(), []);
     assert.deepEqual(await store.listAuditEvents({ limit: 100 }), auditBefore);
 
@@ -89,6 +92,40 @@ test("Postgres privileged changes and their audits roll back together on audit f
       assert.equal(auditAfter[0].details.oldLandingPageEnabled, true);
       assert.equal(auditAfter[0].details.newLandingPageEnabled, false);
     }
+    if (mutation === "branding") {
+      const restartedService = new AuthService(new PostgresAuthStore(createDb(pool)));
+      assert.deepEqual(await restartedService.getPublicBranding(), { text: "Team Skills", showText: false, logoDataUrl: brandingImages.png });
+      assert.equal(auditAfter[0].details.oldText, "MySkills");
+      assert.equal(auditAfter[0].details.newText, "Team Skills");
+      assert.equal(auditAfter[0].details.logoChanged, true);
+      assert.ok(!JSON.stringify(auditAfter[0]).includes("data:image"));
+      assert.deepEqual(await restartedService.getPublicSiteSettings(), { landingPageEnabled: false });
+    }
     if (mutation === "provider") assert.equal((await store.listProviderConfigs())[0].roleMappings.length, 1);
   }
+
+  // Concurrent saves must produce a continuous old/new history, including the
+  // first write when there is no settings row to lock.
+  await pool.query("DELETE FROM instance_settings WHERE key = 'branding'");
+  await pool.query("DELETE FROM audit_events WHERE action = 'admin.branding.update'");
+  const secondService = new AuthService(new PostgresAuthStore(createDb(pool)));
+  await Promise.all([
+    service.updateBranding(actor, { text: "First contender", showText: true, logoDataUrl: brandingImages.jpeg }),
+    secondService.updateBranding(actor, { text: "Second contender", showText: false, logoDataUrl: brandingImages.webp }),
+  ]);
+  const history = (await store.listAuditEvents({ limit: 100 })).filter((event) => event.action === "admin.branding.update");
+  assert.equal(history.length, 2);
+  const first = history.find((event) => event.details.oldText === "MySkills");
+  assert.ok(first);
+  const second = history.find((event) => event.id !== first.id);
+  assert.ok(second);
+  assert.equal(second.details.oldText, first.details.newText);
+  assert.equal(second.details.oldLogoSha256, first.details.newLogoSha256);
+  const persisted = await secondService.getPublicBranding();
+  assert.equal(persisted.text, second.details.newText);
+  assert.equal(persisted.showText, second.details.newShowText);
+  await secondService.updateBranding(actor, { text: "MySkills", showText: true, logoDataUrl: null });
+  assert.deepEqual(await service.getPublicBranding(), { text: "MySkills", showText: true, logoDataUrl: null });
+  await pool.query("UPDATE instance_settings SET value = $1::jsonb WHERE key = 'branding'", [JSON.stringify({ text: "Corrupt", showText: true, logoDataUrl: "javascript:alert(1)" })]);
+  await assert.rejects(service.getPublicBranding(), /branding|logo|image/i);
 });

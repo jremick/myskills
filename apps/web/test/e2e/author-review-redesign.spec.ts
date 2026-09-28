@@ -42,6 +42,7 @@ async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; 
     }
     if (path === "/v1/me") return reply({ user });
     if (path === "/v1/site") return reply({ site: { landingPageEnabled: true } });
+    if (path === "/v1/branding") return reply({ branding: { text: "MySkills", showText: true, logoDataUrl: null } });
     if (path === "/v1/review/submissions") {
       if (failReview) return reply({ error: { code: "SERVICE_UNAVAILABLE", message: "Review queue temporarily unavailable." } }, 503);
       return reply({ submissions: options.partial && !url.searchParams.has("cursor") ? rows.slice(0, 2) : rows, nextCursor: options.partial && !url.searchParams.has("cursor") ? "page-2" : null });

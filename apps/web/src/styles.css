@@ -1,3 +1,4 @@
+@import "./components/branding/branding.css";
 @import "./components/marketing/marketing.css";
 @import "./components/library/libraries.css";
 @import "./components/registry/registry.css";
@@ -5649,7 +5650,7 @@ code {
 
 .sidebar-collapsed .brand { padding: 4px 0 0; }
 
-.sidebar-collapsed .brand > span:last-child,
+.sidebar-collapsed .brand .brand-text,
 .sidebar-collapsed .side-nav-item span,
 .sidebar-collapsed .side-nav-label,
 .sidebar-collapsed .sidebar-account-main span {

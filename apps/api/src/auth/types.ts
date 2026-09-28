@@ -1,3 +1,4 @@
+import type { BrandSettings } from "@myskills-app/core";
 import type { ChronologicalPosition } from "../repositories/chronological-pagination.js";
 import type { AuthNotificationClaim, AuthNotificationIntent, FinishAuthNotificationInput } from "./notification-outbox.js";
 import type { AuthenticatedUser, RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
@@ -286,6 +287,8 @@ export interface SiteSettings {
 }
 
 export interface AuthStore {
+  getBranding(): Promise<BrandSettings>;
+  setBranding(settings: BrandSettings, audit?: CreateAuditEventInput): Promise<BrandSettings>;
   getSiteSettings(): Promise<SiteSettings>;
   setSiteSettings(settings: SiteSettings, audit?: CreateAuditEventInput): Promise<SiteSettings>;
   getRegistrationMode(): Promise<RegistrationMode>;
