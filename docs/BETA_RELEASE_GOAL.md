@@ -5,12 +5,15 @@ Last updated: 2026-09-28
 
 Target release: `v0.1.0-beta.13`.
 
-Status: beta.13 candidate verification is in progress.
+Status: beta.13 GitHub prerelease and hosted delivery are verified.
 
-## Beta.13 Candidate
+## Beta.13 Release Record
 
-Add locally rendered authenticator enrollment QR codes with manual setup fallbacks.
-GitHub and hosted publication are authorized; npm remains beta.8. No database
+Locally rendered authenticator enrollment QR codes with manual setup fallbacks
+are live at myskills.sh. The immutable tag and production API/web pair use
+`48273d5ff401ddcfd9046c448b1b38a58ee12337`. The clean canonical gate, protected CI
+and staging/production acceptance passed. Tagged verification and remote release
+asset checksums passed. npm remains beta.8. No database
 migration or API contract change is included. Physical authenticator-app scans
 remain outstanding. See [Beta.13 release delivery](BETA13_RELEASE_DELIVERY.md).
 

@@ -7,13 +7,17 @@ MySkills beta releases are verification-first and approval-gated. A passing comm
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
 
-## Beta.13 candidate
+## Beta.13 release record
 
-The candidate adds locally rendered QR codes to authenticator enrollment, with
+Beta.13 adds locally rendered QR codes to authenticator enrollment, with
 manual setup fallbacks and the existing confirmation and recovery behavior.
 No database migration or API contract change is required. GitHub and hosted
-publication are authorized; npm publication is excluded. Physical authenticator
-app scans remain outstanding in issue #49. See [Beta.13 release delivery](BETA13_RELEASE_DELIVERY.md).
+publication are authorized; npm publication is excluded. Staging and production
+API/web use `48273d5ff401ddcfd9046c448b1b38a58ee12337`. The clean canonical gate,
+protected-branch CI, tagged verification and live acceptance passed. The GitHub
+prerelease and all five asset checksums are verified.
+Physical authenticator app scans remain outstanding in issue #49. See
+[Beta.13 release delivery](BETA13_RELEASE_DELIVERY.md).
 
 ## Beta.12 release record
 
