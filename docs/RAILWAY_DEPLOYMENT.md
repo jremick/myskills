@@ -200,7 +200,7 @@ embedded source revision.
 
 The beta.7 staging readback on 25 September 2026 returned HTTP 200 for API
 readiness, API and web version identity, web health, same-origin readiness,
-capabilities, and the public root and registry pages. The API, web, and
+capabilities, and the public root and Skills pages. The API, web, and
 same-origin version responses all reported version `0.1.0-beta.7` and revision
 `6912d3f9490c6f002431f3064e8a9db417df3d7f`.
 

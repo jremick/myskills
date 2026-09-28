@@ -82,6 +82,30 @@ for (const width of [1440, 1280]) test(`exact-release workspace keeps selection 
   await page.screenshot({ path: test.info().outputPath(`registry-${width}.png`), fullPage: true });
 });
 
+for (const width of [1440, 390]) test(`Skills navigation is keyboard accessible and preserves legacy deep links at ${width}`, async ({ page }) => {
+  await fixture(page);
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto("/settings");
+  const nav = page.locator(width === 1440 ? ".side-nav" : ".mobile-nav");
+  if (width === 1440) await page.getByRole("button", { name: "Collapse navigation", exact: true }).click();
+  const skillsLink = nav.getByRole("link", { name: "Skills", exact: true });
+  await expect(skillsLink).toHaveAttribute("href", "/registry");
+  if (width === 1440) await expect(skillsLink).toHaveAttribute("title", "Skills");
+  for (let step = 0; step < 40 && !await skillsLink.evaluate((link) => link === document.activeElement); step++) {
+    await page.keyboard.press("Tab");
+  }
+  await expect(skillsLink).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Skills", exact: true })).toBeVisible();
+  await expect(skillsLink).toHaveAttribute("aria-current", "page");
+  await expect(nav.getByRole("link", { name: "Registry", exact: true })).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath(`skills-navigation-${width}.png`), fullPage: true });
+  await page.goto("/registry/skills/release-notes-helper?version=1.0.0");
+  await expect(title(page)).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Release version", exact: true })).toHaveValue("1.0.0");
+  await expect(command(page)).toContainText("--version '1.0.0'");
+});
+
 test("mobile list, exact-version history and Back restore the selected row and focus", async ({ page }) => {
   await fixture(page);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -115,7 +139,7 @@ for (const [role, shortcut] of [["owner", "Review"], ["admin", "Review"], ["main
   await page.goto("/registry");
   const nav = page.locator(".mobile-nav");
   await expect(nav.getByRole("link")).toHaveCount(3);
-  for (const name of ["Libraries", "Registry", shortcut!]) await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
+  for (const name of ["Libraries", "Skills", shortcut!]) await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
   const more = page.getByRole("button", { name: "More", exact: true });
   await more.click();
   const overflow = page.locator(".mobile-more-menu");

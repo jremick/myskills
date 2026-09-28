@@ -133,7 +133,7 @@ interface AppLocation {
   catalog: CatalogLocation;
 }
 
-/** Registry catalog state kept in the URL beside the existing skill parameters. */
+/** Skills catalog state kept in the URL beside the existing skill parameters. */
 interface CatalogLocation {
   view: RegistryView;
   bundle: string | null;
@@ -150,7 +150,7 @@ interface RegistryDisclosures {
 }
 
 const APP_HISTORY_INDEX_KEY = "__myskillsAppHistoryIndex";
-// The Registry splits into list and inspector when its own surface is this wide.
+// The Skills page splits into list and inspector when its own surface is this wide.
 const REGISTRY_SPLIT_WIDTH = 880;
 
 interface WebSession {
@@ -210,7 +210,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   const [view, setView] = useState<AppView>(initialLocation.view);
   const [session, setSession] = useState<WebSession | null>(() => readStoredSession());
   // Bundle catalog, when the client and server provide it. A 404 from the
-  // catalog falls back to the flat registry for this session.
+  // catalog falls back to the flat Skills list for this session.
   const [catalogAvailable, setCatalogAvailable] = useState(() => Boolean(registryClient.bundles));
   const [catalogView, setCatalogView] = useState<RegistryView>(initialLocation.catalog.view);
   const [selectedBundleId, setSelectedBundleId] = useState<string | null>(initialLocation.catalog.bundle);
@@ -325,7 +325,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     architectureNavigationGuardRef.current = guard;
   }, []);
 
-  // Split or stack follows the Registry surface's own width, not the viewport.
+  // Split or stack follows the Skills surface's own width, not the viewport.
   // A surface without layout (width 0, as in DOM tests) keeps the split default.
   const measureRegistry = useCallback((node: HTMLDivElement | null) => {
     registryObserver.current?.disconnect();
@@ -530,7 +530,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
 
   useEffect(() => {
     const requestEpoch = ++listEpoch.current;
-    // The bundle catalog owns registry rows while it is mounted.
+    // The bundle catalog owns Skills rows while it is mounted.
     if (activeView !== "browse" || catalogAvailable) {
       setListState("idle");
       return;
@@ -1026,7 +1026,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
 
   const navItems = [
     { view: "libraries" as const, label: "Libraries", group: "Skills" as const, icon: <Library size={18} aria-hidden="true" />, enabled: Boolean(session && registryClient.libraries) },
-    { view: "browse" as const, label: "Registry", group: "Skills" as const, icon: <LayoutGrid size={18} aria-hidden="true" />, enabled: true },
+    { view: "browse" as const, label: "Skills", group: "Skills" as const, icon: <LayoutGrid size={18} aria-hidden="true" />, enabled: true },
     { view: "submit" as const, label: "Submit", group: "Publish" as const, icon: <Upload size={18} aria-hidden="true" />, enabled: canUseSubmit },
     { view: "review" as const, label: "Review", group: "Publish" as const, icon: <SquareCheckBig size={18} aria-hidden="true" />, enabled: canUseReview },
     { view: "manage" as const, label: "Manage skills", group: "Publish" as const, icon: <SlidersHorizontal size={18} aria-hidden="true" />, enabled: Boolean(session && registryClient.listManagedSkills) },
@@ -1042,7 +1042,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   const navGroups = (["Skills", "Publish", "Deploy", "People", "Account"] as const)
     .map((label) => ({ label, items: navItems.filter((item) => item.group === label) }))
     .filter((group) => group.items.length > 0);
-  // Mobile keeps Libraries and Registry, plus one shortcut for the reader's
+  // Mobile keeps Libraries and Skills, plus one shortcut for the reader's
   // main job. Every other allowed destination stays grouped under More.
   const mobileRoleView = canUseReview ? "review" : canUseSubmit ? "submit" : canUseTargets ? "targets" : null;
   const mobilePrimaryItems = navItems.filter((item) => item.view === "libraries" || item.view === "browse" || item.view === mobileRoleView);
@@ -1267,7 +1267,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
           ) : (
             <main className="registry-workspace" aria-labelledby="registry-heading">
               <header className="registry-page-head">
-                <h1 id="registry-heading">Skill registry</h1>
+                <h1 id="registry-heading">Skills</h1>
               </header>
               <div
                 className="registry-surface"
@@ -1303,8 +1303,8 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
                       {listState === "loading" && <RegistryLoadingRows />}
                       {listState === "error" && (
                         <div className="registry-list-state" role="status" aria-live="polite">
-                          <strong>{listMessage ?? "The registry is not available."}</strong>
-                          <p>The list could not load. Retry the registry request before selecting a skill.</p>
+                          <strong>{listMessage ?? "Skills are not available."}</strong>
+                          <p>The list could not load. Retry the request before selecting a skill.</p>
                           <Button size="sm" type="button" variant="outline" onClick={retryRegistry}>
                             <RotateCw size={15} aria-hidden="true" />
                             Retry
@@ -2195,7 +2195,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
       },
       publish: {
         title: "Publish this release?",
-        description: "Publication makes the approved release available through registry install and export surfaces.",
+        description: "Publication makes the approved release available to install and export through Skills.",
         confirmLabel: "Publish release",
       },
     };
@@ -2608,7 +2608,7 @@ function findRowById(root: HTMLElement | null, id: string): HTMLElement | null {
   return null;
 }
 
-// Teams use the Registry list and detail layout (people.css): the list comes
+// Teams use the Skills list and detail layout (people.css): the list comes
 // first, and the selected team's detail sits beside it on a wide surface or
 // replaces it (with Back) on a narrow one. Messages render beside the control
 // that caused them.
@@ -4517,7 +4517,7 @@ function releaseActionConfirmationDescription(action: ReleaseLifecycleActionName
     case "revoke":
       return "Install and export access will be revoked for this release. Record the security or governance reason.";
     case "unpublish":
-      return "The release will no longer be available from public registry surfaces. Record why it must be withdrawn.";
+      return "The release will no longer be available through public Skills pages. Record why it must be withdrawn.";
     case "deprecate":
       return "The release remains discoverable but will be marked as deprecated. Record the migration or support reason.";
     case "restore":
@@ -5876,7 +5876,7 @@ function handleCallbackLink(event: ReactMouseEvent<HTMLAnchorElement>, callback:
 function registrationPostureTitle(mode: AdminRegistrationMode): string {
   switch (mode) {
     case "closed":
-      return "Only existing approved accounts can access the registry.";
+      return "Only existing approved accounts can access MySkills.";
     case "request":
       return "New accounts require owner or admin approval.";
     case "open":

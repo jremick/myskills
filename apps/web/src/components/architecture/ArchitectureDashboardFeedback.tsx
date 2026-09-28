@@ -16,7 +16,7 @@ export function ArchitectureState({ state, message, onRetry, compact = false }: 
     <div className={compact ? "architecture-state compact" : "architecture-state"} role={unsupported ? "status" : "alert"}>
       {unsupported ? <CircleAlert size={24} aria-hidden="true" /> : <AlertTriangle size={24} aria-hidden="true" />}
       <strong>{message}</strong>
-      <span>{unsupported ? "This workspace can still use the existing registry while architecture support is enabled." : "Retry the API request or review the workspace access and revision state."}</span>
+      <span>{unsupported ? "This workspace can still use Skills while architecture support is enabled." : "Retry the API request or review the workspace access and revision state."}</span>
       {!unsupported && <Button size="sm" type="button" variant="outline" onClick={onRetry}><RefreshCw size={14} aria-hidden="true" /> Retry</Button>}
     </div>
   );

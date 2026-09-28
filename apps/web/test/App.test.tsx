@@ -85,7 +85,7 @@ test("site configuration failure offers retry and sign-in without exposing the h
 });
 
 test("disabled landing leaves direct invitation, recovery and registry routes reachable", async () => {
-  for (const [path, heading] of [["/auth/register#token=fixture", "Complete registration"], ["/auth/reset-password#token=fixture", "Reset password"], ["/registry", "Registry"]]) {
+  for (const [path, heading] of [["/auth/register#token=fixture", "Complete registration"], ["/auth/reset-password#token=fixture", "Reset password"], ["/registry", "Skills"]]) {
     setupDom(`http://localhost${path}`);
     const client = mockClient();
     client.getSiteSettings = async () => ({ landingPageEnabled: false });
@@ -461,7 +461,7 @@ test("a pinned release repairs its platform URL even when the skill list fails",
   client.searchSkillPage = async () => { throw new Error("Search list unavailable"); };
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByText("The list could not load. Retry the registry request before selecting a skill.");
+  await view.findByText("The list could not load. Retry the request before selecting a skill.");
   await view.findByText(fixture.older.releaseNotes!);
   await waitFor(() => assert.equal(window.location.search, "?q=writing&platform=generic&version=0.1.0"));
   assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, fixture.older.version);
@@ -845,7 +845,7 @@ test("URL state and popstate restore search, selection, platform, and active nav
   const modifiedClick = new window.MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true });
   selectedResult.dispatchEvent(modifiedClick);
   assert.equal(modifiedClick.defaultPrevented, false);
-  assert.equal(view.getAllByRole("link", { name: "Registry" })[0]?.getAttribute("aria-current"), "page");
+  assert.equal(view.getAllByRole("link", { name: /^Skills$/ })[0]?.getAttribute("aria-current"), "page");
 
   fireEvent.click(view.getAllByRole("link", { name: "Settings" })[0]!);
   await view.findByRole("heading", { name: "Security and access", level: 1 });
@@ -1946,10 +1946,10 @@ test("exact registry release picker supports a first flat revision and rejects d
   const view = render(<RegistryApp client={client} />);
 
   await view.findByRole("heading", { name: "Build the first revision" });
-  fireEvent.input(view.getByLabelText("Search registry skills"), { target: { value: "audit" } });
+  fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "audit" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
   await waitFor(() => assert.deepEqual(client.searchCalls.at(-1), "audit"));
-  fireEvent.change(await view.findByLabelText("Registry skill"), { target: { value: "audit-helper" } });
+  fireEvent.change(await view.findByLabelText("Skill"), { target: { value: "audit-helper" } });
   await view.findByLabelText("Exact release");
   fireEvent.change(view.getByLabelText("Exact release"), { target: { value: "release-audit-123" } });
   assert.equal(view.queryByLabelText("Release parent router"), null);
@@ -1982,9 +1982,9 @@ test("stale exact-release responses cannot replace the release selected for a ne
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
-  fireEvent.input(view.getByLabelText("Search registry skills"), { target: { value: "skill" } });
+  fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "skill" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
-  const skillSelector = await view.findByLabelText("Registry skill");
+  const skillSelector = await view.findByLabelText("Skill");
   fireEvent.change(skillSelector, { target: { value: "skill-a" } });
   await waitFor(() => assert.equal(client.releaseCalls.at(-1), "skill-a@1.0.0"));
   fireEvent.change(skillSelector, { target: { value: "skill-b" } });
@@ -2005,9 +2005,9 @@ test("router release picker requires an explicit parent and creates a routes edg
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
-  fireEvent.input(view.getByLabelText("Search registry skills"), { target: { value: "audit" } });
+  fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "audit" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
-  fireEvent.change(await view.findByLabelText("Registry skill"), { target: { value: "audit-helper" } });
+  fireEvent.change(await view.findByLabelText("Skill"), { target: { value: "audit-helper" } });
   fireEvent.change(await view.findByLabelText("Exact release"), { target: { value: "release-audit-123" } });
   const addButton = view.getByRole("button", { name: "Add selected exact release" }) as HTMLButtonElement;
   assert.equal(addButton.disabled, true);
@@ -2331,7 +2331,7 @@ test("failed login shows auth-specific safe copy", async () => {
   fireEvent.click(view.getByRole("button", { name: /sign in/i }));
 
   await view.findByText("Invalid email or password.");
-  assert.equal(document.body.textContent?.includes("registry item"), false);
+  assert.equal(document.body.textContent?.includes("You do not have access to that skill or release."), false);
   assert.equal(document.body.textContent?.includes("Wrong password"), false);
   assert.equal(window.localStorage.getItem("myskills-app:web-session"), null);
 });

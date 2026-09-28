@@ -261,7 +261,7 @@ test("overlapping bundles keep one unique count across Grouped, List and Outline
   const api = await installBundleFixture(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/registry");
-  await expect(page.getByRole("heading", { name: "Skill registry", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Skills", exact: true })).toBeVisible();
   await expect(summaryText(page)).toContainText("40 unique skills · 3 bundles");
   const views = page.getByRole("group", { name: "Catalog view" });
   await expect(views.getByRole("button", { name: "Grouped", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -451,7 +451,7 @@ test("bundle detail links both ways and saving a reference adopts nothing", asyn
 
   await page.goto("/libraries");
   await page.getByRole("button", { name: "Clear writing kit", exact: true }).click();
-  await expect(page.getByRole("link", { name: "Open in registry", exact: true })).toHaveAttribute("href", "/registry?bundle=writing");
+  await expect(page.getByRole("link", { name: "Open in Skills", exact: true })).toHaveAttribute("href", "/registry?bundle=writing");
   await expect(page.getByText("Saved at revision 7 · now revision 8")).toBeVisible();
   await page.getByRole("button", { name: "Unavailable bundle", exact: true }).click();
   await expect(page.getByText(/^You no longer have access to this bundle, or it was removed\./)).toBeVisible();
@@ -662,7 +662,7 @@ test("narrow screens show list then detail with Back focus restore and no overfl
     await page.goto("/registry?bundle=writing");
     await expect(page.getByRole("complementary", { name: "Clear writing kit", exact: true })).toBeVisible();
     await expect(region(page, "Engineering toolkit")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Back to registry" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Back to skills" })).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
     await page.screenshot({ path: testInfo.outputPath(`bundles-detail-${width}.png`), fullPage: true });
   }
@@ -680,13 +680,13 @@ test("narrow screens show list then detail with Back focus restore and no overfl
   await expect(region(page, "Engineering toolkit")).toBeHidden();
   await expectNoHorizontalOverflow(page);
   await page.screenshot({ path: testInfo.outputPath("bundles-detail-390.png"), fullPage: true });
-  await page.getByRole("button", { name: "Back to registry", exact: true }).click();
+  await page.getByRole("button", { name: "Back to skills", exact: true }).click();
   await expect(details).toBeFocused();
 
   const member = region(page, "Engineering toolkit").getByRole("link", { name: "Release notes helper", exact: true });
   await member.click();
   await expect(page.getByRole("complementary", { name: "Selected skill detail" }).getByRole("heading", { name: "Release notes helper", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Back to registry", exact: true }).click();
+  await page.getByRole("button", { name: "Back to skills", exact: true }).click();
   await expect(member).toBeFocused();
 
   await page.setViewportSize({ width: 320, height: 720 });

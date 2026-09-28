@@ -169,7 +169,7 @@ test("reader can inspect the adopted version on mobile without receiving edit co
   await expect(heading).toBeFocused();
   await expect(page.locator(".library-command")).toContainText("--library-entry meeting-notes");
   await expect(page.getByRole("button", { name: "Remove entry", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Adopt registry release", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Adopt skill release", exact: true })).toHaveCount(0);
   await fitsPage(page);
   await page.screenshot({ path: testInfo.outputPath("reader-detail-390.png"), fullPage: true });
   await page.getByRole("button", { name: "Back to entries", exact: true }).click();
@@ -223,7 +223,7 @@ test("reference shell keeps navigation and library controls usable at desktop an
   expect((await sidebar.boundingBox())!.width).toBe(240);
   await expect(sidebar).toHaveCSS("background-color", "rgb(247, 249, 251)");
   await expect(sidebar.getByRole("link", { name: "Libraries", exact: true })).toHaveCSS("box-shadow", "rgb(11, 112, 102) 2px 0px 0px 0px inset");
-  await expect(sidebar.getByRole("link", { name: "Registry", exact: true })).toHaveCSS("font-weight", "400");
+  await expect(sidebar.getByRole("link", { name: "Skills", exact: true })).toHaveCSS("font-weight", "400");
   const mfaIcon = sidebar.getByRole("img", { name: "MFA verified", exact: true });
   await expect(mfaIcon).toBeVisible();
   await expect(sidebar.getByText("MFA verified", { exact: true })).toHaveCount(0);

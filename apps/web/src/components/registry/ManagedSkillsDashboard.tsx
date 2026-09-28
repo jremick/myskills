@@ -200,7 +200,7 @@ export function ManagedSkillsDashboard({ client, mfaVerified }: { client: Regist
     const reasonId = `${baseId}-reason`;
     return <section aria-label="Confirm lifecycle change" className="manage-confirm" onKeyDown={onKeyDown}>
       <h4 ref={confirmRef} tabIndex={-1}>{label(pending.action)} {selected.slug}{pending.kind === "release" ? ` ${pending.version}` : ""}</h4>
-      <p>{pending.action === "delete" ? "Deletion removes this resource from use and cannot be undone from this screen." : pending.action === "restore" ? "Restore this exact resource when its review and security state permit it." : "This changes availability through the registry. Existing local installations may require a separate action."}</p>
+      <p>{pending.action === "delete" ? "Deletion removes this resource from use and cannot be undone from this screen." : pending.action === "restore" ? "Restore this exact resource when its review and security state permit it." : "This changes availability through Skills. Existing local installations may require a separate action."}</p>
       <label className="manage-reason" htmlFor={reasonId}>
         <span>Reason {pending.action === "restore" ? "(optional)" : "(required)"}</span>
         <Input aria-label="Lifecycle reason" id={reasonId} value={reason} disabled={busy} onChange={(event) => setReason(event.target.value)} />

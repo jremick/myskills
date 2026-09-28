@@ -39,12 +39,12 @@ test("owner curates a persistent library, changes private-import policy, and rem
   await page.getByLabel("Library name").fill(name);
   await page.getByRole("button", { name: "Create library", exact: true }).click();
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
-  await page.getByLabel("Registry skill slug").fill("release-notes-helper");
-  await page.getByRole("button", { name: "Save registry skill", exact: true }).click();
+  await page.getByLabel("Skill slug").fill("release-notes-helper");
+  await page.getByRole("button", { name: "Save skill", exact: true }).click();
   await page.getByLabel("Reviewed release version").fill("0.1.0");
   const note = "Reviewed for the release preparation workflow.";
   await page.getByLabel("Curator note (optional)").fill(note);
-  await page.getByRole("button", { name: "Adopt registry release", exact: true }).click();
+  await page.getByRole("button", { name: "Adopt skill release", exact: true }).click();
   await expect(page.locator(".library-command")).toContainText("--library-entry");
   const command = await page.locator(".library-command").textContent();
   const entryId = command?.match(/--library-entry ([a-f0-9-]{36})/)?.[1];

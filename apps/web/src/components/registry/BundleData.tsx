@@ -57,7 +57,7 @@ export function useCatalog(api: BundleClient, rawQuery: string, view: RegistryVi
       if (errorStatus(error) === 404) { unavailable.current(); return; }
       if (failureKind(error) !== "failed") setMemberScope((value) => value + 1);
       // Never keep rows from an earlier query after a failure.
-      setState({ ...emptyCatalog(query, view), status: "error", error: bundleError(error, "The registry may be offline. Try again shortly.") });
+      setState({ ...emptyCatalog(query, view), status: "error", error: bundleError(error, "Skills could not load. Try again shortly.") });
     });
     return () => { epoch.current++; };
   }, [api, query, view, reloadKey]);
