@@ -6,6 +6,7 @@ import { BrandingProvider } from "./components/branding/BrandingProvider.js";
 import { BrandIdentity } from "./components/branding/BrandIdentity.js";
 import { BrandingSettings } from "./components/branding/BrandingSettings.js";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useId,
@@ -15,12 +16,14 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 import {
   ArrowLeft,
   ArrowRight,
   Building2,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
@@ -40,6 +43,7 @@ import {
   Monitor,
   PackageCheck,
   PackageOpen,
+  Pin,
   Plus,
   RotateCw,
   Save,
@@ -49,7 +53,6 @@ import {
   Shield,
   SlidersHorizontal,
   SquareCheckBig,
-  TerminalSquare,
   Trash2,
   Upload,
   UserCog,
@@ -145,9 +148,12 @@ type MobileMenu = "more" | "account";
 type RegistryFocus = { kind: "title" } | { kind: "row"; slug: string };
 interface RegistryDisclosures {
   notes: boolean;
+  details: boolean;
+  files: boolean;
   improvement: boolean;
   owner: boolean;
 }
+type ReleaseCardState = "ready" | "loading" | "error" | "no-default";
 
 const APP_HISTORY_INDEX_KEY = "__myskillsAppHistoryIndex";
 // The Registry splits into list and inspector when its own surface is this wide.
@@ -269,7 +275,8 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   const registrySurfaceRef = useRef<HTMLDivElement | null>(null);
   const inspectorTitleRef = useRef<HTMLHeadingElement>(null);
   const pendingRegistryFocus = useRef<RegistryFocus | null>(null);
-  const [registryDisclosures, setRegistryDisclosures] = useState<RegistryDisclosures>({ notes: false, improvement: false, owner: false });
+  const [registryDisclosures, setRegistryDisclosures] = useState<RegistryDisclosures>({ notes: false, details: false, files: false, improvement: false, owner: false });
+  const setRegistryDisclosure = (key: keyof RegistryDisclosures, open: boolean) => setRegistryDisclosures((current) => current[key] === open ? current : { ...current, [key]: open });
   // A desktop split shows the first result without choosing it: the URL stays
   // /registry until the reader picks a skill. A stack shows the list instead.
   const implicitSlug = registryLayout === "split" && selectedSlug === null ? skills[0]?.slug ?? null : null;
@@ -707,17 +714,10 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   const skillReady = selectedSkill !== null && selectedSkill.slug === detailSlug;
   const expectedVersion = selectedVersion ?? selectedSkill?.latestVersion ?? null;
   const releaseReady = skillReady && release !== null && release.slug === detailSlug && release.version === expectedVersion;
-  const historyControls = skillReady ? (
-    <ReleaseHistoryControls
-      historyState={historyState}
-      latestVersion={latestVisibleRelease?.version ?? null}
-      onRetry={retryRegistry}
-      onReturn={returnToLatest}
-      onSelect={selectVersion}
-      releases={visibleReleases}
-      selectedVersion={selectedVersion}
-    />
-  ) : null;
+  const releaseCardState: ReleaseCardState = detailMessage ? "error"
+    : detailState === "ready" && releaseReady ? "ready"
+      : detailState === "ready" && expectedVersion === null ? "no-default"
+        : "loading";
   const registryStacked = registryLayout === "stack";
   const showRegistryList = !(registryStacked && selectedSlug !== null);
   const showRegistryInspector = registryLayout === "split" || selectedSlug !== null;
@@ -1052,75 +1052,92 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     .filter((group) => group.items.length > 0);
   const mobileOverflowActive = mobileOverflowGroups.some((group) => group.items.some((item) => item.view === activeView));
 
-  // Existing skill detail (release history, export, trust panels). The bundle
-  // workspace renders it in its inspector and adds bundle backlinks.
-  const renderSkillDetail = (bundles: ReactNode) => (
-    <>
-                      {skillReady && selectedSkill ? (
-                        <header className="registry-inspector-head">
-                          <span className="registry-tile" data-size="32" data-tone={tileTone(selectedSkill.slug)} aria-hidden="true" />
-                          <div className="registry-inspector-title">
-                            <h2 ref={inspectorTitleRef} tabIndex={-1}>{selectedSkill.title}</h2>
-                            <p className="registry-ref">
-                              <code>{selectedSkill.slug}</code>
-                              {releaseReady && release && <><span aria-hidden="true">@</span><code>{release.version}</code></>}
-                            </p>
-                            {releaseReady && release && ((selectedVersion !== null && selectedSkill.latestVersion && selectedSkill.latestVersion !== release.version) || release.lifecycleStatus === "deprecated") && (
-                              <p className="registry-inspector-meta">
-                                {selectedVersion !== null && selectedSkill.latestVersion && selectedSkill.latestVersion !== release.version && <span>Latest is {selectedSkill.latestVersion}</span>}
-                                {release.lifecycleStatus === "deprecated" && <span className="registry-chip" data-tone="amber">Deprecated</span>}
-                              </p>
-                            )}
-                          </div>
-                          <div className="registry-version-slot">{historyControls}</div>
-                        </header>
-                      ) : null}
-                      {detailMessage ? (
-                        <div className="registry-inspector-state" role="status" aria-live="polite">
-                          <CircleAlert size={20} aria-hidden="true" />
-                          <div>
-                            <strong>{detailMessage}</strong>
-                            <p>{selectedVersion !== null
-                              ? "The requested exact version was not substituted. Choose a published version or return to latest."
-                              : "The selected skill could not load. Retry the request or choose a different approved skill."}</p>
-                            <div className="registry-actions">
-                              <Button size="sm" type="button" variant="outline" onClick={retryRegistry}>
-                                <RotateCw size={15} aria-hidden="true" />
-                                Retry
-                              </Button>
-                              {selectedVersion !== null && !selectedSkill && <Button size="sm" type="button" variant="outline" onClick={returnToLatest}>Return to latest</Button>}
-                            </div>
-                          </div>
-                        </div>
-                      ) : detailState === "ready" && releaseReady && release && selectedSkill ? (
-                        <SkillDetail
-                          bundles={bundles}
-                          command={selectedCommand}
-                          client={registryClient}
-                          disclosures={registryDisclosures}
-                          platform={detailPlatform}
-                          release={release}
-                          selectedSkill={selectedSkill}
-                          session={session}
-                          setDisclosure={(key, open) => setRegistryDisclosures((current) => current[key] === open ? current : { ...current, [key]: open })}
-                          setPlatform={updatePlatform}
-                          onChanged={() => setRefreshKey((value) => value + 1)}
-                        />
-                      ) : detailState === "ready" && skillReady && !release ? (
-                        <div className="registry-inspector-state">
-                          <FileCode2 size={20} aria-hidden="true" />
-                          <div>
-                            <h3>No default stable release</h3>
-                            <p>Choose an exact version from release history when no approved stable release is available.</p>
-                          </div>
-                        </div>
-                      ) : detailSlug || detailState === "loading" || listState === "loading" ? (
-                        <RegistryInspectorSkeleton withHeader={!skillReady} />
-                      ) : (
-                        <p className="registry-inspector-empty">{skills.length > 0 ? "Select a skill to see its exact releases." : "No skill selected."}</p>
-                      )}
-    </>
-  );
+  // Skill detail: skill identity, one card for the exact release, then bundle
+  // backlinks and owner tools. The bundle workspace renders it in its
+  // inspector and passes the backlinks.
+  const renderSkillDetail = (bundles: ReactNode) => {
+    if (!skillReady || !selectedSkill) {
+      return detailMessage ? (
+        <div className="registry-inspector-state" role="status" aria-live="polite">
+          <CircleAlert size={20} aria-hidden="true" />
+          <div>
+            <strong>{detailMessage}</strong>
+            <p>{selectedVersion !== null
+              ? "The requested exact version was not substituted. Choose a published version or view the latest."
+              : "The selected skill could not load. Retry the request or choose a different approved skill."}</p>
+            <div className="registry-actions">
+              <Button size="sm" type="button" variant="outline" onClick={retryRegistry}>
+                <RotateCw size={15} aria-hidden="true" />
+                Retry
+              </Button>
+              {selectedVersion !== null && !selectedSkill && <Button size="sm" type="button" variant="outline" onClick={returnToLatest}>View latest</Button>}
+            </div>
+          </div>
+        </div>
+      ) : detailSlug || detailState === "loading" || listState === "loading" ? (
+        <RegistryInspectorSkeleton withHeader />
+      ) : (
+        <p className="registry-inspector-empty">{skills.length > 0 ? "Select a skill to see its exact releases." : "No skill selected."}</p>
+      );
+    }
+    const readyRelease = releaseCardState === "ready" ? release : null;
+    const owner = readyRelease && session && selectedSkill.access?.canManageSharing ? (
+      <SkillOwnerControls
+        key={`${selectedSkill.slug}:${readyRelease.version}`}
+        client={registryClient}
+        open={registryDisclosures.owner}
+        release={readyRelease}
+        selectedSkill={selectedSkill}
+        session={session}
+        onChanged={() => setRefreshKey((value) => value + 1)}
+        onToggle={(open) => setRegistryDisclosure("owner", open)}
+      />
+    ) : null;
+    return (
+      <div className="registry-skill-pane">
+        <header className="registry-inspector-head">
+          <span className="registry-tile" data-size="32" data-tone={tileTone(selectedSkill.slug)} aria-hidden="true" />
+          <div className="registry-inspector-title">
+            <h2 ref={inspectorTitleRef} tabIndex={-1}>{selectedSkill.title}</h2>
+            <p className="registry-ref"><code>{selectedSkill.slug}</code></p>
+          </div>
+        </header>
+        <p className="registry-summary">{selectedSkill.summary}</p>
+        {selectedSkill.tags.length > 0 && (
+          <ul aria-label="Tags" className="registry-tags">
+            {selectedSkill.tags.map((tag) => <li key={tag}>{tag}</li>)}
+          </ul>
+        )}
+        <SkillReleaseCard
+          historyState={historyState}
+          message={detailMessage}
+          release={readyRelease}
+          releases={visibleReleases}
+          selectedVersion={selectedVersion}
+          skill={selectedSkill}
+          state={releaseCardState}
+          onRetry={retryRegistry}
+          onReturn={returnToLatest}
+          onSelect={selectVersion}
+        >
+          {readyRelease && (
+            <SkillDetail
+              command={selectedCommand}
+              client={registryClient}
+              disclosures={registryDisclosures}
+              platform={detailPlatform}
+              release={readyRelease}
+              selectedSkill={selectedSkill}
+              session={session}
+              setDisclosure={setRegistryDisclosure}
+              setPlatform={updatePlatform}
+            />
+          )}
+        </SkillReleaseCard>
+        {(bundles || owner) && <div className="registry-skill-foot">{bundles}{owner}</div>}
+      </div>
+    );
+  };
 
   return (
     <div className={sidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
@@ -4433,7 +4450,26 @@ function IconButton({ children, label, onClick }: { children: ReactNode; label: 
   );
 }
 
-function CopyButton({ text, variant }: { text: string; variant?: "outline" }) {
+function CopyButton({
+  className = "shadcn-action-button",
+  failureHint,
+  iconOnly = false,
+  label = "Copy",
+  selectOnFailure,
+  text,
+  variant,
+}: {
+  className?: string;
+  /** Visible text after a failed copy. Without it the failure is only announced. */
+  failureHint?: string;
+  iconOnly?: boolean;
+  /** Visible label, or the accessible name of an icon-only button. */
+  label?: string;
+  /** Element whose text is selected for manual copying when the clipboard fails. */
+  selectOnFailure?: RefObject<HTMLElement | null>;
+  text: string;
+  variant?: "outline" | "ghost";
+}) {
   const [status, setStatus] = useState<"idle" | "copying" | "copied" | "error">("idle");
 
   async function copy() {
@@ -4446,15 +4482,33 @@ function CopyButton({ text, variant }: { text: string; variant?: "outline" }) {
       setStatus("copied");
     } catch {
       setStatus("error");
+      const target = selectOnFailure?.current;
+      const selection = window.getSelection();
+      if (target && selection) {
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
     }
   }
 
   return (
     <>
-      <Button className="shadcn-action-button" disabled={status === "copying"} size="sm" type="button" variant={variant} onClick={() => void copy()}>
-        <Copy size={15} aria-hidden="true" />
-        {status === "copying" ? "Copying…" : status === "copied" ? "Copied" : "Copy"}
+      <Button
+        aria-label={iconOnly ? label : undefined}
+        className={className}
+        disabled={status === "copying"}
+        size={iconOnly ? "icon-sm" : "sm"}
+        title={iconOnly ? label : undefined}
+        type="button"
+        variant={variant}
+        onClick={() => void copy()}
+      >
+        {iconOnly && status === "copied" ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
+        {!iconOnly && (status === "copying" ? "Copying…" : status === "copied" ? "Copied" : label)}
       </Button>
+      {failureHint && status === "error" && <span className="registry-copy-failure">{failureHint}</span>}
       <span className="sr-only" role="status" aria-live="polite">
         {status === "copied" ? "Copied to clipboard." : status === "error" ? "Copy failed. Select and copy the text manually." : ""}
       </span>
@@ -4899,57 +4953,281 @@ function MfaSetupPanel({
   );
 }
 
-function ReleaseHistoryControls({
+/**
+ * One card for everything tied to the exact release. The head stays mounted
+ * while a version loads, so the Versions control keeps focus, and release facts
+ * and actions appear only for the loaded release.
+ */
+function SkillReleaseCard({
+  children,
   historyState,
-  latestVersion,
+  message,
   onRetry,
   onReturn,
   onSelect,
+  release,
   releases,
   selectedVersion,
+  skill,
+  state,
 }: {
+  children: ReactNode;
   historyState: LoadState;
-  latestVersion: string | null;
+  message: string | null;
   onRetry: () => void;
   onReturn: () => void;
   onSelect: (version: string) => void;
+  /** The loaded release, only when state is "ready". */
+  release: ReleaseMetadata | null;
   releases: SkillReleaseSummary[];
   selectedVersion: string | null;
+  skill: PublicSkill;
+  state: ReleaseCardState;
 }) {
-  const missingPin = selectedVersion !== null && !releases.some((item) => item.version === selectedVersion);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const versionRef = useRef<HTMLSpanElement>(null);
+  const focusHeading = useRef(false);
+  const listId = useId();
+  const latest = skill.latestVersion;
+  // The requested version stays visible while it loads or when it is missing.
+  const version = release?.version ?? selectedVersion ?? latest;
+  const currentVersion = selectedVersion ?? latest;
+  const showVersions = historyState === "ready" && releases.length > 0;
+  const latestIndex = releases.findIndex((item) => item.version === latest);
+  const pinnedIndex = releases.findIndex((item) => item.version === selectedVersion);
+  const olderPin = latest !== null && selectedVersion !== latest && latestIndex >= 0 && pinnedIndex > latestIndex;
+  // Without a default stable release, clearing a pin promises no latest one.
+  const clearPinLabel = latest === null || selectedVersion === latest ? "Unpin" : "View latest";
+
+  useEffect(() => {
+    if (focusHeading.current && headingRef.current) {
+      headingRef.current.focus();
+      focusHeading.current = false;
+    }
+  });
+
+  function pick(next: string) {
+    setVersionsOpen(false);
+    toggleRef.current?.focus();
+    onSelect(next);
+  }
+
+  function clearPin() {
+    focusHeading.current = true;
+    setVersionsOpen(false);
+    onReturn();
+  }
+
+  function listKeyDown(event: ReactKeyboardEvent<HTMLUListElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setVersionsOpen(false);
+      toggleRef.current?.focus();
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const rows = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button"));
+    const index = rows.findIndex((row) => row === document.activeElement);
+    const next = event.key === "Home" ? 0
+      : event.key === "End" ? rows.length - 1
+        : Math.min(rows.length - 1, Math.max(0, index + (event.key === "ArrowDown" ? 1 : -1)));
+    rows[next]?.focus();
+  }
+
   return (
-    <div className="registry-version-control">
-      {historyState === "loading" && <p className="control-plane-muted" role="status">Loading release history…</p>}
-      {historyState === "ready" && releases.length === 0 && <p className="control-plane-muted" role="status">No published release history is available.</p>}
-      {historyState === "error" && (
-        <div role="status">
-          <p className="control-plane-muted">Release history is unavailable.</p>
-          <Button size="sm" type="button" variant="outline" onClick={onRetry}>Retry release history</Button>
+    <section aria-label="Release" className="registry-release">
+      <div className="registry-release-head">
+        <div className="registry-release-top">
+          <span aria-hidden="true" className="registry-release-label">Release</span>
+          {showVersions ? (
+            <Button
+              aria-controls={listId}
+              aria-expanded={versionsOpen}
+              className="registry-versions-toggle"
+              ref={toggleRef}
+              size="sm"
+              type="button"
+              variant="outline"
+              onClick={() => setVersionsOpen((open) => !open)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && versionsOpen) {
+                  event.preventDefault();
+                  setVersionsOpen(false);
+                }
+              }}
+            >
+              Versions <span className="registry-count">{releases.length}</span>
+              <ChevronDown size={14} aria-hidden="true" />
+            </Button>
+          ) : historyState === "loading" ? (
+            <p className="registry-release-history" role="status">Loading release history…</p>
+          ) : historyState === "error" ? (
+            <p className="registry-release-history" role="status">
+              Release history is unavailable.{" "}
+              <button className="registry-link-button" type="button" onClick={onRetry}>Retry release history</button>
+            </p>
+          ) : historyState === "ready" ? (
+            <p className="registry-release-history" role="status">No published release history is available.</p>
+          ) : null}
         </div>
-      )}
-      {historyState === "ready" && releases.length > 0 && (
-        <label>
-          <span>Release version</span>
-          <select value={selectedVersion ?? latestVersion ?? ""} onChange={(event) => onSelect(event.target.value)}>
-            {selectedVersion === null && latestVersion === null && <option value="" disabled>Choose an exact release</option>}
-            {selectedVersion !== null && missingPin && <option value={selectedVersion} disabled>Unavailable exact version</option>}
+        {showVersions && (
+          <ul aria-label="Published versions" className="registry-versions" hidden={!versionsOpen} id={listId} onKeyDown={listKeyDown}>
             {releases.map((item) => (
-              <option key={item.version} value={item.version}>
-                {item.version}{item.version === latestVersion ? " (latest)" : item.lifecycleStatus === "deprecated" ? " (deprecated)" : ""}
-              </option>
+              <li key={item.version}>
+                <button aria-current={item.version === currentVersion ? "true" : undefined} className="registry-version-row" type="button" onClick={() => pick(item.version)}>
+                  <Check size={14} aria-hidden="true" />
+                  <code>{item.version}</code>
+                  <span className="registry-version-meta">
+                    {item.version === latest && <span className="registry-chip" data-tone="line">Latest</span>}
+                    {item.lifecycleStatus === "deprecated" && <span className="registry-chip" data-tone="amber">Deprecated</span>}
+                    {item.publishedAt && <span>{formatDate(item.publishedAt)}</span>}
+                  </span>
+                </button>
+              </li>
             ))}
-          </select>
-        </label>
-      )}
-      {selectedVersion !== null && <Button size="sm" type="button" variant="outline" onClick={onReturn}>Return to latest</Button>}
+          </ul>
+        )}
+        {state === "no-default" ? (
+          <div className="registry-inspector-state">
+            <FileCode2 size={20} aria-hidden="true" />
+            <div>
+              <h3 ref={headingRef} tabIndex={-1}>No default stable release</h3>
+              <p>Choose an exact version from release history when no approved stable release is available.</p>
+            </div>
+          </div>
+        ) : version ? (
+          <div className="registry-release-id">
+            <h3 ref={headingRef} tabIndex={-1}><span className="sr-only">Release</span>{" "}<span ref={versionRef}>{version}</span></h3>
+            <CopyButton
+              className="registry-icon-copy"
+              failureHint="Copy failed. The version is selected for manual copying."
+              iconOnly
+              key={version}
+              label="Copy version"
+              selectOnFailure={versionRef}
+              text={version}
+              variant="ghost"
+            />
+            {state === "ready" && release && (release.version === latest || release.lifecycleStatus === "deprecated") && (
+              <span className="registry-release-chips">
+                {release.version === latest && <span className="registry-chip" data-tone="line">Latest</span>}
+                {release.lifecycleStatus === "deprecated" && <span className="registry-chip" data-tone="amber">Deprecated</span>}
+              </span>
+            )}
+            {state === "error" && selectedVersion !== null && <span className="registry-chip" data-tone="amber">Unavailable</span>}
+          </div>
+        ) : null}
+        {selectedVersion !== null && state !== "error" && (
+          <p className="registry-pin">
+            <Pin size={14} aria-hidden="true" />
+            <span>{olderPin ? "Pinned to an older release" : "Pinned to this version"}</span>
+            <span aria-hidden="true">·</span>
+            <button className="registry-link-button" type="button" onClick={clearPin}>{clearPinLabel}</button>
+          </p>
+        )}
+        {state === "ready" && release && (
+          <dl className="registry-release-facts">
+            <div><dt>Released</dt><dd>{release.publishedAt ? formatDate(release.publishedAt) : "Not published"}</dd></div>
+            <div><dt>Review</dt><dd><RegistryStatus value={release.reviewStatus} /></dd></div>
+            <div><dt>Security</dt><dd><RegistryStatus value={release.securityStatus} /></dd></div>
+          </dl>
+        )}
+        {state === "error" && (
+          <div className="registry-release-error" role="status" aria-live="polite">
+            <CircleAlert size={16} aria-hidden="true" />
+            <div>
+              <strong>{message}</strong>
+              <p>{selectedVersion !== null
+                ? `No other version was substituted. Choose a published version or ${latest === null ? "clear the pin" : "view the latest"}.`
+                : "The selected skill could not load. Retry the request or choose a different approved skill."}</p>
+              <div className="registry-actions">
+                {selectedVersion !== null && <Button size="sm" type="button" variant="outline" onClick={clearPin}>{clearPinLabel}</Button>}
+                <Button size="sm" type="button" variant="outline" onClick={onRetry}>
+                  <RotateCw size={15} aria-hidden="true" />
+                  Retry
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      {state === "ready" ? children : state === "loading" ? <RegistryInspectorSkeleton withHeader={false} /> : null}
+    </section>
+  );
+}
+
+/** A disclosure row. The hint describes the row without joining its name. */
+function RegistryDisclosure({
+  bodyClassName,
+  children,
+  hint,
+  id,
+  onToggle,
+  open,
+  title,
+}: {
+  bodyClassName?: string;
+  children: ReactNode;
+  hint?: ReactNode;
+  id: string;
+  onToggle: () => void;
+  open: boolean;
+  title: string;
+}) {
+  return (
+    <div className="registry-disclosure">
+      <button
+        aria-controls={id}
+        aria-describedby={hint ? `${id}-hint` : undefined}
+        aria-expanded={open}
+        aria-labelledby={`${id}-title`}
+        className="registry-disclosure-button"
+        type="button"
+        onClick={onToggle}
+      >
+        <span id={`${id}-title`}>{title}</span>
+        <span className="registry-disclosure-hint">
+          {hint && <span id={`${id}-hint`}>{hint}</span>}
+          <ChevronDown size={14} aria-hidden="true" />
+        </span>
+      </button>
+      <div className={bodyClassName ? `registry-disclosure-body ${bodyClassName}` : "registry-disclosure-body"} hidden={!open} id={id}>{children}</div>
     </div>
   );
 }
 
-// The inspector body for one exact release: consumer facts and use first,
-// optional depth in disclosures, and owner tools last.
+/**
+ * Shows the export command with each flag kept beside its value. Display only:
+ * the text content equals the command, and copying uses the command itself.
+ */
+function CommandText({ command }: { command: string }) {
+  const [head, ...flags] = command.split(" --");
+  return (
+    <>
+      <span className="registry-command-part">{head}</span>
+      {flags.map((part, index) => {
+        const space = part.indexOf(" ");
+        const flag = space < 0 ? part : part.slice(0, space);
+        return (
+          <Fragment key={index}>
+            {" "}
+            <span className="registry-command-part">
+              <span className="registry-command-flag">--{flag}</span>
+              {space >= 0 && <span data-version={flag === "version" ? "" : undefined}>{part.slice(space)}</span>}
+            </span>
+          </Fragment>
+        );
+      })}
+    </>
+  );
+}
+
+// The release card body: use first, then optional depth in disclosures whose
+// open state carries across version changes.
 function SkillDetail({
-  bundles,
   command,
   client,
   disclosures,
@@ -4959,10 +5237,7 @@ function SkillDetail({
   session,
   setDisclosure,
   setPlatform,
-  onChanged,
 }: {
-  /** Optional bundle backlinks, shown after the summary. */
-  bundles?: ReactNode;
   command: string;
   client: RegistryClient;
   disclosures: RegistryDisclosures;
@@ -4972,78 +5247,61 @@ function SkillDetail({
   session: WebSession | null;
   setDisclosure: (key: keyof RegistryDisclosures, open: boolean) => void;
   setPlatform: (platform: string) => void;
-  onChanged: () => void;
 }) {
   const supportedPlatforms = release.platforms.filter((item) => item.status === "supported");
   const hasSupportedPlatform = supportedPlatforms.length > 0;
   const canManageSkill = Boolean(session && selectedSkill.access?.canManageSharing);
-  const canUsePrivilegedControls = Boolean(canManageSkill && session?.user.mfaVerified);
-  // Owner tools load on first open and stay mounted so drafts survive closing.
-  const [ownerVisited, setOwnerVisited] = useState(disclosures.owner);
   const baseId = useId();
+  const commandRef = useRef<HTMLElement>(null);
   const compatibility = release.compatibility && Object.keys(release.compatibility).length > 0 ? release.compatibility : null;
 
-  function toggleOwner() {
-    if (!disclosures.owner) setOwnerVisited(true);
-    setDisclosure("owner", !disclosures.owner);
-  }
-
   return (
-    <div className="registry-inspector-body">
-      <p className="registry-summary">{selectedSkill.summary}</p>
-      {bundles}
-
-      <dl className="registry-facts registry-section">
-        <RegistryFact label="Released">{release.publishedAt ? formatDate(release.publishedAt) : "Not published"}</RegistryFact>
-        <RegistryFact label="Review"><RegistryStatus value={release.reviewStatus} /></RegistryFact>
-        <RegistryFact label="Security"><RegistryStatus value={release.securityStatus} /></RegistryFact>
-        <RegistryFact label="Platforms">{hasSupportedPlatform
-          ? supportedPlatforms.map((item) => item.name).join(", ")
-          : release.platforms.map((item) => `${item.name} (${item.status})`).join(", ") || "None declared"}</RegistryFact>
-        <RegistryFact label="Byte size">{new Intl.NumberFormat().format(release.artifact.byteSize)}</RegistryFact>
-        <RegistryFact label="Content type" mono>{release.artifact.contentType}</RegistryFact>
-        <RegistryFact label="SHA-256" mono>{release.artifact.sha256}</RegistryFact>
-        {selectedSkill.tags.length > 0 && <RegistryFact label="Tags">{selectedSkill.tags.join(", ")}</RegistryFact>}
-      </dl>
-
+    <>
       {hasSupportedPlatform ? (
-        <section className="registry-section registry-use" aria-labelledby={`${baseId}-use`}>
-          <h3 id={`${baseId}-use`}>Use this release</h3>
+        <section className="registry-use" aria-labelledby={`${baseId}-use`}>
+          <div className="registry-use-head">
+            <h4 id={`${baseId}-use`}>Use this release</h4>
+            {supportedPlatforms.length === 1 ? (
+              <p className="registry-use-platform">Platform <code>{platform}</code></p>
+            ) : (
+              <div className="registry-use-platforms" role="group" aria-labelledby={`${baseId}-platform`}>
+                <span id={`${baseId}-platform`}>Platform</span>
+                {supportedPlatforms.map((item) => (
+                  <Button
+                    aria-pressed={item.name === platform}
+                    className={item.name === platform ? "platform-button active" : "platform-button"}
+                    key={item.name}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                    onClick={() => setPlatform(item.name)}
+                  >
+                    {item.name}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
           {release.requiresUserAction && (
             <p className="registry-callout" data-tone="amber">
               <CircleAlert size={16} aria-hidden="true" />
               This release requires a user action. Review the instructions before updating.
             </p>
           )}
-          <div className="registry-platforms">
-            <span id={`${baseId}-platform`}>Export platform</span>
-            <div role="group" aria-labelledby={`${baseId}-platform`}>
-              {supportedPlatforms.map((item) => (
-                <Button
-                  aria-pressed={item.name === platform}
-                  className={item.name === platform ? "platform-button active" : "platform-button"}
-                  key={item.name}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                  onClick={() => setPlatform(item.name)}
-                >
-                  {item.name}
-                </Button>
-              ))}
-            </div>
-          </div>
           <div className="command-panel registry-command">
-            <span className="registry-command-label">
-              <TerminalSquare size={14} aria-hidden="true" />
-              CLI export
-            </span>
-            <div className="registry-command-row">
-              <code>{command}</code>
-              <CopyButton text={command} variant="outline" />
-            </div>
+            <code ref={commandRef}><CommandText command={command} /></code>
           </div>
-          <p className="registry-muted">For a personal Codex workspace, follow <a href="/targets">Connect a Codex workspace</a> to enroll the directory and install this exact version with the matching CLI release.</p>
+          <div className="registry-use-actions">
+            <CopyButton
+              className="registry-copy-command"
+              failureHint="Copy failed. The command is selected; copy it with Ctrl+C or ⌘C."
+              key={command}
+              label="Copy command"
+              selectOnFailure={commandRef}
+              text={command}
+            />
+            {platform === "codex" && <p className="registry-muted"><a href="/targets">Connect a Codex workspace</a> to install this exact release.</p>}
+          </div>
           {session && (
             <ReleaseInstallPanel
               key={`${selectedSkill.slug}:${release.version}:${platform}`}
@@ -5058,89 +5316,135 @@ function SkillDetail({
         <p className="registry-callout registry-section-callout" data-tone="amber" role="status">No supported export platform is available for this release. Export and install are unavailable.</p>
       )}
 
-      <div className="registry-section registry-more">
-        <details className="registry-details" open={disclosures.notes}>
-          <summary onClick={(event) => {
-            // Save the preference before a release change can unmount the disclosure.
-            event.preventDefault();
-            setDisclosure("notes", !disclosures.notes);
-          }}>
-            <span>Release notes for {release.version}</span>
-            {release.changeKind && <span className="registry-chip registry-change-kind">{release.changeKind}</span>}
-          </summary>
-          <div className="registry-details-body">
-            <p className="registry-notes">{release.releaseNotes || "No release notes were supplied for this release."}</p>
-            {compatibility && (
-              <dl className="registry-facts" data-labels="wide">
-                <RegistryFact label="Minimum MySkills">{compatibility.minimumMyskillsVersion ?? "Any"}</RegistryFact>
-                <RegistryFact label="Minimum adapter contract">{compatibility.minimumAdapterContractVersion?.toString() ?? "Any"}</RegistryFact>
-                <RegistryFact label="Minimum source version">{compatibility.minimumSourceVersion ?? "Any"}</RegistryFact>
-              </dl>
-            )}
-          </div>
-        </details>
+      <div className="registry-release-more">
+        <RegistryDisclosure
+          hint={release.changeKind && <span className="registry-chip registry-change-kind">{release.changeKind}</span>}
+          id={`${baseId}-notes`}
+          open={disclosures.notes}
+          title="Release notes"
+          onToggle={() => setDisclosure("notes", !disclosures.notes)}
+        >
+          <p className="registry-notes">{release.releaseNotes || "No release notes were supplied for this release."}</p>
+          {compatibility && (
+            <dl className="registry-facts" data-labels="wide">
+              <RegistryFact label="Minimum MySkills">{compatibility.minimumMyskillsVersion ?? "Any"}</RegistryFact>
+              <RegistryFact label="Minimum adapter contract">{compatibility.minimumAdapterContractVersion?.toString() ?? "Any"}</RegistryFact>
+              <RegistryFact label="Minimum source version">{compatibility.minimumSourceVersion ?? "Any"}</RegistryFact>
+            </dl>
+          )}
+        </RegistryDisclosure>
 
-        {hasSupportedPlatform && client.getReleaseBundle && <PackageFileViewer
-          resourceKey={`${selectedSkill.slug}:${release.version}:${platform}`}
-          loadBundle={() => client.getReleaseBundle!(selectedSkill.slug, release.version, platform)}
-        />}
+        <RegistryDisclosure
+          hint={formatByteSize(release.artifact.byteSize)}
+          id={`${baseId}-package`}
+          open={disclosures.details}
+          title="Package details"
+          onToggle={() => setDisclosure("details", !disclosures.details)}
+        >
+          <dl className="registry-facts">
+            <RegistryFact label="Platforms">{release.platforms.map((item) => `${item.name} · ${item.status}`).join(", ") || "None declared"}</RegistryFact>
+            <RegistryFact label="Size">{`${new Intl.NumberFormat().format(release.artifact.byteSize)} bytes`}</RegistryFact>
+            <RegistryFact label="Content type" mono>{release.artifact.contentType}</RegistryFact>
+            <RegistryFact label="SHA-256" mono>{release.artifact.sha256}</RegistryFact>
+          </dl>
+        </RegistryDisclosure>
+
+        {hasSupportedPlatform && client.getReleaseBundle && (
+          <RegistryDisclosure
+            hint="Shown as text"
+            id={`${baseId}-files`}
+            open={disclosures.files}
+            title="Package files"
+            onToggle={() => setDisclosure("files", !disclosures.files)}
+          >
+            {/* Loads only on request; a new release or platform resets it. */}
+            <PackageFileViewer
+              resourceKey={`${selectedSkill.slug}:${release.version}:${platform}`}
+              loadBundle={() => client.getReleaseBundle!(selectedSkill.slug, release.version, platform)}
+            />
+          </RegistryDisclosure>
+        )}
 
         {client.improvements && (
-          <div className="registry-disclosure">
-            <button
-              aria-controls={`${baseId}-improvement`}
-              aria-expanded={disclosures.improvement}
-              className="registry-disclosure-button"
-              type="button"
-              onClick={() => setDisclosure("improvement", !disclosures.improvement)}
-            >
-              Compatibility and improvement
-            </button>
+          <RegistryDisclosure
+            id={`${baseId}-improvement`}
+            open={disclosures.improvement}
+            title="Compatibility and improvement"
+            onToggle={() => setDisclosure("improvement", !disclosures.improvement)}
+          >
             {/* Stays mounted so compatibility evidence and planner drafts persist. */}
-            <div className="registry-disclosure-body" hidden={!disclosures.improvement} id={`${baseId}-improvement`}>
-              <SkillImprovementPanel key={`${release.slug}:${release.version}`} client={client} release={release} user={session?.user ?? null} canManage={canManageSkill} visibility={selectedSkill.visibility} />
-            </div>
-          </div>
+            <SkillImprovementPanel key={`${release.slug}:${release.version}`} client={client} release={release} user={session?.user ?? null} canManage={canManageSkill} visibility={selectedSkill.visibility} />
+          </RegistryDisclosure>
         )}
       </div>
+    </>
+  );
+}
 
-      {canManageSkill && (
-        <div className="registry-section registry-owner">
-          <div className="registry-owner-head">
-            <button
-              aria-controls={`${baseId}-owner`}
-              aria-expanded={disclosures.owner}
-              className="registry-disclosure-button"
-              type="button"
-              onClick={toggleOwner}
-            >
-              Owner controls
-            </button>
-            {!canUsePrivilegedControls && (
-              <span className="registry-owner-hint">
-                <LockKeyhole size={14} aria-hidden="true" />
-                Locked until MFA
-              </span>
-            )}
-          </div>
-          <div className="registry-disclosure-body registry-owner-panel" hidden={!disclosures.owner} id={`${baseId}-owner`}>
-            {(disclosures.owner || ownerVisited) && (canUsePrivilegedControls && session ? (
-              <>
-                <LifecyclePanel
-                  client={client}
-                  release={release}
-                  selectedSkill={selectedSkill}
-                  session={session}
-                  onChanged={onChanged}
-                />
-                <SharingPanel client={client} selectedSkill={selectedSkill} session={session} />
-              </>
-            ) : <PrivilegedControlsLocked />)}
-          </div>
-        </div>
-      )}
+/** Owner tools, last in the pane. They load on first open and stay mounted so drafts survive closing. */
+function SkillOwnerControls({
+  client,
+  open,
+  release,
+  selectedSkill,
+  session,
+  onChanged,
+  onToggle,
+}: {
+  client: RegistryClient;
+  open: boolean;
+  release: ReleaseMetadata;
+  selectedSkill: PublicSkill;
+  session: WebSession;
+  onChanged: () => void;
+  onToggle: (open: boolean) => void;
+}) {
+  const canUsePrivilegedControls = Boolean(session.user.mfaVerified);
+  const [visited, setVisited] = useState(open);
+  const baseId = useId();
+
+  function toggle() {
+    if (!open) setVisited(true);
+    onToggle(!open);
+  }
+
+  return (
+    <div className="registry-owner">
+      <RegistryDisclosure
+        bodyClassName="registry-owner-panel"
+        hint={!canUsePrivilegedControls && <span className="registry-owner-hint"><LockKeyhole size={14} aria-hidden="true" />Locked until MFA</span>}
+        id={`${baseId}-owner`}
+        open={open}
+        title="Owner controls"
+        onToggle={toggle}
+      >
+        {(open || visited) && (canUsePrivilegedControls ? (
+          <>
+            <LifecyclePanel
+              client={client}
+              release={release}
+              selectedSkill={selectedSkill}
+              session={session}
+              onChanged={onChanged}
+            />
+            <SharingPanel client={client} selectedSkill={selectedSkill} session={session} />
+          </>
+        ) : <PrivilegedControlsLocked />)}
+      </RegistryDisclosure>
     </div>
   );
+}
+
+function formatByteSize(bytes: number): string {
+  if (bytes < 1000) return `${bytes} B`;
+  const units = ["kB", "MB", "GB"];
+  let value = bytes / 1000;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value)} ${units[unit]}`;
 }
 
 function RegistryFact({ children, label, mono }: { children: ReactNode; label: string; mono?: boolean }) {
