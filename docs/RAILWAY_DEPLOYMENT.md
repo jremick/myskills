@@ -1,13 +1,37 @@
 # Railway Deployment
 
 Version: 0.1.0-beta.16
-Last updated: 2026-09-28
+Last updated: 2026-09-29
 
 This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.
-The current beta.15 delivery is tracked in [Beta.15 Release Delivery](BETA15_RELEASE_DELIVERY.md).
+The current beta.16 delivery is tracked in [Beta.16 Release Delivery](BETA16_RELEASE_DELIVERY.md).
 The historical operational beta evidence remains in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
 
-## Current beta.15 deployment
+## Current beta.16 deployment
+
+On 29 September 2026, staging and production were promoted from frozen source
+`acfb7c8c7f8bc560f6fdba13cf0414033ab6d00e` in API-ready-then-web order.
+Later GitHub authentication and team Library changes on main are excluded.
+
+| Environment | API deployment | Web deployment |
+| --- | --- | --- |
+| Staging | `70461dc1-e6b7-4146-9633-07bc5ccdb73f` | `88d64e2b-ad6e-403a-a38c-5998dfc4b7d1` |
+| Production | `96e7dc80-b1c4-43ad-a9c1-6d8465f55b30` | `ca6d4399-0cae-4f72-af9e-943ef43ebfc5` |
+
+All four report SUCCESS, beta.16, and the frozen source revision. Each environment
+passed 21 HTTP checks. Production CLI doctor passed nine checks with the existing
+MFA-verified Keychain session. Desktop browser acceptance preserved owner/MFA
+authentication and verified inventory details, setup commands, and an existing
+private exact-release package preview. The production log sample contained
+73 API and 80 web lines, including 54 nginx notices, with zero application fault matches.
+
+The completed recovery point from `2026-09-28T16:02:16.488Z` passed the 26-hour
+freshness policy. No restore is claimed. Retain forward migration
+`0034_observation_slug_privacy` and applied history; use a tested forward fix.
+The beta.15 deployment pair below remains a historical recovery reference,
+not verified downgrade compatibility with the migrated schema.
+
+## Historical beta.15 deployment
 
 On 28 September 2026, staging and production were promoted from
 `0415a160b56dac79900a698c8d378e7083ecd194` in API-ready-then-web order.
