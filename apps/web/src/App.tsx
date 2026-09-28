@@ -3698,13 +3698,13 @@ function SidebarAccount({
 }) {
   return (
     <div className={collapsed ? "sidebar-account collapsed" : "sidebar-account"}>
-      <a className="sidebar-account-main" href="/settings" aria-label={session.user.mfaVerified ? "Account settings" : "Set up or verify MFA"} onClick={(event) => {
+      <a className="sidebar-account-main" href="/settings" aria-label="Account settings" aria-description={session.user.mfaVerified ? "MFA verified" : "MFA not verified. Set up or verify MFA."} onClick={(event) => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
           return;
         }
         event.preventDefault();
         onSettings();
-      }} title={session.user.mfaVerified ? "MFA verified · Account settings" : "MFA not verified · Set up or verify MFA"}>
+      }} title={session.user.email}>
         {session.user.mfaVerified ? (
           <ShieldCheck className="sidebar-account-status" data-verified="true" size={20} role="img" aria-label="MFA verified" />
         ) : (

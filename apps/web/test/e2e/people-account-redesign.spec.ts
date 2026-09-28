@@ -59,8 +59,10 @@ for (const enabled of [true, false]) test(`sidebar MFA warning links to ${enable
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/teams");
   const sidebar = page.getByRole("complementary", { name: "Primary navigation" });
-  const warning = sidebar.getByRole("link", { name: "Set up or verify MFA", exact: true });
+  const warning = sidebar.getByRole("link", { name: "Account settings", exact: true });
   await expect(warning).toHaveAttribute("href", "/settings");
+  await expect(warning).toHaveAttribute("title", "owner@example.test");
+  await expect(warning).toHaveAccessibleDescription("MFA not verified. Set up or verify MFA.");
   await expect(warning.getByRole("img", { name: "MFA not verified", exact: true })).toBeVisible();
   await expect(warning.getByText("MFA unverified", { exact: true })).toBeVisible();
   await expect(sidebar.getByRole("img", { name: "MFA verified", exact: true })).toHaveCount(0);
