@@ -1,3 +1,4 @@
+import { ConfigurationProfileError, selectConfigurationProfile } from "./configuration-profile.js";
 import { bundleRequest } from "@myskills-app/core";
 import { libraryCommandHelp, libraryCommandRequest } from "./library-command.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -50,7 +51,7 @@ import {
 import { codexWorkspaceCapabilities, codexWorkspaceDescriptor, parseWorkspaceTarget, validateCodexSkill, workspaceRootDigest } from "./codex-workspace.js";
 import {
   applyScopeMigration, assertExclusionAllowed, assertGlobalRootAllowed, assertProjectRootAllowed, assertScopeRootUnchanged,
-  buildScopeObservation, canonicalScopeDirectory, inventoryHealth, inventorySkillsDirectory, isScopeProvider,
+  buildScopeObservation, canonicalScopeDirectory, inventoryForObservationServer, inventoryHealth, inventorySkillsDirectory, isScopeProvider,
   managedWorkspaceBindingPresent, newScopeIdentityDigest, parseScopeTarget, planScopeMigration, projectSkillsDirectory,
   readScopeState, resolveScopeOwner, scopeAdapterDescriptor, scopeInventoryCapabilities, scopeProviders, scopeStateDirectory,
   ScopeError, sortProviderScopes, withScopeStateLock,
@@ -165,6 +166,9 @@ export interface CliRuntime {
   io: CliIo;
   fetch: FetchLike;
   configStore?: CliConfigStore;
+  /** Production stores are opened only after selecting the configuration profile. */
+  createStores?: (env: Record<string, string | undefined>, namespace?: string) => { configStore: CliConfigStore; tokenStore: CliTokenStore };
+  configProfile?: string;
   prompt?: CliPrompt;
   tokenStore?: CliTokenStore;
   /** Test-only clock seam for deterministic local target observations. */
@@ -185,11 +189,17 @@ interface ParsedArgs {
 
 export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {
   let parsed: ParsedArgs;
+  let namespace: string | undefined;
   try {
-    parsed = parseArgs(argv);
-  } catch {
+    const selected = selectConfigurationProfile(argv, runtime.env);
+    parsed = parseArgs(selected.argv);
+    runtime = { ...runtime, env: selected.env, configProfile: selected.name };
+    namespace = selected.directory;
+  } catch (error) {
     const wantsJson = Array.isArray(argv) && argv.some((value) => value === "--json");
-    const parseError = new CliError("Invalid command options.", 2, "CLI_ARGUMENTS_INVALID");
+    const parseError = error instanceof ConfigurationProfileError
+      ? new CliError(error.message, 2, error.code)
+      : new CliError("Invalid command options.", 2, "CLI_ARGUMENTS_INVALID");
     if (wantsJson) {
       runtime.io.stderr(JSON.stringify({ error: parseError.toJSON() }, null, 2));
     } else {
@@ -198,6 +208,7 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
     return parseError.exitCode;
   }
   try {
+    if (runtime.createStores) runtime = { ...runtime, ...runtime.createStores(runtime.env, namespace) };
     if (parsed.command === "update" && parsed.options.version !== undefined && !parsed.args[0]) {
       throw new CliError("--version requires a skill slug. Use myskills update <skill-slug> --version <version>.", 2);
     }
@@ -248,7 +259,7 @@ async function dispatchCli(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
       case "help":
       case "--help":
       case "-h":
-        runtime.io.stdout(helpText());
+        runtime.io.stdout(helpText(runtime));
         return 0;
       case "version":
       case "--version":
@@ -796,8 +807,9 @@ async function configCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     const resolved = apiBaseUrlResolution(parsed, runtime);
     const saved = runtime.configStore.getApiUrl() ?? null;
     if (parsed.options.json) {
-      runtime.io.stdout(JSON.stringify({ apiUrl: saved, resolvedApiUrl: resolved.url, resolvedApiUrlSource: resolved.source }, null, 2));
+      runtime.io.stdout(JSON.stringify({ configProfile: runtime.configProfile ?? null, apiUrl: saved, resolvedApiUrl: resolved.url, resolvedApiUrlSource: resolved.source }, null, 2));
     } else {
+      if (runtime.configProfile) runtime.io.stdout(terminalText`config-profile=${runtime.configProfile}`);
       runtime.io.stdout(terminalText`api-url=${saved ?? "unset"}`);
       runtime.io.stdout(terminalText`resolved-api-url=${resolved.url}\tsource=${resolved.source}`);
     }
@@ -811,6 +823,7 @@ async function doctorCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   const checks: DoctorCheck[] = [];
   checks.push(nodeVersionCheck());
   checks.push({ name: "cli_version", ok: true, message: CLI_VERSION, details: { version: CLI_VERSION } });
+  checks.push({ name: "config_profile", ok: true, message: runtime.configProfile ?? "default (legacy)", details: { name: runtime.configProfile ?? null } });
   checks.push({ name: "api_url", ok: true, message: `${api.url} (${api.source})`, details: api });
 
   const health = await doctorHealthCheck(parsed, runtime);
@@ -824,6 +837,7 @@ async function doctorCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   const failed = checks.filter((check) => !check.ok);
   const result = {
     cliVersion: CLI_VERSION,
+    configProfile: runtime.configProfile ?? null,
     apiUrl: api.url,
     apiUrlSource: api.source,
     checks,
@@ -2767,9 +2781,11 @@ async function scopesObserve(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   // The binding is read, rechecked, and used under the state lock, so a local
   // unbind or re-enrollment cannot interleave with this upload.
   return withScopeStateLock(stateDirectory, async ({ snapshot, write }) => {
-    const { record, binding, inventory } = await prepareScopeObservation(snapshot.state, provider, scope, projectRoot);
+    const { record, binding, inventory: localInventory } = await prepareScopeObservation(snapshot.state, provider, scope, projectRoot);
     const token = await requireToken(parsed, runtime);
-    assertScopeProvenance(binding.provenance, await registryProvenance(parsed, runtime, token));
+    const capabilities = await apiGet("/v1/capabilities", parsed, runtime, token);
+    assertScopeProvenance(binding.provenance, await registryProvenance(parsed, runtime, token, capabilities));
+    const inventory = inventoryForObservationServer(localInventory, isPlainRecord(capabilities.capabilities) && capabilities.capabilities.architectureObservationSlugValidation === true);
     const target = await currentScopeTarget(parsed, runtime, token, binding, provider, scope);
     if (target.consent.status !== "granted") {
       throw new CliError("The registry target has no granted consent. Re-run scopes enroll to grant it.", 1, "SCOPE_TARGET_CONSENT_REQUIRED");
@@ -3258,8 +3274,8 @@ function printLibraryUpdateReport(slug: string, platform: string, installedVersi
 
 interface RegistryProvenance { origin: string; instanceId: string }
 
-async function registryProvenance(parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<RegistryProvenance> {
-  const response = await apiGet("/v1/capabilities", parsed, runtime, token);
+async function registryProvenance(parsed: ParsedArgs, runtime: CliRuntime, token?: string, capabilityResponse?: Record<string, unknown>): Promise<RegistryProvenance> {
+  const response = capabilityResponse ?? await apiGet("/v1/capabilities", parsed, runtime, token);
   if (typeof response.instanceId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(response.instanceId)) {
     throw new CliError("The API does not expose a stable instance identity. Upgrade the server before installing or updating packages.", 1, "REGISTRY_IDENTITY_REQUIRED");
   }
@@ -5951,9 +5967,10 @@ function parseArgs(argv: string[]): ParsedArgs {
   return { command, args, options };
 }
 
-function helpText(): string {
+function helpText(runtime: CliRuntime): string {
   return [
-    "myskills <command>",
+    "myskills [--config-profile <name>] <command>",
+    `Configuration profile: ${runtime.configProfile ?? "default (legacy)"}`,
     "",
     "Commands:",
     "  libraries <action> [id] [--input <request.json>] [--json] (libraries help for actions)",
@@ -6037,6 +6054,7 @@ function helpText(): string {
     "",
     "Options:",
     "  --version           Print CLI version.",
+    "  --config-profile <name>  Separate registry, account and scope state. Overrides MYSKILLS_CONFIG_PROFILE; unrelated to --profile-id.",
     "  --json              Print machine-readable JSON.",
     "  --api-url <url>     API base URL. Defaults to MYSKILLS_API_URL, saved config, or http://localhost:3001.",
     "  --token <token>     Bearer token. Defaults to MYSKILLS_TOKEN, then stored login token.",

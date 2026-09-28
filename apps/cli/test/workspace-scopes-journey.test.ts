@@ -53,6 +53,7 @@ interface Journey {
   api: ApiFixture;
   requests: Array<{ origin: string; method: string; path: string; body: string }>;
   faults: Array<{ method: string; path: RegExp; when: "before-send" | "after-send" | "malformed-response" | "hook"; run?: () => Promise<void> }>;
+  observationSlugCapability?: boolean | "absent" | "invalid";
   /** Ordered request starts plus markers pushed by concurrent steps. */
   timeline: string[];
 }
@@ -154,6 +155,12 @@ async function cli(j: Journey, step: string, args: string[], options: { token?: 
     if (fault?.when === "hook") await fault.run?.();
     j.timeline.push(`${record.method} ${record.path}`);
     const response = await fetch(input, init as RequestInit);
+    if (record.path === "/v1/capabilities" && j.observationSlugCapability !== undefined) {
+      const body = await response.json() as Json;
+      if (j.observationSlugCapability === "absent") delete body.capabilities.architectureObservationSlugValidation;
+      else body.capabilities.architectureObservationSlugValidation = j.observationSlugCapability === "invalid" ? "true" : j.observationSlugCapability;
+      return new Response(JSON.stringify(body), { status: response.status, headers: { "content-type": "application/json" } });
+    }
     if (fault?.when === "after-send") {
       await response.text();
       throw new Error("synthetic interruption after the server committed");
@@ -292,8 +299,8 @@ test("global Codex and Claude inventories enroll as separate private read-only t
   // A local preview classifies every entry and makes no network call.
   const preview = await ok(j, "inventory preview (local only)", ["scopes", "inventory", "--provider", "codex", "--root", codexRoot]);
   assert.equal(j.requests.length, 0);
-  assert.deepEqual(preview.skills.map((skill: { slug: string }) => skill.slug), ["alpha-helper", "beta-review"]);
-  assert.deepEqual(preview.withheld, ["release-config-helper"]);
+  assert.deepEqual(preview.skills.map((skill: { slug: string }) => skill.slug), ["alpha-helper", "beta-review", "release-config-helper"]);
+  assert.deepEqual(preview.withheld, []);
   assert.deepEqual(preview.linked, ["linked-skill"]);
   assert.deepEqual(preview.invalid, [
     { name: "Bad_Name", reason: "invalid-name" },
@@ -369,14 +376,14 @@ test("global Codex and Claude inventories enroll as separate private read-only t
   assert.equal(codexObserved.uploaded, true);
   assert.equal(codexObserved.runtimeRecognized, false);
   assert.equal(codexObserved.inventoryComplete, false);
-  assert.deepEqual(codexObserved.local.withheld, ["release-config-helper"]);
+  assert.deepEqual(codexObserved.local.withheld, []);
   const [codexObservation] = await serverObservations(j, codexTarget.id);
-  assert.deepEqual(codexObservation!.skills.map((skill) => skill.slug), ["alpha-helper", "beta-review"]);
+  assert.deepEqual(codexObservation!.skills.map((skill) => skill.slug).sort(), ["alpha-helper", "beta-review", "release-config-helper"]);
   assert.equal(codexObservation!.skills.every((skill) => skill.managed === false), true);
   assert.deepEqual(codexObservation!.metadata, { inventoryComplete: false, provider: "codex", runtimeRecognized: false, scope: "global" });
   assert.deepEqual(
     ["skill-linked", "skill-name-invalid", "skill-definition-missing", "skill-definition-invalid", "skill-name-withheld", "skill-hidden-skipped", "managed-install-state-ignored", "skill-entry-skipped"].map((code) => count(codexObservation!, code)),
-    [1, 1, 1, 2, 1, 1, 1, 2],
+    [1, 1, 1, 2, 0, 1, 1, 2],
   );
   const claudeObserved = await ok(j, "claude observe upload", ["scopes", "observe", "--provider", "claude", "--scope", "global", "--upload"]);
   const [claudeObservation] = await serverObservations(j, claudeTarget.id);
@@ -444,7 +451,7 @@ test("global Codex and Claude inventories enroll as separate private read-only t
   assert.equal((await serverObservations(j, codexTarget.id)).length, observationsBeforeRace + (raced.code === 0 ? 1 : 0));
   assert.equal((await ok(j, "codex global is unbound after the race", ["scopes", "list", "--provider", "codex"])).providers.codex.global, null);
 
-  assertPayloadsPrivate(j, ["release-config-helper", "linked-skill", "linked-claude", "Bad_Name", "mismatch-name", "legacy-installed", "credentials.json"]);
+  assertPayloadsPrivate(j, ["linked-skill", "linked-claude", "Bad_Name", "mismatch-name", "legacy-installed", "credentials.json"]);
   const stateInfo = await stat(stateFile);
   assert.equal(stateInfo.mode & 0o077, 0);
   assert.equal((await stat(path.dirname(stateFile))).mode & 0o077, 0);
@@ -634,4 +641,40 @@ test("migration adopts an existing managed Codex workspace through a previewed, 
   assert.equal(bypass.code, 2);
   assert.match(bypass.err, /Use --workspace/);
   assertPayloadsPrivate(j, []);
+});
+
+
+test("validated sensitive-word slugs upload only when the server explicitly supports structural privacy validation", async (t) => {
+  const j = await journey(t, "privacy-capability");
+  const root = path.join(j.base, "selected-skills");
+  const slugs = ["alpha-helper", "codex-config-sync", "path-helper", "token-budget"];
+  for (const slug of slugs) await writeSkill(path.join(root, slug), slug);
+  const before = await treeDigest(root);
+  const local = await ok(j, "local preview includes valid bounded names", ["scopes", "inventory", "--provider", "codex", "--root", root]);
+  assert.deepEqual(local.skills.map((skill: { slug: string }) => skill.slug), slugs);
+  assert.equal(local.inventoryComplete, true);
+  assert.deepEqual(local.withheld, []);
+  assert.equal(j.requests.length, 0);
+  const enrolled = await ok(j, "enroll privacy fixture", enrollArgs(j, "codex", "global", root));
+  const args = ["scopes", "observe", "--provider", "codex", "--scope", "global", "--upload"];
+  const supported = await ok(j, "new server accepts validated slugs", args);
+  assert.deepEqual(supported.observation.skills.map((skill: { slug: string }) => skill.slug).sort(), slugs);
+  assert.deepEqual(supported.local.withheld, []);
+  assert.equal(supported.inventoryComplete, true);
+  for (const capability of ["absent", false, "invalid"] as const) {
+    j.observationSlugCapability = capability;
+    const legacy = await ok(j, `legacy fallback with capability ${capability}`, args);
+    assert.deepEqual(legacy.observation.skills.map((skill: { slug: string }) => skill.slug), ["alpha-helper"]);
+    assert.deepEqual(legacy.local.withheld, slugs.slice(1));
+    assert.equal(legacy.inventoryComplete, false);
+    assert.deepEqual(legacy.incompleteReasons, ["withheld"]);
+    assert.equal(count(legacy.observation, "skill-name-withheld"), 3);
+    const posted = JSON.parse(j.requests.filter((request) => request.path.endsWith("/observations") && request.method === "POST").at(-1)!.body);
+    assert.deepEqual(posted.skills.map((skill: { slug: string }) => skill.slug), ["alpha-helper"]);
+  }
+  const observations = await serverObservations(j, enrolled.targetId);
+  assert.equal(observations.length, 4);
+  assert.equal(observations.filter((observation) => observation.skills.length === 4).length, 1);
+  assertPayloadsPrivate(j, []);
+  assert.equal(await treeDigest(root), before);
 });

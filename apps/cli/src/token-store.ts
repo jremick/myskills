@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -10,12 +11,12 @@ interface TokenFilePayload {
   tokens: Record<string, StoredCliToken>;
 }
 
-export function createTokenStore(env: Record<string, string | undefined> = process.env): CliTokenStore {
+export function createTokenStore(env: Record<string, string | undefined> = process.env, namespace?: string): CliTokenStore {
   const fileStore = createFileTokenStore(env);
   if (env.MYSKILLS_TOKEN_STORE === "file" || env.MYSKILLS_TOKEN_FILE) {
     return fileStore;
   }
-  return createKeyringTokenStore(fileStore);
+  return createKeyringTokenStore(fileStore, undefined, namespace);
 }
 
 export function createFileTokenStore(env: Record<string, string | undefined> = process.env): CliTokenStore {
@@ -56,13 +57,16 @@ export interface KeyringTokenBackend {
 export function createKeyringTokenStore(
   fallback: CliTokenStore,
   backend: KeyringTokenBackend = nativeKeyringBackend,
+  namespace?: string,
 ): CliTokenStore {
+  const prefix = namespace === undefined ? undefined : `config-profile:${createHash("sha256").update(namespace).digest("hex")}:`;
+  const credentialKey = (apiUrl: string) => prefix === undefined ? apiUrl : `${prefix}${normalizeApiUrl(apiUrl)}`;
   let usedFallback = false;
   return {
     async get(apiUrl) {
       let raw: string | null;
       try {
-        raw = await backend.get(apiUrl);
+        raw = await backend.get(credentialKey(apiUrl));
       } catch {
         throw new Error("Cannot read the OS keyring. Unlock or restore keyring access, or explicitly select MYSKILLS_TOKEN_STORE=file.");
       }
@@ -85,7 +89,7 @@ export function createKeyringTokenStore(
     },
     async set(apiUrl, token) {
       try {
-        await backend.set(apiUrl, JSON.stringify(token));
+        await backend.set(credentialKey(apiUrl), JSON.stringify(token));
       } catch {
         throw new Error("Cannot save the token in the OS keyring. Unlock or restore keyring access, or explicitly select MYSKILLS_TOKEN_STORE=file.");
       }
@@ -97,7 +101,7 @@ export function createKeyringTokenStore(
       }
     },
     async delete(apiUrl) {
-      const results = await Promise.allSettled([backend.delete(apiUrl), fallback.delete(apiUrl)]);
+      const results = await Promise.allSettled([backend.delete(credentialKey(apiUrl)), fallback.delete(apiUrl)]);
       const failed = results.flatMap((result, index) => result.status === "rejected" ? [index === 0 ? "OS keyring" : "file"] : []);
       if (failed.length > 0) {
         throw new Error(`Logout cleanup is incomplete: could not remove the ${failed.join(" and ")} credential. Restore storage access and retry logout.`);

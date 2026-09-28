@@ -46,10 +46,10 @@ const DIGEST_PATTERN = /^[a-f0-9]{64}$/;
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const INSTANCE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
-// Mirrors the persisted-observation privacy check in the PostgreSQL target
-// migration. A slug that trips it would make the registry reject the whole
-// observation, so such slugs are withheld and counted instead.
-const SERVER_PRIVACY_WORD_PATTERN = /(^|[^a-z])(api[_-]?key|authorization|cookie|password|secret|token|credential|private[_-]?key|prompt|path|endpoint|url|package|content|config|body|source|raw|snapshot|payload|file|filename|directory|home|host|machine)([^a-z]|$)/i;
+// Older servers scan the whole observation, including otherwise valid slugs.
+// Use this compatibility guard only when the server has not explicitly
+// advertised structural slug validation. Local inventory is unaffected.
+const LEGACY_SERVER_PRIVACY_WORD_PATTERN = /(^|[^a-z])(api[_-]?key|authorization|cookie|password|secret|token|credential|private[_-]?key|prompt|path|endpoint|url|package|content|config|body|source|raw|snapshot|payload|file|filename|directory|home|host|machine)([^a-z]|$)/i;
 
 /** The project-relative skill location MySkills inventories for each provider. */
 export const projectSkillsLocation: Readonly<Record<ScopeProvider, readonly string[]>> = Object.freeze({
@@ -690,10 +690,6 @@ export async function inventorySkillsDirectory(root: string, location: ScopeInve
       inventory.invalid.push({ name, reason: definition.status });
       continue;
     }
-    if (SERVER_PRIVACY_WORD_PATTERN.test(name)) {
-      inventory.withheld.push(name);
-      continue;
-    }
     valid.push({ slug: name, definitionDigest: definition.digest });
   }
   inventory.skills = valid.slice(0, architectureTargetLimits.skills);
@@ -708,6 +704,24 @@ export async function inventorySkillsDirectory(root: string, location: ScopeInve
   }
   add("inventory-truncated", inventory.truncated.skillsNotListed.length + (inventory.truncated.entriesNotExamined ? 1 : 0));
   return finishInventory(inventory, counts, hiddenDirectories);
+}
+
+/** Derive an explicit partial upload for a server without the new capability. */
+export function inventoryForObservationServer(inventory: ScopeInventory, supportsValidatedSlugs: boolean): ScopeInventory {
+  if (supportsValidatedSlugs) return inventory;
+  const withheld = inventory.skills.filter((skill) => LEGACY_SERVER_PRIVACY_WORD_PATTERN.test(skill.slug)).map((skill) => skill.slug);
+  if (withheld.length === 0) return inventory;
+  return {
+    ...inventory,
+    skills: inventory.skills.filter((skill) => !LEGACY_SERVER_PRIVACY_WORD_PATTERN.test(skill.slug)),
+    withheld: [...inventory.withheld, ...withheld].sort(compareOrdinal),
+    findings: [
+      ...inventory.findings.filter((finding) => finding.code !== "skill-name-withheld"),
+      { code: "skill-name-withheld", severity: "warning" as const, count: inventory.withheld.length + withheld.length },
+    ].sort((left, right) => compareOrdinal(left.code, right.code)),
+    complete: false,
+    incompleteReasons: [...new Set([...inventory.incompleteReasons, "withheld"])],
+  };
 }
 
 function finishInventory(inventory: ScopeInventory, counts: Map<string, number>, hiddenDirectories: number): ScopeInventory {
@@ -776,9 +790,6 @@ export function buildScopeObservation(
     metadata: { provider, scope, runtimeRecognized: false, inventoryComplete: inventory.complete },
   };
   const validated = assertValidArchitectureTargetObservation({ ...observation, observedDigest: architectureTargetObservationDigest(observation) });
-  if (SERVER_PRIVACY_WORD_PATTERN.test(JSON.stringify(validated))) {
-    throw new ScopeError("SCOPE_OBSERVATION_UNSAFE", "The observation contains a value the registry would reject as private. Nothing was uploaded.");
-  }
   return validated;
 }
 

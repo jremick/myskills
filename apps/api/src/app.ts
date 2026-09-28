@@ -106,6 +106,7 @@ export interface ReadinessProbes {
   postgres: () => Promise<void>;
   /** Required when the Postgres-backed Phase 2 architecture services are configured. */
   phase2Architecture?: () => Promise<void>;
+  architectureObservationPrivacy?: () => Promise<void>;
   artifactStorage?: () => Promise<void>;
   artifactStorageRequired?: boolean;
 }
@@ -259,14 +260,19 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     const phase2Architecture = options.readinessProbes?.phase2Architecture
       ? await readinessCheck(options.readinessProbes.phase2Architecture, readinessTimeoutMs)
       : undefined;
+    const architectureObservationPrivacy = options.readinessProbes?.architectureObservationPrivacy
+      ? await readinessCheck(options.readinessProbes.architectureObservationPrivacy, readinessTimeoutMs)
+      : undefined;
     const checks = {
       postgres,
       artifactStorage,
       ...(phase2Architecture ? { phase2Architecture } : {}),
+      ...(architectureObservationPrivacy ? { architectureObservationPrivacy } : {}),
     };
     const ok = postgres === "ready"
       && artifactStorage !== "unready"
-      && phase2Architecture !== "unready";
+      && phase2Architecture !== "unready"
+      && architectureObservationPrivacy !== "unready";
     return reply.code(ok ? 200 : 503).send({
       ok,
       service: "myskills-app-api",
@@ -279,6 +285,9 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     // server does, so a partial migration cannot advertise unusable features.
     const phase2ArchitectureReady = options.readinessProbes?.phase2Architecture
       ? await readinessCheck(options.readinessProbes.phase2Architecture, readinessTimeoutMs) === "ready"
+      : true;
+    const observationPrivacyReady = options.readinessProbes?.architectureObservationPrivacy
+      ? await readinessCheck(options.readinessProbes.architectureObservationPrivacy, readinessTimeoutMs) === "ready"
       : true;
     return {
       version: API_VERSION,
@@ -296,6 +305,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         sharing: Boolean(options.authService),
         architectures: phase2ArchitectureReady && Boolean(options.authService && options.architectureStore && options.submissionService),
         architectureTargets: phase2ArchitectureReady && Boolean(options.authService && options.architectureTargetService),
+        architectureObservationSlugValidation: phase2ArchitectureReady && observationPrivacyReady && Boolean(options.authService && options.architectureTargetService),
         architectureOrganizationGrants: phase2ArchitectureReady && Boolean(options.authService && options.architectureOrganizationGrantService),
         architecturePatternMigrations: phase2ArchitectureReady && Boolean(options.authService && options.architecturePatternMigrationService),
         // Opt-in key: absent unless configured, so existing capability consumers see an unchanged shape.

@@ -34,16 +34,13 @@ CLI tokens should be stored in the platform secret store where possible.
 
 ## Current Slice
 
-This document describes the verified beta.7 CLI. Its GitHub prerelease is
-published, and its dedicated API/CLI acceptance passed. It remains compatible
-with existing hosted registry workflows. Beta.7 is deployed to hosted
-production from the verified candidate and adds local authoring and deterministic
-package creation. Native MCP Skills delivery is documented separately in the MCP
-guide. The beta.2 visibility compatibility shims remain available for existing
-clients. Source versions and npm publication are separate from hosted
-deployment; see [Beta.7 release, publication, and staging evidence](../../docs/BETA7_RELEASE_DELIVERY.md)
-for current status. The API and web expose their deployed version and commit
-at `/version.json`.
+This document describes the `0.1.0-beta.16` source candidate, including named
+CLI configuration profiles and global/project inventory scopes. Source,
+GitHub releases, npm publication, and hosted deployment are separate states;
+see [release verification](../../docs/RELEASE.md) for their checks. Historical
+[beta.7 delivery evidence](../../docs/BETA7_RELEASE_DELIVERY.md) records that
+release only. The API and web expose their deployed version and commit at
+`/version.json`.
 
 ### Beta.3 breaking security changes
 
@@ -231,12 +228,9 @@ myskills --version
 myskills login
 ```
 
-The beta.7 GitHub release and verified CLI assets are published. The npm `beta`
-channel currently resolves to `0.1.0-beta.6` while beta.7 awaits maintainer passkey authentication,
-and hosted production runs beta.7. Beta.7 adds deterministic local package
-authoring and the native MCP delivery work described in the repository release
-notes. To test repository changes before a later npm publication,
-build and run them locally:
+The npm `beta` tag selects the published prerelease. It can differ from this
+source candidate and the deployed API/web revision. To test source changes
+before npm publication, build and run them locally:
 
 ```bash
 npm ci
@@ -272,6 +266,51 @@ requires repair or removal of that file; other stored accounts are not silently
 discarded.
 
 `config get api-url`, `config set api-url <url>`, `config reset api-url`, and `config list` manage the saved API URL. `doctor` checks the CLI version, Node version, resolved API URL, `/health`, auth status, token-store backend, install-directory writability, and `/v1/capabilities`. If the CLI is pointed at the web app instead of the API, or a newer command is sent to an older server, command errors include concrete next steps and `--json` returns structured error codes.
+
+### Separate work and personal configuration
+
+Every command accepts `--config-profile <name>` before or after the command.
+It overrides `MYSKILLS_CONFIG_PROFILE`. Names contain 1–64 lowercase letters,
+digits, hyphens or underscores and start with a letter or digit. For example:
+
+```bash
+myskills config set api-url https://work-registry.example/api --config-profile work
+myskills login --config-profile work
+myskills whoami --config-profile work
+myskills scopes list --config-profile work
+myskills config list --config-profile work --json
+```
+
+There is no create or persistent select command. Writes create the selected
+profile's state as needed; keep the flag on each command or set
+`MYSKILLS_CONFIG_PROFILE` in that shell. `help`, `config list`, and `doctor`
+show the selected configuration. JSON uses `configProfile: null` for the
+legacy default. This selector is separate from architecture `--profile-id`
+and provider inspection `--profile`.
+
+Without a selector, existing config, credentials, and scope bindings remain at
+their current locations. A named `personal` profile starts empty; it does not
+copy or migrate the default. Each named profile has independent saved API URL,
+credentials, and scope state, including for different accounts at one API URL.
+A missing credential never falls back to another profile or the default.
+
+The base directory is `MYSKILLS_CONFIG_DIR`, then
+`$XDG_CONFIG_HOME/myskills-app`, then `~/.config/myskills-app`. Named state lives
+under `<base>/profiles/<name>/` (`config.json`, optional `tokens.json`, and
+`scopes/`). OS credential keys include the canonical profile directory and API
+URL. Aliases for the base directory are supported; linked profile directories
+are rejected so they cannot share another profile’s files. Changing the base
+directory selects separate credentials. Named profiles
+reject `MYSKILLS_CONFIG_FILE` and `MYSKILLS_TOKEN_FILE`; these retain their
+existing precedence when no profile is selected. `MYSKILLS_TOKEN_STORE=file`
+remains available for profile-local file storage.
+
+Explicit API and token overrides still apply: `--api-url` then
+`MYSKILLS_API_URL` override the saved registry, and `--token` then
+`MYSKILLS_TOKEN` override the stored credential. Clear inherited overrides when
+you want the profile's saved registry/account. `auth status` reports the token
+source without printing its value. Selection does not move skill directories,
+change native provider profiles, or unbind existing targets.
 
 `bootstrap codex --dry-run` is a work/team-only local planner. It requires an
 explicit `work` context, a normalized HTTPS target origin, stable target
@@ -432,7 +471,7 @@ commands already accept `--organization-id <organization-id>` (with
 authorizes that exact organization projection; it is a scope filter, not an
 ownership shortcut.
 
-The beta.2 compatibility shims remain in beta.3 and are planned for removal only
+The beta.2 compatibility shims remain available and are planned for removal only
 at a later, separately published prerelease boundary that includes migration
 guidance and release verification. The source release does not imply a hosted
 deployment.

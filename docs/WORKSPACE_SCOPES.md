@@ -30,6 +30,31 @@ Observed skills are reported with `managed: false`, so update planning ignores
 them. The managed Codex workspace adapter (`codex enroll --workspace`) is
 unchanged and separate.
 
+## Work and personal CLI configuration
+
+Use `--config-profile work` on every work command, or set
+`MYSKILLS_CONFIG_PROFILE=work` for that shell. The explicit flag wins. This
+selects separate saved registry, account credentials, and scope state; it is
+unrelated to the architecture `--profile-id` required by enrollment.
+
+```bash
+myskills config set api-url https://work-registry.example/api --config-profile work
+myskills login --config-profile work
+myskills scopes enroll --config-profile work --provider codex --scope global \
+  --root <absolute-work-skills-dir> --architecture-id <id> --environment-id <id> --profile-id <id>
+myskills scopes list --config-profile work
+myskills doctor --config-profile work --json
+```
+
+Omitting the selector keeps the existing default account and all its bindings.
+A named `personal` profile starts with empty state. There is no automatic copy,
+migration, or unbind. Profiles can use different accounts on the same registry.
+Confirm the selected account with `whoami --config-profile work` before enrollment.
+Explicit `--api-url`/`MYSKILLS_API_URL` and `--token`/`MYSKILLS_TOKEN` still
+override saved values; clear inherited overrides to use profile-local values.
+See the [CLI configuration rules](../apps/cli/README.md#separate-work-and-personal-configuration)
+for name validation, storage, and legacy file-override behavior.
+
 ## Commands
 
 ```bash
@@ -67,7 +92,7 @@ other files, credentials, or provider configuration.
 | Entry | Classification | Uploaded |
 |---|---|---|
 | Directory with a valid `SKILL.md` (YAML `name` equal to the directory name, nonempty `description`) | skill | slug and a SHA-256 of `SKILL.md` |
-| Valid skill whose slug contains a word the registry treats as private (for example `config`, `token`, `path`) | withheld | count only |
+| Valid skill whose slug contains a word an older registry treats as private (for example `config`, `token`, `path`) | skill locally; withheld on older-server uploads | slug and digest on upgraded registries; count only on older registries |
 | Symbolic link | linked, not followed | count only |
 | Invalid directory name, missing or invalid `SKILL.md` | invalid | count only |
 | Name starting with `.` | skipped (`hidden`) | count only |
@@ -77,10 +102,13 @@ other files, credentials, or provider configuration.
 Names of linked, invalid, withheld, and skipped entries stay in local output.
 The registry receives slugs, counts, digests, and the provider and scope labels.
 It never receives absolute paths, exclusion paths, skill bodies, descriptions,
-file names, or credentials. Withholding exists because the PostgreSQL target
-store rejects a whole observation when any value contains one of those words;
-the CLI applies the same check first and refuses to upload anything that still
-matches.
+file names, or credentials. Registries with migration `0034` advertise
+`architectureObservationSlugValidation: true` in `/v1/capabilities`. They
+validate the observation structure and skill slugs separately, so valid names
+such as `codex-config-sync` can be uploaded without weakening other privacy
+checks. When this capability is absent or false, the CLI withholds names that
+match the older registry's privacy check and reports an incomplete upload.
+Local inventory retains these valid skills.
 
 `inventoryComplete` is true only when every entry was examined and every entry
 that could hold a skill was listed. It is false when anything was withheld,
@@ -170,7 +198,10 @@ if it is still active. Exclusions are kept.
 State lives in `workspace-scopes.json` in the `scopes` directory under the
 MySkills config directory: `$MYSKILLS_CONFIG_DIR/scopes`, otherwise
 `$XDG_CONFIG_HOME/myskills-app/scopes`, otherwise
-`$HOME/.config/myskills-app/scopes`.
+`$HOME/.config/myskills-app/scopes`. With a named CLI configuration profile,
+the same base-directory precedence applies and state lives in
+`<base>/profiles/<name>/scopes/`. `MYSKILLS_CONFIG_DIR` sets the base, not the
+final named-profile directory.
 
 - The directory must be private to you (mode `700`). Files are written with
   mode `600` through a temporary file and an atomic rename, under the same root
@@ -230,10 +261,22 @@ binding if present), then `scopes enroll --scope project` if it has no binding.
 
 ### Server compatibility
 
-No database migration is required. The existing target schema already accepts
-these targets: `adapter_kind` allows any lowercase kind, contract 1 requires
-all mutation capabilities to be false, `identity_digest` is any SHA-256 value,
-and metadata keys `provider`, `scope`, and `inventoryOnly` pass the metadata
-privacy check. Observations use the existing observation and health routes.
-Scope enrollment needs a registry that exposes a stable instance ID in
-`/v1/capabilities`. Older CLIs ignore the scope state file.
+The existing target schema accepts inventory targets, and observations use the
+existing observation and health routes. Scope enrollment needs a registry that
+exposes a stable instance ID in `/v1/capabilities`. Older CLIs ignore the scope
+state file. Upgrading the CLI preserves the default configuration and bindings;
+choosing a new named configuration starts separate state.
+
+Migration `0034_observation_slug_privacy.sql` is required for full valid-slug
+uploads. It replaces the observation privacy constraint transactionally and
+enforces the new constraint on subsequent writes. The constraint is installed
+with `NOT VALID` to preserve immutable historical observations without a table
+scan; existing rows are not claimed to have passed the new validation. No IDs,
+digests, observations, or append-only protections are rewritten. The API checks
+migration readiness before advertising the capability.
+
+Keep migration `0034` if rolling back application code. An older API omits the
+capability and the new CLI resumes its compatibility withholding. Do not
+reapply the earlier constraint: newly accepted valid names may violate it.
+Database corrections use a forward migration. Local project adoption remains
+an explicit preview-and-apply operation described above.
