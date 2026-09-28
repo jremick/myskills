@@ -34,6 +34,7 @@ test("author feedback, immutable publication, upgrade policy, real CLI install/u
         await useSession(page, actor, `/skills/${slug}`);
         await expect(page.getByRole("heading", { name: /^Acceptance / })).toBeVisible();
         await expect(page.getByText("0.1.1", { exact: true }).first()).toBeVisible();
+        await page.getByRole("button", { name: "Package files", exact: true }).click();
         const files = page.getByRole("region", { name: "Package files" });
         await files.getByRole("button", { name: "Inspect package files" }).click();
         await files.getByLabel("Package file", { exact: true }).selectOption("SKILL.md");
