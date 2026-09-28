@@ -27,7 +27,7 @@ test("anonymous visitor browses the seeded registry through the production proxy
 
   await page.goto("/registry");
   await expect(page).toHaveTitle(/MySkills/);
-  await expect(page.getByRole("heading", { name: "Skills" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Skills", exact: true, level: 1 })).toBeVisible();
   const skillResult = page.getByRole("link", { name: /Release Notes Helper/ }).first();
   await expect(skillResult).toBeVisible();
 

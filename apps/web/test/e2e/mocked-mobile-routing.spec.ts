@@ -62,7 +62,7 @@ test("route-mocked owner registry fits 320, 375, and 390 px with safe mobile ove
 
     await more.click();
     await expect(adminMenuItem).toBeVisible();
-    await page.getByRole("heading", { name: "Skills", exact: true }).click();
+    await page.getByRole("heading", { name: "Skills", exact: true, level: 1 }).click();
     await expect(adminMenuItem).toBeHidden();
   }
 });

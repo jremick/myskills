@@ -30,7 +30,7 @@ test("registry bundles keep relationships through inspect, save and Library reop
   await page.context().addCookies([{name:"myskills_session",value:token!,url:baseURL!,httpOnly:true,sameSite:"Lax"}]);
   await page.addInitScript(({user})=>localStorage.setItem("myskills-app:web-session",JSON.stringify({user,expiresAt:new Date(Date.now()+3600000).toISOString()})),{user});
   await page.goto(`/registry?q=${encodeURIComponent(name)}`);
-  await expect(page.getByRole("heading",{name:"Skills",exact:true})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Skills",exact:true,level:1})).toBeVisible();
   await expect(page.getByRole("button",{name:`Details for ${name}`,exact:true})).toBeVisible();
   await page.getByRole("button",{name:`Details for ${name}`,exact:true}).click();
   await expect(page.getByRole("heading",{name,exact:true,level:2})).toBeVisible();

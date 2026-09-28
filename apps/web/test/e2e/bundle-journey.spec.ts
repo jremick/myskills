@@ -261,7 +261,7 @@ test("overlapping bundles keep one unique count across Grouped, List and Outline
   const api = await installBundleFixture(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/registry");
-  await expect(page.getByRole("heading", { name: "Skills", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Skills", exact: true, level: 1 })).toBeVisible();
   await expect(summaryText(page)).toContainText("40 unique skills · 3 bundles");
   const views = page.getByRole("group", { name: "Catalog view" });
   await expect(views.getByRole("button", { name: "Grouped", exact: true })).toHaveAttribute("aria-pressed", "true");

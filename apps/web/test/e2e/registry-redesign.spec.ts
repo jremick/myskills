@@ -96,7 +96,7 @@ for (const width of [1440, 390]) test(`Skills navigation is keyboard accessible 
   }
   await expect(skillsLink).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { name: "Skills", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Skills", exact: true, level: 1 })).toBeVisible();
   await expect(skillsLink).toHaveAttribute("aria-current", "page");
   await expect(nav.getByRole("link", { name: "Registry", exact: true })).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath(`skills-navigation-${width}.png`), fullPage: true });
