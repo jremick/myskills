@@ -1,11 +1,15 @@
 # Operational Beta Delivery Brief
 
 Version: 0.1.0-beta.16
-Last updated: 2026-09-28
+Last updated: 2026-09-29
 
 Target release: `v0.1.0-beta.16`.
 
-Status: beta.16 work pilot candidate; release gates and publication are pending. See [delivery plan](plans/2026-09-29-work-pilot-release.md).
+Status: beta.16 implementation, canonical verification, staging/production
+acceptance, and GitHub/npm publication are complete for frozen source
+`acfb7c8c7f8bc560f6fdba13cf0414033ab6d00e`.
+Later GitHub authentication and team Library changes on main are excluded. See the
+[Beta.16 release delivery](BETA16_RELEASE_DELIVERY.md).
 
 ## Beta.15 Release Record
 
