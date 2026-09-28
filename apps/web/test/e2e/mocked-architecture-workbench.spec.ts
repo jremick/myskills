@@ -962,8 +962,12 @@ test("a modified click on the launcher opens a separate tab without prompting or
     context.waitForEvent("page"),
     page.getByRole("link", { name: "Resume draft", exact: true }).click({ modifiers: ["ControlOrMeta"] }),
   ]);
-  await popup.waitForLoadState();
-  await expect(popup).toHaveURL(new RegExp(`/architectures/${LARGE_ID}/workbench\\?profile=personal&environment=personal-laptop$`));
+  // A background tab can still have its initial document when the page event fires.
+  // Activate it and wait for the link destination, not that document's load event.
+  await popup.bringToFront();
+  const workbenchUrl = new RegExp(`/architectures/${LARGE_ID}/workbench\\?profile=personal&environment=personal-laptop$`);
+  await popup.waitForURL(workbenchUrl, { waitUntil: "domcontentloaded" });
+  await expect(popup).toHaveURL(workbenchUrl);
   await expect(popup.getByRole("heading", { name: LARGE_NAME, level: 1 })).toBeVisible();
   await expect(popup.getByLabel("Draft revision message")).toHaveValue("");
   await popup.close();
