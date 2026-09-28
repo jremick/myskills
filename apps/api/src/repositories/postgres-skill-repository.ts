@@ -1,3 +1,4 @@
+import { assertCurrentTeamOwner, effectiveTeamOwnerPredicate, isCurrentTeamOwner } from "./team-ownership.js";
 import { and, eq, ilike, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import {
   AppError,
@@ -144,13 +145,13 @@ export class PostgresSkillRepository implements SkillRepository {
 
   async getSkillSharing(slug: string, actor: SkillSharingActor): Promise<SkillSharingDetails> {
     const skill = await this.findSkillForSharing(slug);
-    assertCanManageSkillSharing(skill, actor);
+    await assertCanManageSkillSharing(this.db, skill, actor);
     return this.skillSharingDetails(skill, actor);
   }
 
   async updateSkillSharing(input: UpdateSkillSharingInput): Promise<SkillSharingDetails> {
     const skill = await this.findSkillForSharing(input.slug);
-    assertCanManageSkillSharing(skill, input.actor);
+    await assertCanManageSkillSharing(this.db, skill, input.actor);
     const requestedTeamIds = input.teamIds === undefined ? undefined : uniqueStrings(input.teamIds);
     const requestedUserEmails = input.userEmails === undefined
       ? undefined
@@ -165,13 +166,27 @@ export class PostgresSkillRepository implements SkillRepository {
       // admin disable can race a grant replacement after the preflight read.
       const lockedSettings = await lockSharingSettings(tx);
       const [lockedSkill] = await tx
-        .select({ id: skills.id })
+        .select({ id: skills.id, slug: skills.slug, ownerUserId: skills.ownerUserId, ownerTeamId: skills.ownerTeamId })
         .from(skills)
         .where(eq(skills.id, skill.id))
         .for("update")
         .limit(1);
       if (!lockedSkill) {
         throw new AppError("Skill not found.", "SKILL_NOT_FOUND", 404);
+      }
+
+      // Preserve authorization/error precedence without locking the actor or
+      // owner organization ahead of the requested grant aggregates.
+      await assertCanManageSkillSharing(tx, lockedSkill, input.actor);
+      if (lockedSkill.ownerTeamId) {
+        if (input.actor.mfaVerified !== true) throw new AppError("MFA verification is required.", "MFA_VERIFICATION_REQUIRED", 403);
+        // A sibling-team mutation locks its team before its organization. Fence
+        // every requested team before any parent locks, including the owner team.
+        // The settings UPDATE lock above serializes sharing writers before any
+        // later grant-authority lock upgrades.
+        const authorityTeamIds = [...new Set([lockedSkill.ownerTeamId, ...(requestedTeamIds ?? [])])].sort();
+        await tx.select({ id: teams.id }).from(teams).where(inArray(teams.id, authorityTeamIds))
+          .orderBy(teams.id).for("share");
       }
 
       const currentTeamRows = await tx
@@ -236,6 +251,9 @@ export class PostgresSkillRepository implements SkillRepository {
         ? await this.organizationGrantContexts(input.actor.id, organizationIds, tx)
         : [];
 
+      // Recheck and retain owner authority through commit after all requested
+      // organization locks, matching membership mutations' organization->user order.
+      await assertCanManageSkillSharing(tx, lockedSkill, input.actor, true);
       await tx.update(skills).set({
         visibility: input.visibility,
         updatedAt: new Date(),
@@ -302,7 +320,7 @@ export class PostgresSkillRepository implements SkillRepository {
       team,
       sharingWithTeam: uniqueBySlug(await this.visibleSkillRows(and(
         visibleReleasedSkillPredicate(),
-        eq(skills.ownerUserId, actor.id),
+        skillOwnerPredicate(actor.id),
         eq(skills.visibility, "team"),
         sql`exists (
           select 1
@@ -314,7 +332,7 @@ export class PostgresSkillRepository implements SkillRepository {
       sharedWithMe: uniqueBySlug(await this.visibleSkillRows(and(
         visibleReleasedSkillPredicate(),
         eq(skills.visibility, "team"),
-        sql`${skills.ownerUserId} is distinct from ${actor.id}`,
+        sql`NOT (${skillOwnerPredicate(actor.id)})`,
         sql`exists (
           select 1
           from ${skillTeamGrants}
@@ -340,6 +358,7 @@ export class PostgresSkillRepository implements SkillRepository {
         lifecycleStatus: skills.lifecycleStatus,
         visibility: skills.visibility,
         ownerUserId: skills.ownerUserId,
+        ownerTeamId: skills.ownerTeamId,
         reviewStatus: skillVersions.reviewStatus,
         securityStatus: skillVersions.securityStatus,
         tags: sql<string[]>`
@@ -348,6 +367,7 @@ export class PostgresSkillRepository implements SkillRepository {
             '{}'::text[]
           )
         `,
+        hasTeamOwnership: actorId ? effectiveTeamOwnerPredicate(sql`${skills.ownerTeamId}`, actorId) : sql<boolean>`false`,
         hasTeamAccess: actorId && sharing.teamsEnabled && sharing.teamVisibilityEnabled
           ? effectiveTeamAccessPredicate(actorId)
           : sql<boolean>`false`,
@@ -376,6 +396,7 @@ export class PostgresSkillRepository implements SkillRepository {
         skills.lifecycleStatus,
         skills.visibility,
         skills.ownerUserId,
+        skills.ownerTeamId,
         skillVersions.version,
         skillVersions.reviewStatus,
         skillVersions.securityStatus,
@@ -430,7 +451,7 @@ export class PostgresSkillRepository implements SkillRepository {
       tags: row.tags,
       access: actorId
         ? {
-          canManageSharing: row.ownerUserId === actorId,
+          canManageSharing: row.ownerUserId === actorId || row.hasTeamOwnership,
           reasons: this.accessReasonsForSkill(row, actorId, sharing),
         }
         : undefined,
@@ -445,6 +466,7 @@ export class PostgresSkillRepository implements SkillRepository {
         title: skills.title,
         visibility: skills.visibility,
         ownerUserId: skills.ownerUserId,
+        ownerTeamId: skills.ownerTeamId,
       })
       .from(skills)
       .where(eq(skills.slug, slug))
@@ -717,6 +739,7 @@ export class PostgresSkillRepository implements SkillRepository {
       visibility: VisibilityScope;
       ownerUserId: string | null;
       hasTeamAccess: boolean;
+      hasTeamOwnership: boolean;
       hasUserGrant: boolean;
       hasOrganizationAccess: boolean;
     },
@@ -724,7 +747,7 @@ export class PostgresSkillRepository implements SkillRepository {
     sharing: SharingSettings,
   ): SkillAccessReason[] {
     const reasons: SkillAccessReason[] = [];
-    if (row.ownerUserId === actorId) {
+    if (row.ownerUserId === actorId || row.hasTeamOwnership) {
       reasons.push("owner");
     }
     if (row.visibility === "public" && sharing.publicVisibilityEnabled) {
@@ -750,7 +773,7 @@ function organizationGrantUnavailable(): AppError {
   return new AppError("Organization grant is not available.", "ORGANIZATION_GRANT_NOT_AVAILABLE", 403);
 }
 
-type SkillSharingDb = Pick<Database, "select">;
+type SkillSharingDb = Pick<Database, "select" | "execute">;
 
 async function hasUnelevatedSelfReviewedRelease(db: Pick<Database, "execute">, skillId: string): Promise<boolean> {
   // Tolerate schemas migrated before the libraries release.
@@ -1155,12 +1178,29 @@ function parseSharingSettings(input: unknown): SharingSettings {
   };
 }
 
-function assertCanManageSkillSharing(
-  skill: { ownerUserId: string | null; slug: string },
+function skillOwnerPredicate(actorId: string): SQL | undefined {
+  return or(sql`coalesce(${skills.ownerUserId} = ${actorId}::uuid, false)`, effectiveTeamOwnerPredicate(sql`${skills.ownerTeamId}`, actorId));
+}
+
+async function assertCanManageSkillSharing(
+  db: SkillSharingDb,
+  skill: { ownerUserId: string | null; ownerTeamId: string | null; slug: string },
   actor: SkillSharingActor,
-): void {
+  lock = false,
+): Promise<void> {
   if (skill.ownerUserId === actor.id || actor.roles.includes("owner") || actor.roles.includes("admin")) {
+    if (lock && skill.ownerTeamId && actor.mfaVerified !== true) {
+      throw new AppError("MFA verification is required.", "MFA_VERIFICATION_REQUIRED", 403);
+    }
     return;
+  }
+  if (skill.ownerTeamId) {
+    if (lock) {
+      await assertCurrentTeamOwner(db as DatabaseTransaction, skill.ownerTeamId, actor.id);
+      if (actor.mfaVerified !== true) throw new AppError("MFA verification is required.", "MFA_VERIFICATION_REQUIRED", 403);
+      return;
+    }
+    if (await isCurrentTeamOwner(db, skill.ownerTeamId, actor.id)) return;
   }
   throw new AppError("Skill owner access is required.", "SKILL_OWNER_REQUIRED", 403);
 }

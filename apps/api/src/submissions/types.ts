@@ -19,6 +19,7 @@ export interface ArtifactPayload {
 export interface SubmissionActor {
   id: string;
   roles: Role[];
+  mfaVerified?: boolean;
 }
 
 export interface CreateSubmissionInput {
@@ -38,7 +39,9 @@ export interface CreateSubmissionInput {
  * as the registry version. Both hooks run after the slug advisory lock.
  */
 export interface SubmissionImportBinding {
-  beforeVersionInsert(tx: DatabaseTransaction, context: { skillId: string | null; skillOwnerUserId: string | null }): Promise<void>;
+  /** Trusted Library ownership, derived on the server; never accepted from HTTP input. */
+  owner?: { type: "user" | "team"; id: string };
+  beforeVersionInsert(tx: DatabaseTransaction, context: { skillId: string | null; skillOwnerUserId: string | null; skillOwnerTeamId: string | null }): Promise<void>;
   afterVersionInsert(tx: DatabaseTransaction, context: { skillId: string; versionId: string; artifactSha256: string }): Promise<void>;
 }
 
@@ -70,7 +73,8 @@ export interface SelfReviewedReleaseSummary {
 
 export interface StoredSubmission {
   id: string;
-  ownerUserId: string;
+  ownerUserId: string | null;
+  ownerTeamId: string | null;
   skillSlug: string;
   title: string;
   summary: string;
@@ -152,6 +156,8 @@ export interface ReviewActionResult {
 }
 
 export interface UserSubmissionSummary {
+  /** Present for team drafts; the importing person is attribution, not owner. */
+  owner?: { type: "user" | "team"; id: string };
   id: string;
   slug: string;
   title: string;
@@ -300,7 +306,7 @@ export interface SubmissionStore {
   listUserSubmissions(userId: string): Promise<UserSubmissionSummary[]>;
   getUserSubmissionDetail(input: { userId: string; submissionId: string }): Promise<UserSubmissionDetail | null>;
   getUserSubmissionBundle(input: { userId: string; submissionId: string; platform?: string }): Promise<UserSubmissionBundle | null>;
-  performSubmissionOwnerAction(input: { actorId: string; submissionId: string; action: SubmissionOwnerAction; reason?: string }): Promise<UserSubmissionSummary>;
+  performSubmissionOwnerAction(input: { actorId: string; mfaVerified?: boolean; submissionId: string; action: SubmissionOwnerAction; reason?: string }): Promise<UserSubmissionSummary>;
   listReviewSubmissions(input?: ChronologicalStoreQuery): Promise<ReviewSubmissionSummary[]>;
   getReviewSubmissionDetail(submissionId: string): Promise<ReviewSubmissionDetail | null>;
   getReviewSubmissionBundle(input: { submissionId: string; platform?: string }): Promise<ReviewSubmissionBundle | null>;

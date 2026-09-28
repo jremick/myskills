@@ -1925,7 +1925,7 @@ function SubmitDashboard({ client }: { client: RegistryClient; session: WebSessi
 
         <section aria-busy={submissionsState === "loading"} aria-labelledby={`${baseId}-submitted`} className="registry-list submit-list">
           <div className="registry-list-label">
-            <h2 id={`${baseId}-submitted`} ref={listHeadingRef} tabIndex={-1}>My submitted skills</h2>
+            <h2 id={`${baseId}-submitted`} ref={listHeadingRef} tabIndex={-1}>{submissions.some((submission) => submission.owner?.type === "team") ? "Personal and team submissions" : "My submitted skills"}</h2>
             <span aria-live="polite">{submissionsState === "ready" ? String(submissions.length) : ""}</span>
           </div>
           {submissionsState === "loading" && submissions.length === 0 && (
@@ -1964,6 +1964,7 @@ function SubmitDashboard({ client }: { client: RegistryClient; session: WebSessi
                           <span>Submitted {formatDate(submission.createdAt)}</span>
                         </span>
                         <span className="author-chips">
+                          {submission.owner?.type === "team" && <span className="registry-chip" data-tone="navy">Team-owned</span>}
                           <span className="registry-chip" data-tone={chipTone(review.tone)}>{review.label}</span>
                           <span className="registry-chip" data-tone={chipTone(security.tone)}>{security.label}</span>
                           <span className="registry-chip" data-tone={chipTone(findings.tone)}>{findings.label}</span>

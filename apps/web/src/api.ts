@@ -709,6 +709,7 @@ export interface SubmitSkillResult {
 
 export interface UserSubmissionSummary {
   id: string;
+  owner?: { type: "user" | "team"; id: string };
   slug: string;
   title: string;
   summary: string;

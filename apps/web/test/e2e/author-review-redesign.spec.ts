@@ -13,7 +13,7 @@ const approved = { ...base, id: "approved", slug: "code-review-guide", title: "C
 const blocked = { ...base, id: "blocked", slug: "research-brief", title: "Research Brief", summary: "Gather cited evidence.", version: "0.8.0", lifecycleStatus: "quarantined", reviewStatus: "pending", securityStatus: "failed", findingCount: 3, allowedActions: ["request-changes", "reject"] };
 const managed = [pending, approved, blocked].map((s, i) => ({ ...s, lifecycleStatus: i === 2 ? "archived" : "approved", latestVersion: s.version, allowedActions: i === 2 ? ["restore"] : ["edit", "archive"] }));
 
-async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; failReview?: boolean; bootstrap?: boolean } = {}) {
+async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; failReview?: boolean; bootstrap?: boolean; teamImport?: boolean } = {}) {
   const user = { id: "owner-1", email: "owner@example.test", name: "Example owner", status: "active", roles: ["owner"], emailVerified: true, mfaVerified: options.mfa !== false };
   await page.addInitScript(user => localStorage.setItem("myskills-app:web-session", JSON.stringify({ user, expiresAt: "2027-09-27T00:00:00Z" })), user);
   let rows = structuredClone([pending, approved, blocked]);
@@ -47,10 +47,10 @@ async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; 
       if (failReview) return reply({ error: { code: "SERVICE_UNAVAILABLE", message: "Review queue temporarily unavailable." } }, 503);
       return reply({ submissions: options.partial && !url.searchParams.has("cursor") ? rows.slice(0, 2) : rows, nextCursor: options.partial && !url.searchParams.has("cursor") ? "page-2" : null });
     }
-    if (path === "/v1/submissions/mine") return reply({ submissions: rows.map(s => ({ ...s, reviewStatus: s.id === "blocked" ? "changes-requested" : s.reviewStatus, allowedActions: ["withdraw"] })), nextCursor: null });
+    if (path === "/v1/submissions/mine") return reply({ submissions: rows.map(s => ({ ...s, ...(options.teamImport && s.id === "blocked" ? { owner: { type: "team", id: "engineering-team" } } : {}), reviewStatus: s.id === "blocked" ? "changes-requested" : s.reviewStatus, allowedActions: ["withdraw"] })), nextCursor: null });
     if (/^\/v1\/(review\/)?submissions\/[^/]+\/bundle$/.test(path)) return route.fulfill({ json: { files: [{ path: "SKILL.md", content: "# Reviewed exact artifact\nUse verified release evidence." }] }, headers: { "x-myskills-artifact-sha256": hash } });
     const detail = path.match(/^\/v1\/(?:review\/)?submissions\/([^/]+)$/);
-    if (detail) return reply({ submission: { ...rows.find(s => s.id === detail[1]), reviewStatus: detail[1] === "blocked" ? "changes-requested" : rows.find(s => s.id === detail[1])?.reviewStatus, changeRequestReason: detail[1] === "blocked" ? "Cite the original research sources." : null, reviewHistory: [], scanRuns: [], correction: { requiresNewVersion: true, canSubmitNewVersion: true } } });
+    if (detail) return reply({ submission: { ...rows.find(s => s.id === detail[1]), ...(options.teamImport && detail[1] === "blocked" ? { owner: { type: "team", id: "engineering-team" } } : {}), reviewStatus: detail[1] === "blocked" ? "changes-requested" : rows.find(s => s.id === detail[1])?.reviewStatus, changeRequestReason: detail[1] === "blocked" ? "Cite the original research sources." : null, reviewHistory: [], scanRuns: [], correction: { requiresNewVersion: true, canSubmitNewVersion: !options.teamImport } } });
     if (path === "/v1/manage/skills") return reply({ skills: managed.filter(s => s.title.toLowerCase().includes((url.searchParams.get("q") ?? "").toLowerCase())), nextCursor: null });
     const releases = path.match(/^\/v1\/skills\/([^/]+)\/releases$/);
     if (releases) return reply({ releases: [release(releases[1]!, "1.3.0"), release(releases[1]!, options.bootstrap ? "0.0.0-bootstrap.118b105a185" : "1.0.0")] });
@@ -210,4 +210,21 @@ test("managed bootstrap label keeps the exact lifecycle target", async ({ page }
   expect(state.writes).toEqual([{ path: `/v1/skills/release-notes-helper/releases/${version}/actions`, body: { action: "unpublish", reason: "Replaced by a reviewed release." } }]);
   expect(state.misses).toEqual([]);
   await evidence(page, info, state.writes);
+});
+
+// Team ownership expands the existing submission list. It must not misdirect a
+// curator to the personal upload path when a reviewer requests source changes.
+test("team import feedback identifies ownership and routes corrections through Libraries", async ({ page }, info) => {
+  const state = await fixture(page, { teamImport: true });
+  await page.goto("/submit");
+  const row = page.locator(".submit-item").filter({ hasText: "Research Brief" });
+  await expect(row.getByText("Team-owned", { exact: true })).toBeVisible();
+  await row.getByRole("button", { name: "View feedback for 0.8.0", exact: true }).click();
+  await expect(row.getByText("Review the corrected upstream source in Libraries, then submit a new candidate. Submitting requires an author role. The previous artifact and review history remain unchanged.", { exact: true })).toBeVisible();
+  await expect(row.getByRole("button", { name: "Choose corrected package", exact: true })).toHaveCount(0);
+  await expect(row.getByText("Author permission is required to submit the correction.", { exact: false })).toHaveCount(0);
+  await row.getByRole("link", { name: "Open Libraries", exact: true }).click();
+  await expect(page).toHaveURL(/\/libraries$/);
+  expect(state.writes).toHaveLength(0);
+  await info.attach("team-submission-feedback-receipt", { body: JSON.stringify({ ownershipVisible: true, correctionRoute: "/libraries", mutations: 0 }), contentType: "application/json" });
 });
