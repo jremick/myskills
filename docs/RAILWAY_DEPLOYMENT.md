@@ -4,10 +4,31 @@ Version: 0.1.0-beta.14
 Last updated: 2026-09-28
 
 This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.
-The current beta.13 delivery is tracked in [Beta.13 Release Delivery](BETA13_RELEASE_DELIVERY.md).
+The current beta.14 delivery is tracked in [Beta.14 Release Delivery](BETA14_RELEASE_DELIVERY.md).
 The historical operational beta evidence remains in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
 
-## Current beta.13 deployment
+## Current beta.14 deployment
+
+On 28 September 2026, staging and production were promoted from
+`5647be19f15a8f9bb2c6b0ecfb067478b7528ed0` in API-ready-then-web order.
+The release adds owner/admin branding controls and includes beta.13 QR enrollment.
+No schema migration is required.
+
+| Environment | API deployment | Web deployment |
+| --- | --- | --- |
+| Staging | `04ce1ef7-dfa9-4196-a7d4-c4a3d3e02340` | `7a449630-fd97-4ad1-befb-5dacb63084ee` |
+| Production | `2ced5023-8288-4864-b9c5-87b550cb7362` | `be0c3cc6-037e-4e91-813f-b1347745d678` |
+
+All four report SUCCESS, beta.14 and the same source revision. Each environment
+passed 19 HTTP checks and fresh CLI doctor/catalog checks. Production retained
+the owner/MFA session and rendered private package contents. Live branding
+preview/discard passed; saved settings remained at their existing defaults.
+The completed recovery point from `2026-09-27T16:01:29.347Z` passed the 26-hour
+freshness policy before promotion. Rollback uses the matching beta.13 API/web
+pair below, retaining database and artifact data. See the delivery record for
+canonical, tagged, browser and publication evidence and remaining limitations.
+
+## Historical beta.13 deployment
 
 On 28 September 2026, staging and production were promoted from
 `48273d5ff401ddcfd9046c448b1b38a58ee12337` in API-ready-then-web order.
