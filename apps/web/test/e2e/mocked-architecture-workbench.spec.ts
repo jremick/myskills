@@ -691,7 +691,7 @@ test("message-only changes guard other architectures and outside links; cancelle
   await expect.poll(() => dialogs.messages.length).toBe(2);
   await expect(page).toHaveURL(overviewUrl);
 
-  await page.locator(".side-nav").getByRole("link", { name: "Registry" }).click();
+  await page.locator(".side-nav").getByRole("link", { name: "Skills", exact: true }).click();
   await expect.poll(() => dialogs.messages.length).toBe(3);
   await expect(page).toHaveURL(overviewUrl);
 
@@ -713,7 +713,7 @@ test("message-only changes guard other architectures and outside links; cancelle
   // Accepting an outside link leaves the section once.
   await page.getByRole("link", { name: "Open workbench", exact: true }).click();
   await message.fill("Leaving with a message");
-  await page.locator(".side-nav").getByRole("link", { name: "Registry" }).click();
+  await page.locator(".side-nav").getByRole("link", { name: "Skills", exact: true }).click();
   await expect(page).toHaveURL(/\/registry/);
   expect(dialogs.messages).toHaveLength(5);
 });
@@ -793,9 +793,9 @@ test("a new architecture opens its bootstrap Workbench and the first save become
   await expect(page).toHaveURL(/\/architectures\/arch-new\/workbench$/);
 
   const editor = page.getByTestId("architecture-editor");
-  await editor.getByLabel("Search registry skills").fill("audit");
+  await editor.getByLabel("Search skills").fill("audit");
   await editor.getByRole("button", { name: "Search", exact: true }).click();
-  await editor.getByLabel("Registry skill", { exact: true }).selectOption("synthetic-audit-helper");
+  await editor.getByLabel("Skill", { exact: true }).selectOption("synthetic-audit-helper");
   await editor.getByLabel("Exact release", { exact: true }).selectOption("release-audit-120");
   await editor.getByLabel("Release parent router").selectOption({ label: "Domain router" });
   await editor.getByRole("button", { name: "Add selected exact release" }).click();

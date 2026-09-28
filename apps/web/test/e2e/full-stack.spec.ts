@@ -27,7 +27,7 @@ test("anonymous visitor browses the seeded registry through the production proxy
 
   await page.goto("/registry");
   await expect(page).toHaveTitle(/MySkills/);
-  await expect(page.getByRole("heading", { name: "Skill registry" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Skills", exact: true, level: 1 })).toBeVisible();
   const skillResult = page.getByRole("link", { name: /Release Notes Helper/ }).first();
   await expect(skillResult).toBeVisible();
 
@@ -141,10 +141,10 @@ test("owner creates and reads a real architecture revision from a seeded release
   await expect(editor).toBeVisible();
   await expect(page.getByRole("heading", { name: "Build the first revision" })).toBeVisible();
 
-  await editor.getByLabel("Search registry skills").fill("release-notes-helper");
+  await editor.getByLabel("Search skills").fill("release-notes-helper");
   await editor.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(editor.getByLabel("Registry skill", { exact: true })).toBeVisible();
-  await editor.getByLabel("Registry skill", { exact: true }).selectOption("release-notes-helper");
+  await expect(editor.getByLabel("Skill", { exact: true })).toBeVisible();
+  await editor.getByLabel("Skill", { exact: true }).selectOption("release-notes-helper");
   const releaseSelect = editor.getByLabel("Exact release", { exact: true });
   await expect(releaseSelect).toBeVisible();
   await expect(releaseSelect.locator("option").nth(1)).toBeAttached();

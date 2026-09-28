@@ -62,7 +62,7 @@ test("route-mocked owner registry fits 320, 375, and 390 px with safe mobile ove
 
     await more.click();
     await expect(adminMenuItem).toBeVisible();
-    await page.getByRole("heading", { name: "Skill registry", exact: true }).click();
+    await page.getByRole("heading", { name: "Skills", exact: true, level: 1 }).click();
     await expect(adminMenuItem).toBeHidden();
   }
 });
@@ -74,7 +74,7 @@ test("route-mocked registry uses push navigation and restores URL-backed state w
   await expect(page.getByLabel("Search skills")).toHaveValue("release");
   await expect(page.getByText(/--platform 'generic'/)).toBeVisible();
   await expect(page.locator(".side-nav-label")).toHaveText(["Skills", "Publish", "Deploy", "People", "Account"]);
-  await expect(page.locator(".side-nav").getByRole("link", { name: "Registry" })).toHaveAttribute("aria-current", "page");
+  await expect(page.locator(".side-nav").getByRole("link", { name: "Skills", exact: true })).toHaveAttribute("aria-current", "page");
 
   await page.getByLabel("Search skills").fill("smoke");
   await expect(page).toHaveURL(/\/skills\/smoke-skill\?q=smoke&platform=generic$/);

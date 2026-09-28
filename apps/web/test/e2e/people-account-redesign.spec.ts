@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const date = "2026-09-27T00:00:00Z";
-async function fixture(page: Page, mfaVerified = true) {
-  const user = { id: "owner-1", name: "Example owner", email: "owner@example.test", status: "active", roles: ["owner"], emailVerified: true, mfaVerified, mfaEnabled: true };
+async function fixture(page: Page, mfaVerified = true, mfaEnabled = true) {
+  const user = { id: "owner-1", name: "Example owner", email: "owner@example.test", status: "active", roles: ["owner"], emailVerified: true, mfaVerified, mfaEnabled };
   const teams = ["Writing team", "Release engineering team", "Research and evidence team with a long name"].map((name, i) => ({ id: `team-${i + 1}`, name, slug: `team-${i + 1}`, role: i === 2 ? "member" : "owner", createdAt: date, members: [{ id: `member-${i + 1}`, name: `Reviewer ${i + 1}`, email: `reviewer${i + 1}@example.test`, role: "member" }], invitations: [] }));
   const invitations = [1, 2].map(i => ({ id: `invite-${i}`, teamId: `external-${i}`, teamName: `Invited team ${i}`, email: user.email, status: "pending", createdAt: date }));
   const orgs = ["Release organization", "Read-only organization"].map((name, i) => ({ id: `org-${i + 1}`, name, slug: `org-${i + 1}`, status: "active", role: i ? "member" : "owner", currentPolicy: null, currentPolicyRevisionId: null, createdByUserId: user.id, createdAt: date, updatedAt: date }));
@@ -44,7 +44,7 @@ async function fixture(page: Page, mfaVerified = true) {
     if (path === "/v1/admin/audit") return reply({ events: [], nextCursor: null });
     if (path === "/v1/admin/sharing") return reply({ sharing: { publicVisibilityEnabled: true, authenticatedVisibilityEnabled: true, teamsEnabled: true, teamVisibilityEnabled: true, userVisibilityEnabled: true, organizationVisibilityEnabled: true } });
     if (path === "/v1/admin/library-settings") return reply({ settings: { privateSelfReviewEnabled: true, updatedAt: null }, worker: { configured: true, overdueTrackCount: 0 } });
-    if (path === "/v1/auth/mfa") return reply({ mfa: { totpEnabled: true, recoveryCodesRemaining: 8, factors: [] } });
+    if (path === "/v1/auth/mfa") return reply({ mfa: { totpEnabled: mfaEnabled, recoveryCodesRemaining: mfaEnabled ? 8 : 0, factors: [] } });
     if (path === "/v1/auth/api-tokens") return reply({ tokens: [token] });
     if (path === "/v1/libraries") return reply({ libraries: [], nextCursor: null });
     if (path === "/v1/library-inbox") return reply({ items: [], unreadCount: 0, nextCursor: null });
@@ -53,6 +53,37 @@ async function fixture(page: Page, mfaVerified = true) {
   });
   return { writes, missing };
 }
+
+for (const enabled of [true, false]) test(`sidebar MFA warning links to ${enabled ? "verification" : "setup"} from collapsed navigation`, async ({ page }, info) => {
+  const state = await fixture(page, false, enabled);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/teams");
+  const sidebar = page.getByRole("complementary", { name: "Primary navigation" });
+  const warning = sidebar.getByRole("link", { name: "Account settings", exact: true });
+  await expect(warning).toHaveAttribute("href", "/settings");
+  await expect(warning).toHaveAttribute("title", "owner@example.test");
+  await expect(warning).toHaveAccessibleDescription("MFA not verified. Set up or verify MFA.");
+  await expect(warning.getByRole("img", { name: "MFA not verified", exact: true })).toBeVisible();
+  await expect(warning.getByText("MFA unverified", { exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("img", { name: "MFA verified", exact: true })).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath("sidebar-mfa-warning.png") });
+  await sidebar.locator(".sidebar-account").screenshot({ path: info.outputPath("mfa-warning-account.png") });
+  await page.getByRole("button", { name: "Collapse navigation", exact: true }).click();
+  await expect(warning).toBeVisible();
+  await expect(warning.getByText("MFA unverified", { exact: true })).toBeHidden();
+  await warning.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.getByRole("heading", { name: "Security and access", exact: true })).toBeVisible();
+  if (enabled) {
+    await expect(page.getByRole("button", { name: "Sign in with MFA", exact: true })).toBeVisible();
+  } else {
+    await expect(page.getByRole("region", { name: "MFA setup", exact: true }).getByRole("button", { name: "Continue", exact: true })).toBeVisible();
+  }
+  expect(state.writes).toHaveLength(0);
+  expect(state.missing).toEqual([]);
+  await page.screenshot({ path: info.outputPath("mfa-destination.png") });
+});
 
 for (const width of [1280, 390]) test(`team selection keeps the correct members, sharing and invite destination at ${width}`, async ({ page }, info) => {
   const state = await fixture(page);

@@ -1944,12 +1944,12 @@ export function safeErrorMessage(error: unknown): string {
     return "Skill or release not found.";
   }
   if (isSafeApiError(error) && (error.status === 401 || error.status === 403)) {
-    return "You do not have access to that registry item.";
+    return "You do not have access to that skill or release.";
   }
   if (isSafeApiError(error) && error.status >= 400 && error.status < 500) {
-    return "The registry request could not be completed.";
+    return "The skill request could not be completed.";
   }
-  return "The registry is not available.";
+  return "Skills are not available.";
 }
 
 export function safeAuthErrorMessage(error: unknown): string {
@@ -2160,10 +2160,10 @@ function safeResponseCode(body: Record<string, unknown>): string {
 function safeResponseMessage(body: Record<string, unknown>, status: number): string {
   const error = body.error;
   if (!error || typeof error !== "object" || Array.isArray(error)) {
-    return `Registry request failed with ${status}.`;
+    return `MySkills request failed with ${status}.`;
   }
   const message = (error as { message?: unknown }).message;
-  return typeof message === "string" ? message : `Registry request failed with ${status}.`;
+  return typeof message === "string" ? message : `MySkills request failed with ${status}.`;
 }
 
 function isSafeApiError(error: unknown): error is SafeApiError {

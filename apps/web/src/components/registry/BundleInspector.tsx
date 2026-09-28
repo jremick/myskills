@@ -208,7 +208,10 @@ function OtherBundles({ memberships, exclude, bundleHref, onOpenBundle }: { memb
   );
 }
 
-/** Backlinks from a skill to every visible bundle that contains it. */
+/**
+ * Backlinks from a skill to every visible bundle that contains it. An empty
+ * answer covers visible bundles only, so it never says the skill stands alone.
+ */
 export function BundleMemberships({ api, slug, bundleHref, onOpenBundle }: { api: BundleClient; slug: string; bundleHref: (id: string) => string; onOpenBundle: (id: string, from: HTMLElement) => void }) {
   const [state, setState] = useState<{ slug: string; status: "loading" | "ready" | "error"; bundles: BundleMembership[] }>({ slug, status: "loading", bundles: [] });
   const [retry, setRetry] = useState(0);
@@ -226,7 +229,7 @@ export function BundleMemberships({ api, slug, bundleHref, onOpenBundle }: { api
       <h3>Bundles</h3>
       {current.status === "loading" && <p className="bundle-muted" role="status">Checking bundles…</p>}
       {current.status === "error" && <p className="bundle-muted">Bundles couldn’t load. <button className="bundle-text-button" type="button" onClick={() => setRetry((value) => value + 1)}>Retry bundles</button></p>}
-      {current.status === "ready" && current.bundles.length === 0 && <p className="bundle-muted">Not in any bundle. It works fully on its own.</p>}
+      {current.status === "ready" && current.bundles.length === 0 && <p className="bundle-muted">None visible to you</p>}
       {current.status === "ready" && current.bundles.length > 0 && (
         <ul>
           {current.bundles.map((bundle) => (

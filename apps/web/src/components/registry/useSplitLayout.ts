@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 
 export type SplitLayout = "split" | "stack";
 
-// Same threshold as the Registry: split when the surface itself is this wide.
+// Same threshold as Skills: split when the surface itself is this wide.
 const SPLIT_WIDTH = 880;
 
 /**

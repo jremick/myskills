@@ -193,20 +193,7 @@
 .registry-workspace .registry-ref span { font: var(--registry-mono); }
 .registry-workspace .registry-ref span + code { color: var(--ink-soft); font-weight: 600; }
 .registry-workspace .registry-inspector-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; color: var(--muted); font-size: 13px; line-height: 18px; }
-.registry-workspace .registry-version-slot { min-width: 0; }
-.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="split"] .registry-version-slot { max-width: 260px; }
-.registry-workspace .registry-version-control { display: grid; justify-items: end; gap: 8px; }
-.registry-workspace .registry-version-control label { display: grid; gap: 4px; max-width: 100%; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
-.registry-workspace .registry-version-control select { min-width: 176px; }
-.registry-workspace .registry-version-control .control-plane-muted { color: var(--muted); font-size: 13px; line-height: 18px; text-align: right; }
-.registry-workspace .registry-version-control [role="status"] { display: grid; justify-items: end; gap: 6px; }
 .registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-inspector-head { grid-template-columns: auto minmax(0, 1fr); }
-.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-slot { grid-column: 1 / -1; }
-.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-control,
-.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-control [role="status"] { justify-items: start; }
-.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-control label { width: min(100%, 320px); }
-.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-control select { width: 100%; }
-.registry-workspace :is(.registry-surface, .bundle-body)[data-layout="stack"] .registry-version-control .control-plane-muted { text-align: left; }
 .registry-workspace .registry-inspector-state {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -233,7 +220,6 @@
 .registry-workspace .registry-facts dt { color: var(--muted); font-size: 13px; line-height: 20px; }
 .registry-workspace .registry-facts dd { min-width: 0; color: var(--ink); font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
 .registry-workspace .registry-facts dd.registry-mono { color: var(--ink-soft); font: var(--registry-mono); line-height: 20px; }
-.registry-workspace .registry-use h3 { color: var(--ink); font-size: 15px; line-height: 22px; font-weight: 600; }
 .registry-workspace .registry-callout {
   display: flex;
   align-items: flex-start;
@@ -248,9 +234,61 @@
   overflow-wrap: anywhere;
 }
 .registry-workspace .registry-callout > svg { flex: none; margin-top: 2px; }
-.registry-workspace .registry-platforms { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
-.registry-workspace .registry-platforms > span { color: var(--ink-soft); font-size: 13px; line-height: 18px; font-weight: 600; }
-.registry-workspace .registry-platforms > div { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Skill pane: skill identity, one card for everything tied to the exact
+   release, then skill-level rows. Sized by the pane, not the viewport. */
+.registry-workspace .registry-skill-pane { display: grid; align-content: start; min-width: 0; container: skill-pane / inline-size; }
+.registry-workspace .registry-skill-pane .registry-inspector-head { grid-template-columns: auto minmax(0, 1fr); gap: 12px; }
+.registry-workspace .registry-skill-pane .registry-inspector-title { gap: 0; }
+.registry-workspace .registry-skill-pane .registry-inspector-title h2 { font-size: 20px; line-height: 26px; letter-spacing: -0.01em; }
+.registry-workspace .registry-skill-pane .registry-summary { margin-top: 14px; font-size: 14.5px; line-height: 22px; }
+.registry-workspace .registry-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.registry-workspace .registry-tags li { padding: 1px 7px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink-soft); font-size: 12px; line-height: 16px; }
+.registry-workspace .registry-release { min-width: 0; margin-top: 20px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.registry-workspace .registry-release-head { display: grid; min-width: 0; padding: 12px 16px 14px; border-radius: 9px 9px 0 0; background: var(--surface-soft); }
+.registry-workspace .registry-release-head:last-child { border-radius: 9px; }
+.registry-workspace .registry-release-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; min-height: 28px; }
+.registry-workspace .registry-release-label { color: var(--muted); font-size: 12.5px; line-height: 18px; font-weight: 600; }
+.registry-workspace .registry-release-history { color: var(--muted); font-size: 12.5px; line-height: 18px; }
+.registry-workspace .registry-versions-toggle { gap: 6px; height: 28px; padding: 0 8px 0 10px; border-color: var(--line-strong); color: var(--ink-soft); background: var(--surface); font-size: 12.5px; font-weight: 600; box-shadow: none; }
+.registry-workspace .registry-versions-toggle:hover { border-color: var(--teal); color: var(--teal-dark); background: var(--surface); }
+.registry-workspace .registry-versions-toggle svg { transition: transform 120ms ease; }
+.registry-workspace .registry-versions-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.registry-workspace .registry-count { padding: 0 5px; border-radius: 4px; background: var(--surface-sunken); font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums; }
+.registry-workspace .registry-versions { max-height: 236px; margin: 8px 0 0; padding: 0; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); list-style: none; }
+.registry-workspace .registry-versions li + li { border-top: 1px solid var(--line-soft); }
+.registry-workspace .registry-version-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 2px 8px; width: 100%; min-height: 40px; padding: 8px 12px 8px 10px; border: 0; color: var(--ink); background: none; text-align: left; cursor: pointer; }
+.registry-workspace .registry-version-row:hover { background: var(--surface-soft); }
+.registry-workspace .registry-version-row:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.registry-workspace .registry-version-row > svg { visibility: hidden; color: var(--teal-dark); }
+.registry-workspace .registry-version-row[aria-current="true"] { background: var(--teal-soft); }
+.registry-workspace .registry-version-row[aria-current="true"] > svg { visibility: visible; }
+.registry-workspace .registry-version-row code { min-width: 0; color: var(--ink); }
+.registry-workspace .registry-version-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--muted); font-size: 12px; line-height: 16px; white-space: nowrap; }
+.registry-workspace .registry-release-id { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; margin-top: 6px; }
+.registry-workspace .registry-release-id h3 { max-width: 100%; min-width: 0; color: var(--ink); font: 600 15px/22px var(--font-mono); overflow-wrap: anywhere; }
+.registry-workspace .registry-release h3:focus { outline: none; }
+.registry-workspace .registry-release h3:focus-visible { border-radius: 4px; outline: 2px solid var(--ring); outline-offset: 2px; }
+.registry-workspace .registry-release-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.registry-workspace .registry-chip[data-tone="line"] { color: var(--teal-dark); background: var(--surface); box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.32); }
+.registry-workspace .registry-icon-copy { width: 28px; height: 28px; border: 1px solid transparent; color: var(--muted); background: none; box-shadow: none; }
+.registry-workspace .registry-icon-copy:hover { border-color: var(--line); color: var(--ink); background: var(--surface); }
+.registry-workspace .registry-pin { display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; margin-top: 2px; color: var(--muted); font-size: 12.5px; line-height: 18px; }
+.registry-workspace .registry-link-button { min-height: 24px; padding: 0 2px; border: 0; color: var(--teal-dark); background: none; font: inherit; font-weight: 600; text-underline-offset: 2px; cursor: pointer; }
+.registry-workspace .registry-link-button:hover { text-decoration: underline; }
+.registry-workspace .registry-link-button:focus-visible { border-radius: 4px; outline: 2px solid var(--ring); outline-offset: 1px; }
+.registry-workspace .registry-release-facts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
+.registry-workspace .registry-release-facts > div { display: flex; align-items: center; gap: 6px; }
+.registry-workspace .registry-release-facts dt { color: var(--muted); font-size: 12.5px; line-height: 20px; }
+.registry-workspace .registry-release-facts dd { color: var(--ink); font-size: 13px; line-height: 20px; }
+.registry-workspace .registry-release-error { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; margin-top: 12px; padding: 12px; border: 1px solid rgba(122, 75, 0, 0.18); border-radius: 8px; background: var(--warning-soft); }
+.registry-workspace .registry-release-error > svg { margin-top: 2px; color: var(--warning); }
+.registry-workspace .registry-release-error strong { display: block; color: var(--ink); font-size: 13.5px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.registry-workspace .registry-release-error p { margin-top: 2px; color: var(--ink-soft); font-size: 13px; line-height: 19px; }
+.registry-workspace .registry-release-error .registry-actions { margin-top: 10px; }
+.registry-workspace .registry-release .registry-inspector-state { margin-top: 8px; background: var(--surface); }
+.registry-workspace .registry-release > .registry-skeleton { padding: 14px 16px 16px; }
+.registry-workspace .registry-release > .registry-section-callout { margin: 14px 16px 16px; }
 .registry-workspace .platform-button {
   min-height: 32px;
   padding: 0 12px;
@@ -264,23 +302,27 @@
 .registry-workspace .platform-button:hover { border-color: var(--teal); color: var(--teal-dark); }
 .registry-workspace .platform-button[aria-pressed="true"] { border-color: var(--teal); color: var(--teal-dark); background: var(--teal-soft); }
 
-/* The CLI command keeps its .command-panel hook but uses the light Libraries style. */
-.registry-workspace .registry-command.command-panel { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; border-radius: 0; color: inherit; background: none; box-shadow: none; }
-.registry-workspace .registry-command-label { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-soft); font-size: 13px; line-height: 18px; font-weight: 600; }
-.registry-workspace .registry-command-row {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 8px 12px;
-  padding: 8px 8px 8px 30px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fafbfc;
-}
-.registry-workspace .registry-command-row::before { content: "$"; position: absolute; top: 15px; left: 14px; color: var(--muted); font: var(--registry-mono); }
-.registry-workspace .registry-command code { align-self: center; padding: 7px 0; overflow: visible; color: var(--ink); font: var(--registry-mono); white-space: pre-wrap; }
-.registry-workspace .registry-command button { position: static; }
+/* Use: the command keeps its .command-panel hook but uses the light Libraries style. */
+.registry-workspace .registry-use { display: grid; gap: 10px; min-width: 0; padding: 14px 16px 16px; border-top: 1px solid var(--line-soft); }
+.registry-workspace .registry-use-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
+.registry-workspace .registry-use h4 { color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 600; }
+.registry-workspace .registry-use-platform { color: var(--muted); font-size: 12.5px; line-height: 18px; }
+.registry-workspace .registry-use-platform code { color: var(--ink-soft); font-weight: 600; }
+.registry-workspace .registry-use-platforms { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.registry-workspace .registry-use-platforms > span { margin-right: 2px; color: var(--muted); font-size: 12.5px; line-height: 18px; }
+.registry-workspace .registry-use-platforms .platform-button { min-height: 28px; height: 28px; padding: 0 10px; }
+.registry-workspace .registry-command.command-panel { display: block; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: #fafbfc; box-shadow: none; }
+/* A hanging indent keeps each flag and value together on its own line when the command wraps. */
+.registry-workspace .registry-command code { display: block; padding: 0 0 0 4ch; overflow: visible; color: var(--ink); font: var(--registry-mono); line-height: 20px; text-indent: -4ch; white-space: normal; word-break: normal; overflow-wrap: anywhere; }
+.registry-workspace .registry-command code::before { content: "$\00a0"; color: var(--muted); }
+.registry-workspace .registry-command-part { display: inline-block; max-width: 100%; text-indent: 0; }
+.registry-workspace .registry-command-flag { color: var(--muted); }
+.registry-workspace .registry-command [data-version] { font-weight: 600; }
+.registry-workspace .registry-use-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.registry-workspace .registry-use-actions > .registry-muted { flex: 1 1 220px; }
+.registry-workspace .registry-copy-command { height: 32px; gap: 6px; padding: 0 12px; border: 1px solid var(--teal); border-radius: 6px; color: #fff; background: var(--teal); font-size: 13px; font-weight: 600; box-shadow: none; }
+.registry-workspace .registry-copy-command:hover { background: var(--teal-dark); }
+.registry-workspace .registry-copy-failure { flex-basis: 100%; color: var(--warning); font-size: 12.5px; line-height: 18px; overflow-wrap: anywhere; }
 .registry-workspace .registry-muted { color: var(--muted); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
 
 /* Exact install sub-block */
@@ -307,18 +349,15 @@
 }
 .registry-workspace .release-install-review small { color: var(--muted); font: var(--registry-mono); }
 
-/* Disclosures */
-.registry-workspace .registry-more { gap: 4px; }
-.registry-workspace .registry-details > summary,
+/* Disclosure rows: a full-width button with a short hint, and a body that stays mounted. */
+.registry-workspace .registry-disclosure { display: grid; min-width: 0; border-top: 1px solid var(--line-soft); }
 .registry-workspace .registry-disclosure-button {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px 8px;
-  width: fit-content;
-  max-width: 100%;
-  min-height: 36px;
-  padding: 0;
+  gap: 4px 8px;
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 16px;
   border: 0;
   color: var(--ink-soft);
   background: none;
@@ -326,42 +365,32 @@
   line-height: 18px;
   font-weight: 600;
   text-align: left;
-  list-style: none;
   cursor: pointer;
 }
-.registry-workspace .registry-details > summary::-webkit-details-marker { display: none; }
-.registry-workspace .registry-details > summary::before,
-.registry-workspace .registry-disclosure-button::before {
-  content: "";
-  flex: none;
-  width: 6px;
-  height: 6px;
-  margin: 0 2px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(-45deg);
-  transition: transform 120ms ease;
-}
-.registry-workspace .registry-details[open] > summary::before,
-.registry-workspace .registry-disclosure-button[aria-expanded="true"]::before { transform: rotate(45deg); }
-.registry-workspace :is(.registry-details > summary, .registry-disclosure-button):hover { color: var(--ink); }
-.registry-workspace .registry-details-body { display: grid; gap: 12px; padding: 4px 0 12px 16px; }
+.registry-workspace .registry-disclosure-button:hover { color: var(--ink); }
+.registry-workspace .registry-disclosure-button:focus-visible { outline-width: 2px; outline-offset: -2px; }
+.registry-workspace .registry-disclosure-hint { display: inline-flex; flex: none; align-items: center; gap: 8px; margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 500; }
+.registry-workspace .registry-disclosure-hint > svg { transition: transform 120ms ease; }
+.registry-workspace .registry-disclosure-button[aria-expanded="true"] .registry-disclosure-hint > svg { transform: rotate(180deg); }
+.registry-workspace .registry-disclosure-body { display: grid; gap: 12px; min-width: 0; padding: 0 16px 16px; color: var(--ink-soft); font-size: 13px; line-height: 20px; }
 .registry-workspace .registry-notes { max-width: 64ch; color: var(--ink-soft); font-size: 14px; line-height: 22px; white-space: pre-line; overflow-wrap: anywhere; }
-.registry-workspace .registry-disclosure { display: grid; min-width: 0; }
-.registry-workspace .registry-disclosure-body { min-width: 0; padding: 4px 0 12px; }
-.registry-workspace .package-file-viewer { display: grid; gap: 6px; padding: 8px 0 12px; }
-.registry-workspace .package-file-viewer h2 { color: var(--ink-soft); font-size: 13px; line-height: 18px; font-weight: 600; }
+.registry-workspace .registry-disclosure-body .registry-facts > div { grid-template-columns: 96px minmax(0, 1fr); }
+.registry-workspace .registry-disclosure-body .registry-facts[data-labels="wide"] > div { grid-template-columns: minmax(0, 176px) minmax(0, 1fr); }
+.registry-workspace .package-file-viewer { display: grid; gap: 6px; padding: 0; }
+/* The disclosure row already names the package files. */
+.registry-workspace .package-file-viewer h2 { display: none; }
 .registry-workspace .package-file-viewer .control-plane-muted { max-width: 64ch; color: var(--muted); font-size: 13px; line-height: 18px; }
 .registry-workspace .package-file-viewer [data-slot="button"] { justify-self: start; }
 .registry-workspace .package-file-content { max-height: 20rem; background: var(--surface); font: 12.5px/1.6 var(--font-mono); }
 .registry-workspace .skill-improvement-panel { padding-top: 0; }
 .registry-workspace .skill-improvement-panel .control-plane-section-heading h2 { margin-top: 2px; font-size: 15px; line-height: 22px; font-weight: 600; }
 
-/* Owner controls: last, collapsed, and flattened into the surface. */
-.registry-workspace .registry-owner { gap: 4px; }
-.registry-workspace .registry-owner-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
-.registry-workspace .registry-owner-hint { display: inline-flex; align-items: center; gap: 5px; color: var(--warning); font-size: 12px; line-height: 16px; font-weight: 600; }
-.registry-workspace .registry-owner-panel { display: grid; gap: 20px; padding-top: 8px; }
+/* Skill-level rows below the release card: bundle backlinks, then owner controls. */
+.registry-workspace .registry-skill-foot { display: grid; min-width: 0; margin-top: 16px; }
+.registry-workspace .registry-skill-foot .registry-disclosure-button { padding: 8px 0; }
+.registry-workspace .registry-skill-foot .registry-disclosure-body { padding: 0 0 12px; }
+.registry-workspace .registry-owner-hint { display: inline-flex; align-items: center; gap: 6px; }
+.registry-workspace .registry-owner-panel { gap: 20px; padding-top: 8px; }
 .registry-workspace .registry-owner-panel [data-slot="frame"] { display: grid; gap: 0; margin: 0; padding: 0; overflow: visible; border: 0; border-radius: 0; background: none; box-shadow: none; }
 .registry-workspace .registry-owner-panel [data-slot="frame-panel"] { padding: 0; overflow: visible; border: 0; border-radius: 0; background: none; box-shadow: none; }
 .registry-workspace .registry-owner-panel [data-slot="frame-panel"]::before { display: none; }
@@ -392,7 +421,7 @@
   .registry-workspace :is(.registry-skeleton span:not(.sr-only), .registry-skeleton-line, .registry-skeleton-block) { animation: registry-pulse 1.4s ease-in-out infinite; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .registry-workspace :is(.registry-details > summary, .registry-disclosure-button)::before { transition: none; }
+  .registry-workspace :is(.registry-disclosure-hint > svg, .registry-versions-toggle svg) { transition: none; }
 }
 
 @media (max-width: 680px) {
@@ -405,16 +434,33 @@
   .registry-workspace .registry-facts[data-labels="wide"] > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }
 
-@media (max-width: 480px) {
-  .registry-workspace .registry-command-row { grid-template-columns: minmax(0, 1fr); }
-  .registry-workspace .registry-command button { justify-self: start; }
+/* Narrow skill pane, measured on the pane itself. */
+@container skill-pane (max-width: 420px) {
+  .registry-workspace :is(.registry-release-head, .registry-use, .registry-release-more .registry-disclosure-button, .registry-release-more .registry-disclosure-body) { padding-right: 12px; padding-left: 12px; }
+  .registry-workspace .registry-release > .registry-section-callout { margin-right: 12px; margin-left: 12px; }
+  .registry-workspace .registry-release-id h3 { font-size: 14px; }
+  .registry-workspace .registry-skill-pane .registry-summary { font-size: 14px; line-height: 21px; }
+  .registry-workspace .registry-command.command-panel { padding: 8px 10px; }
+  .registry-workspace .registry-command code { padding-left: 2ch; font-size: 11.5px; line-height: 19px; text-indent: -2ch; }
+  .registry-workspace .registry-version-row { grid-template-columns: 16px minmax(0, 1fr); }
+  .registry-workspace .registry-version-meta { grid-column: 2; }
+  .registry-workspace .registry-disclosure-body .registry-facts > div,
+  .registry-workspace .registry-disclosure-body .registry-facts[data-labels="wide"] > div { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}
+@container skill-pane (max-width: 330px) {
+  .registry-workspace .registry-release-id h3 { font-size: 13px; }
+  .registry-workspace .registry-skill-pane .registry-inspector-title h2 { font-size: 18px; line-height: 24px; }
 }
 
 @media (pointer: coarse), (any-pointer: coarse), (max-width: 680px) {
   .registry-workspace .registry-row { min-height: 64px; }
   .registry-workspace .registry-search input { height: 44px; }
   .registry-workspace .registry-search kbd { display: none; }
-  .registry-workspace :is(.registry-details > summary, .registry-disclosure-button) { min-height: 44px; }
+  .registry-workspace .registry-disclosure-button { min-height: 44px; }
+  .registry-workspace .registry-version-row { min-height: 44px; }
+  .registry-workspace .registry-link-button { min-height: 32px; }
+  .registry-workspace :is(.registry-versions-toggle, .registry-copy-command) { height: 40px; }
+  .registry-workspace .registry-icon-copy { width: 40px; height: 40px; }
 }
 
 @media (forced-colors: active) {
