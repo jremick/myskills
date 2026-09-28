@@ -962,14 +962,28 @@ test("a modified click on the launcher opens a separate tab without prompting or
   await page.getByRole("link", { name: "Architecture overview" }).click();
 
   const navigationEvents: Array<Record<string, unknown>> = [];
+  const pendingRequests = new Set<string>();
   context.on("request", (request) => {
-    if (request.isNavigationRequest()) navigationEvents.push({ event: "request", url: request.url() });
+    pendingRequests.add(request.url());
+    navigationEvents.push({ event: "request", type: request.resourceType(), url: request.url() });
   });
   context.on("response", (response) => {
     if (response.request().isNavigationRequest()) navigationEvents.push({ event: "response", url: response.url(), status: response.status(), contentType: response.headers()["content-type"] });
   });
+  context.on("requestfinished", (request) => {
+    pendingRequests.delete(request.url());
+    if (request.isNavigationRequest()) navigationEvents.push({ event: "finished", url: request.url() });
+  });
   context.on("requestfailed", (request) => {
-    if (request.isNavigationRequest()) navigationEvents.push({ event: "failed", url: request.url(), failure: request.failure()?.errorText });
+    pendingRequests.delete(request.url());
+    navigationEvents.push({ event: "failed", url: request.url(), failure: request.failure()?.errorText });
+  });
+  context.on("page", (tab) => {
+    tab.on("framenavigated", (frame) => navigationEvents.push({ event: "navigated", url: frame.url() }));
+    tab.on("domcontentloaded", () => navigationEvents.push({ event: "domcontentloaded", url: tab.url() }));
+    tab.on("pageerror", (error) => navigationEvents.push({ event: "pageerror", error: error.message }));
+    tab.on("close", () => navigationEvents.push({ event: "close", url: tab.url() }));
+    tab.on("crash", () => navigationEvents.push({ event: "crash", url: tab.url() }));
   });
   const [popup] = await Promise.all([
     context.waitForEvent("page"),
@@ -980,13 +994,14 @@ test("a modified click on the launcher opens a separate tab without prompting or
   await popup.bringToFront();
   const workbenchUrl = new RegExp(`/architectures/${LARGE_ID}/workbench\\?profile=personal&environment=personal-laptop$`);
   try {
-    await popup.waitForURL(workbenchUrl, { waitUntil: "domcontentloaded" });
+    await popup.waitForURL(workbenchUrl, { waitUntil: "domcontentloaded", timeout: 15_000 });
   } catch (error) {
     console.error("Workbench popup navigation", JSON.stringify({
       node: process.version,
       browser: context.browser()?.version(),
       pages: context.pages().map((tab) => ({ url: tab.url(), closed: tab.isClosed() })),
-      navigationEvents: navigationEvents.slice(-20),
+      pendingRequests: [...pendingRequests].slice(-30),
+      navigationEvents: navigationEvents.slice(-40),
     }));
     throw error;
   }
