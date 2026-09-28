@@ -27,6 +27,7 @@ Responsibilities:
 - support maintainer/admin workflows through role-gated API calls
 - enroll a personal Codex workspace and execute approved updates with an explicit companion command
 - inspect an explicitly selected local Codex profile with a read-only metadata observation or health report
+- enroll global and project Codex and Claude skill directories as separate read-only inventory scopes
 - create a dry-run-only work/team bootstrap plan from explicit approved roots and skill selectors
 
 CLI tokens should be stored in the platform secret store where possible.
@@ -123,6 +124,15 @@ myskills update [skill-slug] [--version <version>] [--platform <platform>] [--di
 myskills rollback <skill-slug> [--dir <install-root>]
 myskills codex enroll --workspace <absolute-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>]
 myskills codex observe --workspace <absolute-dir> [--upload] [--json]
+myskills scopes inventory --provider codex|claude --root <absolute-skills-dir> [--json]
+myskills scopes enroll --provider codex|claude --scope global --root <absolute-skills-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>]
+myskills scopes enroll --provider codex|claude --scope project --project <absolute-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>]
+myskills scopes observe --provider codex|claude --scope global|project [--project <absolute-dir>] [--upload] [--json]
+myskills scopes list [--provider codex|claude]
+myskills scopes resolve --provider codex|claude --path <absolute-dir>
+myskills scopes exclude|include --provider codex|claude --project <absolute-dir>
+myskills scopes unbind --provider codex|claude --scope global|project [--project <absolute-dir>]
+myskills scopes migrate plan|apply --provider codex|claude --project <absolute-dir> [--plan-digest <sha256>]
 myskills install <skill-slug> --version <version> --workspace <absolute-dir>
 myskills update [skill-slug] [--version <version>] --workspace <absolute-dir>
 myskills rollback <skill-slug> --workspace <absolute-dir>
@@ -361,6 +371,26 @@ The CLI checks Codex compatibility and valid `SKILL.md` YAML frontmatter with a
 matching name and text description. `--dir` cannot bypass an enrolled workspace's
 binding. Team-shared skills can be installed when your account can read them;
 team-owned execution targets are outside this adapter's beta scope.
+
+### Global and project skill inventories (workspace scopes)
+
+`myskills scopes` enrolls a provider's user-level skills directory, or a
+project, as a personal read-only inventory target: `codex-inventory` for Codex
+and `claude-inventory` for Claude. Pass each directory explicitly; the CLI does
+not search your home directory. Run `scopes inventory` first to review locally
+what an upload would contain. Uploads carry skill slugs, counts, and
+`SKILL.md` digests only. Absolute paths, exclusions, skill bodies, and names of
+linked or invalid entries stay local.
+
+Projects resolve to the provider's global scope unless you exclude them or
+enroll them separately. Resolution uses real paths and whole path segments, the
+deepest rule wins, and an excluded project never falls back to the global
+scope. Scopes are MySkills ownership only: they do not change how Codex or
+Claude load or inherit skills, and they never write skill files. Existing
+managed Codex workspace bindings can be adopted with a previewed
+`scopes migrate plan` and `scopes migrate apply`. See
+[Workspace Scopes](../../docs/WORKSPACE_SCOPES.md) for the rules, recovery
+steps, and local state format.
 
 `codex observe --upload` records verified filesystem state. Confirm separately
 that Codex loaded the skill. To process one browser-queued update, supply a

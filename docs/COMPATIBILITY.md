@@ -49,6 +49,7 @@ Within one beta tag, API capability version, root/workspace versions, CLI versio
 - Browser/device-code CLI login.
 - Provider install adapters beyond the personal, user-owned Codex workspace path. Team-shared releases can be installed into that personal workspace when authorized.
 - Automatic attachment of old installations without a registry identity; preserve and reinstall them into a new root after review.
+- Changing native Codex or Claude skill loading or inheritance. `myskills scopes` records read-only inventory ownership for global and project skill directories; see [Workspace Scopes](WORKSPACE_SCOPES.md).
 - Isolation from hostile local processes with the same OS account. Root locks coordinate MySkills writers; they are not an OS sandbox.
 - Background scan/eval workers and durable eval evidence.
 - Backward-compatible migration from every historical prerelease database shape.
