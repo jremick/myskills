@@ -19,6 +19,8 @@ interface MockArchitectureOptions {
   includeSecondArchitecture?: boolean;
   includeTeamOwner?: boolean;
   failFirstMigrationCreate?: boolean;
+  scopeInventoryTarget?: boolean;
+  authorOnly?: boolean;
 }
 
 test.beforeEach(async ({ page }) => {
@@ -291,7 +293,7 @@ for (const width of [1280, 390]) test(`target registration is on demand and pres
   const state = await installMockArchitectureRoutes(page);
   await page.setViewportSize({ width, height: 844 });
   await page.goto("/targets");
-  await expect(page.getByRole("heading", { name: "Connect a Codex workspace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connect your skills" })).toBeVisible();
   const name = page.getByLabel("Target name", { exact: true });
   await expect(name).toBeHidden();
   const opener = page.getByRole("button", { name: "Register read-only target", exact: true }).first();
@@ -318,6 +320,88 @@ for (const width of [1280, 390]) test(`target registration is on demand and pres
   await info.attach("registered-binding", { body: JSON.stringify(state.targetRegistrationBodies, null, 2), contentType: "application/json" });
 });
 
+// Work-pilot contract: the browser generates local CLI instructions from real
+// architecture bindings; changing scope must not create a target or leak paths.
+for (const width of [1280, 390]) test(`scope setup generates bound Claude project commands and preserves managed Codex at ${width}`, async ({ page, context }, info) => {
+  const state = await installMockArchitectureRoutes(page, { includeSecondArchitecture: true, authorOnly: true });
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto("/targets");
+  const guide = page.getByRole("region", { name: "Connect your skills" });
+  await expect(guide).toBeVisible();
+  await guide.getByLabel("Provider", { exact: true }).selectOption("claude");
+  await guide.getByLabel("Connection type").selectOption("project");
+  await guide.getByLabel("CLI configuration profile").fill("work");
+  await guide.getByLabel("Setup architecture", { exact: true }).selectOption("architecture-1");
+  await guide.getByLabel("Architecture profile", { exact: true }).selectOption("personal");
+  await guide.getByLabel("Logical environment").selectOption("personal-laptop");
+  await guide.getByLabel("Setup architecture", { exact: true }).selectOption("architecture-2");
+  await guide.getByLabel("Architecture profile", { exact: true }).selectOption("work");
+  await expect(guide.getByLabel("Logical environment")).toHaveValue("codex-work");
+  await expect(guide.getByLabel("Logical environment").locator("option")).toHaveCount(1);
+  const commands = guide.getByLabel("Enrollment commands", { exact: true });
+  await expect(commands).toContainText('npm install -g @jarel/myskills@beta');
+  await expect(commands).toContainText(`scopes enroll --provider claude --scope project --project '/absolute/existing/project with spaces'`);
+  await expect(commands).toContainText(`--architecture-id 'architecture-2' --environment-id 'codex-work' --profile-id 'work'`);
+  await expect(commands).toContainText("--config-profile 'work'");
+  await expect(commands).not.toContainText("ARCHITECTURE_ID");
+  await expect(commands).toContainText(`scopes inventory --provider claude --root '/absolute/existing/project with spaces/.claude/skills'`);
+  await guide.getByRole("button", { name: "Copy enrollment commands" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(await commands.textContent());
+  await guide.getByLabel("Connection type").selectOption("global");
+  await expect(commands).toContainText(`scopes enroll --provider claude --scope global --root '/absolute/existing/skills'`);
+  await expect(commands).not.toContainText("--project");
+  await guide.getByLabel("Provider", { exact: true }).selectOption("codex");
+  await guide.getByLabel("Connection type").selectOption("managed");
+  await expect(commands).toContainText(`codex enroll --workspace '/absolute/existing/workspace'`);
+  await expect(commands).not.toContainText("scopes enroll");
+  await expect(guide.getByText("Install, update, and recover managed skills", { exact: true })).toBeVisible();
+  await guide.getByLabel("CLI configuration profile").fill('work; touch /tmp/unwanted');
+  await expect(guide.getByRole("button", { name: "Copy enrollment commands" })).toBeDisabled();
+  await expect(commands).toHaveCount(0);
+  await guide.getByLabel("CLI configuration profile").fill("");
+  await expect(commands).not.toContainText("--config-profile");
+  await guide.getByLabel("CLI configuration profile").fill("work");
+  await page.getByRole("heading", { name: "Connect your skills" }).focus();
+  expect(state.targetRegistrationBodies).toEqual([]);
+  expect(state.createdBodies).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath(`scope-guide-${width}.png`), fullPage: true });
+  await info.attach("scope-commands", { body: await commands.textContent() ?? "", contentType: "text/plain" });
+});
+
+test("scope setup with no owned architecture offers the existing creation flow without fabricated IDs", async ({ page }) => {
+  const state = await installMockArchitectureRoutes(page, { includeExistingArchitecture: false });
+  await page.goto("/targets");
+  const guide = page.getByRole("region", { name: "Connect your skills" });
+  await expect(guide.getByText("Create a personal architecture and save a revision before enrollment.", { exact: true })).toBeVisible();
+  await expect(guide).toContainText("choose at least one reviewed skill from Skills");
+  await expect(guide.getByRole("link", { name: "Create or edit an architecture" })).toHaveAttribute("href", "/architectures");
+  await expect(guide.getByLabel("Enrollment commands", { exact: true })).toHaveCount(0);
+  expect(state.targetRegistrationBodies).toEqual([]);
+});
+
+test("an incomplete connected inventory explains omissions using bounded findings without rendering raw metadata", async ({ page }, info) => {
+  await installMockArchitectureRoutes(page, { scopeInventoryTarget: true });
+  await page.goto("/targets");
+  const detail = page.getByRole("article", { name: "Work Claude inventory" });
+  await expect(detail).toBeVisible();
+  await expect(detail.getByText("Claude", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Project inventory", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Connected", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Inventory incomplete", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Last observed", { exact: true })).toBeVisible();
+  await expect(detail.getByText("skill-linked", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Linked skill directories were not followed.", { exact: true })).toBeVisible();
+  await expect(detail.getByText("2", { exact: true }).first()).toBeVisible();
+  await expect(detail.getByText("inventory-truncated", { exact: true })).toBeVisible();
+  await expect(detail.getByText("The inventory limit was reached; some entries were not listed.", { exact: true })).toBeVisible();
+  await expect(detail).not.toContainText("DO_NOT_RENDER_LOCAL_METADATA");
+  await expect(detail).not.toContainText("Connection failed");
+  await expect(detail.getByText("Inventory does not confirm that Claude recognizes or loads these skills.", { exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("incomplete-inventory.png"), fullPage: true });
+});
+
 interface MockArchitectureState {
   createdBodies: Array<Record<string, unknown>>;
   draftPreviewAttempts: number;
@@ -335,6 +419,10 @@ async function installMockArchitectureRoutes(
   page: Page,
   options: MockArchitectureOptions = {},
 ): Promise<MockArchitectureState> {
+  const account = options.authorOnly ? { ...owner, roles: ["author"] } : owner;
+  if (options.authorOnly) await page.addInitScript(({ expiresAt: expiry, user }) => {
+    if (location.origin !== "null") window.localStorage.setItem("myskills-app:web-session", JSON.stringify({ expiresAt: expiry, user }));
+  }, { expiresAt, user: account });
   const state: MockArchitectureState = {
     createdBodies: [],
     draftPreviewAttempts: 0,
@@ -480,7 +568,22 @@ async function installMockArchitectureRoutes(
     updatedAt: "2026-08-30T00:00:00.000Z",
   };
   let createdArchitecture: Record<string, unknown> | null = null;
-  let createdTarget: Record<string, unknown> | null = null;
+  let createdTarget: Record<string, unknown> | null = options.scopeInventoryTarget ? {
+    schemaVersion: 1, id: "target-scope", name: "Work Claude inventory",
+    owner: { type: "user", id: owner.id }, adapter: { kind: "claude-inventory", version: "1.0.0", contractVersion: 1 },
+    architectureId: architecture.id, environmentId: "codex-work", profileId: "work", status: "connected",
+    consent: { status: "granted" }, generation: 1, identityDigest: "f".repeat(64),
+    capabilities: { "inventory.read": true, "health.read": true, "plan.read": false },
+    metadata: { provider: "claude", scope: "project" }, health: { status: "degraded", checkedAt: "2026-09-29T01:00:00.000Z" },
+  } : null;
+  const scopeObservations = options.scopeInventoryTarget ? [{
+    schemaVersion: 1, id: "observation-scope", targetId: "target-scope", targetGeneration: 1,
+    adapterDigest: "a".repeat(64), capabilitiesDigest: "b".repeat(64), observedDigest: "c".repeat(64),
+    observedAt: "2026-09-29T01:00:00.000Z", skills: [{ slug: "review-helper" }],
+    configFindings: [{ code: "skill-linked", severity: "warning", count: 2 }, { code: "inventory-truncated", severity: "error", count: 1 }],
+    promptAwareness: { detected: false, count: 0, redacted: true },
+    metadata: { provider: "claude", scope: "project", inventoryComplete: false, runtimeRecognized: false, extra: "DO_NOT_RENDER_LOCAL_METADATA" },
+  }] : [];
   let organizationGrantIds: string[] = [];
 
   await page.route("**/api/v1/**", async (route) => {
@@ -490,7 +593,7 @@ async function installMockArchitectureRoutes(
     const path = url.pathname.replace(/^\/api/, "");
     const body = request.postData() ? JSON.parse(request.postData()!) as Record<string, unknown> : {};
 
-    if (path === "/v1/me") return json(route, 200, { user: owner });
+    if (path === "/v1/me") return json(route, 200, { user: account });
     if (path === "/v1/architecture-patterns") {
       return json(route, 200, {
         patterns: [
@@ -755,7 +858,7 @@ async function installMockArchitectureRoutes(
     }
     const targetObservationMatch = path.match(/^\/v1\/architecture-targets\/([^/]+)\/observations$/);
     if (targetObservationMatch && method === "GET") {
-      return json(route, 200, { observations: [] });
+      return json(route, 200, { observations: scopeObservations });
     }
     const targetMatch = path.match(/^\/v1\/architecture-targets\/([^/]+)$/);
     if (targetMatch && method === "GET") {

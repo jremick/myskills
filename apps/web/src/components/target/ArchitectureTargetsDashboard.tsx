@@ -5,7 +5,6 @@ import {
   BookOpen,
   Check,
   CircleAlert,
-  Eye,
   Plus,
   RefreshCw,
   ShieldCheck,
@@ -31,6 +30,8 @@ import type {
 } from "@myskills-app/core";
 import { architectureDigest, type ArchitectureSpecV1 } from "@myskills-app/core";
 import { CodexWorkspaceGuide } from "./CodexWorkspaceGuide.js";
+import { TargetObservationCard } from "./TargetObservationCard.js";
+import { targetInventoryLabels } from "./workspace-target.js";
 import { useSplitLayout } from "../registry/useSplitLayout.js";
 import {
   adapterLabel,
@@ -446,11 +447,11 @@ export function ArchitectureTargetsDashboard({ client, session }: { client: Regi
           <div className="cp-list-label"><h2>Targets</h2><span aria-live="polite">{state === "ready" ? targets.length : ""}</span></div>
           {state === "loading" && <TargetLoadingRows />}
           {state === "error" && <div className="cp-list-state" role="alert"><strong>Targets unavailable</strong><p>{message ?? "Retry when the target service is ready."}</p><Button size="sm" type="button" variant="outline" onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw size={15} aria-hidden="true" />Retry</Button></div>}
-          {noTargets && <div className="cp-list-state"><strong>No connected targets</strong><p>Enroll a Codex workspace with the CLI setup guide, or register a read-only target.</p></div>}
+          {noTargets && <div className="cp-list-state"><strong>No connected targets</strong><p>Connect Codex or Claude with the CLI setup guide, or register a read-only target.</p></div>}
           {state === "ready" && targets.length > 0 && <div className="cp-rows" role="list">{targets.map((target) => {
             const status = targetStatusLabel(target.status);
             return <div key={target.id} role="listitem"><button aria-current={target.id === selectedId ? "true" : undefined} aria-pressed={target.id === selectedId} className="cp-row" data-target-id={target.id} type="button" onClick={() => selectTarget(target.id)}>
-              <span className="cp-row-text"><span className="cp-row-title">{target.name}</span><span className="cp-row-meta">{adapterLabel(target.adapter.kind)} · {ownerLabel(target.owner, session.user.id, organizationNames)} · {consentLabel(target.consent.status).label}</span></span>
+              <span className="cp-row-text"><span className="cp-row-title">{target.name}</span><span className="cp-row-meta">{targetInventoryLabels(target)?.label ?? adapterLabel(target.adapter.kind)} · {ownerLabel(target.owner, session.user.id, organizationNames)} · {consentLabel(target.consent.status).label}</span></span>
               <span className="cp-chip" data-tone={toneOf(status)}>{status.label}</span>
             </button></div>;
           })}</div>}
@@ -477,7 +478,7 @@ export function ArchitectureTargetsDashboard({ client, session }: { client: Regi
           </div>
           <div className="cp-panel" id="target-guide-panel" hidden={inspectorPanel !== "guide"}>
             {!noTargets && <div className="cp-panel-bar"><Button size="sm" type="button" variant="outline" onClick={closePanel}><X size={15} aria-hidden="true" />Close</Button></div>}
-            <CodexWorkspaceGuide headingRef={guideHeadingRef} />
+            <CodexWorkspaceGuide client={client} currentUserId={session.user.id} active={inspectorPanel === "guide"} headingRef={guideHeadingRef} />
           </div>
         </div>
       </div>
@@ -771,7 +772,7 @@ function TargetDetailPanel({ client, detail, observations, state, message, selec
       {back}
       <div className="cp-title-block">
         <h2 id="target-detail-title" ref={titleRef} tabIndex={-1}>{detail.name}</h2>
-        <p className="cp-meta">{adapterLabel(detail.adapter.kind)} · adapter v{detail.adapter.version} · contract v{detail.adapter.contractVersion}</p>
+        <p className="cp-meta">{targetInventoryLabels(detail)?.label ?? adapterLabel(detail.adapter.kind)} · adapter v{detail.adapter.version} · contract v{detail.adapter.contractVersion}</p>
         <div className="cp-chips"><span className="cp-chip" data-tone={toneOf(status)}>{status.label}</span><span className="cp-chip" data-tone={toneOf(consent)}>{consent.label}</span></div>
       </div>
     </header>
@@ -788,6 +789,7 @@ function TargetDetailPanel({ client, detail, observations, state, message, selec
 }
 
 function TargetBindingFacts({ target, currentUserId, architectureNames, organizationNames }: { target: ArchitectureTargetRecord; currentUserId: string; architectureNames: ReadonlyMap<string, string>; organizationNames: ReadonlyMap<string, string> }) {
+  const inventory = targetInventoryLabels(target);
   const metadataKeys = Object.keys(target.metadata ?? {}).sort();
   const mutable = target.adapter.contractVersion === 2;
   const capabilities = [
@@ -799,6 +801,7 @@ function TargetBindingFacts({ target, currentUserId, architectureNames, organiza
   return <section className="cp-section" aria-labelledby="target-binding-heading">
     <h3 id="target-binding-heading">Binding</h3>
     <dl className="cp-facts">
+      {inventory && <><div><dt>Provider</dt><dd>{inventory.provider}</dd></div><div><dt>Scope</dt><dd>{inventory.scope}</dd></div></>}
       <div><dt>Owner</dt><dd>{ownerLabel(target.owner, currentUserId, organizationNames)}</dd></div>
       <div><dt>Architecture</dt>{architectureName ? <dd>{architectureName}</dd> : <dd className="cp-mono">{shortId(target.architectureId)}</dd>}</div>
       <div><dt>Profile ID</dt><dd className="cp-mono">{target.profileId}</dd></div>
@@ -859,9 +862,6 @@ function TargetHealthCard({ client, target, onChanged }: { client: RegistryClien
   return <section className="cp-section" aria-labelledby="target-health-heading"><details className="cp-details"><summary id="target-health-heading">Report health manually</summary><div className="cp-details-body"><p className="cp-muted">Current health: {healthLabel(target.health?.status).label}. A manual report replaces it until the adapter reports again.</p><form className="target-health-form" onSubmit={(event) => void updateHealth(event)}><label><span>Reported state</span><select aria-label="Target health status" disabled={state === "saving" || target.status === "revoked"} onChange={(event) => setStatus(event.target.value as ArchitectureTargetHealth["status"])} value={status}><option value="healthy">Healthy</option><option value="degraded">Degraded</option><option value="unavailable">Unavailable</option></select></label><Button disabled={state === "saving" || target.status === "revoked"} size="sm" type="submit" variant="outline"><Activity size={15} aria-hidden="true" />{state === "saving" ? "Updating…" : "Update health"}</Button></form>{message && <div className="cp-notice" data-tone={state === "error" ? "danger" : undefined} role={state === "error" ? "alert" : "status"}>{message}</div>}</div></details></section>;
 }
 
-function TargetObservationCard({ target, observations }: { target: ArchitectureTargetRecord; observations: ArchitectureTargetObservationRecord[] }) {
-  return <section className="cp-section" aria-labelledby="target-observations-heading"><div className="cp-section-head"><h3 id="target-observations-heading">Observations</h3><span className="cp-muted">{observations.length} recent</span></div><p className="cp-muted">Only bounded counts and status metadata are shown here. Configuration contents, paths, prompts, and credentials are never rendered.</p>{observations.length > 0 ? <div className="target-observation-list">{observations.map((observation) => <div className="target-observation-row" key={observation.id ?? observation.observedDigest}><Eye size={16} aria-hidden="true" /><span><strong>{formatTargetDate(observation.observedAt)}</strong><small>{observation.skills.length} skills · {observation.configFindings.length} config findings · prompt detected: {observation.promptAwareness.detected ? "yes" : "no"}</small></span><span className="cp-chip">Generation {observation.targetGeneration}</span></div>)}</div> : <p className="cp-muted"><strong>No observations yet.</strong> {target.consent.status === "granted" ? "A read-only adapter can report bounded state after consent." : "Grant consent before an adapter can report state."}</p>}</section>;
-}
 
 function TargetRevokeCard({ client, target, onRevoked }: { client: RegistryClient; target: ArchitectureTargetRecord; onRevoked: () => void }) {
   const [confirm, setConfirm] = useState(false);

@@ -92,6 +92,7 @@ test("GET /v1/capabilities describes enabled server features", async (t) => {
       sharing: false,
       architectures: false,
       architectureTargets: false,
+      architectureObservationSlugValidation: false,
       architectureOrganizationGrants: false,
       architecturePatternMigrations: false,
     },
@@ -192,6 +193,30 @@ test("configured Phase 2 architecture server fails readiness and hides capabilit
   });
   assert.equal(capabilities.statusCode, 200);
   assert.equal(capabilities.json().capabilities.architectures, false);
+});
+
+test("observation privacy capability stays false and readiness fails when the configured migration probe fails", async (t) => {
+  const { ArchitectureTargetService } = await import("../src/targets/service.js");
+  const { MemoryArchitectureTargetStore } = await import("../src/targets/memory-target-store.js");
+  const { ArchitectureTargetBindingAuthorizer } = await import("../src/targets/architecture-binding-authorizer.js");
+  let migrated = false;
+  const app = buildApp({
+    skillRepository: repository,
+    authService: new AuthService(new MemoryAuthStore("closed")),
+    architectureTargetService: new ArchitectureTargetService(new MemoryArchitectureTargetStore(), new ArchitectureTargetBindingAuthorizer(new MemoryArchitectureStore())),
+    readinessProbes: {
+      postgres: async () => {},
+      architectureObservationPrivacy: async () => { if (!migrated) throw new Error("Observation privacy migration is missing."); },
+    },
+  });
+  t.after(() => app.close());
+  assert.equal((await app.inject({ method: "GET", url: "/v1/capabilities" })).json().capabilities.architectureObservationSlugValidation, false);
+  const unready = await app.inject({ method: "GET", url: "/ready" });
+  assert.equal(unready.statusCode, 503);
+  assert.equal(unready.json().checks.architectureObservationPrivacy, "unready");
+  migrated = true;
+  assert.equal((await app.inject({ method: "GET", url: "/v1/capabilities" })).json().capabilities.architectureObservationSlugValidation, true);
+  assert.equal((await app.inject({ method: "GET", url: "/ready" })).statusCode, 200);
 });
 
 test("API request limiting is shared across routes while health probes remain independent", async (t) => {

@@ -11,9 +11,8 @@ try {
   const exitCode = await runCli(process.argv.slice(2), {
     env: process.env,
     fetch: fetchImpl,
-    configStore: createFileConfigStore(process.env),
+    createStores: (env, namespace) => ({ configStore: createFileConfigStore(env), tokenStore: createTokenStore(env, namespace) }),
     prompt,
-    tokenStore: createTokenStore(process.env),
     io: {
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),

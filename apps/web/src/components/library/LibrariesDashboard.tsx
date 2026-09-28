@@ -597,6 +597,44 @@ function LibraryDetail({ api, client, libraryId, entryId, candidateId, filter, g
   </section>;
 }
 
+function retryDeadline(tracking: LibraryEntry["tracking"]): string | null {
+  if (tracking?.retryAvailableAt !== undefined) return tracking.retryAvailableAt;
+  return tracking?.health === "rate-limited" ? tracking.nextCheckAt ?? null : null;
+}
+
+function useDeadlineNow(deadline: string | null | undefined): number {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const until = deadline ? Date.parse(deadline) : NaN;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    function tick() {
+      const current = Date.now();
+      setNow(current);
+      const remaining = until - current;
+      if (remaining > 0) timer = setTimeout(tick, remaining > 60_000 ? Math.min(60_000, remaining - 60_000) : Math.min(1_000, remaining));
+    }
+    tick();
+    return () => clearTimeout(timer);
+  }, [deadline]);
+  return now;
+}
+
+function CheckSchedule({ tracking, compact = false }: { tracking: LibraryEntry["tracking"]; compact?: boolean }) {
+  const scheduled = (tracking?.mode === "daily" || tracking?.mode === "weekly") && tracking.workerAvailable !== false;
+  const retryAt = retryDeadline(tracking);
+  const nextAt = tracking?.nextCheckAt;
+  const deadline = scheduled && nextAt ? retryAt && Date.parse(retryAt) > Date.parse(nextAt) ? retryAt : nextAt : retryAt;
+  const now = useDeadlineNow(deadline);
+  if (!tracking || (!scheduled && !deadline)) return compact ? null : <Fact label="Checks">No automatic checks scheduled</Fact>;
+  const timestamp = deadline ? Date.parse(deadline) : NaN;
+  const remaining = Math.max(0, timestamp - now);
+  const countdown = !Number.isFinite(timestamp) ? "" : remaining === 0 ? scheduled ? "due" : "now"
+    : remaining >= 3_600_000 ? `in ${Math.ceil(remaining / 3_600_000)}h` : remaining >= 60_000 ? `in ${Math.ceil(remaining / 60_000)}m` : `in ${Math.ceil(remaining / 1_000)}s`;
+  const label = scheduled ? "Next check" : "Retry available";
+  const content = <>{deadline && Number.isFinite(timestamp) ? <time dateTime={deadline} title={new Date(timestamp).toLocaleString()}>{dateTime(deadline)}</time> : "Not scheduled"}{countdown && <span className="library-check-countdown">{countdown}</span>}</>;
+  return compact ? <span className="library-check-schedule">{label}: {content}</span> : <Fact label={label}><span className="library-check-schedule">{content}</span></Fact>;
+}
+
 function EntryRow({ entry, sourceName, selected, register, onSelect }: { entry: LibraryEntry; sourceName?: string; selected: boolean; register: (node: HTMLButtonElement | null) => void; onSelect: () => void }) {
   const id = useId();
   const source = entry.kind === "source" ? entry.source : undefined;
@@ -612,6 +650,7 @@ function EntryRow({ entry, sourceName, selected, register, onSelect }: { entry: 
           {entry.kind === "bundle" ? <span>Bundle reference</span> : entry.kind === "source" ? <><span>{source?.path || "Repository root"}</span><span>{refLabel(source?.ref)}</span></>
             : <>{slug && <code>{slug}</code>}<span>{sourceName ?? (entry.skill?.sourceEntryId ? "Library source" : "Skills")}</span></>}
         </span>
+        {source && <CheckSchedule tracking={entry.tracking} compact />}
       </span>
       <span id={`${id}-chips`} className="library-entry-chips">
         {entry.kind === "bundle" ? <Chip>Bundle</Chip> : entry.kind === "source" ? <>
@@ -651,7 +690,7 @@ function SourceEntry({ api, entry, library, titleId, importing, skills, partial,
       {source.license !== undefined && <Fact label="License">{source.license ?? "Not declared"}</Fact>}
       {tracking && <Fact label="Checks"><span className="library-fact-inline">{trackingModeLabel(tracking.mode).label}<Chip tone={health.tone}>{health.label}</Chip></span></Fact>}
       {tracking && <Fact label="Last success">{dateTime(tracking.lastSuccessfulCheckAt) ?? "Never"}</Fact>}
-      {tracking && <Fact label="Next check">{dateTime(tracking.nextCheckAt) ?? "Not scheduled"}</Fact>}
+      {tracking && <CheckSchedule tracking={tracking} />}
       {snapshot && <Fact label="Last snapshot"><span className="library-fact-inline"><code>{snapshot.commit.slice(0, 12)}</code>{snapshot.upstreamLabel && <span>{snapshot.upstreamLabel}</span>}{shortDate(snapshot.observedAt) && <span className="library-muted">{shortDate(snapshot.observedAt)}</span>}</span></Fact>}
       {source.archived && <Fact label="Upstream"><Chip tone="amber">Archived upstream</Chip></Fact>}
     </dl>
@@ -683,8 +722,11 @@ function TrackingControls({ api, entry, onChanged }: { api: LibraryClient; entry
   const [result, setResult] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const identityChange = entry.tracking?.identityChange;
+  const retryAt = retryDeadline(entry.tracking);
+  const now = useDeadlineNow(retryAt);
+  const coolingDown = Boolean(retryAt && Date.parse(retryAt) > now);
   const needsAcknowledgement = identityChange && !acknowledged && (mode === "daily" || mode === "weekly");
-  async function run(check: boolean) { setBusy(true); setError(null); try { if (check) { const response = await api.check(entry.id); setResult(`Check ${response.check.outcome}. ${response.check.candidateIds.length} new candidates.`); } else await api.tracking(entry.id, { expectedRevision: entry.revision, mode, ...(identityChange && acknowledged ? { acknowledgeIdentityChange: true } : {}) }); await onChanged(); } catch (e) { setError(libraryError(e)); } finally { setBusy(false); } }
+  async function run(check: boolean) { if (check && coolingDown) return; setBusy(true); setError(null); try { if (check) { const response = await api.check(entry.id); setResult(`Check ${response.check.outcome}. ${response.check.candidateIds.length} new candidates.`); } else await api.tracking(entry.id, { expectedRevision: entry.revision, mode, ...(identityChange && acknowledged ? { acknowledgeIdentityChange: true } : {}) }); await onChanged(); } catch (e) { setError(libraryError(e)); } finally { setBusy(false); } }
   return <div className="library-tracking">
     {identityChange && <div className="library-callout" data-tone="amber">
       <strong className="library-callout-title"><CircleAlert size={16} aria-hidden="true" />Repository identity changed</strong>
@@ -696,8 +738,9 @@ function TrackingControls({ api, entry, onChanged }: { api: LibraryClient; entry
     <div className="library-form-row">
       <label className="library-field"><span>Check frequency</span><select disabled={busy} value={mode} onChange={(event) => setMode(event.target.value as LibraryTrackingMode)}><option value="off">Off</option><option value="manual">Manual</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></label>
       <Button size="sm" variant="outline" disabled={busy || Boolean(needsAcknowledgement)} onClick={() => void run(false)}>Save tracking</Button>
-      <Button size="sm" variant="ghost" disabled={busy || Boolean(identityChange)} onClick={() => void run(true)}>Check now</Button>
+      <Button size="sm" variant="ghost" disabled={busy || Boolean(identityChange) || coolingDown} onClick={() => void run(true)}>Check now</Button>
     </div>
+    {coolingDown && <p className="library-muted">GitHub’s request allowance resets at the retry time. Check now will be available then.</p>}
     {entry.tracking?.workerAvailable === false && <p className="library-muted">Scheduled checks are unavailable on this instance. Manual checks remain available.</p>}
     {error && <p role="alert" className="library-alert">{error}</p>}{result && <p role="status" className="library-muted">{result}</p>}
   </div>;
