@@ -806,16 +806,6 @@
   margin: -8px 0 -8px -8px;
 }
 
-@container (max-width: 480px) {
-  .app-shell .bundle-inspector-panel.is-skill.registry-inspector .registry-inspector-head { grid-template-columns: auto minmax(0, 1fr); }
-  .app-shell .bundle-inspector-panel.is-skill.registry-inspector .registry-version-slot { grid-column: 1 / -1; max-width: none; }
-  .app-shell .bundle-inspector-panel.is-skill.registry-inspector .registry-version-control,
-  .app-shell .bundle-inspector-panel.is-skill.registry-inspector .registry-version-control [role="status"] { justify-items: start; }
-  .app-shell .bundle-inspector-panel.is-skill.registry-inspector .registry-version-control label { width: min(100%, 320px); }
-  .app-shell .bundle-inspector-panel.is-skill.registry-inspector .registry-version-control select { width: 100%; }
-  .app-shell .bundle-inspector-panel.is-skill.registry-inspector .registry-version-control .control-plane-muted { text-align: left; }
-}
-
 .app-shell .bundle-back {
   justify-self: start;
   margin-left: -8px;
@@ -965,35 +955,47 @@
   line-height: 16px;
 }
 
+/* One compact row below the skill's release card. */
 .app-shell .bundle-memberships {
-  display: grid;
-  gap: 6px;
-  margin: 16px 0;
-  padding: 12px 14px;
-  border-radius: 8px;
-  background: var(--bw-surface-muted, #f7f9fb);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 11px 0;
+  border-top: 1px solid var(--bw-line-soft, #e8edf2);
+  font-size: 13px;
+  line-height: 18px;
 }
 
 .app-shell .bundle-memberships h3 {
-  color: var(--bw-muted, #5c6879);
-  font-size: 12px;
-  line-height: 16px;
+  color: var(--ink-soft, #46556a);
+  font-size: 13px;
+  line-height: 18px;
   font-weight: 600;
 }
 
+.app-shell .bundle-memberships .bundle-muted {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 18px;
+}
+
 .app-shell .bundle-memberships ul {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .app-shell .bundle-memberships li {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
+  gap: 4px 6px;
+  min-width: 0;
 }
 
 .app-shell .bundle-memberships a {
