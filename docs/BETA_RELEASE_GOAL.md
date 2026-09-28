@@ -5,14 +5,16 @@ Last updated: 2026-09-28
 
 Target release: `v0.1.0-beta.15`.
 
-Status: beta.15 browser-branding candidate; beta.14 remains the verified hosted release.
+Status: beta.15 GitHub prerelease and hosted delivery are verified.
 
-## Beta.15 Candidate
+## Beta.15 Release Record
 
-Extend saved instance branding to the browser tab title and favicon. Verify
-save, draft/failure isolation, reload, public pages, hidden text, all three image
-formats, removal and reset. Preserve the beta.14 API and storage contracts.
-See [Beta.15 release delivery](BETA15_RELEASE_DELIVERY.md).
+Saved branding now controls the browser tab title and favicon. Tag, staging and
+production use `0415a160b56dac79900a698c8d378e7083ecd194`. Canonical and tagged
+verification, protected CI, live acceptance and all release-asset checksums passed.
+The beta.14 admin controls and beta.13 QR enrollment remain included. No API,
+schema or dependency change is required; npm remains beta.8. See
+[Beta.15 release delivery](BETA15_RELEASE_DELIVERY.md).
 
 ## Beta.14 Release Record
 
