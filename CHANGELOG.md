@@ -2,6 +2,17 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
+## 0.1.0-beta.14 - 2026-09-28
+
+Target release: `v0.1.0-beta.14`.
+
+- Let MFA-verified owners and administrators change the instance logo and brand text from Admin → Branding.
+- Preview and save PNG, JPEG or WebP logos, hide text for a wordmark, discard drafts, or restore MySkills defaults. Saved branding appears on public, authentication and application pages, including mobile navigation.
+- Persist changes with atomic audit history and reject unsupported, malformed or oversized images. No database migration or new dependency is required.
+- Retain the authenticator enrollment QR codes shipped in beta.13.
+
+This release targets GitHub and the hosted app. npm remains beta.8; the CLI archive is built and verified as a GitHub asset. See [branding controls](docs/BRANDING.md) and [delivery record](docs/BETA14_RELEASE_DELIVERY.md).
+
 ## 0.1.0-beta.13 - 2026-09-28
 
 Target release: `v0.1.0-beta.13`.
