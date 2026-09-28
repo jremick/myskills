@@ -765,6 +765,19 @@ button:focus-visible {
   line-height: 1.35;
 }
 
+.mfa-instructions {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mfa-qr {
+  display: block;
+  width: 240px;
+  max-width: 100%;
+  height: auto;
+}
+
 .auth-message {
   flex-basis: 100%;
   color: #854d0e;

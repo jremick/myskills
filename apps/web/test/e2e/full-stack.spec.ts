@@ -1,7 +1,10 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { captureMfaEvidence, decodeEnrollmentQr, enrollmentCode, observeEnrollmentPrivacy } from "./mfa-test-support.js";
 
 const browserExecutable = process.env.MYSKILLS_E2E_BROWSER_EXECUTABLE?.trim();
-test.use({ launchOptions: browserExecutable ? { executablePath: browserExecutable } : {} });
+// This file handles credentials and one-time enrollment data. Artifact options
+// are worker-scoped, so disable automatic recording for the whole file.
+test.use({ launchOptions: browserExecutable ? { executablePath: browserExecutable } : {}, trace: "off", video: "off", screenshot: "off" });
 
 const ownerEmail = requiredEnvironment("MYSKILLS_E2E_OWNER_EMAIL");
 const ownerPassword = requiredEnvironment("MYSKILLS_E2E_OWNER_PASSWORD");
@@ -207,7 +210,8 @@ test("owner creates and reads a real architecture revision from a seeded release
   expect(browserErrors).toEqual([]);
 });
 
-test("owner invites a user through captured email and the invitee registers and logs in", async ({ page }, testInfo) => {
+test("owner invites a user who registers, logs in and enrolls MFA from the rendered QR", async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
   const inviteeEmail = `beta2-invitee-${testInfo.retry}@example.test`;
   await signInOwner(page, recoveryCode(2, testInfo));
 
@@ -243,6 +247,51 @@ test("owner invites a user through captured email and the invitee registers and 
   await page.getByLabel("Password").fill(inviteePassword);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("link", { name: "Account settings" })).toHaveAttribute("title", inviteeEmail);
+
+  const assertPrivacy = observeEnrollmentPrivacy(page);
+  await page.getByRole("link", { name: "Account settings" }).click();
+  const panel = page.getByRole("region", { name: "MFA setup", exact: true });
+  const qr = panel.getByRole("img", { name: "Authenticator setup QR code", exact: true });
+  await expect(panel.getByLabel("Current password", { exact: true })).toBeVisible();
+  await expect(qr).toHaveCount(0);
+  await panel.getByLabel("Current password", { exact: true }).fill("incorrect-fixture-password");
+  await panel.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(panel.getByRole("status")).toBeVisible();
+  await expect(qr).toHaveCount(0);
+
+  const enrollmentResponse = page.waitForResponse(response => new URL(response.url()).pathname === "/api/v1/auth/mfa/totp/enroll" && response.status() === 201);
+  await panel.getByLabel("Current password", { exact: true }).fill(inviteePassword);
+  await panel.getByRole("button", { name: "Continue", exact: true }).click();
+  const { enrollment } = await (await enrollmentResponse).json() as { enrollment: { secret: string; otpauthUrl: string } };
+  const decodedUri = await decodeEnrollmentQr(qr);
+  expect(decodedUri === enrollment.otpauthUrl, "Rendered QR must match the real API enrollment URI").toBe(true);
+  expect((await panel.locator(".mfa-secret").textContent())?.includes(enrollment.secret), "Manual secret remains available").toBe(true);
+  expect((await panel.locator(".mfa-secret").textContent())?.includes(enrollment.otpauthUrl), "Setup URL remains available").toBe(true);
+  await captureMfaEvidence(page, testInfo, "fullstack-mfa-setup");
+
+  await panel.getByLabel("MFA setup code", { exact: true }).fill("123");
+  await panel.getByRole("button", { name: "Enable MFA", exact: true }).click();
+  await expect(panel.getByRole("status")).toBeVisible();
+  await expect(qr).toBeVisible();
+  const confirmationResponse = page.waitForResponse(response => new URL(response.url()).pathname === "/api/v1/auth/mfa/totp/confirm" && response.status() === 200);
+  const code = enrollmentCode(decodedUri);
+  expect(/^\d{6}$/.test(code), "Authenticator confirmation must use six digits").toBe(true);
+  await panel.getByLabel("MFA setup code", { exact: true }).fill(code);
+  await panel.getByRole("button", { name: "Enable MFA", exact: true }).click();
+  const { mfa } = await (await confirmationResponse).json() as { mfa: { recoveryCodes: string[] } };
+  await expect(page.getByText("Authenticator app MFA is enabled.", { exact: true })).toBeVisible();
+  const displayedCodes = await panel.locator(".mfa-recovery code").textContent();
+  expect(mfa.recoveryCodes.length).toBe(10);
+  expect(mfa.recoveryCodes.every(value => displayedCodes?.includes(value)), "All recovery codes must be displayed once").toBe(true);
+  await expect(qr).toHaveCount(0);
+  await captureMfaEvidence(page, testInfo, "fullstack-mfa-enabled");
+  await page.reload();
+  await expect(page.getByText("Authenticator app MFA is enabled.", { exact: true })).toBeVisible();
+  await expect(page.getByText("10 recovery codes left.", { exact: true })).toBeVisible();
+  await expect(page.locator(".mfa-recovery")).toHaveCount(0);
+  await expect(page.locator(".mfa-secret")).toHaveCount(0);
+  const privacy = await assertPrivacy([enrollment.secret, enrollment.otpauthUrl, ...mfa.recoveryCodes]);
+  await testInfo.attach("mfa-fullstack-acceptance", { body: JSON.stringify({ realApi: true, qrRoundTrip: true, sixDigitConfirmation: true, persistedEnabledState: true, recoveryCodes: mfa.recoveryCodes.length, oneTimeRecoveryDisplay: true, ...privacy, physicalAuthenticatorScans: "not performed" }), contentType: "application/json" });
 });
 
 async function signInOwner(page: Page, codeOrRecoveryCode: string) {
