@@ -951,6 +951,9 @@ for (const width of [1024, 390, 320]) test(`the Workbench stays usable without h
 
 test("a modified click on the launcher opens a separate tab without prompting or disturbing the draft", async ({ page, context }) => {
   await installWorkbenchMock(context);
+  // This navigation check does not need web fonts. A pending external stylesheet
+  // also blocks DOMContentLoaded in the new tab, even after its HTML has arrived.
+  await context.route("https://fonts.googleapis.com/**", (route) => route.fulfill({ contentType: "text/css", body: "" }));
   const dialogs = trackDialogs(page);
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.goto(`/architectures/${LARGE_ID}`);
