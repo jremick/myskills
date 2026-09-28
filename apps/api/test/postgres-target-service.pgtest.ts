@@ -167,6 +167,48 @@ test("Postgres target store enforces current user, team, and organization tenanc
   assert.equal(await service.getTarget(teamMemberId, teamTarget.id), null);
 });
 
+test("Postgres observation append accepts config and token slugs after privacy upgrade without widening owner access", { timeout: 60_000 }, async (t) => {
+  const pool = await freshPool(t);
+  await applyMigration(pool, "0034_observation_slug_privacy");
+  await insertUser(pool, ownerId, "privacy-owner@example.com");
+  await insertUser(pool, outsiderId, "privacy-outsider@example.com");
+  await insertArchitecture(pool);
+  const service = new ArchitectureTargetService(new PostgresArchitectureTargetStore(createDb(pool)), allowAuthorizer());
+  const registered = await service.registerTarget({
+    actor: ownerId, name: "Private inventory", owner: { type: "user", id: ownerId },
+    architectureId, environmentId: "personal", profileId: "personal", adapter, capabilities,
+  });
+  const target = await service.grantConsent(ownerId, registered.id);
+  const base = makeObservation(target.id, "observation-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+  const input = {
+    ...base,
+    metadata: { label: "CI/CD, nightly", spacing: "blue\u00a0/\ufeffgreen" },
+    skills: ["codex-config-sync", "token-budget"].map((slug) => ({
+      slug, managed: false, version: "2026/09, nightly", metadata: { label: "Input\\output, nightly" },
+    })),
+  };
+  const observation = { ...input, observedDigest: architectureTargetObservationDigest(input) };
+  const accepted = await service.appendObservation({ actor: ownerId, targetId: target.id, observation });
+  assert.deepEqual(accepted.skills.map((skill) => skill.slug).sort(), ["codex-config-sync", "token-budget"]);
+  assert.equal(accepted.metadata?.label, "CI/CD, nightly");
+  assert.equal(accepted.metadata?.spacing, "blue\u00a0/\ufeffgreen");
+  assert.equal(accepted.skills[0]?.version, "2026/09, nightly");
+  assert.equal(accepted.skills[0]?.metadata?.label, "Input\\output, nightly");
+  assert.deepEqual((await service.listObservations(ownerId, target.id))[0], accepted);
+  await assert.rejects(service.appendObservation({ actor: outsiderId, targetId: target.id, observation }),
+    (error: unknown) => error instanceof Error && "code" in error && error.code === "ARCHITECTURE_TARGET_NOT_FOUND");
+  await assert.rejects(service.listObservations(outsiderId, target.id),
+    (error: unknown) => error instanceof Error && "code" in error && error.code === "ARCHITECTURE_TARGET_NOT_FOUND");
+  for (const unsafe of [
+    { ...observation, body: "BODY-CANARY" },
+    { ...observation, skills: [{ slug: "../../private" }] },
+    { ...observation, metadata: { note: "Bearer abcdefghijklmnop" } },
+  ]) {
+    await assert.rejects(service.appendObservation({ actor: ownerId, targetId: target.id, observation: unsafe }));
+  }
+  assert.equal((await service.listObservations(ownerId, target.id)).length, 1);
+});
+
 test("Postgres target team access follows effective parent organization state across every operation", { timeout: 60_000 }, async (t) => {
   const pool = await freshPool(t);
   await insertUser(pool, ownerId, "target-effective-owner@example.com");

@@ -92,6 +92,8 @@ import {
 import { freezeArchitectureRevisionAuthorizationSnapshot } from "./architectures/revision-authorization.js";
 import { registerLibraryRoutes } from "./libraries/routes.js";
 import type { LibraryService } from "./libraries/service.js";
+import { registerGithubRoutes } from "./github/routes.js";
+import type { GithubIntegrationService } from "./github/service.js";
 import { API_VERSION, readBuildRevision } from "./version.js";
 
 const SESSION_COOKIE_NAME = "myskills_session";
@@ -106,6 +108,7 @@ export interface ReadinessProbes {
   postgres: () => Promise<void>;
   /** Required when the Postgres-backed Phase 2 architecture services are configured. */
   phase2Architecture?: () => Promise<void>;
+  architectureObservationPrivacy?: () => Promise<void>;
   artifactStorage?: () => Promise<void>;
   artifactStorageRequired?: boolean;
 }
@@ -126,6 +129,7 @@ export interface BuildAppOptions {
   architecturePatternMigrationService?: ArchitecturePatternMigrationService;
   /** Postgres-backed libraries, source imports and tracking. Routes answer 503 when absent. */
   libraryService?: LibraryService;
+  githubService?: GithubIntegrationService;
   bundleService?: BundleService;
   bundlesEnabled?: boolean;
   /** Per-user bound on provider-backed library source requests. Defaults to an in-memory limiter. */
@@ -143,7 +147,21 @@ export interface BuildAppOptions {
 export function buildApp(options: BuildAppOptions): FastifyInstance {
   const revision = readBuildRevision();
   const app = Fastify({
-    logger: options.logger ?? false,
+    logger: options.logger ? {
+      redact: ["req.headers.authorization", "req.headers.cookie", "res.headers.set-cookie"],
+      serializers: {
+        req(request: { method?: string; url?: string; hostname?: string; ip?: string; socket?: { remotePort?: number } }) {
+          return {
+            method: request.method,
+            // OAuth codes and state are credentials; never serialize their query.
+            url: request.url?.split("?", 1)[0] === "/v1/account/github/callback" ? "/v1/account/github/callback" : request.url,
+            hostname: request.hostname,
+            remoteAddress: request.ip,
+            remotePort: request.socket?.remotePort,
+          };
+        },
+      },
+    } : false,
     bodyLimit: DEFAULT_BODY_LIMIT_BYTES,
     ...(options.trustProxy !== undefined ? { trustProxy: options.trustProxy } : {}),
   });
@@ -259,14 +277,19 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     const phase2Architecture = options.readinessProbes?.phase2Architecture
       ? await readinessCheck(options.readinessProbes.phase2Architecture, readinessTimeoutMs)
       : undefined;
+    const architectureObservationPrivacy = options.readinessProbes?.architectureObservationPrivacy
+      ? await readinessCheck(options.readinessProbes.architectureObservationPrivacy, readinessTimeoutMs)
+      : undefined;
     const checks = {
       postgres,
       artifactStorage,
       ...(phase2Architecture ? { phase2Architecture } : {}),
+      ...(architectureObservationPrivacy ? { architectureObservationPrivacy } : {}),
     };
     const ok = postgres === "ready"
       && artifactStorage !== "unready"
-      && phase2Architecture !== "unready";
+      && phase2Architecture !== "unready"
+      && architectureObservationPrivacy !== "unready";
     return reply.code(ok ? 200 : 503).send({
       ok,
       service: "myskills-app-api",
@@ -279,6 +302,9 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     // server does, so a partial migration cannot advertise unusable features.
     const phase2ArchitectureReady = options.readinessProbes?.phase2Architecture
       ? await readinessCheck(options.readinessProbes.phase2Architecture, readinessTimeoutMs) === "ready"
+      : true;
+    const observationPrivacyReady = options.readinessProbes?.architectureObservationPrivacy
+      ? await readinessCheck(options.readinessProbes.architectureObservationPrivacy, readinessTimeoutMs) === "ready"
       : true;
     return {
       version: API_VERSION,
@@ -296,6 +322,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         sharing: Boolean(options.authService),
         architectures: phase2ArchitectureReady && Boolean(options.authService && options.architectureStore && options.submissionService),
         architectureTargets: phase2ArchitectureReady && Boolean(options.authService && options.architectureTargetService),
+        architectureObservationSlugValidation: phase2ArchitectureReady && observationPrivacyReady && Boolean(options.authService && options.architectureTargetService),
         architectureOrganizationGrants: phase2ArchitectureReady && Boolean(options.authService && options.architectureOrganizationGrantService),
         architecturePatternMigrations: phase2ArchitectureReady && Boolean(options.authService && options.architecturePatternMigrationService),
         // Opt-in key: absent unless configured, so existing capability consumers see an unchanged shape.
@@ -2364,6 +2391,8 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     requiresMfaForRole,
     artifactHashHeader: REVIEW_ARTIFACT_HASH_HEADER,
   });
+
+  registerGithubRoutes(app, { authService: options.authService, githubService: options.githubService }, { requestAuthorization, authFailureReply });
 
   return app;
 }

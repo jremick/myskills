@@ -198,8 +198,9 @@ test("target registry guides the owner and current architecture context and neve
   assert.equal(document.body.textContent?.includes("secret-store-token"), false);
 
   fireEvent.click(view.getByRole("button", { name: "Setup guide" }));
-  await view.findByRole("heading", { name: "Connect a Codex workspace" });
-  assert.match(view.container.textContent ?? "", /myskills codex enroll/);
+  await view.findByRole("heading", { name: "Connect your skills" });
+  fireEvent.change(view.getByLabelText("Connection type"), { target: { value: "managed" } });
+  await waitFor(() => assert.match(view.container.textContent ?? "", /myskills codex enroll/));
   fireEvent.click(view.getByRole("button", { name: "Register read-only target" }));
   fireEvent.input(view.getByLabelText("Target name"), { target: { value: "Work Codex" } });
   const architecture = await view.findByLabelText("Target architecture");

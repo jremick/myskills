@@ -44,7 +44,7 @@ test("anonymous visitor browses the seeded registry through the production proxy
     return {
       body: await response.json() as {
         ok: boolean;
-        checks: { postgres: string; artifactStorage: string; phase2Architecture: string };
+        checks: { postgres: string; artifactStorage: string; phase2Architecture: string; architectureObservationPrivacy: string };
       },
       status: response.status,
     };
@@ -53,7 +53,7 @@ test("anonymous visitor browses the seeded registry through the production proxy
     body: {
       ok: true,
       service: "myskills-app-api",
-      checks: { postgres: "ready", artifactStorage: "ready", phase2Architecture: "ready" },
+      checks: { postgres: "ready", artifactStorage: "ready", phase2Architecture: "ready", architectureObservationPrivacy: "ready" },
     },
     status: 200,
   });
@@ -115,7 +115,7 @@ test("owner creates and reads a real architecture revision from a seeded release
   });
   page.on("pageerror", (error) => browserErrors.push(error.message));
 
-  await signInOwner(page, recoveryCode(4, testInfo));
+  await useOwnerSession(page);
   await page.locator(".side-nav").getByRole("link", { name: "Architectures" }).click();
   await expect(page.getByRole("heading", { name: "Skill architectures" })).toBeVisible();
 
@@ -295,6 +295,21 @@ test("owner invites a user who registers, logs in and enrolls MFA from the rende
   const privacy = await assertPrivacy([enrollment.secret, enrollment.otpauthUrl, ...mfa.recoveryCodes]);
   await testInfo.attach("mfa-fullstack-acceptance", { body: JSON.stringify({ realApi: true, qrRoundTrip: true, sixDigitConfirmation: true, persistedEnabledState: true, recoveryCodes: mfa.recoveryCodes.length, oneTimeRecoveryDisplay: true, ...privacy, physicalAuthenticatorScans: "not performed" }), contentType: "application/json" });
 });
+
+// The architecture journey reuses the runner's verified session so its retries
+// do not consume later journeys' login and MFA budgets. Logout flows need their own session.
+async function useOwnerSession(page: Page) {
+  const token = requiredEnvironment("MYSKILLS_ACCEPTANCE_OWNER_TOKEN");
+  const baseURL = requiredEnvironment("MYSKILLS_E2E_BASE_URL");
+  await page.context().addCookies([{ name: "myskills_session", value: token, url: baseURL, httpOnly: true, secure: true, sameSite: "Lax" }]);
+  const response = await page.request.get(`${baseURL}/api/v1/me`);
+  expect(response.status()).toBe(200);
+  const { user } = await response.json();
+  expect(user).toMatchObject({ email: ownerEmail, mfaVerified: true });
+  await page.addInitScript((session) => localStorage.setItem("myskills-app:web-session", JSON.stringify(session)), { user, expiresAt: new Date(Date.now() + 300_000).toISOString() });
+  await page.goto("/registry");
+  await expect(page.getByRole("link", { name: "Account settings" })).toHaveAttribute("title", ownerEmail);
+}
 
 async function signInOwner(page: Page, codeOrRecoveryCode: string) {
   await page.goto("/login");
