@@ -1,13 +1,50 @@
 # Railway Deployment
 
 Version: 0.1.0-beta.12
-Last updated: 2026-09-27
+Last updated: 2026-09-28
 
 This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.
 The current beta.12 release is tracked in [Beta.12 Release Delivery](BETA12_RELEASE_DELIVERY.md).
 The historical operational beta evidence remains in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
 
-## Beta.12 production status
+## Current maintenance deployment
+
+On 28 September 2026, staging and production were promoted from
+`d8775d6b07e2de06b7af4cbdc6bee1a33455902d` in API-ready-then-web order.
+This includes [PR #96](https://github.com/jremick/myskills/pull/96), the
+auth-outbox timing repair in [PR #100](https://github.com/jremick/myskills/pull/100),
+and Nodemailer 10 with bundled types in
+[PR #68](https://github.com/jremick/myskills/pull/68). All 11 merged-source check
+runs passed, including both supported Node versions and Railway image builds.
+
+| Environment | API deployment | Web deployment |
+| --- | --- | --- |
+| Staging | `c6c4e18a-c51f-498e-b2fb-e4858c0c8b53` | `f179931b-616e-4c94-99e2-87b812c77eaf` |
+| Production | `49a2bc94-2db8-432f-8611-4339c2cdd124` | `77bf8274-c816-4095-ba14-38ad3c061f9b` |
+
+All four deployments report SUCCESS and beta.12 with the source revision above.
+Each environment passed 14 direct API, same-origin API and web checks, fresh CLI
+doctor and catalog checks, and rendered package inspection. Staging authenticated
+login, library reads, package delivery and logout passed. Its private Mailpit
+service captured the password-reset notification with the expected staging link
+and fragment token. This verifies SMTP capture, not external inbox delivery;
+no password was changed.
+
+The existing production owner session survived reload. Its private package export
+downloaded four files in a 17,300-byte bundle whose SHA-256 matched the prior
+verified package. Anonymous access to that exact release returned 404. Sampled
+runtime logs contained no application fault patterns: 45 API and 83 web lines.
+
+The completed recovery point from `2026-09-27T16:01:29.347Z` passed the 26-hour
+freshness policy before promotion. This was a freshness check, not a restore.
+The matching rollback source is `3834acedf495d16bd54a3562ba214953dc212069`,
+previously served by API `1d946f1b-4716-49d0-98ce-629d860603aa` and web
+`e06e9ced-ac88-41f5-a358-4a5d7c29e5d1`. No migration changed between these sources.
+Retain data, schema and credentials when rolling back. The beta.12 tag and release
+assets are unchanged; npm remains beta.8. Documentation-only commits do not
+change the deployed source revision.
+
+## Original beta.12 production promotion
 
 On 27 September 2026, production API `9cf1264b-6903-4806-abed-23a446d580ee`
 and web `fb7a2b03-ea8c-4698-84f5-396d5b5c6ccc` succeeded from
