@@ -20,8 +20,8 @@
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
-import { lstat, mkdir, mkdtemp, readFile, readdir, readlink, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { constants, readdirSync, readFileSync } from "node:fs";
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, readlink, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
@@ -322,10 +322,18 @@ test("two-user workspace pilot: private inventory to separately reviewed team ad
   const evidencePath = join(evidenceDirectory, evidenceTarget ? basename(evidenceTarget) : "workspace-pilot-evidence.json");
   const receipt = JSON.stringify({ schemaVersion: 1, journey: "two-user-workspace-pilot", verification: "real-api-postgres-cli-filesystem", nativeActivation: "not-observed", scenarios, cli: receipts }, null, 2);
   for (const forbidden of [base, temporary, password, privateCanary, ...actors.map((actor) => actor.token)]) assert.equal(receipt.includes(forbidden), false);
-  await writeFile(evidencePath, `${receipt}\n`, { flag: "wx", mode: 0o600 });
   assert.equal((await stat(evidenceDirectory)).mode & 0o777, 0o700);
-  assert.equal((await stat(evidencePath)).mode & 0o777, 0o600);
-  assert.deepEqual(JSON.parse(await readFile(evidencePath, "utf8")), JSON.parse(receipt));
+  const evidence = await open(evidencePath, constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  try {
+    await evidence.writeFile(`${receipt}\n`);
+    const info = await evidence.stat();
+    assert.ok(info.isFile());
+    assert.equal(info.mode & 0o777, 0o600);
+    const bytes = Buffer.alloc(info.size);
+    const { bytesRead } = await evidence.read(bytes, 0, bytes.length, 0);
+    assert.equal(bytesRead, bytes.length);
+    assert.deepEqual(JSON.parse(bytes.toString("utf8")), JSON.parse(receipt));
+  } finally { await evidence.close(); }
   t.diagnostic(`workspace pilot evidence: ${evidencePath}`);
 });
 
@@ -342,12 +350,23 @@ function packageFiles(name: string, version: string, visibility: string, content
 async function treeDigest(root: string): Promise<string> {
   const hash = createHash("sha256");
   async function visit(directory: string, relative: string): Promise<void> {
-    for (const name of (await readdir(directory)).sort()) {
-      const file = join(directory, name), child = `${relative}/${name}`, entry = await lstat(file);
-      hash.update(`${child}\0${entry.mode}\0`);
-      if (entry.isSymbolicLink()) hash.update(await readlink(file));
-      else if (entry.isDirectory()) await visit(file, child);
-      else hash.update(await readFile(file));
+    const entries = await readdir(directory, { withFileTypes: true });
+    for (const entry of entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
+      const file = join(directory, entry.name), child = `${relative}/${entry.name}`;
+      if (entry.isSymbolicLink() || entry.isDirectory()) {
+        const info = await lstat(file);
+        hash.update(`${child}\0${info.mode}\0`);
+        if (entry.isSymbolicLink()) hash.update(await readlink(file));
+        else await visit(file, child);
+      } else {
+        const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+        try {
+          const info = await handle.stat();
+          assert.ok(info.isFile(), "tree digest requires a regular file");
+          hash.update(`${child}\0${info.mode}\0`);
+          hash.update(await handle.readFile());
+        } finally { await handle.close(); }
+      }
     }
   }
   await visit(root, "");

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { lstat, mkdir, mkdtemp, readFile, readdir, readlink, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, readlink, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test, { after, type TestContext } from "node:test";
@@ -266,14 +267,24 @@ async function claudeGlobalFixture(base: string): Promise<string> {
 async function treeDigest(root: string): Promise<string> {
   const hash = createHash("sha256");
   async function visit(directory: string, relative: string): Promise<void> {
-    for (const name of (await readdir(directory)).sort()) {
-      const absolute = path.join(directory, name);
-      const entry = await lstat(absolute);
-      const child = relative ? `${relative}/${name}` : name;
-      hash.update(`${child}\0${entry.mode}\0`);
-      if (entry.isSymbolicLink()) hash.update(`link:${await readlink(absolute)}\0`);
-      else if (entry.isDirectory()) await visit(absolute, child);
-      else hash.update(await readFile(absolute));
+    const entries = await readdir(directory, { withFileTypes: true });
+    for (const entry of entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
+      const absolute = path.join(directory, entry.name);
+      const child = relative ? `${relative}/${entry.name}` : entry.name;
+      if (entry.isSymbolicLink() || entry.isDirectory()) {
+        const info = await lstat(absolute);
+        hash.update(`${child}\0${info.mode}\0`);
+        if (entry.isSymbolicLink()) hash.update(`link:${await readlink(absolute)}\0`);
+        else await visit(absolute, child);
+      } else {
+        const handle = await open(absolute, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+        try {
+          const info = await handle.stat();
+          assert.ok(info.isFile(), "tree digest requires a regular file");
+          hash.update(`${child}\0${info.mode}\0`);
+          hash.update(await handle.readFile());
+        } finally { await handle.close(); }
+      }
     }
   }
   await visit(root, "");
