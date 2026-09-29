@@ -139,7 +139,7 @@ From a clean candidate checkout, with a disposable database whose name includes 
 TEST_DATABASE_URL=postgres://myskills_test:myskills_test@localhost:5432/myskills_test npm run release:verify
 ```
 
-This single command runs repo quality/security checks, the exact public CLI pack/install smoke, route-mocked browser E2E, a production-like Docker Compose API/web/MinIO/Postgres browser journey, Postgres integration, and release artifact creation. Use `npm run check:prerelease`, `npm run smoke:cli-package`, or individual test commands only to diagnose a failure; do not substitute a collection of partial runs for the canonical gate.
+This single command runs repo quality/security checks, the exact public CLI pack/install smoke, route-mocked browser E2E, a production-like Docker Compose API/web/MinIO/Postgres browser journey, Postgres integration, and release artifact creation. On a Linux host with Docker, `scripts/local-ci.sh verify` runs the full CI matrix for the same commit in fresh clones, and `scripts/local-ci.sh release-check` runs this gate for a tag; see [Local CI](LOCAL_CI.md). Use `npm run check:prerelease`, `npm run smoke:cli-package`, or individual test commands only to diagnose a failure; do not substitute a collection of partial runs for the canonical gate.
 
 When using the Windows PC for container testing, run the verifier and PostgreSQL on that host so lease checks use the same clock. The verifier needs a clean Git checkout of the candidate, including `.git` and `.github`; the production Docker build context excludes those paths and is not a complete release-verification checkout. Match the Playwright container version to the repository's installed Playwright version and retain the reports and artifacts before removing the disposable runner.
 
@@ -154,7 +154,7 @@ Final artifact generation refuses a dirty worktree. `--allow-dirty` exists only 
 ## Staging And User Test
 
 1. Select one immutable candidate commit on a branch. Record the full SHA and intended version.
-2. Require the GitHub CI jobs for that commit to pass on Node 22 and 24 LTS, web E2E, and disposable Postgres.
+2. Require a gating `scripts/local-ci.sh verify` result for that commit: complete, pinned with `LOCAL_CI_SOURCE_SHA`, and `passed` for `check`, `web-e2e` and `postgres-integration`. These cover Node 22 and 24 LTS, web E2E, disposable Postgres and the Railway images. While the GitHub workflows still run during the migration, treat their results as parity evidence and resolve any disagreement before approval.
 3. Exercise the same commit through a dedicated staging environment. If no dedicated Railway staging environment is configured, the documented production Compose stack may serve as beta staging, but record that limitation; do not use Railway production as the first test environment.
 4. Record user-test evidence for first-run setup, login/MFA, owner invitation and invitee registration through a captured or staging-only email, public browse/detail, author submission/withdrawal, maintainer artifact inspection and hash-attested review/publication, CLI validate/scan/search/export/install/rollback, and MCP read-only discovery.
 5. Re-run the canonical gate after any candidate change. Evidence from an earlier SHA is stale.
@@ -166,24 +166,34 @@ Staging deployment is not release approval. User-test acceptance is a maintainer
 The owner approves each external action separately and in order:
 
 1. **Tag approval**: authorize creation/push of `v<package-version>` only after the acceptance ledger, clean canonical gate, current GitHub controls, and staging/user-test evidence are reviewed.
-2. **Package/release approval**: after the verification-only tag workflow passes, separately authorize any npm `beta` publish, GitHub Release creation, container registry push, or public announcement. The current workflow performs none of these actions.
+2. **Package/release approval**: after the pushed tag passes `scripts/local-ci.sh release-check` with a gating result for the tagged commit, separately authorize any npm `beta` publish, GitHub Release creation, container registry push, or public announcement. Release verification performs none of these actions.
 3. **Production approval**: separately authorize Railway production migration/deploy. API and web must use the same commit; the migration plan, backup/restore readiness, smoke owner, and rollback target must be named.
 
-A green workflow is evidence, not an approval signal. Never reuse or move an existing tag to repair a failed release.
+A passing check is evidence, not an approval signal. Never reuse or move an existing tag to repair a failed release.
 
-## Tag And Workflow Protection
+## Tag Verification And Protection
 
-The release workflow triggers on `v*.*.*` tags and:
+Verify a pushed tag from a clean checkout of that tag, with full history and a current main ref:
 
-- checks out full history;
-- requires the tag to equal `v<root package version>`;
-- resolves the tag commit and requires it to be an ancestor of `origin/main`;
-- runs the canonical release gate with tag enforcement;
+```bash
+VERSION=$(node -p "require('./package.json').version")
+git fetch origin main --tags
+git checkout --detach "v${VERSION}"
+LOCAL_CI_RELEASE_TAG="v${VERSION}" LOCAL_CI_SOURCE_SHA="$(git rev-parse HEAD)" scripts/local-ci.sh release-check
+```
+
+Set `LOCAL_CI_RUN_ID`, `LOCAL_CI_EVIDENCE_DIR` and the Node toolchains as described in [Local CI](LOCAL_CI.md). Release-check:
+
+- requires the tag to equal `v<root package version>` and to point at the checked-out commit;
+- requires that commit to be an ancestor of `refs/remotes/origin/main` (or `LOCAL_CI_MAIN_REF`);
+- runs the canonical release gate with tag enforcement against disposable `postgres:17`;
 - builds the root Dockerfile `api`, `web`, and `mcp-http` targets plus the exact `Dockerfile.api` and `Dockerfile.web` used by Railway;
 - builds `Dockerfile.backup` and checks both command entrypoints without credentials or network access;
-- uploads verification artifacts only.
+- verifies the artifact set, checksums and metadata, rebuilds the source archive from the tagged commit, and exports the verified artifacts as evidence only.
 
-Configure a GitHub ruleset for the release-tag pattern (for example `v*`) that restricts tag creation, update, and deletion to the release maintainer role. Protect `main` with the aggregate `check` context (which requires both Node matrix jobs), web E2E, and Postgres integration; require current branches and choose administrator bypass deliberately. Read the live ruleset/protection state immediately before release; workflow YAML cannot prove that repository settings are applied.
+The `v*.*.*` tag workflow runs the same steps and remains a parity reference until the migration in [Local CI](LOCAL_CI.md) is complete.
+
+Configure a GitHub ruleset for the release-tag pattern (for example `v*`) that restricts tag creation, update, and deletion to the release maintainer role. Protect `main` with the aggregate `check` context (which requires both Node lines, web E2E, Postgres and the Railway images), `web-e2e`, and `postgres-integration`. GitHub Actions reports these contexts until cutover. At cutover, migrate the requirements to the distinct controller contexts `local-ci/check`, `local-ci/web-e2e` and `local-ci/postgres-integration`. The controller reports them from complete, SHA-pinned `verify` results. Require current branches and choose administrator bypass deliberately. Read the live ruleset/protection state, including which app may report each context, immediately before release; neither workflow YAML nor a local result proves that repository settings are applied.
 
 ## Tagging
 

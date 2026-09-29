@@ -5,7 +5,12 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const composeFile = resolve(root, "docker-compose.e2e.yml");
-const projectName = `myskills-beta2-e2e-${process.pid}-${randomBytes(4).toString("hex")}`;
+// CI runners pass an exact per-run project so they can clean up after a hard stop.
+const projectName = process.env.MYSKILLS_E2E_COMPOSE_PROJECT ?? `myskills-beta2-e2e-${process.pid}-${randomBytes(4).toString("hex")}`;
+if (!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(projectName)) {
+  console.error("MYSKILLS_E2E_COMPOSE_PROJECT must be a lowercase Docker Compose project name of at most 63 characters.");
+  process.exit(1);
+}
 const webPort = process.env.MYSKILLS_E2E_WEB_PORT ?? "43100";
 const mailpitPort = process.env.MYSKILLS_E2E_MAILPIT_PORT ?? "43101";
 const baseURL = `http://127.0.0.1:${webPort}`;
@@ -25,6 +30,15 @@ const environment = {
   MYSKILLS_E2E_POSTGRES_PASSWORD: randomCredential(24),
   MYSKILLS_E2E_WEB_PORT: webPort,
 };
+// Container logs can echo these generated values; keep them out of CI output.
+const generatedSecrets = [
+  environment.MYSKILLS_E2E_AUTH_SECRET,
+  environment.MYSKILLS_E2E_INVITEE_PASSWORD,
+  environment.MYSKILLS_E2E_MINIO_ROOT_PASSWORD,
+  environment.MYSKILLS_E2E_MINIO_ROOT_USER,
+  environment.MYSKILLS_E2E_OWNER_PASSWORD,
+  environment.MYSKILLS_E2E_POSTGRES_PASSWORD,
+];
 
 let teardownStarted = false;
 
@@ -41,6 +55,7 @@ try {
   const owner = await prepareOwnerMfa();
   environment.MYSKILLS_E2E_OWNER_RECOVERY_CODES = JSON.stringify(owner.recoveryCodes);
   environment.MYSKILLS_ACCEPTANCE_OWNER_TOKEN = owner.sessionToken;
+  generatedSecrets.push(owner.sessionToken, ...owner.recoveryCodes);
   await run(resolve(root, "node_modules/.bin/playwright"), [
     "test",
     "--config",
@@ -183,10 +198,12 @@ function run(command, args, options = {}) {
     const child = spawn(command, args, {
       cwd: root,
       env: environment,
-      stdio: "inherit",
+      stdio: ["inherit", "pipe", "pipe"],
     });
+    forwardRedacted(child.stdout, process.stdout);
+    forwardRedacted(child.stderr, process.stderr);
     child.once("error", rejectPromise);
-    child.once("exit", (code, signal) => {
+    child.once("close", (code, signal) => {
       if (code === 0 || options.allowFailure) {
         resolvePromise();
         return;
@@ -194,4 +211,26 @@ function run(command, args, options = {}) {
       rejectPromise(new Error(`${command} exited with ${signal ? `signal ${signal}` : `code ${code}`}.`));
     });
   });
+}
+
+function forwardRedacted(input, output) {
+  // Line buffering keeps a value split across chunks from escaping redaction.
+  let pending = "";
+  input.setEncoding("utf8");
+  input.on("data", (chunk) => {
+    const lines = (pending + chunk).split("\n");
+    pending = lines.pop();
+    for (const line of lines) output.write(`${redact(line)}\n`);
+  });
+  input.on("end", () => {
+    if (pending) output.write(redact(pending));
+  });
+}
+
+function redact(text) {
+  let redacted = text;
+  for (const secret of generatedSecrets) {
+    if (secret) redacted = redacted.split(secret).join("[redacted]");
+  }
+  return redacted;
 }
