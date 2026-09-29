@@ -553,6 +553,85 @@ test("populated or symlinked evidence destinations are refused before anything i
   assert.equal(lstatSync(emptyLink).isSymbolicLink(), true);
 });
 
+// Failure cases (written before the fix): automatic and maximum-length run IDs made the Compose project
+// `myskills-ci-<run>-<job>-<suffix>` longer than the 63 characters run-fullstack-e2e.mjs accepts, so every
+// full-stack and release journey failed at once. IDs are PID-seeded so a real run's reservation is never touched.
+const idSeed = createHash("sha256").update(`compose-name-${process.pid}`).digest("hex");
+const automaticRunId = `myskills-verify-${idSeed.slice(0, 10)}-1`; // shape and length (28) of real automatic IDs
+const maximumRunId = `myskills-verify-${idSeed.slice(10, 40)}-1`; // 48, the longest accepted LOCAL_CI_RUN_ID
+const maximumSiblingRunId = `${maximumRunId.slice(0, -1)}2`; // shares the first 47 characters
+
+test("long run IDs give both browser jobs valid, bounded, distinct Compose projects that cleanup owns", (t) => {
+  const fixture = makeFixture(t);
+  const seen = new Set();
+  for (const id of [automaticRunId, maximumRunId, maximumSiblingRunId]) {
+    t.after(() => rmSync(join(dirname(runIdReservation), id), { recursive: true, force: true }));
+    fixture.configure({});
+    const run = runLocalCi(fixture, ["verify", "--job", "web-e2e-node22", "--job", "web-e2e-node24"], {
+      env: { LOCAL_CI_RUN_ID: id, LOCAL_CI_SOURCE_SHA: fixture.sha },
+    });
+    assert.equal(run.status, 0, run.output);
+    assert.equal(run.result.runId, id, "the caller's run ID is recorded unchanged");
+    assert.equal(run.result.source.sha, fixture.sha);
+    const records = fixture.records();
+    const used = records.filter(({ tool, args }) => tool === "npm" && args.join(" ") === "run test:e2e:fullstack");
+    assert.deepEqual(used.map(({ line }) => line).sort(), ["22", "24"]);
+    const projects = used.map(({ env }) => env.MYSKILLS_E2E_COMPOSE_PROJECT);
+    for (const project of projects) {
+      assertOwnedComposeProject(t, project, id);
+      seen.add(project);
+    }
+    const ledger = JSON.parse(readFileSync(join(run.evidence, "resources.json"), "utf8")).resources
+      .filter(({ kind }) => kind === "compose-project").map(({ name }) => name);
+    assert.deepEqual(ledger.sort(), [...projects].sort(), "cleanup tracks exactly the names the jobs used");
+    const docker = records.filter(({ tool }) => tool === "docker");
+    for (const project of projects) {
+      assert.ok(docker.some(({ args }) => args[0] === "ps" && args.includes(`label=com.docker.compose.project=${project}`)), project);
+      assert.ok(docker.some(({ args }) => args[0] === "image" && args[1] === "rm" && args.includes(`${project}-api`)), project);
+    }
+  }
+  assert.equal(seen.size, 6, "every run ID and browser job gets its own project");
+
+  fixture.configure({});
+  const short = runLocalCi(fixture, ["verify", "--job", "web-e2e-node22"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(short.status, 0, short.output);
+  const shortProject = fixture.records().find(({ args }) => args.join(" ") === "run test:e2e:fullstack").env.MYSKILLS_E2E_COMPOSE_PROJECT;
+  assert.equal(shortProject, `myskills-ci-${runId}-web-e2e-node22-fullstack`, "names that already fit keep their existing form");
+});
+
+test("release-check gives its full-stack journey a valid owned Compose project for the longest run ID", (t) => {
+  const fixture = makeFixture(t, { tag: true });
+  t.after(() => rmSync(join(dirname(runIdReservation), maximumRunId), { recursive: true, force: true }));
+  const run = runLocalCi(fixture, ["release-check"], {
+    env: { LOCAL_CI_RUN_ID: maximumRunId, LOCAL_CI_SOURCE_SHA: fixture.sha, LOCAL_CI_RELEASE_TAG: releaseTag },
+  });
+  assert.equal(run.status, 0, run.output);
+  assert.equal(run.result.runId, maximumRunId);
+  const records = fixture.records();
+  const project = records.find(({ tool, args }) => tool === "npm" && args.join(" ") === "run release:verify").env.MYSKILLS_E2E_COMPOSE_PROJECT;
+  assertOwnedComposeProject(t, project, maximumRunId);
+  assertExactCleanup(records.filter(({ tool }) => tool === "docker"), [project]);
+});
+
+// Checks a project name against the real full-stack runner (fake Docker that fails at `config`) and the
+// runner's leftover rule, which matches the complete run ID as a delimited token.
+function assertOwnedComposeProject(t, project, id) {
+  assert.ok(project.length <= 63, `${project} has ${project.length} characters`);
+  assert.match(project, new RegExp(`(?<![a-z0-9])${id}(?![a-z0-9])`), "the complete run ID stays matchable");
+  const dir = mkdtempSync(join(tmpdir(), "myskills-compose-name-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const calls = join(dir, "docker.calls");
+  writeShim(join(dir, "docker"), `printf '%s\\n' "$*" >> ${shellQuote(calls)}\nexit 1`);
+  const run = spawnSync(process.execPath, [resolve("scripts/run-fullstack-e2e.mjs")], {
+    cwd: resolve("."),
+    encoding: "utf8",
+    timeout: 60_000,
+    env: { PATH: `${dir}:${process.env.PATH}`, HOME: process.env.HOME ?? dir, MYSKILLS_E2E_COMPOSE_PROJECT: project },
+  });
+  assert.doesNotMatch(run.stderr, /MYSKILLS_E2E_COMPOSE_PROJECT must be/, project);
+  assert.match(existsSync(calls) ? readFileSync(calls, "utf8") : "", new RegExp(`^compose --project-name ${project} `, "m"), `real runner accepts ${project}`);
+}
+
 function snapshot(directory) {
   return Object.fromEntries(listFiles(directory).map((file) => [file, sha256(readFileSync(join(directory, file)))]));
 }
