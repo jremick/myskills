@@ -45,6 +45,8 @@ TEST_DATABASE_URL=postgres://myskills_test:myskills_test@localhost:5432/myskills
 
 `TEST_DATABASE_URL` must point at a disposable database whose name includes `test` or `ci`; the test resets that schema.
 
+To run the full CI, release or CodeQL gates on a Linux host with Docker, use `scripts/local-ci.sh`; see [Local CI](docs/LOCAL_CI.md).
+
 ## Pull Request Expectations
 
 Every PR should include:
