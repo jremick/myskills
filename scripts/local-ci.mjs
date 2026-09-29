@@ -177,7 +177,7 @@ function validateEvidenceDirectory(value) {
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
       entry = lstatSync(real);
-      if (entry.isSymbolicLink()) throw new Error("LOCAL_CI_EVIDENCE_DIR must not be a symbolic link; pass the real directory path.");
+      if (entry.isSymbolicLink()) throw new Error("LOCAL_CI_EVIDENCE_DIR must not be a symbolic link; pass the real directory path.", { cause: error });
     }
   }
   if (!entry.isDirectory()) throw new Error("LOCAL_CI_EVIDENCE_DIR must be a directory.");
