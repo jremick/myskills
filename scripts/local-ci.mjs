@@ -4,7 +4,7 @@
 // scripts/local-ci.sh; docs/LOCAL_CI.md describes the inputs, jobs and result contract.
 
 import { spawn, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   accessSync,
   closeSync,
@@ -58,6 +58,10 @@ const maxPendingLine = 1024 * 1024;
 const codeqlSuiteLine = "\nqueries:\n  - uses: security-extended\n";
 const defaultCodeqlCategory = "/language:javascript-typescript";
 const composeServiceImages = ["api", "web", "minio", "minio-init"];
+// Run IDs are reserved here, independent of TMPDIR and LOCAL_CI_WORK_DIR: exclusive mkdir on the local
+// filesystem is atomic, which Docker resource names are not. It covers only a local Docker daemon.
+const runIdLockRoot = "/var/tmp/myskills-local-ci-locks";
+const dockerJobPattern = /^(?:(?:postgres|web-e2e)-node2[24]|railway-images|release)$/;
 // Only these variables reach job processes; runner tokens stay with the runner.
 const passthroughEnv = [
   "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ", "TERM", "TMPDIR",
@@ -153,17 +157,35 @@ function validateEvidenceDirectory(value) {
   if (!value) throw new Error("LOCAL_CI_EVIDENCE_DIR is required and must be absolute.");
   if (!isAbsolute(value)) throw new Error("LOCAL_CI_EVIDENCE_DIR must be absolute.");
   const target = resolve(value);
+  let entry = null;
+  try {
+    entry = lstatSync(target);
+  } catch {
+    // Absent: created exclusively below.
+  }
+  if (entry?.isSymbolicLink()) throw new Error("LOCAL_CI_EVIDENCE_DIR must not be a symbolic link; pass the real directory path.");
   const real = realPathAllowingMissing(target);
   const source = realpathSync(sourceRoot);
   if (isWithin(real, source) || isWithin(source, real)) {
     throw new Error("LOCAL_CI_EVIDENCE_DIR must be outside the source tree and must not contain it.");
   }
-  if (existsSync(target)) {
-    if (!statSync(target).isDirectory()) throw new Error("LOCAL_CI_EVIDENCE_DIR must be a directory.");
-    if (existsSync(join(target, "result.json"))) {
-      throw new Error("LOCAL_CI_EVIDENCE_DIR already contains result.json; use a new directory for each run.");
+  if (!entry) {
+    mkdirSync(dirname(real), { recursive: true });
+    try {
+      mkdirSync(real);
+      return real;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      entry = lstatSync(real);
+      if (entry.isSymbolicLink()) throw new Error("LOCAL_CI_EVIDENCE_DIR must not be a symbolic link; pass the real directory path.");
     }
   }
+  if (!entry.isDirectory()) throw new Error("LOCAL_CI_EVIDENCE_DIR must be a directory.");
+  if (existsSync(join(real, "result.json"))) {
+    throw new Error("LOCAL_CI_EVIDENCE_DIR already contains result.json; use a new directory for each run.");
+  }
+  // Every file below the evidence directory is scanned, may be removed as quarantine, and is exported.
+  if (readdirSync(real).length > 0) throw new Error("LOCAL_CI_EVIDENCE_DIR must be empty or absent; it contains files that the run did not write.");
   return real;
 }
 
@@ -199,12 +221,70 @@ function prepareRun(options, runId, evidence) {
     gatingBlockers: [
       ...(options.complete ? [] : ["partial-job-selection"]),
       ...(expectedSha ? [] : ["source-sha-not-supplied"]),
+      ...(platform() === "linux" && arch() === "x64" ? [] : ["unsupported-host-platform"]),
     ],
   };
   if (options.mode === "release-check") run.release = validateRelease(head, rootPackage);
   if (options.mode === "codeql") run.codeql = validateCodeql();
-  run.workspace = reserveWorkspace(runId, evidence);
+  if (options.jobs.some((id) => dockerJobPattern.test(id))) requireLocalDocker();
+  run.runIdLock = reserveRunId(runId);
+  try {
+    run.workspace = reserveWorkspace(runId, evidence);
+  } catch (error) {
+    releaseRunId(run.runIdLock);
+    throw error;
+  }
   return run;
+}
+
+// The run-ID reservation is host-local, so Docker jobs must use this host's daemon. The Docker CLI lets
+// DOCKER_CONTEXT override DOCKER_HOST; both together are refused rather than guessed.
+function requireLocalDocker() {
+  const { DOCKER_HOST: host, DOCKER_CONTEXT: context } = process.env;
+  if (host && context) {
+    throw new Rejection("docker-endpoint-ambiguous", "Set only one of DOCKER_HOST and DOCKER_CONTEXT for Docker jobs; DOCKER_CONTEXT would override DOCKER_HOST.");
+  }
+  const format = ["--format", "{{.Endpoints.docker.Host}}"];
+  const endpoint = context ? docker(["context", "inspect", context, ...format]).stdout.trim()
+    : host || docker(["context", "inspect", ...format]).stdout.trim();
+  if (!endpoint.startsWith("unix://")) {
+    throw new Rejection("docker-endpoint-not-local", "Docker jobs need a local unix:// Docker endpoint; the run-ID reservation is host-local and cannot cover a remote daemon.");
+  }
+}
+
+function reserveRunId(runId) {
+  try {
+    mkdirSync(runIdLockRoot, { mode: 0o700 });
+  } catch (error) {
+    if (error?.code !== "EEXIST") throw new Rejection("run-id-lock-unavailable", `Cannot create ${runIdLockRoot}: ${error.code ?? error.message}.`);
+  }
+  const root = lstatSync(runIdLockRoot);
+  if (root.isSymbolicLink() || !root.isDirectory() || root.uid !== process.getuid() || (root.mode & 0o022) !== 0) {
+    throw new Rejection("run-id-lock-unavailable", `${runIdLockRoot} must be a real directory owned by this user and not writable by group or others.`);
+  }
+  const path = join(runIdLockRoot, runId);
+  try {
+    mkdirSync(path, { mode: 0o700 });
+  } catch (error) {
+    if (error?.code === "EEXIST") {
+      throw new Rejection("run-id-in-use", `LOCAL_CI_RUN_ID is already reserved on this host (${path}). Use a new run ID. After a killed run, remove the resources in its resources.json and then this reservation; it is never taken over.`);
+    }
+    throw new Rejection("run-id-lock-unavailable", `Cannot reserve the run ID: ${error.code ?? error.message}.`);
+  }
+  const owner = randomBytes(16).toString("hex");
+  writeFileSync(join(path, "owner.json"), `${JSON.stringify({ owner, pid: process.pid, startedAt: new Date().toISOString() })}\n`, { mode: 0o600, flag: "wx" });
+  return { path, owner };
+}
+
+// Removes the reservation only when it still carries this run's owner token.
+function releaseRunId(lock) {
+  try {
+    if (JSON.parse(readFileSync(join(lock.path, "owner.json"), "utf8")).owner !== lock.owner) return false;
+    rmSync(lock.path, { recursive: true });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function validateRelease(head, rootPackage) {
@@ -270,6 +350,8 @@ function reserveWorkspace(runId, evidence) {
 
 async function executeRun(run, base) {
   const ledger = new ResourceLedger(join(run.evidence, "resources.json"), run.runId);
+  const reservation = ledger.track("run-id-reservation", run.runIdLock.path, null, "created");
+  reservation.owner = run.runIdLock.owner;
   ledger.track("workspace", run.workspace, null, "created");
   mkdirSync(join(run.evidence, "logs"), { recursive: true });
   const environment = collectEnvironment(run);
@@ -298,6 +380,20 @@ async function executeRun(run, base) {
   } catch (error) {
     ledger.mark(ledger.find("workspace", run.workspace), "remove-failed");
     cleanupFailures.push(`workspace: ${error.code ?? error.message}`);
+  }
+  // Removals that failed during job cleanup count too; they are not retried here.
+  for (const entry of ledger.resources) {
+    const failure = `${entry.kind} ${entry.name}`;
+    if (entry.state === "remove-failed" && !cleanupFailures.includes(failure) && !failure.startsWith("workspace ")) cleanupFailures.push(failure);
+  }
+  // While known resources remain, keep the run ID reserved so another run cannot reuse their names.
+  if (cleanupFailures.length > 0) {
+    ledger.mark(reservation, "retained");
+  } else if (releaseRunId(run.runIdLock)) {
+    ledger.mark(reservation, "removed");
+  } else {
+    ledger.mark(reservation, "remove-failed");
+    cleanupFailures.push("run-id-reservation");
   }
   writeJsonAtomic(join(run.evidence, "environment.json"), environment);
 
@@ -784,7 +880,7 @@ class ResourceLedger {
   cleanup(sink, job = undefined) {
     const failures = [];
     for (const entry of [...this.resources].reverse()) {
-      if ((job !== undefined && entry.job !== job) || entry.kind === "workspace") continue;
+      if ((job !== undefined && entry.job !== job) || entry.kind === "workspace" || entry.kind === "run-id-reservation") continue;
       if (!["created", "creating"].includes(entry.state)) continue;
       if (entry.kind === "container" && entry.state === "creating") continue;
       const removed = removeResource(entry, sink);

@@ -5,6 +5,7 @@ import {
   chmodSync,
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -33,8 +34,19 @@ import test from "node:test";
 // - release-check accepts a wrong tag, a tag not at HEAD, or a commit outside main.
 // - Tampered release artifacts pass, or release-check publishes images or packages.
 // - CodeQL output that ignores the repository query filters passes.
+// Review follow-up (PR 120), also written before the fix:
+// - A complete pinned run on a host other than Linux/amd64 reports gating Linux/amd64 evidence.
+// - Runs that start together with one run ID but different work or temporary directories all reserve
+//   it, so their container, Compose-project and image names collide on the Docker host; or a stale
+//   or foreign reservation is taken over or removed.
+// - Docker jobs run against a remote daemon that a host-local reservation cannot cover, including a
+//   remote DOCKER_CONTEXT that overrides a local DOCKER_HOST.
+// - A run whose cleanup failed releases its reservation, so the run ID can be reused while its
+//   resources remain.
+// - A populated or symlinked evidence destination is accepted, so the evidence scan can delete or the
+//   manifest can export files that the run did not write.
 
-const runId = "fixture-run";
+const runId = `fixture-run-${process.pid}`;
 const rootPackage = JSON.parse(readFileSync(resolve("package.json"), "utf8"));
 const releaseTag = `v${rootPackage.version}`;
 const verifyJobs = ["check-node22", "check-node24", "web-e2e-node22", "web-e2e-node24", "postgres-node22", "postgres-node24", "railway-images"];
@@ -51,6 +63,9 @@ const fixtureFiles = [
 ];
 const webBuild = "run build -w @myskills-app/core -w @myskills-app/auth -w @myskills-app/skill-package -w @myskills-app/api";
 const mockedBrowser = "run test:e2e -w @myskills-app/web -- --reporter=line,json";
+// The gate is defined for Linux/amd64 hosts; elsewhere a complete pinned run must stay non-gating.
+const hostBlockers = process.platform === "linux" && process.arch === "x64" ? [] : ["unsupported-host-platform"];
+const runIdReservation = join("/var/tmp/myskills-local-ci-locks", runId);
 
 test("unsafe or stale inputs are rejected before any tool, container or workspace is used", (t) => {
   const fixture = makeFixture(t);
@@ -113,8 +128,8 @@ test("verify runs every required job on both Node lines and reports gating conte
   assert.equal(run.status, 0, run.output);
   const { result } = run;
   assert.equal(result.status, "passed");
-  assert.equal(result.gating, true);
-  assert.deepEqual(result.gatingBlockers, []);
+  assert.equal(result.gating, hostBlockers.length === 0);
+  assert.deepEqual(result.gatingBlockers, hostBlockers);
   assert.equal(result.complete, true);
   assert.equal(result.source.sha, fixture.sha);
   assert.deepEqual(result.jobs.map(({ id }) => id).sort(), [...verifyJobs].sort());
@@ -182,7 +197,7 @@ test("job failures are isolated, fail the gating contexts and never remove anoth
   assert.equal(run.status, 1, run.output);
   const { result } = run;
   assert.equal(result.status, "failed");
-  assert.equal(result.gating, true, "a pinned complete run is authoritative even when it fails");
+  assert.equal(result.gating, hostBlockers.length === 0, "a pinned complete run on a Linux/amd64 host is authoritative even when it fails");
   const job = (id) => result.jobs.find((candidate) => candidate.id === id);
   assert.equal(job("check-node22").status, "passed");
   assert.equal(job("check-node24").status, "failed");
@@ -217,7 +232,7 @@ test("partial or unpinned runs never report the required contexts", (t) => {
   assert.equal(run.result.status, "passed");
   assert.equal(run.result.complete, false);
   assert.equal(run.result.gating, false);
-  assert.deepEqual([...run.result.gatingBlockers].sort(), ["partial-job-selection", "source-sha-not-supplied"]);
+  assert.deepEqual([...run.result.gatingBlockers].sort(), ["partial-job-selection", "source-sha-not-supplied", ...hostBlockers].sort());
   assert.equal(run.result.contexts, null);
   const records = fixture.records();
   assert.ok(records.every(({ tool, line }) => tool === "npm" && line === "22"));
@@ -266,6 +281,7 @@ test("cancellation stops the running step and removes exactly the run's resource
   const resources = JSON.parse(readFileSync(join(evidence, "resources.json"), "utf8"));
   assert.ok(resources.resources.every(({ state }) => state === "removed"), JSON.stringify(resources));
   assert.equal(existsSync(fixture.runWorkspace), false);
+  assert.equal(existsSync(runIdReservation), false, "cancellation releases the run-ID reservation");
 });
 
 test("credential-shaped output is redacted from exported evidence and fails the run and its contexts", (t) => {
@@ -320,7 +336,7 @@ test("release-check verifies tagged artifacts and release images without publish
   const run = runLocalCi(fixture, ["release-check"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha, LOCAL_CI_RELEASE_TAG: releaseTag } });
   assert.equal(run.status, 0, run.output);
   assert.equal(run.result.status, "passed");
-  assert.equal(run.result.gating, true);
+  assert.equal(run.result.gating, hostBlockers.length === 0);
   assert.equal(run.result.release.tag, releaseTag);
   assert.equal(run.result.release.mainSha, fixture.sha);
 
@@ -394,6 +410,152 @@ test("CodeQL applies the repository query filters and fails closed when they are
   assert.equal(ignored.status, 1, ignored.output);
   assert.equal(ignored.result.jobs[0].reason, "codeql-filter-not-applied");
 });
+
+test("a complete pinned run on a host other than Linux/amd64 never reports gating evidence", (t) => {
+  const fixture = makeFixture(t);
+  const run = runLocalCi(fixture, ["codeql"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha, LOCAL_CI_CODEQL_BIN: join(fixture.bin, "codeql") } });
+  assert.equal(run.status, 0, run.output);
+  const environment = readJson(join(run.evidence, "environment.json"));
+  const supported = environment.platform === "linux" && environment.arch === "x64";
+  assert.equal(run.result.status, "passed", "the run itself still completes for development use");
+  assert.equal(run.result.complete, true);
+  assert.equal(run.result.gating, supported, `${environment.platform}/${environment.arch}`);
+  assert.equal(run.result.gatingBlockers.includes("unsupported-host-platform"), !supported);
+});
+
+test("runs that start together with one run ID reserve it once on the host, whatever their work and temporary directories", async (t) => {
+  const fixture = makeFixture(t);
+  t.after(() => rmSync(runIdReservation, { recursive: true, force: true }));
+  fixture.configure({ rules: [{ tool: "npm", line: "22", prefix: "ci", sleepMs: 4000 }] });
+  const callers = ["a", "b", "c", "d"].map((name) => {
+    const caller = { name, work: join(fixture.root, `work-${name}`), tmp: join(fixture.root, `tmp-${name}`), evidence: fixture.newEvidence() };
+    mkdirSync(caller.work);
+    mkdirSync(caller.tmp);
+    return caller;
+  });
+  const exits = await Promise.all(callers.map((caller) => new Promise((resolvePromise) => {
+    const child = spawn("bash", [join(fixture.source, "scripts/local-ci.sh"), "verify", "--job", "postgres-node22"], {
+      cwd: fixture.source,
+      env: fixture.env({ LOCAL_CI_EVIDENCE_DIR: caller.evidence, LOCAL_CI_SOURCE_SHA: fixture.sha, LOCAL_CI_WORK_DIR: caller.work, TMPDIR: caller.tmp }),
+      stdio: "ignore",
+    });
+    child.once("close", (code) => resolvePromise(code));
+  })));
+  const outcomes = callers.map((caller, index) => ({ ...caller, code: exits[index], result: readJson(join(caller.evidence, "result.json")) }));
+  const winners = outcomes.filter(({ code }) => code === 0);
+  const refused = outcomes.filter(({ code }) => code === 2);
+  assert.equal(winners.length, 1, JSON.stringify(outcomes.map(({ name, code }) => [name, code])));
+  assert.equal(refused.length, callers.length - 1);
+  assert.equal(winners[0].result.status, "passed");
+  for (const caller of refused) {
+    assert.equal(caller.result?.status, "rejected", caller.name);
+    assert.equal(caller.result.reason, "run-id-in-use", caller.name);
+    assert.deepEqual(readdirSync(caller.work), [], `${caller.name} must not keep a workspace`);
+    const docker = fixture.records().filter(({ tool, env }) => tool === "docker" && env.TMPDIR === caller.tmp);
+    assert.ok(docker.every(({ args }) => args[0] === "context"), `${caller.name} may only read its Docker endpoint: ${JSON.stringify(docker.map(({ args }) => args))}`);
+  }
+  assert.equal(existsSync(runIdReservation), false, "the finished run releases its reservation");
+});
+
+test("a stale or foreign run-ID reservation is never taken over or removed", (t) => {
+  const fixture = makeFixture(t);
+  t.after(() => rmSync(runIdReservation, { recursive: true, force: true }));
+  mkdirSync(runIdReservation, { recursive: true });
+  const owner = join(runIdReservation, "owner.json");
+  writeFileSync(owner, JSON.stringify({ owner: "another-run", pid: 1 }));
+  const before = readFileSync(owner);
+  const run = runLocalCi(fixture, ["verify", "--job", "postgres-node22"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(run.status, 2, run.output);
+  assert.equal(run.result?.reason, "run-id-in-use");
+  assert.deepEqual(readFileSync(owner), before);
+  assert.equal(existsSync(fixture.runWorkspace), false);
+  assert.ok(fixture.records().every(({ tool, args }) => tool === "docker" && args[0] === "context"), JSON.stringify(fixture.records()));
+});
+
+test("Docker jobs refuse a remote Docker endpoint that a host-local reservation cannot cover", (t) => {
+  const fixture = makeFixture(t);
+  for (const endpoint of ["tcp://127.0.0.1:2375", "ssh://ci@docker.example.invalid"]) {
+    const run = runLocalCi(fixture, ["verify", "--job", "postgres-node22"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha, DOCKER_HOST: endpoint } });
+    assert.equal(run.status, 2, `${endpoint}: ${run.output}`);
+    assert.equal(run.result?.reason, "docker-endpoint-not-local", endpoint);
+    assert.deepEqual(fixture.records(), [], endpoint);
+    assert.equal(existsSync(runIdReservation), false, endpoint);
+  }
+  fixture.configure({ dockerEndpoint: "tcp://10.0.0.5:2376" });
+  const context = runLocalCi(fixture, ["verify", "--job", "postgres-node22"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(context.status, 2, context.output);
+  assert.equal(context.result?.reason, "docker-endpoint-not-local", "a remote current Docker context is refused too");
+
+  // DOCKER_CONTEXT overrides DOCKER_HOST in the Docker CLI, so a local DOCKER_HOST proves nothing then.
+  fixture.configure({ dockerContexts: { "remote-ci": "tcp://10.0.0.5:2376", "wsl-local": "unix:///var/run/docker.sock" } });
+  const combined = runLocalCi(fixture, ["verify", "--job", "postgres-node22"], {
+    env: { LOCAL_CI_SOURCE_SHA: fixture.sha, DOCKER_HOST: "unix:///var/run/docker.sock", DOCKER_CONTEXT: "remote-ci" },
+  });
+  assert.equal(combined.status, 2, combined.output);
+  assert.equal(combined.result?.reason, "docker-endpoint-ambiguous");
+  assert.equal(existsSync(runIdReservation), false);
+  const namedRemote = runLocalCi(fixture, ["verify", "--job", "postgres-node22"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha, DOCKER_CONTEXT: "remote-ci" } });
+  assert.equal(namedRemote.status, 2, namedRemote.output);
+  assert.equal(namedRemote.result?.reason, "docker-endpoint-not-local");
+  const namedLocal = runLocalCi(fixture, ["verify", "--job", "postgres-node22"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha, DOCKER_CONTEXT: "wsl-local" } });
+  assert.equal(namedLocal.status, 0, namedLocal.output);
+  assert.ok(fixture.records().some(({ tool, args }) => tool === "docker" && args.slice(0, 3).join(" ") === "context inspect wsl-local"));
+});
+
+test("a run whose cleanup failed keeps its reservation so the run ID cannot be reused", (t) => {
+  const fixture = makeFixture(t);
+  t.after(() => rmSync(runIdReservation, { recursive: true, force: true }));
+  fixture.configure({ rules: [{ tool: "docker", prefix: "rm -f -v", exit: 1 }] });
+  const run = runLocalCi(fixture, ["verify", "--job", "postgres-node22"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(run.status, 1, run.output);
+  assert.equal(run.result.status, "failed");
+  assert.equal(run.result.cleanup.status, "failed");
+  const owner = readFileSync(join(runIdReservation, "owner.json"));
+  const reservation = readJson(join(run.evidence, "resources.json")).resources.find(({ kind }) => kind === "run-id-reservation");
+  assert.equal(reservation.state, "retained");
+  assert.equal(reservation.owner, JSON.parse(owner).owner, "resources.json identifies the exact owner for manual recovery");
+
+  fixture.configure({});
+  const second = runLocalCi(fixture, ["verify", "--job", "postgres-node22"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(second.status, 2, second.output);
+  assert.equal(second.result?.reason, "run-id-in-use");
+  assert.deepEqual(readFileSync(join(runIdReservation, "owner.json")), owner);
+});
+
+test("populated or symlinked evidence destinations are refused before anything is scanned, moved or written", (t) => {
+  const fixture = makeFixture(t);
+  const secret = ["gh", "p_", "Q".repeat(36)].join("");
+  const populated = join(fixture.root, "populated");
+  mkdirSync(join(populated, "nested"), { recursive: true });
+  writeFileSync(join(populated, "notes.txt"), `keep this ${secret}\n`);
+  writeFileSync(join(populated, "nested", "data.bin"), Buffer.from([0, 1, 2, 255]));
+  const emptyTarget = join(fixture.root, "empty-target");
+  mkdirSync(emptyTarget);
+  const emptyLink = join(fixture.root, "evidence-link");
+  symlinkSync(emptyTarget, emptyLink);
+  const populatedLink = join(fixture.root, "populated-link");
+  symlinkSync(populated, populatedLink);
+  const before = snapshot(populated);
+  for (const [name, evidence, message] of [
+    ["populated directory", populated, /must be empty/],
+    ["symlink to an empty directory", emptyLink, /symbolic link/],
+    ["symlink to a populated directory", populatedLink, /symbolic link/],
+  ]) {
+    const run = runLocalCi(fixture, ["verify"], { evidence, env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+    assert.equal(run.status, 2, `${name}: ${run.output}`);
+    assert.match(run.stderr, message, name);
+    assert.deepEqual(fixture.records(), [], `${name} must not invoke tools`);
+    assert.equal(existsSync(fixture.runWorkspace), false, name);
+    assert.equal(existsSync(runIdReservation), false, name);
+  }
+  assert.deepEqual(snapshot(populated), before, "pre-existing files, including credential-shaped bytes, are preserved exactly");
+  assert.deepEqual(readdirSync(emptyTarget), []);
+  assert.equal(lstatSync(emptyLink).isSymbolicLink(), true);
+});
+
+function snapshot(directory) {
+  return Object.fromEntries(listFiles(directory).map((file) => [file, sha256(readFileSync(join(directory, file)))]));
+}
 
 function makeFixture(t, { tag = false } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "myskills-local-ci-")));
@@ -609,7 +771,7 @@ async function fakeToolMain() {
   const config = JSON.parse(fs.readFileSync(path.join(root, "fake-config.json"), "utf8"));
   const key = args.join(" ");
   const env = {};
-  for (const name of ["CI", "TEST_DATABASE_URL", "MYSKILLS_E2E_COMPOSE_PROJECT", "RELEASE_REQUIRE_TAG", "RELEASE_EXPECTED_TAG", "PLAYWRIGHT_JSON_OUTPUT_FILE"]) {
+  for (const name of ["CI", "TEST_DATABASE_URL", "MYSKILLS_E2E_COMPOSE_PROJECT", "RELEASE_REQUIRE_TAG", "RELEASE_EXPECTED_TAG", "PLAYWRIGHT_JSON_OUTPUT_FILE", "TMPDIR"]) {
     if (process.env[name] !== undefined) env[name] = process.env[name];
   }
   const canarySeen = Boolean(config.canary) && Object.values(process.env).some((value) => String(value).includes(config.canary));
@@ -650,6 +812,10 @@ async function fakeToolMain() {
     }
     if (tool === "docker") {
       if (args[0] === "version") return print("28.3.0");
+      if (args[0] === "context" && args[1] === "inspect") {
+        const name = args[2] === "--format" ? null : args[2];
+        return print((name ? config.dockerContexts?.[name] : config.dockerEndpoint) ?? "unix:///var/run/docker.sock");
+      }
       if (args[0] === "run" && args.includes("-d")) {
         if ((config.dockerConflicts ?? []).includes(valueAfter("--name"))) {
           process.stderr.write("Conflict. The container name is already in use.\n");

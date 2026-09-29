@@ -56,10 +56,11 @@ LOCAL_CI_CODEQL_BIN=/path/to/codeql/codeql scripts/local-ci.sh codeql
 | Variable | Rule |
 |---|---|
 | `LOCAL_CI_RUN_ID` | Required. 1-48 lowercase letters, digits or hyphens. It names every container, Compose project, image tag and the workspace. |
-| `LOCAL_CI_EVIDENCE_DIR` | Required. Absolute, outside the source tree, and without an earlier `result.json`. |
+| `LOCAL_CI_EVIDENCE_DIR` | Required. Absolute, outside the source tree, not a symbolic link, and absent or empty. Every file in it is scanned and exported, so a populated directory is refused. |
 | `LOCAL_CI_SOURCE_SHA` | Optional. Must equal `HEAD`. Without it the result is not gating. |
 | `LOCAL_CI_NODE22_BIN`, `LOCAL_CI_NODE24_BIN` | Directories containing `node`, `npm` and `npx`. When unset, `node` on `PATH` is used only for its own major version. |
 | `LOCAL_CI_WORK_DIR` | Optional parent for the per-run workspace. Defaults to the OS temporary directory. |
+| `DOCKER_HOST`, `DOCKER_CONTEXT` | Jobs that use Docker need a local `unix://` endpoint; a remote endpoint is refused. Set at most one of the two, because `DOCKER_CONTEXT` overrides `DOCKER_HOST`. |
 | `LOCAL_CI_RELEASE_TAG`, `LOCAL_CI_MAIN_REF` | `release-check` only. The tag must be `v<package version>` and point at `HEAD`. `HEAD` must be an ancestor of the main ref (default `refs/remotes/origin/main`). The script does not fetch. |
 | `LOCAL_CI_CODEQL_BIN`, `LOCAL_CI_CODEQL_CATEGORY` | `codeql` only. The category defaults to `/language:javascript-typescript`. |
 | `MYSKILLS_E2E_PORT`, `MYSKILLS_E2E_WEB_PORT`, `MYSKILLS_E2E_MAILPIT_PORT` | Optional loopback ports. Free ports are chosen when unset. |
@@ -77,8 +78,8 @@ atomically and contains:
 
 - `status`: `passed`, `failed`, `rejected` or `cancelled`. `passed` also requires complete
   cleanup and clean evidence.
-- `gating` and `gatingBlockers`: only a complete job set with a verified `LOCAL_CI_SOURCE_SHA` can
-  gate a commit.
+- `gating` and `gatingBlockers`: only a complete job set with a verified `LOCAL_CI_SOURCE_SHA` on a
+  Linux/amd64 host can gate a commit. Other hosts report `unsupported-host-platform`.
 - `contexts`: for a complete `verify` run, the protected-branch contexts `check`, `web-e2e` and
   `postgres-integration`. Partial runs report `null`.
 - `jobs`: status, reason, steps, exit codes, timings and a hashed log for each job.
@@ -96,16 +97,22 @@ the job clone and are deleted with it.
 ## Isolation And Cleanup
 
 Each job runs in its own clone of the pinned commit inside
-`<work dir>/myskills-local-ci-<run id>`. The workspace is created exclusively, so two runs cannot
-share a run ID on one host. The script records each container, Compose project and image in
+`<work dir>/myskills-local-ci-<run id>`. Before that, the run ID is reserved by creating
+`/var/tmp/myskills-local-ci-locks/<run id>` exclusively, whatever `TMPDIR` or the work directory is,
+so two runs on one host cannot share a run ID. The lock directory must be owned by the running user
+and not writable by others. The reservation covers only this host's Docker daemon, which is why
+remote Docker endpoints are refused. A reservation is never taken over. The script records each container, Compose project and image in
 `resources.json` before or as it creates it, and removes only those exact names. Compose cleanup
 matches the exact `com.docker.compose.project` label. A container whose creation failed, for
 example because of a name conflict, is never removed. The script never prunes and never matches
 name prefixes. Shared npm, Playwright and Docker build caches are kept.
 
 Each step runs in its own process group. `SIGTERM` stops the current step, cleans up and writes a
-cancelled result; allow about 60 seconds. After `SIGKILL`, use `resources.json` to remove the
-listed resources.
+cancelled result; allow about 60 seconds. The reservation is released only after complete cleanup.
+If cleanup fails, or after `SIGKILL`, the reservation stays and the run ID is refused. To recover,
+remove the resources listed in that run's `resources.json`. Then remove
+`/var/tmp/myskills-local-ci-locks/<run id>` only if its `owner.json` `owner` equals the
+`run-id-reservation` entry's `owner` in the same `resources.json`.
 
 ## Maintainer Controller
 
