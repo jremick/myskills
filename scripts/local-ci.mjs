@@ -50,6 +50,7 @@ Jobs:
 
 Required environment: LOCAL_CI_RUN_ID, LOCAL_CI_EVIDENCE_DIR. See docs/LOCAL_CI.md.`;
 const runIdPattern = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
+const composeProjectMaxLength = 63;
 const webE2eTimeoutMs = 15 * 60_000;
 const alwaysStepTimeoutMs = 60_000;
 const killGraceMs = 10_000;
@@ -627,7 +628,7 @@ class JobContext {
   }
 
   trackComposeProject(suffix) {
-    const project = containerName(this.run.runId, this.id, suffix);
+    const project = composeProjectName(this.run.runId, this.id, suffix);
     this.ledger.track("compose-project", project, this.id, "created");
     return project;
   }
@@ -1201,6 +1202,18 @@ function copyRegularFiles(source, target) {
 
 function containerName(runId, jobId, suffix) {
   return `myskills-ci-${runId}-${jobId}-${suffix}`;
+}
+
+// run-fullstack-e2e.mjs accepts Compose projects of at most 63 characters. Names that fit keep their
+// existing form. Longer ones keep the complete run ID (the runner's leftover check matches it as a token),
+// then as much of the job ID as fits, then a hash of the complete original name so jobs stay distinct.
+function composeProjectName(runId, jobId, suffix) {
+  const full = containerName(runId, jobId, suffix);
+  if (full.length <= composeProjectMaxLength) return full;
+  const digest = createHash("sha256").update(full).digest("hex").slice(0, 12);
+  const room = composeProjectMaxLength - runId.length - digest.length - 2;
+  const job = jobId.slice(0, Math.max(0, room - 1)).replace(/-+$/, "");
+  return job ? `${runId}-${job}-${digest}` : `${runId}-${digest}`;
 }
 
 function git(args, cwd = sourceRoot) {

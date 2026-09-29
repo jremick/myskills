@@ -162,3 +162,13 @@ The workflow files stay as the parity reference, so `scripts/check-structure.mjs
 them and `scripts/check-prerelease.mjs` still checks their static contract. Remove those checks
 only together with the files. The full-stack Compose run builds from cached base images without
 `--pull`, so the host cache can differ from a fresh GitHub runner until it is refreshed.
+
+## Updating an existing branch
+
+Merge or rebase an older branch onto current `main` before requesting local checks. The controller
+runs the checked-out commit's entrypoint, so a branch without `scripts/local-ci.sh` fails closed.
+
+Wait for fresh `local-ci/check`, `local-ci/web-e2e` and `local-ci/postgres-integration` results on the
+current pull request head, and for the code-scanning rule to accept its CodeQL analysis. Updating
+either the head or its base invalidates evidence for the earlier merge source. Fork contributions
+require maintainer review before their code runs on a trusted worker.
