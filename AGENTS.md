@@ -1,7 +1,7 @@
 # MySkills Agent Instructions
 
 Version: 1.0.0
-Last updated: 2026-06-19
+Last updated: 2026-09-29
 
 ## Source Of Truth
 
@@ -42,6 +42,7 @@ Run the narrowest check that proves the change, then broaden when touching share
 - Disposable Postgres integration gate: `TEST_DATABASE_URL=postgres://myskills_test:myskills_test@localhost:5432/myskills_test npm run test:postgres`
 - Release artifact gate: `npm run release:artifacts`
 - Production env preflight: `npm run check:prod-env -- --env-file .env.production`
+- Full CI, release or CodeQL gate on Linux with Docker: `scripts/local-ci.sh verify|release-check|codeql` (see `docs/LOCAL_CI.md`)
 
 `npm run test:postgres` must use a disposable database whose name includes `test` or `ci`; it resets that schema.
 

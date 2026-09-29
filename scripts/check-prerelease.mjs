@@ -65,6 +65,7 @@ const policyFiles = [
   "docs/CODEX_CLOUD.md",
   "docs/COMPATIBILITY.md",
   "docs/DEPLOYMENT.md",
+  "docs/LOCAL_CI.md",
   "docs/API_MCP_CLI_PLAN.md",
   "docs/ARCHITECTURE.md",
   "docs/DATA_MODEL.md",
@@ -87,6 +88,10 @@ const forbiddenPolicyPhrases = [
   /current alpha repository/i,
   /first public private-development launch/i,
   /private-development deployment currently/i,
+  // Release approval uses local CI results, not a green GitHub Actions run.
+  /Require the GitHub CI jobs/i,
+  /after the verification-only tag workflow passes/i,
+  /require GitHub CI to pass/i,
   /^## Public Alpha Install$/im,
   ...[
     ["check:alpha", "-release"],
@@ -237,6 +242,8 @@ function checkReleaseMarkers() {
   assertContains("docs/BETA_RELEASE_GOAL.md", `Target release: \`${expectedTag}\`.`);
   assertContains("docs/BETA_RELEASE_GOAL.md", "npm run release:verify");
   assertContains("docs/RELEASE.md", "npm run release:verify");
+  assertContains("docs/RELEASE.md", "scripts/local-ci.sh verify");
+  assertContains("docs/RELEASE.md", "scripts/local-ci.sh release-check");
   assertContains("docs/RELEASE.md", "## Approval Boundary");
   assertContains("docs/RELEASE.md", "## Rollback");
 

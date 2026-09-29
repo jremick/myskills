@@ -2,8 +2,9 @@
 
 `scripts/local-ci.sh` runs the same gates as the GitHub Actions workflows on a Linux host with
 Docker. Contributors can use it before opening a pull request. An external runner can call it
-after checkout and read its evidence. The GitHub workflows remain in place until a replacement
-has shown equivalent results; this entrypoint does not report statuses or publish anything.
+after checkout and read its evidence. Release and merge instructions use its results. The GitHub
+workflows stay in the repository as a parity reference during the migration. This entrypoint
+does not report statuses or publish anything.
 
 ## Requirements
 
@@ -106,6 +107,22 @@ Each step runs in its own process group. `SIGTERM` stops the current step, clean
 cancelled result; allow about 60 seconds. After `SIGKILL`, use `resources.json` to remove the
 listed resources.
 
+## Maintainer Controller
+
+Maintainers dispatch this entrypoint to a trusted Linux host with a private `local-ci` controller.
+The controller snapshots the exact commit, runs the entrypoint, collects `result.json` and the
+evidence, and reports the protected contexts. Contributors do not need it. Dispatch only trusted
+changes. The syntax below is current; final paths and configuration may still change.
+
+```bash
+local-ci submit --app myskills --job verify --commit <sha>
+local-ci submit --app myskills --job release-check --commit <sha> --tag v<version>
+local-ci submit --app myskills --job codeql --commit <sha>
+local-ci wait <run-id>
+local-ci report --app myskills --commit <sha>   # dry run; --execute posts statuses
+local-ci sarif upload <run-id>                  # dry run; --execute uploads SARIF
+```
+
 ## Mapping From GitHub Actions
 
 | Workflow gate | Local equivalent | Difference |
@@ -125,16 +142,16 @@ listed resources.
 
 ## Not Covered Here
 
-These GitHub functions stay with GitHub, or with an external runner, until a separate cutover
-replaces them:
+The entrypoint does not provide these functions. Until cutover, GitHub Actions and repository
+settings provide them; afterwards the maintainers' controller and GitHub settings do:
 
 - Pull request, push, tag and weekly CodeQL triggers, and release concurrency.
-- Reporting the `check`, `web-e2e` and `postgres-integration` statuses, and branch protection.
+- Reporting `local-ci/check`, `local-ci/web-e2e` and `local-ci/postgres-integration` after the matching branch-protection cutover. These distinct names replace the Actions contexts `check`, `web-e2e` and `postgres-integration`.
 - SARIF upload and the code scanning merge rule.
 - Artifact retention.
 - Dependabot, which is not an Actions workflow.
 
-`scripts/check-prerelease.mjs`, `scripts/check-structure.mjs` and the release documentation
-still describe the workflow files; update them when the workflows are retired. The full-stack
-Compose run builds from cached base images without `--pull`, so the host cache can differ from a
-fresh GitHub runner until it is refreshed.
+The workflow files stay as the parity reference, so `scripts/check-structure.mjs` still requires
+them and `scripts/check-prerelease.mjs` still checks their static contract. Remove those checks
+only together with the files. The full-stack Compose run builds from cached base images without
+`--pull`, so the host cache can differ from a fresh GitHub runner until it is refreshed.

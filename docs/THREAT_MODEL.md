@@ -1,7 +1,7 @@
 # Threat Model
 
 Version: 0.2.0-draft
-Last updated: 2026-09-01
+Last updated: 2026-09-29
 
 ## Scope
 
@@ -92,7 +92,8 @@ future authorization.
 - CLI auth, registry, sharing, team, and read-only architecture commands.
 - MCP registry and read-only architecture projection tools.
 - Package directory and `.zip` parsing, Docker/production configuration, and
-  GitHub release workflow.
+  release verification (`scripts/local-ci.sh` and the GitHub workflows it is
+  replacing).
 
 Pattern migration has a local authenticated preview/create route. There is no
 public sync-run route. The fixture planner in the consolidated preview is
@@ -120,7 +121,8 @@ explicit and request-scoped; a target is never inferred.
 | Artifact tampering/direct object exposure | Modified or unreviewed content | Opaque storage keys, API-owned writes, byte-size/SHA-256 verification, fail-closed mismatch handling | Signed/direct delivery with authorization and audit |
 | MCP bearer misuse | Unauthorized metadata or unsafe action | Scoped API token before protocol handling, read-only architecture tools, no bundle payloads, host/origin restrictions | Per-tool authoritative audit and future role-gated tools |
 | Audit/error leakage | Token/package/private-data exposure | Sanitized audit details, generic auth responses, no raw target state, bounded fields | Structured audit export hardening |
-| Release pipeline/provenance weakness | Harder source-to-artifact proof | Reproducible source archive, checksums, tag/version checks, release workflow | Pinned actions/images, SBOM, signatures, protected release tags |
+| Release pipeline/provenance weakness | Harder source-to-artifact proof | Reproducible source archive rebuilt from the tagged commit, checksums, tag/version/main-ancestry checks, hashed release-check evidence | Pinned actions/images, SBOM, signatures, protected release tags; local evidence has no hosted-runner identity until a signed runner identity exists |
+| Local CI host trust | Test and dependency code runs with the runner account's files and Docker access | Trusted changes only, allowlisted job environment without tokens, no publishing credentials in the job account, run-scoped cleanup, redacted and hashed evidence | Untrusted pull requests need a separately verified disposable executor |
 
 ## Audit findings at this branch review
 

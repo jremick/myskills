@@ -90,6 +90,7 @@ The [MCP guide](apps/mcp/README.md) covers the source-based stdio and HTTP serve
 - [Libraries](docs/LIBRARIES.md) — save sources, review changes and curate shared skills.
 - [Architecture](docs/ARCHITECTURE.md) — how the registry, API and clients fit together.
 - [Contributing](CONTRIBUTING.md) — development setup and pull request guidance.
+- [Local CI](docs/LOCAL_CI.md) — run the CI, release and CodeQL gates with `scripts/local-ci.sh`; maintainers dispatch the same entrypoint through their `local-ci` controller.
 - [Support](SUPPORT.md) · [GitHub issues](https://github.com/jremick/myskills/issues) — questions, bugs and feature requests.
 - [Security policy](SECURITY.md) — report vulnerabilities privately.
 - [Changelog](CHANGELOG.md) — user-facing changes and upgrade notes.
