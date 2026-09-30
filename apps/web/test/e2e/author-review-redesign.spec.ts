@@ -11,9 +11,9 @@ const base = { visibility: "private", platforms, artifact, createdAt: date, publ
 const pending = { ...base, id: "pending", slug: "release-notes-helper", title: "Release Notes Helper", summary: "Write concise release notes.", version: "1.3.0", lifecycleStatus: "submitted", reviewStatus: "pending", securityStatus: "passed", allowedActions: ["approve", "request-changes", "reject"] };
 const approved = { ...base, id: "approved", slug: "code-review-guide", title: "Code Review Guide", summary: "Check correctness before release.", version: "2.1.0", lifecycleStatus: "approved", reviewStatus: "approved", securityStatus: "passed", approvedArtifactSha256: "a".repeat(64), allowedActions: ["publish"] };
 const blocked = { ...base, id: "blocked", slug: "research-brief", title: "Research Brief", summary: "Gather cited evidence.", version: "0.8.0", lifecycleStatus: "quarantined", reviewStatus: "pending", securityStatus: "failed", findingCount: 3, allowedActions: ["request-changes", "reject"] };
-const managed = [pending, approved, blocked].map((s, i) => ({ ...s, lifecycleStatus: i === 2 ? "archived" : "approved", latestVersion: s.version, allowedActions: i === 2 ? ["restore"] : ["edit", "archive"] }));
+const managed = [pending, approved, blocked].map((s, i) => ({ ...s, tags: [], lifecycleStatus: i === 2 ? "archived" : "approved", latestVersion: s.version, allowedActions: i === 2 ? ["restore"] : ["edit", "archive"] }));
 
-async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; failReview?: boolean } = {}) {
+async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; failReview?: boolean; bootstrap?: boolean; teamImport?: boolean } = {}) {
   const user = { id: "owner-1", email: "owner@example.test", name: "Example owner", status: "active", roles: ["owner"], emailVerified: true, mfaVerified: options.mfa !== false };
   await page.addInitScript(user => localStorage.setItem("myskills-app:web-session", JSON.stringify({ user, expiresAt: "2027-09-27T00:00:00Z" })), user);
   let rows = structuredClone([pending, approved, blocked]);
@@ -47,13 +47,20 @@ async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; 
       if (failReview) return reply({ error: { code: "SERVICE_UNAVAILABLE", message: "Review queue temporarily unavailable." } }, 503);
       return reply({ submissions: options.partial && !url.searchParams.has("cursor") ? rows.slice(0, 2) : rows, nextCursor: options.partial && !url.searchParams.has("cursor") ? "page-2" : null });
     }
-    if (path === "/v1/submissions/mine") return reply({ submissions: rows.map(s => ({ ...s, reviewStatus: s.id === "blocked" ? "changes-requested" : s.reviewStatus, allowedActions: ["withdraw"] })), nextCursor: null });
+    if (path === "/v1/submissions/mine") return reply({ submissions: rows.map(s => ({ ...s, ...(options.teamImport && s.id === "blocked" ? { owner: { type: "team", id: "engineering-team" } } : {}), reviewStatus: s.id === "blocked" ? "changes-requested" : s.reviewStatus, allowedActions: ["withdraw"] })), nextCursor: null });
     if (/^\/v1\/(review\/)?submissions\/[^/]+\/bundle$/.test(path)) return route.fulfill({ json: { files: [{ path: "SKILL.md", content: "# Reviewed exact artifact\nUse verified release evidence." }] }, headers: { "x-myskills-artifact-sha256": hash } });
     const detail = path.match(/^\/v1\/(?:review\/)?submissions\/([^/]+)$/);
-    if (detail) return reply({ submission: { ...rows.find(s => s.id === detail[1]), reviewStatus: detail[1] === "blocked" ? "changes-requested" : rows.find(s => s.id === detail[1])?.reviewStatus, changeRequestReason: detail[1] === "blocked" ? "Cite the original research sources." : null, reviewHistory: [], scanRuns: [], correction: { requiresNewVersion: true, canSubmitNewVersion: true } } });
+    if (detail) return reply({ submission: { ...rows.find(s => s.id === detail[1]), ...(options.teamImport && detail[1] === "blocked" ? { owner: { type: "team", id: "engineering-team" } } : {}), reviewStatus: detail[1] === "blocked" ? "changes-requested" : rows.find(s => s.id === detail[1])?.reviewStatus, changeRequestReason: detail[1] === "blocked" ? "Cite the original research sources." : null, reviewHistory: [], scanRuns: [], correction: { requiresNewVersion: true, canSubmitNewVersion: !options.teamImport } } });
     if (path === "/v1/manage/skills") return reply({ skills: managed.filter(s => s.title.toLowerCase().includes((url.searchParams.get("q") ?? "").toLowerCase())), nextCursor: null });
+    const managedDetail = path.match(/^\/v1\/manage\/skills\/([^/]+)$/);
+    if (managedDetail) {
+      const row = managed.find(s => s.slug === managedDetail[1]);
+      return row ? reply({ skill: row }) : reply({ error: { code: "SKILL_NOT_FOUND" } }, 404);
+    }
+    // These skills have no readable published release: Skills shows the management record.
+    if (/^\/v1\/skills\/[^/]+$/.test(path)) return reply({ error: { code: "SKILL_NOT_FOUND", message: "Skill not found." } }, 404);
     const releases = path.match(/^\/v1\/skills\/([^/]+)\/releases$/);
-    if (releases) return reply({ releases: [release(releases[1]!, "1.3.0"), release(releases[1]!, "1.0.0")] });
+    if (releases) return reply({ releases: [release(releases[1]!, "1.3.0"), release(releases[1]!, options.bootstrap ? "0.0.0-bootstrap.118b105a185" : "1.0.0")] });
     if (path === "/v1/teams") return reply({ teams: [], invitations: [] });
     if (path === "/v1/libraries") return reply({ libraries: [], nextCursor: null });
     if (path === "/v1/library-inbox") return reply({ items: [], unreadCount: 0, nextCursor: null });
@@ -152,14 +159,16 @@ test("submission feedback opens beside its context and returns focus without an 
   await evidence(page, info, state.writes);
 });
 
+// /manage/skills is now the Skills Can manage scope; lifecycle lives in Manage.
 for (const mfa of [true, false]) test(`managed mobile exact release lifecycle respects MFA ${mfa}`, async ({ page }, info) => {
   const state = await fixture(page, { mfa });
   await page.setViewportSize({ width: 320, height: 844 });
   await page.goto("/manage/skills");
-  const row = page.getByRole("button", { name: /Release Notes Helper/ });
+  const row = page.getByRole("region", { name: "Managed skills", exact: true }).getByRole("link", { name: /Release Notes Helper/ });
   await row.click();
   await expect(page.getByRole("heading", { name: "Release Notes Helper", exact: true })).toBeFocused();
-  await page.getByRole("combobox", { name: "Managed release version", exact: true }).selectOption("1.0.0");
+  await page.getByRole("combobox", { name: "Release version", exact: true }).selectOption("1.0.0");
+  await page.getByRole("tab", { name: "Manage", exact: true }).click();
   const unpublish = page.getByRole("button", { name: "Unpublish 1.0.0", exact: true });
   if (!mfa) await expect(unpublish).toBeDisabled();
   else {
@@ -189,4 +198,43 @@ test("review queue retries its local error without duplicating alerts", async ({
   await expect(page.getByRole("alert")).toHaveCount(0);
   expect(state.writes).toHaveLength(0);
   await evidence(page, info, state.writes);
+});
+
+// The friendly label must never enter a lifecycle request or conceal its pin.
+test("managed bootstrap label keeps the exact lifecycle target", async ({ page }, info) => {
+  const state = await fixture(page, { bootstrap: true });
+  const version = "0.0.0-bootstrap.118b105a185";
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/manage/skills");
+  await page.getByRole("region", { name: "Managed skills", exact: true }).getByRole("link", { name: /Release Notes Helper/ }).click();
+  const selector = page.getByRole("combobox", { name: "Release version", exact: true });
+  await expect(selector.locator(`option[value="${version}"]`)).toHaveText("Initial import · Not published");
+  await selector.selectOption(version);
+  await page.getByRole("tab", { name: "Manage", exact: true }).click();
+  await expect(page.getByText("Exact version", { exact: true }).locator("..")).toContainText(version);
+  await page.getByRole("button", { name: "Unpublish Initial import", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Confirm lifecycle change" })).toContainText(version);
+  await page.getByRole("textbox", { name: "Lifecycle reason", exact: true }).fill("Replaced by a reviewed release.");
+  await page.getByRole("button", { name: "Confirm unpublish", exact: true }).click();
+  await expect(page.getByText(/Lifecycle change saved/)).toBeVisible();
+  expect(state.writes).toEqual([{ path: `/v1/skills/release-notes-helper/releases/${version}/actions`, body: { action: "unpublish", reason: "Replaced by a reviewed release." } }]);
+  expect(state.misses).toEqual([]);
+  await evidence(page, info, state.writes);
+});
+
+// Team ownership expands the existing submission list. It must not misdirect a
+// curator to the personal upload path when a reviewer requests source changes.
+test("team import feedback identifies ownership and routes corrections through Libraries", async ({ page }, info) => {
+  const state = await fixture(page, { teamImport: true });
+  await page.goto("/submit");
+  const row = page.locator(".submit-item").filter({ hasText: "Research Brief" });
+  await expect(row.getByText("Team-owned", { exact: true })).toBeVisible();
+  await row.getByRole("button", { name: "View feedback for 0.8.0", exact: true }).click();
+  await expect(row.getByText("Review the corrected upstream source in Libraries, then submit a new candidate. Submitting requires an author role. The previous artifact and review history remain unchanged.", { exact: true })).toBeVisible();
+  await expect(row.getByRole("button", { name: "Choose corrected package", exact: true })).toHaveCount(0);
+  await expect(row.getByText("Author permission is required to submit the correction.", { exact: false })).toHaveCount(0);
+  await row.getByRole("link", { name: "Open Libraries", exact: true }).click();
+  await expect(page).toHaveURL(/\/libraries$/);
+  expect(state.writes).toHaveLength(0);
+  await info.attach("team-submission-feedback-receipt", { body: JSON.stringify({ ownershipVisible: true, correctionRoute: "/libraries", mutations: 0 }), contentType: "application/json" });
 });

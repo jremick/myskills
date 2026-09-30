@@ -27,6 +27,7 @@ import { ArchitecturePatternMigrationService } from "./architectures/pattern-mig
 import { createExactArchitectureReleaseAuthorizer } from "./architectures/exact-release-authorizer.js";
 import { ArchitectureTargetBindingAuthorizer } from "./targets/architecture-binding-authorizer.js";
 import { PostgresArchitectureTargetStore } from "./targets/postgres-target-store.js";
+import { createPostgresObservationPrivacyReadinessProbe } from "./targets/observation-privacy-readiness.js";
 import { ArchitectureTargetService } from "./targets/service.js";
 import { PostgresTargetSkillOperationStore } from "./target-operations/postgres-store.js";
 import { TargetSkillOperationService } from "./target-operations/service.js";
@@ -35,6 +36,8 @@ import { SkillUpgradePolicyService } from "./upgrade-policies/service.js";
 import { PostgresImprovementStore } from "./improvements/postgres-store.js";
 import { ImprovementService } from "./improvements/service.js";
 import { PublicGithubSourceProvider } from "./libraries/github-source.js";
+import { PostgresSourceCooldownStore } from "./libraries/source-cooldown.js";
+import { GithubIntegrationService } from "./github/service.js";
 import { PostgresLibraryStore } from "./libraries/postgres-store.js";
 import { LibraryService } from "./libraries/service.js";
 import { LibrarySourceWorker } from "./libraries/worker.js";
@@ -92,13 +95,21 @@ const architectureTargetService = new ArchitectureTargetService(
 const skillUpgradePolicyService = new SkillUpgradePolicyService(new PostgresSkillUpgradePolicyStore(db));
 // Production always uses the fixed-host HTTPS transport; there is no fetch override.
 const bundleService = new BundleService(db);
+const authSecret = requiredAuthSecret();
+const githubWebBaseUrl = (process.env.APP_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+const githubService = new GithubIntegrationService({
+  db,
+  secret: authSecret,
+  webBaseUrl: githubWebBaseUrl,
+  apiBaseUrl: process.env.API_BASE_URL ?? (process.env.NODE_ENV === "production" ? `${githubWebBaseUrl}/api` : `http://localhost:${port}`),
+});
 const libraryService = new LibraryService({
   bundles: bundleService,
   store: new PostgresLibraryStore(db),
   submissions: submissionService,
   skillRepository,
   targets: architectureTargetService,
-  sourceProvider: new PublicGithubSourceProvider(),
+  sourceProvider: new PublicGithubSourceProvider({ credentials: githubService, cooldowns: new PostgresSourceCooldownStore(db) }),
 });
 const targetSkillOperationService = new TargetSkillOperationService(
   new PostgresTargetSkillOperationStore(db),
@@ -113,7 +124,6 @@ const improvementService = new ImprovementService(improvementStore, {
   teamService,
   organizationService,
 });
-const authSecret = requiredAuthSecret();
 const notificationSink = createAuthNotificationSinkFromEnv(process.env);
 // Remote MCP connections are off unless configured; incomplete config throws here.
 const oauthConfig = parseOAuthConfig(process.env);
@@ -152,6 +162,7 @@ const app = buildApp({
   skillUpgradePolicyService,
   improvementService,
   libraryService,
+  githubService,
   bundleService,
   bundlesEnabled: process.env.MYSKILLS_BUNDLES_ENABLED !== "false",
   allowedOrigins: allowedOrigins(),
@@ -164,6 +175,7 @@ const app = buildApp({
       await pool.query("SELECT 1");
     },
     phase2Architecture: createPostgresArchitectureReadinessProbe(db),
+    architectureObservationPrivacy: createPostgresObservationPrivacyReadinessProbe(db),
     artifactStorageRequired: Boolean(artifactStorage),
     artifactStorage: artifactStorage ? () => artifactStorage.checkReady() : undefined,
   },

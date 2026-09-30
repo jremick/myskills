@@ -34,6 +34,7 @@ test("author feedback, immutable publication, upgrade policy, real CLI install/u
         await useSession(page, actor, `/skills/${slug}`);
         await expect(page.getByRole("heading", { name: /^Acceptance / })).toBeVisible();
         await expect(page.getByText("0.1.1", { exact: true }).first()).toBeVisible();
+        await page.getByRole("button", { name: "Package files", exact: true }).click();
         const files = page.getByRole("region", { name: "Package files" });
         await files.getByRole("button", { name: "Inspect package files" }).click();
         await files.getByLabel("Package file", { exact: true }).selectOption("SKILL.md");
@@ -43,21 +44,23 @@ test("author feedback, immutable publication, upgrade policy, real CLI install/u
       },
       async afterUnpublish({ slug, actor, version }) {
         await useSession(page, actor, "/manage/skills");
-        await page.getByRole("textbox", { name: "Search managed skills" }).fill(slug);
+        await page.getByRole("textbox", { name: "Search skills you can manage", exact: true }).fill(slug);
         const row = page.locator(".managed-skill-row").filter({ hasText: slug });
         await expect(row).toBeVisible();
         await row.click();
-        await page.getByLabel("Managed release version").selectOption(version);
-        await expect(page.getByLabel("Managed release version").locator("option:checked")).toHaveText(`${version} · Unpublished`);
+        await page.getByRole("tab", { name: "Manage", exact: true }).click();
+        await page.getByRole("combobox", { name: "Release version", exact: true }).selectOption(version);
+        await expect(page.getByRole("combobox", { name: "Release version", exact: true }).locator("option:checked")).toHaveText(`${version} · Unpublished`);
         await expect(page.getByRole("button", { name: `Restore ${version}`, exact: true })).toBeEnabled();
         await page.screenshot({ path: testInfo.outputPath("maintainer-unpublished-history.png"), fullPage: true });
       },
       async afterArchive({ slug, actor }) {
         await useSession(page, actor, "/manage/skills");
-        await page.getByRole("textbox", { name: "Search managed skills" }).fill(slug);
+        await page.getByRole("textbox", { name: "Search skills you can manage", exact: true }).fill(slug);
         const row = page.locator(".managed-skill-row").filter({ hasText: slug });
         await expect(row).toContainText("Archived");
         await row.click();
+        await page.getByRole("tab", { name: "Manage", exact: true }).click();
         await expect(page.getByRole("button", { name: "Restore skill", exact: true })).toBeEnabled();
         await page.screenshot({ path: testInfo.outputPath("maintainer-archived-inventory.png"), fullPage: true });
       },

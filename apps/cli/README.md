@@ -27,22 +27,20 @@ Responsibilities:
 - support maintainer/admin workflows through role-gated API calls
 - enroll a personal Codex workspace and execute approved updates with an explicit companion command
 - inspect an explicitly selected local Codex profile with a read-only metadata observation or health report
+- enroll global and project Codex and Claude skill directories as separate read-only inventory scopes
 - create a dry-run-only work/team bootstrap plan from explicit approved roots and skill selectors
 
 CLI tokens should be stored in the platform secret store where possible.
 
 ## Current Slice
 
-This document describes the verified beta.7 CLI. Its GitHub prerelease is
-published, and its dedicated API/CLI acceptance passed. It remains compatible
-with existing hosted registry workflows. Beta.7 is deployed to hosted
-production from the verified candidate and adds local authoring and deterministic
-package creation. Native MCP Skills delivery is documented separately in the MCP
-guide. The beta.2 visibility compatibility shims remain available for existing
-clients. Source versions and npm publication are separate from hosted
-deployment; see [Beta.7 release, publication, and staging evidence](../../docs/BETA7_RELEASE_DELIVERY.md)
-for current status. The API and web expose their deployed version and commit
-at `/version.json`.
+This document describes the `0.1.0-beta.17` source candidate, including named
+CLI configuration profiles and global/project inventory scopes. Source,
+GitHub releases, npm publication, and hosted deployment are separate states;
+see [release verification](../../docs/RELEASE.md) for their checks. Historical
+[beta.7 delivery evidence](../../docs/BETA7_RELEASE_DELIVERY.md) records that
+release only. The API and web expose their deployed version and commit at
+`/version.json`.
 
 ### Beta.3 breaking security changes
 
@@ -123,6 +121,15 @@ myskills update [skill-slug] [--version <version>] [--platform <platform>] [--di
 myskills rollback <skill-slug> [--dir <install-root>]
 myskills codex enroll --workspace <absolute-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>]
 myskills codex observe --workspace <absolute-dir> [--upload] [--json]
+myskills scopes inventory --provider codex|claude --root <absolute-skills-dir> [--json]
+myskills scopes enroll --provider codex|claude --scope global --root <absolute-skills-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>]
+myskills scopes enroll --provider codex|claude --scope project --project <absolute-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>]
+myskills scopes observe --provider codex|claude --scope global|project [--project <absolute-dir>] [--upload] [--json]
+myskills scopes list [--provider codex|claude]
+myskills scopes resolve --provider codex|claude --path <absolute-dir>
+myskills scopes exclude|include --provider codex|claude --project <absolute-dir>
+myskills scopes unbind --provider codex|claude --scope global|project [--project <absolute-dir>]
+myskills scopes migrate plan|apply --provider codex|claude --project <absolute-dir> [--plan-digest <sha256>]
 myskills install <skill-slug> --version <version> --workspace <absolute-dir>
 myskills update [skill-slug] [--version <version>] --workspace <absolute-dir>
 myskills rollback <skill-slug> --workspace <absolute-dir>
@@ -301,12 +308,9 @@ myskills --version
 myskills login
 ```
 
-The beta.7 GitHub release and verified CLI assets are published. The npm `beta`
-channel currently resolves to `0.1.0-beta.6` while beta.7 awaits maintainer passkey authentication,
-and hosted production runs beta.7. Beta.7 adds deterministic local package
-authoring and the native MCP delivery work described in the repository release
-notes. To test repository changes before a later npm publication,
-build and run them locally:
+The npm `beta` tag selects the published prerelease. It can differ from this
+source candidate and the deployed API/web revision. To test source changes
+before npm publication, build and run them locally:
 
 ```bash
 npm ci
@@ -342,6 +346,66 @@ requires repair or removal of that file; other stored accounts are not silently
 discarded.
 
 `config get api-url`, `config set api-url <url>`, `config reset api-url`, and `config list` manage the saved API URL. `doctor` checks the CLI version, Node version, resolved API URL, `/health`, auth status, token-store backend, install-directory writability, and `/v1/capabilities`. If the CLI is pointed at the web app instead of the API, or a newer command is sent to an older server, command errors include concrete next steps and `--json` returns structured error codes.
+
+### Older workspace scope identities
+
+Scope state now records both device and inode. Existing inode-only state stays
+readable, but observation and ordinary re-enrollment stop with
+`SCOPE_ROOT_IDENTITY_LEGACY`. After confirming the same directory, repeat its
+original `scopes enroll` command with `--accept-current-root` and the original
+configuration profile. The command verifies the account, registry, architecture,
+and existing target, then backs up local state and updates only the root identity.
+It does not register targets, grant consent, or upload inventory. Pending
+enrollments retain their recovery identity and can resume with normal enrollment
+after acknowledgment. A repeated acknowledgment is a no-op; it cannot override
+a known device/inode mismatch. Device and inode do not detect every same-device
+inode reuse. See [scope identity migration](../../docs/WORKSPACE_SCOPES.md#upgrade-an-inode-only-scope-identity)
+for the exact upgrade and recovery behavior.
+
+### Separate work and personal configuration
+
+Every command accepts `--config-profile <name>` before or after the command.
+It overrides `MYSKILLS_CONFIG_PROFILE`. Names contain 1–64 lowercase letters,
+digits, hyphens or underscores and start with a letter or digit. For example:
+
+```bash
+myskills config set api-url https://work-registry.example/api --config-profile work
+myskills login --config-profile work
+myskills whoami --config-profile work
+myskills scopes list --config-profile work
+myskills config list --config-profile work --json
+```
+
+There is no create or persistent select command. Writes create the selected
+profile's state as needed; keep the flag on each command or set
+`MYSKILLS_CONFIG_PROFILE` in that shell. `help`, `config list`, and `doctor`
+show the selected configuration. JSON uses `configProfile: null` for the
+legacy default. This selector is separate from architecture `--profile-id`
+and provider inspection `--profile`.
+
+Without a selector, existing config, credentials, and scope bindings remain at
+their current locations. A named `personal` profile starts empty; it does not
+copy or migrate the default. Each named profile has independent saved API URL,
+credentials, and scope state, including for different accounts at one API URL.
+A missing credential never falls back to another profile or the default.
+
+The base directory is `MYSKILLS_CONFIG_DIR`, then
+`$XDG_CONFIG_HOME/myskills-app`, then `~/.config/myskills-app`. Named state lives
+under `<base>/profiles/<name>/` (`config.json`, optional `tokens.json`, and
+`scopes/`). OS credential keys include the canonical profile directory and API
+URL. Aliases for the base directory are supported; linked profile directories
+are rejected so they cannot share another profile’s files. Changing the base
+directory selects separate credentials. Named profiles
+reject `MYSKILLS_CONFIG_FILE` and `MYSKILLS_TOKEN_FILE`; these retain their
+existing precedence when no profile is selected. `MYSKILLS_TOKEN_STORE=file`
+remains available for profile-local file storage.
+
+Explicit API and token overrides still apply: `--api-url` then
+`MYSKILLS_API_URL` override the saved registry, and `--token` then
+`MYSKILLS_TOKEN` override the stored credential. Clear inherited overrides when
+you want the profile's saved registry/account. `auth status` reports the token
+source without printing its value. Selection does not move skill directories,
+change native provider profiles, or unbind existing targets.
 
 `bootstrap codex --dry-run` is a work/team-only local planner. It requires an
 explicit `work` context, a normalized HTTPS target origin, stable target
@@ -442,6 +506,26 @@ matching name and text description. `--dir` cannot bypass an enrolled workspace'
 binding. Team-shared skills can be installed when your account can read them;
 team-owned execution targets are outside this adapter's beta scope.
 
+### Global and project skill inventories (workspace scopes)
+
+`myskills scopes` enrolls a provider's user-level skills directory, or a
+project, as a personal read-only inventory target: `codex-inventory` for Codex
+and `claude-inventory` for Claude. Pass each directory explicitly; the CLI does
+not search your home directory. Run `scopes inventory` first to review locally
+what an upload would contain. Uploads carry skill slugs, counts, and
+`SKILL.md` digests only. Absolute paths, exclusions, skill bodies, and names of
+linked or invalid entries stay local.
+
+Projects resolve to the provider's global scope unless you exclude them or
+enroll them separately. Resolution uses real paths and whole path segments, the
+deepest rule wins, and an excluded project never falls back to the global
+scope. Scopes are MySkills ownership only: they do not change how Codex or
+Claude load or inherit skills, and they never write skill files. Existing
+managed Codex workspace bindings can be adopted with a previewed
+`scopes migrate plan` and `scopes migrate apply`. See
+[Workspace Scopes](../../docs/WORKSPACE_SCOPES.md) for the rules, recovery
+steps, and local state format.
+
 `codex observe --upload` records verified filesystem state. Confirm separately
 that Codex loaded the skill. To process one browser-queued update, supply a
 separate token with `skills:read` and `targets:execute` through `MYSKILLS_TOKEN`
@@ -483,7 +567,7 @@ commands already accept `--organization-id <organization-id>` (with
 authorizes that exact organization projection; it is a scope filter, not an
 ownership shortcut.
 
-The beta.2 compatibility shims remain in beta.3 and are planned for removal only
+The beta.2 compatibility shims remain available and are planned for removal only
 at a later, separately published prerelease boundary that includes migration
 guidance and release verification. The source release does not imply a hosted
 deployment.
@@ -658,3 +742,11 @@ Save with `myskills bundles save <bundle-id> --input save-reference.json`, where
 the file contains `libraryId` and `expectedRevision`. This saves one reference;
 it does not adopt, install or follow any skill. Use `--cursor` with list/member
 reads. Refresh from the first page if the authorized catalog changes.
+
+### GitHub connection controls
+
+Use `myskills account github status` to inspect the connected account and `myskills account github disconnect` to revoke it. Administrators can use `myskills admin github get` and `myskills admin github test` for safe configuration status and verification. These commands preserve API scope, account, role and MFA checks.
+
+`myskills account github connect` and `myskills admin github configure` return instructions for the trusted browser flow. They do not open a browser, enter credentials, grant consent or claim completion. Keep GitHub App secrets and private keys in the trusted Admin form. Inspect the safe status command after completing that flow.
+
+Use `myskills skills managed <slug>` to inspect an authorized archived or unpublished skill from the managed inventory. The public `info` command retains the public release contract.

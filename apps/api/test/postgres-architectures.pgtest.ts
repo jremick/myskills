@@ -26,7 +26,6 @@ import {
   skillArchitectureRevisions,
   skillArchitectures,
   skillArtifacts,
-  skills,
   teamMemberships,
   users,
 } from "../src/db/schema.js";
@@ -735,18 +734,15 @@ async function insertUser(db: Database, id: string, email: string): Promise<void
     status: "active",
     emailVerifiedAt: new Date(),
   });
-  await db.insert(skills).values({
-    id: fixtureSkillId,
-    slug: "release-notes-helper",
-    title: "Release notes",
-    summary: "Prepare release notes.",
-    lifecycleStatus: "approved",
-    visibility: "public",
-    ownerUserId: id,
-  }).onConflictDoNothing({ target: skills.slug });
   // These tests intentionally stop at historical architecture migrations.
-  // Use the historical skill_versions shape instead of the current Drizzle
-  // projection, which also contains columns introduced by migration 0021.
+  // Keep fixture inserts on that schema: current Drizzle projections include
+  // skill ownership from 0034 and release metadata from 0021.
+  await db.execute(sql`
+    INSERT INTO skills (id, slug, title, summary, lifecycle_status, visibility, owner_user_id)
+    VALUES (${fixtureSkillId}, 'release-notes-helper', 'Release notes',
+      'Prepare release notes.', 'approved', 'public', ${id})
+    ON CONFLICT (slug) DO NOTHING
+  `);
   await db.execute(sql`
     INSERT INTO skill_versions (
       id, skill_id, version, lifecycle_status, review_status,

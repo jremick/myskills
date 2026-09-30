@@ -23,7 +23,7 @@ A skill is a folder of instructions, built around a `SKILL.md` file, that an AI 
 
 ## Why MySkills?
 
-- **Keep your own library.** Save skills from the registry or a public GitHub repository, inspect their contents and choose a version to adopt.
+- **Keep your own library.** Save skills you find in Skills or a public GitHub repository, inspect their contents and choose a version to adopt.
 - **Share reviewed skills with your team.** Use shared libraries, maintainer review, roles and an audit history of key actions.
 - **Choose when to update.** Review source changes before adopting them. Install exact versions, preserve local edits and roll back when needed.
 - **Keep control of your data.** Self-host the registry, accounts and skill packages on infrastructure you manage.
@@ -34,7 +34,7 @@ Use the web app, CLI, HTTP API or MCP server. Managed workspace installation cur
 
 ## Try it
 
-[Browse the public registry](https://myskills.sh/registry) without an account. Accounts on [myskills.sh](https://myskills.sh) are invitation-only. Run your own instance to manage your own skills and users.
+[Browse public skills](https://myskills.sh/registry) without an account. Accounts on [myskills.sh](https://myskills.sh) are invitation-only. Run your own instance to manage your own skills and users.
 
 ### Run locally
 
@@ -64,7 +64,7 @@ Start the web app in another terminal, from the same repository directory:
 npm run dev:web
 ```
 
-Open **[localhost:3000/registry](http://localhost:3000/registry)**. You should see the seeded **Release Notes Helper** skill. Sign in with `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` from your local `.env`. These defaults are for local use only.
+Open **[Skills](http://localhost:3000/registry)**. You should see the seeded **Release Notes Helper** skill. Sign in with `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` from your local `.env`. These defaults are for local use only.
 
 For smoke checks, troubleshooting and shutdown, see [Getting Started](docs/GETTING_STARTED.md).
 
@@ -90,6 +90,7 @@ The [MCP guide](apps/mcp/README.md) covers the source-based stdio and HTTP serve
 - [Libraries](docs/LIBRARIES.md) — save sources, review changes and curate shared skills.
 - [Architecture](docs/ARCHITECTURE.md) — how the registry, API and clients fit together.
 - [Contributing](CONTRIBUTING.md) — development setup and pull request guidance.
+- [Local CI](docs/LOCAL_CI.md) — run the CI, release and CodeQL gates with `scripts/local-ci.sh`; maintainers dispatch the same entrypoint through their `local-ci` controller.
 - [Support](SUPPORT.md) · [GitHub issues](https://github.com/jremick/myskills/issues) — questions, bugs and feature requests.
 - [Security policy](SECURITY.md) — report vulnerabilities privately.
 - [Changelog](CHANGELOG.md) — user-facing changes and upgrade notes.

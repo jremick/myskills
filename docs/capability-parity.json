@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
-  "audit_date": "2026-09-29",
+  "audit_date": "2026-09-30",
   "evidence_level": "source inventory with scoped local contract/runtime evidence; real-host and deployment acceptance unverified",
   "base_commit": "3ab55b5da86bef5e3f6864657445b9f0ba38288d",
-  "github_main_checked": "fe88fdca056dd0017dbe46d99d228ad448932df5",
-  "includes_uncommitted_mcp_connector": true,
+  "github_main_checked": "8468ae9f",
+  "includes_uncommitted_mcp_connector": false,
   "statuses": {
     "A": "Operation exposed in inspected source; policy/configuration still apply",
     "P": "Partial outcome, parameters, lifecycle or response coverage",
@@ -23,7 +23,7 @@
           "method": "GET",
           "path": "/v1/skills",
           "source": "apps/api/src/app.ts",
-          "line": 888
+          "line": 915
         }
       ],
       "api": {
@@ -41,7 +41,7 @@
         "detail": "search [query] --limit/--cursor, with next cursor output",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 628,
+          "line": 652,
           "anchor": "async function searchCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -64,7 +64,7 @@
         "detail": "Registry filters and pagination",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 570,
+          "line": 669,
           "anchor": "const request = registryClient.searchSkillPage"
         },
         "evidence": [
@@ -127,7 +127,7 @@
           "method": "GET",
           "path": "/v1/skills/:slug",
           "source": "apps/api/src/app.ts",
-          "line": 956
+          "line": 983
         }
       ],
       "api": {
@@ -145,7 +145,7 @@
         "detail": "info",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 654,
+          "line": 678,
           "anchor": "async function infoCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -160,7 +160,7 @@
         "detail": "Skill inspector",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 5022,
+          "line": 5703,
           "anchor": "function SkillDetail({"
         },
         "evidence": [
@@ -223,7 +223,7 @@
           "method": "GET",
           "path": "/v1/skills/:slug/releases",
           "source": "apps/api/src/app.ts",
-          "line": 897
+          "line": 924
         }
       ],
       "api": {
@@ -241,7 +241,7 @@
         "detail": "releases list",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1210,
+          "line": 1237,
           "anchor": "async function releasesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -255,9 +255,9 @@
         "status": "A",
         "detail": "Release history selector",
         "source": {
-          "path": "apps/web/src/App.tsx",
-          "line": 4973,
-          "anchor": "function ReleaseHistoryControls({"
+          "path": "apps/web/src/components/registry/SkillSections.tsx",
+          "line": 51,
+          "anchor": "export function SkillVersionsPanel({"
         },
         "evidence": [
           {
@@ -319,7 +319,7 @@
           "method": "GET",
           "path": "/v1/skills/:slug/releases/:version",
           "source": "apps/api/src/app.ts",
-          "line": 910
+          "line": 937
         }
       ],
       "api": {
@@ -337,7 +337,7 @@
         "detail": "info <slug> --version <exact-version>; preserves JSON metadata and sanitizes human terminal output",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 654,
+          "line": 678,
           "anchor": "async function infoCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -360,7 +360,7 @@
         "detail": "Exact version inspector",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 5022,
+          "line": 5703,
           "anchor": "function SkillDetail({"
         },
         "evidence": [
@@ -423,7 +423,7 @@
           "method": "GET",
           "path": "/v1/skills/:slug/releases/:version/bundle",
           "source": "apps/api/src/app.ts",
-          "line": 931
+          "line": 958
         }
       ],
       "api": {
@@ -441,7 +441,7 @@
         "detail": "export validates bundle; install also downloads",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1880,
+          "line": 1907,
           "anchor": "async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -456,7 +456,7 @@
         "detail": "Export/install CLI command handoff",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 729,
+          "line": 912,
           "anchor": "selectedSkill && release && supportedDetailPlatform ? exportCommand(selectedSkill.slug, release.version, supportedDetailPlatform) : \"\""
         },
         "evidence": [
@@ -512,14 +512,20 @@
     {
       "id": "REG-06",
       "domain": "Registry",
-      "capability": "List skills the user can manage",
+      "capability": "List and inspect skills the user can manage",
       "category": "product",
       "api_operations": [
         {
           "method": "GET",
           "path": "/v1/manage/skills",
           "source": "apps/api/src/app.ts",
-          "line": 2169
+          "line": 2198
+        },
+        {
+          "method": "GET",
+          "path": "/v1/manage/skills/:slug",
+          "source": "apps/api/src/app.ts",
+          "line": 2213
         }
       ],
       "api": {
@@ -534,7 +540,7 @@
       },
       "cli": {
         "status": "A",
-        "detail": "skills managed --query/--limit/--cursor",
+        "detail": "skills managed [slug] or --query/--limit/--cursor",
         "evidence": [
           {
             "level": "source",
@@ -558,9 +564,9 @@
         "status": "A",
         "detail": "Manage skills dashboard",
         "source": {
-          "path": "apps/web/src/components/registry/ManagedSkillsDashboard.tsx",
-          "line": 52,
-          "anchor": "if (!client.listManagedSkills) throw new Error(\"Skill management is unavailable.\");"
+          "path": "apps/web/src/components/registry/ManagedSkillsInventory.tsx",
+          "line": 45,
+          "anchor": "if (!client.listManagedSkills) {"
         },
         "evidence": [
           {
@@ -571,7 +577,7 @@
       },
       "mcp_api_token": {
         "status": "A",
-        "detail": "skills_managed_list",
+        "detail": "skills_managed_list, skills_managed_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
           "line": 97
@@ -589,7 +595,7 @@
       },
       "mcp_oauth": {
         "status": "A",
-        "detail": "skills_managed_list",
+        "detail": "skills_managed_list, skills_managed_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
           "line": 97
@@ -608,7 +614,8 @@
       "authorization": "Named actions enforce live API user/resource/lifecycle policy and declared scopes: skills:manage. Privileged OAuth actions require actual session MFA verification within 15 minutes; refresh never extends it. Trusted-control sub-operations retain their original boundary.",
       "gap": "G04",
       "delegated_action_ids": [
-        "skills.managed.list"
+        "skills.managed.list",
+        "skills.managed.get"
       ],
       "initial_authorization": "Session; managed-resource visibility, including unpublished/lifecycle state."
     },
@@ -622,7 +629,7 @@
           "method": "PUT",
           "path": "/v1/skills/:slug",
           "source": "apps/api/src/app.ts",
-          "line": 971
+          "line": 998
         }
       ],
       "api": {
@@ -640,7 +647,7 @@
         "detail": "skills edit",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1151,
+          "line": 1178,
           "anchor": "async function skillsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -654,9 +661,9 @@
         "status": "A",
         "detail": "Metadata editor",
         "source": {
-          "path": "apps/web/src/App.tsx",
-          "line": 5376,
-          "anchor": "await client.updateSkillMetadata({"
+          "path": "apps/web/src/components/registry/SkillManagePanel.tsx",
+          "line": 116,
+          "anchor": "await client.updateSkillMetadata({ slug: record.slug, ...input });"
         },
         "evidence": [
           {
@@ -726,7 +733,7 @@
           "method": "POST",
           "path": "/v1/skills/:slug/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1027
+          "line": 1055
         }
       ],
       "api": {
@@ -744,7 +751,7 @@
         "detail": "skills archive/restore/delete",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1151,
+          "line": 1178,
           "anchor": "async function skillsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -758,9 +765,9 @@
         "status": "A",
         "detail": "Lifecycle controls",
         "source": {
-          "path": "apps/web/src/App.tsx",
-          "line": 5416,
-          "anchor": "await client.performSkillAction(selectedSkill.slug, action, confirmedReason || undefined);"
+          "path": "apps/web/src/components/registry/SkillManagePanel.tsx",
+          "line": 97,
+          "anchor": "if (pending.kind === \"skill\") await client.performSkillAction(record.slug, pending.action, reason.trim() || undefined);"
         },
         "evidence": [
           {
@@ -822,7 +829,7 @@
           "method": "POST",
           "path": "/v1/skills/:slug/releases/:version/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1052
+          "line": 1080
         }
       ],
       "api": {
@@ -840,7 +847,7 @@
         "detail": "releases actions",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1210,
+          "line": 1237,
           "anchor": "async function releasesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -854,9 +861,9 @@
         "status": "A",
         "detail": "Release lifecycle controls",
         "source": {
-          "path": "apps/web/src/App.tsx",
-          "line": 5443,
-          "anchor": "await client.performReleaseAction(selectedSkill.slug, release.version, action, confirmedReason || undefined, undefined);"
+          "path": "apps/web/src/components/registry/SkillManagePanel.tsx",
+          "line": 98,
+          "anchor": "else await client.performReleaseAction(record.slug, pending.version, pending.action, reason.trim() || undefined);"
         },
         "evidence": [
           {
@@ -918,13 +925,13 @@
           "method": "GET",
           "path": "/v1/skills/:slug/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1078
+          "line": 1106
         },
         {
           "method": "PUT",
           "path": "/v1/skills/:slug/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1095
+          "line": 1123
         }
       ],
       "api": {
@@ -942,7 +949,7 @@
         "detail": "sharing get/set",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1325,
+          "line": 1352,
           "anchor": "async function sharingCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -957,7 +964,7 @@
         "detail": "Sharing editor",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 5612,
+          "line": 6051,
           "anchor": "const next = await client.updateSkillSharing({"
         },
         "evidence": [
@@ -1063,7 +1070,7 @@
         "detail": "bundles list/show/members/memberships",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1896,
+          "line": 1923,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1162,7 +1169,7 @@
         "detail": "bundles sources",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1896,
+          "line": 1923,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1264,7 +1271,7 @@
         "detail": "bundles create/edit",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1896,
+          "line": 1923,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1368,7 +1375,7 @@
         "detail": "bundles save",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1896,
+          "line": 1923,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1445,7 +1452,7 @@
           "method": "POST",
           "path": "/v1/submissions",
           "source": "apps/api/src/app.ts",
-          "line": 2296
+          "line": 2342
         }
       ],
       "api": {
@@ -1463,7 +1470,7 @@
         "detail": "submit --path",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1729,
+          "line": 1756,
           "anchor": "async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -1478,7 +1485,7 @@
         "detail": "Submit archive",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 1830,
+          "line": 2226,
           "anchor": "const submitted = await client.submitArchive({"
         },
         "evidence": [
@@ -1541,7 +1548,7 @@
           "method": "GET",
           "path": "/v1/submissions/mine",
           "source": "apps/api/src/app.ts",
-          "line": 2220
+          "line": 2266
         }
       ],
       "api": {
@@ -1559,7 +1566,7 @@
         "detail": "submissions list",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1110,
+          "line": 1137,
           "anchor": "async function submissionsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -1574,7 +1581,7 @@
         "detail": "My submissions",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 1786,
+          "line": 2182,
           "anchor": "setSubmissions(await client.listUserSubmissions());"
         },
         "evidence": [
@@ -1637,7 +1644,7 @@
           "method": "GET",
           "path": "/v1/submissions/:id",
           "source": "apps/api/src/app.ts",
-          "line": 2184
+          "line": 2230
         }
       ],
       "api": {
@@ -1740,7 +1747,7 @@
           "method": "GET",
           "path": "/v1/submissions/:id/bundle",
           "source": "apps/api/src/app.ts",
-          "line": 2239
+          "line": 2285
         }
       ],
       "api": {
@@ -1780,7 +1787,7 @@
         "detail": "Export own submission",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 1848,
+          "line": 2244,
           "anchor": "const bundle = await client.exportUserSubmission(submission.id);"
         },
         "evidence": [
@@ -1843,7 +1850,7 @@
           "method": "POST",
           "path": "/v1/submissions/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 2271
+          "line": 2317
         }
       ],
       "api": {
@@ -1861,7 +1868,7 @@
         "detail": "submissions withdraw",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1110,
+          "line": 1137,
           "anchor": "async function submissionsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -1876,7 +1883,7 @@
         "detail": "Withdraw control",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 1874,
+          "line": 2270,
           "anchor": "await client.performSubmissionAction(submission.id, \"withdraw\", confirmedReason);"
         },
         "evidence": [
@@ -1939,7 +1946,7 @@
           "method": "GET",
           "path": "/v1/review/submissions",
           "source": "apps/api/src/app.ts",
-          "line": 2322
+          "line": 2368
         }
       ],
       "api": {
@@ -1957,7 +1964,7 @@
         "detail": "review submissions --limit/--cursor, with next cursor output",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1015,
+          "line": 1042,
           "anchor": "async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -1980,7 +1987,7 @@
         "detail": "Review queue and load more",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2149,
+          "line": 2560,
           "anchor": "return client.listReviewSubmissionPage ? client.listReviewSubmissionPage({ limit: 100, cursor })"
         },
         "evidence": [
@@ -2043,7 +2050,7 @@
           "method": "GET",
           "path": "/v1/review/submissions/:id",
           "source": "apps/api/src/app.ts",
-          "line": 2201
+          "line": 2247
         }
       ],
       "api": {
@@ -2146,7 +2153,7 @@
           "method": "GET",
           "path": "/v1/review/submissions/:id/bundle",
           "source": "apps/api/src/app.ts",
-          "line": 2341
+          "line": 2387
         }
       ],
       "api": {
@@ -2164,7 +2171,7 @@
         "detail": "review bundle",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1015,
+          "line": 1042,
           "anchor": "async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -2179,7 +2186,7 @@
         "detail": "Review artifact inspector",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2291,
+          "line": 2706,
           "anchor": "const bundle = await client.getReviewSubmissionBundle(submission.id);"
         },
         "evidence": [
@@ -2242,7 +2249,7 @@
           "method": "POST",
           "path": "/v1/review/submissions/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 2376
+          "line": 2422
         }
       ],
       "api": {
@@ -2260,7 +2267,7 @@
         "detail": "review action",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1015,
+          "line": 1042,
           "anchor": "async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -2275,7 +2282,7 @@
         "detail": "Review actions",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2216,
+          "line": 2627,
           "anchor": "const result = await client.performReviewAction({"
         },
         "evidence": [
@@ -2377,7 +2384,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 83,
+          "line": 124,
           "anchor": "void client.listTeams().then((result) => { if (active) setTeams(result.teams.filter((team) => team.role === \"owner\")); }).catch(() => {});"
         },
         "evidence": [
@@ -2474,7 +2481,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 61,
+          "line": 79,
           "anchor": "const [createError, setCreateError] = useState<string | null>(null);"
         },
         "evidence": [
@@ -2661,7 +2668,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 102,
+          "line": 148,
           "anchor": "function removed() {"
         },
         "evidence": [
@@ -2771,7 +2778,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 162,
+          "line": 229,
           "anchor": "const [entries, setEntries] = useState<LibraryEntry[]>([]);"
         },
         "evidence": [
@@ -2868,7 +2875,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 210,
+          "line": 327,
           "anchor": "const result = await api.addSource(libraryId, { url, ...(path.trim() ? { path: path.trim() } : {}), ...(refKind === \"url\" ? {} : { ref: { kind: refKind, ...(refValue.trim() ? { value: refValue.trim() } : {}) } }), clientMutationId: sourceKey.current });"
         },
         "evidence": [
@@ -2964,8 +2971,8 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 847,
-          "anchor": "return <div className=\"library-remove\">{confirm ? <div className=\"library-confirm\"><p>Remove this entry? Installed files and registry releases stay intact.</p><div className=\"library-actions\"><Button variant=\"destructive\" size=\"sm\" disabled={busy} onClick={() => { setBusy(true); void api.removeEntry(entry.id).then(() => onChanged()).catch((e) => setError(libraryError(e))).finally(() => setBusy(false)); }}>Confirm remove</Button><Button variant=\"ghost\" size=\"sm\" onClick={() => setConfirm(false)}>Cancel</Button></div></div> : <Button variant=\"ghost\" size=\"sm\" className=\"library-remove-button\" onClick={() => setConfirm(true)}><Trash2 size={14} aria-hidden=\"true\" />Remove entry</Button>}{error && <p role=\"alert\" className=\"library-alert\">{error}</p>}</div>;"
+          "line": 1082,
+          "anchor": "return <div className=\"library-remove\">{confirm ? <div className=\"library-confirm\"><p>Remove this entry? Installed files and skill releases stay intact.</p><div className=\"library-actions\"><Button variant=\"destructive\" size=\"sm\" disabled={busy} onClick={() => { setBusy(true); void api.removeEntry(entry.id).then(() => onChanged()).catch((e) => setError(libraryError(e))).finally(() => setBusy(false)); }}>Confirm remove</Button><Button variant=\"ghost\" size=\"sm\" onClick={() => setConfirm(false)}>Cancel</Button></div></div> : <Button variant=\"ghost\" size=\"sm\" className=\"library-remove-button\" onClick={() => setConfirm(true)}><Trash2 size={14} aria-hidden=\"true\" />Remove entry</Button>}{error && <p role=\"alert\" className=\"library-alert\">{error}</p>}</div>;"
         },
         "evidence": [
           {
@@ -3060,8 +3067,8 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 169,
-          "anchor": "const [sourceSelection, setSourceSelection] = useState<{ id: string; discover: boolean } | null>(null);"
+          "line": 344,
+          "anchor": "const sourceSelection = candidateId && entryId ? { id: entryId, discover: false } : manualImport && manualImport.id === selectedId ? manualImport : null;"
         },
         "evidence": [
           {
@@ -3156,7 +3163,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 571,
+          "line": 789,
           "anchor": "async function preview() {"
         },
         "evidence": [
@@ -3458,7 +3465,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 672,
+          "line": 894,
           "anchor": "<Button variant=\"ghost\" size=\"sm\" disabled={busy} onClick={() => void run(async () => setCandidate((await api.ignore(candidate.id)).candidate))}>Ignore candidate</Button>"
         },
         "evidence": [
@@ -3554,7 +3561,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 692,
+          "line": 916,
           "anchor": "<Button size=\"sm\" disabled={busy || !inspected || !attested || !candidate.packageDigest} onClick={() => void run(async () => setCandidate((await api.selfReview(candidate.id, candidate.packageDigest!)).candidate))}>Approve for my private use</Button>"
         },
         "evidence": [
@@ -3650,7 +3657,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 696,
+          "line": 921,
           "anchor": "{candidate.registry.attestation === \"private-self-reviewed\" && <Button size=\"sm\" variant=\"outline\" disabled={busy} onClick={() => void run(async () => { await api.requestReview(candidate.id); setMessage(\"Instance review requested. Sharing stays restricted until review is complete.\"); })}>Request instance review for sharing</Button>}"
         },
         "evidence": [
@@ -3746,7 +3753,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 439,
+          "line": 643,
           "anchor": "const attestation = entry.adoption ? attestationLabel(entry.adoption.attestation) : null;"
         },
         "evidence": [
@@ -3933,7 +3940,7 @@
         "detail": "Current adoption shown; no resolution/status operation",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 700,
+          "line": 925,
           "anchor": "setMessage(\"Version adopted. Installed copies change only when you update them.\");"
         },
         "evidence": [
@@ -4125,7 +4132,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 348,
+          "line": 514,
           "anchor": "<label className=\"library-switch-field\"><input type=\"checkbox\" className=\"library-switch-input\" checked={subscriptionPending ?? Boolean(library.subscription)} disabled={busy} onChange={(event) => { const enabled = event.target.checked; setSubscriptionPending(enabled); void action(() => enabled ? api.subscribe(libraryId) : api.unsubscribe(libraryId)).finally(() => setSubscriptionPending(null)); }} /><span>Notify me about changes</span></label>"
         },
         "evidence": [
@@ -4227,7 +4234,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 348,
+          "line": 514,
           "anchor": "<label className=\"library-switch-field\"><input type=\"checkbox\" className=\"library-switch-input\" checked={subscriptionPending ?? Boolean(library.subscription)} disabled={busy} onChange={(event) => { const enabled = event.target.checked; setSubscriptionPending(enabled); void action(() => enabled ? api.subscribe(libraryId) : api.unsubscribe(libraryId)).finally(() => setSubscriptionPending(null)); }} /><span>Notify me about changes</span></label>"
         },
         "evidence": [
@@ -4338,7 +4345,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 882,
+          "line": 1117,
           "anchor": "useEffect(() => { let active = true; void api.inbox().then((value) => { if (active) { setItems(value.items); setCursor(value.nextCursor); setUnread(value.unreadCount ?? 0); } }).catch((e) => { if (active) setError(libraryError(e)); }); return () => { active = false; }; }, [api]);"
         },
         "evidence": [
@@ -4435,7 +4442,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 353,
+          "line": 519,
           "anchor": "<p className=\"library-muted\">Deleting a library stops tracking and subscriptions. Installed files stay in place; bindings stop following new recommendations.</p>"
         },
         "evidence": [
@@ -4640,7 +4647,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 350,
+          "line": 516,
           "anchor": "{library.access.canWrite && <LibraryDisclosure label=\"Library settings\" iconOnly focusPanel variant=\"ghost\" icon={<Settings2 size={16} aria-hidden=\"true\" />}>"
         },
         "evidence": [
@@ -4813,7 +4820,7 @@
           "method": "GET",
           "path": "/v1/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1900
+          "line": 1929
         }
       ],
       "api": {
@@ -4831,7 +4838,7 @@
         "detail": "teams list",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1258,
+          "line": 1285,
           "anchor": "async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -4846,7 +4853,7 @@
         "detail": "Teams dashboard",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2721,
+          "line": 3146,
           "anchor": "client.listTeams(),"
         },
         "evidence": [
@@ -4917,7 +4924,7 @@
           "method": "POST",
           "path": "/v1/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1914
+          "line": 1943
         }
       ],
       "api": {
@@ -4935,7 +4942,7 @@
         "detail": "teams create",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1258,
+          "line": 1285,
           "anchor": "async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -4950,7 +4957,7 @@
         "detail": "Create team",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2813,
+          "line": 3238,
           "anchor": "await client.createTeam(teamName);"
         },
         "evidence": [
@@ -5021,13 +5028,13 @@
           "method": "POST",
           "path": "/v1/teams/:id/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1957
+          "line": 1986
         },
         {
           "method": "POST",
           "path": "/v1/teams/invitations/:id/accept",
           "source": "apps/api/src/app.ts",
-          "line": 2043
+          "line": 2072
         }
       ],
       "api": {
@@ -5045,7 +5052,7 @@
         "detail": "teams invite/accept",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1258,
+          "line": 1285,
           "anchor": "async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -5060,7 +5067,7 @@
         "detail": "Team invitations",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2832,
+          "line": 3257,
           "anchor": "await client.inviteTeamMember(invitedTeam.id, email);"
         },
         "evidence": [
@@ -5132,7 +5139,7 @@
           "method": "DELETE",
           "path": "/v1/teams/:teamId/invitations/:invitationId",
           "source": "apps/api/src/app.ts",
-          "line": 1979
+          "line": 2008
         }
       ],
       "api": {
@@ -5230,13 +5237,13 @@
           "method": "PUT",
           "path": "/v1/teams/:teamId/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 2001
+          "line": 2030
         },
         {
           "method": "DELETE",
           "path": "/v1/teams/:teamId/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 2022
+          "line": 2051
         }
       ],
       "api": {
@@ -5335,7 +5342,7 @@
           "method": "GET",
           "path": "/v1/teams/shared-skills",
           "source": "apps/api/src/app.ts",
-          "line": 2063
+          "line": 2092
         }
       ],
       "api": {
@@ -5353,7 +5360,7 @@
         "detail": "teams skills",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1258,
+          "line": 1285,
           "anchor": "async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -5368,7 +5375,7 @@
         "detail": "Team shared skills",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2722,
+          "line": 3147,
           "anchor": "client.listTeamSharedSkills(),"
         },
         "evidence": [
@@ -5431,13 +5438,13 @@
           "method": "GET",
           "path": "/v1/organizations",
           "source": "apps/api/src/app.ts",
-          "line": 1581
+          "line": 1610
         },
         {
           "method": "GET",
           "path": "/v1/organizations/:id",
           "source": "apps/api/src/app.ts",
-          "line": 1647
+          "line": 1676
         }
       ],
       "api": {
@@ -5477,7 +5484,7 @@
         "detail": "Organizations dashboard",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 308,
+          "line": 364,
           "anchor": "const canUseOrganizations = Boolean(session && registryClient.listOrganizations);"
         },
         "evidence": [
@@ -5541,13 +5548,13 @@
           "method": "POST",
           "path": "/v1/organizations",
           "source": "apps/api/src/app.ts",
-          "line": 1595
+          "line": 1624
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1838
+          "line": 1867
         }
       ],
       "api": {
@@ -5651,19 +5658,19 @@
           "method": "GET",
           "path": "/v1/organizations/:id/members",
           "source": "apps/api/src/app.ts",
-          "line": 1664
+          "line": 1693
         },
         {
           "method": "GET",
           "path": "/v1/organizations/:id/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1681
+          "line": 1710
         },
         {
           "method": "GET",
           "path": "/v1/organizations/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1615
+          "line": 1644
         }
       ],
       "api": {
@@ -5768,13 +5775,13 @@
           "method": "POST",
           "path": "/v1/organizations/:id/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1698
+          "line": 1727
         },
         {
           "method": "POST",
           "path": "/v1/organizations/invitations/:id/accept",
           "source": "apps/api/src/app.ts",
-          "line": 1629
+          "line": 1658
         }
       ],
       "api": {
@@ -5878,13 +5885,13 @@
           "method": "PUT",
           "path": "/v1/organizations/:id/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 1718
+          "line": 1747
         },
         {
           "method": "DELETE",
           "path": "/v1/organizations/:id/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 1736
+          "line": 1765
         }
       ],
       "api": {
@@ -5988,19 +5995,19 @@
           "method": "GET",
           "path": "/v1/organizations/:id/policy-revisions",
           "source": "apps/api/src/app.ts",
-          "line": 1754
+          "line": 1783
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/policy-revisions",
           "source": "apps/api/src/app.ts",
-          "line": 1797
+          "line": 1826
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/policy-revisions/:revisionId/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1816
+          "line": 1845
         }
       ],
       "api": {
@@ -6105,19 +6112,19 @@
           "method": "GET",
           "path": "/v1/organizations/:id/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1859
+          "line": 1888
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1881
+          "line": 1910
         },
         {
           "method": "PUT",
           "path": "/v1/teams/:id/organization",
           "source": "apps/api/src/app.ts",
-          "line": 1935
+          "line": 1964
         }
       ],
       "api": {
@@ -6222,13 +6229,13 @@
           "method": "GET",
           "path": "/v1/organizations/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 1771
+          "line": 1800
         },
         {
           "method": "PUT",
           "path": "/v1/organizations/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 1782
+          "line": 1811
         }
       ],
       "api": {
@@ -6332,7 +6339,7 @@
           "method": "GET",
           "path": "/v1/architecture-patterns",
           "source": "apps/api/src/app.ts",
-          "line": 352
+          "line": 379
         }
       ],
       "api": {
@@ -6350,7 +6357,7 @@
         "detail": "architectures patterns",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1372,
+          "line": 1399,
           "anchor": "async function architecturesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -6365,7 +6372,7 @@
         "detail": "Architecture pattern picker",
         "source": {
           "path": "apps/web/src/components/architecture/ArchitecturesDashboard.tsx",
-          "line": 130,
+          "line": 298,
           "anchor": "client.listArchitecturePatterns(),"
         },
         "evidence": [
@@ -6428,7 +6435,7 @@
           "method": "GET",
           "path": "/v1/architectures",
           "source": "apps/api/src/app.ts",
-          "line": 356
+          "line": 383
         }
       ],
       "api": {
@@ -6446,7 +6453,7 @@
         "detail": "architectures list",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1372,
+          "line": 1399,
           "anchor": "async function architecturesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -6461,7 +6468,7 @@
         "detail": "Architecture dashboard",
         "source": {
           "path": "apps/web/src/components/architecture/ArchitecturesDashboard.tsx",
-          "line": 131,
+          "line": 299,
           "anchor": "client.listArchitectures(),"
         },
         "evidence": [
@@ -6524,19 +6531,19 @@
           "method": "GET",
           "path": "/v1/architectures/:id",
           "source": "apps/api/src/app.ts",
-          "line": 385
+          "line": 412
         },
         {
           "method": "GET",
           "path": "/v1/architectures/:id/revisions",
           "source": "apps/api/src/app.ts",
-          "line": 408
+          "line": 435
         },
         {
           "method": "GET",
           "path": "/v1/architectures/:id/revisions/:revisionId",
           "source": "apps/api/src/app.ts",
-          "line": 612
+          "line": 639
         }
       ],
       "api": {
@@ -6576,7 +6583,7 @@
         "detail": "Revision inspection",
         "source": {
           "path": "apps/web/src/components/architecture/ArchitecturesDashboard.tsx",
-          "line": 332,
+          "line": 508,
           "anchor": "const nextRevision = await client.getArchitectureRevision(selectedArchitectureId, revisionId);"
         },
         "evidence": [
@@ -6641,7 +6648,7 @@
           "method": "POST",
           "path": "/v1/architectures",
           "source": "apps/api/src/app.ts",
-          "line": 364
+          "line": 391
         }
       ],
       "api": {
@@ -6743,7 +6750,7 @@
           "method": "POST",
           "path": "/v1/architectures/:id/revisions",
           "source": "apps/api/src/app.ts",
-          "line": 418
+          "line": 445
         }
       ],
       "api": {
@@ -6782,9 +6789,9 @@
         "status": "A",
         "detail": "Architecture editor",
         "source": {
-          "path": "apps/web/src/components/architecture/ArchitecturesDashboard.tsx",
-          "line": 572,
-          "anchor": "await client.createArchitectureRevision(selectedArchitectureId, {"
+          "path": "apps/web/src/components/architecture/ArchitectureDashboardEditorPanels.tsx",
+          "line": 134,
+          "anchor": "await client.createArchitectureRevision(architectureId, {"
         },
         "evidence": [
           {
@@ -6846,7 +6853,7 @@
           "method": "POST",
           "path": "/v1/architectures/:id/preview",
           "source": "apps/api/src/app.ts",
-          "line": 624
+          "line": 651
         }
       ],
       "api": {
@@ -6864,7 +6871,7 @@
         "detail": "architectures preview/compile/plan/dry-run",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1372,
+          "line": 1399,
           "anchor": "async function architecturesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -6879,7 +6886,7 @@
         "detail": "Preview and observed-state plan",
         "source": {
           "path": "apps/web/src/components/architecture/ArchitecturesDashboard.tsx",
-          "line": 273,
+          "line": 445,
           "anchor": "client.previewArchitecture(selectedArchitectureId, request).then((nextPreview) => {"
         },
         "evidence": [
@@ -6942,7 +6949,7 @@
           "method": "POST",
           "path": "/v1/architectures/:id/draft-preview",
           "source": "apps/api/src/app.ts",
-          "line": 479
+          "line": 506
         }
       ],
       "api": {
@@ -6982,7 +6989,7 @@
         "detail": "Draft preview",
         "source": {
           "path": "apps/web/src/components/architecture/ArchitecturesDashboard.tsx",
-          "line": 550,
+          "line": 823,
           "anchor": "const nextPreview = await client.previewArchitectureDraft(selectedArchitectureId, {"
         },
         "evidence": [
@@ -7045,13 +7052,13 @@
           "method": "GET",
           "path": "/v1/architectures/:id/organization-grants",
           "source": "apps/api/src/app.ts",
-          "line": 556
+          "line": 583
         },
         {
           "method": "PUT",
           "path": "/v1/architectures/:id/organization-grants",
           "source": "apps/api/src/app.ts",
-          "line": 566
+          "line": 593
         }
       ],
       "api": {
@@ -7154,13 +7161,13 @@
           "method": "POST",
           "path": "/v1/architectures/:id/pattern-migrations/preview",
           "source": "apps/api/src/app.ts",
-          "line": 580
+          "line": 607
         },
         {
           "method": "POST",
           "path": "/v1/architectures/:id/pattern-migrations",
           "source": "apps/api/src/app.ts",
-          "line": 598
+          "line": 625
         }
       ],
       "api": {
@@ -7263,13 +7270,13 @@
           "method": "GET",
           "path": "/v1/architecture-targets",
           "source": "apps/api/src/app.ts",
-          "line": 687
+          "line": 714
         },
         {
           "method": "GET",
           "path": "/v1/architecture-targets/:id",
           "source": "apps/api/src/app.ts",
-          "line": 706
+          "line": 733
         }
       ],
       "api": {
@@ -7309,7 +7316,7 @@
         "detail": "Targets dashboard",
         "source": {
           "path": "apps/web/src/components/target/ArchitectureTargetsDashboard.tsx",
-          "line": 300,
+          "line": 301,
           "anchor": "if (!client.listArchitectureTargets) {"
         },
         "evidence": [
@@ -7373,13 +7380,13 @@
           "method": "POST",
           "path": "/v1/architecture-targets",
           "source": "apps/api/src/app.ts",
-          "line": 695
+          "line": 722
         },
         {
           "method": "POST",
           "path": "/v1/architecture-targets/:id/consent",
           "source": "apps/api/src/app.ts",
-          "line": 717
+          "line": 744
         }
       ],
       "api": {
@@ -7419,7 +7426,7 @@
         "detail": "Target registration and consent",
         "source": {
           "path": "apps/web/src/components/target/ArchitectureTargetsDashboard.tsx",
-          "line": 820,
+          "line": 823,
           "anchor": "if (!client.setArchitectureTargetConsent || target.status === \"revoked\") return;"
         },
         "evidence": [
@@ -7483,7 +7490,7 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/observations",
           "source": "apps/api/src/app.ts",
-          "line": 732
+          "line": 759
         }
       ],
       "api": {
@@ -7523,7 +7530,7 @@
         "detail": "Target observations",
         "source": {
           "path": "apps/web/src/components/target/ArchitectureTargetsDashboard.tsx",
-          "line": 335,
+          "line": 336,
           "anchor": "if (!client.getArchitectureTarget || !client.listArchitectureTargetObservations) {"
         },
         "evidence": [
@@ -7586,7 +7593,7 @@
           "method": "POST",
           "path": "/v1/architecture-targets/:id/observations",
           "source": "apps/api/src/app.ts",
-          "line": 745
+          "line": 772
         }
       ],
       "api": {
@@ -7626,7 +7633,7 @@
         "detail": "Local observation command guidance",
         "source": {
           "path": "apps/web/src/components/target/ArchitectureTargetsDashboard.tsx",
-          "line": 31,
+          "line": 30,
           "anchor": "} from \"@myskills-app/core\";"
         },
         "evidence": [
@@ -7685,7 +7692,7 @@
           "method": "POST",
           "path": "/v1/architecture-targets/:id/health",
           "source": "apps/api/src/app.ts",
-          "line": 757
+          "line": 784
         }
       ],
       "api": {
@@ -7725,7 +7732,7 @@
         "detail": "Target health control",
         "source": {
           "path": "apps/web/src/components/target/ArchitectureTargetsDashboard.tsx",
-          "line": 847,
+          "line": 850,
           "anchor": "if (!client.updateArchitectureTargetHealth || target.status === \"revoked\") return;"
         },
         "evidence": [
@@ -7784,7 +7791,7 @@
           "method": "DELETE",
           "path": "/v1/architecture-targets/:id",
           "source": "apps/api/src/app.ts",
-          "line": 770
+          "line": 797
         }
       ],
       "api": {
@@ -7887,7 +7894,7 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/updates",
           "source": "apps/api/src/app.ts",
-          "line": 795
+          "line": 822
         }
       ],
       "api": {
@@ -7990,7 +7997,7 @@
           "method": "POST",
           "path": "/v1/architecture-targets/:id/operations",
           "source": "apps/api/src/app.ts",
-          "line": 782
+          "line": 809
         }
       ],
       "api": {
@@ -8093,7 +8100,7 @@
           "method": "POST",
           "path": "/v1/target-operations/batch",
           "source": "apps/api/src/app.ts",
-          "line": 824
+          "line": 851
         }
       ],
       "api": {
@@ -8196,13 +8203,13 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/operations",
           "source": "apps/api/src/app.ts",
-          "line": 833
+          "line": 860
         },
         {
           "method": "GET",
           "path": "/v1/target-operations/:id",
           "source": "apps/api/src/app.ts",
-          "line": 844
+          "line": 871
         }
       ],
       "api": {
@@ -8306,7 +8313,7 @@
           "method": "POST",
           "path": "/v1/target-operations/:id/cancel",
           "source": "apps/api/src/app.ts",
-          "line": 850
+          "line": 877
         }
       ],
       "api": {
@@ -8409,13 +8416,13 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 804
+          "line": 831
         },
         {
           "method": "PUT",
           "path": "/v1/architecture-targets/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 813
+          "line": 840
         }
       ],
       "api": {
@@ -8519,19 +8526,19 @@
           "method": "POST",
           "path": "/v1/target-operations/claim",
           "source": "apps/api/src/app.ts",
-          "line": 857
+          "line": 884
         },
         {
           "method": "POST",
           "path": "/v1/target-operations/:id/state",
           "source": "apps/api/src/app.ts",
-          "line": 864
+          "line": 891
         },
         {
           "method": "POST",
           "path": "/v1/target-operations/:id/receipt",
           "source": "apps/api/src/app.ts",
-          "line": 876
+          "line": 903
         }
       ],
       "api": {
@@ -8549,7 +8556,7 @@
         "detail": "companion run-once with lease/fence checks",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2503,
+          "line": 3100,
           "anchor": "async function companionCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -8641,7 +8648,7 @@
         "detail": "improve compatibility --release <slug>@<version>; optional login for public releases",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 397,
+          "line": 421,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -8751,7 +8758,7 @@
         "detail": "improve declare/review-declaration",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 397,
+          "line": 421,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -8854,7 +8861,7 @@
         "detail": "improve policy",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 397,
+          "line": 421,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -8969,7 +8976,7 @@
         "detail": "improve profiles",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 397,
+          "line": 421,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9086,7 +9093,7 @@
         "detail": "improve suites",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 397,
+          "line": 421,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9192,7 +9199,7 @@
         "detail": "improve preview/prepare and show-plan --id <plan-id>; inspect saved plans/runs without creating a local job",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 397,
+          "line": 421,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9402,7 +9409,7 @@
         "detail": "improve status/cancel",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 397,
+          "line": 421,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9604,7 +9611,7 @@
         "detail": "improve evidence/accept-evidence",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 397,
+          "line": 421,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9683,7 +9690,7 @@
           "method": "POST",
           "path": "/v1/auth/register",
           "source": "apps/api/src/app.ts",
-          "line": 1122
+          "line": 1151
         }
       ],
       "api": {
@@ -9723,7 +9730,7 @@
         "detail": "Invitation registration only; no open/request self-registration form",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 1626,
+          "line": 2022,
           "anchor": "await client.registerWithInvitation({"
         },
         "evidence": [
@@ -9782,19 +9789,19 @@
           "method": "POST",
           "path": "/v1/auth/login",
           "source": "apps/api/src/app.ts",
-          "line": 1133
+          "line": 1162
         },
         {
           "method": "POST",
           "path": "/v1/auth/mfa/verify",
           "source": "apps/api/src/app.ts",
-          "line": 1199
+          "line": 1228
         },
         {
           "method": "POST",
           "path": "/v1/auth/logout",
           "source": "apps/api/src/app.ts",
-          "line": 1211
+          "line": 1240
         }
       ],
       "api": {
@@ -9812,7 +9819,7 @@
         "detail": "login with password+TOTP/recovery or API key; logout",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 688,
+          "line": 712,
           "anchor": "async function loginCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9827,7 +9834,7 @@
         "detail": "Login/MFA/sign out",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 936,
+          "line": 1158,
           "anchor": "const result = await registryClient.verifyMfa({"
         },
         "evidence": [
@@ -9886,7 +9893,7 @@
           "method": "GET",
           "path": "/v1/me",
           "source": "apps/api/src/app.ts",
-          "line": 1567
+          "line": 1596
         }
       ],
       "api": {
@@ -9904,7 +9911,7 @@
         "detail": "whoami / auth status",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 783,
+          "line": 807,
           "anchor": "async function whoamiCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9919,7 +9926,7 @@
         "detail": "Account/session identity",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 532,
+          "line": 630,
           "anchor": "registryClient.getMe()"
         },
         "evidence": [
@@ -9982,13 +9989,13 @@
           "method": "POST",
           "path": "/v1/auth/email-verification/request",
           "source": "apps/api/src/app.ts",
-          "line": 1147
+          "line": 1176
         },
         {
           "method": "POST",
           "path": "/v1/auth/email-verification/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1158
+          "line": 1187
         }
       ],
       "api": {
@@ -10028,7 +10035,7 @@
         "detail": "Confirmation route; no request/resend action",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3825,
+          "line": 4257,
           "anchor": "await client.confirmEmailVerification({ token });"
         },
         "evidence": [
@@ -10087,13 +10094,13 @@
           "method": "POST",
           "path": "/v1/auth/password-reset/request",
           "source": "apps/api/src/app.ts",
-          "line": 1168
+          "line": 1197
         },
         {
           "method": "POST",
           "path": "/v1/auth/password-reset/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1179
+          "line": 1208
         }
       ],
       "api": {
@@ -10133,7 +10140,7 @@
         "detail": "Password reset forms",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 959,
+          "line": 1181,
           "anchor": "await registryClient.requestPasswordReset(input);"
         },
         "evidence": [
@@ -10192,19 +10199,19 @@
           "method": "POST",
           "path": "/v1/auth/account/password",
           "source": "apps/api/src/app.ts",
-          "line": 1219
+          "line": 1248
         },
         {
           "method": "POST",
           "path": "/v1/auth/account/email-change",
           "source": "apps/api/src/app.ts",
-          "line": 1233
+          "line": 1262
         },
         {
           "method": "POST",
           "path": "/v1/auth/email-change/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1189
+          "line": 1218
         }
       ],
       "api": {
@@ -10244,7 +10251,7 @@
         "detail": "Account security forms",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 4037,
+          "line": 4469,
           "anchor": "await client.changePassword({ currentPassword: passwordInput.currentPassword, password: passwordInput.password });"
         },
         "evidence": [
@@ -10303,25 +10310,25 @@
           "method": "GET",
           "path": "/v1/auth/mfa",
           "source": "apps/api/src/app.ts",
-          "line": 1248
+          "line": 1277
         },
         {
           "method": "POST",
           "path": "/v1/auth/mfa/totp/enroll",
           "source": "apps/api/src/app.ts",
-          "line": 1259
+          "line": 1288
         },
         {
           "method": "POST",
           "path": "/v1/auth/mfa/totp/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1271
+          "line": 1300
         },
         {
           "method": "DELETE",
           "path": "/v1/auth/mfa/totp",
           "source": "apps/api/src/app.ts",
-          "line": 1282
+          "line": 1311
         }
       ],
       "api": {
@@ -10361,7 +10368,7 @@
         "detail": "MFA setup/settings",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 4853,
+          "line": 5309,
           "anchor": "const nextEnrollment = await client.startTotpEnrollment({ password: passwordOverride ?? password, label: \"1Password\" });"
         },
         "evidence": [
@@ -10440,19 +10447,19 @@
           "method": "GET",
           "path": "/v1/auth/api-tokens",
           "source": "apps/api/src/app.ts",
-          "line": 1293
+          "line": 1322
         },
         {
           "method": "POST",
           "path": "/v1/auth/api-tokens",
           "source": "apps/api/src/app.ts",
-          "line": 1304
+          "line": 1333
         },
         {
           "method": "DELETE",
           "path": "/v1/auth/api-tokens/:id",
           "source": "apps/api/src/app.ts",
-          "line": 1316
+          "line": 1345
         }
       ],
       "api": {
@@ -10470,7 +10477,7 @@
         "detail": "token list/create/revoke",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 942,
+          "line": 969,
           "anchor": "async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -10485,7 +10492,7 @@
         "detail": "Token settings",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 4109,
+          "line": 4541,
           "anchor": "const token = await client.createApiToken({"
         },
         "evidence": [
@@ -10689,13 +10696,13 @@
           "method": "GET",
           "path": "/v1/branding",
           "source": "apps/api/src/app.ts",
-          "line": 1328
+          "line": 1357
         },
         {
           "method": "GET",
           "path": "/v1/site",
           "source": "apps/api/src/app.ts",
-          "line": 1350
+          "line": 1379
         }
       ],
       "api": {
@@ -10798,13 +10805,13 @@
           "method": "GET",
           "path": "/v1/admin/branding",
           "source": "apps/api/src/app.ts",
-          "line": 1334
+          "line": 1363
         },
         {
           "method": "PUT",
           "path": "/v1/admin/branding",
           "source": "apps/api/src/app.ts",
-          "line": 1342
+          "line": 1371
         }
       ],
       "api": {
@@ -10907,13 +10914,13 @@
           "method": "GET",
           "path": "/v1/admin/site",
           "source": "apps/api/src/app.ts",
-          "line": 1358
+          "line": 1387
         },
         {
           "method": "PUT",
           "path": "/v1/admin/site",
           "source": "apps/api/src/app.ts",
-          "line": 1366
+          "line": 1395
         }
       ],
       "api": {
@@ -11016,19 +11023,19 @@
           "method": "GET",
           "path": "/v1/admin/registration",
           "source": "apps/api/src/app.ts",
-          "line": 1378
+          "line": 1407
         },
         {
           "method": "PUT",
           "path": "/v1/admin/registration",
           "source": "apps/api/src/app.ts",
-          "line": 1389
+          "line": 1418
         },
         {
           "method": "POST",
           "path": "/v1/admin/registration/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1405
+          "line": 1434
         }
       ],
       "api": {
@@ -11132,13 +11139,13 @@
           "method": "GET",
           "path": "/v1/admin/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1420
+          "line": 1449
         },
         {
           "method": "PUT",
           "path": "/v1/admin/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1440
+          "line": 1469
         }
       ],
       "api": {
@@ -11156,7 +11163,7 @@
         "detail": "admin sharing get/set",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1695,
+          "line": 1722,
           "anchor": "async function adminCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -11230,13 +11237,13 @@
           "method": "GET",
           "path": "/v1/admin/providers",
           "source": "apps/api/src/app.ts",
-          "line": 1464
+          "line": 1493
         },
         {
           "method": "PUT",
           "path": "/v1/admin/providers/:key",
           "source": "apps/api/src/app.ts",
-          "line": 1475
+          "line": 1504
         }
       ],
       "api": {
@@ -11339,13 +11346,13 @@
           "method": "GET",
           "path": "/v1/admin/users",
           "source": "apps/api/src/app.ts",
-          "line": 1491
+          "line": 1520
         },
         {
           "method": "POST",
           "path": "/v1/admin/users/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1502
+          "line": 1531
         }
       ],
       "api": {
@@ -11448,7 +11455,7 @@
           "method": "PUT",
           "path": "/v1/admin/users/:id/roles",
           "source": "apps/api/src/app.ts",
-          "line": 1518
+          "line": 1547
         }
       ],
       "api": {
@@ -11550,13 +11557,13 @@
           "method": "GET",
           "path": "/v1/admin/api-tokens",
           "source": "apps/api/src/app.ts",
-          "line": 1534
+          "line": 1563
         },
         {
           "method": "DELETE",
           "path": "/v1/admin/api-tokens/:id",
           "source": "apps/api/src/app.ts",
-          "line": 1545
+          "line": 1574
         }
       ],
       "api": {
@@ -11659,7 +11666,7 @@
           "method": "GET",
           "path": "/v1/admin/audit",
           "source": "apps/api/src/app.ts",
-          "line": 1556
+          "line": 1585
         }
       ],
       "api": {
@@ -11772,7 +11779,7 @@
         "detail": "init / validate / scan / package",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 516,
+          "line": 540,
           "anchor": "async function initCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -11787,7 +11794,7 @@
         "detail": "Archive submission performs scanning; no scaffold/package workspace editor",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 1830,
+          "line": 2226,
           "anchor": "const submitted = await client.submitArchive({"
         },
         "evidence": [
@@ -11857,7 +11864,7 @@
         "detail": "export/install/list/updates/update/rollback",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1968,
+          "line": 1995,
           "anchor": "async function installCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -11942,7 +11949,7 @@
         "detail": "architectures observe/health; bootstrap codex --dry-run",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2405,
+          "line": 2432,
           "anchor": "async function codexWorkspaceCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -11957,7 +11964,7 @@
         "detail": "Targets offer observation command guidance",
         "source": {
           "path": "apps/web/src/components/target/ArchitectureTargetsDashboard.tsx",
-          "line": 31,
+          "line": 30,
           "anchor": "} from \"@myskills-app/core\";"
         },
         "evidence": [
@@ -12027,7 +12034,7 @@
         "detail": "improve plan/run/report/export; explicit plan/cloud consent",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 397,
+          "line": 421,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -12112,7 +12119,7 @@
         "detail": "libraries unbind-local",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1896,
+          "line": 1923,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -12192,7 +12199,7 @@
         "detail": "config/auth status/doctor/version",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 857,
+          "line": 881,
           "anchor": "async function configCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -12245,25 +12252,25 @@
           "method": "GET",
           "path": "/health",
           "source": "apps/api/src/app.ts",
-          "line": 282
+          "line": 300
         },
         {
           "method": "GET",
           "path": "/ready",
           "source": "apps/api/src/app.ts",
-          "line": 292
+          "line": 310
         },
         {
           "method": "GET",
           "path": "/version.json",
           "source": "apps/api/src/app.ts",
-          "line": 287
+          "line": 305
         },
         {
           "method": "GET",
           "path": "/v1/capabilities",
           "source": "apps/api/src/app.ts",
-          "line": 317
+          "line": 340
         }
       ],
       "api": {
@@ -12545,7 +12552,7 @@
           "method": "GET",
           "path": "/v1/mcp/session",
           "source": "apps/api/src/app.ts",
-          "line": 2079
+          "line": 2108
         }
       ],
       "api": {
@@ -12608,6 +12615,216 @@
       },
       "authorization": "MCP accepts API-token/OAuth identities, rejects session credentials; resource reads reauthorize exact release files. No native installation/execution guarantee.",
       "gap": "G12"
+    },
+    {
+      "id": "GIT-01",
+      "domain": "GitHub",
+      "capability": "Read, connect and disconnect own GitHub account",
+      "category": "product",
+      "api_operations": [
+        {
+          "method": "GET",
+          "path": "/v1/account/github",
+          "source": "apps/api/src/github/routes.ts",
+          "line": 26
+        },
+        {
+          "method": "POST",
+          "path": "/v1/account/github/connect",
+          "source": "apps/api/src/github/routes.ts",
+          "line": 30
+        },
+        {
+          "method": "GET",
+          "path": "/v1/account/github/callback",
+          "source": "apps/api/src/github/routes.ts",
+          "line": 34
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/account/github",
+          "source": "apps/api/src/github/routes.ts",
+          "line": 44
+        }
+      ],
+      "api": {
+        "status": "A",
+        "detail": "Named safe operations and trusted session-only credential/linking endpoints",
+        "source": {
+          "path": "apps/api/src/github/routes.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reconciled current main and explicit adapter contracts on 2026-09-30. Runtime verification is recorded separately in the implementation ledger."
+          }
+        ]
+      },
+      "ui": {
+        "status": "A",
+        "detail": "Read, connect and disconnect own GitHub account",
+        "source": {
+          "path": "apps/web/src/components/github/GithubAccountConnection.tsx",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reconciled current main and explicit adapter contracts on 2026-09-30. Runtime verification is recorded separately in the implementation ledger."
+          }
+        ]
+      },
+      "cli": {
+        "status": "P",
+        "detail": "account github status|disconnect|connect; linking/secret entry is an unconfirmed trusted browser handoff",
+        "source": {
+          "path": "apps/cli/src/account-admin-commands.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reconciled current main and explicit adapter contracts on 2026-09-30. Runtime verification is recorded separately in the implementation ledger."
+          }
+        ]
+      },
+      "authorization": "Own-account metadata and disconnection use account:read and account:connections:revoke. Connection and callback retain session-bound browser consent; no OAuth codes or provider credentials enter MCP.",
+      "gap": "G12",
+      "delegated_action_ids": [
+        "account.github.get",
+        "account.github.disconnect"
+      ],
+      "mcp_api_token": {
+        "status": "P",
+        "detail": "account_github_get, account_github_disconnect; application_handoff for linking/secret configuration, with unconfirmed completion",
+        "source": {
+          "path": "apps/mcp/src/application-handoffs.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reconciled current main and explicit adapter contracts on 2026-09-30. Runtime verification is recorded separately in the implementation ledger."
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "P",
+        "detail": "account_github_get, account_github_disconnect; application_handoff for linking/secret configuration, with unconfirmed completion",
+        "source": {
+          "path": "apps/mcp/src/application-handoffs.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reconciled current main and explicit adapter contracts on 2026-09-30. Runtime verification is recorded separately in the implementation ledger."
+          }
+        ]
+      }
+    },
+    {
+      "id": "GIT-02",
+      "domain": "GitHub",
+      "capability": "Read, configure and verify GitHub App settings",
+      "category": "product",
+      "api_operations": [
+        {
+          "method": "GET",
+          "path": "/v1/admin/github",
+          "source": "apps/api/src/github/routes.ts",
+          "line": 48
+        },
+        {
+          "method": "PUT",
+          "path": "/v1/admin/github",
+          "source": "apps/api/src/github/routes.ts",
+          "line": 52
+        },
+        {
+          "method": "POST",
+          "path": "/v1/admin/github/test",
+          "source": "apps/api/src/github/routes.ts",
+          "line": 56
+        }
+      ],
+      "api": {
+        "status": "A",
+        "detail": "Named safe operations and trusted session-only credential/linking endpoints",
+        "source": {
+          "path": "apps/api/src/github/routes.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reconciled current main and explicit adapter contracts on 2026-09-30. Runtime verification is recorded separately in the implementation ledger."
+          }
+        ]
+      },
+      "ui": {
+        "status": "A",
+        "detail": "Read, configure and verify GitHub App settings",
+        "source": {
+          "path": "apps/web/src/components/github/GithubSettings.tsx",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reconciled current main and explicit adapter contracts on 2026-09-30. Runtime verification is recorded separately in the implementation ledger."
+          }
+        ]
+      },
+      "cli": {
+        "status": "P",
+        "detail": "admin github get|test|configure; linking/secret entry is an unconfirmed trusted browser handoff",
+        "source": {
+          "path": "apps/cli/src/account-admin-commands.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reconciled current main and explicit adapter contracts on 2026-09-30. Runtime verification is recorded separately in the implementation ledger."
+          }
+        ]
+      },
+      "authorization": "Safe administrative status/test requires admin role, current MFA and admin:read/admin:settings scopes. App secret/private-key configuration remains in the trusted browser session.",
+      "gap": "G12",
+      "delegated_action_ids": [
+        "admin.github.get",
+        "admin.github.test"
+      ],
+      "mcp_api_token": {
+        "status": "P",
+        "detail": "admin_github_get, admin_github_test; application_handoff for linking/secret configuration, with unconfirmed completion",
+        "source": {
+          "path": "apps/mcp/src/application-handoffs.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reconciled current main and explicit adapter contracts on 2026-09-30. Runtime verification is recorded separately in the implementation ledger."
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "P",
+        "detail": "admin_github_get, admin_github_test; application_handoff for linking/secret configuration, with unconfirmed completion",
+        "source": {
+          "path": "apps/mcp/src/application-handoffs.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reconciled current main and explicit adapter contracts on 2026-09-30. Runtime verification is recorded separately in the implementation ledger."
+          }
+        ]
+      }
     }
   ],
   "negative_evidence": {
@@ -12805,7 +13022,9 @@
         "LOC-05",
         "TGT-04",
         "TGT-05",
-        "TGT-13"
+        "TGT-13",
+        "GIT-01",
+        "GIT-02"
       ],
       "oauth_advertised": true,
       "actions": [
@@ -12970,12 +13189,24 @@
           "capability_ids": [
             "TGT-04"
           ]
+        },
+        {
+          "name": "account.github.connect",
+          "capability_ids": [
+            "GIT-01"
+          ]
+        },
+        {
+          "name": "admin.github.configure",
+          "capability_ids": [
+            "GIT-02"
+          ]
         }
       ],
       "delivery": "guidance_only; performed:false; completion.confirmed:false",
       "source": {
         "path": "apps/mcp/src/application-handoffs.ts",
-        "line": 207
+        "line": 217
       }
     },
     {
@@ -15161,6 +15392,71 @@
         "path": "apps/mcp/src/application-tools.ts",
         "line": 13
       }
+    },
+    {
+      "name": "skills_managed_get",
+      "action_id": "skills.managed.get",
+      "capability_ids": [
+        "REG-06"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
+    },
+    {
+      "name": "account_github_get",
+      "action_id": "account.github.get",
+      "capability_ids": [
+        "GIT-01"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
+    },
+    {
+      "name": "account_github_disconnect",
+      "action_id": "account.github.disconnect",
+      "capability_ids": [
+        "GIT-01"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
+    },
+    {
+      "name": "admin_github_get",
+      "action_id": "admin.github.get",
+      "capability_ids": [
+        "GIT-02"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
+    },
+    {
+      "name": "admin_github_test",
+      "action_id": "admin.github.test",
+      "capability_ids": [
+        "GIT-02"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
     }
   ],
   "mcp_transport_source": {
@@ -15228,7 +15524,7 @@
   "overview": [
     "## Baseline and meaning of parity\n",
     "The product target is the same authorized application outcomes across UI, API, CLI and MCP. Remote ChatGPT and Claude connections are included. A read-only connector is an implementation stage, not the final capability boundary.\n",
-    "- Initial audit base: `3ab55b5da86bef5e3f6864657445b9f0ba38288d`, including the uncommitted MCP OAuth connector. GitHub main checked at `fe88fdca056dd0017dbe46d99d228ad448932df5`; the intervening changes affected web presentation and related tests. This is a source baseline, not deployment proof.",
+    "- Initial audit base: `3ab55b5da86bef5e3f6864657445b9f0ba38288d`, including the preserved MCP OAuth connector. GitHub main checked at `8468ae9f`; the integration reconciles GitHub controls, managed detail, local workspace commands and the current full-stack harness. This is a source baseline, not deployment proof.",
     "- Current cell provenance is recorded individually. Existing connector test evidence is in [MCP delivery evidence](MCP_CONNECTIONS_DELIVERY.md). Static inventory checks do not replace cross-surface scenarios or real host acceptance.\n",
     "The API and its domain services remain the state and authorization authority. Adapters must not create a second ACL or a more permissive mutation path.\n",
     "`effective action = user permissions ∩ resource policy ∩ credential scopes/consent ∩ required assurance ∩ instance availability`\n",
@@ -15237,7 +15533,7 @@
     "- Remote MCP filesystem changes require an enrolled local executor or explicit CLI handoff with status and receipts. A queued operation, filesystem delivery and host recognition are separate outcomes.",
     "- Mechanism-specific transport/configuration rows may use N with a reason. This must not hide an otherwise authorized application outcome.\n"
   ],
-  "permission_notes": "| Boundary | Current source behavior | Required proof / remaining limit |\n| --- | --- | --- |\n| Scope contract | [31 application scopes](../packages/core/src/delegated-actions.ts#L24); API tokens additionally support the separate `targets:execute` scope. Existing credentials gain no new scopes. | Scope names do not prove user permission or a completed workflow; test positive and negative policy outcomes. |\n| Named actions | [168 named application/public operations](../packages/core/src/delegated-actions.ts#L98) map fixed routes and required scopes. Domain services still enforce roles, resources and lifecycle. | No arbitrary HTTP proxy. API-token and OAuth credential paths need independent denial and mutation proof. |\n| OAuth assurance | [Actual session MFA provenance](../apps/api/src/auth/service.ts#L763) is checked against a 15-minute privileged window; refreshing does not extend assurance. Legacy read grants retain their prior role ceiling. | Stale/missing assurance requires browser MFA and renewed consent. Current account status, roles and membership are rechecked. |\n| Trusted account controls | Passwords, enrollment/recovery secrets and credential issuance remain in trusted browser/private CLI controls. Safe metadata and authorized revocation have named actions. | Handoff guidance returns no completion claim. Secret-bearing inputs must never pass through model tools. |\n| Producer/executor boundary | Target observations/health and improvement execution events come from real local producers. `targets:execute` remains a local executor credential. | MCP can guide, schedule and inspect; it cannot fabricate local state, evaluator results, leases or receipts. |\n| Consent and discovery | Scope effect metadata labels writes; the API-token chooser defaults only to `skills:read`. Tool visibility does not grant its advertised scopes. | Reconnect/approve scopes as needed; verify each action at call time and read resulting API state. |\n| Feature availability | `/v1/capabilities` describes configured features, not effective permission for a particular user/resource. | SYS-02 is a separate product gap across all surfaces. |\n",
+  "permission_notes": "| Boundary | Current source behavior | Required proof / remaining limit |\n| --- | --- | --- |\n| Scope contract | [31 application scopes](../packages/core/src/delegated-actions.ts#L24); API tokens additionally support the separate `targets:execute` scope. Existing credentials gain no new scopes. | Scope names do not prove user permission or a completed workflow; test positive and negative policy outcomes. |\n| Named actions | [173 named application/public operations](../packages/core/src/delegated-actions.ts#L98) map fixed routes and required scopes. Domain services still enforce roles, resources and lifecycle. | No arbitrary HTTP proxy. API-token and OAuth credential paths need independent denial and mutation proof. |\n| OAuth assurance | [Actual session MFA provenance](../apps/api/src/auth/service.ts#L763) is checked against a 15-minute privileged window; refreshing does not extend assurance. Legacy read grants retain their prior role ceiling. | Stale/missing assurance requires browser MFA and renewed consent. Current account status, roles and membership are rechecked. |\n| Trusted account controls | Passwords, enrollment/recovery secrets and credential issuance remain in trusted browser/private CLI controls. Safe metadata and authorized revocation have named actions. | Handoff guidance returns no completion claim. Secret-bearing inputs must never pass through model tools. |\n| Producer/executor boundary | Target observations/health and improvement execution events come from real local producers. `targets:execute` remains a local executor credential. | MCP can guide, schedule and inspect; it cannot fabricate local state, evaluator results, leases or receipts. |\n| Consent and discovery | Scope effect metadata labels writes; the API-token chooser defaults only to `skills:read`. Tool visibility does not grant its advertised scopes. | Reconnect/approve scopes as needed; verify each action at call time and read resulting API state. |\n| Feature availability | `/v1/capabilities` describes configured features, not effective permission for a particular user/resource. | SYS-02 is a separate product gap across all surfaces. |\n",
   "gaps": [
     {
       "id": "G00",
@@ -15314,7 +15610,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 245
+        "line": 267
       }
     },
     {
@@ -15324,7 +15620,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 246
+        "line": 268
       }
     },
     {
@@ -15334,7 +15630,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 247
+        "line": 269
       }
     },
     {
@@ -15344,7 +15640,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 248
+        "line": 270
       }
     },
     {
@@ -15354,7 +15650,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 251
+        "line": 273
       }
     },
     {
@@ -15364,7 +15660,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 252
+        "line": 274
       }
     },
     {
@@ -15374,7 +15670,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 253
+        "line": 275
       }
     },
     {
@@ -15384,7 +15680,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 256
+        "line": 278
       }
     },
     {
@@ -15394,7 +15690,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 258
+        "line": 280
       }
     },
     {
@@ -15404,7 +15700,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 260
+        "line": 282
       }
     },
     {
@@ -15414,7 +15710,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 262
+        "line": 284
       }
     },
     {
@@ -15424,7 +15720,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 264
+        "line": 286
       }
     },
     {
@@ -15434,7 +15730,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 266
+        "line": 288
       }
     },
     {
@@ -15444,7 +15740,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 268
+        "line": 290
       }
     },
     {
@@ -15454,7 +15750,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 270
+        "line": 292
       }
     },
     {
@@ -15464,7 +15760,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 272
+        "line": 294
       }
     },
     {
@@ -15475,7 +15771,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 274
+        "line": 296
       }
     },
     {
@@ -15485,7 +15781,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 276
+        "line": 298
       }
     },
     {
@@ -15495,7 +15791,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 278
+        "line": 300
       }
     },
     {
@@ -15505,7 +15801,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 280
+        "line": 302
       }
     },
     {
@@ -15525,7 +15821,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 282
+        "line": 304
       }
     },
     {
@@ -15535,7 +15831,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 284
+        "line": 306
       }
     },
     {
@@ -15548,7 +15844,7 @@
       ],
       "source": {
         "path": "apps/cli/src/registry-collaboration-commands.ts",
-        "line": 56
+        "line": 62
       }
     },
     {
@@ -15561,7 +15857,7 @@
       ],
       "source": {
         "path": "apps/cli/src/registry-collaboration-commands.ts",
-        "line": 60
+        "line": 66
       }
     },
     {
@@ -15573,7 +15869,7 @@
       ],
       "source": {
         "path": "apps/cli/src/registry-collaboration-commands.ts",
-        "line": 39
+        "line": 40
       }
     },
     {
@@ -15584,7 +15880,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 292
+        "line": 314
       }
     },
     {
@@ -15597,7 +15893,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 294
+        "line": 316
       }
     },
     {
@@ -15610,7 +15906,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 295
+        "line": 317
       }
     },
     {
@@ -15645,7 +15941,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 297
+        "line": 319
       }
     },
     {
@@ -15680,7 +15976,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 298
+        "line": 320
       }
     },
     {
@@ -15695,7 +15991,7 @@
       ],
       "source": {
         "path": "apps/cli/src/registry-collaboration-commands.ts",
-        "line": 77
+        "line": 83
       }
     },
     {
@@ -15705,7 +16001,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 302
+        "line": 324
       }
     },
     {
@@ -15719,7 +16015,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 304
+        "line": 326
       }
     },
     {
@@ -15738,7 +16034,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 305
+        "line": 327
       }
     },
     {
@@ -15752,11 +16048,12 @@
         "ADM-07",
         "ADM-08",
         "ADM-09",
-        "ADM-10"
+        "ADM-10",
+        "GIT-02"
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 307
+        "line": 329
       }
     },
     {
@@ -15767,7 +16064,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 309
+        "line": 331
       }
     },
     {
@@ -15777,7 +16074,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 311
+        "line": 333
       }
     },
     {
@@ -15787,7 +16084,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 313
+        "line": 335
       }
     },
     {
@@ -15797,7 +16094,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 315
+        "line": 337
       }
     },
     {
@@ -15807,7 +16104,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 317
+        "line": 339
       }
     },
     {
@@ -15817,7 +16114,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 319
+        "line": 341
       }
     },
     {
@@ -15827,7 +16124,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 2910
+        "line": 3507
       }
     },
     {
@@ -15839,7 +16136,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 3265
+        "line": 3862
       }
     },
     {
@@ -15849,7 +16146,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 325
+        "line": 349
       }
     },
     {
@@ -15866,7 +16163,7 @@
       ],
       "source": {
         "path": "apps/cli/src/registry-collaboration-commands.ts",
-        "line": 86
+        "line": 92
       }
     },
     {
@@ -15909,11 +16206,12 @@
         "ACC-04",
         "ACC-05",
         "ACC-06",
-        "ACC-07"
+        "ACC-07",
+        "GIT-01"
       ],
       "source": {
         "path": "apps/cli/src/account-admin-commands.ts",
-        "line": 54
+        "line": 56
       }
     },
     {
@@ -15923,7 +16221,7 @@
       ],
       "source": {
         "path": "apps/cli/src/account-admin-commands.ts",
-        "line": 58
+        "line": 60
       }
     },
     {
@@ -15934,7 +16232,18 @@
       ],
       "source": {
         "path": "apps/cli/src/account-admin-commands.ts",
-        "line": 70
+        "line": 72
+      }
+    },
+    {
+      "name": "scopes",
+      "capability_ids": [
+        "LOC-03",
+        "TGT-02"
+      ],
+      "source": {
+        "path": "apps/cli/src/cli.ts",
+        "line": 347
       }
     }
   ]

@@ -28,6 +28,14 @@ const companionInstructions = [
 
 /** Guidance boundaries, not action implementations or claims of brokered completion. */
 export const APPLICATION_HANDOFF_ACTIONS: readonly HandoffAction[] = [
+  browser("account.github.connect", "GIT-01", "/settings", [
+    "Connect GitHub directly in trusted MySkills Settings. Complete GitHub consent in the same signed-in browser session; do not paste credentials, authorization codes or callback URLs into chat.",
+    "Inspect account_github_get after the trusted flow finishes. A navigation link or a connected MySkills MCP session does not establish a GitHub connection.",
+  ], "account.github.get"),
+  browser("admin.github.configure", "GIT-02", "/admin", [
+    "As an MFA-verified administrator, configure the GitHub App directly in trusted MySkills Admin settings. Keep the client secret and private key in that trusted form and outside chat.",
+    "Inspect admin_github_get and, when authorized, admin_github_test. Configured credentials alone do not prove a user's GitHub account has connected.",
+  ], "admin.github.get"),
   browser("account.register", "ACC-01", "/auth/register", [
     "Use the trusted MySkills registration page when you have an invitation. For open/request registration, use myskills account register --email <email> in your terminal; it prompts privately for a password and optional invitation token.",
     "The instance registration policy decides whether access is granted, requested or unavailable. Follow the account verification message directly.",
@@ -134,6 +142,8 @@ const inputSchema = z.object({
   targetId: identifier.optional(), planId: identifier.optional(), runId: identifier.optional(), operationId: identifier.optional(),
 }).strict();
 const readbacks: Record<string, { route: string; contextKey?: ContextKey }> = {
+  "account.github.get": { route: "/v1/account/github" },
+  "admin.github.get": { route: "/v1/admin/github" },
   "account.identity.get": { route: "/v1/me" },
   "account.mfa.status": { route: "/v1/auth/mfa" },
   "account.tokens.list": { route: "/v1/auth/api-tokens" },

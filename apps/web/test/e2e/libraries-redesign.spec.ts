@@ -5,7 +5,7 @@ import { expect, test, type Page } from "@playwright/test";
 const stamp = "2026-09-27T00:00:00Z";
 const digest = "a".repeat(64);
 
-async function libraryScene(page: Page, options: { empty?: boolean; reader?: boolean; failCreate?: boolean; failDelete?: boolean } = {}) {
+async function libraryScene(page: Page, options: { empty?: boolean; reader?: boolean; failCreate?: boolean; failDelete?: boolean; rateLimited?: boolean; manual?: boolean; clearedQuota?: boolean } = {}) {
   const user = { id: "design-owner", email: "owner@example.test", name: "Library owner", status: "active", roles: options.reader ? ["member"] : ["owner"], emailVerified: true, mfaVerified: true };
   await page.addInitScript((user) => { if (location.origin !== "null") localStorage.setItem("myskills-app:web-session", JSON.stringify({ expiresAt: "2027-09-27T00:00:00Z", user })); }, user);
   const writes: Array<{ path: string; body: Record<string, unknown> }> = [];
@@ -18,7 +18,7 @@ async function libraryScene(page: Page, options: { empty?: boolean; reader?: boo
   let paged = false;
   const library = (id = "personal") => ({ id, name: id === "personal" ? name : "Support team", description: id === "personal" ? "The skills I reach for every day." : "Reviewed instructions for our support team.", owner: id === "personal" ? { type: "user", id: user.id } : { type: "team", id: "team-support", name: "Support team" }, status: "active", revision: 1, access: { canWrite: !options.reader, canImport: !options.reader, canTrackSources: !options.reader, role: options.reader ? "member" : "owner" }, subscription: subscribed ? { events: ["candidate-ready"], createdAt: stamp } : null, createdAt: stamp, updatedAt: stamp });
   const skill = (id: string, title: string, version: string | null, owner = true) => ({ id, libraryId: "personal", kind: "skill", status: "active", title, revision: 1, skill: { slug: id, nativeName: id, sourceEntryId: null, sourcePath: null, lineageId: null, ownership: { type: "user", isCaller: owner } }, adoption: version ? { id: "adopt-" + id, entryId: id, slug: id, version, artifactSha256: digest, predecessorAdoptionId: null, attestation: "instance-reviewed", adoptedBy: { id: user.id }, reason: "Reviewed for our everyday workflow.", adoptedAt: stamp } : null, createdAt: stamp, updatedAt: stamp });
-  const entries = [skill("meeting-notes", "Meeting notes to actions", "1.3.0"), skill("project-brief", "Project brief writer", "0.9.2"), skill("code-review", "Code review checklist", "2.1.0", false), skill("release-notes", "Release notes helper", null), { id: "team-source", libraryId: "personal", kind: "source", status: "active", title: "example/team-skills", revision: 1, source: { provider: "github", repositoryId: "1234", fullName: "example/team-skills", url: "https://github.com/example/team-skills", path: "skills", ref: { kind: "default-branch" }, defaultBranch: "main", license: "MIT", archived: false }, tracking: { mode: "weekly", health: "healthy", nextCheckAt: "2026-10-04T00:00:00Z", lastAttemptAt: stamp, lastSuccessfulCheckAt: stamp, lastErrorCode: null, attemptCount: 0, lastGoodSnapshot: null, workerAvailable: true, identityChange: null }, adoption: null, createdAt: stamp, updatedAt: stamp }];
+  const entries = [skill("meeting-notes", "Meeting notes to actions", "1.3.0"), skill("project-brief", "Project brief writer", "0.9.2"), skill("code-review", "Code review checklist", "2.1.0", false), skill("release-notes", "Release notes helper", null), { id: "team-source", libraryId: "personal", kind: "source", status: "active", title: "example/team-skills", revision: 1, source: { provider: "github", repositoryId: "1234", fullName: "example/team-skills", url: "https://github.com/example/team-skills", path: "skills", ref: { kind: "default-branch" }, defaultBranch: "main", license: "MIT", archived: false }, tracking: { mode: options.manual ? "manual" : "weekly", health: options.rateLimited ? "rate-limited" : "healthy", retryAvailableAt: options.rateLimited && !options.clearedQuota ? "2026-09-29T00:02:00Z" : null, nextCheckAt: options.manual ? null : options.rateLimited ? "2026-09-29T00:02:00Z" : "2026-10-04T00:00:00Z", lastAttemptAt: stamp, lastSuccessfulCheckAt: stamp, lastErrorCode: null, attemptCount: 0, lastGoodSnapshot: null, workerAvailable: true, identityChange: null }, adoption: null, createdAt: stamp, updatedAt: stamp }];
   const extra = skill("incident-summary", "Incident summary and follow-up for customer escalations", "1.0.4");
   await page.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
@@ -61,6 +61,7 @@ async function libraryScene(page: Page, options: { empty?: boolean; reader?: boo
       };
       return reply({ release: { slug, title: entry?.title ?? slug, summary: summaries[slug] ?? "Reusable instructions for everyday work.", version: path.split("/").at(-1), lifecycleStatus: "approved", reviewStatus: "approved", securityStatus: "passed", publishedAt: "2026-09-20T00:00:00Z", platforms: [{ name: "codex", installTarget: ".agents/skills", status: "supported" }, { name: "claude-code", installTarget: ".claude/skills", status: "supported" }], releaseNotes: "Clarified the output format and added an explicit check for missing owners.", requiresUserAction: false, artifact: { sha256: digest, byteSize: 1024, contentType: "application/json" } } });
     }
+    if (path.endsWith("/checks")) return reply({ check: { outcome: "unchanged", candidateIds: [] } });
     if (path.endsWith("/candidates")) return reply({ candidates: [], nextCursor: null });
     if (path.endsWith("/bindings")) return reply({ bindings: [] });
     if (path === "/v1/library-inbox") return reply({ items: [], unreadCount: 0, nextCursor: null });
@@ -169,7 +170,7 @@ test("reader can inspect the adopted version on mobile without receiving edit co
   await expect(heading).toBeFocused();
   await expect(page.locator(".library-command")).toContainText("--library-entry meeting-notes");
   await expect(page.getByRole("button", { name: "Remove entry", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Adopt registry release", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Adopt skill release", exact: true })).toHaveCount(0);
   await fitsPage(page);
   await page.screenshot({ path: testInfo.outputPath("reader-detail-390.png"), fullPage: true });
   await page.getByRole("button", { name: "Back to entries", exact: true }).click();
@@ -223,8 +224,14 @@ test("reference shell keeps navigation and library controls usable at desktop an
   expect((await sidebar.boundingBox())!.width).toBe(240);
   await expect(sidebar).toHaveCSS("background-color", "rgb(247, 249, 251)");
   await expect(sidebar.getByRole("link", { name: "Libraries", exact: true })).toHaveCSS("box-shadow", "rgb(11, 112, 102) 2px 0px 0px 0px inset");
-  await expect(sidebar.getByRole("link", { name: "Registry", exact: true })).toHaveCSS("font-weight", "400");
-  await expect(sidebar.getByText("MFA verified", { exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "Skills", exact: true })).toHaveCSS("font-weight", "400");
+  const mfaIcon = sidebar.getByRole("img", { name: "MFA verified", exact: true });
+  await expect(mfaIcon).toBeVisible();
+  await expect(sidebar.getByText("MFA verified", { exact: true })).toHaveCount(0);
+  const iconBounds = (await mfaIcon.boundingBox())!;
+  const identityBounds = (await sidebar.getByRole("link", { name: "Account settings", exact: true }).locator("span").boundingBox())!;
+  expect(iconBounds.x + iconBounds.width).toBeLessThan(identityBounds.x);
+  expect(Math.abs(iconBounds.y + iconBounds.height / 2 - identityBounds.y - identityBounds.height / 2)).toBeLessThan(1);
   await expect(sidebar.getByRole("button", { name: "Sign out", exact: true })).toBeInViewport();
   const personal = page.getByRole("navigation", { name: "Your libraries" }).getByRole("button", { name: "My skills", exact: true });
   await expect(personal).toHaveCSS("border-bottom-color", "rgb(11, 112, 102)");
@@ -233,6 +240,7 @@ test("reference shell keeps navigation and library controls usable at desktop an
   expect((await sidebar.boundingBox())!.width).toBe(64);
   await expect(sidebar.getByRole("link", { name: "Libraries", exact: true })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "Account settings", exact: true })).toBeVisible();
+  await expect(mfaIcon).toBeVisible();
   await page.screenshot({ path: info.outputPath("reference-sidebar-collapsed.png"), animations: "disabled" });
   await page.getByRole("button", { name: "Expand navigation", exact: true }).click();
   const team = page.getByRole("navigation", { name: "Your libraries" }).getByRole("button", { name: /Support team.*team library/ });
@@ -255,4 +263,56 @@ test("reference shell keeps navigation and library controls usable at desktop an
     await fitsPage(page);
   }
   expect(state.writes).toEqual([]);
+});
+
+// Authored before cooldown UI. The independent contract is that a stored server
+// retry deadline blocks manual actions, survives reload, and does not imply an
+// automatic retry for a manual source. Existing scenarios only cover healthy
+// sources. The route fixture never implements button gating or timer behavior.
+for (const manual of [false, true]) {
+  test(`rate limit deadline survives reload and releases manual control (${manual ? "manual" : "scheduled"})`, async ({ page }, info) => {
+    await page.clock.install({ time: new Date("2026-09-29T00:00:00Z") });
+    const state = await libraryScene(page, { rateLimited: true, manual });
+    await page.goto("/libraries");
+    const row = page.getByRole("button", { name: "example/team-skills", exact: true });
+    await expect(row).toContainText(manual ? "Retry available" : "Next check");
+    await row.click();
+    const detail = page.getByRole("complementary", { name: "example/team-skills", exact: true });
+    await expect(detail).toContainText("Rate limited");
+    await expect(detail).toContainText("in 2m");
+    const check = detail.getByRole("button", { name: "Check now", exact: true });
+    await expect(check).toBeDisabled();
+    if (manual) await expect(detail).not.toContainText("Next check");
+    await page.reload();
+    await row.click();
+    await expect(check).toBeDisabled();
+    await page.clock.fastForward(121_000);
+    await expect(check).toBeEnabled();
+    expect(state.writes.filter(write => write.path.endsWith("/checks"))).toHaveLength(0);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await fitsPage(page);
+    await page.screenshot({ path: info.outputPath(`cooldown-${manual ? "manual" : "scheduled"}.png`), fullPage: true });
+    await check.click();
+    await expect.poll(() => state.writes.filter(write => write.path.endsWith("/checks")).length).toBe(1);
+    await info.attach("cooldown-receipt", { body: JSON.stringify({ manual, writes: state.writes }), contentType: "application/json" });
+  });
+}
+
+// A new credential can clear the quota while the previous scheduled backoff
+// remains. An explicit null deadline must release Check now; only legacy
+// responses that omit retryAvailableAt may use nextCheckAt as a fallback.
+test("cleared credential quota permits a check before the old scheduled backoff", async ({ page }, info) => {
+  await page.clock.install({ time: new Date("2026-09-29T00:00:00Z") });
+  const state = await libraryScene(page, { rateLimited: true, clearedQuota: true });
+  await page.goto("/libraries");
+  await page.getByRole("button", { name: "example/team-skills", exact: true }).click();
+  const detail = page.getByRole("complementary", { name: "example/team-skills", exact: true });
+  await expect(detail).toContainText("Rate limited");
+  await expect(detail).toContainText("Next check");
+  await expect(detail).toContainText("in 2m");
+  const check = detail.getByRole("button", { name: "Check now", exact: true });
+  await expect(check).toBeEnabled();
+  await check.click();
+  await expect.poll(() => state.writes.filter(write => write.path.endsWith("/checks")).length).toBe(1);
+  await info.attach("cleared-quota-receipt", { body: JSON.stringify({ retryAvailableAt: null, writes: state.writes }), contentType: "application/json" });
 });

@@ -26,9 +26,9 @@ import {
 //   bootstrap remains dry-run and improvement still needs explicit plan/cloud consent.
 
 test("handoff inventory covers the exact account, producer and executor boundaries", () => {
-  assert.equal(APPLICATION_HANDOFF_ACTIONS.length, 27);
-  assert.equal(new Set(APPLICATION_HANDOFF_ACTIONS.map((item) => item.actionId)).size, 27);
-  assert.equal(APPLICATION_HANDOFF_ACTIONS.filter((item) => item.kind === "trusted_browser").length, 15);
+  assert.equal(APPLICATION_HANDOFF_ACTIONS.length, 29);
+  assert.equal(new Set(APPLICATION_HANDOFF_ACTIONS.map((item) => item.actionId)).size, 29);
+  assert.equal(APPLICATION_HANDOFF_ACTIONS.filter((item) => item.kind === "trusted_browser").length, 17);
   assert.equal(APPLICATION_HANDOFF_ACTIONS.filter((item) => item.kind === "local_executor").length, 12);
   for (const item of APPLICATION_HANDOFF_ACTIONS) {
     assert.ok(item.capabilityIds.length > 0, item.actionId);
@@ -58,6 +58,8 @@ test("trusted browser links use only the configured origin and existing app rout
     ["account.email_change.confirm", "/auth/change-email"],
     ["account.password.change", "/settings"],
     ["account.tokens.create", "/settings"],
+    ["account.github.connect", "/settings"],
+    ["admin.github.configure", "/admin"],
   ]) {
     const result = createApplicationHandoff({ actionId }, options);
     assert.equal(result.destination.url, `https://skills.example.test${path}`);

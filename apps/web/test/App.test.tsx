@@ -29,6 +29,7 @@ import type {
   ProviderRoleMappingInput,
   RegistryClient,
   ReleaseMetadata,
+  SkillManagementSummary,
   SkillReleaseSummary,
   ReviewSubmissionSummary,
   SafeApiError,
@@ -85,7 +86,7 @@ test("site configuration failure offers retry and sign-in without exposing the h
 });
 
 test("disabled landing leaves direct invitation, recovery and registry routes reachable", async () => {
-  for (const [path, heading] of [["/auth/register#token=fixture", "Complete registration"], ["/auth/reset-password#token=fixture", "Reset password"], ["/registry", "Registry"]]) {
+  for (const [path, heading] of [["/auth/register#token=fixture", "Complete registration"], ["/auth/reset-password#token=fixture", "Reset password"], ["/registry", "Skills"]]) {
     setupDom(`http://localhost${path}`);
     const client = mockClient();
     client.getSiteSettings = async () => ({ landingPageEnabled: false });
@@ -363,8 +364,11 @@ test("skill detail displays public metadata and release artifact metadata only",
   const view = render(<RegistryApp client={client} />);
 
   await view.findByText("Turns merged changes into concise release notes.");
+  // The summary is skill-level; release facts appear once the exact release loads.
+  await view.findByText("Platforms");
   assert.equal(view.getAllByText("0.1.0").length, 2);
-  assert.equal(view.getAllByText("codex, generic").length, 2);
+  assert.equal(view.getAllByText("codex, generic").length, 1);
+  assert.match(view.getByText("Platforms").parentElement?.textContent ?? "", /codex · supported, generic · supported/);
   assert.equal(view.getByText("Approved").textContent, "Approved");
   assert.equal(view.getByText("Passed").textContent, "Passed");
   assert.equal(document.body.textContent?.includes("storageKey"), false);
@@ -379,27 +383,28 @@ test("public release history selects exact metadata and a supported platform wit
   const view = render(<RegistryApp client={client} />);
 
   await view.findByText(fixture.latest.releaseNotes!);
-  const selector = view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement;
-  assert.equal(selector.value, fixture.latest.version);
-  assert.deepEqual(Array.from(selector.options).map((option) => option.value), [fixture.latest.version, fixture.older.version]);
+  releaseHeading(view, fixture.latest.version);
+  const rows = versionRows(view);
+  assert.deepEqual(rows.map((row) => row.querySelector("code")?.textContent), [fixture.latest.version, fixture.older.version]);
+  assert.deepEqual(rows.map((row) => row.getAttribute("aria-current")), ["true", null]);
   assert.equal(view.queryByText("Manager-only notes."), null);
   assert.equal(client.releaseHistoryCalls.length, 1);
   assert.equal(client.releaseManagementCalls, 0);
   assert.equal(view.getByText("feature").textContent, "feature");
   const latestDate = view.getByText("Released").parentElement?.textContent;
 
-  fireEvent.change(selector, { target: { value: fixture.older.version } });
+  selectRelease(view, fixture.older.version);
   await view.findByText(fixture.older.releaseNotes!);
   await waitFor(() => assert.equal(window.location.search, "?q=writing&platform=generic&version=0.1.0"));
-  assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, fixture.older.version);
+  releaseHeading(view, fixture.older.version);
   assert.notEqual(view.getByText("Released").parentElement?.textContent, latestDate);
   assert.equal(view.getByText("fix").textContent, "fix");
   assert.match(view.getByText("Minimum MySkills").parentElement?.textContent ?? "", /1\.0\.0/);
   assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /b{64}/);
-  assert.match(view.getByText("Byte size").parentElement?.textContent ?? "", /513/);
+  assert.match(view.getByText("Size").parentElement?.textContent ?? "", /513 bytes/);
   assert.equal(view.getByText("Platforms").parentElement?.textContent?.includes("codex"), false);
   assert.equal(view.queryByRole("button", { name: "codex" }), null);
-  await view.findByText(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/);
+  await findCommand(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/);
   assert.equal(client.releaseCalls.at(-1), "release-notes-helper@0.1.0");
   assert.equal(client.bundleCalls, 0);
   assert.equal(client.releaseManagementCalls, 0);
@@ -421,7 +426,7 @@ for (const version of ["1.02.0", "2026.09.01"]) {
       const view = render(<RegistryApp client={client} />);
 
       await view.findByText(latest.releaseNotes);
-      assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, version);
+      releaseHeading(view, version);
       assert.deepEqual(client.releaseCalls, [`release-notes-helper@${version}`]);
       assert.equal(window.location.search, pinned ? `?version=${version}` : "");
       assert.equal(view.queryByText(original.older.releaseNotes!), null);
@@ -439,19 +444,22 @@ test("release version control keeps the same focused node while an exact release
   const view = render(<RegistryApp client={client} />);
 
   await view.findByText(fixture.latest.releaseNotes!);
-  const selector = view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement;
-  selector.focus();
-  assert.equal(document.activeElement, selector);
-  fireEvent.change(selector, { target: { value: fixture.older.version } });
+  const toggle = view.getByRole("button", { name: /^Versions/ });
+  toggle.focus();
+  assert.equal(document.activeElement, toggle);
+  selectRelease(view, fixture.older.version);
   await waitFor(() => assert.equal(client.releaseCalls.at(-1), `release-notes-helper@${fixture.older.version}`));
-  assert.equal(view.getByRole("combobox", { name: "Release version" }), selector);
-  assert.equal(selector.isConnected, true);
-  assert.equal(document.activeElement, selector);
+  assert.equal(view.getByRole("button", { name: /^Versions/ }), toggle);
+  assert.equal(toggle.isConnected, true);
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  assert.equal(document.activeElement, toggle);
+  releaseHeading(view, fixture.older.version);
+  assert.equal(document.querySelector(".command-panel"), null);
 
   await act(async () => { pending.resolve(fixture.older); await pending.promise; });
   await view.findByText(fixture.older.releaseNotes!);
-  assert.equal(view.getByRole("combobox", { name: "Release version" }), selector);
-  assert.equal(document.activeElement, selector);
+  assert.equal(view.getByRole("button", { name: /^Versions/ }), toggle);
+  assert.equal(document.activeElement, toggle);
 });
 
 test("a pinned release repairs its platform URL even when the skill list fails", async () => {
@@ -461,13 +469,15 @@ test("a pinned release repairs its platform URL even when the skill list fails",
   client.searchSkillPage = async () => { throw new Error("Search list unavailable"); };
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByText("The list could not load. Retry the registry request before selecting a skill.");
+  await view.findByText("The list could not load. Retry the request before selecting a skill.");
   await view.findByText(fixture.older.releaseNotes!);
   await waitFor(() => assert.equal(window.location.search, "?q=writing&platform=generic&version=0.1.0"));
-  assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, fixture.older.version);
-  assert.equal(view.getByRole("button", { name: "generic" }).classList.contains("active"), true);
+  releaseHeading(view, fixture.older.version);
+  // A single supported platform is stated rather than offered as a choice.
+  assert.match(view.getByRole("region", { name: "Use this release" }).textContent ?? "", /Platform\s*generic/);
+  assert.equal(view.queryByRole("button", { name: "generic" }), null);
   assert.equal(view.queryByRole("button", { name: "codex" }), null);
-  await view.findByText(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/);
+  await findCommand(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/);
   assert.deepEqual(client.releaseCalls, ["release-notes-helper@0.1.0"]);
 });
 
@@ -480,12 +490,15 @@ test("manager-only history cannot be pinned and offers an explicit return to lat
   await view.findByText("This exact release is unavailable.");
   assert.equal(window.location.search, "?version=0.3.0");
   assert.deepEqual(client.releaseCalls, []);
-  assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, "0.3.0");
-  assert.equal(view.getByRole("option", { name: "Unavailable exact version" }).hasAttribute("disabled"), true);
+  releaseHeading(view, "0.3.0");
+  view.getByText("Unavailable");
+  assert.deepEqual(versionRows(view).map((row) => row.querySelector("code")?.textContent), [fixture.latest.version, fixture.older.version]);
+  assert.equal(view.getByRole("list", { name: "Published versions" }).querySelector("[aria-current='true']"), null);
   assert.equal(view.queryByText("Manager-only notes."), null);
   assert.equal(view.queryByText(fixture.latest.releaseNotes!), null);
+  assert.equal(document.querySelector(".command-panel"), null);
 
-  fireEvent.click(view.getByRole("button", { name: "Return to latest" }));
+  fireEvent.click(view.getByRole("button", { name: "View latest" }));
   await view.findByText(fixture.latest.releaseNotes!);
   assert.equal(window.location.search, "");
 });
@@ -506,7 +519,7 @@ test("return to latest retries skill detail after a pinned skill fails to load",
   await view.findByText("Skill or release not found.");
   assert.equal(window.location.search, "?q=writing&version=0.1.0");
   assert.equal(document.body.textContent?.includes("Private skill detail"), false);
-  fireEvent.click(view.getByRole("button", { name: "Return to latest" }));
+  fireEvent.click(view.getByRole("button", { name: "View latest" }));
   await view.findByText(fixture.latest.releaseNotes!);
   assert.equal(skillCalls, 2);
   assert.equal(window.location.search, "?q=writing");
@@ -543,7 +556,9 @@ test("a listed exact version returning 404 stays pinned instead of falling back"
   assert.deepEqual(client.releaseCalls, ["release-notes-helper@0.1.0"]);
   assert.equal(document.body.textContent?.includes("Private release details"), false);
   assert.equal(view.queryByText(fixture.latest.releaseNotes!), null);
-  fireEvent.click(view.getByRole("button", { name: "Return to latest" }));
+  releaseHeading(view, fixture.older.version);
+  assert.equal(document.querySelector(".command-panel"), null);
+  fireEvent.click(view.getByRole("button", { name: "View latest" }));
   await view.findByText(fixture.latest.releaseNotes!);
 });
 
@@ -588,16 +603,17 @@ test("a release without supported platforms keeps its metadata but offers no exp
 
   const view = render(<RegistryApp client={client} />);
   await view.findByText(older.releaseNotes!);
-  assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, older.version);
-  assert.match(view.getByText("Platforms").parentElement?.textContent ?? "", /generic \(planned\).*codex \(deprecated\)/);
+  releaseHeading(view, older.version);
+  assert.match(view.getByText("Platforms").parentElement?.textContent ?? "", /generic · planned.*codex · deprecated/);
   assert.match(view.getByText("SHA-256").parentElement?.textContent ?? "", /b{64}/);
-  assert.match(view.getByText("Byte size").parentElement?.textContent ?? "", /513/);
+  assert.match(view.getByText("Size").parentElement?.textContent ?? "", /513 bytes/);
   assert.match(view.getByText(/No supported export platform is available for this release/).textContent ?? "", /Export and install are unavailable/);
   assert.equal(view.queryByRole("heading", { name: "Install this exact release" }), null);
   assert.equal(view.queryByRole("button", { name: "generic" }), null);
   assert.equal(view.queryByRole("button", { name: "codex" }), null);
   assert.equal(document.querySelector(".package-file-viewer"), null);
-  assert.equal(view.queryByText("CLI export"), null);
+  assert.equal(document.querySelector(".command-panel"), null);
+  assert.equal(view.queryByRole("button", { name: /^Copy command/ }), null);
   assert.equal(document.body.textContent?.includes("myskills export 'release-notes-helper'"), false);
   assert.equal(client.bundleCalls, 0);
   assert.equal(targetReads, 0);
@@ -625,7 +641,7 @@ test(`signed-in users review the ${selectedRelease} release before queueing a co
   const view = render(<RegistryApp client={client} />);
   await view.findByRole("heading", { name: "Install this exact release" });
   if (selectedRelease === "older") {
-    fireEvent.change(view.getByRole("combobox", { name: "Release version" }), { target: { value: fixture.older.version } });
+    selectRelease(view, fixture.older.version);
   }
   await view.findByText(expectedRelease.releaseNotes!);
   assert.equal(operations.length, 0);
@@ -678,7 +694,8 @@ test("generic exact releases remain readable and exportable without browser queu
   client.listArchitectureTargets = async () => [workspaceTarget()];
   client.scheduleTargetSkillOperation = async () => { queued += 1; return { operation: {} as never, replayed: false }; };
   const view = render(<RegistryApp client={client} />);
-  fireEvent.change(await view.findByRole("combobox", { name: "Release version" }), { target: { value: fixture.older.version } });
+  await view.findByRole("button", { name: /^Versions/ });
+  selectRelease(view, fixture.older.version);
   await view.findByText(fixture.older.releaseNotes!);
   await view.findByText(/Browser installs require a consented personal Codex workspace/);
   assert.equal(view.queryByRole("button", { name: "Review install" }), null);
@@ -702,43 +719,54 @@ for (const releaseKind of ["prerelease", "deprecated"] as const) {
     const view = render(<RegistryApp client={client} />);
     await view.findByRole("heading", { name: "No default stable release" });
     assert.deepEqual(client.releaseCalls, []);
-    fireEvent.change(view.getByRole("combobox", { name: "Release version" }), { target: { value: exact.version } });
+    assert.deepEqual(versionRows(view).map((row) => row.getAttribute("aria-current")), [null]);
+    selectRelease(view, exact.version);
     await view.findByText(exact.releaseNotes!);
     assert.deepEqual(client.releaseCalls, [`${skill.slug}@${exact.version}`]);
     assert.ok(document.querySelector(".command-panel")?.textContent?.includes(`--version '${exact.version}'`));
+    // With no default stable release, clearing the pin never claims a latest one.
+    assert.equal(view.queryByRole("button", { name: "View latest" }), null);
   });
 }
 
-test("privileged skill controls stay locked without an MFA-verified session and do not request management data", async () => {
+// Lifecycle, metadata and sharing live in the skill's Manage section. The
+// management record is the lifecycle authority; sharing keeps its own gate.
+test("privileged skill controls stay locked without an MFA-verified session and do not request sharing data", async () => {
   const owner = authUser({ email: "owner@example.com", roles: ["owner"], mfaVerified: false });
   setupAuthenticatedDom("http://localhost/skills/release-notes-helper", owner);
   const managedSkill: PublicSkill = { ...publicSkill(), access: { canManageSharing: true, reasons: ["owner", "public"] } };
   const client = mockClient({ skills: [managedSkill], user: owner });
+  const managedReads: string[] = [];
+  client.getManagedSkill = async (slug) => { managedReads.push(slug); return managedSummary(managedSkill); };
 
   const view = render(<RegistryApp client={client} />);
 
-  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
-  await view.findByRole("heading", { name: "Lifecycle and sharing controls are locked", level: 2 });
-  assert.equal(view.queryByRole("region", { name: "Skill lifecycle controls" }), null);
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  await view.findByText(/MFA-verified session is required/);
+  assert.equal((view.getByRole("button", { name: "Archive skill" }) as HTMLButtonElement).disabled, true);
+  assert.equal((view.getByRole("button", { name: "Save metadata" }) as HTMLButtonElement).disabled, true);
   assert.equal(view.queryByRole("region", { name: "Sharing controls" }), null);
   assert.deepEqual(client.releaseHistoryCalls, [managedSkill.slug]);
   assert.equal(client.releaseManagementCalls, 0);
   assert.equal(client.sharingDetailCalls, 0);
+  assert.deepEqual(managedReads, [managedSkill.slug]);
 });
 
-test("MFA-verified managers can load lifecycle and sharing controls", async () => {
+test("MFA-verified managers load lifecycle and sharing controls without a second release read", async () => {
   const owner = authUser({ email: "owner@example.com", roles: ["owner"], mfaVerified: true });
   setupAuthenticatedDom("http://localhost/skills/release-notes-helper", owner);
   const managedSkill: PublicSkill = { ...publicSkill(), access: { canManageSharing: true, reasons: ["owner", "public"] } };
   const client = mockClient({ skills: [managedSkill], user: owner });
+  client.getManagedSkill = async () => managedSummary(managedSkill);
 
   const view = render(<RegistryApp client={client} />);
 
-  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
-  await view.findByRole("region", { name: "Skill lifecycle controls" });
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  await view.findByRole("heading", { name: "Release lifecycle" });
   await view.findByRole("region", { name: "Sharing controls" });
+  assert.equal((view.getByRole("button", { name: "Archive skill" }) as HTMLButtonElement).disabled, false);
   assert.deepEqual(client.releaseHistoryCalls, [managedSkill.slug]);
-  assert.equal(client.releaseManagementCalls, 1);
+  assert.equal(client.releaseManagementCalls, 0);
   assert.equal(client.sharingDetailCalls, 1);
 });
 
@@ -747,17 +775,20 @@ test("metadata saves refresh the parent registry detail", async () => {
   setupAuthenticatedDom("http://localhost/skills/release-notes-helper", owner);
   let skill = { ...publicSkill(), access: { canManageSharing: true, reasons: ["owner", "public"] } } as PublicSkill;
   const client = mockClient({ user: owner, skills: [skill], skillLoader: () => skill });
+  client.getManagedSkill = async () => managedSummary(skill);
   client.updateSkillMetadata = async (input) => {
     skill = { ...skill, title: input.title ?? skill.title, summary: input.summary ?? skill.summary };
     return { ...skill, lifecycleStatus: "approved", allowedActions: ["edit"] };
   };
   const view = render(<RegistryApp client={client} />);
-  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
-  await view.findByRole("region", { name: "Skill lifecycle controls" });
-  fireEvent.input(view.getByRole("textbox", { name: "Title" }), { target: { value: "Updated registry title" } });
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  const title = await view.findByRole("textbox", { name: "Title" }) as HTMLInputElement;
+  assert.equal(title.value, "Release Notes Helper");
+  fireEvent.input(title, { target: { value: "Updated registry title" } });
   fireEvent.input(view.getByRole("textbox", { name: "Summary" }), { target: { value: "Updated registry summary" } });
   fireEvent.click(view.getByRole("button", { name: "Save metadata" }));
   await view.findByRole("heading", { name: "Updated registry title" });
+  fireEvent.click(view.getByRole("tab", { name: "Overview" }));
   await view.findByText("Updated registry summary");
 });
 
@@ -770,18 +801,22 @@ test("skill deletion clears the parent detail and its stale export actions", asy
     if (deleted) throw safeApiError(404, "NOT_FOUND", "Deleted");
     return skill;
   } });
-  client.performSkillAction = async () => { deleted = true; return { ...skill, lifecycleStatus: "deleted", allowedActions: [] }; };
+  client.getManagedSkill = async () => {
+    if (deleted) throw safeApiError(404, "SKILL_NOT_FOUND", "Deleted");
+    return managedSummary(skill);
+  };
+  client.performSkillAction = async () => { deleted = true; return { ...managedSummary(skill), lifecycleStatus: "deleted", allowedActions: [] }; };
   const view = render(<RegistryApp client={client} />);
-  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
-  await view.findByRole("region", { name: "Skill lifecycle controls" });
-  const deleteButton = view.getByRole("button", { name: "Delete skill" }) as HTMLButtonElement;
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  const deleteButton = await view.findByRole("button", { name: "Delete skill" }) as HTMLButtonElement;
   await waitFor(() => assert.equal(deleteButton.disabled, false));
   fireEvent.click(deleteButton);
-  const dialog = await view.findByRole("dialog");
-  fireEvent.input(dialog.querySelector("textarea")!, { target: { value: "Remove obsolete skill" } });
-  fireEvent.click(Array.from(dialog.querySelectorAll("button")).find((button) => button.textContent === "Delete skill")!);
+  const confirm = await view.findByRole("region", { name: "Confirm lifecycle change" });
+  fireEvent.input(within(confirm).getByRole("textbox", { name: "Lifecycle reason" }), { target: { value: "Remove obsolete skill" } });
+  fireEvent.click(within(confirm).getByRole("button", { name: "Confirm delete" }));
   await view.findByText("Skill or release not found.");
-  assert.equal(view.queryByText("CLI export"), null);
+  assert.equal(document.querySelector(".command-panel"), null);
+  assert.equal(view.queryByRole("tab", { name: "Manage" }), null);
 });
 
 test("release mutation refreshes parent history before offering the old artifact", async () => {
@@ -792,15 +827,18 @@ test("release mutation refreshes parent history before offering the old artifact
   let revoked = false;
   const current = { ...releaseSummary(fixture.latest), allowedActions: ["revoke" as const] };
   const client = historyClient(fixture, { user: owner, releaseListLoader: () => revoked ? [{ ...current, lifecycleStatus: "revoked" }] : [current] });
+  client.getManagedSkill = async () => managedSummary(fixture.skill);
   client.performReleaseAction = async () => { revoked = true; return { ...current, lifecycleStatus: "revoked", allowedActions: [] }; };
   const view = render(<RegistryApp client={client} />);
-  fireEvent.click(await view.findByRole("button", { name: "Owner controls" }));
-  fireEvent.click(await view.findByRole("button", { name: "Revoke" }));
-  const dialog = await view.findByRole("dialog");
-  fireEvent.input(dialog.querySelector("textarea")!, { target: { value: "Withdraw this artifact" } });
-  fireEvent.click(Array.from(dialog.querySelectorAll("button")).find((button) => button.textContent === "Revoke release")!);
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  fireEvent.click(await view.findByRole("button", { name: "Revoke 0.2.0" }));
+  const confirm = await view.findByRole("region", { name: "Confirm lifecycle change" });
+  fireEvent.input(within(confirm).getByRole("textbox", { name: "Lifecycle reason" }), { target: { value: "Withdraw this artifact" } });
+  fireEvent.click(within(confirm).getByRole("button", { name: "Confirm revoke" }));
+  await view.findByText(/Lifecycle change saved/);
+  fireEvent.click(view.getByRole("tab", { name: "Overview" }));
   await view.findByText("This exact release is unavailable.");
-  assert.equal(view.queryByText("CLI export"), null);
+  assert.equal(document.querySelector(".command-panel"), null);
 });
 
 test("404 detail responses render generic not found state", async () => {
@@ -821,11 +859,11 @@ test("platform selection changes CLI export guidance only", async () => {
   const client = mockClient();
 
   const view = render(<RegistryApp client={client} />);
-  await view.findByText(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'codex'/);
+  await findCommand(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'codex'/);
 
   fireEvent.click(view.getByRole("button", { name: "generic" }));
 
-  await view.findByText(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/);
+  await findCommand(/myskills export 'release-notes-helper' --version '0\.1\.0' --platform 'generic'/);
   assert.equal(window.location.search, "?platform=generic");
   assert.equal(client.releaseCalls.length, 1);
   assert.equal(client.bundleCalls, 0);
@@ -837,7 +875,7 @@ test("URL state and popstate restore search, selection, platform, and active nav
 
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByText(/--platform 'generic'/);
+  await findCommand(/--platform 'generic'/);
   assert.equal((view.getByLabelText("Search skills") as HTMLInputElement).value, "release");
   const selectedResult = view.getByRole("link", { name: /Release Notes Helper/ });
   assert.equal(selectedResult.getAttribute("aria-current"), "true");
@@ -845,7 +883,7 @@ test("URL state and popstate restore search, selection, platform, and active nav
   const modifiedClick = new window.MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true });
   selectedResult.dispatchEvent(modifiedClick);
   assert.equal(modifiedClick.defaultPrevented, false);
-  assert.equal(view.getAllByRole("link", { name: "Registry" })[0]?.getAttribute("aria-current"), "page");
+  assert.equal(view.getAllByRole("link", { name: /^Skills$/ })[0]?.getAttribute("aria-current"), "page");
 
   fireEvent.click(view.getAllByRole("link", { name: "Settings" })[0]!);
   await view.findByRole("heading", { name: "Security and access", level: 1 });
@@ -854,7 +892,7 @@ test("URL state and popstate restore search, selection, platform, and active nav
   window.history.replaceState({}, "", "/skills/release-notes-helper?q=release&platform=generic");
   window.dispatchEvent(new window.PopStateEvent("popstate"));
 
-  await view.findByText(/--platform 'generic'/);
+  await findCommand(/--platform 'generic'/);
   assert.equal((view.getByLabelText("Search skills") as HTMLInputElement).value, "release");
   assert.equal(window.location.pathname, "/skills/release-notes-helper");
 });
@@ -895,7 +933,7 @@ test("a late release list cannot replace another skill's history", async () => {
     await pendingHistory.promise;
   });
   assert.equal(window.location.pathname, "/skills/fast-helper");
-  assert.equal(view.queryByRole("combobox", { name: "Release version" }), null);
+  assert.equal(view.queryByRole("button", { name: /^Versions/ }), null);
   assert.equal(client.releaseManagementCalls, 0);
 });
 
@@ -908,7 +946,7 @@ test("out-of-order exact release responses cannot replace the current version", 
   });
   const view = render(<RegistryApp client={client} />);
   await waitFor(() => assert.deepEqual(client.releaseCalls, ["release-notes-helper@0.1.0"]));
-  fireEvent.click(await view.findByRole("button", { name: "Return to latest" }));
+  fireEvent.click(await view.findByRole("button", { name: "View latest" }));
   await view.findByText(fixture.latest.releaseNotes!);
   await act(async () => { pendingRelease.resolve(fixture.older); await pendingRelease.promise; });
   assert.equal(window.location.search, "");
@@ -925,7 +963,7 @@ test("popstate restores a pinned version and skill changes clear that pin", asyn
   const view = render(<RegistryApp client={client} />);
   await view.findByText(fixture.latest.releaseNotes!);
   const historyLength = window.history.length;
-  fireEvent.change(view.getByRole("combobox", { name: "Release version" }), { target: { value: fixture.older.version } });
+  selectRelease(view, fixture.older.version);
   await view.findByText(fixture.older.releaseNotes!);
   const pinnedUrl = `${window.location.pathname}${window.location.search}`;
   assert.equal(pinnedUrl, "/skills/release-notes-helper?q=writing&platform=generic&version=0.1.0");
@@ -941,9 +979,9 @@ test("popstate restores a pinned version and skill changes clear that pin", asyn
   });
   await view.findByText(fixture.older.releaseNotes!);
   assert.equal((view.getByLabelText("Search skills") as HTMLInputElement).value, "writing");
-  assert.equal((view.getByRole("combobox", { name: "Release version" }) as HTMLSelectElement).value, fixture.older.version);
+  releaseHeading(view, fixture.older.version);
   assert.equal(view.getByRole("link", { name: /Release Notes Helper/ }).getAttribute("aria-current"), "true");
-  await view.findByText(/--version '0\.1\.0' --platform 'generic'/);
+  await findCommand(/--version '0\.1\.0' --platform 'generic'/);
 
   act(() => {
     window.history.replaceState(window.history.state, "", otherUrl);
@@ -973,11 +1011,11 @@ test("copy actions announce success to assistive technology", async (t) => {
   t.after(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: originalClipboard }));
 
   const view = render(<RegistryApp client={mockClient()} />);
-  await view.findByText(/myskills export/);
-  fireEvent.click(view.getByRole("button", { name: "Copy" }));
+  await findCommand(/myskills export/);
+  fireEvent.click(view.getByRole("button", { name: "Copy command" }));
 
   await view.findByText("Copied to clipboard.");
-  assert.equal(writes[0]?.includes("myskills export"), true);
+  assert.deepEqual(writes, ["myskills export 'release-notes-helper' --version '0.1.0' --platform 'codex' --output './skills/release-notes-helper'"]);
 });
 
 for (const failure of [safeApiError(503, "UNAVAILABLE", "Temporary outage"), new Error("Network unavailable")]) {
@@ -1185,6 +1223,13 @@ test("signed-in users can open the teams workspace", async () => {
   assert.equal(window.location.pathname, "/teams");
 });
 
+// Editing happens in the full-page Workbench; tests reach it through the
+// overview launcher, as a user would.
+async function openArchitectureWorkbench(view: ReturnType<typeof render>, launcher = "Open workbench") {
+  fireEvent.click(await view.findByRole("link", { name: launcher }));
+  await view.findByRole("tablist", { name: "Workbench sections" });
+}
+
 test("signed-in users can create and inspect a multi-level skill architecture", async () => {
   setupAuthenticatedDom("http://localhost/architectures");
   const client = mockClient({
@@ -1204,7 +1249,8 @@ test("signed-in users can create and inspect a multi-level skill architecture", 
   fireEvent.click(view.getByRole("button", { name: "Create architecture" }));
 
   await view.findByRole("heading", { name: "Work assistant" });
-  await view.findByText(/This draft has no revision yet/);
+  await view.findByRole("heading", { name: "Build the first revision" });
+  await view.findByText("No revision yet. Build and save the first revision in the workbench.");
   assert.equal(client.architectureCreates.length, 1);
   assert.deepEqual(client.architectureCreates[0]?.owner, { type: "user" });
   assert.equal(client.architecturePreviewCalls.length, 0);
@@ -1399,6 +1445,7 @@ test("diagram exports use the authorized artifact and tolerate organization-only
   await view.findByText("Select one authorized organization to preview this shared architecture.");
   fireEvent.change(view.getByLabelText("Preview organization"), { target: { value: "org-1" } });
   await view.findByText("Skills available in this context");
+  fireEvent.click(view.getByText("Technical details"));
   await view.findByText("Revision unavailable");
   await view.findByRole("button", { name: "Copy canonical diagram JSON" });
   await view.findByRole("button", { name: "Download canonical diagram JSON" });
@@ -1506,6 +1553,8 @@ test("architecture revisions parse JSON before the API and refresh after a valid
   const view = render(<RegistryApp client={client} />);
 
   await view.findByText("Skills available in this context");
+  await openArchitectureWorkbench(view);
+  fireEvent.click(view.getByRole("tab", { name: "Advanced" }));
   fireEvent.click(view.getByText("Add immutable revision"));
   fireEvent.input(view.getByLabelText("Revision message"), { target: { value: "Bind the work context" } });
   const validSpec = defaultArchitecturePreview().revision.spec;
@@ -1532,6 +1581,8 @@ test("architecture revision form rejects invalid JSON without calling the API", 
   const view = render(<RegistryApp client={client} />);
 
   await view.findByText("Skills available in this context");
+  await openArchitectureWorkbench(view);
+  fireEvent.click(view.getByRole("tab", { name: "Advanced" }));
   fireEvent.click(view.getByText("Add immutable revision"));
   fireEvent.input(view.getByLabelText("Architecture spec JSON"), { target: { value: "{not-json" } });
   fireEvent.click(view.getByRole("button", { name: "Save immutable revision" }));
@@ -1549,6 +1600,7 @@ test("architecture editor previews an unsaved draft through the API with its rev
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Edited review router" } });
   fireEvent.click(view.getByRole("button", { name: "Preview draft" }));
 
@@ -1586,7 +1638,7 @@ test("the editor preserves input delivered before its initial passive effects", 
   await waitFor(() => assert.deepEqual(previewedLabels, ["Immediate edit"]));
   const nextSpec = { ...spec, nodes: [{ ...spec.nodes[0]!, label: "New server revision" }, ...spec.nodes.slice(1)] };
   await act(async () => { view.rerender(<EarlyInputEditor initialSpec={nextSpec} />); });
-  await view.findByText("All changes saved");
+  await view.findByText("No unsaved changes");
   assert.equal((view.getByLabelText("Selected node label") as HTMLInputElement).value, "New server revision");
 });
 
@@ -1602,6 +1654,7 @@ test("an initial server preview settling around an edit preserves the unsaved ed
     client.previewArchitecture = async () => initialPreview;
     const view = render(<RegistryApp client={client} />);
     await view.findByTestId("architecture-editor");
+    await openArchitectureWorkbench(view);
     assert.equal(view.queryByText("Skills available in this context"), null);
 
     await act(async () => {
@@ -1641,7 +1694,10 @@ test("team members receive a read-only architecture editor without revision cont
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  assert.equal(view.queryByRole("link", { name: "Open workbench" }), null);
+  await openArchitectureWorkbench(view, "Inspect in workbench");
   assert.equal(view.getByRole("heading", { name: "Inspect this architecture" }).textContent, "Inspect this architecture");
+  assert.equal(view.queryByLabelText("Draft revision message"), null);
   assert.equal(view.queryByRole("button", { name: "Save revision" }), null);
   assert.equal(view.queryByText("Add immutable revision"), null);
   const editorName = view.getByTestId("architecture-editor").querySelector<HTMLInputElement>('input[aria-label="Architecture name"]');
@@ -1661,6 +1717,7 @@ test("architecture editor preserves its draft when the optimistic save conflicts
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
   const label = view.getByLabelText("Selected node label") as HTMLInputElement;
   fireEvent.input(label, { target: { value: "Draft kept after conflict" } });
   fireEvent.click(view.getByRole("button", { name: "Save revision" }));
@@ -1688,6 +1745,7 @@ test("architecture editor sends the immutable revision token and refreshes after
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Saved review router" } });
   fireEvent.input(view.getByLabelText("Draft revision message"), { target: { value: "Clarify review routing" } });
   fireEvent.click(view.getByRole("button", { name: "Save revision" }));
@@ -1722,7 +1780,7 @@ test("architecture selection clears stale detail before previewing a new draft",
   fireEvent.click(view.getByRole("button", { name: /Draft assistant/ }));
 
   await view.findByRole("heading", { name: "Draft assistant", level: 2 });
-  await view.findByText(/This draft has no revision yet/);
+  await view.findByText("No revision yet. Build and save the first revision in the workbench.");
   assert.equal(client.architecturePreviewCalls.some((call) => call.architectureId === "architecture-2"), false);
 });
 
@@ -1741,6 +1799,7 @@ test("unsaved architecture edits guard selection and beforeunload navigation", a
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Unsaved router" } });
   await view.findByText("Unsaved changes");
 
@@ -1748,6 +1807,9 @@ test("unsaved architecture edits guard selection and beforeunload navigation", a
   window.dispatchEvent(navigation);
   assert.equal(navigation.defaultPrevented, true);
 
+  // The same architecture's overview keeps the draft; switching asks first.
+  fireEvent.click(view.getByRole("link", { name: "Architecture overview" }));
+  await view.findByRole("link", { name: "Resume draft" });
   fireEvent.click(view.getByRole("button", { name: /Draft assistant/ }));
   assert.equal(view.getByRole("heading", { name: "Review assistant", level: 2 }).isConnected, true);
 
@@ -1777,8 +1839,15 @@ test("unsaved architecture edits guard browser back without duplicate prompts", 
   await view.findByText("Release Notes Helper");
   fireEvent.click(view.getAllByRole("link", { name: "Architectures" })[0]!);
   await view.findByTestId("architecture-editor");
+  await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Unsaved browser draft" } });
   await view.findByText("Unsaved changes");
+
+  // Back to the same architecture's overview keeps the draft without a prompt.
+  window.history.back();
+  await view.findByRole("link", { name: "Resume draft" });
+  assert.equal(window.location.pathname, "/architectures");
+  assert.equal(confirmCalls, 0);
 
   window.history.back();
   await waitFor(() => {
@@ -1884,6 +1953,7 @@ test("architecture history loads older revisions, shows semantic counts, and see
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-history-panel");
+  fireEvent.click(view.getByRole("tab", { name: "History" }));
   fireEvent.click(view.getByRole("button", { name: /Revision 2/ }));
   await waitFor(() => assert.deepEqual(client.architectureRevisionFetches, ["architecture-1:revision-older"]));
   await view.findByText(/Semantic changes from this older revision to the current revision/);
@@ -1897,7 +1967,7 @@ test("architecture history loads older revisions, shows semantic counts, and see
   assert.equal(history.textContent?.includes("private-marker"), false);
 
   fireEvent.click(view.getByRole("button", { name: "Use as new draft" }));
-  await view.findByRole("heading", { name: "Draft from revision revision-older" });
+  await view.findByRole("heading", { name: "Draft from Revision 2" });
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Draft from history" } });
   fireEvent.click(view.getByRole("button", { name: "Save revision" }));
   await waitFor(() => assert.equal(client.architectureRevisionCreates.length, 1));
@@ -1945,11 +2015,12 @@ test("exact registry release picker supports a first flat revision and rejects d
   });
   const view = render(<RegistryApp client={client} />);
 
+  await openArchitectureWorkbench(view, "Build first revision");
   await view.findByRole("heading", { name: "Build the first revision" });
-  fireEvent.input(view.getByLabelText("Search registry skills"), { target: { value: "audit" } });
+  fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "audit" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
   await waitFor(() => assert.deepEqual(client.searchCalls.at(-1), "audit"));
-  fireEvent.change(await view.findByLabelText("Registry skill"), { target: { value: "audit-helper" } });
+  fireEvent.change(await view.findByLabelText("Skill"), { target: { value: "audit-helper" } });
   await view.findByLabelText("Exact release");
   fireEvent.change(view.getByLabelText("Exact release"), { target: { value: "release-audit-123" } });
   assert.equal(view.queryByLabelText("Release parent router"), null);
@@ -1982,9 +2053,11 @@ test("stale exact-release responses cannot replace the release selected for a ne
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
-  fireEvent.input(view.getByLabelText("Search registry skills"), { target: { value: "skill" } });
+  await openArchitectureWorkbench(view);
+  fireEvent.click(view.getByText("Add exact release"));
+  fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "skill" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
-  const skillSelector = await view.findByLabelText("Registry skill");
+  const skillSelector = await view.findByLabelText("Skill");
   fireEvent.change(skillSelector, { target: { value: "skill-a" } });
   await waitFor(() => assert.equal(client.releaseCalls.at(-1), "skill-a@1.0.0"));
   fireEvent.change(skillSelector, { target: { value: "skill-b" } });
@@ -2005,9 +2078,11 @@ test("router release picker requires an explicit parent and creates a routes edg
   const view = render(<RegistryApp client={client} />);
 
   await view.findByTestId("architecture-editor");
-  fireEvent.input(view.getByLabelText("Search registry skills"), { target: { value: "audit" } });
+  await openArchitectureWorkbench(view);
+  fireEvent.click(view.getByText("Add exact release"));
+  fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "audit" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
-  fireEvent.change(await view.findByLabelText("Registry skill"), { target: { value: "audit-helper" } });
+  fireEvent.change(await view.findByLabelText("Skill"), { target: { value: "audit-helper" } });
   fireEvent.change(await view.findByLabelText("Exact release"), { target: { value: "release-audit-123" } });
   const addButton = view.getByRole("button", { name: "Add selected exact release" }) as HTMLButtonElement;
   assert.equal(addButton.disabled, true);
@@ -2331,7 +2406,7 @@ test("failed login shows auth-specific safe copy", async () => {
   fireEvent.click(view.getByRole("button", { name: /sign in/i }));
 
   await view.findByText("Invalid email or password.");
-  assert.equal(document.body.textContent?.includes("registry item"), false);
+  assert.equal(document.body.textContent?.includes("You do not have access to that skill or release."), false);
   assert.equal(document.body.textContent?.includes("Wrong password"), false);
   assert.equal(window.localStorage.getItem("myskills-app:web-session"), null);
 });
@@ -3639,6 +3714,10 @@ function publicRelease(): ReleaseMetadata {
   };
 }
 
+function managedSummary(skill: PublicSkill, allowedActions: SkillManagementSummary["allowedActions"] = ["edit", "archive", "delete"]): SkillManagementSummary {
+  return { slug: skill.slug, title: skill.title, summary: skill.summary, lifecycleStatus: "approved", visibility: skill.visibility, tags: skill.tags, allowedActions };
+}
+
 function releaseSummary(release: ReleaseMetadata): SkillReleaseSummary {
   return {
     id: `release-${release.version}`,
@@ -3695,6 +3774,26 @@ function releaseHistoryFixture() {
     older,
     history: [releaseSummary(older), hidden, unpublished, releaseSummary(latest)],
   };
+}
+
+function releaseHeading(view: ReturnType<typeof render>, version: string) {
+  return view.getByRole("heading", { name: `Release ${version}` });
+}
+
+function versionRows(view: ReturnType<typeof render>) {
+  const toggle = view.getByRole("button", { name: /^Versions/ });
+  if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
+  return within(view.getByRole("list", { name: "Published versions" })).getAllByRole("button");
+}
+
+function selectRelease(view: ReturnType<typeof render>, version: string) {
+  const row = versionRows(view).find((button) => button.querySelector("code")?.textContent === version);
+  assert.ok(row, `version row ${version}`);
+  fireEvent.click(row);
+}
+
+async function findCommand(pattern: RegExp) {
+  await waitFor(() => assert.match(document.querySelector(".command-panel code")?.textContent ?? "", pattern));
 }
 
 function historyClient(fixture: ReturnType<typeof releaseHistoryFixture>, options: Parameters<typeof mockClient>[0] = {}) {

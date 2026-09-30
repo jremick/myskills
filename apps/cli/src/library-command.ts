@@ -48,7 +48,7 @@ export const libraryCommandHelp = [
   "Import: discover, preview, candidates, candidate, import, self-review, request-review, ignore",
   "Curate: adopt, adoptions, resolve, tracking, check, subscribe, unsubscribe, inbox, mark-read",
   "Targets: bindings, bind, detach. Admin: settings, set-settings, review-requests, review-bundle, elevate",
-  "bind, detach and set-settings require an MFA-verified myskills login session; API tokens cannot perform these actions.",
+  "bind and detach require libraries:bind plus targets:control for scoped credentials; set-settings requires admin:settings. The API also enforces current user permission and MFA assurance.",
   "List pagination: --cursor <cursor> --limit <1-100>. Remove library: --revision <current revision>.",
   "Filter entries: --kind source|skill. Filter candidates: --state ready-for-review|blocked|accepted|ignored|superseded|expired.",
   "Filter inbox: --unread true|false.",

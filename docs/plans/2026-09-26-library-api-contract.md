@@ -8,7 +8,9 @@ Revision 2026-09-26 (lease fencing, no shape change): every check-owned write va
 
 Revision 2026-09-26 (beta.8 runtime-name normalization, owner-approved, additive shapes): the runtime `SKILL.md` name is the registry slug and the exact upstream `SKILL.md` is held at `myskills-source-skill.txt` (§4.4 package layout). New transform kind `normalize-runtime-name` with optional `LibraryTransform` fields `originalPath`, `originalSha256`, `transformedSha256`, `originalName`, `runtimeName`; new finding code `native-frontmatter-unsupported`; new core constant `LIBRARY_ORIGINAL_SKILL_PATH`. The importer version is `myskills-library-importer/2`, so earlier active candidates are not reused.
 
-Scope: personal libraries, public GitHub source references and imports (1A); manual/daily/weekly tracking and in-app inbox (1B); team libraries that curate already-authorized releases (1C); admin-controlled private self-review. Not in scope: private GitHub credentials, org-owned imports, email or external notifications, unattended target application, native plugin execution.
+Revision 2026-09-29 (unreleased team sourcing): the [approved extension](2026-09-29-team-library-sources.md) adds team-owned public imports and source tracking. Existing routes derive the owner from the Library; they do not accept arbitrary import ownership. Team writes retain MFA, imports retain author and token-scope requirements, and team imports require instance review. `LibraryEntry.skill.ownership` adds a team variant. Existing personal payloads retain their meaning.
+
+Scope: personal and team Libraries, public GitHub source references and imports; manual/daily/weekly tracking and in-app inbox; explicit adoption of authorized reviewed releases; admin-controlled private self-review for personal imports only. Not in scope: private GitHub credentials, organization-owned Libraries, email or external notifications, unattended target application, native plugin execution.
 
 ## 1. Conventions
 
@@ -51,7 +53,7 @@ Provider budget: every provider request spends the instance's shared, unauthenti
 - Personal library: owner reads and writes. Nobody else can see it (admins included).
 - Team library: effective team **owners** write (curate); current effective team members read. Effective membership uses the same organization-parent rules as team skill sharing. Removal takes effect at the next request.
 - Library visibility never overrides artifact grants. Each `skill` entry whose adopted or referenced release is not readable by the caller is **omitted** from lists and returns 404 on direct read. The inbox applies the same filter.
-- Team libraries contain only `skill` entries for registry releases already visible to the team (`public`, `authenticated`, or `team` with a grant to that team), and `source` entries as reference-only (no tracking, no import). Imports and tracks are personal.
+- Team Libraries can source public repositories and import selected skills under team ownership. The registry submission transaction creates the owning-team grant; member delivery still requires an approved, published, scan-passed release. Contributor-owned references must already be visible to the team (`public`, `authenticated`, or `team` with an explicit grant). Pending team candidates are curator-only.
 - Self-reviewed (not instance-elevated) releases can be adopted only in the owner's personal library.
 
 ## 4. Routes
@@ -90,7 +92,7 @@ LibrarySummary = {
   createdAt: string; updatedAt: string;
 }
 ```
-`canTrackSources`/`canImport` are true only for personal libraries.
+`canTrackSources` permits a personal owner or effective team curator. `canImport` additionally reflects existing author-role requirements. The API independently enforces scopes and team-write MFA.
 
 ### 4.2 Entries
 
@@ -146,20 +148,21 @@ LibraryEntry = {
   skill?: {
     slug: string; nativeName: string | null;
     sourceEntryId: string | null; sourcePath: string | null; lineageId: string | null;
-    ownership: { type: "user"; isCaller: boolean };   // personal ownership dependency, shown in team libraries
+    ownership: { type: "user"; isCaller: boolean }
+      | { type: "team"; id: string; name: string; isCaller: false };
   };
   adoption: LibraryAdoption | null;
   createdAt: string; updatedAt: string;
 }
 ```
 
-### 4.3 Tracking and checks (personal `source` entries)
+### 4.3 Tracking and checks (`source` entries)
 
 `PATCH /v1/library-entries/:entryId/tracking`
 ```json
 { "expectedRevision": 2, "mode": "daily", "acknowledgeIdentityChange": false }
 ```
-→ `200 { "entry": LibraryEntry }`. `daily`/`weekly` set `nextCheckAt` from the current time. `off`/`manual` clear it. Team libraries → `409 LIBRARY_TRACKING_UNSUPPORTED`.
+→ `200 { "entry": LibraryEntry }`. `daily`/`weekly` set `nextCheckAt` from the current time. `off`/`manual` clear it. Team source operations require current curator authority and MFA. Scheduled team checks use durable team configuration rather than the initiating user's identity. Loss of all eligible curators pauses tracking with `tracking-authority-unavailable`; restoring membership alone does not resume it. A current curator must explicitly save tracking again.
 
 Repository identity is kept per entry. `source.fullName`/`source.url` are the name this entry's owner accepted; another user saving or checking the same repository never changes them. When a check, discovery or preview finds a different name for the same repository id, the entry gets `tracking.identityChange`, `health: "identity-change-review"` and a new `revision`. Checks also emit one `source-health-changed` inbox item; discovery and preview report the pending review directly without an inbox item. Until the owner acknowledges it:
 - discovery and preview return `409 SOURCE_IDENTITY_CHANGED`, checks return `outcome: "failed"`, `errorCode: "source-identity-changed"`, and the worker skips the entry;
@@ -200,7 +203,9 @@ Lock order in these transactions: the library row (`FOR KEY SHARE`), the entry (
 
 Not fenced: the shared `library_sources` row that a check upserts after it reads the repository. Every save, discovery and check of that repository writes this row without a lease, so it is last-writer-wins metadata. A stale check can overwrite the default branch, license, archived flag and canonical name and URL with the values it observed during its run, and can append that URL to the URL history. The next save, discovery or check of the repository by anyone refreshes the row. The stale write cannot change entry identity (acknowledged and pending names live on the entry), snapshots, candidates, events, schedule or release provenance. Previews use the live repository's license identifier or an explicit reviewed mapping; an unknown live identifier never falls back to cached metadata.
 
-### 4.4 Discovery, preview and import (personal `source` entries)
+### 4.4 Discovery, preview and import (`source` entries)
+
+Team candidates belong to the Library's team and can be inspected or continued only by current curators. Import still requires an author role, the existing token scopes, and team-write MFA. Ownership fields in ordinary submission payloads are rejected. New team-owned skills receive an explicit owning-team grant atomically with their first submission; a later import does not restore a revoked grant.
 
 `POST /v1/library-entries/:entryId/discoveries` → `200 { "discovery": SourceDiscovery }`
 ```ts
@@ -322,7 +327,7 @@ Registry slug: `<readable-prefix>-<10-char opaque suffix>` (≤ 64 chars), alloc
 ```
 → `200 { "candidate": LibraryCandidate, "release": { "slug", "version", "artifactSha256", "publishedAt", "attestation": "private-self-reviewed" } }`
 Rechecked in one transaction: setting enabled; caller is the import owner; registry skill owned by caller and `private` with no team/user/organization grants; submission `unreviewed`; scans passed with zero findings; exact artifact hash. Result: release is approved and published **only** for the owner; a distinct `private-self-review` attestation records the real actor and hash. No maintainer approval is recorded.
-Errors: `403 PRIVATE_SELF_REVIEW_DISABLED`, `409 PRIVATE_SELF_REVIEW_SCOPE_INVALID` (not private / grants / not owner-owned skill), `409 PRIVATE_SELF_REVIEW_SCAN_NOT_CLEAN`, `409 SUBMISSION_NOT_REVIEWABLE`, `409 ARTIFACT_HASH_MISMATCH`, `403 MFA_VERIFICATION_REQUIRED`.
+Errors: `403 PRIVATE_SELF_REVIEW_DISABLED`, `409 LIBRARY_SELF_REVIEW_UNSUPPORTED` (team-owned candidate), `409 PRIVATE_SELF_REVIEW_SCOPE_INVALID` (not private / grants / not owner-owned skill), `409 PRIVATE_SELF_REVIEW_SCAN_NOT_CLEAN`, `409 SUBMISSION_NOT_REVIEWABLE`, `409 ARTIFACT_HASH_MISMATCH`, `403 MFA_VERIFICATION_REQUIRED`.
 
 `POST /v1/library-candidates/:candidateId/instance-review-requests` → `200 { "request": { "submissionId", "requestedAt" } }` (owner asks reviewers to elevate a self-reviewed release).
 
@@ -402,6 +407,8 @@ LibraryInboxItem = { id: string; kind: LibraryEventKind; libraryId: string; libr
 ```
 Delivery rules: only current subscribers who can read the library now; curator-audience events (`candidate-*`, `new-skill-discovered`, `skill-removed`, `skill-renamed-suggested`, `source-health-changed`) only to current curators; entry events only if the caller can read the entry's release. Events are deduplicated by semantic key (one item per retry). `unreadCount` counts only authorized items in the newest 200 events. No email or external channel.
 
+Team Libraries sharing a lineage retain independent audiences and adoption pins. If one Library imports a revision before another checks, the later check can emit `candidate-ready` for the second Library's skill entry with `candidateId: null` and the existing registry version. It creates no duplicate candidate or release. The second Library can inspect and adopt the authorized release independently.
+
 ## 5. Enumerations (exported from `@myskills-app/core`)
 
 - `librarySourceRefKinds = ["default-branch", "branch", "tag", "commit", "latest-release", "tag-prefix"]`
@@ -422,15 +429,15 @@ Core types: `LibraryOwnerReference`, `LibrarySummary`, `LibraryEntry`, `LibraryE
 |---|---|
 | 400 | `INVALID_REQUEST_BODY` (also wrong entry kind for an action), `INVALID_PAGE_CURSOR`, `INVALID_SKILL_SLUG`, `SOURCE_URL_UNSUPPORTED`, `SOURCE_REF_INVALID`, `IMPORT_RELEASE_METADATA_REQUIRED`, `INVALID_RELEASE_METADATA`, `LIBRARY_PREVIEW_SELECTION_INVALID` |
 | 401 | `AUTHENTICATION_REQUIRED` |
-| 403 | `API_TOKEN_SCOPE_REQUIRED`, `SESSION_AUTH_REQUIRED`, `MFA_VERIFICATION_REQUIRED`, `ADMIN_ROLE_REQUIRED`, `TEAM_OWNER_REQUIRED` (team library create), `LIBRARY_WRITE_FORBIDDEN` (reader of a readable library), `SUBMISSION_ROLE_REQUIRED`, `REVIEW_ROLE_REQUIRED`, `PRIVATE_SELF_REVIEW_DISABLED`, `SOURCE_ACCESS_LOST` (repository not publicly readable) |
+| 403 | `API_TOKEN_SCOPE_REQUIRED`, `SESSION_AUTH_REQUIRED`, `MFA_VERIFICATION_REQUIRED`, `ADMIN_ROLE_REQUIRED`, `TEAM_OWNER_REQUIRED` (team library create), `TEAM_GRANT_REQUIRED` (later team-visible import without its owning-team grant), `LIBRARY_WRITE_FORBIDDEN` (reader of a readable library), `SUBMISSION_ROLE_REQUIRED`, `REVIEW_ROLE_REQUIRED`, `PRIVATE_SELF_REVIEW_DISABLED`, `SOURCE_ACCESS_LOST` (repository not publicly readable) |
 | 404 | `LIBRARY_NOT_FOUND`, `LIBRARY_ENTRY_NOT_FOUND`, `LIBRARY_CANDIDATE_NOT_FOUND`, `LIBRARY_BINDING_NOT_FOUND`, `SKILL_NOT_FOUND`, `SUBMISSION_NOT_FOUND`, `SOURCE_UNAVAILABLE`, `SOURCE_REF_NOT_FOUND`, `SNAPSHOT_NOT_FOUND` |
-| 409 | `LIBRARY_REVISION_CONFLICT`, `CLIENT_MUTATION_ID_CONFLICT`, `LIBRARY_ENTRY_DUPLICATE`, `LIBRARY_TRACKING_UNSUPPORTED`, `SOURCE_CHECK_IN_PROGRESS`, `SOURCE_IDENTITY_CHANGED`, `IDENTITY_ACKNOWLEDGEMENT_NOT_APPLICABLE`, `ORDER_ACKNOWLEDGEMENT_NOT_APPLICABLE`, `SOURCE_REDIRECT_REJECTED`, `PREVIEW_EXPIRED`, `PREVIEW_DIGEST_MISMATCH`, `CANDIDATE_NOT_IMPORTABLE`, `CANDIDATE_SUPERSEDED`, `CANDIDATE_ORDER_UNVERIFIED`, `SLUG_CONFLICT`, `PACKAGE_SLUG_UNAVAILABLE`, `PACKAGE_VISIBILITY_MISMATCH`, `PACKAGE_VERSION_EXISTS`, `PRIVATE_SELF_REVIEW_SCOPE_INVALID`, `PRIVATE_SELF_REVIEW_SCAN_NOT_CLEAN`, `SELF_REVIEW_ELEVATION_NOT_APPLICABLE`, `SUBMISSION_NOT_REVIEWABLE`, `ARTIFACT_HASH_MISMATCH`, `SELF_REVIEWED_RELEASE_REQUIRES_INSTANCE_REVIEW`, `LIBRARY_ADOPTION_CONFLICT`, `BINDING_VERSION_CONFLICT`, `TARGET_OPERATION_LIBRARY_ADOPTION_MISMATCH`, `TARGET_OPERATION_LIBRARY_CURATION_UNAVAILABLE`, `TARGET_OPERATION_POLICY_CHANGED` |
+| 409 | `LIBRARY_REVISION_CONFLICT`, `CLIENT_MUTATION_ID_CONFLICT`, `LIBRARY_ENTRY_DUPLICATE`, `LIBRARY_SELF_REVIEW_UNSUPPORTED`, `SOURCE_CHECK_IN_PROGRESS`, `SOURCE_IDENTITY_CHANGED`, `IDENTITY_ACKNOWLEDGEMENT_NOT_APPLICABLE`, `ORDER_ACKNOWLEDGEMENT_NOT_APPLICABLE`, `SOURCE_REDIRECT_REJECTED`, `PREVIEW_EXPIRED`, `PREVIEW_DIGEST_MISMATCH`, `CANDIDATE_NOT_IMPORTABLE`, `CANDIDATE_SUPERSEDED`, `CANDIDATE_ORDER_UNVERIFIED`, `SLUG_CONFLICT`, `PACKAGE_SLUG_UNAVAILABLE`, `PACKAGE_VISIBILITY_MISMATCH`, `PACKAGE_VERSION_EXISTS`, `PRIVATE_SELF_REVIEW_SCOPE_INVALID`, `PRIVATE_SELF_REVIEW_SCAN_NOT_CLEAN`, `SELF_REVIEW_ELEVATION_NOT_APPLICABLE`, `SUBMISSION_NOT_REVIEWABLE`, `ARTIFACT_HASH_MISMATCH`, `SELF_REVIEWED_RELEASE_REQUIRES_INSTANCE_REVIEW`, `LIBRARY_ADOPTION_CONFLICT`, `BINDING_VERSION_CONFLICT`, `TARGET_OPERATION_LIBRARY_ADOPTION_MISMATCH`, `TARGET_OPERATION_LIBRARY_CURATION_UNAVAILABLE`, `TARGET_OPERATION_POLICY_CHANGED` |
 | 413/422 | `LIBRARY_LIMIT_EXCEEDED` (422), `LIBRARY_RELEASE_NOT_ADOPTABLE`, `LIBRARY_RELEASE_NOT_AUTHORIZED`, `INVENTORY_INCOMPLETE`, `PACKAGE_SCAN_BLOCKED`, `PACKAGE_MANIFEST_MISMATCH`, `SOURCE_RESPONSE_TOO_LARGE` |
 | 429/503 | `LIBRARY_SOURCE_RATE_LIMITED` (429, per-user source request limit, `retry-after` header and `details.retryAfterSeconds`), `SOURCE_RATE_LIMITED` (429, `details.retryAfterSeconds` or `details.rateLimitResetEpochSeconds`), `SOURCE_TIMEOUT` (503), `SOURCE_PROVIDER_UNAVAILABLE` (503), `SOURCE_INTEGRITY_MISMATCH` (503, fetched bytes did not match the Git blob SHA), `PRIVATE_SELF_REVIEW_UNAVAILABLE` (503, non-Postgres store), `LIBRARY_SERVICE_UNAVAILABLE` (503) |
 
 A manual check that reaches the provider but fails returns `200` with `check.outcome: "failed"`, `check.health` and `check.errorCode` (for example `rate-limited`, `unavailable`, `access-lost`, `inventory-incomplete`, `source-identity-changed`); tracking health and `nextCheckAt` are persisted the same way as scheduled checks. `errorCode: "lease-lost"` means another worker took over the check. Nothing was written after the lease was lost, and the check did not change health, schedule or last good snapshot. Snapshots, events and candidates committed while the check still held the lease remain (§4.3).
 
-`POST /v1/submissions` now rejects client-supplied `provenance`, `sourceImport`, `lineageId`, `attestation`, `selfReview` fields (`400 UNSUPPORTED_SUBMISSION_FIELD`). Existing ordinary submissions to a skill whose owner is `null` (orphaned) now return `409 PACKAGE_SLUG_UNAVAILABLE` instead of assigning ownership.
+`POST /v1/submissions` now rejects client-supplied `provenance`, `sourceImport`, `lineageId`, `attestation`, `selfReview`, `owner`, and `ownerTeamId` fields (`400 UNSUPPORTED_SUBMISSION_FIELD`). Existing ordinary submissions to an orphaned skill now return `409 PACKAGE_SLUG_UNAVAILABLE` instead of assigning ownership.
 
 ## 7. Capabilities
 

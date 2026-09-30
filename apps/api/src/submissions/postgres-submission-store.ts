@@ -1,3 +1,4 @@
+import { assertCurrentTeamOwner, effectiveTeamOwnerPredicate, isCurrentTeamOwner } from "../repositories/team-ownership.js";
 import type { ChronologicalStoreQuery } from "../repositories/chronological-pagination.js";
 import { and, eq, ilike, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { AppError, type SharingSettings, type SkillLifecycleStatus } from "@myskills-app/core";
@@ -7,7 +8,7 @@ import {
 } from "@myskills-app/skill-package";
 import { assertArtifactBodyMatchesMetadata, parseArtifactPayload, readArtifactPayload } from "../artifacts/package-payload.js";
 import { sanitizeAuditDetails, sanitizeAuditValue } from "../audit/sanitize.js";
-import type { Database } from "../db/client.js";
+import type { Database, DatabaseTransaction } from "../db/client.js";
 import type { ArtifactObjectStorage } from "../artifacts/storage.js";
 import { ArtifactStorageTimeoutError } from "../artifacts/storage.js";
 import {
@@ -108,7 +109,13 @@ export class PostgresSubmissionStore implements SubmissionStore {
         await tx.update(artifactWriteIntents).set({ state: "object_written", updatedAt: new Date() })
           .where(eq(artifactWriteIntents.storageKey, input.artifact.storageKey));
       }
+      // Match sharing/adoption lock order before the skill and team authority locks.
+      await tx.execute(sql`SELECT key FROM instance_settings WHERE key = 'sharing' FOR SHARE`);
       const sharing = await getSharingSettings(tx);
+      const owner = input.importBinding?.owner ?? { type: "user" as const, id: input.actor.id };
+      if (owner.type === "user" && owner.id !== input.actor.id) {
+        throw new AppError("Package slug is unavailable.", "PACKAGE_SLUG_UNAVAILABLE", 409);
+      }
       if (input.manifest.visibility === "organization" && !sharing.organizationVisibilityEnabled) {
         throw new AppError("Organization sharing is disabled for this instance.", "ORGANIZATION_SHARING_DISABLED", 403);
       }
@@ -118,11 +125,26 @@ export class PostgresSubmissionStore implements SubmissionStore {
         .select()
         .from(skills)
         .where(eq(skills.slug, input.manifest.name))
+        .for("update")
         .limit(1);
 
       // A null owner is an orphaned lineage, not an unclaimed slug. Never infer
       // ownership from a matching name; a new revision needs the current owner.
-      if (existingSkill && existingSkill.ownerUserId !== input.actor.id) {
+      if (owner.type === "team") {
+        await assertCurrentTeamOwner(tx, owner.id, input.actor.id);
+        assertTeamMutationMfa(input.actor);
+        if (!existingSkill && input.manifest.visibility !== "team") {
+          throw new AppError("Initial team imports require team visibility.", "PACKAGE_VISIBILITY_MISMATCH", 409);
+        }
+        const author = await tx.execute(sql`SELECT id FROM role_assignments
+          WHERE user_id = ${input.actor.id}::uuid AND scope_type = 'instance'
+            AND scope_id = '00000000-0000-0000-0000-000000000000'::uuid
+            AND role IN ('author', 'maintainer', 'admin', 'owner') LIMIT 1`);
+        if (!author.rows.length) throw new AppError("Submission requires author permissions.", "SUBMISSION_ROLE_REQUIRED", 403);
+      }
+      if (existingSkill && (owner.type === "team"
+        ? existingSkill.ownerTeamId !== owner.id || existingSkill.ownerUserId !== null
+        : existingSkill.ownerUserId !== owner.id || existingSkill.ownerTeamId !== null)) {
         throw new AppError("Package slug is unavailable.", "PACKAGE_SLUG_UNAVAILABLE", 409);
       }
 
@@ -130,9 +152,16 @@ export class PostgresSubmissionStore implements SubmissionStore {
         throw new AppError("Package visibility must match the skill's current sharing setting.", "PACKAGE_VISIBILITY_MISMATCH", 409);
       }
 
+      if (owner.type === "team" && existingSkill?.visibility === "team") {
+        const [grant] = await tx.select({ skillId: skillTeamGrants.skillId }).from(skillTeamGrants)
+          .where(and(eq(skillTeamGrants.skillId, existingSkill.id), eq(skillTeamGrants.teamId, owner.id))).for("share").limit(1);
+        if (!grant) throw new AppError("Restore the owning team's release grant before importing another version.", "TEAM_GRANT_REQUIRED", 403);
+      }
+
       await input.importBinding?.beforeVersionInsert(tx, {
         skillId: existingSkill?.id ?? null,
         skillOwnerUserId: existingSkill?.ownerUserId ?? null,
+        skillOwnerTeamId: existingSkill?.ownerTeamId ?? null,
       });
 
       const skill = existingSkill ?? (await tx
@@ -143,7 +172,8 @@ export class PostgresSubmissionStore implements SubmissionStore {
           summary: input.manifest.summary,
           lifecycleStatus: "submitted",
           visibility: input.manifest.visibility,
-          ownerUserId: input.actor.id,
+          ownerUserId: owner.type === "user" ? owner.id : null,
+          ownerTeamId: owner.type === "team" ? owner.id : null,
         })
         .returning())[0];
 
@@ -157,9 +187,12 @@ export class PostgresSubmissionStore implements SubmissionStore {
           title: nextLifecycle === "approved" ? existingSkill.title : input.manifest.title,
           summary: nextLifecycle === "approved" ? existingSkill.summary : input.manifest.summary,
           lifecycleStatus: nextLifecycle,
-          ownerUserId: existingSkill.ownerUserId ?? input.actor.id,
           updatedAt: new Date(),
         }).where(eq(skills.id, skill.id));
+      }
+
+      if (owner.type === "team" && !existingSkill) {
+        await tx.insert(skillTeamGrants).values({ skillId: skill.id, teamId: owner.id }).onConflictDoNothing();
       }
 
       const [existingVersion] = await tx
@@ -246,6 +279,8 @@ export class PostgresSubmissionStore implements SubmissionStore {
           fileCount: input.files.length,
           findingCount: input.findings.length,
           securityStatus: input.securityStatus,
+          ownerUserId: skill.ownerUserId,
+          ownerTeamId: skill.ownerTeamId,
         },
       });
 
@@ -276,7 +311,8 @@ export class PostgresSubmissionStore implements SubmissionStore {
         securityStatus: version.securityStatus,
         approvedArtifactSha256: version.approvedArtifactSha256,
         publishedAt: version.publishedAt?.toISOString() ?? null,
-        ownerUserId: input.actor.id,
+        ownerUserId: skill.ownerUserId,
+        ownerTeamId: skill.ownerTeamId,
         createdAt: version.createdAt.toISOString(),
         release: input.release,
         artifact: input.artifact,
@@ -334,7 +370,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
     return {
       ...userSubmissionSummary(row),
       ...await selectSubmissionFeedback(this.db, row.id, row.reviewStatus, row.lifecycleReason),
-      correction: { requiresNewVersion: true, canSubmitNewVersion: true },
+      correction: { requiresNewVersion: true, canSubmitNewVersion: row.ownerTeamId === null },
     };
   }
 
@@ -383,7 +419,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
     };
   }
 
-  async performSubmissionOwnerAction(input: { actorId: string; submissionId: string; action: SubmissionOwnerAction; reason?: string }): Promise<UserSubmissionSummary> {
+  async performSubmissionOwnerAction(input: { actorId: string; mfaVerified?: boolean; submissionId: string; action: SubmissionOwnerAction; reason?: string }): Promise<UserSubmissionSummary> {
     if (input.action !== "withdraw") {
       throw new AppError("Unsupported submission action.", "INVALID_SUBMISSION_ACTION", 400);
     }
@@ -398,7 +434,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
       actorId: input.actorId,
       submissionId: input.submissionId,
     }, async (tx) => {
-      const row = await selectUserSubmissionStateForUpdate(tx, input.actorId, input.submissionId);
+      const row = await selectUserSubmissionStateForUpdate(tx, input.actorId, input.submissionId, input.mfaVerified);
       if (!row) {
         await this.insertReviewAudit("submission.withdraw", "deny", input.actorId, input.submissionId, {
           reason: "not_owner_or_missing",
@@ -892,7 +928,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
     if (!skill) {
       return null;
     }
-    assertCanManageSkill(skill, input.actor);
+    await assertCanManageSkill(this.db, skill, input.actor);
     return skillManagementSummary(this.db, skill);
   }
 
@@ -908,7 +944,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
       visibility: skills.visibility,
       tags: sql<string[]>`array(select ${skillTags.tag} from ${skillTags} where ${skillTags.skillId} = ${skills.id} order by ${skillTags.tag})`,
     }).from(skills).where(and(
-      privileged ? undefined : eq(skills.ownerUserId, input.actor.id),
+      privileged ? undefined : skillOwnerPredicate(input.actor.id),
       input.afterSlug ? sql`${skills.slug} collate "C" > ${input.afterSlug}` : undefined,
       query ? or(ilike(skills.slug, pattern), ilike(skills.title, pattern), ilike(skills.summary, pattern)) : undefined,
     )).orderBy(sql`${skills.slug} collate "C"`).limit(input.limit ?? 50);
@@ -918,11 +954,11 @@ export class PostgresSubmissionStore implements SubmissionStore {
   async updateSkillMetadata(input: { slug: string; actor: SubmissionActor; update: SkillMetadataUpdate; reason?: string }): Promise<SkillManagementSummary> {
     assertNoVisibilityMetadataUpdate(input.update);
     return this.db.transaction(async (tx) => {
-      const skill = await findSkillForManagement(tx, input.slug);
+      const skill = await findSkillForManagement(tx, input.slug, true);
       if (!skill) {
         throw new AppError("Skill not found.", "SKILL_NOT_FOUND", 404);
       }
-      assertCanManageSkill(skill, input.actor);
+      await assertCanManageSkill(tx, skill, input.actor, true);
       const update: Partial<typeof skills.$inferInsert> = { updatedAt: new Date() };
       if (input.update.title !== undefined) {
         update.title = input.update.title;
@@ -952,7 +988,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
           reason: input.reason,
         }),
       });
-      const updatedSkill = await findSkillForManagement(tx, input.slug);
+      const updatedSkill = await findSkillForManagement(tx, input.slug, true);
       if (!updatedSkill) {
         throw new Error("Skill metadata update failed.");
       }
@@ -962,11 +998,11 @@ export class PostgresSubmissionStore implements SubmissionStore {
 
   async performSkillAction(input: { slug: string; actor: SubmissionActor; action: SkillLifecycleAction; reason?: string }): Promise<SkillManagementSummary> {
     return this.db.transaction(async (tx) => {
-      const skill = await findSkillForManagement(tx, input.slug);
+      const skill = await findSkillForManagement(tx, input.slug, true);
       if (!skill) {
         throw new AppError("Skill not found.", "SKILL_NOT_FOUND", 404);
       }
-      assertCanManageSkill(skill, input.actor);
+      await assertCanManageSkill(tx, skill, input.actor, true);
       const lifecycleStatus = input.action === "restore"
         ? await restoredSkillLifecycle(tx, skill.id)
         : "archived";
@@ -986,7 +1022,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
           reason: input.reason,
         }),
       });
-      const updatedSkill = await findSkillForManagement(tx, input.slug);
+      const updatedSkill = await findSkillForManagement(tx, input.slug, true);
       if (!updatedSkill) {
         throw new Error("Skill lifecycle update failed.");
       }
@@ -1000,7 +1036,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
       return [];
     }
     const sharing = await getSharingSettings(this.db);
-    const canManage = Boolean(input.actor && canManageSkill(skill, input.actor));
+    const canManage = Boolean(input.actor && await canManageSkill(this.db, skill, input.actor));
     const rows = await selectSkillReleaseRows(this.db, {
       slug: input.slug,
       where: canManage
@@ -1034,11 +1070,11 @@ export class PostgresSubmissionStore implements SubmissionStore {
       actorId: input.actor.id,
       details: { slug: input.slug, version: input.version },
     }, async (tx) => {
-      const skill = await findSkillForManagement(tx, input.slug);
+      const skill = await findSkillForManagement(tx, input.slug, true);
       if (!skill) {
         throw new AppError("Release not found.", "RELEASE_NOT_FOUND", 404);
       }
-      assertCanManageSkill(skill, input.actor);
+      await assertCanManageSkill(tx, skill, input.actor, true);
       const row = await selectSkillReleaseActionStateForUpdate(tx, input);
       if (!row) {
         throw new AppError("Release not found.", "RELEASE_NOT_FOUND", 404);
@@ -1726,8 +1762,9 @@ function artifactPayloadJsonForRevalidation(input: unknown): string {
   return json;
 }
 
-async function findSkillForManagement(db: DbLike, slug: string) {
-  const [skill] = await db
+async function findSkillForManagement(db: DbLike, slug: string, lock = false) {
+  if (lock) await db.execute(sql`SELECT key FROM instance_settings WHERE key = 'sharing' FOR SHARE`);
+  const query = db
     .select({
       id: skills.id,
       slug: skills.slug,
@@ -1736,21 +1773,42 @@ async function findSkillForManagement(db: DbLike, slug: string) {
       lifecycleStatus: skills.lifecycleStatus,
       visibility: skills.visibility,
       ownerUserId: skills.ownerUserId,
+      ownerTeamId: skills.ownerTeamId,
     })
     .from(skills)
     .where(eq(skills.slug, slug))
     .limit(1);
+  const [skill] = await (lock ? query.for("update") : query);
   return skill ?? null;
 }
 
-function canManageSkill(skill: { ownerUserId: string | null }, actor: SubmissionActor): boolean {
-  return skill.ownerUserId === actor.id || actor.roles.some((role) => role === "owner" || role === "admin" || role === "maintainer");
+function skillOwnerPredicate(actorId: string): SQL | undefined {
+  return or(sql`coalesce(${skills.ownerUserId} = ${actorId}::uuid, false)`, effectiveTeamOwnerPredicate(sql`${skills.ownerTeamId}`, actorId));
 }
 
-function assertCanManageSkill(skill: { ownerUserId: string | null }, actor: SubmissionActor): void {
-  if (!canManageSkill(skill, actor)) {
+async function canManageSkill(db: DbLike, skill: { ownerUserId: string | null; ownerTeamId: string | null }, actor: SubmissionActor): Promise<boolean> {
+  return skill.ownerUserId === actor.id
+    || actor.roles.some((role) => role === "owner" || role === "admin" || role === "maintainer")
+    || Boolean(skill.ownerTeamId && await isCurrentTeamOwner(db, skill.ownerTeamId, actor.id));
+}
+
+async function assertCanManageSkill(db: DbLike, skill: { ownerUserId: string | null; ownerTeamId: string | null }, actor: SubmissionActor, lock = false): Promise<void> {
+  if (skill.ownerUserId === actor.id || actor.roles.some((role) => role === "owner" || role === "admin" || role === "maintainer")) {
+    if (lock && skill.ownerTeamId) assertTeamMutationMfa(actor);
+    return;
+  }
+  if (skill.ownerTeamId && lock) {
+    await assertCurrentTeamOwner(db as DatabaseTransaction, skill.ownerTeamId, actor.id);
+    assertTeamMutationMfa(actor);
+    return;
+  }
+  if (!await canManageSkill(db, skill, actor)) {
     throw new AppError("Skill management requires owner or maintainer permissions.", "SKILL_MANAGEMENT_ROLE_REQUIRED", 403);
   }
+}
+
+function assertTeamMutationMfa(actor: { mfaVerified?: boolean }): void {
+  if (actor.mfaVerified !== true) throw new AppError("MFA verification is required.", "MFA_VERIFICATION_REQUIRED", 403);
 }
 
 async function skillManagementSummary(db: DbLike, skill: ManagedSkillRow): Promise<SkillManagementSummary> {
@@ -1804,11 +1862,12 @@ async function restoredSkillLifecycle(db: DbLike, skillId: string): Promise<Skil
 
 async function selectUserSubmissions(db: DbLike, userId: string, submissionId?: string) {
   const where = submissionId
-    ? and(eq(skills.ownerUserId, userId), eq(skillVersions.id, submissionId))
-    : eq(skills.ownerUserId, userId);
+    ? and(skillOwnerPredicate(userId), eq(skillVersions.id, submissionId))
+    : skillOwnerPredicate(userId);
   return db
     .select({
       id: skillVersions.id,
+      ownerTeamId: skills.ownerTeamId,
       slug: skills.slug,
       title: skills.title,
       summary: skills.summary,
@@ -1848,6 +1907,7 @@ async function selectUserSubmissions(db: DbLike, userId: string, submissionId?: 
     .where(where)
     .groupBy(
       skillVersions.id,
+      skills.ownerTeamId,
       skills.slug,
       skills.title,
       skills.summary,
@@ -1868,7 +1928,15 @@ async function selectUserSubmissions(db: DbLike, userId: string, submissionId?: 
     .limit(submissionId ? 1 : 100);
 }
 
-async function selectUserSubmissionStateForUpdate(db: DbLike, userId: string, submissionId: string) {
+async function selectUserSubmissionStateForUpdate(db: DbLike, userId: string, submissionId: string, mfaVerified?: boolean) {
+  await db.execute(sql`SELECT key FROM instance_settings WHERE key = 'sharing' FOR SHARE`);
+  const [owner] = await db.select({ teamId: skills.ownerTeamId }).from(skills)
+    .innerJoin(skillVersions, eq(skillVersions.skillId, skills.id))
+    .where(and(eq(skillVersions.id, submissionId), skillOwnerPredicate(userId))).for("update", { of: skills }).limit(1);
+  if (owner?.teamId) {
+    await assertCurrentTeamOwner(db as DatabaseTransaction, owner.teamId, userId);
+    assertTeamMutationMfa({ mfaVerified });
+  }
   const [row] = await db
     .select({
       id: skillVersions.id,
@@ -1881,7 +1949,7 @@ async function selectUserSubmissionStateForUpdate(db: DbLike, userId: string, su
     })
     .from(skillVersions)
     .innerJoin(skills, eq(skillVersions.skillId, skills.id))
-    .where(and(eq(skills.ownerUserId, userId), eq(skillVersions.id, submissionId)))
+    .where(and(skillOwnerPredicate(userId), eq(skillVersions.id, submissionId)))
     .for("update", { of: skillVersions })
     .limit(1);
   return row ?? null;
@@ -1940,6 +2008,7 @@ async function selectSubmissionFeedback(
 
 function userSubmissionSummary(row: UserSubmissionRow): UserSubmissionSummary {
   return {
+    ...(row.ownerTeamId ? { owner: { type: "team" as const, id: row.ownerTeamId } } : {}),
     id: row.id,
     slug: row.slug,
     title: row.title,
@@ -2308,7 +2377,14 @@ async function selectVersionForReview(db: DbLike, submissionId: string) {
   return row ?? null;
 }
 
+async function lockSubmissionSkill(db: DbLike, submissionId: string): Promise<void> {
+  await db.select({ id: skills.id }).from(skills)
+    .innerJoin(skillVersions, eq(skillVersions.skillId, skills.id))
+    .where(eq(skillVersions.id, submissionId)).for("update", { of: skills });
+}
+
 async function selectVersionForReviewState(db: DbLike, submissionId: string): Promise<ReviewStateRow | null> {
+  await lockSubmissionSkill(db, submissionId);
   const [row] = await db
     .select({
       slug: skills.slug,
@@ -2332,6 +2408,7 @@ async function selectVersionForReviewRevalidation(
   submissionId: string,
   preparedArtifactPayloadJson: string,
 ): Promise<PublishableReviewRow | null> {
+  await lockSubmissionSkill(db, submissionId);
   const [row] = await db
     .select({
       skillId: skills.id,

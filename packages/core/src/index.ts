@@ -44,6 +44,7 @@ export interface SkillSearchFilters {
 export interface SkillSharingActor {
   id: string;
   roles: string[];
+  mfaVerified?: boolean;
 }
 
 export interface SharingSettings {

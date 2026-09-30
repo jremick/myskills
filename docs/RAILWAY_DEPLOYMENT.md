@@ -1,13 +1,37 @@
 # Railway Deployment
 
-Version: 0.1.0-beta.15
-Last updated: 2026-09-28
+Version: 0.1.0-beta.17
+Last updated: 2026-09-29
 
 This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.
-The current beta.15 delivery is tracked in [Beta.15 Release Delivery](BETA15_RELEASE_DELIVERY.md).
+The current beta.16 delivery is tracked in [Beta.16 Release Delivery](BETA16_RELEASE_DELIVERY.md).
 The historical operational beta evidence remains in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
 
-## Current beta.15 deployment
+## Current beta.16 deployment
+
+On 29 September 2026, staging and production were promoted from frozen source
+`acfb7c8c7f8bc560f6fdba13cf0414033ab6d00e` in API-ready-then-web order.
+Later GitHub authentication and team Library changes on main are excluded.
+
+| Environment | API deployment | Web deployment |
+| --- | --- | --- |
+| Staging | `70461dc1-e6b7-4146-9633-07bc5ccdb73f` | `88d64e2b-ad6e-403a-a38c-5998dfc4b7d1` |
+| Production | `96e7dc80-b1c4-43ad-a9c1-6d8465f55b30` | `ca6d4399-0cae-4f72-af9e-943ef43ebfc5` |
+
+All four report SUCCESS, beta.16, and the frozen source revision. Each environment
+passed 21 HTTP checks. Production CLI doctor passed nine checks with the existing
+MFA-verified Keychain session. Desktop browser acceptance preserved owner/MFA
+authentication and verified inventory details, setup commands, and an existing
+private exact-release package preview. The production log sample contained
+73 API and 80 web lines, including 54 nginx notices, with zero application fault matches.
+
+The completed recovery point from `2026-09-28T16:02:16.488Z` passed the 26-hour
+freshness policy. No restore is claimed. Retain forward migration
+`0034_observation_slug_privacy` and applied history; use a tested forward fix.
+The beta.15 deployment pair below remains a historical recovery reference,
+not verified downgrade compatibility with the migrated schema.
+
+## Historical beta.15 deployment
 
 On 28 September 2026, staging and production were promoted from
 `0415a160b56dac79900a698c8d378e7083ecd194` in API-ready-then-web order.
@@ -483,11 +507,11 @@ curl --doh-url https://cloudflare-dns.com/dns-query https://api.myskills.sh/read
 
 The current live project is intentionally manual but can be made easier without changing hosting providers:
 
-1. Keep feature work on a branch and require GitHub CI to pass.
-2. Merge or fast-forward the Railway-connected branch after the rendered checks pass. Verify required CI for the exact merged source before promotion, and capture a current database-and-artifact recovery point.
+1. Keep feature work on a branch and require the protected checks (`local-ci/check`, `local-ci/web-e2e` and `local-ci/postgres-integration` after cutover) to pass; see [Local CI](LOCAL_CI.md).
+2. Merge or fast-forward the Railway-connected branch after the rendered checks pass. Verify the required checks for the exact merged source before promotion, and capture a current database-and-artifact recovery point.
 3. When changing artifact publication or cleanup coordination, remove incompatible API writers and cleanup workers before starting the replacement. For Libraries beta.8, drain beta.7 API instances and workers before accepting library writes; older code does not enforce private-attestation and library-binding guards. Follow the [Libraries rollback boundary](RELEASE.md#libraries-beta8-compatibility-boundary). Account for the resulting API interruption in the rollout plan.
 4. Deploy `api` from the approved commit and wait for Railway success and direct `/ready` before uploading `web` from the same commit. The web proxy must start after the healthy API so it does not retain an address for a retiring private instance.
 5. Compare direct API, web, and proxy `/version.json` with the approved source. Verify web health and same-origin `/api/health` and `/api/ready`.
 6. Complete staging's real browser/CLI journey before production. After production promotion, verify HTML revalidation in an existing browser cache, existing-session auth, authorized private package delivery, anonymous denial, rendered package text and navigation, and recent logs. Use a fresh context for anonymous checks and preserve existing user sessions during verification. Use read requests for production checks; package access still writes its normal audit events.
 
-The release workflow is intentionally verification-only and does not deploy Railway. Follow the staging, production approval, and rollback boundary in [Release Process](RELEASE.md). Any future deploy automation must use scoped project credentials, preserve a separate staging/user-test step, require explicit production approval, deploy API and web from the same commit in API-ready-then-web order, and report resulting deployment IDs plus direct and same-origin health/browser readback.
+Release verification (`scripts/local-ci.sh release-check`, and the tag workflow while it remains) is intentionally verification-only and does not deploy Railway. Follow the staging, production approval, and rollback boundary in [Release Process](RELEASE.md). Any future deploy automation must use scoped project credentials, preserve a separate staging/user-test step, require explicit production approval, deploy API and web from the same commit in API-ready-then-web order, and report resulting deployment IDs plus direct and same-origin health/browser readback.

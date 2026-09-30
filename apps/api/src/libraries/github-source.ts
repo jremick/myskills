@@ -3,7 +3,7 @@ import { AppError, compareSemanticVersions, parseSemanticVersion, type LibrarySo
 
 /**
  * Public GitHub read adapter. It talks only to two fixed hosts, never sends
- * credentials, never follows redirects and bounds every body and request.
+ * credentials to the raw-content host, never follows redirects and bounds every body and request.
  * Tests inject a deterministic transport through the constructor; production
  * wiring in server.ts always uses the fetch transport.
  */
@@ -39,6 +39,28 @@ export interface SourceHttpTransport {
 export interface SourceRequestContext {
   /** Epoch milliseconds (wall clock) after which no further provider request starts. */
   deadline: number;
+  /** The source owner, including for worker checks. Never taken from provider input. */
+  userId?: string;
+}
+
+export interface SourceCredential {
+  key: string;
+  kind: "anonymous" | "user" | "installation";
+  token?: string;
+  userId?: string;
+  generation?: number;
+}
+
+export interface SourceCredentials {
+  resolve(userId?: string): Promise<SourceCredential>;
+  /** Local metadata only: reading status must not mint a token or call GitHub. */
+  credentialKey(userId?: string): Promise<string>;
+  markInvalid?(credential: SourceCredential): Promise<void>;
+}
+
+export interface SourceCooldownStore {
+  get(key: string): Promise<Date | null>;
+  extend(key: string, until: Date): Promise<void>;
 }
 
 export interface GithubRepositoryInfo {
@@ -77,6 +99,7 @@ export interface SourceTree {
 export type SourceCommitOrder = "ahead" | "identical" | "behind" | "diverged" | "unknown";
 
 export interface UpstreamSourceProvider {
+  retryAvailableAt?(userId?: string): Promise<Date | null>;
   getRepositoryByName(owner: string, repo: string, context: SourceRequestContext): Promise<GithubRepositoryInfo>;
   getRepositoryById(id: string, context: SourceRequestContext): Promise<GithubRepositoryInfo>;
   resolveRef(repository: GithubRepositoryInfo, ref: LibrarySourceRef, context: SourceRequestContext): Promise<ResolvedSourceRef>;
@@ -145,10 +168,24 @@ const REF_NAME_PATTERN = /^[A-Za-z0-9._/-]{1,255}$/;
 export class PublicGithubSourceProvider implements UpstreamSourceProvider {
   private readonly transport: SourceHttpTransport;
   private readonly requestTimeoutMs: number;
+  private readonly credentials?: SourceCredentials;
+  private readonly cooldowns?: SourceCooldownStore;
+  private readonly clock: () => Date;
 
-  constructor(options: { transport?: SourceHttpTransport; requestTimeoutMs?: number } = {}) {
+  constructor(options: { transport?: SourceHttpTransport; requestTimeoutMs?: number; credentials?: SourceCredentials; cooldowns?: SourceCooldownStore; now?: () => Date } = {}) {
     this.transport = options.transport ?? createFetchSourceTransport();
     this.requestTimeoutMs = Math.min(Math.max(options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS, 1_000), 30_000);
+    this.credentials = options.credentials;
+    this.cooldowns = options.cooldowns;
+    this.clock = options.now ?? (() => new Date());
+  }
+
+  async retryAvailableAt(userId?: string): Promise<Date | null> {
+    if (!this.cooldowns) return null;
+    const key = await this.credentials?.credentialKey(userId) ?? "github:anonymous";
+    const times = await Promise.all([this.cooldowns.get(key), this.cooldowns.get("github:raw")]);
+    const latest = Math.max(0, ...times.map((value) => value?.getTime() ?? 0));
+    return latest > this.clock().getTime() ? new Date(latest) : null;
   }
 
   async getRepositoryByName(owner: string, repo: string, context: SourceRequestContext): Promise<GithubRepositoryInfo> {
@@ -292,7 +329,7 @@ export class PublicGithubSourceProvider implements UpstreamSourceProvider {
       const status = record(await this.json(url, context, COMPARE_BODY_LIMIT)).status;
       return status === "ahead" || status === "identical" || status === "behind" || status === "diverged" ? status : "unknown";
     } catch (error) {
-      if (error instanceof AppError && error.code === "SOURCE_RATE_LIMITED") throw error;
+      if (error instanceof AppError && (error.code === "SOURCE_RATE_LIMITED" || error.code === "SOURCE_AUTH_REQUIRED" || error.code.startsWith("GITHUB_"))) throw error;
       return "unknown";
     }
   }
@@ -329,6 +366,17 @@ export class PublicGithubSourceProvider implements UpstreamSourceProvider {
     if (url.protocol !== "https:" || !ALLOWED_HOSTS.has(url.host) || url.username || url.password || url.port) {
       throw sourceError("SOURCE_URL_UNSUPPORTED", "Source requests are limited to fixed GitHub hosts.", 400);
     }
+    const apiRequest = url.origin === GITHUB_API_ORIGIN;
+    // Check the shared budget before a credential refresh or provider request.
+    const key = apiRequest ? await this.credentials?.credentialKey(context.userId) ?? "github:anonymous" : "github:raw";
+    const cooldown = await this.cooldowns?.get(key);
+    if (cooldown && cooldown.getTime() > this.clock().getTime()) throw this.rateLimitError(cooldown);
+    const credential = apiRequest ? await this.credentials?.resolve(context.userId) : undefined;
+    // Configuration may change between the metadata read and resolution.
+    if (credential && credential.key !== key) {
+      const currentCooldown = await this.cooldowns?.get(credential.key);
+      if (currentCooldown && currentCooldown.getTime() > this.clock().getTime()) throw this.rateLimitError(currentCooldown);
+    }
     const remaining = context.deadline - Date.now();
     if (remaining <= 0) throw sourceError("SOURCE_TIMEOUT", "The source check exceeded its time limit.", 503);
     const controller = new AbortController();
@@ -341,6 +389,7 @@ export class PublicGithubSourceProvider implements UpstreamSourceProvider {
           accept,
           "user-agent": "myskills-library-importer",
           "x-github-api-version": "2022-11-28",
+          ...(apiRequest && credential?.token ? { authorization: `Bearer ${credential.token}` } : {}),
         },
         signal: controller.signal,
         maxBytes,
@@ -359,20 +408,35 @@ export class PublicGithubSourceProvider implements UpstreamSourceProvider {
     if (response.status === 403 || response.status === 429) {
       const reset = Number(response.headers["x-ratelimit-reset"]);
       const retryAfter = Number(response.headers["retry-after"]);
-      const limited = response.status === 429 || response.headers["x-ratelimit-remaining"] === "0" || Number.isFinite(retryAfter);
+      const limited = response.status === 429 || response.headers["x-ratelimit-remaining"] === "0" || Number.isFinite(retryAfter)
+        || /secondary rate limit|rate limit exceeded/i.test(Buffer.from(response.body).toString("utf8"));
       if (limited) {
-        throw sourceError("SOURCE_RATE_LIMITED", "The source provider rate limit was reached.", 429, {
-          ...(Number.isFinite(retryAfter) && retryAfter >= 0 ? { retryAfterSeconds: Math.min(Math.ceil(retryAfter), 86_400) } : {}),
-          ...(Number.isFinite(reset) && reset > 0 ? { rateLimitResetEpochSeconds: Math.floor(reset) } : {}),
-        });
+        const now = this.clock().getTime();
+        const until = new Date(Math.max(now + 1_000,
+          Number.isFinite(reset) && reset > 0 ? Math.floor(reset) * 1000 : 0,
+          Number.isFinite(retryAfter) && retryAfter >= 0 ? now + Math.min(Math.ceil(retryAfter), 86_400) * 1000 : 0,
+          !Number.isFinite(reset) && !Number.isFinite(retryAfter) ? now + 60_000 : 0));
+        await this.cooldowns?.extend(credential?.key ?? key, until);
+        throw this.rateLimitError(until);
       }
       throw sourceError("SOURCE_ACCESS_LOST", "The public source is no longer readable without credentials.", 403);
+    }
+    if (response.status === 401 && credential?.kind !== "anonymous" && credential) {
+      await this.credentials?.markInvalid?.(credential);
+      throw sourceError("SOURCE_AUTH_REQUIRED", "GitHub authentication is no longer valid. Reconnect GitHub or ask an administrator to check the GitHub App.", 401);
     }
     if (response.status === 404 || response.status === 410 || response.status === 451) {
       throw sourceError("SOURCE_UNAVAILABLE", "Source repository or path is unavailable.", 404);
     }
     if (response.status !== 200) throw providerUnavailable();
     return response;
+  }
+
+  private rateLimitError(until: Date): AppError {
+    return sourceError("SOURCE_RATE_LIMITED", "GitHub is rate limited. Wait until the retry time before checking again.", 429, {
+      retryAfterSeconds: Math.max(1, Math.ceil((until.getTime() - this.clock().getTime()) / 1000)),
+      rateLimitResetEpochSeconds: Math.ceil(until.getTime() / 1000),
+    });
   }
 }
 

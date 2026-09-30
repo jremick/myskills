@@ -2,6 +2,7 @@ import type { ParityCommandContext, ParityCommandInput } from "./parity-types.js
 
 export const registryCollaborationHelp = [
   "  skills managed [--query <text>] [--limit <1-100>] [--cursor <cursor>]",
+  "  skills managed <slug>",
   "  submissions show <submission-id>",
   "  submissions export <submission-id> [--platform <name>] [--output <file>]",
   "  review show <submission-id>",
@@ -37,6 +38,11 @@ export async function runRegistryCollaborationCommand(
     context.output(await context.request(method, path, body));
   };
   if (input.command === "skills" && action === "managed") {
+    if (args.length) {
+      validate(input, args, 1);
+      await send("GET", `/v1/manage/skills/${identifier(args[0], "slug")}`);
+      return true;
+    }
     validate(input, args, 0, ["query", "limit", "cursor"]);
     const query = new URLSearchParams();
     const search = option(input, "query");

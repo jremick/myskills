@@ -47,7 +47,8 @@ export interface ApplicationRequestInput {
 }
 
 export interface McpSession {
-  user: {
+  /** OAuth returns the profile only when profile:read was explicitly granted. */
+  user?: {
     id: string;
     email: string;
     name: string;

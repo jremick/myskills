@@ -2,6 +2,32 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
+## 0.1.0-beta.17 - candidate
+
+Target release: `v0.1.0-beta.17`.
+
+- Open architecture editing in a full-page Workbench, with saved Overview, Skills, History, and Access tabs, responsive editing, draft protection, and direct links.
+- Browse and manage skills in one workspace, preserving the selected skill and exact version across scopes and detail tabs.
+- Save Library references through skill and release pickers. Open exact entries and source candidates from links, with reload, history, and return navigation preserved.
+- Keep archived and unpublished skills available to authorized managers. Exclude archived parent skills from Library adoption choices.
+- Include GitHub source authentication and retry scheduling, plus team-owned Library sourcing, tracking, and instance review.
+
+This release targets the regular GitHub update artifacts for operator-managed instances. Apply the GitHub integration, source cooldown, and team Library ownership migrations before starting the API; preserve the database, artifact storage, and existing configuration. GitHub authentication requires the documented instance configuration. Keep API and web on the same release. Hosted deployment and npm publication are separate actions; the published beta.16 CLI remains available.
+
+## 0.1.0-beta.16 - 2026-09-29
+
+Target release: `v0.1.0-beta.16`.
+
+Work pilot release; GitHub, npm beta, and hosted delivery are verified.
+
+- Enroll separate Codex and Claude global or project skill inventories. Resolve project ownership and exclusions without changing native skill inheritance.
+- Preview and apply local scope migration with stale-plan checks and backups, preserving existing managed workspace bindings. Require explicit acknowledgment before upgrading legacy inode-only root identities.
+- Select an isolated named CLI configuration for work and personal registries/accounts while retaining the existing default configuration.
+- Guide provider and scope setup in Connected targets, and show inventory completeness and bounded omission reasons.
+- Accept valid skill names in observations with structural privacy validation; retain safe upload behavior against older servers.
+
+Frozen candidate: `acfb7c8c7f8bc560f6fdba13cf0414033ab6d00e`. It includes the matching CLI and excludes later GitHub authentication and team Library changes on main. Verified macOS upgrade and legacy acknowledgment preserved skill files and target identities. See [delivery evidence](docs/BETA16_RELEASE_DELIVERY.md).
+
 ## 0.1.0-beta.15 - 2026-09-28
 
 Target release: `v0.1.0-beta.15`.

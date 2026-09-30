@@ -120,6 +120,10 @@ test("CLI managed inventory and submission detail/export retain private author a
   assert.equal(second.nextCursor, null);
   assert.deepEqual((await author.ok(["skills", "managed", "--query", "beta"])).skills.map((item) => item.slug), ["collaboration-beta"]);
   assert.deepEqual((await outsider.ok(["skills", "managed"])).skills, []);
+  // A list-only adapter misses the current detail workflow and can wrongly
+  // route private/unpublished management state to public skill lookup.
+  assert.equal((await author.ok(["skills", "managed", "collaboration-alpha"])).skill.slug, "collaboration-alpha");
+  await outsider.fail(["skills", "managed", "collaboration-alpha"], /SKILL_MANAGEMENT_ROLE_REQUIRED/);
 
   const id = submissions[0].id;
   await owner.ok(["review", "action", id, "--action", "request-changes", "--reason", "Explain setup and expected permissions."]);
@@ -177,6 +181,7 @@ interface CommandResult {
   team: { id: string; organizationId: string | null };
   teams: Array<{ id: string }>;
   skills: Array<{ slug: string }>;
+  skill: { slug: string };
   nextCursor: string | null;
   submission: { id: string; changeRequestReason: string; reviewHistory: Array<{ action: string }> };
 }

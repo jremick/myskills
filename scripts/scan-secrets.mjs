@@ -3,15 +3,9 @@
 import { execFileSync } from "node:child_process";
 import { closeSync, constants, fstatSync, openSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { secretPatterns as patterns } from "./lib/secret-patterns.mjs";
 
 const root = repoRoot();
-const patterns = [
-  { name: "Vendor API token", pattern: /\bATATT[0-9A-Za-z_-]{20,}\b/ },
-  { name: "GitHub token", pattern: /\b(?:ghp|gho|ghu|ghs|ghr)_[0-9A-Za-z_]{30,}\b/ },
-  { name: "OpenAI API key", pattern: /\bsk-[A-Za-z0-9_-]{32,}\b/ },
-  { name: "Private key block", pattern: /-----BEGIN (?:RSA |EC |OPENSSH |)PRIVATE KEY-----/ },
-  { name: "AWS access key", pattern: /\bAKIA[0-9A-Z]{16}\b/ },
-];
 
 const findings = [];
 for (const file of scanCandidates()) {

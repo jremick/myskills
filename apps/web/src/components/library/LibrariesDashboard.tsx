@@ -11,8 +11,17 @@ import { LibrarySharingReview } from "./LibrarySharingReview.js";
 import { LibraryDisclosure } from "./LibraryDisclosure.js";
 import { attestationLabel, bindingStatusLabel, candidateStateLabel, dateTime, eventLabel, healthLabel, platformLabel, refLabel, repositoryLabel, reviewStatusLabel, roleLabel, securityStatusLabel, severityLabel, shortDate, tileTone, trackingModeLabel, type Tone } from "./library-display.js";
 import { BundleReference } from "./BundleReference.js";
+import { LibrarySkillPicker } from "./LibrarySkillPicker.js";
+import { LibraryReleasePicker, type AdoptableRelease } from "./LibraryReleasePicker.js";
+import { librariesUrl, readLibraryLocation, writeLibraryLocation, type LibraryLocation, type LibraryNavigate } from "./library-location.js";
 
 const mutationId = () => crypto.randomUUID();
+const errorCode = (error: unknown) => error && typeof error === "object" && "code" in error ? String(error.code) : "";
+const errorStatus = (error: unknown) => error && typeof error === "object" && "status" in error ? Number(error.status) : 0;
+const LIBRARY_UNAVAILABLE = libraryError({ code: "LIBRARY_NOT_FOUND" });
+const ENTRY_UNAVAILABLE = libraryError({ code: "LIBRARY_ENTRY_NOT_FOUND" });
+const CANDIDATE_UNAVAILABLE = "This change is unavailable or was replaced. Review the source’s current candidates.";
+type Go = (next: Partial<LibraryLocation>, mode: "push" | "replace") => void;
 const date = (value: string | null | undefined) => value ? new Date(value).toLocaleString() : "Never";
 // Measured surface width at which the entry list and inspector sit side by side.
 // 700 keeps 1024px windows (about 726px of surface) in the two-pane layout.
@@ -42,18 +51,27 @@ function SurfaceSkeleton({ label }: { label: string }) {
   </div>;
 }
 
-export function LibrariesDashboard({ client, user }: { client: RegistryClient; user: WebAuthUser }) {
+/**
+ * `onNavigate` lets App.tsx record Library URL changes with its own history
+ * writers. Without it, the dashboard writes browser history directly.
+ */
+export function LibrariesDashboard({ client, user, onNavigate }: { client: RegistryClient; user: WebAuthUser; onNavigate?: LibraryNavigate }) {
   if (!client.libraries) return <main className="library-workspace" aria-label="Libraries">
     <header className="library-page-header app-page-header"><h1>Libraries</h1></header>
     <div className="library-surface library-state"><p>Libraries are not available on this server.</p></div>
   </main>;
-  return <LibraryWorkspace key={user.id} api={client.libraries} client={client} user={user} />;
+  return <LibraryWorkspace key={user.id} api={client.libraries} client={client} user={user} onNavigate={onNavigate} />;
 }
 
-function LibraryWorkspace({ api, client, user }: { api: LibraryClient; client: RegistryClient; user: WebAuthUser }) {
+function LibraryWorkspace({ api, client, user, onNavigate }: { api: LibraryClient; client: RegistryClient; user: WebAuthUser; onNavigate?: LibraryNavigate }) {
   const [libraries, setLibraries] = useState<LibrarySummary[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  // The URL is the source of truth for library, entry, candidate and filter.
+  const [location, setLocation] = useState<LibraryLocation>(readLibraryLocation);
+  const locationRef = useRef(location);
+  const navigateRef = useRef(onNavigate);
+  // A library read directly because it is not on a loaded list page.
+  const [linked, setLinked] = useState<LibrarySummary | null>(null);
   const [teams, setTeams] = useState<TeamRecord[]>([]);
   const [name, setName] = useState("");
   const [owner, setOwner] = useState("user");
@@ -65,14 +83,37 @@ function LibraryWorkspace({ api, client, user }: { api: LibraryClient; client: R
   const [adminMounted, setAdminMounted] = useState(false);
   const createKey = useRef(mutationId());
   const epoch = useRef(0);
+  useEffect(() => { navigateRef.current = onNavigate; }, [onNavigate]);
+  const go: Go = useCallback((next, mode) => {
+    const merged = { ...locationRef.current, ...next };
+    const target: LibraryLocation = {
+      library: merged.library,
+      entry: merged.library ? merged.entry : null,
+      candidate: merged.library && merged.entry ? merged.candidate : null,
+      filter: merged.filter,
+    };
+    locationRef.current = target;
+    writeLibraryLocation(target, mode, navigateRef.current);
+    setLocation(target);
+  }, []);
+  // Back and forward restore the exact selection recorded in the URL.
+  useEffect(() => {
+    const sync = () => {
+      if (window.location.pathname !== "/libraries") return;
+      const next = readLibraryLocation();
+      locationRef.current = next;
+      setLocation(next);
+    };
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, []);
   const load = useCallback(async (next?: string) => {
     const ticket = ++epoch.current;
     try {
       const result = await api.list(next);
       if (ticket !== epoch.current) return;
-      setLibraries((current) => next ? [...current, ...result.libraries] : result.libraries);
+      setLibraries((current) => next ? [...current, ...result.libraries.filter((library) => !current.some((row) => row.id === library.id))] : result.libraries);
       setCursor(result.nextCursor);
-      setSelected((current) => current ?? result.libraries[0]?.id ?? null);
       setError(null);
     } catch (e) { if (ticket === epoch.current) setError(libraryError(e)); }
     finally { if (ticket === epoch.current) setLoading(false); }
@@ -83,11 +124,16 @@ function LibraryWorkspace({ api, client, user }: { api: LibraryClient; client: R
     void client.listTeams().then((result) => { if (active) setTeams(result.teams.filter((team) => team.role === "owner")); }).catch(() => {});
     return () => { active = false; epoch.current++; };
   }, [client, load]);
+  // An explicit library in the URL is shown even when it is beyond the loaded
+  // list pages; it is never replaced by the first library.
+  const selected = location.library ?? libraries[0]?.id ?? null;
+  const shown = linked && linked.id === selected && !libraries.some((library) => library.id === linked.id) ? [...libraries, linked] : libraries;
+  const selectLibrary = (id: string | null, mode: "push" | "replace" = "push") => go({ library: id, entry: null, candidate: null, filter: "" }, mode);
   async function create() {
     setBusy(true); setCreateError(null);
     try {
       const result = await api.create({ name: name.trim(), owner: owner === "user" ? { type: "user" } : { type: "team", id: owner }, clientMutationId: createKey.current });
-      createKey.current = mutationId(); setName(""); await load(); setSelected(result.library.id);
+      createKey.current = mutationId(); setName(""); await load(); selectLibrary(result.library.id);
       return true;
     } catch (e) { setCreateError(libraryError(e)); return false; } finally { setBusy(false); }
   }
@@ -100,15 +146,18 @@ function LibraryWorkspace({ api, client, user }: { api: LibraryClient; client: R
     {createError && <p role="alert" className="library-alert">{createError}</p>}
   </form>;
   function removed() {
-    const index = libraries.findIndex((library) => library.id === selected);
-    setSelected(libraries[index + 1]?.id ?? libraries[index - 1]?.id ?? null);
+    const index = shown.findIndex((library) => library.id === selected);
+    const next = shown[index + 1]?.id ?? shown[index - 1]?.id ?? null;
+    setLinked(null);
+    setLibraries((current) => current.filter((library) => library.id !== selected));
+    selectLibrary(next, "replace");
     void load();
   }
   return <main className="library-workspace" aria-label="Libraries">
     <header className="library-page-header app-page-header">
       <h1>Libraries</h1>
       <div className="library-page-actions">
-        <LibraryInbox api={api} onSelect={setSelected} />
+        <LibraryInbox api={api} onSelect={(item) => go({ library: item.libraryId, entry: item.entryId, candidate: item.entryId ? item.candidateId : null, filter: "" }, "push")} />
         {canReviewSharing && <Button type="button" size="sm" variant="outline" aria-label="Library administration" aria-expanded={adminOpen} aria-controls={adminMounted ? "library-administration" : undefined} onClick={() => { setAdminMounted(true); setAdminOpen((open) => !open); }}>
           <ShieldCheck size={16} aria-hidden="true" /><span className="library-action-text">Administration</span>
         </Button>}
@@ -125,9 +174,9 @@ function LibraryWorkspace({ api, client, user }: { api: LibraryClient; client: R
       <div className="library-switcher library-skeleton-switcher" aria-hidden="true"><span /><span /></div>
       <div className="library-surface"><SurfaceSkeleton label="Loading libraries…" /></div>
     </> : <>
-      {(libraries.length > 1 || cursor) && <nav className="library-switcher" aria-label="Your libraries">
+      {(shown.length > 1 || cursor) && <nav className="library-switcher" aria-label="Your libraries">
         <div className="library-switcher-track">
-          {libraries.map((library) => <button key={library.id} type="button" className="library-switch" aria-current={selected === library.id ? "true" : undefined} onClick={() => setSelected(library.id)}>
+          {shown.map((library) => <button key={library.id} type="button" className="library-switch" aria-current={selected === library.id ? "true" : undefined} onClick={() => { if (library.id !== selected) selectLibrary(library.id); }}>
             <Tile tone={tileTone(library.id)} size={12} />
             <span className="library-switch-name">{library.name}</span>
             {library.owner.type === "team" && <><span className="library-switch-tag" aria-hidden="true"><Users size={12} /><span className="library-switch-tag-text">Team</span></span><span className="sr-only">, team library</span></>}
@@ -136,62 +185,129 @@ function LibraryWorkspace({ api, client, user }: { api: LibraryClient; client: R
         {cursor && <Button type="button" variant="ghost" size="sm" onClick={() => void load(cursor)}>Load more libraries</Button>}
       </nav>}
       {error && libraries.length > 0 && <p role="alert" className="library-alert library-alert-bar">{error}</p>}
-      {error && libraries.length === 0 ? <div className="library-surface library-state">
+      {error && libraries.length === 0 && !location.library ? <div className="library-surface library-state">
         <h2>Couldn't load libraries</h2>
         <p role="alert">{error}</p>
         <Button type="button" variant="outline" size="sm" onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />Try again</Button>
-      </div> : libraries.length === 0 ? <section className="library-surface library-first-use" aria-labelledby="library-first-use-title">
+      </div> : libraries.length === 0 && !location.library ? <section className="library-surface library-first-use" aria-labelledby="library-first-use-title">
         <div className="library-first-use-body">
           <span className="library-first-glyph" aria-hidden="true"><span data-tone="teal" /><span data-tone="amber" /><span data-tone="navy" /></span>
           <h2 id="library-first-use-title">Create your first library</h2>
           <p className="library-lede">Keep useful skills together, retain their sources, and choose which versions you use.</p>
           {createForm()}
           <ol className="library-steps">
-            <li><Tile tone="teal" size={12} /><strong>Save</strong><span>Save a GitHub repository or a registry skill. Saving a source does not install its content.</span></li>
+            <li><Tile tone="teal" size={12} /><strong>Save</strong><span>Save a GitHub repository or a skill. Saving a source does not install its content.</span></li>
             <li><Tile tone="amber" size={12} /><strong>Check</strong><span>Preview complete skill packages before importing them.</span></li>
             <li><Tile tone="navy" size={12} /><strong>Adopt</strong><span>Adoption records the reviewed version you recommend. Installed copies change only when you update them.</span></li>
           </ol>
         </div>
-      </section> : selected ? <LibraryDetail key={selected} api={api} client={client} libraryId={selected} onRemoved={removed} /> : null}
+      </section> : selected ? <LibraryDetail
+        key={selected}
+        api={api}
+        client={client}
+        libraryId={selected}
+        entryId={location.library === selected ? location.entry : null}
+        candidateId={location.library === selected ? location.candidate : null}
+        filter={location.filter}
+        go={go}
+        onLibrary={(summary) => { if (!libraries.some((library) => library.id === summary.id)) setLinked(summary); }}
+        onRemoved={removed}
+        onShowLibraries={location.library ? () => selectLibrary(null) : null}
+      /> : null}
     </>}
   </main>;
 }
 
-function LibraryDetail({ api, client, libraryId, onRemoved }: { api: LibraryClient; client: RegistryClient; libraryId: string; onRemoved: () => void }) {
+function LibraryDetail({ api, client, libraryId, entryId, candidateId, filter, go, onLibrary, onRemoved, onShowLibraries }: {
+  api: LibraryClient; client: RegistryClient; libraryId: string;
+  /** Explicit selection from the URL. */
+  entryId: string | null; candidateId: string | null; filter: string;
+  go: Go; onLibrary: (library: LibrarySummary) => void; onRemoved: () => void; onShowLibraries: (() => void) | null;
+}) {
   const [library, setLibrary] = useState<LibrarySummary | null>(null);
+  const [loadError, setLoadError] = useState<{ message: string; unavailable: boolean } | null>(null);
   const [entries, setEntries] = useState<LibraryEntry[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
+  // An entry read directly because it is not on a loaded entry page.
+  const [extra, setExtra] = useState<LibraryEntry | null>(null);
+  const [entryError, setEntryError] = useState<string | null>(null);
   const [url, setUrl] = useState("");
   const [path, setPath] = useState("");
   const [refKind, setRefKind] = useState<LibrarySourceRefKind | "url">("url");
   const [refValue, setRefValue] = useState("");
-  const [slug, setSlug] = useState("");
-  const [sourceSelection, setSourceSelection] = useState<{ id: string; discover: boolean } | null>(null);
+  const [manualImport, setManualImport] = useState<{ id: string; discover: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [skillError, setSkillError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [subscriptionPending, setSubscriptionPending] = useState<boolean | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+  // Desktop split shows the first entry without choosing it; the URL is unchanged.
+  const [autoId, setAutoId] = useState<string | null>(null);
   const [layout, setLayout] = useState<"split" | "stack" | null>(null);
   const [focusTarget, setFocusTarget] = useState<{ kind: "row" | "title"; id: string } | null>(null);
   const sourceKey = useRef(mutationId());
   const skillKey = useRef(mutationId());
   const epoch = useRef(0);
+  const extraRef = useRef<LibraryEntry | null>(null);
+  const entryIdRef = useRef(entryId);
+  const onLibraryRef = useRef(onLibrary);
   const rows = useRef(new Map<string, HTMLButtonElement>());
   const observer = useRef<ResizeObserver | null>(null);
   const automaticSelection = useRef(false);
   const baseId = useId();
   const titleId = (id: string) => `${baseId}-entry-${id}`;
+  useEffect(() => { onLibraryRef.current = onLibrary; }, [onLibrary]);
+  useEffect(() => { entryIdRef.current = entryId; }, [entryId]);
+  const keepExtra = useCallback((entry: LibraryEntry | null) => { extraRef.current = entry; setExtra(entry); }, []);
   const load = useCallback(async (next?: string) => {
     const ticket = ++epoch.current;
     const [detail, page] = await Promise.all([api.get(libraryId), api.entries(libraryId, next)]);
     if (ticket !== epoch.current) return;
-    setLibrary(detail.library); setEntries((current) => next ? [...current, ...page.entries] : page.entries); setCursor(page.nextCursor);
-  }, [api, libraryId]);
-  useEffect(() => { void load().catch((e) => setError(libraryError(e))); return () => { epoch.current++; }; }, [load]);
+    setLibrary(detail.library); onLibraryRef.current(detail.library); setLoadError(null);
+    setEntries((current) => next ? [...current, ...page.entries.filter((entry) => !current.some((row) => row.id === entry.id))] : page.entries);
+    setCursor(page.nextCursor); setLoaded(true);
+    // Keep a directly read entry current. If it is gone or left this library,
+    // drop it and, when the URL still names it, say so instead of loading forever.
+    const outside = extraRef.current;
+    if (!next && outside && !page.entries.some((entry) => entry.id === outside.id)) {
+      let lost: string | null = null;
+      try {
+        const fresh = (await api.entry(outside.id)).entry;
+        if (ticket !== epoch.current) return;
+        if (fresh.libraryId === libraryId) keepExtra(fresh); else lost = ENTRY_UNAVAILABLE;
+      } catch (e) {
+        if (ticket !== epoch.current) return;
+        lost = libraryError(e);
+      }
+      if (lost) {
+        keepExtra(null);
+        if (entryIdRef.current === outside.id) setEntryError(lost);
+      }
+    }
+  }, [api, keepExtra, libraryId]);
+  const initial = useCallback(() => {
+    setLoadError(null);
+    void load().catch((e) => {
+      const unavailable = [403, 404].includes(errorStatus(e)) || errorCode(e) === "LIBRARY_NOT_FOUND";
+      setLoadError({ message: unavailable ? LIBRARY_UNAVAILABLE : libraryError(e), unavailable });
+    });
+  }, [load]);
+  useEffect(() => { initial(); return () => { epoch.current++; }; }, [initial]);
+  // Resolve an explicit entry outside the loaded pages with a direct authorised
+  // read, and check it belongs to this library. Never substitute another entry.
+  const hasEntry = Boolean(entryId && entries.some((entry) => entry.id === entryId));
+  useEffect(() => {
+    if (!entryId || !loaded || hasEntry || extraRef.current?.id === entryId) { setEntryError(null); return; }
+    let active = true;
+    setEntryError(null);
+    void api.entry(entryId).then(({ entry }) => {
+      if (!active) return;
+      if (entry.libraryId === libraryId) keepExtra(entry); else setEntryError(ENTRY_UNAVAILABLE);
+    }).catch((e) => { if (active) setEntryError(libraryError(e)); });
+    return () => { active = false; };
+  }, [api, entryId, hasEntry, keepExtra, libraryId, loaded]);
   // Split or stack follows the surface's own width, not the viewport.
   const measure = useCallback((node: HTMLElement | null) => {
     observer.current?.disconnect(); observer.current = null;
@@ -206,26 +322,42 @@ function LibraryDetail({ api, client, libraryId, onRemoved }: { api: LibraryClie
     setBusy(true); report(null);
     try { await work(); await load(); } catch (e) { report(libraryError(e)); } finally { setBusy(false); }
   }
+  const selectEntry = (entry: string | null, mode: "push" | "replace" = "push") => go({ library: libraryId, entry, candidate: null }, mode);
   async function saveSource() {
     const result = await api.addSource(libraryId, { url, ...(path.trim() ? { path: path.trim() } : {}), ...(refKind === "url" ? {} : { ref: { kind: refKind, ...(refValue.trim() ? { value: refValue.trim() } : {}) } }), clientMutationId: sourceKey.current });
-    sourceKey.current = mutationId(); setUrl(""); setPath(""); setRefKind("url"); setRefValue(""); setSourceSelection({ id: result.entry.id, discover: true });
+    sourceKey.current = mutationId(); setUrl(""); setPath(""); setRefKind("url"); setRefValue("");
+    keepExtra(result.entry);
+    setManualImport({ id: result.entry.id, discover: true });
+    automaticSelection.current = false;
+    selectEntry(result.entry.id);
   }
-  const importing = Boolean(sourceSelection && library?.access.canImport);
   const skills = entries.filter((entry) => entry.kind !== "source");
   const sources = entries.filter((entry) => entry.kind === "source");
   const ordered = [...skills, ...sources];
-  const selectedEntry = entries.find((entry) => entry.id === selectedId) ?? null;
+  const byId = (id: string | null) => id ? entries.find((entry) => entry.id === id) ?? (extra?.id === id ? extra : null) : null;
+  const selectedId = entryId ?? autoId;
+  const selectedEntry = byId(selectedId);
+  const autoEntry = autoId ? entries.find((entry) => entry.id === autoId) ?? null : null;
   const firstId = ordered[0]?.id ?? null;
-  useEffect(() => { if (sourceSelection) { automaticSelection.current = false; setSelectedId(sourceSelection.id); } }, [sourceSelection]);
+  // A candidate in the URL opens its source in review; otherwise import mode
+  // follows the reader's own Discover or Review choice for the selected source.
+  const sourceSelection = candidateId && entryId ? { id: entryId, discover: false } : manualImport && manualImport.id === selectedId ? manualImport : null;
+  const sourceEntry = byId(sourceSelection?.id ?? null);
+  const importing = Boolean(sourceSelection && library?.access.canWrite && (sourceEntry ? sourceEntry.kind === "source" : !entryError));
+  const importingId = importing ? sourceSelection!.id : null;
+  const candidateProblem = candidateId && selectedEntry && !importing ? CANDIDATE_UNAVAILABLE : null;
   useEffect(() => {
-    if (layout === "stack" && automaticSelection.current && !sourceSelection) {
+    if (entryId) {
       automaticSelection.current = false;
-      setSelectedId(null);
-    } else if (layout === "split" && !busy && !selectedEntry && firstId && !sourceSelection) {
+      if (autoId !== null) setAutoId(null);
+    } else if (layout === "stack" && automaticSelection.current && !importingId) {
+      automaticSelection.current = false;
+      setAutoId(null);
+    } else if (layout === "split" && !busy && !autoEntry && firstId && !importingId) {
       automaticSelection.current = true;
-      setSelectedId(firstId);
+      setAutoId(firstId);
     }
-  }, [layout, busy, selectedEntry, firstId, sourceSelection]);
+  }, [entryId, autoId, layout, busy, autoEntry, firstId, importingId]);
   useEffect(() => {
     if (!focusTarget) return;
     const node = focusTarget.kind === "row" ? rows.current.get(focusTarget.id) : document.getElementById(titleId(focusTarget.id));
@@ -234,29 +366,45 @@ function LibraryDetail({ api, client, libraryId, onRemoved }: { api: LibraryClie
   });
   function openEntry(id: string, moveFocus = layout === "stack") {
     automaticSelection.current = false;
-    setSelectedId(id);
+    selectEntry(id);
     if (moveFocus) setFocusTarget({ kind: "title", id });
   }
   function crossLink(id: string) {
-    setSourceSelection(null);
+    setManualImport(null);
     openEntry(id, true);
   }
   function backToEntries() {
     if (selectedId) setFocusTarget({ kind: "row", id: selectedId });
     automaticSelection.current = false;
-    setSelectedId(null);
+    setAutoId(null);
+    selectEntry(null);
+  }
+  function review(id: string, discover: boolean) {
+    setManualImport({ id, discover });
+    if (candidateId) selectEntry(id);
+  }
+  function closeImport() {
+    setManualImport(null);
+    if (candidateId) selectEntry(entryId);
   }
   const afterRemove = (entry: LibraryEntry) => async () => {
     const index = ordered.findIndex((row) => row.id === entry.id);
-    const next = ordered[index + 1]?.id ?? ordered[index - 1]?.id ?? null;
-    if (sourceSelection?.id === entry.id) setSourceSelection(null);
+    const next = index < 0 ? null : ordered[index + 1]?.id ?? ordered[index - 1]?.id ?? null;
+    if (manualImport?.id === entry.id) setManualImport(null);
+    if (extraRef.current?.id === entry.id) keepExtra(null);
     await load();
+    if (entryId) selectEntry(null, "replace");
     automaticSelection.current = layout === "split";
-    setSelectedId(layout === "split" ? next : null);
+    setAutoId(layout === "split" ? next : null);
     if (next) setFocusTarget({ kind: "row", id: next });
   };
   if (!library) return <section ref={measure} className="library-surface">
-    {error ? <div className="library-state"><p role="alert">{error}</p></div> : <SurfaceSkeleton label="Loading library…" />}
+    {loadError ? <div className="library-state">
+      <h2>{loadError.unavailable ? "Library unavailable" : "Couldn’t load this library"}</h2>
+      <p role="alert">{loadError.message}</p>
+      {loadError.unavailable ? onShowLibraries && <Button type="button" variant="outline" size="sm" onClick={onShowLibraries}>Show your libraries</Button>
+        : <Button type="button" variant="outline" size="sm" onClick={initial}><RefreshCw size={16} aria-hidden="true" />Try again</Button>}
+    </div> : <SurfaceSkeleton label="Loading library…" />}
   </section>;
 
   const team = library.owner.type === "team";
@@ -270,16 +418,27 @@ function LibraryDetail({ api, client, libraryId, onRemoved }: { api: LibraryClie
     {sourceError && <p role="alert" className="library-alert">{sourceError}</p>}
     <div className="library-form-actions"><Button variant={primary ? "default" : "outline"} disabled={busy || !url.trim()}>Save source</Button></div>
   </form>;
-  const skillForm = (primary: boolean, done?: () => void) => <form className="library-form library-form-row" onSubmit={(event) => {
-    event.preventDefault();
-    let added: string | null = null;
-    void action(async () => { const result = await api.addSkill(libraryId, slug.trim(), skillKey.current); skillKey.current = mutationId(); setSlug(""); added = result.entry.id; done?.(); }, setSkillError).then(() => { if (added) openEntry(added); });
-  }}>
-    <label className="library-field library-grow"><span>Registry skill slug</span><Input value={slug} onChange={(event) => { setSlug(event.target.value); skillKey.current = mutationId(); }} placeholder="such as release-notes-helper" required /></label>
-    <Button variant={primary ? "default" : "outline"} disabled={busy || !slug.trim()}>Save registry skill</Button>
-    {skillError && <p role="alert" className="library-alert">{skillError}</p>}
-  </form>;
+  // Saves a reference to the chosen skill. A retry of the same choice reuses its mutation ID.
+  const saveSkill = (done?: () => void) => async (slug: string) => {
+    const saved: { entry: LibraryEntry | null } = { entry: null };
+    await action(async () => {
+      const result = await api.addSkill(libraryId, slug, skillKey.current);
+      skillKey.current = mutationId(); saved.entry = result.entry; keepExtra(result.entry); done?.();
+    }, setSkillError);
+    if (saved.entry) openEntry(saved.entry.id);
+    return Boolean(saved.entry);
+  };
+  const skillForm = (primary: boolean, done?: () => void) => <LibrarySkillPicker
+    client={client}
+    busy={busy}
+    primary={primary}
+    error={skillError}
+    onChoose={() => { skillKey.current = mutationId(); setSkillError(null); }}
+    onSave={saveSkill(done)}
+  />;
 
+  const query = filter;
+  const setQuery = (value: string) => go({ library: libraryId, filter: value }, "replace");
   const needle = query.trim().toLowerCase();
   const matches = (entry: LibraryEntry) => !needle || [entry.title, entry.skill?.slug, entry.source?.fullName, entry.source?.path].some((value) => value?.toLowerCase().includes(needle));
   const shownSkills = skills.filter(matches);
@@ -298,12 +457,15 @@ function LibraryDetail({ api, client, libraryId, onRemoved }: { api: LibraryClie
     onSelect={() => openEntry(entry.id)}
   />;
 
-  const inspected = importing ? entries.find((entry) => entry.id === sourceSelection?.id) ?? null : selectedEntry;
-  const listHidden = importing || (layout === "stack" && Boolean(selectedEntry));
-  const showInspector = importing || layout === "split" || Boolean(selectedEntry);
+  const inspected = importing ? sourceEntry : selectedEntry;
+  // A linked entry that is still resolving, or failed, holds the inspector.
+  const pendingLink = Boolean(entryId && !selectedEntry);
+  const listHidden = importing || (layout === "stack" && (Boolean(selectedEntry) || (pendingLink && !entryError)));
+  const showInspector = importing || layout === "split" || Boolean(selectedEntry) || pendingLink;
   const remove = (entry: LibraryEntry) => library.access.canWrite && <RemoveEntry api={api} entry={entry} onChanged={afterRemove(entry)} />;
   const inspector = inspected ? <aside key={inspected.id} className="library-inspector" aria-labelledby={titleId(inspected.id)} onFocusCapture={() => { automaticSelection.current = false; }}>
     {layout === "stack" && !importing && <Button type="button" variant="ghost" size="sm" className="library-back" onClick={backToEntries}><ArrowLeft size={16} aria-hidden="true" />Back to entries</Button>}
+    {candidateProblem && <p role="alert" className="library-alert">{candidateProblem}</p>}
     {inspected.kind === "bundle" ? <><header className="library-inspector-head"><h3 id={titleId(inspected.id)} tabIndex={-1}>{inspected.title}</h3><Chip>Bundle</Chip></header><BundleReference entry={inspected} />{remove(inspected)}</> : inspected.kind === "source" && inspected.source ? <SourceEntry
       api={api}
       entry={inspected}
@@ -312,11 +474,11 @@ function LibraryDetail({ api, client, libraryId, onRemoved }: { api: LibraryClie
       importing={importing}
       skills={skills.filter((entry) => entry.skill?.sourceEntryId === inspected.id)}
       partial={Boolean(cursor)}
-      onDiscover={() => setSourceSelection({ id: inspected.id, discover: true })}
-      onReview={() => setSourceSelection({ id: inspected.id, discover: false })}
+      onDiscover={() => review(inspected.id, true)}
+      onReview={() => review(inspected.id, false)}
       onSelectEntry={crossLink}
       onChanged={() => load()}
-      importer={sourceSelection && library.access.canImport && sourceSelection.id === inspected.id && <SourceImporter key={`${sourceSelection.id}:${sourceSelection.discover}`} api={api} entryId={sourceSelection.id} discoverOnOpen={sourceSelection.discover} entries={entries} onChanged={() => load()} onClose={() => setSourceSelection(null)} />}
+      importer={importing && sourceSelection && sourceSelection.id === inspected.id && <SourceImporter key={`${sourceSelection.id}:${sourceSelection.discover}:${candidateId ?? ""}`} api={api} library={library} entryId={sourceSelection.id} discoverOnOpen={sourceSelection.discover} linkedCandidateId={candidateId} entries={entries} onChanged={() => load()} onClose={closeImport} />}
       footer={remove(inspected)}
     /> : <SkillEntry
       api={api}
@@ -324,12 +486,16 @@ function LibraryDetail({ api, client, libraryId, onRemoved }: { api: LibraryClie
       entry={inspected}
       canWrite={library.access.canWrite}
       titleId={titleId(inspected.id)}
+      returnTo={librariesUrl({ library: libraryId, entry: inspected.id, filter })}
       sourceEntry={sources.find((entry) => entry.id === inspected.skill?.sourceEntryId)}
       onSelectEntry={crossLink}
       onChanged={() => load()}
       footer={remove(inspected)}
     />}
   </aside> : importing ? <div className="library-inspector"><p role="status" className="library-muted">Loading source…</p></div>
+    : pendingLink ? <div className="library-inspector">
+      {entryError ? <p role="alert" className="library-alert">{entryError}</p> : <p role="status" className="library-muted">Loading entry…</p>}
+    </div>
     : layout === "split" ? <div className="library-inspector library-inspector-empty"><p className="library-muted">Select an entry to see its details.</p></div> : null;
 
   return <section ref={measure} className="library-surface" data-layout={layout ?? undefined} data-mode={importing ? "import" : undefined} aria-labelledby={`${baseId}-name`}>
@@ -357,24 +523,24 @@ function LibraryDetail({ api, client, libraryId, onRemoved }: { api: LibraryClie
       </div>
     </header>
     {error && <p role="alert" className="library-alert library-alert-bar">{error}</p>}
-    {entries.length > 0 || importing ? <>
+    {entries.length > 0 || importing || pendingLink || selectedEntry ? <>
       <div className="library-toolbar" hidden={layout === "stack" && !importing && Boolean(selectedEntry)}>
         <div className="library-filter" hidden={importing}>
           <Search size={16} aria-hidden="true" />
           <Input type="search" aria-label="Filter entries" placeholder={cursor ? "Filter loaded entries" : "Filter entries"} value={query} onChange={(event) => setQuery(event.target.value)} />
         </div>
         {library.access.canWrite ? <div className="library-toolbar-actions">
-          <LibraryDisclosure label="Add source" variant={team ? "outline" : "default"} icon={<GitBranch size={16} aria-hidden="true" />}>
+          <LibraryDisclosure label="Add source" variant={library.access.canTrackSources ? "default" : "outline"} icon={<GitBranch size={16} aria-hidden="true" />}>
             {(close) => <div className="library-popover-body">
               <h3 className="library-popover-title">Add a GitHub source</h3>
               <p className="library-muted">Use a public github.com repository, directory, or SKILL.md URL. Saving a source does not install its content.</p>
               {sourceForm(true, close)}
             </div>}
           </LibraryDisclosure>
-          <LibraryDisclosure label="Add skill" variant={team ? "default" : "outline"} icon={<Plus size={16} aria-hidden="true" />}>
+          <LibraryDisclosure label="Add skill" variant={library.access.canTrackSources ? "outline" : "default"} icon={<Plus size={16} aria-hidden="true" />}>
             {(close) => <div className="library-popover-body">
-              <h3 className="library-popover-title">Add a registry skill</h3>
-              <p className="library-muted">{team ? "Curate releases already shared with your team." : "Save an authorized registry skill by its slug."}</p>
+              <h3 className="library-popover-title">Add a skill</h3>
+              <p className="library-muted">{team ? "Curate releases already shared with your team." : "Search the skills you can use and save one as a reference."}</p>
               {skillForm(true, close)}
             </div>}
           </LibraryDisclosure>
@@ -405,11 +571,11 @@ function LibraryDetail({ api, client, libraryId, onRemoved }: { api: LibraryClie
     </> : library.access.canWrite ? <div className="library-empty">
       <h3>Add a source or a skill</h3>
       <p>No entries yet. Save a source to discover its skills.</p>
-      {team && <p className="library-muted">Curate releases already shared with your team. Sources can be saved as references.</p>}
+      {team && <p className="library-muted">Team curators can select source skills and recommend versions after instance review. Imports belong to the team.</p>}
       <div className="library-empty-forms">
-        {team ? skillForm(true) : sourceForm(true)}
+        {library.access.canTrackSources ? sourceForm(true) : skillForm(true)}
         <div className="library-or"><span>or</span></div>
-        {team ? sourceForm(false) : skillForm(false)}
+        {library.access.canTrackSources ? skillForm(false) : sourceForm(false)}
       </div>
       <p className="library-muted">Saving a source does not install its content. Adoption records the reviewed version you recommend.</p>
     </div> : <div className="library-empty">
@@ -431,6 +597,44 @@ function LibraryDetail({ api, client, libraryId, onRemoved }: { api: LibraryClie
   </section>;
 }
 
+function retryDeadline(tracking: LibraryEntry["tracking"]): string | null {
+  if (tracking?.retryAvailableAt !== undefined) return tracking.retryAvailableAt;
+  return tracking?.health === "rate-limited" ? tracking.nextCheckAt ?? null : null;
+}
+
+function useDeadlineNow(deadline: string | null | undefined): number {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const until = deadline ? Date.parse(deadline) : NaN;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    function tick() {
+      const current = Date.now();
+      setNow(current);
+      const remaining = until - current;
+      if (remaining > 0) timer = setTimeout(tick, remaining > 60_000 ? Math.min(60_000, remaining - 60_000) : Math.min(1_000, remaining));
+    }
+    tick();
+    return () => clearTimeout(timer);
+  }, [deadline]);
+  return now;
+}
+
+function CheckSchedule({ tracking, compact = false }: { tracking: LibraryEntry["tracking"]; compact?: boolean }) {
+  const scheduled = (tracking?.mode === "daily" || tracking?.mode === "weekly") && tracking.workerAvailable !== false;
+  const retryAt = retryDeadline(tracking);
+  const nextAt = tracking?.nextCheckAt;
+  const deadline = scheduled && nextAt ? retryAt && Date.parse(retryAt) > Date.parse(nextAt) ? retryAt : nextAt : retryAt;
+  const now = useDeadlineNow(deadline);
+  if (!tracking || (!scheduled && !deadline)) return compact ? null : <Fact label="Checks">No automatic checks scheduled</Fact>;
+  const timestamp = deadline ? Date.parse(deadline) : NaN;
+  const remaining = Math.max(0, timestamp - now);
+  const countdown = !Number.isFinite(timestamp) ? "" : remaining === 0 ? scheduled ? "due" : "now"
+    : remaining >= 3_600_000 ? `in ${Math.ceil(remaining / 3_600_000)}h` : remaining >= 60_000 ? `in ${Math.ceil(remaining / 60_000)}m` : `in ${Math.ceil(remaining / 1_000)}s`;
+  const label = scheduled ? "Next check" : "Retry available";
+  const content = <>{deadline && Number.isFinite(timestamp) ? <time dateTime={deadline} title={new Date(timestamp).toLocaleString()}>{dateTime(deadline)}</time> : "Not scheduled"}{countdown && <span className="library-check-countdown">{countdown}</span>}</>;
+  return compact ? <span className="library-check-schedule">{label}: {content}</span> : <Fact label={label}><span className="library-check-schedule">{content}</span></Fact>;
+}
+
 function EntryRow({ entry, sourceName, selected, register, onSelect }: { entry: LibraryEntry; sourceName?: string; selected: boolean; register: (node: HTMLButtonElement | null) => void; onSelect: () => void }) {
   const id = useId();
   const source = entry.kind === "source" ? entry.source : undefined;
@@ -444,8 +648,9 @@ function EntryRow({ entry, sourceName, selected, register, onSelect }: { entry: 
         <span id={`${id}-title`} className="library-entry-title">{entry.title}</span>
         <span id={`${id}-meta`} className="library-entry-meta">
           {entry.kind === "bundle" ? <span>Bundle reference</span> : entry.kind === "source" ? <><span>{source?.path || "Repository root"}</span><span>{refLabel(source?.ref)}</span></>
-            : <>{slug && <code>{slug}</code>}<span>{sourceName ?? (entry.skill?.sourceEntryId ? "Library source" : "Registry")}</span></>}
+            : <>{slug && <code>{slug}</code>}<span>{sourceName ?? (entry.skill?.sourceEntryId ? "Library source" : "Skills")}</span></>}
         </span>
+        {source && <CheckSchedule tracking={entry.tracking} compact />}
       </span>
       <span id={`${id}-chips`} className="library-entry-chips">
         {entry.kind === "bundle" ? <Chip>Bundle</Chip> : entry.kind === "source" ? <>
@@ -485,11 +690,11 @@ function SourceEntry({ api, entry, library, titleId, importing, skills, partial,
       {source.license !== undefined && <Fact label="License">{source.license ?? "Not declared"}</Fact>}
       {tracking && <Fact label="Checks"><span className="library-fact-inline">{trackingModeLabel(tracking.mode).label}<Chip tone={health.tone}>{health.label}</Chip></span></Fact>}
       {tracking && <Fact label="Last success">{dateTime(tracking.lastSuccessfulCheckAt) ?? "Never"}</Fact>}
-      {tracking && <Fact label="Next check">{dateTime(tracking.nextCheckAt) ?? "Not scheduled"}</Fact>}
+      {tracking && <CheckSchedule tracking={tracking} />}
       {snapshot && <Fact label="Last snapshot"><span className="library-fact-inline"><code>{snapshot.commit.slice(0, 12)}</code>{snapshot.upstreamLabel && <span>{snapshot.upstreamLabel}</span>}{shortDate(snapshot.observedAt) && <span className="library-muted">{shortDate(snapshot.observedAt)}</span>}</span></Fact>}
       {source.archived && <Fact label="Upstream"><Chip tone="amber">Archived upstream</Chip></Fact>}
     </dl>
-    {library.access.canImport && <section className="library-section" aria-labelledby={`${titleId}-import`}>
+    {library.access.canWrite && <section className="library-section" aria-labelledby={`${titleId}-import`}>
       <h4 id={`${titleId}-import`}>Import skills</h4>
       <p className="library-muted">Inspect the frozen source and complete package before submitting. Saved candidates remain available when the source is offline.</p>
       <div className="library-actions">
@@ -517,8 +722,11 @@ function TrackingControls({ api, entry, onChanged }: { api: LibraryClient; entry
   const [result, setResult] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const identityChange = entry.tracking?.identityChange;
+  const retryAt = retryDeadline(entry.tracking);
+  const now = useDeadlineNow(retryAt);
+  const coolingDown = Boolean(retryAt && Date.parse(retryAt) > now);
   const needsAcknowledgement = identityChange && !acknowledged && (mode === "daily" || mode === "weekly");
-  async function run(check: boolean) { setBusy(true); setError(null); try { if (check) { const response = await api.check(entry.id); setResult(`Check ${response.check.outcome}. ${response.check.candidateIds.length} new candidates.`); } else await api.tracking(entry.id, { expectedRevision: entry.revision, mode, ...(identityChange && acknowledged ? { acknowledgeIdentityChange: true } : {}) }); await onChanged(); } catch (e) { setError(libraryError(e)); } finally { setBusy(false); } }
+  async function run(check: boolean) { if (check && coolingDown) return; setBusy(true); setError(null); try { if (check) { const response = await api.check(entry.id); setResult(`Check ${response.check.outcome}. ${response.check.candidateIds.length} new candidates.`); } else await api.tracking(entry.id, { expectedRevision: entry.revision, mode, ...(identityChange && acknowledged ? { acknowledgeIdentityChange: true } : {}) }); await onChanged(); } catch (e) { setError(libraryError(e)); } finally { setBusy(false); } }
   return <div className="library-tracking">
     {identityChange && <div className="library-callout" data-tone="amber">
       <strong className="library-callout-title"><CircleAlert size={16} aria-hidden="true" />Repository identity changed</strong>
@@ -530,17 +738,20 @@ function TrackingControls({ api, entry, onChanged }: { api: LibraryClient; entry
     <div className="library-form-row">
       <label className="library-field"><span>Check frequency</span><select disabled={busy} value={mode} onChange={(event) => setMode(event.target.value as LibraryTrackingMode)}><option value="off">Off</option><option value="manual">Manual</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></label>
       <Button size="sm" variant="outline" disabled={busy || Boolean(needsAcknowledgement)} onClick={() => void run(false)}>Save tracking</Button>
-      <Button size="sm" variant="ghost" disabled={busy || Boolean(identityChange)} onClick={() => void run(true)}>Check now</Button>
+      <Button size="sm" variant="ghost" disabled={busy || Boolean(identityChange) || coolingDown} onClick={() => void run(true)}>Check now</Button>
     </div>
+    {coolingDown && <p className="library-muted">GitHub’s request allowance resets at the retry time. Check now will be available then.</p>}
     {entry.tracking?.workerAvailable === false && <p className="library-muted">Scheduled checks are unavailable on this instance. Manual checks remain available.</p>}
     {error && <p role="alert" className="library-alert">{error}</p>}{result && <p role="status" className="library-muted">{result}</p>}
   </div>;
 }
 
-function SourceImporter({ api, entryId, discoverOnOpen, entries, onChanged, onClose }: { api: LibraryClient; entryId: string; discoverOnOpen: boolean; entries: LibraryEntry[]; onChanged: () => Promise<void>; onClose: () => void }) {
+function SourceImporter({ api, library, entryId, discoverOnOpen, linkedCandidateId, entries, onChanged, onClose }: { api: LibraryClient; library: LibrarySummary; entryId: string; discoverOnOpen: boolean; linkedCandidateId: string | null; entries: LibraryEntry[]; onChanged: () => Promise<void>; onClose: () => void }) {
   const [discovery, setDiscovery] = useState<SourceDiscovery | null>(null);
   const [paths, setPaths] = useState<string[]>([]);
   const [candidates, setCandidates] = useState<LibraryCandidate[]>([]);
+  const [linked, setLinked] = useState<LibraryCandidate | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [mappings, setMappings] = useState<Record<string, { summary?: string; license?: string }>>({});
   const [error, setError] = useState<string | null>(null);
@@ -552,6 +763,12 @@ function SourceImporter({ api, entryId, discoverOnOpen, entries, onChanged, onCl
       if (active) { setCandidates(result.candidates); setCursor(result.nextCursor); }
     });
     const source = discoverOnOpen ? api.discover(entryId).then((result) => { if (active) setDiscovery(result.discovery); }) : Promise.resolve();
+    // A linked candidate may sit beyond the first page. Read it directly and
+    // show it only when it belongs to this source.
+    if (linkedCandidateId) void api.candidate(linkedCandidateId).then(({ candidate }) => {
+      if (!active) return;
+      if (candidate.sourceEntryId === entryId) setLinked(candidate); else setLinkError(CANDIDATE_UNAVAILABLE);
+    }).catch(() => { if (active) setLinkError(CANDIDATE_UNAVAILABLE); });
     void Promise.allSettled([saved, source]).then((results) => {
       if (!active) return;
       const failure = results.find((result) => result.status === "rejected");
@@ -559,7 +776,8 @@ function SourceImporter({ api, entryId, discoverOnOpen, entries, onChanged, onCl
       setBusy(false);
     });
     return () => { active = false; };
-  }, [api, entryId, discoverOnOpen]);
+  }, [api, entryId, discoverOnOpen, linkedCandidateId]);
+  const listed = linked ? [linked, ...candidates.filter((candidate) => candidate.id !== linked.id)] : candidates;
   async function loadCandidates(next?: string) {
     setBusy(true); setError(null);
     try {
@@ -592,6 +810,7 @@ function SourceImporter({ api, entryId, discoverOnOpen, entries, onChanged, onCl
       </div>
     </header>
     {error && <p role="alert" className="library-alert">{error}</p>}
+    {linkError && <p role="alert" className="library-alert">{linkError}</p>}
     {busy && <p role="status" className="library-muted">Loading import details…</p>}
     <div className="library-workbench-grid" data-columns={discovery ? "2" : "1"}>
       {discovery && <div className="library-workbench-pane">
@@ -616,16 +835,19 @@ function SourceImporter({ api, entryId, discoverOnOpen, entries, onChanged, onCl
       </div>}
       <div className="library-workbench-pane">
         <p className="library-pane-label">Candidates</p>
-        {!busy && candidates.length === 0 && <p className="library-muted">No saved candidates.</p>}
-        {candidates.map((candidate) => <CandidateReview key={`${candidate.id}:${candidate.packageDigest}:${candidate.state}:${candidate.registry?.reviewStatus}`} api={api} initial={candidate} entry={entries.find((entry) => entry.id === candidate.skillEntryId || entry.skill?.slug === candidate.lineage.slug)} onChanged={onChanged} />)}
+        {!busy && listed.length === 0 && <p className="library-muted">No saved candidates.</p>}
+        {listed.map((candidate) => <CandidateReview key={`${candidate.id}:${candidate.packageDigest}:${candidate.state}:${candidate.registry?.reviewStatus}`} api={api} library={library} initial={candidate} linked={candidate.id === linked?.id} entry={entries.find((entry) => entry.id === candidate.skillEntryId || entry.skill?.slug === candidate.lineage.slug)} onChanged={onChanged} />)}
         {cursor && <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void loadCandidates(cursor)}>More candidates</Button>}
       </div>
     </div>
   </section>;
 }
 
-function CandidateReview({ api, initial, entry, onChanged }: { api: LibraryClient; initial: LibraryCandidate; entry?: LibraryEntry; onChanged: () => Promise<void> }) {
+function CandidateReview({ api, library, initial, linked = false, entry, onChanged }: { api: LibraryClient; library: LibrarySummary; initial: LibraryCandidate; linked?: boolean; entry?: LibraryEntry; onChanged: () => Promise<void> }) {
   const [candidate, setCandidate] = useState(initial);
+  const articleRef = useRef<HTMLElement>(null);
+  // A deep-linked change takes focus once so keyboard and screen reader users start there.
+  useEffect(() => { if (linked) articleRef.current?.focus(); }, [linked]);
   const [inspected, setInspected] = useState(false);
   const [attested, setAttested] = useState(false);
   const [reason, setReason] = useState("");
@@ -642,7 +864,7 @@ function CandidateReview({ api, initial, entry, onChanged }: { api: LibraryClien
     setBusy(true); setError(null);
     try { await work(); await onChanged(); } catch (e) { setError(libraryError(e)); } finally { setBusy(false); }
   }
-  return <article className="library-candidate" aria-label={`Import ${candidate.sourcePath}`}>
+  return <article ref={articleRef} className={linked ? "library-candidate library-linked" : "library-candidate"} aria-label={`Import ${candidate.sourcePath}`} data-linked={linked ? "true" : undefined} tabIndex={linked ? -1 : undefined}>
     <header className="library-candidate-head"><h5>{candidate.mapping.title}</h5><Chip tone={state.tone}>{state.label}</Chip></header>
     <p className="library-candidate-meta"><code>{candidate.lineage.slug}</code><span>{candidate.expectedVersion}</span>{candidate.mapping.license && <span>{candidate.mapping.license}</span>}</p>
     <p className="library-muted">Native name: {candidate.lineage.nativeName ?? "Unknown"} · Preview expires: {date(candidate.expiresAt)}</p>
@@ -672,7 +894,8 @@ function CandidateReview({ api, initial, entry, onChanged }: { api: LibraryClien
       <Button variant="ghost" size="sm" disabled={busy} onClick={() => void run(async () => setCandidate((await api.ignore(candidate.id)).candidate))}>Ignore candidate</Button>
       {candidate.state === "ready-for-review" && <div className="library-decision-main">
         <p className="library-muted">Unclassified changes require user action before an update. Submitting does not adopt or install this version.</p>
-        <Button size="sm" disabled={busy || expired || !candidate.packageDigest || (candidate.orderStatus === "unverified" && !reason.trim())} onClick={() => void run(async () => {
+        {!library.access.canImport && <p className="library-muted">An author role is required to submit this import.</p>}
+        <Button size="sm" disabled={busy || !library.access.canImport || expired || !candidate.packageDigest || (candidate.orderStatus === "unverified" && !reason.trim())} onClick={() => void run(async () => {
           const result = await api.import(candidate.id, { expectedPackageDigest: candidate.packageDigest!, release: { classification: "unclassified" }, clientMutationId: key.current, ...(candidate.orderStatus === "unverified" && reason.trim() ? { acknowledgeUnverifiedOrder: { reason: reason.trim() } } : {}) });
           setCandidate(result.candidate); setInspected(false); setAttested(false);
         })}>Submit import for review</Button>
@@ -686,11 +909,13 @@ function CandidateReview({ api, initial, entry, onChanged }: { api: LibraryClien
           const bundle = await api.submittedBundle(candidate.registry.submissionId, candidate.packageDigest);
           setInspected(true); return bundle;
         }} />
-        <label className="library-check"><input type="checkbox" checked={attested} disabled={!inspected || busy} onChange={(event) => setAttested(event.target.checked)} />I reviewed these files for my private use</label>
-        <div className="library-decision-main">
-          <p className="library-muted">Requires MFA and an enabled instance policy. This attestation does not authorize sharing.</p>
-          <Button size="sm" disabled={busy || !inspected || !attested || !candidate.packageDigest} onClick={() => void run(async () => setCandidate((await api.selfReview(candidate.id, candidate.packageDigest!)).candidate))}>Approve for my private use</Button>
-        </div>
+        {library.owner.type === "team" ? <p className="library-muted">Team imports require instance review before adoption.</p> : <>
+          <label className="library-check"><input type="checkbox" checked={attested} disabled={!inspected || busy} onChange={(event) => setAttested(event.target.checked)} />I reviewed these files for my private use</label>
+          <div className="library-decision-main">
+            <p className="library-muted">Requires MFA and an enabled instance policy. This attestation does not authorize sharing.</p>
+            <Button size="sm" disabled={busy || !inspected || !attested || !candidate.packageDigest} onClick={() => void run(async () => setCandidate((await api.selfReview(candidate.id, candidate.packageDigest!)).candidate))}>Approve for my private use</Button>
+          </div>
+        </>}
       </>}
       {(candidate.registry.attestation === "private-self-reviewed" || (candidate.registry.reviewStatus === "approved" && candidate.skillEntryId)) && <div className="library-actions">
         {candidate.registry.attestation === "private-self-reviewed" && <Button size="sm" variant="outline" disabled={busy} onClick={() => void run(async () => { await api.requestReview(candidate.id); setMessage("Instance review requested. Sharing stays restricted until review is complete."); })}>Request instance review for sharing</Button>}
@@ -705,15 +930,16 @@ function CandidateReview({ api, initial, entry, onChanged }: { api: LibraryClien
   </article>;
 }
 
-function SkillEntry({ api, client, entry, canWrite, titleId, sourceEntry, onSelectEntry, onChanged, footer }: {
-  api: LibraryClient; client: RegistryClient; entry: LibraryEntry; canWrite: boolean; titleId: string; sourceEntry?: LibraryEntry;
+function SkillEntry({ api, client, entry, canWrite, titleId, returnTo, sourceEntry, onSelectEntry, onChanged, footer }: {
+  api: LibraryClient; client: RegistryClient; entry: LibraryEntry; canWrite: boolean; titleId: string;
+  /** Internal /libraries URL that restores this exact selection. */
+  returnTo: string; sourceEntry?: LibraryEntry;
   onSelectEntry: (id: string) => void; onChanged: () => Promise<void>; footer: ReactNode;
 }) {
-  const [version, setVersion] = useState("");
-  const [curatorNote, setCuratorNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [bindingsOpen, setBindingsOpen] = useState(false);
+  const [changeOpen, setChangeOpen] = useState(false);
   const [release, setRelease] = useState<ReleaseMetadata | null>(null);
   const [requiresAction, setRequiresAction] = useState<boolean | null>(null);
   const slug = entry.skill?.slug;
@@ -731,30 +957,36 @@ function SkillEntry({ api, client, entry, canWrite, titleId, sourceEntry, onSele
     return () => { active = false; };
   }, [client, slug, adoptedVersion, artifactSha256]);
   if (!entry.skill || !slug) return <header className="library-inspector-head"><div className="library-inspector-title"><h3 id={titleId} tabIndex={-1}>{entry.title}</h3></div></header>;
-  async function adopt() {
+  // Re-read the exact release before adopting: the list digest must still
+  // match, and the server keeps the final say on authority and concurrency.
+  async function adopt(choice: AdoptableRelease, reason: string) {
     setBusy(true); setError(null);
     try {
-      const release = await client.getRelease(slug!, version.trim());
-      await api.adopt(entry.id, { version: version.trim(), artifactSha256: release.artifact.sha256, expectedCurrentAdoptionId: entry.adoption?.id ?? null, reason: curatorNote.trim() });
+      const exact = await client.getRelease(slug!, choice.version);
+      if (exact.version !== choice.version || exact.artifact.sha256 !== choice.artifact.sha256) {
+        setError("The release changed since this list loaded. Refresh and choose it again.");
+        return false;
+      }
+      await api.adopt(entry.id, { version: exact.version, artifactSha256: exact.artifact.sha256, expectedCurrentAdoptionId: entry.adoption?.id ?? null, reason });
       await onChanged();
-      setCuratorNote("");
-    } catch (e) { setError(libraryError(e)); } finally { setBusy(false); }
+      return true;
+    } catch (e) {
+      setError(errorCode(e) === "RELEASE_NOT_FOUND" ? "This release is no longer available. Refresh and choose another." : libraryError(e));
+      return false;
+    } finally { setBusy(false); }
   }
   const adoption = entry.adoption;
   const attestation = adoption ? attestationLabel(adoption.attestation) : null;
   const published = shortDate(release?.publishedAt);
   const platforms = release?.platforms?.map((platform) => platformLabel(platform.name)).filter(Boolean) ?? [];
-  const adoptForm = <form className="library-form" onSubmit={(event) => { event.preventDefault(); void adopt(); }}>
-    <label className="library-field"><span>Reviewed release version</span><Input value={version} onChange={(event) => setVersion(event.target.value)} placeholder="0.0.1" required /></label>
-    <label className="library-field"><span>Curator note (optional)</span><Input value={curatorNote} onChange={(event) => setCuratorNote(event.target.value)} maxLength={500} /></label>
-    <div className="library-form-actions"><Button size="sm" variant={adoption ? "outline" : "default"} disabled={busy || !version.trim()}>Adopt registry release</Button></div>
-  </form>;
+  const skillLink = `/skills/${encodeURIComponent(slug)}?${new URLSearchParams({ ...(adoption ? { version: adoption.version } : {}), returnTo })}`;
+  const picker = <LibraryReleasePicker client={client} slug={slug} currentVersion={adoption?.version ?? null} busy={busy} primary={!adoption} onAdopt={adopt} />;
   return <>
     <header className="library-inspector-head">
       <Tile tone={tileTone(slug)} size={24} />
       <div className="library-inspector-title">
         <h3 id={titleId} tabIndex={-1}>{entry.title}</h3>
-        <p><code>{slug}</code><a href={`/skills/${encodeURIComponent(slug)}`}>View in registry</a></p>
+        <p><code>{slug}</code><a href={skillLink}>View in Skills</a></p>
       </div>
     </header>
     <dl className="library-facts">
@@ -763,18 +995,18 @@ function SkillEntry({ api, client, entry, canWrite, titleId, sourceEntry, onSele
         {attestation && <Chip tone={attestation.tone}>{attestation.label}</Chip>}
         {shortDate(adoption.adoptedAt) && <span className="library-muted">{shortDate(adoption.adoptedAt)}</span>}
       </span> : <span className="library-muted">No version adopted</span>}</Fact>
-      {adoption && <Fact label="Registry">{release ? <span className="library-fact-inline">
+      {adoption && <Fact label="Skills">{release ? <span className="library-fact-inline">
         {release.lifecycleStatus === "deprecated" ? <Chip tone="amber">Deprecated</Chip> : <Chip tone="teal">{published ? `Published ${published}` : "Published"}</Chip>}
         {platforms.length > 0 && <span className="library-muted">{platforms.join(" · ")}</span>}
       </span> : <span className="library-muted">{error ? "Release unavailable" : "Checking release…"}</span>}</Fact>}
       <Fact label="From">{sourceEntry ? <button type="button" className="library-link-button" onClick={() => onSelectEntry(sourceEntry.id)}><GitBranch size={12} aria-hidden="true" />{sourceEntry.source?.fullName ?? sourceEntry.title}</button>
-        : entry.skill.sourceEntryId ? <span>A source in this library{entry.skill.sourcePath ? <> · <code>{entry.skill.sourcePath}</code></> : null}</span> : "Registry"}</Fact>
+        : entry.skill.sourceEntryId ? <span>A source in this library{entry.skill.sourcePath ? <> · <code>{entry.skill.sourcePath}</code></> : null}</span> : "Skills"}</Fact>
     </dl>
     {(release?.summary || release?.releaseNotes || adoption?.reason || !entry.skill.ownership?.isCaller) && <div className="library-section library-prose-block">
       {release?.summary && <p className="library-prose">{release.summary}</p>}
       {release?.releaseNotes && <details className="library-details"><summary>Release notes for {release.version ?? adoption?.version}</summary><p className="library-prose library-notes">{release.releaseNotes}</p></details>}
       {adoption?.reason && <p className="library-note">Curator note: {adoption.reason}</p>}
-      {!entry.skill.ownership?.isCaller && <p className="library-muted">This skill remains owned by its contributor. Library membership does not transfer ownership or grant release access.</p>}
+      {entry.skill.ownership?.type === "team" ? <p className="library-muted">Owned by {entry.skill.ownership.name}. Curators manage this skill on the team's behalf.</p> : !entry.skill.ownership?.isCaller && <p className="library-muted">This skill remains owned by its contributor. Library membership does not transfer ownership or grant release access.</p>}
     </div>}
     {adoption && <section className="library-section" aria-labelledby={`${titleId}-install`}>
       <h4 id={`${titleId}-install`}>Install</h4>
@@ -784,12 +1016,15 @@ function SkillEntry({ api, client, entry, canWrite, titleId, sourceEntry, onSele
       </> : !error && <p className="library-muted">Checking the adopted artifact…</p>}
     </section>}
     {canWrite && !adoption && <section className="library-section" aria-labelledby={`${titleId}-adopt`}>
-      <h4 id={`${titleId}-adopt`}>Adopt a registry release</h4>
+      <h4 id={`${titleId}-adopt`}>Adopt a skill release</h4>
       <p className="library-muted">Adoption records the reviewed version you recommend. Installed copies change only when you update them.</p>
-      {adoptForm}
+      {picker}
     </section>}
     {(adoption || footer) && <div className="library-section library-secondary-actions">
-      {canWrite && adoption && <details className="library-details"><summary>Change adopted version</summary><div className="library-details-body">{adoptForm}</div></details>}
+      {canWrite && adoption && <details className="library-details" onToggle={(event) => setChangeOpen(event.currentTarget.open)}>
+        <summary>Change adopted version</summary>
+        {changeOpen && <div className="library-details-body">{picker}</div>}
+      </details>}
       {adoption && <details className="library-details" onToggle={(event) => setBindingsOpen(event.currentTarget.open)}>
         <summary>Connect an existing target</summary>
         {bindingsOpen && <div className="library-details-body"><TargetBindings api={api} entry={entry} /></div>}
@@ -844,7 +1079,7 @@ function TargetBindings({ api, entry }: { api: LibraryClient; entry: LibraryEntr
 
 function RemoveEntry({ api, entry, onChanged }: { api: LibraryClient; entry: LibraryEntry; onChanged: () => Promise<void> }) {
   const [confirm, setConfirm] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
-  return <div className="library-remove">{confirm ? <div className="library-confirm"><p>Remove this entry? Installed files and registry releases stay intact.</p><div className="library-actions"><Button variant="destructive" size="sm" disabled={busy} onClick={() => { setBusy(true); void api.removeEntry(entry.id).then(() => onChanged()).catch((e) => setError(libraryError(e))).finally(() => setBusy(false)); }}>Confirm remove</Button><Button variant="ghost" size="sm" onClick={() => setConfirm(false)}>Cancel</Button></div></div> : <Button variant="ghost" size="sm" className="library-remove-button" onClick={() => setConfirm(true)}><Trash2 size={14} aria-hidden="true" />Remove entry</Button>}{error && <p role="alert" className="library-alert">{error}</p>}</div>;
+  return <div className="library-remove">{confirm ? <div className="library-confirm"><p>Remove this entry? Installed files and skill releases stay intact.</p><div className="library-actions"><Button variant="destructive" size="sm" disabled={busy} onClick={() => { setBusy(true); void api.removeEntry(entry.id).then(() => onChanged()).catch((e) => setError(libraryError(e))).finally(() => setBusy(false)); }}>Confirm remove</Button><Button variant="ghost" size="sm" onClick={() => setConfirm(false)}>Cancel</Button></div></div> : <Button variant="ghost" size="sm" className="library-remove-button" onClick={() => setConfirm(true)}><Trash2 size={14} aria-hidden="true" />Remove entry</Button>}{error && <p role="alert" className="library-alert">{error}</p>}</div>;
 }
 
 function LibrarySettings({ api, mfaVerified }: { api: LibraryClient; mfaVerified: boolean }) {
@@ -876,7 +1111,7 @@ function LibrarySettings({ api, mfaVerified }: { api: LibraryClient; mfaVerified
   </section>;
 }
 
-function LibraryInbox({ api, onSelect }: { api: LibraryClient; onSelect: (id: string) => void }) {
+function LibraryInbox({ api, onSelect }: { api: LibraryClient; onSelect: (item: LibraryInboxItem) => void }) {
   const [items, setItems] = useState<LibraryInboxItem[]>([]); const [cursor, setCursor] = useState<string | null>(null); const [error, setError] = useState<string | null>(null);
   const [unread, setUnread] = useState(0);
   useEffect(() => { let active = true; void api.inbox().then((value) => { if (active) { setItems(value.items); setCursor(value.nextCursor); setUnread(value.unreadCount ?? 0); } }).catch((e) => { if (active) setError(libraryError(e)); }); return () => { active = false; }; }, [api]);
@@ -886,7 +1121,7 @@ function LibraryInbox({ api, onSelect }: { api: LibraryClient; onSelect: (id: st
       {items.length === 0 ? <p className="library-muted">No notifications yet.</p> : <ul className="library-inbox">{items.map((item) => {
         const kind = eventLabel(item.kind);
         const fresh = !item.readAt;
-        return <li key={item.id}><button type="button" className="library-inbox-item" onClick={() => { onSelect(item.libraryId); void api.markRead([item.id]).then(() => { setItems((current) => current.map((row) => row.id === item.id ? { ...row, readAt: new Date().toISOString() } : row)); if (fresh) setUnread((count) => Math.max(0, count - 1)); }).catch((e) => setError(libraryError(e))); close(); }}>
+        return <li key={item.id}><button type="button" className="library-inbox-item" onClick={() => { onSelect(item); void api.markRead([item.id]).then(() => { setItems((current) => current.map((row) => row.id === item.id ? { ...row, readAt: new Date().toISOString() } : row)); if (fresh) setUnread((count) => Math.max(0, count - 1)); }).catch((e) => setError(libraryError(e))); close(); }}>
           <span className="library-inbox-mark" data-state={fresh ? (item.kind === "candidate-ready" ? "change" : "unread") : "read"} aria-hidden="true" />
           <span className="library-inbox-text">
             <span className="library-inbox-title">{item.libraryName}</span>

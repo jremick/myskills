@@ -5,8 +5,11 @@ import { LandingSettings } from "./components/marketing/LandingSettings.js";
 import { QRCodeSVG } from "qrcode.react";
 import { BrandingProvider } from "./components/branding/BrandingProvider.js";
 import { BrandIdentity } from "./components/branding/BrandIdentity.js";
+import { GithubAccountConnection } from "./components/github/GithubAccountConnection.js";
+import { GithubSettings } from "./components/github/GithubSettings.js";
 import { BrandingSettings } from "./components/branding/BrandingSettings.js";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useId,
@@ -16,12 +19,14 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 import {
   ArrowLeft,
   ArrowRight,
   Building2,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
@@ -41,6 +46,7 @@ import {
   Monitor,
   PackageCheck,
   PackageOpen,
+  Pin,
   Plus,
   RotateCw,
   Save,
@@ -48,9 +54,7 @@ import {
   Settings,
   ShieldCheck,
   Shield,
-  SlidersHorizontal,
   SquareCheckBig,
-  TerminalSquare,
   Trash2,
   Upload,
   UserCog,
@@ -62,19 +66,25 @@ import { parseSemanticVersion, type PublicSkill, type RegistryView, type SkillSh
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Frame, FrameDescription, FrameHeader, FramePanel, FrameTitle } from "@/components/reui/frame";
+import { Frame, FramePanel } from "@/components/reui/frame";
 import { ArchitecturesDashboard } from "@/components/architecture/ArchitecturesDashboard";
+import { isArchitecturePath } from "@/components/architecture/architecture-route";
+import type { ArchitectureNavigationGuard } from "@/components/architecture/useArchitectureNavigationGuard";
 import { OrganizationsDashboard } from "@/components/organization/OrganizationsDashboard";
 import { ArchitectureTargetsDashboard } from "@/components/target/ArchitectureTargetsDashboard";
 import { LibrariesDashboard } from "@/components/library/LibrariesDashboard";
 import { tileTone } from "@/components/library/library-display";
 import { SystemUpdateCenter } from "@/components/update/SystemUpdateCenter";
+import { AddToLibraryButton } from "@/components/library/AddToLibraryButton";
 import { PackageFileViewer } from "@/components/registry/PackageFileViewer";
-import { ManagedSkillsDashboard } from "@/components/registry/ManagedSkillsDashboard";
+import { ManagedSkillsInventory } from "@/components/registry/ManagedSkillsInventory";
+import { SkillManagePanel } from "@/components/registry/SkillManagePanel";
+import { ManagedReleaseSelect, SkillSectionTabs, SkillVersionsPanel } from "@/components/registry/SkillSections";
+import { isPublishedRelease, parseSkillScope, parseSkillTab, safeLibraryReturn, sectionPanelId, sectionTabId, type SkillScope, type SkillTab } from "@/components/registry/skill-workspace";
 import { SubmissionEvidencePanel } from "@/components/registry/SubmissionEvidencePanel";
 import { SkillImprovementPanel } from "@/components/registry/SkillImprovementPanel";
 import { BundleWorkspace } from "@/components/registry/BundleWorkspace";
-import { chipTone, findingsLabel, lifecycleLabel, reviewStatusLabel, securityStatusLabel, severityLabel, visibilityLabel } from "@/components/registry/status-display";
+import { isBootstrapVersion, releaseVersionLabel, chipTone, findingsLabel, lifecycleLabel, reviewStatusLabel, securityStatusLabel, severityLabel, visibilityLabel } from "@/components/registry/status-display";
 import { useSplitLayout } from "@/components/registry/useSplitLayout";
 import {
   createRegistryClient,
@@ -106,6 +116,7 @@ import {
   type ReviewActionResult,
   type ReviewActionName,
   type ReviewSubmissionSummary,
+  type SkillManagementSummary,
   type SkillReleaseSummary,
   type SubmitSkillResult,
   type TeamDashboard,
@@ -125,7 +136,7 @@ interface RegistryAppProps {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type AuthState = "idle" | "loading" | "mfa";
-type AppView = "libraries" | "manage" | "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "organizations" | "targets" | "updates" | "admin" | "review" | "submit" | "teams" | "settings" | "connect" | "not-found";
+type AppView = "libraries" | "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "organizations" | "targets" | "updates" | "admin" | "review" | "submit" | "teams" | "settings" | "connect" | "not-found";
 
 interface AppLocation {
   view: AppView;
@@ -134,26 +145,39 @@ interface AppLocation {
   platform: string;
   version: string | null;
   catalog: CatalogLocation;
+  workspace: WorkspaceLocation;
 }
 
-/** Registry catalog state kept in the URL beside the existing skill parameters. */
+/** Skills catalog state kept in the URL beside the existing skill parameters. */
 interface CatalogLocation {
   view: RegistryView;
   bundle: string | null;
 }
 
-type ArchitectureNavigationGuard = (action: string) => boolean;
+/** Skills workspace scope, detail section and a validated Libraries return path. */
+interface WorkspaceLocation {
+  scope: SkillScope;
+  tab: SkillTab;
+  returnTo: string | null;
+}
+
+// "denied" is the server's answer (401/403/404). "error" means the check did
+// not complete (network, 5xx) and must be retried, not shown as a denial.
+type ManagedDetail = { slug: string; status: "loading" | "ready" | "denied" | "error"; record: SkillManagementSummary | null };
+
 type RegistryLayout = "split" | "stack";
 type MobileMenu = "more" | "account";
 type RegistryFocus = { kind: "title" } | { kind: "row"; slug: string };
 interface RegistryDisclosures {
   notes: boolean;
+  details: boolean;
+  files: boolean;
   improvement: boolean;
-  owner: boolean;
 }
+type ReleaseCardState = "ready" | "loading" | "error" | "no-default";
 
 const APP_HISTORY_INDEX_KEY = "__myskillsAppHistoryIndex";
-// The Registry splits into list and inspector when its own surface is this wide.
+// The Skills page splits into list and inspector when its own surface is this wide.
 const REGISTRY_SPLIT_WIDTH = 880;
 
 interface WebSession {
@@ -235,16 +259,28 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   const architectureNavigationGuardRef = useRef<ArchitectureNavigationGuard | null>(null);
   const restoringPopstateRef = useRef(false);
   const [view, setView] = useState<AppView>(initialLocation.view);
+  // Routes that own URL state beyond the view (the architecture section) read it from here.
+  const [appUrl, setAppUrl] = useState(currentBrowserUrl);
   const [session, setSession] = useState<WebSession | null>(() => readStoredSession());
   // Bundle catalog, when the client and server provide it. A 404 from the
-  // catalog falls back to the flat registry for this session.
+  // catalog falls back to the flat Skills list for this session.
   const [catalogAvailable, setCatalogAvailable] = useState(() => Boolean(registryClient.bundles));
   const [catalogView, setCatalogView] = useState<RegistryView>(initialLocation.catalog.view);
   const [selectedBundleId, setSelectedBundleId] = useState<string | null>(initialLocation.catalog.bundle);
   const catalogLocationRef = useRef<CatalogLocation>(initialLocation.catalog);
+  const [scope, setScope] = useState<SkillScope>(initialLocation.workspace.scope);
+  const [tab, setTab] = useState<SkillTab>(initialLocation.workspace.tab);
+  const [returnTo, setReturnTo] = useState<string | null>(initialLocation.workspace.returnTo);
+  const workspaceLocationRef = useRef<WorkspaceLocation>(initialLocation.workspace);
   const browseUrl = (slug: string | null, nextQuery: string, nextPlatform: string, version: string | null = null) => (
-    registryUrl(slug, nextQuery, nextPlatform, version, catalogLocationRef.current)
+    registryUrl(slug, nextQuery, nextPlatform, version, catalogLocationRef.current, workspaceLocationRef.current)
   );
+  const updateWorkspaceLocation = (next: Partial<WorkspaceLocation>) => {
+    workspaceLocationRef.current = { ...workspaceLocationRef.current, ...next };
+    if (next.scope !== undefined) setScope(next.scope);
+    if (next.tab !== undefined) setTab(next.tab);
+    if (next.returnTo !== undefined) setReturnTo(next.returnTo);
+  };
   const bundleCatalog = catalogAvailable ? registryClient.bundles : undefined;
   const [siteState, setSiteState] = useState<{ view: AppView; enabled?: boolean; failed?: boolean } | null>(null);
   const [siteRetry, setSiteRetry] = useState(0);
@@ -270,7 +306,18 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   const [selectedSkill, setSelectedSkill] = useState<PublicSkill | null>(null);
   const [release, setRelease] = useState<ReleaseMetadata | null>(null);
   const [visibleReleases, setVisibleReleases] = useState<SkillReleaseSummary[]>([]);
+  // Every exact release record the server returned for the selected skill. For
+  // a manager this includes unpublished releases; readers only see published.
+  const [releaseRows, setReleaseRows] = useState<SkillReleaseSummary[]>([]);
   const [historyState, setHistoryState] = useState<LoadState>("idle");
+  // Management authority for the selected skill comes from the server's
+  // management record, never from the readable skill's sharing flag.
+  const [managed, setManaged] = useState<ManagedDetail | null>(null);
+  const [managedRetry, setManagedRetry] = useState(0);
+  // The slug whose readable (public) detail failed; a manager may still load it.
+  const [publicFailure, setPublicFailure] = useState<string | null>(null);
+  // A saved management change reloads in place instead of clearing the detail.
+  const softReload = useRef({ detail: false, managed: false });
   const [platform, setPlatform] = useState(initialLocation.platform);
   const [listState, setListState] = useState<LoadState>("idle");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -286,6 +333,9 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   const [mfaPending, setMfaPending] = useState<MfaPending | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenu, setMobileMenu] = useState<MobileMenu | null>(null);
+  // Explicit app navigation to Libraries starts it fresh from the new URL.
+  // Its own library/entry URL writes (navigateFromLibraries) never bump this.
+  const [libraryNavigationRevision, setLibraryNavigationRevision] = useState(0);
   const mobileMoreButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMoreMenuRef = useRef<HTMLDivElement>(null);
   const mobileAccountButtonRef = useRef<HTMLButtonElement>(null);
@@ -296,10 +346,16 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   const registrySurfaceRef = useRef<HTMLDivElement | null>(null);
   const inspectorTitleRef = useRef<HTMLHeadingElement>(null);
   const pendingRegistryFocus = useRef<RegistryFocus | null>(null);
-  const [registryDisclosures, setRegistryDisclosures] = useState<RegistryDisclosures>({ notes: false, improvement: false, owner: false });
+  const [registryDisclosures, setRegistryDisclosures] = useState<RegistryDisclosures>({ notes: false, details: false, files: false, improvement: false });
+  const setRegistryDisclosure = (key: keyof RegistryDisclosures, open: boolean) => setRegistryDisclosures((current) => current[key] === open ? current : { ...current, [key]: open });
+  const sectionsId = useId();
+  // Can manage needs a session and the management inventory; otherwise the
+  // workspace reads the catalog.
+  const canUseManageScope = Boolean(session && registryClient.listManagedSkills);
+  const workspaceScope: SkillScope = scope === "manage" && canUseManageScope ? "manage" : "all";
   // A desktop split shows the first result without choosing it: the URL stays
   // /registry until the reader picks a skill. A stack shows the list instead.
-  const implicitSlug = registryLayout === "split" && selectedSlug === null ? skills[0]?.slug ?? null : null;
+  const implicitSlug = workspaceScope === "all" && registryLayout === "split" && selectedSlug === null ? skills[0]?.slug ?? null : null;
   const detailSlug = selectedSlug ?? implicitSlug;
   const canUseAdmin = Boolean(session && isAdminUser(session.user));
   const canUseReview = Boolean(session && isReviewerUser(session.user));
@@ -307,7 +363,9 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   const canUseTeams = Boolean(session);
   const canUseOrganizations = Boolean(session && registryClient.listOrganizations);
   const canUseTargets = Boolean(session && registryClient.listArchitectureTargets);
-  const activeView: AppView = isPublicView(view)
+  const activeView: AppView = view === "browse" && scope === "manage" && !session
+    ? "login"
+    : isPublicView(view)
     ? view
     : !session
       ? "login"
@@ -327,8 +385,6 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
           ? "targets"
         : view === "updates" && canUseTargets
           ? "updates"
-        : view === "manage" && session
-          ? "manage"
         : view === "teams" && canUseTeams
           ? "teams"
         : view === "settings"
@@ -339,6 +395,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     window.history.replaceState(appHistoryState(historyIndexRef.current), "", nextUrl);
     currentLocationRef.current = appLocationFromWindow();
     currentUrlRef.current = currentBrowserUrl();
+    setAppUrl(currentUrlRef.current);
   };
 
   const pushAppHistory = (nextUrl: string) => {
@@ -346,13 +403,19 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     window.history.pushState(appHistoryState(historyIndexRef.current), "", nextUrl);
     currentLocationRef.current = appLocationFromWindow();
     currentUrlRef.current = currentBrowserUrl();
+    setAppUrl(currentUrlRef.current);
+  };
+
+  const navigateArchitectures = (nextUrl: string, mode: "push" | "replace") => {
+    if (mode === "push") pushAppHistory(nextUrl);
+    else replaceAppHistory(nextUrl);
   };
 
   const registerArchitectureNavigationGuard = useCallback((guard: ArchitectureNavigationGuard | null) => {
     architectureNavigationGuardRef.current = guard;
   }, []);
 
-  // Split or stack follows the Registry surface's own width, not the viewport.
+  // Split or stack follows the Skills surface's own width, not the viewport.
   // A surface without layout (width 0, as in DOM tests) keeps the split default.
   const measureRegistry = useCallback((node: HTMLDivElement | null) => {
     registryObserver.current?.disconnect();
@@ -389,10 +452,13 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
         }
         currentLocationRef.current = next;
         currentUrlRef.current = currentBrowserUrl();
+        setAppUrl(currentUrlRef.current);
         return;
       }
 
-      if (previous.view === "architectures" && next.view !== "architectures") {
+      // The architecture guard sees every move, including moves inside the
+      // section; it prompts only when the destination would discard a draft.
+      if (previous.view === "architectures") {
         const guard = architectureNavigationGuardRef.current;
         if (guard) {
           const action = nextHistoryIndex !== null && nextHistoryIndex < historyIndexRef.current
@@ -400,7 +466,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
             : nextHistoryIndex !== null && nextHistoryIndex > historyIndexRef.current
               ? "go forward"
               : "navigate away";
-          if (!guard(action)) {
+          if (!guard(action, currentBrowserUrl())) {
             const restoreDelta = nextHistoryIndex === null
               ? null
               : historyIndexRef.current - nextHistoryIndex;
@@ -423,37 +489,67 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
       if (nextHistoryIndex !== null) {
         historyIndexRef.current = nextHistoryIndex;
       }
-      currentLocationRef.current = next;
-      currentUrlRef.current = currentBrowserUrl();
-      searchSelectionQuery.current = null;
-      setView(next.view);
-      // Clear eagerly only when the detail effects are certain to reload. An
-      // implicit desktop selection can become the same explicit skill, so a
-      // change to or from /registry is left to those effects.
-      const bothExplicit = next.slug !== null && previous.slug !== null;
-      if (bothExplicit && next.slug !== previous.slug) {
-        setSelectedSkill(null);
-        setVisibleReleases([]);
-        setHistoryState("idle");
-      }
-      if (bothExplicit && (next.slug !== previous.slug || next.version !== previous.version)) {
-        setRelease(null);
-        setDetailState("loading");
-      }
-      if (registryLayoutRef.current === "stack" && next.view === "browse" && previous.view === "browse" && next.slug !== previous.slug) {
-        pendingRegistryFocus.current = next.slug ? { kind: "title" } : previous.slug ? { kind: "row", slug: previous.slug } : null;
-      }
-      setSelectedSlug(next.slug);
-      setSelectedVersion(next.version);
-      setQuery(next.query);
-      setPlatform(next.platform);
-      catalogLocationRef.current = next.catalog;
-      setCatalogView(next.catalog.view);
-      setSelectedBundleId(next.catalog.bundle);
-      setMobileMenu(null);
+      applyLocation(next, previous);
     }
     window.addEventListener("popstate", syncFromBrowserHistory);
     return () => window.removeEventListener("popstate", syncFromBrowserHistory);
+  }, []);
+
+  // Moves every URL-owned piece of state to a location. Uses only setters and
+  // refs, so the popstate listener registered once can call it safely.
+  function applyLocation(next: AppLocation, previous: AppLocation) {
+    currentLocationRef.current = next;
+    currentUrlRef.current = currentBrowserUrl();
+    setAppUrl(currentUrlRef.current);
+    searchSelectionQuery.current = null;
+    setView(next.view);
+    // Clear eagerly only when the detail effects are certain to reload. An
+    // implicit desktop selection can become the same explicit skill, so a
+    // change to or from /registry is left to those effects.
+    const bothExplicit = next.slug !== null && previous.slug !== null;
+    if (bothExplicit && next.slug !== previous.slug) {
+      setSelectedSkill(null);
+      setVisibleReleases([]);
+      setReleaseRows([]);
+      setHistoryState("idle");
+    }
+    if (bothExplicit && (next.slug !== previous.slug || next.version !== previous.version)) {
+      setRelease(null);
+      setDetailState("loading");
+    }
+    if (registryLayoutRef.current === "stack" && next.view === "browse" && previous.view === "browse" && next.slug !== previous.slug) {
+      pendingRegistryFocus.current = next.slug ? { kind: "title" } : previous.slug ? { kind: "row", slug: previous.slug } : null;
+    }
+    setSelectedSlug(next.slug);
+    setSelectedVersion(next.version);
+    setQuery(next.query);
+    setPlatform(next.platform);
+    catalogLocationRef.current = next.catalog;
+    setCatalogView(next.catalog.view);
+    setSelectedBundleId(next.catalog.bundle);
+    workspaceLocationRef.current = next.workspace;
+    setScope(next.workspace.scope);
+    setTab(next.workspace.tab);
+    setReturnTo(next.workspace.returnTo);
+    setMobileMenu(null);
+  }
+
+  /** Opens an internal app URL (for example an exact skill link from Review) as a new history entry. */
+  function openAppUrl(url: string) {
+    const previous = currentLocationRef.current;
+    pushAppHistory(url);
+    applyLocation(currentLocationRef.current, previous);
+  }
+
+  // Libraries records its own library/entry/candidate URLs through the app
+  // history so the history index and location refs stay accurate. A link that
+  // leaves Libraries (for example to an exact skill) moves the app there too.
+  // Stable: it uses only refs, setters and ref-backed helpers.
+  const navigateFromLibraries = useCallback((url: string, mode: "push" | "replace") => {
+    const previous = currentLocationRef.current;
+    if (mode === "replace") replaceAppHistory(url);
+    else pushAppHistory(url);
+    if (currentLocationRef.current.view !== "libraries") applyLocation(currentLocationRef.current, previous);
   }, []);
 
   useEffect(() => {
@@ -489,7 +585,9 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   }, [mobileMenu]);
 
   useEffect(() => {
-    if (!session && !isPublicView(view)) {
+    // Can manage is private: signed-out readers sign in first, as the old
+    // /manage/skills page required.
+    if (!session && (!isPublicView(view) || (view === "browse" && scope === "manage"))) {
       setView("login");
       replaceAppHistory("/login");
       return;
@@ -503,7 +601,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
       setView("browse");
       replaceAppHistory("/registry");
     }
-  }, [activeView, platform, query, selectedSlug, selectedVersion, session, view]);
+  }, [activeView, platform, query, scope, selectedSlug, selectedVersion, session, view]);
 
   useEffect(() => {
     if (activeView !== "browse") {
@@ -557,8 +655,9 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
 
   useEffect(() => {
     const requestEpoch = ++listEpoch.current;
-    // The bundle catalog owns registry rows while it is mounted.
-    if (activeView !== "browse" || catalogAvailable) {
+    // The bundle catalog owns Skills rows while it is mounted, and the
+    // management inventory owns them in the Can manage scope.
+    if (activeView !== "browse" || catalogAvailable || workspaceScope !== "all") {
       setListState("idle");
       return;
     }
@@ -608,47 +707,64 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     return () => {
       active = false;
     };
-  }, [activeView, catalogAvailable, registryClient, query, refreshKey]);
+  }, [activeView, catalogAvailable, registryClient, query, refreshKey, workspaceScope]);
+
+  function applyReleaseRows(slug: string, rows: SkillReleaseSummary[]) {
+    const exact = rows.filter((row) => row.slug === slug && isExactReleaseVersion(row.version));
+    setReleaseRows(exact.filter((row, index, all) => all.findIndex((other) => other.version === row.version) === index));
+    setVisibleReleases(exact
+      .filter((row) => isPublishedRelease(row))
+      .sort((a, b) => Date.parse(b.publishedAt ?? "") - Date.parse(a.publishedAt ?? ""))
+      .filter((row, index, all) => all.findIndex((other) => other.version === row.version) === index));
+  }
 
   useEffect(() => {
     if (activeView !== "browse" || !detailSlug) {
       setSelectedSkill(null);
       setRelease(null);
       setVisibleReleases([]);
+      setReleaseRows([]);
       setHistoryState("idle");
       setDetailState("idle");
       setDetailMessage(null);
+      setPublicFailure(null);
       return;
     }
     let active = true;
-    setSelectedSkill(null);
-    setRelease(null);
-    setVisibleReleases([]);
-    setHistoryState("loading");
-    setDetailState("loading");
-    setDetailMessage(null);
+    // A soft reload keeps the current detail on screen until fresh data lands.
+    const soft = softReload.current.detail;
+    softReload.current.detail = false;
+    if (!soft) {
+      setSelectedSkill(null);
+      setRelease(null);
+      setVisibleReleases([]);
+      setReleaseRows([]);
+      setHistoryState("loading");
+      setDetailState("loading");
+      setDetailMessage(null);
+      setPublicFailure(null);
+    }
     registryClient.getSkill(detailSlug)
       .then(async (skill) => {
         if (!active) return;
         if (skill.slug !== detailSlug) {
+          setSelectedSkill(null);
           setHistoryState("error");
           setDetailMessage("Skill or release not found.");
           setDetailState("error");
           return;
         }
         setSelectedSkill(skill);
+        setPublicFailure(null);
         try {
           const rows = await registryClient.listSkillReleases(detailSlug);
           if (!active) return;
-          const visible = rows
-            .filter((row) => row.slug === detailSlug && isExactReleaseVersion(row.version) && isPublishedRelease(row))
-            .sort((a, b) => Date.parse(b.publishedAt ?? "") - Date.parse(a.publishedAt ?? ""))
-            .filter((row, index, all) => all.findIndex((other) => other.version === row.version) === index);
-          setVisibleReleases(visible);
+          applyReleaseRows(detailSlug, rows);
           setHistoryState("ready");
         } catch {
           if (!active) return;
           setVisibleReleases([]);
+          setReleaseRows([]);
           setHistoryState("error");
         }
       })
@@ -656,13 +772,80 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
         if (!active) return;
         setSelectedSkill(null);
         setRelease(null);
-        setVisibleReleases([]);
-        setHistoryState("idle");
+        // A manager's management-only history reloads separately; keep it on a soft reload.
+        if (!soft) {
+          setVisibleReleases([]);
+          setReleaseRows([]);
+          setHistoryState("idle");
+        }
         setDetailMessage(safeErrorMessage(error));
         setDetailState("error");
+        setPublicFailure(detailSlug);
       });
     return () => { active = false; };
   }, [activeView, registryClient, detailSlug, refreshKey]);
+
+  // Ask for the management record only when it can matter: in Can manage, for
+  // privileged roles, when the readable skill says the reader owns it, or when
+  // the readable detail is unavailable (archived or unpublished). The server
+  // decides; a denial hides every lifecycle control.
+  const sessionUserId = session?.user.id ?? null;
+  const privilegedSession = Boolean(session && isReviewerUser(session.user));
+  const skillReady = selectedSkill !== null && selectedSkill.slug === detailSlug;
+  const ownsReadableSkill = skillReady && Boolean(session && selectedSkill.access?.canManageSharing);
+  const wantManaged = activeView === "browse" && Boolean(detailSlug) && Boolean(session && registryClient.getManagedSkill)
+    && (workspaceScope === "manage" || privilegedSession || ownsReadableSkill || publicFailure === detailSlug);
+  const managedForSlug = managed && managed.slug === detailSlug ? managed : null;
+  const managedRecord = managedForSlug?.status === "ready" ? managedForSlug.record : null;
+  const managedLoading = wantManaged && (!managedForSlug || managedForSlug.status === "loading");
+  const managementOnly = !skillReady && publicFailure === detailSlug && managedRecord !== null;
+
+  useEffect(() => {
+    const getManagedSkill = registryClient.getManagedSkill?.bind(registryClient);
+    if (!wantManaged || !detailSlug || !getManagedSkill) {
+      softReload.current.managed = false;
+      setManaged(null);
+      return;
+    }
+    let active = true;
+    const slug = detailSlug;
+    const soft = softReload.current.managed;
+    softReload.current.managed = false;
+    setManaged((current) => soft && current?.slug === slug ? current : { slug, status: "loading", record: null });
+    getManagedSkill(slug)
+      .then((record) => {
+        if (!active) return;
+        setManaged(record && record.slug === slug ? { slug, status: "ready", record } : { slug, status: "denied", record: null });
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        const status = apiErrorStatus(error);
+        setManaged({ slug, status: status === 401 || status === 403 || status === 404 ? "denied" : "error", record: null });
+      });
+    return () => { active = false; };
+  }, [wantManaged, detailSlug, refreshKey, registryClient, sessionUserId, managedRetry]);
+
+  // Readable detail failed but the manager can load the record: its release
+  // history comes from the same authorised releases read, never from a
+  // synthesized PublicSkill or release.
+  useEffect(() => {
+    if (!managementOnly || !detailSlug) return;
+    let active = true;
+    setHistoryState((current) => current === "ready" ? current : "loading");
+    registryClient.listSkillReleases(detailSlug)
+      .then((rows) => {
+        if (!active) return;
+        applyReleaseRows(detailSlug, rows);
+        setHistoryState("ready");
+      })
+      .catch(() => {
+        if (!active) return;
+        setReleaseRows([]);
+        setVisibleReleases([]);
+        setHistoryState("error");
+      });
+    return () => { active = false; };
+  }, [managementOnly, detailSlug, registryClient, refreshKey]);
 
   useEffect(() => {
     if (activeView !== "browse" || !detailSlug || !selectedSkill || selectedSkill.slug !== detailSlug
@@ -730,21 +913,21 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   ), [release, selectedSkill, supportedDetailPlatform]);
   const latestVisibleRelease = visibleReleases.find((item) => item.version === selectedSkill?.latestVersion) ?? null;
   // Guards keep a stale skill or release off screen for the frame between a
-  // selection change and the effects that reload it.
-  const skillReady = selectedSkill !== null && selectedSkill.slug === detailSlug;
+  // selection change and the effects that reload it (skillReady is above).
   const expectedVersion = selectedVersion ?? selectedSkill?.latestVersion ?? null;
   const releaseReady = skillReady && release !== null && release.slug === detailSlug && release.version === expectedVersion;
-  const historyControls = skillReady ? (
-    <ReleaseHistoryControls
-      historyState={historyState}
-      latestVersion={latestVisibleRelease?.version ?? null}
-      onRetry={retryRegistry}
-      onReturn={returnToLatest}
-      onSelect={selectVersion}
-      releases={visibleReleases}
-      selectedVersion={selectedVersion}
-    />
-  ) : null;
+  const releaseCardState: ReleaseCardState = detailMessage ? "error"
+    : detailState === "ready" && releaseReady ? "ready"
+      : detailState === "ready" && expectedVersion === null ? "no-default"
+        : "loading";
+  // Managers may select any release record the server returned to them (from
+  // Versions); readers select published releases only.
+  const selectableReleases = managedRecord ? releaseRows : visibleReleases;
+  // A readable skill defaults only to its latest stable release; with none, it
+  // stays unselected until an exact choice. Only a management-only record
+  // (no readable release at all) opens on its newest release record.
+  const defaultVersion = skillReady ? selectedSkill.latestVersion : managementOnly ? releaseRows[0]?.version ?? null : null;
+  const workspaceVersion = selectedVersion ?? defaultVersion;
   const registryStacked = registryLayout === "stack";
   const showRegistryList = !(registryStacked && selectedSlug !== null);
   const showRegistryInspector = registryLayout === "split" || selectedSlug !== null;
@@ -753,7 +936,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     const pending = pendingRegistryFocus.current;
     if (!pending || activeView !== "browse") return;
     if (pending.kind === "title") {
-      if (skillReady && inspectorTitleRef.current) {
+      if ((skillReady || managementOnly) && inspectorTitleRef.current) {
         inspectorTitleRef.current.focus();
         pendingRegistryFocus.current = null;
       }
@@ -763,7 +946,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     const rows = registrySurfaceRef.current?.querySelectorAll<HTMLAnchorElement>("a[data-slug]") ?? [];
     Array.from(rows).find((row) => row.dataset.slug === pending.slug)?.focus();
     pendingRegistryFocus.current = null;
-  }, [activeView, skillReady, showRegistryList, listState, skills]);
+  }, [activeView, skillReady, managementOnly, showRegistryList, listState, skills]);
 
   function selectSkill(slug: string) {
     searchSelectionQuery.current = null;
@@ -777,6 +960,8 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     setSelectedSlug(slug);
     catalogLocationRef.current = { ...catalogLocationRef.current, bundle: null };
     setSelectedBundleId(null);
+    // A Libraries return belongs to the skill it was opened for.
+    if (slug !== selectedSlug) updateWorkspaceLocation({ returnTo: null });
     pushAppHistory(browseUrl(slug, query, platform, slug === selectedSlug ? selectedVersion : null));
   }
 
@@ -785,6 +970,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     searchSelectionQuery.current = null;
     setSelectedSlug(null);
     setSelectedVersion(null);
+    updateWorkspaceLocation({ tab: "overview", returnTo: null });
     pushAppHistory(browseUrl(null, query, platform));
   }
 
@@ -798,7 +984,43 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     setRelease(null);
     catalogLocationRef.current = { ...catalogLocationRef.current, bundle: bundleId };
     setSelectedBundleId(bundleId);
+    updateWorkspaceLocation({ tab: "overview", returnTo: null });
     pushAppHistory(browseUrl(null, query, platform));
+  }
+
+  /** Scope changes keep the exact skill, version and section; only Can manage drops a bundle selection. */
+  function changeScope(nextScope: SkillScope) {
+    if (nextScope === workspaceScope) return;
+    searchSelectionQuery.current = null;
+    setView("browse");
+    catalogLocationRef.current = { ...catalogLocationRef.current, bundle: null };
+    setSelectedBundleId(null);
+    updateWorkspaceLocation({ scope: nextScope });
+    pushAppHistory(browseUrl(selectedSlug, query, platform, selectedVersion));
+  }
+
+  /** A list link keeps this skill's version and return path; another skill starts at its latest release. */
+  function skillLinkUrl(slug: string): string {
+    const same = slug === selectedSlug;
+    return registryUrl(slug, query, platform, same ? selectedVersion : null, catalogLocationRef.current, { ...workspaceLocationRef.current, returnTo: same ? workspaceLocationRef.current.returnTo : null });
+  }
+
+  function scopeHref(nextScope: SkillScope): string {
+    return registryUrl(selectedSlug, query, platform, selectedVersion, { ...catalogLocationRef.current, bundle: null }, { ...workspaceLocationRef.current, scope: nextScope });
+  }
+
+  function selectTab(nextTab: SkillTab) {
+    if (!detailSlug) return;
+    // Choosing a section makes an implicit desktop selection explicit.
+    setSelectedSlug(detailSlug);
+    updateWorkspaceLocation({ tab: nextTab });
+    pushAppHistory(browseUrl(detailSlug, query, platform, selectedVersion));
+  }
+
+  /** A saved management change reloads the detail in place so its confirmation stays visible. */
+  function reloadAfterManagement() {
+    softReload.current = { detail: true, managed: true };
+    setRefreshKey((value) => value + 1);
   }
 
   function changeCatalogView(nextView: RegistryView) {
@@ -808,7 +1030,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   }
 
   function selectVersion(version: string) {
-    const target = visibleReleases.find((item) => item.version === version);
+    const target = selectableReleases.find((item) => item.version === version);
     if (!detailSlug || !target || version === selectedVersion) return;
     const nextPlatform = releasePlatform(target.platforms, platform) ?? platform;
     // Pinning a version makes an implicit desktop selection explicit.
@@ -833,7 +1055,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     setDetailState("loading");
     setSelectedSlug(detailSlug);
     pushAppHistory(browseUrl(detailSlug, query, nextPlatform));
-    if (!selectedSkill) setRefreshKey((current) => current + 1);
+    if (!selectedSkill && !managementOnly) setRefreshKey((current) => current + 1);
   }
 
   function openLanding() {
@@ -994,6 +1216,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
 
   function navigateTo(nextView: AppView) {
     setView(nextView);
+    if (nextView === "libraries") setLibraryNavigationRevision((value) => value + 1);
     if (nextView === "browse") {
       pushAppHistory(browseUrl(selectedSlug, query, platform, selectedVersion));
     } else {
@@ -1094,10 +1317,9 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
 
   const navItems = [
     { view: "libraries" as const, label: "Libraries", group: "Skills" as const, icon: <Library size={18} aria-hidden="true" />, enabled: Boolean(session && registryClient.libraries) },
-    { view: "browse" as const, label: "Registry", group: "Skills" as const, icon: <LayoutGrid size={18} aria-hidden="true" />, enabled: true },
+    { view: "browse" as const, label: "Skills", group: "Skills" as const, icon: <LayoutGrid size={18} aria-hidden="true" />, enabled: true },
     { view: "submit" as const, label: "Submit", group: "Publish" as const, icon: <Upload size={18} aria-hidden="true" />, enabled: canUseSubmit },
     { view: "review" as const, label: "Review", group: "Publish" as const, icon: <SquareCheckBig size={18} aria-hidden="true" />, enabled: canUseReview },
-    { view: "manage" as const, label: "Manage skills", group: "Publish" as const, icon: <SlidersHorizontal size={18} aria-hidden="true" />, enabled: Boolean(session && registryClient.listManagedSkills) },
     { view: "architectures" as const, label: "Architectures", group: "Deploy" as const, icon: <Layers size={18} aria-hidden="true" />, enabled: Boolean(session) },
     { view: "targets" as const, label: "Connected targets", group: "Deploy" as const, icon: <Monitor size={18} aria-hidden="true" />, enabled: canUseTargets },
     { view: "updates" as const, label: "Updates", group: "Deploy" as const, icon: <RotateCw size={18} aria-hidden="true" />, enabled: canUseTargets },
@@ -1110,7 +1332,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   const navGroups = (["Skills", "Publish", "Deploy", "People", "Account"] as const)
     .map((label) => ({ label, items: navItems.filter((item) => item.group === label) }))
     .filter((group) => group.items.length > 0);
-  // Mobile keeps Libraries and Registry, plus one shortcut for the reader's
+  // Mobile keeps Libraries and Skills, plus one shortcut for the reader's
   // main job. Every other allowed destination stays grouped under More.
   const mobileRoleView = canUseReview ? "review" : canUseSubmit ? "submit" : canUseTargets ? "targets" : null;
   const mobilePrimaryItems = navItems.filter((item) => item.view === "libraries" || item.view === "browse" || item.view === mobileRoleView);
@@ -1120,75 +1342,237 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     .filter((group) => group.items.length > 0);
   const mobileOverflowActive = mobileOverflowGroups.some((group) => group.items.some((item) => item.view === activeView));
 
-  // Existing skill detail (release history, export, trust panels). The bundle
-  // workspace renders it in its inspector and adds bundle backlinks.
-  const renderSkillDetail = (bundles: ReactNode) => (
-    <>
-                      {skillReady && selectedSkill ? (
-                        <header className="registry-inspector-head">
-                          <span className="registry-tile" data-size="32" data-tone={tileTone(selectedSkill.slug)} aria-hidden="true" />
-                          <div className="registry-inspector-title">
-                            <h2 ref={inspectorTitleRef} tabIndex={-1}>{selectedSkill.title}</h2>
-                            <p className="registry-ref">
-                              <code>{selectedSkill.slug}</code>
-                              {releaseReady && release && <><span aria-hidden="true">@</span><code>{release.version}</code></>}
-                            </p>
-                            {releaseReady && release && ((selectedVersion !== null && selectedSkill.latestVersion && selectedSkill.latestVersion !== release.version) || release.lifecycleStatus === "deprecated") && (
-                              <p className="registry-inspector-meta">
-                                {selectedVersion !== null && selectedSkill.latestVersion && selectedSkill.latestVersion !== release.version && <span>Latest is {selectedSkill.latestVersion}</span>}
-                                {release.lifecycleStatus === "deprecated" && <span className="registry-chip" data-tone="amber">Deprecated</span>}
-                              </p>
-                            )}
-                          </div>
-                          <div className="registry-version-slot">{historyControls}</div>
-                        </header>
-                      ) : null}
-                      {detailMessage ? (
-                        <div className="registry-inspector-state" role="status" aria-live="polite">
-                          <CircleAlert size={20} aria-hidden="true" />
-                          <div>
-                            <strong>{detailMessage}</strong>
-                            <p>{selectedVersion !== null
-                              ? "The requested exact version was not substituted. Choose a published version or return to latest."
-                              : "The selected skill could not load. Retry the request or choose a different approved skill."}</p>
-                            <div className="registry-actions">
-                              <Button size="sm" type="button" variant="outline" onClick={retryRegistry}>
-                                <RotateCw size={15} aria-hidden="true" />
-                                Retry
-                              </Button>
-                              {selectedVersion !== null && !selectedSkill && <Button size="sm" type="button" variant="outline" onClick={returnToLatest}>Return to latest</Button>}
-                            </div>
-                          </div>
-                        </div>
-                      ) : detailState === "ready" && releaseReady && release && selectedSkill ? (
-                        <SkillDetail
-                          bundles={bundles}
-                          command={selectedCommand}
-                          client={registryClient}
-                          disclosures={registryDisclosures}
-                          platform={detailPlatform}
-                          release={release}
-                          selectedSkill={selectedSkill}
-                          session={session}
-                          setDisclosure={(key, open) => setRegistryDisclosures((current) => current[key] === open ? current : { ...current, [key]: open })}
-                          setPlatform={updatePlatform}
-                          onChanged={() => setRefreshKey((value) => value + 1)}
-                        />
-                      ) : detailState === "ready" && skillReady && !release ? (
-                        <div className="registry-inspector-state">
-                          <FileCode2 size={20} aria-hidden="true" />
-                          <div>
-                            <h3>No default stable release</h3>
-                            <p>Choose an exact version from release history when no approved stable release is available.</p>
-                          </div>
-                        </div>
-                      ) : detailSlug || detailState === "loading" || listState === "loading" ? (
-                        <RegistryInspectorSkeleton withHeader={!skillReady} />
-                      ) : (
-                        <p className="registry-inspector-empty">{skills.length > 0 ? "Select a skill to see its exact releases." : "No skill selected."}</p>
-                      )}
-    </>
+  // Can manage shows only skills the server lets this account manage.
+  const manageDenied = workspaceScope === "manage" && wantManaged && managedForSlug?.status === "denied";
+  // In Can manage, wait for authority before showing any detail for the selection.
+  const awaitingManageAuthority = workspaceScope === "manage" && managedLoading;
+  // The management check did not complete: offer a retry, never a denial.
+  const manageCheckFailed = wantManaged && managedForSlug?.status === "error";
+  const retryManagement = () => setManagedRetry((value) => value + 1);
+  const canManageSharing = Boolean(session && skillReady && selectedSkill.access?.canManageSharing);
+  const manageTabAvailable = Boolean(managedRecord) || canManageSharing || manageCheckFailed || (tab === "manage" && managedLoading);
+  const sectionTabs: SkillTab[] = manageTabAvailable ? ["overview", "versions", "manage"] : ["overview", "versions"];
+  const activeTab: SkillTab = sectionTabs.includes(tab) ? tab : "overview";
+  const managedVersion = releaseRows.find((item) => item.version === selectedVersion) ?? null;
+
+  // The readable skill itself could not load (a version problem stays in its release card).
+  const skillErrorState = (
+    <div className="registry-inspector-state" role="status" aria-live="polite">
+      <CircleAlert size={20} aria-hidden="true" />
+      <div>
+        <strong>{detailMessage}</strong>
+        <p>{selectedVersion !== null
+          ? "The requested exact version was not substituted. Choose a published version or view the latest."
+          : "The selected skill could not load. Retry the request or choose a different approved skill."}</p>
+        <div className="registry-actions">
+          <Button size="sm" type="button" variant="outline" onClick={retryRegistry}>
+            <RotateCw size={15} aria-hidden="true" />
+            Retry
+          </Button>
+          {selectedVersion !== null && !selectedSkill && <Button size="sm" type="button" variant="outline" onClick={returnToLatest}>View latest</Button>}
+        </div>
+      </div>
+    </div>
   );
+
+  const managementCheckError = (
+    <div className="registry-inspector-state" role="status" aria-live="polite">
+      <CircleAlert size={20} aria-hidden="true" />
+      <div>
+        <strong>Management access couldn't be checked.</strong>
+        <p>The management check did not complete, so nothing is shown as allowed or denied. Retry before changing this skill.</p>
+        <div className="registry-actions">
+          <Button size="sm" type="button" variant="outline" onClick={retryManagement}>
+            <RotateCw size={15} aria-hidden="true" />
+            Retry management check
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Overview: the readable skill pane (summary, tags, one card for the exact
+  // release, bundle backlinks), or a manager's record with no readable release.
+  const renderOverview = (bundles: ReactNode) => {
+    if (managementOnly && managedRecord) {
+      const status = lifecycleLabel(managedRecord.lifecycleStatus);
+      return (
+        <div className="registry-inspector-body">
+          {managedRecord.summary && <p className="registry-summary">{managedRecord.summary}</p>}
+          <p className="registry-callout registry-section-callout" data-tone="amber" role="status">
+            <CircleAlert size={16} aria-hidden="true" />
+            <span><strong>No readable published release.</strong> This record comes from your management inventory. Readable content, export and install stay unavailable until a release is published and the skill is active.</span>
+          </p>
+          <dl className="registry-facts registry-section">
+            <RegistryFact label="Lifecycle"><span className="registry-chip" data-tone={chipTone(status.tone)}>{status.label}</span></RegistryFact>
+            <RegistryFact label="Visibility">{visibilityLabel(managedRecord.visibility)}</RegistryFact>
+            {managedRecord.tags.length > 0 && <RegistryFact label="Tags">{managedRecord.tags.join(", ")}</RegistryFact>}
+          </dl>
+        </div>
+      );
+    }
+    if (!skillReady) return <RegistryInspectorSkeleton withHeader={false} />;
+    const readyRelease = releaseCardState === "ready" ? release : null;
+    return (
+      <>
+        <p className="registry-summary">{selectedSkill.summary}</p>
+        {selectedSkill.tags.length > 0 && (
+          <ul aria-label="Tags" className="registry-tags">
+            {selectedSkill.tags.map((tag) => <li key={tag}>{tag}</li>)}
+          </ul>
+        )}
+        <SkillReleaseCard
+          historyState={historyState}
+          message={detailMessage}
+          release={readyRelease}
+          releases={visibleReleases}
+          selectedVersion={selectedVersion}
+          skill={selectedSkill}
+          state={releaseCardState}
+          onRetry={retryRegistry}
+          onReturn={returnToLatest}
+          onSelect={selectVersion}
+        >
+          {readyRelease && (
+            <SkillDetail
+              command={selectedCommand}
+              client={registryClient}
+              disclosures={registryDisclosures}
+              platform={detailPlatform}
+              release={readyRelease}
+              selectedSkill={selectedSkill}
+              session={session}
+              setDisclosure={setRegistryDisclosure}
+              setPlatform={updatePlatform}
+            />
+          )}
+        </SkillReleaseCard>
+        {managedRecord && managedVersion && !isPublishedRelease(managedVersion) && (
+          <p className="registry-callout registry-section-callout" data-tone="amber" role="status">
+            <CircleAlert size={16} aria-hidden="true" />
+            <span>Version {managedVersion.version} is {lifecycleLabel(managedVersion.lifecycleStatus).label.toLowerCase()}{managedVersion.publishedAt ? "" : " and not published"}. Readable content, export and install are unavailable. Use Manage to change its lifecycle.</span>
+          </p>
+        )}
+        {bundles && <div className="registry-skill-foot">{bundles}</div>}
+      </>
+    );
+  };
+
+  const renderSectionPanel = (bundles: ReactNode) => {
+    if (activeTab === "versions" && detailSlug) {
+      return (
+        <SkillVersionsPanel
+          historyState={historyState}
+          latestVersion={latestVisibleRelease?.version ?? null}
+          onRetry={retryRegistry}
+          onSelect={selectVersion}
+          releases={selectableReleases}
+          selectedVersion={workspaceVersion}
+          versionHref={(version) => browseUrl(detailSlug, query, platform, version)}
+        />
+      );
+    }
+    if (activeTab === "manage" && detailSlug) {
+      const mfaVerified = Boolean(session?.user.mfaVerified);
+      return (
+        <SkillManagePanel
+          client={registryClient}
+          historyState={historyState}
+          key={detailSlug}
+          mfaVerified={mfaVerified}
+          onChanged={reloadAfterManagement}
+          onRetryRecord={retryManagement}
+          record={managedRecord}
+          recordState={managedRecord ? "ready" : managedLoading ? "loading" : manageCheckFailed ? "error" : "denied"}
+          releases={releaseRows}
+          sharing={canManageSharing && mfaVerified && session && selectedSkill ? <SharingPanel client={registryClient} selectedSkill={selectedSkill} session={session} /> : null}
+          version={workspaceVersion}
+        />
+      );
+    }
+    return renderOverview(bundles);
+  };
+
+  // One skill detail for both scopes: skill identity, then Overview / Versions /
+  // Manage. The bundle workspace renders it in its inspector and passes backlinks.
+  const renderSkillDetail = (bundles: ReactNode) => {
+    // Can manage shows no detail until authority is known.
+    if (workspaceScope === "manage" && manageCheckFailed) return managementCheckError;
+    if (manageDenied) {
+      return (
+        <div className="registry-inspector-state" role="status" aria-live="polite">
+          <LockKeyhole size={20} aria-hidden="true" />
+          <div>
+            <strong>You can't manage this skill.</strong>
+            <p>Can manage lists only skills your account can manage, including archived and unpublished records.</p>
+            <div className="registry-actions">
+              <a className="skill-inline-link" href={scopeHref("all")} onClick={(event) => handleCallbackLink(event, () => changeScope("all"))}>View in All skills</a>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    const identity = awaitingManageAuthority ? null
+      : skillReady ? { slug: selectedSkill.slug, title: selectedSkill.title }
+        : managementOnly && managedRecord ? { slug: managedRecord.slug, title: managedRecord.title }
+          : null;
+    if (!identity) {
+      // An unreadable skill may still be manageable: do not call it missing while that check failed.
+      if (manageCheckFailed && publicFailure === detailSlug) return managementCheckError;
+      if (!awaitingManageAuthority && detailMessage && !(publicFailure === detailSlug && managedLoading)) return skillErrorState;
+      if (detailSlug || detailState === "loading" || listState === "loading") return <RegistryInspectorSkeleton withHeader />;
+      return <p className="registry-inspector-empty">{workspaceScope === "manage" ? "Select a skill you manage to see its versions and controls." : skills.length > 0 ? "Select a skill to see its exact releases." : "No skill selected."}</p>;
+    }
+    const lifecycle = managementOnly && managedRecord ? lifecycleLabel(managedRecord.lifecycleStatus) : null;
+    return (
+      <div className="registry-skill-pane">
+        <header className="registry-inspector-head">
+          <span className="registry-tile" data-size="32" data-tone={tileTone(identity.slug)} aria-hidden="true" />
+          <div className="registry-inspector-title">
+            <h2 ref={inspectorTitleRef} tabIndex={-1}>{identity.title}</h2>
+            <p className="registry-ref"><code>{identity.slug}</code></p>
+            {lifecycle && managedRecord && (
+              <p className="registry-inspector-meta">
+                <span>{visibilityLabel(managedRecord.visibility)}</span>
+                <span className="registry-chip" data-tone={chipTone(lifecycle.tone)}>{lifecycle.label}</span>
+              </p>
+            )}
+          </div>
+          {managementOnly && <div className="registry-version-slot"><ManagedReleaseSelect onSelect={selectVersion} releases={releaseRows} version={workspaceVersion} /></div>}
+        </header>
+        {(returnTo || (session && skillReady)) && (
+          <div className="skill-detail-actions">
+            {returnTo && (
+              <a className="skill-inline-link" href={returnTo} onClick={(event) => handleCallbackLink(event, () => openAppUrl(returnTo))}>
+                <ArrowLeft size={15} aria-hidden="true" />
+                Return to library
+              </a>
+            )}
+            {session && skillReady && <AddToLibraryButton client={registryClient} slug={selectedSkill.slug} title={selectedSkill.title} />}
+          </div>
+        )}
+        <SkillSectionTabs active={activeTab} baseId={sectionsId} onSelect={selectTab} tabs={sectionTabs} />
+        <div aria-labelledby={sectionTabId(sectionsId, activeTab)} className="skill-tab-panel" id={sectionPanelId(sectionsId)} role="tabpanel">
+          {renderSectionPanel(bundles)}
+        </div>
+      </div>
+    );
+  };
+
+  const scopeControl = canUseManageScope ? (
+    <nav aria-label="Skill scope" className="skill-scope">
+      {(["all", "manage"] as const).map((item) => (
+        <a
+          aria-current={workspaceScope === item ? "page" : undefined}
+          href={scopeHref(item)}
+          key={item}
+          onClick={(event) => handleCallbackLink(event, () => changeScope(item))}
+        >
+          {item === "all" ? "All skills" : "Can manage"}
+        </a>
+      ))}
+    </nav>
+  ) : null;
 
   return (
     <div className={sidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
@@ -1286,17 +1670,15 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
 
         <div className="app-content" id="main-content" tabIndex={-1}>
           {activeView === "libraries" && session ? (
-            <LibrariesDashboard client={registryClient} user={session.user} />
-          ) : activeView === "manage" && session ? (
-            <ManagedSkillsDashboard client={registryClient} mfaVerified={session.user.mfaVerified} />
+            <LibrariesDashboard client={registryClient} key={libraryNavigationRevision} onNavigate={navigateFromLibraries} user={session.user} />
           ) : activeView === "review" && session ? (
-            <ReviewDashboard client={registryClient} session={session} />
+            <ReviewDashboard client={registryClient} onOpenSkill={openAppUrl} session={session} />
           ) : activeView === "submit" && session ? (
-            <SubmitDashboard client={registryClient} session={session} />
+            <SubmitDashboard client={registryClient} onOpenSkill={openAppUrl} session={session} />
           ) : activeView === "teams" && session ? (
             <TeamsDashboard client={registryClient} session={session} />
           ) : activeView === "architectures" && session ? (
-            <ArchitecturesDashboard client={registryClient} onNavigationGuardChange={registerArchitectureNavigationGuard} session={session} />
+            <ArchitecturesDashboard client={registryClient} onNavigate={navigateArchitectures} onNavigationGuardChange={registerArchitectureNavigationGuard} session={session} url={appUrl} />
           ) : activeView === "organizations" && session ? (
             <OrganizationsDashboard client={registryClient} session={session} />
           ) : activeView === "targets" && session ? (
@@ -1311,11 +1693,12 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
               onSessionInvalidated={handleSessionInvalidated}
               session={session}
             />
-          ) : bundleCatalog ? (
+          ) : bundleCatalog && workspaceScope === "all" ? (
             <BundleWorkspace
               api={bundleCatalog}
               bundleHref={(bundleId) => registryUrl(null, query, platform, null, { view: catalogView, bundle: bundleId })}
               canCreate={canUseSubmit}
+              headerControls={scopeControl}
               libraries={session ? registryClient.libraries : undefined}
               listTeams={session ? () => registryClient.listTeams() : undefined}
               onClearQuery={() => updateSearch("")}
@@ -1329,13 +1712,14 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
               renderSkillDetail={renderSkillDetail}
               selection={selectedSlug ? { kind: "skill", slug: selectedSlug } : selectedBundleId ? { kind: "bundle", id: selectedBundleId } : null}
               signedIn={Boolean(session)}
-              skillHref={(slug) => browseUrl(slug, query, platform, slug === selectedSlug ? selectedVersion : null)}
+              skillHref={skillLinkUrl}
               view={catalogView}
             />
           ) : (
             <main className="registry-workspace" aria-labelledby="registry-heading">
               <header className="registry-page-head">
-                <h1 id="registry-heading">Skill registry</h1>
+                <h1 id="registry-heading">Skills</h1>
+                {scopeControl}
               </header>
               <div
                 className="registry-surface"
@@ -1349,11 +1733,11 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
                       <Search size={16} aria-hidden="true" />
                       <input
                         id="skill-search"
-                        aria-label="Search skills"
+                        aria-label={workspaceScope === "manage" ? "Search skills you can manage" : "Search skills"}
                         name="skill-search"
                         value={query}
                         onChange={(event) => updateSearch(event.target.value)}
-                        placeholder="Search skills…"
+                        placeholder={workspaceScope === "manage" ? "Search skills you can manage…" : "Search skills…"}
                         autoComplete="off"
                         spellCheck={false}
                       />
@@ -1362,7 +1746,19 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
                   </div>
                 )}
                 <div className="registry-body">
-                  {showRegistryList && (
+                  {workspaceScope === "manage" && (
+                    <ManagedSkillsInventory
+                      client={registryClient}
+                      hidden={!showRegistryList}
+                      onOpenSkill={selectSkill}
+                      query={query}
+                      reloadKey={refreshKey}
+                      selectedSlug={selectedSlug}
+                      skillHref={skillLinkUrl}
+                      stacked={registryStacked}
+                    />
+                  )}
+                  {workspaceScope === "all" && showRegistryList && (
                     <section className="registry-results-panel registry-list" aria-label="Skill search results">
                       <div className="registry-list-label">
                         <h2>Skills</h2>
@@ -1371,8 +1767,8 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
                       {listState === "loading" && <RegistryLoadingRows />}
                       {listState === "error" && (
                         <div className="registry-list-state" role="status" aria-live="polite">
-                          <strong>{listMessage ?? "The registry is not available."}</strong>
-                          <p>The list could not load. Retry the registry request before selecting a skill.</p>
+                          <strong>{listMessage ?? "Skills are not available."}</strong>
+                          <p>The list could not load. Retry the request before selecting a skill.</p>
                           <Button size="sm" type="button" variant="outline" onClick={retryRegistry}>
                             <RotateCw size={15} aria-hidden="true" />
                             Retry
@@ -1386,7 +1782,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
                               aria-current={!registryStacked && skill.slug === detailSlug ? "true" : undefined}
                               className="registry-row"
                               data-slug={skill.slug}
-                              href={browseUrl(skill.slug, query, platform, skill.slug === selectedSlug ? selectedVersion : null)}
+                              href={skillLinkUrl(skill.slug)}
                               key={skill.slug}
                               onClick={(event) => handleCallbackLink(event, () => selectSkill(skill.slug))}
                             >
@@ -1399,7 +1795,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
                                   {skill.platforms.length > 0 && <span>{skill.platforms.slice(0, 2).map((item) => item.name).join(", ")}</span>}
                                 </span>
                               </span>
-                              {skill.latestVersion && <span className="registry-version-chip">{skill.latestVersion}</span>}
+                              {skill.latestVersion && <span className="registry-version-chip" title={skill.latestVersion}>{releaseVersionLabel(skill.latestVersion)}</span>}
                             </a>
                           ))}
                         </div>
@@ -1759,7 +2155,7 @@ function NotFoundPage({ onHome, onLogin, showLandingLink }: { onHome: () => void
   );
 }
 
-function SubmitDashboard({ client }: { client: RegistryClient; session: WebSession }) {
+function SubmitDashboard({ client, onOpenSkill }: { client: RegistryClient; onOpenSkill: (url: string) => void; session: WebSession }) {
   const [file, setFile] = useState<File | null>(null);
   const [feedbackId, setFeedbackId] = useState<string | null>(null);
   const [state, setState] = useState<LoadState>("idle");
@@ -1939,6 +2335,14 @@ function SubmitDashboard({ client }: { client: RegistryClient; session: WebSessi
           {result && resultReview && resultSecurity && resultFindings && (
             <div className="submit-result-block">
               <h3 ref={resultHeadingRef} tabIndex={-1}>Submitted {result.submission.slug}@{result.submission.version}</h3>
+              <p className="review-outcome-link">
+                <a
+                  href={exactSkillUrl(result.submission.slug, result.submission.version, false)}
+                  onClick={(event) => handleCallbackLink(event, () => onOpenSkill(exactSkillUrl(result.submission.slug, result.submission.version, false)))}
+                >
+                  Open {result.submission.slug}@{result.submission.version} in Skills
+                </a>
+              </p>
               <p className="author-chips">
                 <span className="registry-chip" data-tone={chipTone(resultReview.tone)}>{resultReview.label}</span>
                 <span className="registry-chip" data-tone={chipTone(resultSecurity.tone)}>{resultSecurity.label}</span>
@@ -1974,7 +2378,7 @@ function SubmitDashboard({ client }: { client: RegistryClient; session: WebSessi
 
         <section aria-busy={submissionsState === "loading"} aria-labelledby={`${baseId}-submitted`} className="registry-list submit-list">
           <div className="registry-list-label">
-            <h2 id={`${baseId}-submitted`} ref={listHeadingRef} tabIndex={-1}>My submitted skills</h2>
+            <h2 id={`${baseId}-submitted`} ref={listHeadingRef} tabIndex={-1}>{submissions.some((submission) => submission.owner?.type === "team") ? "Personal and team submissions" : "My submitted skills"}</h2>
             <span aria-live="polite">{submissionsState === "ready" ? String(submissions.length) : ""}</span>
           </div>
           {submissionsState === "loading" && submissions.length === 0 && (
@@ -2008,11 +2412,18 @@ function SubmitDashboard({ client }: { client: RegistryClient; session: WebSessi
                       <span className="registry-row-text">
                         <span className="registry-row-title" id={titleId}>{submission.title}</span>
                         <span className="registry-row-meta">
-                          <code>{submission.slug}@{submission.version}</code>
+                          <a
+                            className="submission-skill-link"
+                            href={exactSkillUrl(submission.slug, submission.version, isPublishedRelease(submission))}
+                            onClick={(event) => handleCallbackLink(event, () => onOpenSkill(exactSkillUrl(submission.slug, submission.version, isPublishedRelease(submission))))}
+                          >
+                            <code>{submission.slug}@{submission.version}</code>
+                          </a>
                           <span>{formatBytes(submission.artifact.byteSize)}</span>
                           <span>Submitted {formatDate(submission.createdAt)}</span>
                         </span>
                         <span className="author-chips">
+                          {submission.owner?.type === "team" && <span className="registry-chip" data-tone="navy">Team-owned</span>}
                           <span className="registry-chip" data-tone={chipTone(review.tone)}>{review.label}</span>
                           <span className="registry-chip" data-tone={chipTone(security.tone)}>{security.label}</span>
                           <span className="registry-chip" data-tone={chipTone(findings.tone)}>{findings.label}</span>
@@ -2099,12 +2510,12 @@ function appendUniqueById<T extends { id: string }>(current: T[], incoming: T[])
   })];
 }
 
-function ReviewDashboard({ client, session }: { client: RegistryClient; session: WebSession }) {
+function ReviewDashboard({ client, onOpenSkill, session }: { client: RegistryClient; onOpenSkill: (url: string) => void; session: WebSession }) {
   const [state, setState] = useState<LoadState>("loading");
   // Queue load failures stay in the queue; decision and artifact messages stay
   // beside the submission they belong to.
   const [message, setMessage] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ submissionId: string; text: string } | null>(null);
+  const [notice, setNotice] = useState<{ submissionId: string; text: string; skill: { label: string; href: string } } | null>(null);
   const [decisionError, setDecisionError] = useState<{ submissionId: string; text: string } | null>(null);
   const [artifactStatus, setArtifactStatus] = useState<{ submissionId: string; text: string; error: boolean } | null>(null);
   const [submissions, setSubmissions] = useState<ReviewSubmissionSummary[]>([]);
@@ -2230,7 +2641,11 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
           : action === "publish"
             ? "was published"
             : "was approved and can now be published";
-      setNotice({ submissionId: submission.id, text: `${submission.title} ${actionLabel}.` });
+      setNotice({
+        submissionId: submission.id,
+        text: `${submission.title} ${actionLabel}.`,
+        skill: { label: `Open ${result.slug}@${result.version} in Skills`, href: exactSkillUrl(result.slug, result.version, Boolean(result.publishedAt)) },
+      });
     } catch (error) {
       const safeMessage = safeReviewErrorMessage(error);
       // The dialog owns the alert; the decision band keeps a quiet copy.
@@ -2263,7 +2678,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
       },
       publish: {
         title: "Publish this release?",
-        description: "Publication makes the approved release available through registry install and export surfaces.",
+        description: "Publication makes the approved release available to install and export through Skills.",
         confirmLabel: "Publish release",
       },
     };
@@ -2361,6 +2776,14 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
     element.focus();
   });
 
+  // Decisions link back to the exact release: readable once published,
+  // otherwise the Can manage Versions section.
+  const renderOutcomeLink = (skill: { label: string; href: string }) => (
+    <p className="review-outcome-link">
+      <a href={skill.href} onClick={(event) => handleCallbackLink(event, () => onOpenSkill(skill.href))}>{skill.label}</a>
+    </p>
+  );
+
   const canPublish = allowedReviewActions.includes("publish");
   const canApprove = allowedReviewActions.includes("approve");
   const primary = !selected ? null
@@ -2447,6 +2870,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
           </ol>
           {actionHint && <p className="review-hint">{actionHint}</p>}
           {decisionNotice && <p className="author-status" data-tone="teal" ref={decisionNoticeRef} role="status" tabIndex={-1}>{decisionNotice.text}</p>}
+          {decisionNotice && renderOutcomeLink(decisionNotice.skill)}
           {decisionMessage && <p className="author-status" data-tone="danger" role="status">{decisionMessage.text}</p>}
           {primary || canRequestChanges || canReject ? (
             <div className="review-decision-actions">
@@ -2542,6 +2966,7 @@ function ReviewDashboard({ client, session }: { client: RegistryClient; session:
                 <span aria-live="polite">{state === "ready" ? (nextCursor ? `${submissions.length} loaded` : String(submissions.length)) : ""}</span>
               </div>
               {queueNotice && <p className="author-status" data-tone="teal" ref={queueNoticeRef} role="status" tabIndex={-1}>{queueNotice.text}</p>}
+              {queueNotice && renderOutcomeLink(queueNotice.skill)}
               {state === "loading" && (
                 <div className="registry-skeleton" role="status" aria-live="polite">
                   <span className="sr-only">Loading submissions…</span>
@@ -2676,7 +3101,7 @@ function findRowById(root: HTMLElement | null, id: string): HTMLElement | null {
   return null;
 }
 
-// Teams use the Registry list and detail layout (people.css): the list comes
+// Teams use the Skills list and detail layout (people.css): the list comes
 // first, and the selected team's detail sits beside it on a wide surface or
 // replaces it (with Back) on a narrow one. Messages render beside the control
 // that caused them.
@@ -3083,7 +3508,7 @@ function TeamSkillSection({ empty, skills, title }: { empty: string; skills: Pub
             <li key={skill.slug}>
               <span className="people-person">
                 <strong>{skill.title}</strong>
-                <small><code>{skill.slug}</code>{skill.latestVersion ? ` · ${skill.latestVersion}` : ""}</small>
+                <small><code>{skill.slug}</code>{skill.latestVersion ? ` · ${releaseVersionLabel(skill.latestVersion)}` : ""}</small>
               </span>
             </li>
           ))}
@@ -3093,11 +3518,12 @@ function TeamSkillSection({ empty, skills, title }: { empty: string; skills: Pub
   );
 }
 
-type AdminTab = "people" | "instance" | "branding" | "keys" | "providers" | "audit";
+type AdminTab = "people" | "instance" | "github" | "branding" | "keys" | "providers" | "audit";
 const ADMIN_TABS: ReadonlyArray<{ id: AdminTab; label: string }> = [
   { id: "people", label: "People" },
   { id: "instance", label: "Instance" },
   { id: "branding", label: "Branding" },
+  { id: "github", label: "GitHub" },
   { id: "keys", label: "API keys" },
   { id: "providers", label: "Sign-in providers" },
   { id: "audit", label: "Audit" },
@@ -3575,6 +4001,11 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
           <LandingSettings key={`${session.user.id}:${session.expiresAt}`} client={client} canEdit={session.user.mfaVerified} onSaved={() => { void refreshAudit().catch(() => setMessage("Landing setting saved. Refresh to load the audit history.")); }} />
         </section>
 
+        <section {...panelProps("github")}>
+          <div className="account-panel-head"><div><h2>GitHub</h2><p>Authenticated source checks for users and organization instances</p></div></div>
+          {client.github && <GithubSettings key={`${session.user.id}:${session.expiresAt}`} api={client.github} canEdit={session.user.mfaVerified} onSaved={() => { void refreshAudit().catch(() => setMessage("GitHub settings changed. Refresh to load the audit history.")); }} />}
+        </section>
+
         <section {...panelProps("branding")}>
           <div className="account-panel-head"><div><h2>Branding</h2><p>The logo and name shown to everyone, including visitors</p></div></div>
           <BrandingSettings key={`${session.user.id}:${session.expiresAt}`} client={client} canEdit={session.user.mfaVerified} onSaved={() => { void refreshAudit().catch(() => setMessage("Branding saved. Refresh to load the audit history.")); }} />
@@ -3766,21 +4197,22 @@ function SidebarAccount({
 }) {
   return (
     <div className={collapsed ? "sidebar-account collapsed" : "sidebar-account"}>
-      <a className="sidebar-account-main" href="/settings" aria-label="Account settings" onClick={(event) => {
+      <a className="sidebar-account-main" href="/settings" aria-label="Account settings" aria-description={session.user.mfaVerified ? "MFA verified" : "MFA not verified. Set up or verify MFA."} onClick={(event) => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
           return;
         }
         event.preventDefault();
         onSettings();
       }} title={session.user.email}>
-        <UserRound size={18} aria-hidden="true" />
+        {session.user.mfaVerified ? (
+          <ShieldCheck className="sidebar-account-status" data-verified="true" size={20} role="img" aria-label="MFA verified" />
+        ) : (
+          <CircleAlert className="sidebar-account-status" size={20} role="img" aria-label="MFA not verified" />
+        )}
         <span>
           <strong>{session.user.email}</strong>
           <small>{session.user.roles.join(" · ") || "user"}</small>
-          <Badge variant="secondary" className="sidebar-account-status" data-verified={session.user.mfaVerified}>
-            {session.user.mfaVerified && <Check aria-hidden="true" />}
-            {session.user.mfaVerified ? "MFA verified" : "MFA pending"}
-          </Badge>
+          {!session.user.mfaVerified && <small className="sidebar-account-warning">MFA unverified</small>}
         </span>
       </a>
       <IconButton label="Sign out" onClick={() => void onLogout()}>
@@ -4300,6 +4732,8 @@ function AccountSettings({
           </form>
         </section>
 
+        {client.github && <GithubAccountConnection key={`${session.user.id}:${session.expiresAt}`} api={client.github} />}
+
         <section aria-labelledby={`${baseId}-mfa`} className="account-row">
           <div className="account-row-intro">
             <h2 id={`${baseId}-mfa`}>MFA</h2>
@@ -4504,7 +4938,26 @@ function IconButton({ children, label, onClick }: { children: ReactNode; label: 
   );
 }
 
-function CopyButton({ text, variant }: { text: string; variant?: "outline" }) {
+function CopyButton({
+  className = "shadcn-action-button",
+  failureHint,
+  iconOnly = false,
+  label = "Copy",
+  selectOnFailure,
+  text,
+  variant,
+}: {
+  className?: string;
+  /** Visible text after a failed copy. Without it the failure is only announced. */
+  failureHint?: string;
+  iconOnly?: boolean;
+  /** Visible label, or the accessible name of an icon-only button. */
+  label?: string;
+  /** Element whose text is selected for manual copying when the clipboard fails. */
+  selectOnFailure?: RefObject<HTMLElement | null>;
+  text: string;
+  variant?: "outline" | "ghost";
+}) {
   const [status, setStatus] = useState<"idle" | "copying" | "copied" | "error">("idle");
 
   async function copy() {
@@ -4517,15 +4970,33 @@ function CopyButton({ text, variant }: { text: string; variant?: "outline" }) {
       setStatus("copied");
     } catch {
       setStatus("error");
+      const target = selectOnFailure?.current;
+      const selection = window.getSelection();
+      if (target && selection) {
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
     }
   }
 
   return (
     <>
-      <Button className="shadcn-action-button" disabled={status === "copying"} size="sm" type="button" variant={variant} onClick={() => void copy()}>
-        <Copy size={15} aria-hidden="true" />
-        {status === "copying" ? "Copying…" : status === "copied" ? "Copied" : "Copy"}
+      <Button
+        aria-label={iconOnly ? label : undefined}
+        className={className}
+        disabled={status === "copying"}
+        size={iconOnly ? "icon-sm" : "sm"}
+        title={iconOnly ? label : undefined}
+        type="button"
+        variant={variant}
+        onClick={() => void copy()}
+      >
+        {iconOnly && status === "copied" ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
+        {!iconOnly && (status === "copying" ? "Copying…" : status === "copied" ? "Copied" : label)}
       </Button>
+      {failureHint && status === "error" && <span className="registry-copy-failure">{failureHint}</span>}
       <span className="sr-only" role="status" aria-live="polite">
         {status === "copied" ? "Copied to clipboard." : status === "error" ? "Copy failed. Select and copy the text manually." : ""}
       </span>
@@ -4578,21 +5049,6 @@ function StatusToken({ value }: { value?: string }) {
 function formatStatusLabel(value: string) {
   const label = value.replace(/[-_]+/g, " ");
   return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
-function releaseActionConfirmationDescription(action: ReleaseLifecycleActionName): string {
-  switch (action) {
-    case "delete":
-      return "This release will be removed and cannot be restored from this screen. Record why deletion is required.";
-    case "revoke":
-      return "Install and export access will be revoked for this release. Record the security or governance reason.";
-    case "unpublish":
-      return "The release will no longer be available from public registry surfaces. Record why it must be withdrawn.";
-    case "deprecate":
-      return "The release remains discoverable but will be marked as deprecated. Record the migration or support reason.";
-    case "restore":
-      return "The release will return to the lifecycle state allowed by its review and security status.";
-  }
 }
 
 function AuthWidget({
@@ -4970,57 +5426,281 @@ function MfaSetupPanel({
   );
 }
 
-function ReleaseHistoryControls({
+/**
+ * One card for everything tied to the exact release. The head stays mounted
+ * while a version loads, so the Versions control keeps focus, and release facts
+ * and actions appear only for the loaded release.
+ */
+function SkillReleaseCard({
+  children,
   historyState,
-  latestVersion,
+  message,
   onRetry,
   onReturn,
   onSelect,
+  release,
   releases,
   selectedVersion,
+  skill,
+  state,
 }: {
+  children: ReactNode;
   historyState: LoadState;
-  latestVersion: string | null;
+  message: string | null;
   onRetry: () => void;
   onReturn: () => void;
   onSelect: (version: string) => void;
+  /** The loaded release, only when state is "ready". */
+  release: ReleaseMetadata | null;
   releases: SkillReleaseSummary[];
   selectedVersion: string | null;
+  skill: PublicSkill;
+  state: ReleaseCardState;
 }) {
-  const missingPin = selectedVersion !== null && !releases.some((item) => item.version === selectedVersion);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const versionRef = useRef<HTMLSpanElement>(null);
+  const focusHeading = useRef(false);
+  const listId = useId();
+  const latest = skill.latestVersion;
+  // The requested version stays visible while it loads or when it is missing.
+  const version = release?.version ?? selectedVersion ?? latest;
+  const currentVersion = selectedVersion ?? latest;
+  const showVersions = historyState === "ready" && releases.length > 0;
+  const latestIndex = releases.findIndex((item) => item.version === latest);
+  const pinnedIndex = releases.findIndex((item) => item.version === selectedVersion);
+  const olderPin = latest !== null && selectedVersion !== latest && latestIndex >= 0 && pinnedIndex > latestIndex;
+  // Without a default stable release, clearing a pin promises no latest one.
+  const clearPinLabel = latest === null || selectedVersion === latest ? "Unpin" : "View latest";
+
+  useEffect(() => {
+    if (focusHeading.current && headingRef.current) {
+      headingRef.current.focus();
+      focusHeading.current = false;
+    }
+  });
+
+  function pick(next: string) {
+    setVersionsOpen(false);
+    toggleRef.current?.focus();
+    onSelect(next);
+  }
+
+  function clearPin() {
+    focusHeading.current = true;
+    setVersionsOpen(false);
+    onReturn();
+  }
+
+  function listKeyDown(event: ReactKeyboardEvent<HTMLUListElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setVersionsOpen(false);
+      toggleRef.current?.focus();
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const rows = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button"));
+    const index = rows.findIndex((row) => row === document.activeElement);
+    const next = event.key === "Home" ? 0
+      : event.key === "End" ? rows.length - 1
+        : Math.min(rows.length - 1, Math.max(0, index + (event.key === "ArrowDown" ? 1 : -1)));
+    rows[next]?.focus();
+  }
+
   return (
-    <div className="registry-version-control">
-      {historyState === "loading" && <p className="control-plane-muted" role="status">Loading release history…</p>}
-      {historyState === "ready" && releases.length === 0 && <p className="control-plane-muted" role="status">No published release history is available.</p>}
-      {historyState === "error" && (
-        <div role="status">
-          <p className="control-plane-muted">Release history is unavailable.</p>
-          <Button size="sm" type="button" variant="outline" onClick={onRetry}>Retry release history</Button>
+    <section aria-label="Release" className="registry-release">
+      <div className="registry-release-head">
+        <div className="registry-release-top">
+          <span aria-hidden="true" className="registry-release-label">Release</span>
+          {showVersions ? (
+            <Button
+              aria-controls={listId}
+              aria-expanded={versionsOpen}
+              className="registry-versions-toggle"
+              ref={toggleRef}
+              size="sm"
+              type="button"
+              variant="outline"
+              onClick={() => setVersionsOpen((open) => !open)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && versionsOpen) {
+                  event.preventDefault();
+                  setVersionsOpen(false);
+                }
+              }}
+            >
+              Versions <span className="registry-count">{releases.length}</span>
+              <ChevronDown size={14} aria-hidden="true" />
+            </Button>
+          ) : historyState === "loading" ? (
+            <p className="registry-release-history" role="status">Loading release history…</p>
+          ) : historyState === "error" ? (
+            <p className="registry-release-history" role="status">
+              Release history is unavailable.{" "}
+              <button className="registry-link-button" type="button" onClick={onRetry}>Retry release history</button>
+            </p>
+          ) : historyState === "ready" ? (
+            <p className="registry-release-history" role="status">No published release history is available.</p>
+          ) : null}
         </div>
-      )}
-      {historyState === "ready" && releases.length > 0 && (
-        <label>
-          <span>Release version</span>
-          <select value={selectedVersion ?? latestVersion ?? ""} onChange={(event) => onSelect(event.target.value)}>
-            {selectedVersion === null && latestVersion === null && <option value="" disabled>Choose an exact release</option>}
-            {selectedVersion !== null && missingPin && <option value={selectedVersion} disabled>Unavailable exact version</option>}
+        {showVersions && (
+          <ul aria-label="Published versions" className="registry-versions" hidden={!versionsOpen} id={listId} onKeyDown={listKeyDown}>
             {releases.map((item) => (
-              <option key={item.version} value={item.version}>
-                {item.version}{item.version === latestVersion ? " (latest)" : item.lifecycleStatus === "deprecated" ? " (deprecated)" : ""}
-              </option>
+              <li key={item.version}>
+                <button aria-current={item.version === currentVersion ? "true" : undefined} className="registry-version-row" type="button" onClick={() => pick(item.version)}>
+                  <Check size={14} aria-hidden="true" />
+                  <code title={item.version}>{releaseVersionLabel(item.version, releases)}</code>
+                  <span className="registry-version-meta">
+                    {item.version === latest && <span className="registry-chip" data-tone="line">Latest</span>}
+                    {item.lifecycleStatus === "deprecated" && <span className="registry-chip" data-tone="amber">Deprecated</span>}
+                    {item.publishedAt && <span>{formatDate(item.publishedAt)}</span>}
+                  </span>
+                </button>
+              </li>
             ))}
-          </select>
-        </label>
-      )}
-      {selectedVersion !== null && <Button size="sm" type="button" variant="outline" onClick={onReturn}>Return to latest</Button>}
+          </ul>
+        )}
+        {state === "no-default" ? (
+          <div className="registry-inspector-state">
+            <FileCode2 size={20} aria-hidden="true" />
+            <div>
+              <h3 ref={headingRef} tabIndex={-1}>No default stable release</h3>
+              <p>Choose an exact version from release history when no approved stable release is available.</p>
+            </div>
+          </div>
+        ) : version ? (
+          <div className="registry-release-id">
+            <h3 ref={headingRef} tabIndex={-1} title={version}><span className="sr-only">Release</span>{" "}<span ref={versionRef}>{releaseVersionLabel(version)}</span></h3>
+            <CopyButton
+              className="registry-icon-copy"
+              failureHint={isBootstrapVersion(version) ? `Copy failed. Exact version: ${version}` : "Copy failed. The version is selected for manual copying."}
+              iconOnly
+              key={version}
+              label="Copy version"
+              selectOnFailure={isBootstrapVersion(version) ? undefined : versionRef}
+              text={version}
+              variant="ghost"
+            />
+            {state === "ready" && release && (release.version === latest || release.lifecycleStatus === "deprecated") && (
+              <span className="registry-release-chips">
+                {release.version === latest && <span className="registry-chip" data-tone="line">Latest</span>}
+                {release.lifecycleStatus === "deprecated" && <span className="registry-chip" data-tone="amber">Deprecated</span>}
+              </span>
+            )}
+            {state === "error" && selectedVersion !== null && <span className="registry-chip" data-tone="amber">Unavailable</span>}
+          </div>
+        ) : null}
+        {selectedVersion !== null && state !== "error" && (
+          <p className="registry-pin">
+            <Pin size={14} aria-hidden="true" />
+            <span>{olderPin ? "Pinned to an older release" : "Pinned to this version"}</span>
+            <span aria-hidden="true">·</span>
+            <button className="registry-link-button" type="button" onClick={clearPin}>{clearPinLabel}</button>
+          </p>
+        )}
+        {state === "ready" && release && (
+          <dl className="registry-release-facts">
+            <div><dt>Released</dt><dd>{release.publishedAt ? formatDate(release.publishedAt) : "Not published"}</dd></div>
+            <div><dt>Review</dt><dd><RegistryStatus value={release.reviewStatus} /></dd></div>
+            <div><dt>Security</dt><dd><RegistryStatus value={release.securityStatus} /></dd></div>
+          </dl>
+        )}
+        {state === "error" && (
+          <div className="registry-release-error" role="status" aria-live="polite">
+            <CircleAlert size={16} aria-hidden="true" />
+            <div>
+              <strong>{message}</strong>
+              <p>{selectedVersion !== null
+                ? `No other version was substituted. Choose a published version or ${latest === null ? "clear the pin" : "view the latest"}.`
+                : "The selected skill could not load. Retry the request or choose a different approved skill."}</p>
+              <div className="registry-actions">
+                {selectedVersion !== null && <Button size="sm" type="button" variant="outline" onClick={clearPin}>{clearPinLabel}</Button>}
+                <Button size="sm" type="button" variant="outline" onClick={onRetry}>
+                  <RotateCw size={15} aria-hidden="true" />
+                  Retry
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      {state === "ready" ? children : state === "loading" ? <RegistryInspectorSkeleton withHeader={false} /> : null}
+    </section>
+  );
+}
+
+/** A disclosure row. The hint describes the row without joining its name. */
+function RegistryDisclosure({
+  bodyClassName,
+  children,
+  hint,
+  id,
+  onToggle,
+  open,
+  title,
+}: {
+  bodyClassName?: string;
+  children: ReactNode;
+  hint?: ReactNode;
+  id: string;
+  onToggle: () => void;
+  open: boolean;
+  title: string;
+}) {
+  return (
+    <div className="registry-disclosure">
+      <button
+        aria-controls={id}
+        aria-describedby={hint ? `${id}-hint` : undefined}
+        aria-expanded={open}
+        aria-labelledby={`${id}-title`}
+        className="registry-disclosure-button"
+        type="button"
+        onClick={onToggle}
+      >
+        <span id={`${id}-title`}>{title}</span>
+        <span className="registry-disclosure-hint">
+          {hint && <span id={`${id}-hint`}>{hint}</span>}
+          <ChevronDown size={14} aria-hidden="true" />
+        </span>
+      </button>
+      <div className={bodyClassName ? `registry-disclosure-body ${bodyClassName}` : "registry-disclosure-body"} hidden={!open} id={id}>{children}</div>
     </div>
   );
 }
 
-// The inspector body for one exact release: consumer facts and use first,
-// optional depth in disclosures, and owner tools last.
+/**
+ * Shows the export command with each flag kept beside its value. Display only:
+ * the text content equals the command, and copying uses the command itself.
+ */
+function CommandText({ command }: { command: string }) {
+  const [head, ...flags] = command.split(" --");
+  return (
+    <>
+      <span className="registry-command-part">{head}</span>
+      {flags.map((part, index) => {
+        const space = part.indexOf(" ");
+        const flag = space < 0 ? part : part.slice(0, space);
+        return (
+          <Fragment key={index}>
+            {" "}
+            <span className="registry-command-part">
+              <span className="registry-command-flag">--{flag}</span>
+              {space >= 0 && <span data-version={flag === "version" ? "" : undefined}>{part.slice(space)}</span>}
+            </span>
+          </Fragment>
+        );
+      })}
+    </>
+  );
+}
+
+// The release card body: use first, then optional depth in disclosures whose
+// open state carries across version changes. Lifecycle, metadata and sharing live in Manage.
 function SkillDetail({
-  bundles,
   command,
   client,
   disclosures,
@@ -5030,10 +5710,7 @@ function SkillDetail({
   session,
   setDisclosure,
   setPlatform,
-  onChanged,
 }: {
-  /** Optional bundle backlinks, shown after the summary. */
-  bundles?: ReactNode;
   command: string;
   client: RegistryClient;
   disclosures: RegistryDisclosures;
@@ -5043,78 +5720,61 @@ function SkillDetail({
   session: WebSession | null;
   setDisclosure: (key: keyof RegistryDisclosures, open: boolean) => void;
   setPlatform: (platform: string) => void;
-  onChanged: () => void;
 }) {
   const supportedPlatforms = release.platforms.filter((item) => item.status === "supported");
   const hasSupportedPlatform = supportedPlatforms.length > 0;
   const canManageSkill = Boolean(session && selectedSkill.access?.canManageSharing);
-  const canUsePrivilegedControls = Boolean(canManageSkill && session?.user.mfaVerified);
-  // Owner tools load on first open and stay mounted so drafts survive closing.
-  const [ownerVisited, setOwnerVisited] = useState(disclosures.owner);
   const baseId = useId();
+  const commandRef = useRef<HTMLElement>(null);
   const compatibility = release.compatibility && Object.keys(release.compatibility).length > 0 ? release.compatibility : null;
 
-  function toggleOwner() {
-    if (!disclosures.owner) setOwnerVisited(true);
-    setDisclosure("owner", !disclosures.owner);
-  }
-
   return (
-    <div className="registry-inspector-body">
-      <p className="registry-summary">{selectedSkill.summary}</p>
-      {bundles}
-
-      <dl className="registry-facts registry-section">
-        <RegistryFact label="Released">{release.publishedAt ? formatDate(release.publishedAt) : "Not published"}</RegistryFact>
-        <RegistryFact label="Review"><RegistryStatus value={release.reviewStatus} /></RegistryFact>
-        <RegistryFact label="Security"><RegistryStatus value={release.securityStatus} /></RegistryFact>
-        <RegistryFact label="Platforms">{hasSupportedPlatform
-          ? supportedPlatforms.map((item) => item.name).join(", ")
-          : release.platforms.map((item) => `${item.name} (${item.status})`).join(", ") || "None declared"}</RegistryFact>
-        <RegistryFact label="Byte size">{new Intl.NumberFormat().format(release.artifact.byteSize)}</RegistryFact>
-        <RegistryFact label="Content type" mono>{release.artifact.contentType}</RegistryFact>
-        <RegistryFact label="SHA-256" mono>{release.artifact.sha256}</RegistryFact>
-        {selectedSkill.tags.length > 0 && <RegistryFact label="Tags">{selectedSkill.tags.join(", ")}</RegistryFact>}
-      </dl>
-
+    <>
       {hasSupportedPlatform ? (
-        <section className="registry-section registry-use" aria-labelledby={`${baseId}-use`}>
-          <h3 id={`${baseId}-use`}>Use this release</h3>
+        <section className="registry-use" aria-labelledby={`${baseId}-use`}>
+          <div className="registry-use-head">
+            <h4 id={`${baseId}-use`}>Use this release</h4>
+            {supportedPlatforms.length === 1 ? (
+              <p className="registry-use-platform">Platform <code>{platform}</code></p>
+            ) : (
+              <div className="registry-use-platforms" role="group" aria-labelledby={`${baseId}-platform`}>
+                <span id={`${baseId}-platform`}>Platform</span>
+                {supportedPlatforms.map((item) => (
+                  <Button
+                    aria-pressed={item.name === platform}
+                    className={item.name === platform ? "platform-button active" : "platform-button"}
+                    key={item.name}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                    onClick={() => setPlatform(item.name)}
+                  >
+                    {item.name}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
           {release.requiresUserAction && (
             <p className="registry-callout" data-tone="amber">
               <CircleAlert size={16} aria-hidden="true" />
               This release requires a user action. Review the instructions before updating.
             </p>
           )}
-          <div className="registry-platforms">
-            <span id={`${baseId}-platform`}>Export platform</span>
-            <div role="group" aria-labelledby={`${baseId}-platform`}>
-              {supportedPlatforms.map((item) => (
-                <Button
-                  aria-pressed={item.name === platform}
-                  className={item.name === platform ? "platform-button active" : "platform-button"}
-                  key={item.name}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                  onClick={() => setPlatform(item.name)}
-                >
-                  {item.name}
-                </Button>
-              ))}
-            </div>
-          </div>
           <div className="command-panel registry-command">
-            <span className="registry-command-label">
-              <TerminalSquare size={14} aria-hidden="true" />
-              CLI export
-            </span>
-            <div className="registry-command-row">
-              <code>{command}</code>
-              <CopyButton text={command} variant="outline" />
-            </div>
+            <code ref={commandRef}><CommandText command={command} /></code>
           </div>
-          <p className="registry-muted">For a personal Codex workspace, follow <a href="/targets">Connect a Codex workspace</a> to enroll the directory and install this exact version with the matching CLI release.</p>
+          <div className="registry-use-actions">
+            <CopyButton
+              className="registry-copy-command"
+              failureHint="Copy failed. The command is selected; copy it with Ctrl+C or ⌘C."
+              key={command}
+              label="Copy command"
+              selectOnFailure={commandRef}
+              text={command}
+            />
+            {platform === "codex" && <p className="registry-muted"><a href="/targets">Connect a Codex workspace</a> to install this exact release.</p>}
+          </div>
           {session && (
             <ReleaseInstallPanel
               key={`${selectedSkill.slug}:${release.version}:${platform}`}
@@ -5129,89 +5789,82 @@ function SkillDetail({
         <p className="registry-callout registry-section-callout" data-tone="amber" role="status">No supported export platform is available for this release. Export and install are unavailable.</p>
       )}
 
-      <div className="registry-section registry-more">
-        <details className="registry-details" open={disclosures.notes}>
-          <summary onClick={(event) => {
-            // Save the preference before a release change can unmount the disclosure.
-            event.preventDefault();
-            setDisclosure("notes", !disclosures.notes);
-          }}>
-            <span>Release notes for {release.version}</span>
-            {release.changeKind && <span className="registry-chip registry-change-kind">{release.changeKind}</span>}
-          </summary>
-          <div className="registry-details-body">
-            <p className="registry-notes">{release.releaseNotes || "No release notes were supplied for this release."}</p>
-            {compatibility && (
-              <dl className="registry-facts" data-labels="wide">
-                <RegistryFact label="Minimum MySkills">{compatibility.minimumMyskillsVersion ?? "Any"}</RegistryFact>
-                <RegistryFact label="Minimum adapter contract">{compatibility.minimumAdapterContractVersion?.toString() ?? "Any"}</RegistryFact>
-                <RegistryFact label="Minimum source version">{compatibility.minimumSourceVersion ?? "Any"}</RegistryFact>
-              </dl>
-            )}
-          </div>
-        </details>
+      <div className="registry-release-more">
+        <RegistryDisclosure
+          hint={release.changeKind && <span className="registry-chip registry-change-kind">{release.changeKind}</span>}
+          id={`${baseId}-notes`}
+          open={disclosures.notes}
+          title="Release notes"
+          onToggle={() => setDisclosure("notes", !disclosures.notes)}
+        >
+          <p className="registry-notes">{release.releaseNotes || "No release notes were supplied for this release."}</p>
+          {compatibility && (
+            <dl className="registry-facts" data-labels="wide">
+              <RegistryFact label="Minimum MySkills">{compatibility.minimumMyskillsVersion ?? "Any"}</RegistryFact>
+              <RegistryFact label="Minimum adapter contract">{compatibility.minimumAdapterContractVersion?.toString() ?? "Any"}</RegistryFact>
+              <RegistryFact label="Minimum source version">{compatibility.minimumSourceVersion ?? "Any"}</RegistryFact>
+            </dl>
+          )}
+        </RegistryDisclosure>
 
-        {hasSupportedPlatform && client.getReleaseBundle && <PackageFileViewer
-          resourceKey={`${selectedSkill.slug}:${release.version}:${platform}`}
-          loadBundle={() => client.getReleaseBundle!(selectedSkill.slug, release.version, platform)}
-        />}
+        <RegistryDisclosure
+          hint={formatByteSize(release.artifact.byteSize)}
+          id={`${baseId}-package`}
+          open={disclosures.details}
+          title="Package details"
+          onToggle={() => setDisclosure("details", !disclosures.details)}
+        >
+          <dl className="registry-facts">
+            {isBootstrapVersion(release.version) && <RegistryFact label="Exact version" mono>{release.version}</RegistryFact>}
+            <RegistryFact label="Platforms">{release.platforms.map((item) => `${item.name} · ${item.status}`).join(", ") || "None declared"}</RegistryFact>
+            <RegistryFact label="Size">{`${new Intl.NumberFormat().format(release.artifact.byteSize)} bytes`}</RegistryFact>
+            <RegistryFact label="Content type" mono>{release.artifact.contentType}</RegistryFact>
+            <RegistryFact label="SHA-256" mono>{release.artifact.sha256}</RegistryFact>
+          </dl>
+        </RegistryDisclosure>
+
+        {hasSupportedPlatform && client.getReleaseBundle && (
+          <RegistryDisclosure
+            hint="Shown as text"
+            id={`${baseId}-files`}
+            open={disclosures.files}
+            title="Package files"
+            onToggle={() => setDisclosure("files", !disclosures.files)}
+          >
+            {/* Loads only on request; a new release or platform resets it. */}
+            <PackageFileViewer
+              resourceKey={`${selectedSkill.slug}:${release.version}:${platform}`}
+              loadBundle={() => client.getReleaseBundle!(selectedSkill.slug, release.version, platform)}
+            />
+          </RegistryDisclosure>
+        )}
 
         {client.improvements && (
-          <div className="registry-disclosure">
-            <button
-              aria-controls={`${baseId}-improvement`}
-              aria-expanded={disclosures.improvement}
-              className="registry-disclosure-button"
-              type="button"
-              onClick={() => setDisclosure("improvement", !disclosures.improvement)}
-            >
-              Compatibility and improvement
-            </button>
+          <RegistryDisclosure
+            id={`${baseId}-improvement`}
+            open={disclosures.improvement}
+            title="Compatibility and improvement"
+            onToggle={() => setDisclosure("improvement", !disclosures.improvement)}
+          >
             {/* Stays mounted so compatibility evidence and planner drafts persist. */}
-            <div className="registry-disclosure-body" hidden={!disclosures.improvement} id={`${baseId}-improvement`}>
-              <SkillImprovementPanel key={`${release.slug}:${release.version}`} client={client} release={release} user={session?.user ?? null} canManage={canManageSkill} visibility={selectedSkill.visibility} />
-            </div>
-          </div>
+            <SkillImprovementPanel key={`${release.slug}:${release.version}`} client={client} release={release} user={session?.user ?? null} canManage={canManageSkill} visibility={selectedSkill.visibility} />
+          </RegistryDisclosure>
         )}
       </div>
-
-      {canManageSkill && (
-        <div className="registry-section registry-owner">
-          <div className="registry-owner-head">
-            <button
-              aria-controls={`${baseId}-owner`}
-              aria-expanded={disclosures.owner}
-              className="registry-disclosure-button"
-              type="button"
-              onClick={toggleOwner}
-            >
-              Owner controls
-            </button>
-            {!canUsePrivilegedControls && (
-              <span className="registry-owner-hint">
-                <LockKeyhole size={14} aria-hidden="true" />
-                Locked until MFA
-              </span>
-            )}
-          </div>
-          <div className="registry-disclosure-body registry-owner-panel" hidden={!disclosures.owner} id={`${baseId}-owner`}>
-            {(disclosures.owner || ownerVisited) && (canUsePrivilegedControls && session ? (
-              <>
-                <LifecyclePanel
-                  client={client}
-                  release={release}
-                  selectedSkill={selectedSkill}
-                  session={session}
-                  onChanged={onChanged}
-                />
-                <SharingPanel client={client} selectedSkill={selectedSkill} session={session} />
-              </>
-            ) : <PrivilegedControlsLocked />)}
-          </div>
-        </div>
-      )}
-    </div>
+    </>
   );
+}
+
+function formatByteSize(bytes: number): string {
+  if (bytes < 1000) return `${bytes} B`;
+  const units = ["kB", "MB", "GB"];
+  let value = bytes / 1000;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value)} ${units[unit]}`;
 }
 
 function RegistryFact({ children, label, mono }: { children: ReactNode; label: string; mono?: boolean }) {
@@ -5319,226 +5972,12 @@ function ReleaseInstallPanel({
   );
 }
 
-function PrivilegedControlsLocked() {
-  return (
-    <section className="privileged-controls-locked" role="status" aria-labelledby="privileged-controls-heading">
-      <LockKeyhole size={20} aria-hidden="true" />
-      <div>
-        <h2 id="privileged-controls-heading">Lifecycle and sharing controls are locked</h2>
-        <p>Sign in with MFA before changing lifecycle state, release availability, metadata, or sharing access.</p>
-      </div>
-      <a href="/settings">Review security settings</a>
-    </section>
-  );
-}
-
-function LifecyclePanel({
-  client,
-  release,
-  selectedSkill,
-  session,
-  onChanged,
-}: {
-  client: RegistryClient;
-  release: ReleaseMetadata;
-  selectedSkill: PublicSkill;
-  session: WebSession;
-  onChanged: () => void;
-}) {
-  const [state, setState] = useState<LoadState>("loading");
-  const [message, setMessage] = useState<string | null>(null);
-  const [releases, setReleases] = useState<SkillReleaseSummary[]>([]);
-  const [title, setTitle] = useState(selectedSkill.title);
-  const [summary, setSummary] = useState(selectedSkill.summary);
-  const [reason, setReason] = useState("");
-  const [confirmation, setConfirmation] = useState<ConfirmationRequest | null>(null);
-  const currentRelease = releases.find((item) => item.version === release.version);
-
-  const refresh = useCallback(async () => {
-    setState("loading");
-    setMessage(null);
-    try {
-      setReleases(await client.listSkillReleases(selectedSkill.slug));
-      setState("ready");
-    } catch (error) {
-      setMessage(safeReviewErrorMessage(error));
-      setState("error");
-    }
-  }, [client, selectedSkill.slug]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  async function saveMetadata() {
-    setMessage(null);
-    try {
-      await client.updateSkillMetadata({
-        slug: selectedSkill.slug,
-        title,
-        summary,
-        reason,
-      });
-      setMessage("Skill metadata saved.");
-      setReason("");
-      onChanged();
-    } catch (error) {
-      setMessage(safeReviewErrorMessage(error));
-    }
-  }
-
-  async function runSkillAction(action: "archive" | "restore" | "delete") {
-    if (action === "restore") {
-      try {
-        await commitSkillAction(action, reason);
-      } catch {
-        // The safe error is already rendered by commitSkillAction.
-      }
-      return;
-    }
-    setConfirmation({
-      key: `skill-${action}`,
-      title: action === "delete" ? "Delete this skill?" : "Archive this skill?",
-      description: action === "delete"
-        ? "The skill and its public discovery path will be removed. Record why this destructive action is required."
-        : "The skill will be removed from active discovery until it is restored.",
-      confirmLabel: action === "delete" ? "Delete skill" : "Archive skill",
-      destructive: action === "delete",
-      initialReason: reason,
-      requireReason: true,
-      onConfirm: (confirmedReason) => commitSkillAction(action, confirmedReason),
-    });
-  }
-
-  async function commitSkillAction(action: "archive" | "restore" | "delete", confirmedReason: string) {
-    setMessage(null);
-    try {
-      await client.performSkillAction(selectedSkill.slug, action, confirmedReason || undefined);
-      setMessage(`Skill ${formatStatusLabel(action).toLowerCase()} complete.`);
-      setReason("");
-      onChanged();
-    } catch (error) {
-      const safeMessage = safeReviewErrorMessage(error);
-      setMessage(safeMessage);
-      throw new Error(safeMessage);
-    }
-  }
-
-  async function runReleaseAction(action: ReleaseLifecycleActionName) {
-    setConfirmation({
-      key: `release-${action}`,
-      title: `${formatStatusLabel(action)} this release?`,
-      description: releaseActionConfirmationDescription(action),
-      confirmLabel: `${formatStatusLabel(action)} release`,
-      destructive: action === "delete" || action === "revoke" || action === "unpublish",
-      initialReason: reason,
-      requireReason: action !== "restore",
-      onConfirm: (confirmedReason) => commitReleaseAction(action, confirmedReason),
-    });
-  }
-
-  async function commitReleaseAction(action: ReleaseLifecycleActionName, confirmedReason: string) {
-    setMessage(null);
-    try {
-      await client.performReleaseAction(selectedSkill.slug, release.version, action, confirmedReason || undefined, undefined);
-      setMessage(`Release ${formatStatusLabel(action).toLowerCase()} complete.`);
-      setReason("");
-      onChanged();
-    } catch (error) {
-      const safeMessage = safeReviewErrorMessage(error);
-      setMessage(safeMessage);
-      throw new Error(safeMessage);
-    }
-  }
-
-  return (
-    <Frame className="lifecycle-panel reui-registry-frame" role="region" aria-label="Skill lifecycle controls" spacing="sm">
-      <FramePanel className="reui-registry-panel">
-        <FrameHeader className="admin-panel-heading reui-admin-heading reui-registry-heading">
-          <span className="admin-panel-icon"><Settings size={18} aria-hidden="true" /></span>
-          <div>
-            <FrameTitle>Lifecycle controls</FrameTitle>
-            <FrameDescription aria-live="polite">{state === "loading" ? "Loading release state…" : `${releases.length} versions tracked`}</FrameDescription>
-          </div>
-        </FrameHeader>
-        {message && <div className="safe-message compact" role="status">{message}</div>}
-        <div className="metadata-edit-grid">
-          <label>
-            Title
-            <Input className="registry-input" value={title} onChange={(event) => setTitle(event.target.value)} />
-          </label>
-          <label>
-            Summary
-            <Input className="registry-input" value={summary} onChange={(event) => setSummary(event.target.value)} />
-          </label>
-          <label className="reason-field">
-            Reason
-            <Input className="registry-input" value={reason} onChange={(event) => setReason(event.target.value)} />
-          </label>
-          <Button className="save-button compact-button shadcn-action-button" size="sm" type="button" onClick={() => void saveMetadata()}>
-            <Save size={15} aria-hidden="true" />
-            Save metadata
-          </Button>
-        </div>
-        <div className="lifecycle-actions">
-          <Button className="shadcn-action-button" disabled={state === "loading"} size="sm" type="button" variant="outline" onClick={() => void runSkillAction("archive")}>
-            <PackageOpen size={15} aria-hidden="true" />
-            Archive skill
-          </Button>
-          <Button className="shadcn-action-button" disabled={state === "loading"} size="sm" type="button" variant="outline" onClick={() => void runSkillAction("restore")}>
-            <RotateCw size={15} aria-hidden="true" />
-            Restore skill
-          </Button>
-          <Button className="registry-danger-button shadcn-action-button" disabled={state === "loading"} size="sm" type="button" variant="outline" onClick={() => void runSkillAction("delete")}>
-            <Trash2 size={15} aria-hidden="true" />
-            Delete skill
-          </Button>
-        </div>
-        <div className="release-lifecycle-list">
-          {(currentRelease ? [currentRelease] : releases.slice(0, 1)).map((item) => (
-            <div className="release-lifecycle-row" key={item.id}>
-              <div className="release-lifecycle-meta">
-                <span>
-                  <strong>{item.slug}@{item.version}</strong>
-                  <small>{item.publishedAt ? formatDate(item.publishedAt) : "not published"}</small>
-                </span>
-                <span className="release-lifecycle-statuses">
-                  <StatusToken value={item.lifecycleStatus} />
-                  <StatusToken value={item.reviewStatus} />
-                  <StatusToken value={item.securityStatus} />
-                </span>
-              </div>
-              <div className="release-lifecycle-actions">
-                {item.allowedActions.map((action) => (
-                  <Button
-                    className={action === "delete" || action === "revoke" ? "registry-danger-button compact-button shadcn-action-button" : "compact-button shadcn-action-button"}
-                    key={action}
-                    disabled={state === "loading"}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                    onClick={() => void runReleaseAction(action)}
-                  >
-                    {formatStatusLabel(action)}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        {confirmation && <ConfirmationDialog key={confirmation.key} request={confirmation} onClose={() => setConfirmation(null)} />}
-      </FramePanel>
-    </Frame>
-  );
-}
-
 export function SharingPanel({
   client,
   selectedSkill,
-  session,
 }: {
   client: RegistryClient;
-  selectedSkill: PublicSkill;
+  selectedSkill: Pick<PublicSkill, "slug" | "visibility">;
   session: WebSession;
 }) {
   const [state, setState] = useState<LoadState>("loading");
@@ -5756,14 +6195,6 @@ function isExactReleaseVersion(version: string): boolean {
   return parseSemanticVersion(version) !== null || /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version);
 }
 
-function isPublishedRelease(release: Pick<SkillReleaseSummary, "lifecycleStatus" | "reviewStatus" | "securityStatus" | "publishedAt">): boolean {
-  return (release.lifecycleStatus === "approved" || release.lifecycleStatus === "deprecated")
-    && release.reviewStatus === "approved"
-    && release.securityStatus === "passed"
-    && typeof release.publishedAt === "string"
-    && Number.isFinite(Date.parse(release.publishedAt));
-}
-
 function formatDate(input: string): string {
   return new Intl.DateTimeFormat(undefined, {
     day: "numeric",
@@ -5798,7 +6229,8 @@ function isPublicView(view: AppView): boolean {
 
 function initialViewFromPath(pathname: string): AppView {
   if (pathname === "/libraries") return "libraries";
-  if (pathname === "/manage/skills") return "manage";
+  // Legacy Manage skills page: now the Can manage scope of Skills.
+  if (pathname === "/manage/skills") return "browse";
   if (pathname === "/") {
     return "landing";
   }
@@ -5826,7 +6258,7 @@ function initialViewFromPath(pathname: string): AppView {
   if (pathname === "/submit") {
     return "submit";
   }
-  if (pathname === "/architectures") {
+  if (isArchitecturePath(pathname)) {
     return "architectures";
   }
   if (pathname === "/organizations") {
@@ -5854,7 +6286,6 @@ function initialViewFromPath(pathname: string): AppView {
 }
 
 function pathForView(view: AppView): string {
-  if (view === "manage") return "/manage/skills";
   if (view === "landing") {
     return "/";
   }
@@ -5896,6 +6327,11 @@ function appLocationFromWindow(): AppLocation {
       view: catalogView === "list" || catalogView === "outline" ? catalogView : "grouped",
       bundle: slug ? null : params.get("bundle") || null,
     },
+    workspace: {
+      scope: window.location.pathname === "/manage/skills" ? "manage" : parseSkillScope(params.get("scope")),
+      tab: slug ? parseSkillTab(params.get("tab")) : "overview",
+      returnTo: slug ? safeLibraryReturn(params.get("returnTo"), window.location.origin) : null,
+    },
   };
 }
 
@@ -5919,7 +6355,12 @@ function appHistoryState(index: number): Record<string, unknown> {
   return { ...base, [APP_HISTORY_INDEX_KEY]: index };
 }
 
-function registryUrl(slug: string | null, query: string, platform: string, version: string | null = null, catalog?: CatalogLocation): string {
+/** Exact release link for Submit and Review outcomes: readable when published, otherwise the manager's Versions. */
+function exactSkillUrl(slug: string, version: string, published: boolean): string {
+  return registryUrl(slug, "", "codex", version, undefined, published ? undefined : { scope: "manage", tab: "versions", returnTo: null });
+}
+
+function registryUrl(slug: string | null, query: string, platform: string, version: string | null = null, catalog?: CatalogLocation, workspace?: WorkspaceLocation): string {
   const params = new URLSearchParams();
   if (query.trim()) {
     params.set("q", query);
@@ -5935,6 +6376,16 @@ function registryUrl(slug: string | null, query: string, platform: string, versi
   }
   if (catalog?.bundle && !slug) {
     params.set("bundle", catalog.bundle);
+  }
+  // Workspace keys follow the existing ones so older URLs keep their shape.
+  if (workspace?.scope === "manage") {
+    params.set("scope", "manage");
+  }
+  if (slug && workspace && workspace.tab !== "overview") {
+    params.set("tab", workspace.tab);
+  }
+  if (slug && workspace?.returnTo) {
+    params.set("returnTo", workspace.returnTo);
   }
   const pathname = slug ? `/skills/${slug}` : "/registry";
   const search = params.toString();
@@ -5952,7 +6403,7 @@ function handleCallbackLink(event: ReactMouseEvent<HTMLAnchorElement>, callback:
 function registrationPostureTitle(mode: AdminRegistrationMode): string {
   switch (mode) {
     case "closed":
-      return "Only existing approved accounts can access the registry.";
+      return "Only existing approved accounts can access MySkills.";
     case "request":
       return "New accounts require owner or admin approval.";
     case "open":
@@ -6170,6 +6621,11 @@ function clearAuthActionTokenFromLocation(): void {
     return;
   }
   window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
+}
+
+function apiErrorStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object" || !("status" in error)) return null;
+  return typeof error.status === "number" ? error.status : null;
 }
 
 function apiErrorCode(error: unknown): string | null {

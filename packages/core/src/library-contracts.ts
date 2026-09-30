@@ -177,6 +177,8 @@ export interface LibraryEntryTracking {
   mode: LibraryTrackingMode;
   health: LibrarySourceHealth;
   nextCheckAt: string | null;
+  /** Provider cooldown, independent of whether automatic checks are enabled. */
+  retryAvailableAt?: string | null;
   lastAttemptAt: string | null;
   lastSuccessfulCheckAt: string | null;
   lastErrorCode: string | null;
@@ -197,7 +199,7 @@ export interface LibraryEntrySkill {
   sourceEntryId: string | null;
   sourcePath: string | null;
   lineageId: string | null;
-  ownership: { type: "user"; isCaller: boolean };
+  ownership: { type: "user"; isCaller: boolean } | { type: "team"; id: string; name: string; isCaller: false };
 }
 
 export interface LibraryAdoption {
@@ -339,6 +341,7 @@ export interface SourceCheckResult {
   errorCode: string | null;
   retryAfterSeconds: number | null;
   nextCheckAt: string | null;
+  retryAvailableAt?: string | null;
 }
 
 export type LibraryEntryResolution =

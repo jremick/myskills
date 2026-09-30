@@ -13,6 +13,7 @@ export const accountAdminHelp = [
   "  account mfa-enroll --output <new-file> [--label <label>]  (writes the TOTP setup secret to a new private file)",
   "  account mfa-confirm <factor-id> --output <new-file>  (prompts for a code; writes recovery codes to a new private file)",
   "  account mfa-disable  (prompts for the current password)",
+  "  account github status|disconnect|connect  (connect guides the trusted browser flow)",
   "  connections info|list",
   "  connections revoke <connection-id>",
   "  admin branding get | set --input <branding.json>",
@@ -23,6 +24,7 @@ export const accountAdminHelp = [
   "  admin users roles <user-id> --role <role> [--role <role> ...] [--reason <text>]",
   "  admin tokens list | revoke <token-id>",
   "  admin audit [--limit <1-100>] [--cursor <cursor>]",
+  "  admin github get|test|configure  (configure guides private browser credential entry)",
   "  instance info|health|ready|version|capabilities|branding|site",
 ];
 
@@ -33,7 +35,7 @@ const globalOptions = new Set(["api-url", "token", "json"]);
 // Secrets never come from argv: it is visible in process lists and shell history.
 const secretOptionPattern = /password|passphrase|secret|recovery|totp|^otp$|^code$|-token$/i;
 const providerSecretKeyPattern = /secret|password|token|private[-_ ]?key|api[-_ ]?key/i;
-const adminResources = new Set(["branding", "site", "registration", "providers", "users", "tokens", "audit"]);
+const adminResources = new Set(["branding", "site", "registration", "providers", "users", "tokens", "audit", "github"]);
 const userRoles = ["owner", "admin", "maintainer", "author", "user"];
 const userActions = ["approve", "activate", "disable", "delete"];
 const registrationModes = ["closed", "request", "open"];
@@ -95,6 +97,9 @@ async function accountCommand(
   send: (method: Method, endpoint: string, body?: unknown, auth?: Auth) => Promise<void>,
 ): Promise<void> {
   switch (action) {
+    case "github":
+      await githubCommand(input, args, false, context, send);
+      return;
     case "register": {
       validate(input, args, 0, ["email", "name"]);
       const email = emailOption(input, "email");
@@ -182,6 +187,35 @@ async function accountCommand(
   }
 }
 
+async function githubCommand(
+  input: ParityCommandInput,
+  rest: string[],
+  admin: boolean,
+  context: ParityCommandContext,
+  send: (method: Method, endpoint: string, body?: unknown, auth?: Auth) => Promise<void>,
+): Promise<void> {
+  const [action, ...args] = rest;
+  validate(input, args, 0);
+  if (action === (admin ? "configure" : "connect")) {
+    context.output({
+      status: "action_required", performed: false,
+      destination: { path: admin ? "/admin" : "/settings" },
+      instructions: admin
+        ? "Open the trusted MySkills app's Admin GitHub settings. Enter and save GitHub App credentials there, then run myskills admin github get and myskills admin github test to inspect safe status. Keep secrets outside chat and shell arguments."
+        : "Open the trusted MySkills app's Settings and connect GitHub in that browser session. Complete GitHub consent there, then run myskills account github status to inspect the resulting account connection.",
+      completion: { confirmed: false },
+    });
+  } else if (action === (admin ? "get" : "status")) {
+    await send("GET", admin ? "/v1/admin/github" : "/v1/account/github");
+  } else if (admin && action === "test") {
+    await send("POST", "/v1/admin/github/test");
+  } else if (!admin && action === "disconnect") {
+    await send("DELETE", "/v1/account/github");
+  } else {
+    throw usage(admin ? "admin github get|test|configure" : "account github status|disconnect|connect");
+  }
+}
+
 async function adminCommand(
   input: ParityCommandInput,
   resource: string,
@@ -203,6 +237,10 @@ async function adminCommand(
       query.set("cursor", cursor);
     }
     await send("GET", `/v1/admin/audit${query.size ? `?${query}` : ""}`);
+    return;
+  }
+  if (resource === "github") {
+    await githubCommand(input, rest, true, context, send);
     return;
   }
   const [action, ...args] = rest;

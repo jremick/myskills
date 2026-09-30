@@ -27,6 +27,7 @@ const policy = z.object({ policy: object, expectedRevisionNumber: revision, reas
 const migration = { expectedCurrentRevisionId: id, targetPatternId: z.enum(architecturePatternIds), mapping: object.optional() };
 const operation = { action: z.enum(["install", "update", "rollback"]), slug: id, version, platform: id.optional(), idempotencyKey: id };
 const fields: Record<string, z.ZodType> = {
+  "admin.github.test": empty,
   "skills.metadata.update": z.object({ title: text(200).optional(), summary: text(4000).optional(), tags: z.array(text(80)).max(100).optional(), visibility: z.enum(visibilityScopes).optional(), reason }).strict(),
   "skills.lifecycle.decide": z.object({ action: z.enum(["archive", "restore", "delete"]), reason }).strict(),
   "skills.releases.lifecycle.decide": z.object({ action: z.enum(["deprecate", "unpublish", "revoke", "restore", "delete"]), reason, replacement: text(128).optional() }).strict(),

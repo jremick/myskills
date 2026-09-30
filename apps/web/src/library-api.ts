@@ -62,6 +62,7 @@ export type LibraryClient = ReturnType<typeof createLibraryClient>;
 export function libraryError(error: unknown): string {
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
   const messages: Record<string, string> = {
+    LIBRARY_SELF_REVIEW_UNSUPPORTED: "Team imports require instance review before adoption.",
     PRIVATE_SELF_REVIEW_DISABLED: "Private self-review is disabled. Ask an instance reviewer to review this import.",
     PRIVATE_SELF_REVIEW_SCOPE_INVALID: "Private self-review requires your own private import with no sharing grants.",
     PRIVATE_SELF_REVIEW_SCAN_NOT_CLEAN: "This import needs an instance reviewer because its scan is not clean.",
@@ -75,7 +76,10 @@ export function libraryError(error: unknown): string {
     CANDIDATE_SUPERSEDED: "A newer source preview replaced this candidate. Refresh the source.",
     CANDIDATE_ORDER_UNVERIFIED: "Source order needs review. Provide a reason before accepting this revision.",
     SOURCE_URL_UNSUPPORTED: "Use a public github.com repository, directory, or SKILL.md URL.",
-    SOURCE_RATE_LIMITED: "GitHub rate limited this check. The saved source will be retried later.",
+    SOURCE_RATE_LIMITED: "GitHub rate limited this check. Try again after the retry time.",
+    SOURCE_AUTH_REQUIRED: "GitHub authentication needs attention. Reconnect your GitHub account in Account settings or ask an administrator to check the shared installation.",
+    GITHUB_RECONNECT_REQUIRED: "Reconnect your GitHub account in Account settings to resume authenticated checks.",
+    GITHUB_CONFIGURATION_REQUIRED: "Ask an instance administrator to check the GitHub App configuration.",
     SOURCE_CHECK_IN_PROGRESS: "A check is already running for this source.",
     SOURCE_IDENTITY_CHANGED: "The repository identity changed. Review the source before resuming tracking.",
     SOURCE_UNAVAILABLE: "The public GitHub source is unavailable.",

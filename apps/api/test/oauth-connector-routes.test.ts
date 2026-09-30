@@ -437,14 +437,23 @@ test("access tokens expire and each call rechecks the account", async (t) => {
 });
 
 test("read-only connector grants cannot call write actions or trusted controls despite real owner assurance", async (t) => {
-  const { app, authStore } = oauthApp(t);
+  const { app, authStore, oauthService } = oauthApp(t);
   const client = await register(app, { client_name: "ChatGPT", redirect_uris: [CHATGPT_REDIRECT], token_endpoint_auth_method: "none" });
   const owner = await addAndLoginWithMfa(app, authStore, { id: "owner-1", email: "owner@example.test", roles: ["owner"] });
   const tokens = await connect(app, owner, { clientId: client.client_id, redirectUri: CHATGPT_REDIRECT, scope: "skills:read architectures:read" });
   const session = await app.inject({ method: "GET", url: "/v1/mcp/session", headers: bearer(tokens.access_token) });
   assert.equal(session.statusCode, 200);
-  assert.deepEqual(session.json().user.roles, ["owner"]);
-  assert.equal(session.json().user.mfaVerified, true);
+  const verified = await oauthService.verifyAccessToken(tokens.access_token);
+  assert.deepEqual(verified?.user.roles, ["owner"]);
+  assert.ok(verified?.mfaVerifiedAt);
+  // Bootstrap scopes are not consent to disclose the account profile. This
+  // must agree with /v1/me's profile:read boundary below.
+  assert.equal(Object.hasOwn(session.json(), "user"), false);
+  assert.equal(session.body.includes("owner@example.test"), false);
+  const profileTokens = await connect(app, owner, { clientId: client.client_id, redirectUri: CHATGPT_REDIRECT, scope: "skills:read profile:read" });
+  const profileSession = await app.inject({ method: "GET", url: "/v1/mcp/session", headers: bearer(profileTokens.access_token) });
+  assert.equal(profileSession.statusCode, 200);
+  assert.equal(profileSession.json().user.email, "owner@example.test");
 
   for (const [method, url, payload] of [
     ["GET", "/v1/me", undefined],

@@ -1,5 +1,6 @@
 import { createBundleClient, type BundleClient } from "./bundle-api.js";
 import { createImprovementClient, type ImprovementClient } from "./improvement-api";
+import { createGithubClient, type GithubClient } from "./github-api.js";
 import { createLibraryClient, type LibraryClient } from "./library-api.js";
 import { createOAuthConnectionClient, type OAuthConnectionClient } from "./oauth-api.js";
 import { MAX_BRAND_LOGO_BYTES, MAX_BRAND_TEXT_LENGTH } from "@myskills-app/core";
@@ -710,6 +711,7 @@ export interface SubmitSkillResult {
 
 export interface UserSubmissionSummary {
   id: string;
+  owner?: { type: "user" | "team"; id: string };
   slug: string;
   title: string;
   summary: string;
@@ -807,9 +809,11 @@ export interface RegistryClient {
   oauth?: OAuthConnectionClient;
   improvements?: ImprovementClient;
   libraries?: LibraryClient;
+  github?: GithubClient;
   bundles?: BundleClient;
   searchSkillPage?(input: RegistryPageInput): Promise<RegistryPage<PublicSkill>>;
   listManagedSkills?(input: RegistryPageInput): Promise<RegistryPage<SkillManagementSummary>>;
+  getManagedSkill?(slug: string): Promise<SkillManagementSummary>;
   getUserSubmissionDetail?(submissionId: string): Promise<UserSubmissionDetail>;
   getReviewSubmissionDetail?(submissionId: string): Promise<ReviewSubmissionDetail>;
   getReleaseBundle?(slug: string, version: string, platform?: string): Promise<SkillPackageBundle>;
@@ -1000,6 +1004,7 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
     oauth: createOAuthConnectionClient(root, fetchImpl, token),
     improvements: createImprovementClient(<T,>(url: string, init?: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown }) => requestJson<T>(fetchImpl, `${root}${url}`, { ...init, token })),
     libraries: createLibraryClient(root, fetchImpl, token),
+    github: createGithubClient(root, fetchImpl, token),
     bundles: createBundleClient(root, fetchImpl, token),
     async searchSkillPage(input) {
       const params = registryPageQuery(input);
@@ -1007,6 +1012,10 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
     },
     async listManagedSkills(input) {
       return requestJson<RegistryPage<SkillManagementSummary>>(fetchImpl, `${root}/v1/manage/skills${registryPageQuery(input)}`, { token });
+    },
+    async getManagedSkill(slug) {
+      const body = await requestJson<{ skill: SkillManagementSummary }>(fetchImpl, `${root}/v1/manage/skills/${encodeURIComponent(slug)}`, { token });
+      return body.skill;
     },
     async getUserSubmissionDetail(submissionId) {
       const body = await requestJson<{ submission: UserSubmissionDetail }>(fetchImpl, `${root}/v1/submissions/${encodeURIComponent(submissionId)}`, { token });
@@ -1949,12 +1958,12 @@ export function safeErrorMessage(error: unknown): string {
     return "Skill or release not found.";
   }
   if (isSafeApiError(error) && (error.status === 401 || error.status === 403)) {
-    return "You do not have access to that registry item.";
+    return "You do not have access to that skill or release.";
   }
   if (isSafeApiError(error) && error.status >= 400 && error.status < 500) {
-    return "The registry request could not be completed.";
+    return "The skill request could not be completed.";
   }
-  return "The registry is not available.";
+  return "Skills are not available.";
 }
 
 export function safeAuthErrorMessage(error: unknown): string {
@@ -2165,10 +2174,10 @@ function safeResponseCode(body: Record<string, unknown>): string {
 function safeResponseMessage(body: Record<string, unknown>, status: number): string {
   const error = body.error;
   if (!error || typeof error !== "object" || Array.isArray(error)) {
-    return `Registry request failed with ${status}.`;
+    return `MySkills request failed with ${status}.`;
   }
   const message = (error as { message?: unknown }).message;
-  return typeof message === "string" ? message : `Registry request failed with ${status}.`;
+  return typeof message === "string" ? message : `MySkills request failed with ${status}.`;
 }
 
 function isSafeApiError(error: unknown): error is SafeApiError {

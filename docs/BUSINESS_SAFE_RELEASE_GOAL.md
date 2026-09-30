@@ -1,7 +1,7 @@
 # Business-Safe Production Release Goal
 
 Version: 0.1.0-beta.4
-Last updated: 2026-06-30
+Last updated: 2026-09-29
 
 ## Goal
 
@@ -74,4 +74,4 @@ Turn the public beta into a business-safe, production-ready open-source release 
 - Fresh clone and production-like deploy rehearsals pass.
 - Security review and threat model are refreshed after the production hardening work.
 - All public docs describe the supported and unsupported production posture without stale alpha-only caveats.
-- A release candidate tag is cut and the release workflow succeeds.
+- A release candidate tag is cut and tagged release verification (`scripts/local-ci.sh release-check`) succeeds.

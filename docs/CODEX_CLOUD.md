@@ -1,20 +1,20 @@
 # Codex Cloud Setup
 
-Version: 0.1.0-beta.15
-Last updated: 2026-07-13
+Version: 0.1.0-beta.17
+Last updated: 2026-09-29
 
 This runbook makes MySkills ready for subscription-based Codex cloud/web tasks while keeping implementation work on GitHub pull requests and avoiding API-billed GitHub Actions agents for now.
 
 ## Current Repo Contract
 
-Codex cloud should mirror the existing GitHub CI contract:
+Codex cloud should mirror the existing CI contract, defined portably by `scripts/local-ci.sh` (see [Local CI](LOCAL_CI.md)):
 
 - CI installs dependencies with `npm ci`.
 - CI runs `npm run check` for the general gate.
 - CI runs `npm run test:postgres` in a separate job with disposable Postgres.
-- Release verification runs the canonical `npm run release:verify` gate, then builds production Docker targets in the tag workflow.
+- Release verification runs the canonical `npm run release:verify` gate, then builds production Docker targets (`scripts/local-ci.sh release-check`).
 
-Do not add a GitHub Actions workflow that invokes a coding agent yet. Use Codex cloud/web to create branches and pull requests, then let the existing CI and human review gates decide whether to merge.
+The full entrypoint needs Linux with Docker and is not expected to run inside a Codex cloud task. Do not add a GitHub Actions workflow that invokes a coding agent yet. Use Codex cloud/web to create branches and pull requests, then let the required checks and human review decide whether to merge.
 
 ## Codex Environment
 
@@ -45,10 +45,10 @@ Inspect the MySkills repository instructions and CI. Do not change runtime behav
 
 Expected behavior:
 
-- The agent reads `AGENTS.md`, `README.md`, `package.json`, and `.github/workflows/ci.yml`.
+- The agent reads `AGENTS.md`, `README.md`, `package.json`, and `docs/LOCAL_CI.md`.
 - The diff is documentation-only.
 - No secrets, deployment variables, GitHub Actions agent workflows, or production deploy changes are added.
-- The PR waits for existing GitHub CI and human approval before merge.
+- The PR waits for the required checks and human approval before merge.
 
 ## Verification Commands For Agents
 

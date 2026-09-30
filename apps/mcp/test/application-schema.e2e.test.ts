@@ -42,18 +42,23 @@ test("SDK application schemas preserve library source/root and provider contract
     ["improvements_evidence_share", { path: { id: "run" }, body: { reportSha256: "a".repeat(64), disclosure: "summary", proposals: [], idempotencyKey: "-share001" } }],
     ["improvements_policy_set", { path: { scopeType: "user", scopeId: "owner" }, body: { policy: {}, expectedRevisionNumber: 0, reason: null } }],
     ["organizations_create", { body: { name: "Engineering", slug: "Platform Engineering" } }],
+    ["skills_managed_get", { path: { slug: "unpublished-helper" } }],
+    ["account_github_get", {}],
+    ["account_github_disconnect", {}],
+    ["admin_github_get", {}],
+    ["admin_github_test", {}],
   ] as const;
   for (const [name, args] of calls) {
     const result = await client.callTool({ name, arguments: args });
     assert.equal(result.isError, undefined, `${name}: ${JSON.stringify(result)}`);
   }
-  assert.equal(requests.length, 10);
+  assert.equal(requests.length, 15);
   assert.deepEqual((requests[1].body as { ref: unknown }).ref, { kind: "default-branch" });
   assert.deepEqual((requests[3].body as { paths: string[] }).paths, ["", "skills/nested"]);
   assert.equal((await client.listTools()).tools.find(tool => tool.name === "library_entries_preview")?.annotations?.readOnlyHint, false);
   const invented = await client.callTool({ name: "submissions_create", arguments: { body: { files: [{ path: "SKILL.md", content: "ZmFrZQ==", encoding: "base64" }] } } });
   assert.equal(invented.isError, true);
-  assert.equal(requests.length, 10);
+  assert.equal(requests.length, 15);
   const large = await client.callTool({ name: "submissions_create", arguments: { body: { files: [{ path: "reference.md", content: "x".repeat(900_000) }] } } });
   assert.equal(large.isError, undefined, JSON.stringify(large));
   const archive = await client.callTool({ name: "submissions_create", arguments: { body: { archive: { filename: "package.zip", contentBase64: "x".repeat(13_000_000) } } } });

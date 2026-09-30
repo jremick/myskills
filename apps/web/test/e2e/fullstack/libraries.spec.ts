@@ -39,12 +39,15 @@ test("owner curates a persistent library, changes private-import policy, and rem
   await page.getByLabel("Library name").fill(name);
   await page.getByRole("button", { name: "Create library", exact: true }).click();
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
-  await page.getByLabel("Registry skill slug").fill("release-notes-helper");
-  await page.getByRole("button", { name: "Save registry skill", exact: true }).click();
-  await page.getByLabel("Reviewed release version").fill("0.1.0");
+  // Skills and releases are chosen from authorised pickers, not typed identifiers.
+  const picker = page.getByRole("form", { name: "Save a skill" });
+  await picker.getByRole("searchbox", { name: "Search skills", exact: true }).fill("release-notes-helper");
+  await picker.getByRole("radio", { name: /release-notes-helper/ }).check();
+  await picker.getByRole("button", { name: "Save skill", exact: true }).click();
+  await page.getByLabel("Reviewed release", { exact: true }).selectOption("0.1.0");
   const note = "Reviewed for the release preparation workflow.";
   await page.getByLabel("Curator note (optional)").fill(note);
-  await page.getByRole("button", { name: "Adopt registry release", exact: true }).click();
+  await page.getByRole("button", { name: "Adopt skill release", exact: true }).click();
   await expect(page.locator(".library-command")).toContainText("--library-entry");
   const command = await page.locator(".library-command").textContent();
   const entryId = command?.match(/--library-entry ([a-f0-9-]{36})/)?.[1];
@@ -64,6 +67,8 @@ test("owner curates a persistent library, changes private-import policy, and rem
   expect(resolution.resolution).toMatchObject({ state: "adopted", slug: "release-notes-helper", version: "0.1.0" });
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("heading", { name: savedEntry.entry.title, exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Back to entries", exact: true }).click();
   await page.getByRole("button", { name: savedEntry.entry.title, exact: true }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("persistent-library-mobile.png"), fullPage: true });
