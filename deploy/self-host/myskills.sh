@@ -182,6 +182,7 @@ case "$command" in
   preflight) docker_call compose version >/dev/null 2>&1 || die 'Docker Compose v2 is unavailable.'; cfg validate ;;
   up)
     cfg startup-check || die 'forward migration requires the exact target bundle for startup; preserve the barrier and use isolated recovery if needed.'
+    cfg startup-fence || die 'migration retry requires durable exact-target fences.'
     quiet_compose pull postgres minio minio-init migrate api web
     quiet_compose up -d --wait postgres minio
     quiet_compose run --rm --no-deps minio-init
@@ -225,6 +226,7 @@ case "$command" in
     upgrade_owned=true
     cfg receipt --status in-progress --phase validate
     compose_dir=$target_bundle; phase=pull-target; cfg receipt --status in-progress --phase "$phase"
+    cfg startup-fence || die 'migration retry requires durable exact-target fences.'
     quiet_compose pull postgres minio minio-init migrate api web
     if [ "$mcp" = true ]; then quiet_compose --profile mcp pull mcp-http; fi
     phase=stop-app-writes; cfg receipt --status in-progress --phase "$phase"

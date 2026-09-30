@@ -17,7 +17,7 @@ export function hostDocker(path, executable, args, options = { stdio: "inherit" 
     name = `${ledger.owner}-op-${++ledger.sequence}`;
     ledger.resources.push({ kind: "container", name, state: "creating" });
     saveHostLedger(path, ledger); // Reserve BEFORE the daemon can create it.
-    args = ["run", "--name", name, "--label", `io.myskills.host-rehearsal=${ledger.owner}`, ...args.slice(1)];
+    args = ["run", "--name", name, "--label", `io.myskills.host-rehearsal=${ledger.owner}`, ...args.slice(1).filter(arg => arg !== "--rm" && arg !== "--rm=true")];
   }
   if (args[0] === "compose") {
     let command;
@@ -40,7 +40,18 @@ export function hostDocker(path, executable, args, options = { stdio: "inherit" 
     }
   }
   const result = spawnSync(executable, args, options);
-  if (name && result.status === 0) {
+  // Retain direct helpers until exact owned terminal state can be inspected.
+  // Expected process rejection is not daemon completion evidence by itself.
+  let terminal = result.status === 0;
+  if (name && !terminal && result.status !== null && !result.error && !result.signal) {
+    const inspected = spawnSync(executable, ["container", "inspect", name], { encoding: "utf8", timeout: 30_000, maxBuffer: 1024 * 1024 });
+    try {
+      const identity = JSON.parse(inspected.stdout)[0];
+      terminal = inspected.status === 0 && identity?.Config?.Labels?.["io.myskills.host-rehearsal"] === ledger.owner
+        && ["exited", "dead"].includes(identity?.State?.Status) && identity.State.ExitCode === result.status;
+    } catch { terminal = false; }
+  }
+  if (name && terminal) {
     const completed = JSON.parse(readFileSync(path, "utf8"));
     completed.resources.find((resource) => resource.name === name).state = "created";
     saveHostLedger(path, completed);

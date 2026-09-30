@@ -1,8 +1,10 @@
+import { isApprovedArtifactRollbackTransition } from "./artifact-service.js";
 import { assertExecutableSyncRun } from "./purpose.js";
 import { createHash, randomUUID } from "node:crypto";
 import { asc, desc, eq, and, sql } from "drizzle-orm";
 import {
   AppError,
+  artifactHash, assertArchitectureArtifactIntent, type ArchitectureArtifactIntent,
   architectureSyncControlLimits,
   architectureSyncSnapshotDigest,
   architectureSyncStepDigest,
@@ -31,7 +33,7 @@ import {
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type { Database } from "../db/client.js";
 import {
-  auditEvents,
+  auditEvents, authSessions, apiTokens,
   skillArchitectures,
   skillArchitectureObservations,
   skillArchitectureRevisions,
@@ -69,6 +71,7 @@ import { PostgresArchitectureStore } from "../architectures/postgres-store.js";
 import { PostgresArchitectureTargetStore } from "../targets/postgres-target-store.js";
 import { PostgresSkillRepository } from "../repositories/postgres-skill-repository.js";
 import { PostgresSubmissionStore } from "../submissions/postgres-submission-store.js";
+import type { ArtifactObjectStorage } from "../artifacts/storage.js";
 import { SubmissionService } from "../submissions/service.js";
 import { lockOperationTarget, lockOperationSharing, resolveLockedUpgradePolicy } from "../target-operations/postgres-authorization.js";
 import { reauthorizeInternalRegistrySnapshot } from "../architectures/postgres-pattern-migration-authorization.js";
@@ -92,6 +95,7 @@ type ReceiptRow = typeof skillArchitectureSyncReceipts.$inferSelect;
 
 interface PostgresArchitectureSyncStoreOptions {
   readonly now?: () => Date;
+  readonly artifactStorage?: ArtifactObjectStorage;
   readonly idFactory?: () => string;
   /** Test-only checkpoints used to prove transaction rollback. */
   readonly onRecoveryPhase?: (phase: ArchitectureSyncRecoveryAtomicPhase) => void;
@@ -124,7 +128,7 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
 
   constructor(
     private readonly db: Database,
-    options: PostgresArchitectureSyncStoreOptions = {},
+    private readonly options: PostgresArchitectureSyncStoreOptions = {},
   ) {
     this.now = options.now ?? (() => new Date());
     this.idFactory = options.idFactory ?? randomUUID;
@@ -145,11 +149,41 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
         // Existing architecture writers own this lock first. NOWAIT avoids a
         // reverse-order wait while holding the target lifecycle authority.
         await tx.select({ id: skillArchitectures.id }).from(skillArchitectures).where(eq(skillArchitectures.id, target.architectureId)).for("update", { noWait: true }).limit(1);
-        const scoped = new PostgresArchitectureSyncStore(tx as unknown as Database, { now: this.now, idFactory: this.idFactory, onRecoveryPhase: this.onRecoveryPhase });
+        const [clock] = (await tx.execute(sql`SELECT clock_timestamp() AS now`)).rows;
+        const authorityTime = new Date(String(clock!.now));
+        const scoped = new PostgresArchitectureSyncStore(tx as unknown as Database, { ...this.options, now: () => authorityTime, idFactory: this.idFactory, onRecoveryPhase: this.onRecoveryPhase });
         const dependencies: ArchitecturePlanDependencies = {
+          authorityNow: async () => new Date(String((await tx.execute(sql`SELECT clock_timestamp() AS now`)).rows[0]!.now)),
+          assertArtifactCredential: async (actor, execution, purpose = "intent") => {
+            if (!actor.artifactCredential) throw new AppError("An authenticated execution credential is required.","AUTHENTICATION_REQUIRED",401);
+            if (actor.artifactCredential.kind === "oauth") {
+              if (execution) throw new AppError("Use the enrolled companion session or scoped token for host execution.","API_TOKEN_REQUIRED",403);
+              const rows=await tx.execute(sql`SELECT t.scopes, t.expires_at AS token_expires, t.revoked_at AS token_revoked,
+                g.expires_at, g.revoked_at, g.mfa_verified_at, g.assurance_expires_at
+                FROM oauth_access_tokens t JOIN oauth_grants g ON g.id=t.grant_id
+                WHERE t.token_hash=${actor.artifactCredential.hash} AND g.user_id=${actorId}::uuid
+                AND g.resource=${actor.artifactCredential.resource ?? ""} AND g.client_id=${actor.artifactCredential.clientId ?? ""}
+                FOR UPDATE OF g,t`);
+              const credential=rows.rows[0];const time=new Date(String((await tx.execute(sql`SELECT clock_timestamp() AS now`)).rows[0]!.now)).getTime();
+              if (!credential || credential.token_revoked || credential.revoked_at || new Date(String(credential.token_expires)).getTime()<=time || new Date(String(credential.expires_at)).getTime()<=time) throw new AppError("Current OAuth grant is required.","AUTHENTICATION_REQUIRED",401);
+              if(!credential.mfa_verified_at || !credential.assurance_expires_at || new Date(String(credential.mfa_verified_at)).getTime()>time || new Date(String(credential.assurance_expires_at)).getTime()<=time) throw new AppError("Current grant MFA assurance is required.","MFA_VERIFICATION_REQUIRED",403);
+              const scopes=credential.scopes as string[];
+              for(const scope of actor.artifactCredential.requiredScopes ?? ["architectures:read","targets:control",...(purpose==="intent"?["skills:read"]:[])]) if(!scopes.includes(scope))throw new AppError("Current grant scope is required.","API_TOKEN_SCOPE_REQUIRED",403);
+              return;
+            }
+            const table = actor.artifactCredential.kind === "session" ? authSessions : apiTokens;
+            const [credential] = await tx.select().from(table).where(and(eq(table.tokenHash,actor.artifactCredential.hash),eq(table.userId,actorId))).for("update").limit(1);
+            const time = new Date(String((await tx.execute(sql`SELECT clock_timestamp() AS now`)).rows[0]!.now)).getTime();
+            if (!credential || credential.revokedAt || credential.expiresAt.getTime()<=time || !credential.mfaVerifiedAt || credential.mfaVerifiedAt.getTime()>time || credential.mfaVerifiedAt.getTime()+15*60_000<=time) throw new AppError("Current credential and MFA assurance are required.","MFA_VERIFICATION_REQUIRED",403);
+            if (actor.artifactCredential.kind === "api_token") {
+              const scopes = "scopes" in credential && Array.isArray(credential.scopes) ? credential.scopes : [];
+              for (const scope of execution ? ["architectures:read","skills:read","targets:execute"] : actor.artifactCredential.requiredScopes ?? ["architectures:read","targets:control",...(purpose==="intent"?["skills:read"]:[])]) if (!scopes.includes(scope)) throw new AppError("The scoped token cannot authorize this boundary.","API_TOKEN_SCOPE_REQUIRED",403);
+            }
+          },
+          artifactSubmissions: new SubmissionService(new PostgresSubmissionStore(tx as unknown as Database, { artifactStorage: this.options.artifactStorage })),
           architectureStore: new PostgresArchitectureStore(tx as unknown as Database),
           targetStore: new PostgresArchitectureTargetStore(tx as unknown as Database),
-          releaseDependencies: { skillRepository: new PostgresSkillRepository(tx as unknown as Database), submissionService: new SubmissionService(new PostgresSubmissionStore(tx as unknown as Database)) },
+          releaseDependencies: { skillRepository: new PostgresSkillRepository(tx as unknown as Database), submissionService: new SubmissionService(new PostgresSubmissionStore(tx as unknown as Database, { artifactStorage: this.options.artifactStorage })) },
           readPolicyConstraints: async target => ({
             constraints: await resolveLockedUpgradePolicy(tx, target),
             revisions: (await tx.execute(sql`SELECT DISTINCT ON (scope_type, scope_id) id, scope_type, scope_id, revision_number
@@ -164,6 +198,24 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
     } catch (error) {
       throw mapPersistenceError(error, "Architecture plan authority could not be retained.", "ARCHITECTURE_PLAN_AUTHORITY_CONFLICT");
     }
+  }
+
+  async withArtifactAuthority<T>(input: { readonly actorId: string; readonly targetId: string }, operation: (store: ArchitectureSyncStore, dependencies: ArchitecturePlanDependencies) => Promise<T>): Promise<T> {
+    return this.withPlanAuthority(input, operation);
+  }
+  async getArtifactIntent(runId: string): Promise<ArchitectureArtifactIntent | null> {
+    const [row] = await this.db.select({ intent: skillArchitectureSyncRuns.artifactIntent }).from(skillArchitectureSyncRuns).where(eq(skillArchitectureSyncRuns.id, dbUuid(runId,"runId"))).limit(1);
+    if (!row?.intent) return null;
+    assertArchitectureArtifactIntent(row.intent); return row.intent;
+  }
+  async setArtifactIntent(runId: string, intent: ArchitectureArtifactIntent): Promise<void> {
+    assertArchitectureArtifactIntent(intent);
+    await this.db.transaction(async tx => {
+      const row = await this.selectRun(tx, dbUuid(runId,"runId"), true);
+      if (!row || parseObject(row.metadata).source !== "architecture-artifact" || parseObject(row.metadata).artifactDigest !== artifactHash(intent)) throw new AppError("Artifact intent is not bound to its run.","ARCHITECTURE_ARTIFACT_INTENT_CONFLICT",409);
+      if (row.artifactIntent && artifactHash(row.artifactIntent)!==artifactHash(intent)) throw new AppError("Artifact intent is immutable.","ARCHITECTURE_ARTIFACT_INTENT_CONFLICT",409);
+      if (!row.artifactIntent) await tx.update(skillArchitectureSyncRuns).set({artifactIntent:intent}).where(eq(skillArchitectureSyncRuns.id,row.id));
+    });
   }
 
   async createRun(input: ArchitectureSyncCreateRunStoreInput): Promise<ArchitectureSyncCreateRunStoreResult> {
@@ -310,7 +362,7 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
     const targetId = validateIdentifier(input.targetId, "targetId");
     const targetGeneration = validateGeneration(input.targetGeneration);
     const holderId = validateIdentifier(input.holderId, "holderId");
-    const now = validateTimestamp(input.now, "now");
+    let now = validateTimestamp(input.now, "now");
     if (!Number.isInteger(input.leaseSeconds)
       || input.leaseSeconds < 1
       || input.leaseSeconds > architectureSyncControlLimits.leaseMaximumSeconds) {
@@ -336,6 +388,7 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
           });
         }
         const current = await this.selectLease(tx, dbTargetId, true);
+        now = new Date(String((await tx.execute(sql`SELECT clock_timestamp() AS now`)).rows[0]!.now)).toISOString();
         const nowDate = new Date(now);
         const active = current?.status === "active" && current.expiresAt.getTime() > nowDate.getTime();
         if (active) {
@@ -516,7 +569,7 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
         const existing = await this.requireHydratedRun(tx, existingRow.id);
         this.assertImmutableRunFields(existing, run);
         this.assertRunTimestamps(existing, run);
-        const runTransitionAllowed = existing.state === run.state
+        const runTransitionAllowed = isApprovedArtifactRollbackTransition(existing, run) || existing.state === run.state
           || (options.recoveryTransition
             ? isValidArchitectureSyncRecoveryTransition({
               from: existing.state,
@@ -550,7 +603,7 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
     const targetId = validateIdentifier(input.targetId, "targetId");
     const holderId = validateIdentifier(input.holderId, "holderId");
     const targetGeneration = validateGeneration(input.targetGeneration);
-    const now = validateTimestamp(input.now, "now");
+    let now = validateTimestamp(input.now, "now");
     if (!Number.isInteger(input.leaseSeconds)
       || input.leaseSeconds < 1
       || input.leaseSeconds > architectureSyncControlLimits.leaseMaximumSeconds) {
@@ -575,6 +628,7 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
         }
         assertExecutableSyncRun(await this.requireHydratedRun(tx, run.id));
         const current = await this.selectLease(tx, dbTargetId, true);
+        now = new Date(String((await tx.execute(sql`SELECT clock_timestamp() AS now`)).rows[0]!.now)).toISOString();
         const nowDate = new Date(now);
         if (current?.status === "active" && current.expiresAt.getTime() > nowDate.getTime()) {
           throw new AppError("The target is leased by another sync run.", "ARCHITECTURE_SYNC_LEASE_CONFLICT", 409);
@@ -598,7 +652,8 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
     try {
       return await this.db.transaction(async (tx) => {
         const row = await this.selectLease(tx, dbTargetId, true);
-        if (!row || row.status !== "active" || row.expiresAt.getTime() <= this.now().getTime()) return null;
+        const currentTime = new Date(String((await tx.execute(sql`SELECT clock_timestamp() AS now`)).rows[0]!.now));
+        if (!row || row.status !== "active" || row.expiresAt.getTime() <= currentTime.getTime()) return null;
         return leaseFromRow(row);
       });
     } catch (error) {
@@ -1094,7 +1149,7 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
     const path = statePath(
       existingRow.status,
       next.state,
-      (from, to) => isValidArchitectureSyncRunTransition(from, to)
+      (from, to) => (parseObject(existingRow.metadata).source === "architecture-artifact" && from === "succeeded" && to === "rollback_required" && next.receipts.at(-1)?.code === "artifact.rollback.approved") || isValidArchitectureSyncRunTransition(from, to)
         || (recoveryTransition !== undefined && isValidArchitectureSyncRecoveryTransition({
           from,
           to,

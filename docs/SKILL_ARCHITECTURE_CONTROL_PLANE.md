@@ -325,9 +325,21 @@ backup artifact alone does not establish either gate; if either is unapproved,
 stop before 0019 and use the deployment runbook's repair-forward or
 pre-migration restore path.
 
-## Deferred and non-goals
+## Composed workspace source delivery
 
-This Phase 2 slice does not enable:
+The roadmap integration now adds `codex-workspace-architecture/v1` immutable
+intent, distinct execution approval, the existing shared target fence and an
+explicit local companion transaction. Review-only plans stay non-executable.
+See [COMPOSED_ARCHITECTURE_DELIVERY.md](COMPOSED_ARCHITECTURE_DELIVERY.md) for
+protocol, limits, recovery semantics, exact ARCH-02/03/04 bindings and pending
+canonical/actual-host acceptance. This source addition does not establish live
+provider recognition or complete the graph lifecycle thesis.
+
+## Earlier Phase 2 deferred scope
+
+The original Phase 2 slice below excluded these outcomes. The composed source
+addition above now delivers the bounded enrolled-workspace path; broader targets
+and runtime acceptance remain pending:
 
 - live Codex, ChatGPT, Claude, filesystem, API-project, or other target
   adapters;

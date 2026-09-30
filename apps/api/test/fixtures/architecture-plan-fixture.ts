@@ -21,7 +21,7 @@ const adapter = { kind: "codex", version: "1.0.0", contractVersion: 1 as const }
 const capabilities = { "inventory.read": true, "health.read": true, "plan.read": true, apply: false, rollback: false, "sync.write": false } as const;
 
 /** Real domain services and memory authorities. Never connects to a host target. */
-export async function createArchitecturePlanFixture(t: Pick<TestContext, "after">) {
+export async function createArchitecturePlanFixture(t: Pick<TestContext, "after">, composed = false) {
   const authStore = new MemoryAuthStore("closed");
   const authService = new AuthService(authStore);
   const architectureStore = new MemoryArchitectureStore();
@@ -31,7 +31,7 @@ export async function createArchitecturePlanFixture(t: Pick<TestContext, "after"
   const references = [];
   for (const [slug, version, domainId] of [["plan-alpha", "2.0.0", "build"], ["plan-beta", "1.0.0", "build"], ["plan-denied", "1.0.0", "review"]]) {
     const manifest = { name: slug, title: slug, summary: "Synthetic architecture journey", version, license: "Apache-2.0", visibility: "public" as const, platforms: [{ name: "codex", install_target: "codex-skill", status: "supported" as const }], tags: ["fixture"] };
-    const submitted = await submissionService.createSubmission({ actor: { id: ownerId, roles: ["author"] }, manifest, files: [{ path: "skill.json", content: JSON.stringify(manifest) }, { path: "README.md", content: "Synthetic architecture fixture." }] });
+    const submitted = await submissionService.createSubmission({ actor: { id: ownerId, roles: ["author"] }, manifest, files: [{ path: "skill.json", content: JSON.stringify(manifest) }, { path: "README.md", content: "Synthetic architecture fixture." }, ...(composed ? [{path:"SKILL.md",content:`---\nname: ${slug}\ndescription: Synthetic composed instructions\n---\nExact ${slug}@${version} bytes.\n`},{path:"references/context.txt",content:`Asset ${slug}@${version}\n`}] : [])] });
     await submissionService.performReviewAction({ actor: { id: "plan-fixture-maintainer", roles: ["maintainer"] }, submissionId: submitted.id, action: "approve", artifactSha256: submitted.artifact.sha256 });
     await submissionService.performReviewAction({ actor: { id: "plan-fixture-maintainer", roles: ["maintainer"] }, submissionId: submitted.id, action: "publish" });
     references.push({ id: slug, slug, title: slug, version, digest: submitted.artifact.sha256, packageVisibility: "public" as const, domainId });
@@ -43,7 +43,7 @@ export async function createArchitecturePlanFixture(t: Pick<TestContext, "after"
   spec.profiles[0].bindings = spec.profiles[0].bindings.map(binding => binding.nodeId === "leaf-plan-denied" ? { ...binding, enabled: false, runtimeExposure: "disabled" as const } : binding);
   const revision = await architectureStore.createRevision({ actor: ownerId, architectureId: architecture.id, expectedCurrentRevisionId: null, message: "Mixed exact releases and profile denial", spec });
   assert.ok(revision);
-  const registered = await targetService.registerTarget({ actor: ownerId, name: "Synthetic Codex target", architectureId: architecture.id, profileId: "plan-personal", environmentId: "plan-workspace", adapter, capabilities });
+  const registered = await targetService.registerTarget({ actor: ownerId, name: "Synthetic Codex target", architectureId: architecture.id, profileId: "plan-personal", environmentId: "plan-workspace", adapter: composed ? {kind:"codex-workspace",version:"1.0.0",contractVersion:2} : adapter, capabilities: composed ? {...capabilities,apply:true,rollback:true,"sync.write":true} : capabilities });
   const target = await targetService.setConsent({ actor: ownerId, targetId: registered.id, decision: "grant" });
   let sequence = 0;
   async function appendObservation(overrides: Partial<ArchitectureTargetObservationInput> = {}) {
@@ -74,5 +74,5 @@ export async function createArchitecturePlanFixture(t: Pick<TestContext, "after"
   const owner = verified.json().token as string;
   const outsider = await login("plan-fixture-outsider", "plan-fixture-outsider@example.com");
   const request = { revisionId: revision.id, expectedTargetGeneration: target.generation, expectedObservationId: observation.id!, expectedObservationDigest: observation.observedDigest, idempotencyKey: "plan-fixture-request" };
-  return { app, authService, authStore, architectureStore, targetStore, targetService, submissionService, skillRepository, syncStore, planService, target, revision, spec, request, sessions: { owner, plain, outsider }, ownerId, appendObservation };
+  return { app, authService, authStore, architectureStore, targetStore, targetService, submissionService, skillRepository, syncStore, planService, target, revision, spec, request, sessions: { owner, plain, outsider }, ownerId, appendObservation, references };
 }

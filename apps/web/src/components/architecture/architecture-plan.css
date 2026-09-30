@@ -8,3 +8,5 @@
 .architecture-plan-table { overflow-x: auto; }
 .architecture-plan-table table { width: 100%; border-collapse: collapse; text-align: left; font-size: .85rem; }
 .architecture-plan-table th, .architecture-plan-table td { padding: .45rem; border-bottom: 1px solid var(--color-border, #cbd5e1); overflow-wrap: anywhere; }
+
+.architecture-plan-inspection pre { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }

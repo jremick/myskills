@@ -1,3 +1,7 @@
+import { secretDigest as oauthSecretDigest } from "./oauth/tokens.js";
+import { hashApiToken, hashSessionToken } from "@myskills-app/auth";
+import { registerArchitectureArtifactRoutes } from "./architecture-sync/artifact-routes.js";
+import type { ArchitectureArtifactService } from "./architecture-sync/artifact-service.js";
 import { registerDraftRoutes } from "./drafts/routes.js";
 import type { DraftService } from "./drafts/service.js";
 import { registerArchitecturePlanRoutes } from "./architecture-sync/routes.js";
@@ -136,6 +140,7 @@ export interface BuildAppOptions {
   organizationService?: OrganizationService;
   architectureStore?: ArchitectureStore;
   architectureTargetService?: ArchitectureTargetService;
+  architectureArtifactService?: ArchitectureArtifactService;
   architecturePlanService?: ArchitecturePlanService;
   draftService?: DraftService;
   discoveryFinalAuthority?: DiscoveryFinalAuthority;
@@ -2474,9 +2479,10 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
 
   registerDraftRoutes(app, options, { requestAuthorization, authFailureReply, requireScope, requiresMfaForRole });
   registerTaskDiscoveryRoutes(app, options, { requestAuthorization, requireScope });
+  if (options.architectureArtifactService) registerArchitectureArtifactRoutes(app, { service: options.architectureArtifactService, authenticate: (request,reply)=>authenticateArchitecturePlanActor(options,request,reply,true) });
   if (options.architecturePlanService) registerArchitecturePlanRoutes(app, {
     service: options.architecturePlanService,
-    authenticate: (request, reply) => authenticateArchitectureTargetSession(options, request, reply),
+    authenticate: (request, reply) => authenticateArchitecturePlanActor(options, request, reply),
   });
 
   registerImprovementRoutes(app, {
@@ -2540,6 +2546,19 @@ async function authenticateArchitectureSession(
     requireMfaForPrivilegedSession(user);
   }
   return user;
+}
+
+async function authenticateArchitecturePlanActor(options:BuildAppOptions,request:FastifyRequest,reply:FastifyReply,artifact=false) {
+  const header=requestAuthorization(request);const context=await options.authService?.authenticateRequest(header);
+  if(!context){if(options.authService)await authFailureReply(options.authService,header,reply);else reply.code(503).send({error:{code:"AUTH_SERVICE_UNAVAILABLE"}});return null;}
+  const delegated=requestDelegatedAction(request);
+  if(context.credential.kind!=="session") {
+    if(delegated) requireDelegatedAction(context,request);
+    else {if(!artifact||context.credential.kind==="oauth")throw new AppError("Use the trusted application session or scoped companion token.","API_TOKEN_REQUIRED",403);
+      requireScope(context,"architectures:read");requireScope(context,"skills:read");requireScope(context,/\/(claim|checkpoint|receipt)$/.test(request.url)?"targets:execute":"targets:control");}
+  }
+  const raw=header?.replace(/^Bearer\s+/i,"");if(!raw)return null;
+  return {...context.user,artifactCredential:{kind:context.credential.kind,hash:context.credential.kind==="session"?hashSessionToken(raw):context.credential.kind==="oauth"?oauthSecretDigest(raw):hashApiToken(raw),requiredScopes:delegated?.requiredScopes,resource:context.credential.resource,clientId:context.credential.clientId}};
 }
 
 async function authenticateArchitectureTargetSession(

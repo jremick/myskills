@@ -395,3 +395,18 @@ function composeCalls(f) { return f.records().filter((record) => record.args[0] 
 function assertOrder(calls, fragments) { let position = -1; for (const fragment of fragments) { const next = calls.findIndex((call, index) => index > position && call.includes(fragment)); assert.ok(next > position, `${fragment} missing or out of order: ${JSON.stringify(calls)}`); position = next; } }
 function backup(f) { writeFileSync(join(f.config, "backup.env"), "MYSKILLS_BACKUP_INSTANCE_ID=eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee\nMYSKILLS_RECOVERY_BACKUP_S3_ENDPOINT=https://backup.operator.test\nMYSKILLS_RECOVERY_BACKUP_S3_BUCKET=external-backup\nMYSKILLS_RECOVERY_BACKUP_S3_ACCESS_KEY_ID=backup-user\nMYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY=" + canary + "\n", { mode: 0o600 }); }
 function targetBundle(f, v) { const path = join(f.root, v); mkdirSync(path); makeBundle(path, v); return path; }
+
+test("public exact-target up durably retries both fences before SQL and repeated sync failures stop SQL", (t) => {
+  for (const point of ["migration-barrier.json-file", "migration-barrier.json-directory", "state.json-file", "state.json-directory", null]) {
+    const f = configured(t); backup(f); const target = targetBundle(f, "0.1.0-beta.19");
+    writeFileSync(f.syncFailure, "state.json-file");
+    assert.notEqual(execute(f, ["upgrade", target, "--accept-forward-migrations"]).status, 0);
+    if (point) writeFileSync(f.syncFailure, point); else rmSync(f.syncFailure);
+    writeFileSync(f.syncLog, ""); writeFileSync(f.log, "");
+    const retried = execute({ ...f, bundle: target }, ["up"]);
+    const events = readFileSync(f.syncLog, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse);
+    if (point) { assert.notEqual(retried.status, 0); assert.equal(events.some(e => e.event === "sql"), false, point); }
+    else { assert.equal(retried.status, 0, retried.output); const sql = events.findIndex(e => e.event === "sql"); assert.ok(sql > 0);
+      assert.deepEqual(events.slice(0, sql).map(e => [e.event, e.target]), [["sync", "migration-barrier.json-file"], ["rename", "migration-barrier.json"], ["sync", "migration-barrier.json-directory"], ["sync", "state.json-file"], ["rename", "state.json"], ["sync", "state.json-directory"]]); }
+  }
+});

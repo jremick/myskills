@@ -1,3 +1,4 @@
+@import "./components/operations/operations.css";
 @import "./components/registry/task-discovery.css";
 @import "./components/registry/scan-evidence.css";
 @import "./components/registry/ReleaseComparison.css";

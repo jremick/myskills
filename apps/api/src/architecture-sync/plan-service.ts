@@ -22,7 +22,7 @@ import type { ArchitectureTargetRecord, ArchitectureTargetStore } from "../targe
 import type { ArchitectureSyncStore } from "./types.js";
 import { sanitizeArchitectureSyncMetadata } from "./metadata.js";
 
-export interface ArchitecturePlanActor { readonly id: string; readonly mfaVerified: boolean }
+export interface ArchitecturePlanActor { readonly id: string; readonly mfaVerified: boolean; readonly artifactCredential?: { readonly kind: "session" | "api_token" | "oauth"; readonly hash: string; readonly resource?: string; readonly clientId?: string; readonly requiredScopes?: readonly string[] } }
 export interface CreateArchitecturePlanInput {
   readonly revisionId: string;
   readonly expectedTargetGeneration: number;
@@ -34,6 +34,9 @@ export interface ArchitecturePlanDependencies {
   readonly architectureStore: ArchitectureStore;
   readonly targetStore: ArchitectureTargetStore;
   readonly releaseDependencies: ExactReleaseResolutionDependencies;
+  readonly authorityNow?: () => Promise<Date>;
+  readonly assertArtifactCredential?: (actor: ArchitecturePlanActor, execution: boolean, purpose?: "review" | "intent") => Promise<void>;
+  readonly artifactSubmissions?: Pick<import("../submissions/service.js").SubmissionService, "getPublicBundle" | "getPublicRelease" | "listSkillReleaseChangeHistory">;
   readonly readPolicyConstraints?: (target: ArchitectureTargetRecord) => Promise<unknown>;
   readonly authorizeRevision?: (input: { actorId: string; target: ArchitectureTargetRecord; architecture: ArchitectureRecord; revision: ArchitectureRevisionRecord }) => Promise<void>;
 }
@@ -64,7 +67,8 @@ export class ArchitecturePlanService {
     const placeholderSteps: ArchitectureSyncStep[] = snapshot.plan.items.map((item, index) => ({ schemaVersion: 1, id: `step-${index + 1}`, ordinal: index + 1, action: item.action, nodeId: item.nodeId, targetGeneration: target.generation, state: "planned", idempotencyKey: "pending", metadata: { kind: item.kind, reasonCode: `plan.${item.action}`, ...(item.skillRefId ? { skillRefId: item.skillRefId } : {}), ...(item.desired?.version ? { desiredVersion: item.desired.version } : {}), ...(item.desired?.digest ? { desiredDigest: item.desired.digest } : {}), ...(item.observed?.version ? { observedVersion: item.observed.version } : {}), ...(item.observed?.digest ? { observedDigest: item.observed.digest } : {}) } }));
     const planDigest = architectureSyncPlanDigest(placeholderSteps);
     const steps = placeholderSteps.map(step => ({ ...step, idempotencyKey: architectureSyncStepIdempotencyKey({ identity, planDigest, step }) }));
-    const timestamp = this.now().toISOString();
+    await this.dependencies.assertArtifactCredential?.(actor, false, "review");
+    const timestamp = this.dependencies.authorityNow ? (await this.dependencies.authorityNow()).toISOString() : this.now().toISOString();
     const runBase: ArchitectureSyncRun = { schemaVersion: 1, identity, state: "drafted", digests: { desiredDigest: snapshot.compiled.revisionDigest, compiledDigest: createHash("sha256").update(canonicalizeJson(snapshot.compiled)).digest("hex"), observedDigest: snapshot.observation.observedDigest, planDigest }, steps, receipts: [], capabilities: { "inventory.read": target.capabilities["inventory.read"] === true, "health.read": target.capabilities["health.read"] === true, "plan.read": true, apply: false, rollback: false, "sync.write": false }, createdAt: timestamp, updatedAt: timestamp, metadata: snapshot.metadata };
     const run = assertValidArchitectureSyncRun({ ...runBase, metadata: { ...snapshot.metadata, reviewDigest: reviewDigest(runBase) } });
     const result = await this.store.createRun({ actorId: actor.id, requestKey: `architecture-plan-${requestId}`, idempotencyKey: `architecture-plan-${requestId}`, intentDigest: architectureSyncOrderedDigest({ identity, digests: run.digests, steps, capabilities: run.capabilities, metadata: run.metadata }), run });
@@ -72,14 +76,17 @@ export class ArchitecturePlanService {
   }
 
   async listPlans(actor: ArchitecturePlanActor, targetId: string, limit = 100) {
-    await this.requireTarget(actor, targetId, false);
+    const target=await this.requireTarget(actor, targetId, false);
     validatePlanHistoryLimit(limit);
-    return { runs: await this.store.listRuns({ targetId, limit, source: "architecture-plan" }) };
+    const runs:ArchitectureSyncRun[]=[];
+    for(const run of await this.store.listRuns({ targetId, limit, source: "architecture-plan" })) {try{await this.authorizeHistory(actor,target,run);runs.push(run);}catch(error){if(!(error instanceof AppError)||!["ARCHITECTURE_PLAN_NOT_FOUND","ARCHITECTURE_SKILL_RELEASE_UNAVAILABLE","ARCHITECTURE_REVISION_NOT_FOUND"].includes(error.code))throw error;}}
+    return { runs };
   }
 
   async getPlan(actor: ArchitecturePlanActor, runId: string) {
     const run = await this.requireRun(runId);
-    await this.requireTarget(actor, run.identity.targetId, false);
+    const target=await this.requireTarget(actor, run.identity.targetId, false);
+    await this.authorizeHistory(actor,target,run);
     return { run };
   }
 
@@ -103,13 +110,14 @@ export class ArchitecturePlanService {
     for (const [field, name] of [["observationId", "OBSERVATION"], ["observationDigest", "OBSERVATION"], ["revisionDigest", "REVISION"], ["targetIdentityDigest", "TARGET_IDENTITY"], ["adapterDigest", "ADAPTER"], ["capabilitiesDigest", "CAPABILITIES"], ["consentDigest", "CONSENT"], ["policyDigest", "POLICY"]] as const) {
       if (snapshot.metadata[field] !== run.metadata[field]) throw stale(name, "A reviewed plan fence has changed.");
     }
+    await this.dependencies.assertArtifactCredential?.(actor, false, "review");
     if (run.approval) return approvedReplay(run, actor);
     if (run.state !== "drafted" && run.state !== "awaiting_approval") {
       throw new AppError("The plan is not awaiting review approval.", "ARCHITECTURE_PLAN_APPROVAL_STATE_INVALID", 409);
     }
     try {
-      if (run.state === "drafted") run = await this.store.saveRun({ ...run, state: "awaiting_approval", updatedAt: this.timestampAfter(run) });
-      const approvedAt = this.timestampAfter(run);
+      if (run.state === "drafted") run = await this.store.saveRun({ ...run, state: "awaiting_approval", updatedAt: await this.timestampAfter(run) });
+      const approvedAt = await this.timestampAfter(run);
       const approval = { schemaVersion: 1 as const, id: `review-${digestIdentifier({ runId, actorId: actor.id })}`, runId, actorId: actor.id, planDigest: run.digests.planDigest, approvedAt, metadata: { reviewOnly: true, reviewDigest: input.expectedReviewDigest } };
       const next: ArchitectureSyncRun = { ...run, state: "approved", approval, digests: { ...run.digests, approvalDigest: architectureSyncSnapshotDigest(approval) }, receipts: [...run.receipts, { schemaVersion: 1, id: `review-receipt-${digestIdentifier({ runId, actorId: actor.id })}`, runId, kind: "approval", status: "succeeded", code: "plan.review.approved", recordedAt: approvedAt, evidenceDigest: input.expectedReviewDigest, metadata: { reviewOnly: true } }], updatedAt: approvedAt };
       return { run: await this.store.saveRun(next), replayed: false };
@@ -122,6 +130,14 @@ export class ArchitecturePlanService {
       }
       throw error;
     }
+  }
+
+  private async authorizeHistory(actor:ArchitecturePlanActor,target:ArchitectureTargetRecord,run:ArchitectureSyncRun):Promise<void> {
+    if(target.owner.type!=="organization")return;
+    const revision=await this.dependencies.architectureStore.getRevisionForPreview(actor.id,target.architectureId,run.identity.revisionId,target.owner.id);
+    if(!revision||revision.spec.skills.some(ref=>!["public","authenticated","organization"].includes(ref.packageVisibility)))throw new AppError("Architecture plan was not found.","ARCHITECTURE_PLAN_NOT_FOUND",404);
+    for(const reference of revision.spec.skills){const visible=await this.dependencies.releaseDependencies.skillRepository.getSkillVisibleToOrganizationBySlug(reference.slug,target.owner.id);if(!visible||visible.visibility!==reference.packageVisibility)throw new AppError("Architecture plan was not found.","ARCHITECTURE_PLAN_NOT_FOUND",404);}
+    await resolveAuthorizedArchitectureRegistry(this.dependencies.releaseDependencies,actor.id,revision.spec,{organizationIds:[target.owner.id]});
   }
 
   private async requireTarget(actor: ArchitecturePlanActor, targetId: string, control: boolean): Promise<ArchitectureTargetRecord> {
@@ -148,6 +164,12 @@ export class ArchitecturePlanService {
       throw new AppError("Architecture plan was not found.", "ARCHITECTURE_PLAN_NOT_FOUND", 404);
     }
     return run;
+  }
+
+  async artifactSnapshot(actor: ArchitecturePlanActor, targetId: string, revisionId: string) {
+    requireMfa(actor);
+    const target = await this.requireTarget(actor, targetId, true);
+    return { target, ...await this.snapshot(actor, target, revisionId) };
   }
 
   private async snapshot(actor: ArchitecturePlanActor, target: ArchitectureTargetRecord, revisionId: string) {
@@ -194,7 +216,7 @@ export class ArchitecturePlanService {
     return { revision, compiled, observation, plan, metadata: sanitizeArchitectureSyncMetadata(metadata)! };
   }
 
-  private timestampAfter(run: ArchitectureSyncRun) { return new Date(Math.max(this.now().getTime(), Date.parse(run.updatedAt))).toISOString(); }
+  private async timestampAfter(run: ArchitectureSyncRun) { const now=this.dependencies.authorityNow ? await this.dependencies.authorityNow() : this.now(); return new Date(Math.max(now.getTime(), Date.parse(run.updatedAt))).toISOString(); }
 }
 
 function reviewDigest(run: ArchitectureSyncRun): string {

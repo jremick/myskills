@@ -1,3 +1,5 @@
+import { prepareLocalArchitectureArtifact, applyLocalArchitectureArtifact, verifyLocalArchitectureArtifact, rollbackLocalArchitectureArtifact, type ArtifactFaultPoint } from "./architecture-artifact.js";
+import { artifactHash, type ArchitectureArtifactIntent } from "@myskills-app/core";
 import { ConfigurationProfileError, selectConfigurationProfile } from "./configuration-profile.js";
 import { browserDeviceLogin } from "./device-login.js";
 import { readBoundedResponse, decodeResponseUtf8, MAX_PACKAGE_RESPONSE_BYTES } from "./bounded-response.js";
@@ -186,6 +188,7 @@ export interface CliRuntime {
   /** Test-only clock seam for deterministic local target observations. */
   codexAdapterClock?: () => Date;
   /** Test-only fault seam for deterministic install crash-recovery coverage. */
+  artifactFault?: (point: ArtifactFaultPoint) => void | Promise<void>;
   installFault?: (point: InstallFaultPoint) => void | Promise<void>;
   /** Internal executor fence, checked immediately before either promotion. */
   beforeInstallPromotion?: () => Promise<void>;
@@ -224,7 +227,7 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
     if (parsed.command === "update" && parsed.options.version !== undefined && !parsed.args[0]) {
       throw new CliError("--version requires a skill slug. Use myskills update <skill-slug> --version <version>.", 2);
     }
-    if (["install", "list", "update", "updates", "rollback", "companion", "codex", "doctor"].includes(parsed.command) || (["library", "libraries"].includes(parsed.command) && parsed.args[0] === "unbind-local")) {
+    if (["install", "list", "update", "updates", "rollback", "companion", "codex", "doctor", "architecture-artifacts"].includes(parsed.command) || (["library", "libraries"].includes(parsed.command) && parsed.args[0] === "unbind-local")) {
       if (parsed.options.workspace && parsed.options.dir) throw new CliError("Choose --workspace or --dir, not both.", 2);
       const workspace = optionalStringOption(parsed, "workspace");
       if (workspace) {
@@ -266,6 +269,7 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
 }
 
 async function dispatchCli(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+    if (parsed.command === "architecture-artifacts") return architectureArtifactCommand(parsed, runtime);
     if (await runAuthorDraftCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
     if (await runArchitecturePlanCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
     if (parsed.command === "discover") {
@@ -2449,6 +2453,35 @@ async function assertWorkspaceBinding(parsed: ParsedArgs, runtime: CliRuntime, p
       || current.status === "revoked" || current.consent.status !== "granted") throw new CliError("Workspace target binding or consent changed. Re-enroll before modifying this workspace.", 1);
   }
   return binding;
+}
+
+async function architectureArtifactCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const [action, id, ...extra] = parsed.args;
+  if (!action || !["create","prepare","apply","verify","rollback","show"].includes(action) || !id || extra.length || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(id)) throw new CliError("Usage: myskills architecture-artifacts create <target-id> --input <request.json>; prepare|apply|verify|rollback|show <run-id> --workspace <absolute-dir>.",2);
+  for (const key of Object.keys(parsed.options)) if (!["api-url","token","json","workspace","dir",...(action==="create"?["input"]:[])].includes(key)) throw new CliError(`Unknown option --${key}.`,2);
+  const workspace = optionalStringOption(parsed,"workspace");
+  if (!workspace) throw new CliError("Composed artifact commands require an explicitly enrolled --workspace.",2);
+  const root = installRoot(parsed,runtime);
+  const binding = await readWorkspaceBinding(root);
+  const token = await requireToken(parsed,runtime);
+  const provenance = await registryProvenance(parsed,runtime,token);
+  assertMatchingProvenance(binding,provenance);
+  const current = parseWorkspaceTarget((await apiGet(`/v1/architecture-targets/${encodeURIComponent(binding.target.id)}`,parsed,runtime,token)).target);
+  if(current.generation!==binding.target.generation||current.identityDigest!==binding.target.identityDigest||current.consent.status!=="granted"||current.status==="revoked") throw new CliError("Current workspace consent or binding changed. Retain private recovery state.",1);
+  const context = {workspace,lockRoot:root,targetId:current.id,generation:current.generation,targetIdentityDigest:current.identityDigest,provenanceDigest:artifactHash(provenance),
+    request:(method:"GET"|"POST",route:string,body?:unknown) => method === "GET" ? apiGet(route,parsed,runtime,token) : apiPost(route,body,parsed,runtime,token),
+    download:async(pkg:ArchitectureArtifactIntent["projection"]["packages"][number])=>{
+      const bundle = await downloadVerifiedBundle({slug:pkg.slug,version:pkg.version,platform:"codex"},parsed,runtime,token);
+      if(bundle.artifact.sha256!==pkg.digest||bundle.artifact.byteSize!==pkg.size)throw new CliError("Downloaded release differs from composed exact pin.",1);
+      return bundle.files;
+    },fault:runtime.artifactFault};
+  const result = action === "create" ? await (async()=>{if(id!==current.id)throw new CliError("Create target must match this enrolled workspace.",2);const file=stringOption(parsed,"input");return context.request("POST",`/v1/architecture-targets/${encodeURIComponent(id)}/artifacts`,await parityCommandContext(parsed,runtime).readInput(file));})()
+    : action === "prepare" ? await prepareLocalArchitectureArtifact(context,id)
+    : action === "apply" ? await applyLocalArchitectureArtifact(context,id)
+      : action === "verify" ? await verifyLocalArchitectureArtifact(context,id)
+        : action === "rollback" ? await rollbackLocalArchitectureArtifact(context,id)
+          : await context.request("GET",`/v1/architecture-artifacts/${encodeURIComponent(id)}`);
+  runtime.io.stdout(JSON.stringify(result,null,2)); return 0;
 }
 
 async function codexWorkspaceCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
@@ -6246,6 +6279,8 @@ function helpText(runtime: CliRuntime): string {
     "  update [skill-slug] [--version <version>] [--platform <platform>] [--include-prerelease] [--dry-run] [--accept-user-action] [--dir <install-root>]",
     "  rollback <skill-slug> [--dir <install-root>]",
     "  companion run-once --workspace <absolute-dir> --holder <id> [--api-url <url>] [--token <token>] (token scopes: skills:read, targets:execute; add libraries:read for library-bound skills)",
+    "  architecture-artifacts create <target-id> --input <request.json>; prepare|apply|verify|rollback|show <run-id> --workspace <absolute-dir>",
+    "    Stage before execution approval. Aggregate byte/receipt proof does not establish provider recognition.",
     "  codex enroll --workspace <absolute-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>] [--api-url <url>]",
     "  codex observe --workspace <absolute-dir> [--upload] [--api-url <url>]",
     "  scopes inventory --provider <codex|claude> --root <absolute-skills-dir> [--json] (local only)",

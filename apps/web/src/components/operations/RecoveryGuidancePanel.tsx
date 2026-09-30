@@ -2,7 +2,6 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MAX_OPERATOR_RECEIPT_BYTES, OPERATOR_IMAGE_NAMES, parseOperatorReceipt, snapshotAge, type OperatorImageName, type OperatorStatusReceipt } from "./operator-receipt.js";
-import "./operations.css";
 
 const imageLabels: Record<OperatorImageName, string> = { api: "API", web: "Web", mcp: "MCP", ops: "Operations tool", minio: "Object storage", postgres: "Postgres" };
 const healthLabels = { healthy: "Healthy", unhealthy: "Unhealthy", unavailable: "Unavailable", disabled: "Disabled", tool: "Local tool" };

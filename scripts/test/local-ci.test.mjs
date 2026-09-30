@@ -99,6 +99,13 @@ test("HOST receipt must include restored TOTP, non-owner denial and revoked-sess
   assert.equal(run.result.jobs[0].reason, "host-rehearsal-evidence-missing");
 });
 
+test("HOST receipt requires the real composed object-byte and denied-storage proof", (t) => {
+  const fixture = makeFixture(t); fixture.configure({ omitHostComposedProof: true });
+  const run = runLocalCi(fixture, ["verify", "--job", "railway-images"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(run.status, 1, run.output);
+  assert.equal(run.result.jobs[0].reason, "host-rehearsal-evidence-missing");
+});
+
 test("product-site build and browser proof run in existing browser jobs; missing site reports fail", (t) => {
   const fixture = makeFixture(t); fixture.configure({ omitSiteReport: ["22"] });
   const run = runLocalCi(fixture, ["verify", "--job", "web-e2e-node22"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
@@ -881,7 +888,7 @@ function makeFixture(t, { tag = false, mcpSmokeTimeoutMs } = {}) {
   }
   // Controller tests fake only the expensive HOST subprocess. The actual HOST
   // fixture and cleanup module have their own tests; this verifies gating/wiring.
-  writeFileSync(join(source, "scripts/rehearse-self-host.mjs"), `import {readFileSync,writeFileSync} from 'node:fs';import {spawnSync} from 'node:child_process';const r=spawnSync(${JSON.stringify(process.execPath)},[${JSON.stringify(join(root,"tools/fake-tool.mjs"))},'host-rehearsal'],{env:{...process.env,FAKE_TOOL_ROOT:${JSON.stringify(root)}}});if(r.status!==0)process.exit(r.status??1);const authProof=JSON.parse(readFileSync(${JSON.stringify(join(root,"fake-config.json"))})).omitHostAuthProof?undefined:{totp:'original-factor-decrypted-and-verified',recoveryCode:'verified',nonownerPrivateArtifact:'denied',revokedSession:'denied'};writeFileSync(process.argv[4],JSON.stringify({status:'passed',sourceCommit:process.argv[5],composeInterruption:{cleanup:'complete',client:{actualComposeClient:'interrupted-in-health-wait'}},protectedComposeInputs:{quotedRuntimeAndBootstrapAndBackup:'exact-values'},restore:{restoredApplicationRuntime:'tested',exactPackageBytes:'passed',authProof},upgrade:{forwardMigrations:'passed',authProof}}));`);
+  writeFileSync(join(source, "scripts/rehearse-self-host.mjs"), `import {readFileSync,writeFileSync} from 'node:fs';import {spawnSync} from 'node:child_process';const r=spawnSync(${JSON.stringify(process.execPath)},[${JSON.stringify(join(root,"tools/fake-tool.mjs"))},'host-rehearsal'],{env:{...process.env,FAKE_TOOL_ROOT:${JSON.stringify(root)}}});if(r.status!==0)process.exit(r.status??1);const authProof=JSON.parse(readFileSync(${JSON.stringify(join(root,"fake-config.json"))})).omitHostAuthProof?undefined:{totp:'original-factor-decrypted-and-verified',recoveryCode:'verified',nonownerPrivateArtifact:'denied',revokedSession:'denied'};writeFileSync(process.argv[4],JSON.stringify({status:'passed',sourceCommit:process.argv[5],composedArtifact:JSON.parse(readFileSync(${JSON.stringify(join(root,"fake-config.json"))})).omitHostComposedProof?undefined:{status:'passed',exactObjectBytes:'passed',deniedStorageNoIntent:'passed'},composeInterruption:{cleanup:'complete',client:{actualComposeClient:'interrupted-in-health-wait'}},protectedComposeInputs:{quotedRuntimeAndBootstrapAndBackup:'exact-values'},restore:{restoredApplicationRuntime:'tested',exactPackageBytes:'passed',authProof},upgrade:{forwardMigrations:'passed',authProof}}));`);
   mkdirSync(join(source, "apps/site"), { recursive: true });
   writeFileSync(join(source, "apps/site/package.json"), JSON.stringify({ name: "@myskills-app/site", version: rootPackage.version, private: true }));
   chmodSync(join(source, "scripts/local-ci.sh"), 0o755);

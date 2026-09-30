@@ -1,3 +1,4 @@
+import type { ArchitectureArtifactIntent } from "@myskills-app/core";
 import type { ArchitecturePlanDependencies } from "./plan-service.js";
 import type {
   ArchitectureSyncAction,
@@ -396,6 +397,9 @@ export interface ArchitectureSyncLeaseAcquireInput {
 
 export interface ArchitectureSyncStore {
   readonly kind: "memory" | "postgres";
+  getArtifactIntent(runId: string): Promise<ArchitectureArtifactIntent | null>;
+  setArtifactIntent(runId: string, intent: ArchitectureArtifactIntent): Promise<void>;
+  withArtifactAuthority?<T>(input: { readonly actorId: string; readonly targetId: string }, operation: (store: ArchitectureSyncStore, dependencies: ArchitecturePlanDependencies) => Promise<T>): Promise<T>;
   withPlanAuthority?<T>(input: { readonly actorId: string; readonly targetId: string }, operation: (store: ArchitectureSyncStore, dependencies: ArchitecturePlanDependencies) => Promise<T>): Promise<T>;
   createRun(input: ArchitectureSyncCreateRunStoreInput): Promise<ArchitectureSyncCreateRunStoreResult>;
   getRun(runId: string): Promise<ArchitectureSyncRun | null>;

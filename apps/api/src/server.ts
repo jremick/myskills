@@ -1,3 +1,4 @@
+import { ArchitectureArtifactService } from "./architecture-sync/artifact-service.js";
 import { PostgresDraftStore } from "./drafts/postgres-store.js";
 import { DraftService } from "./drafts/service.js";
 import { PackageScanService } from "./package-quality/scan-service.js";
@@ -165,7 +166,8 @@ const app = buildApp({
   }),
   submissionService,
   draftService: new DraftService(new PostgresDraftStore(db), submissionService),
-  architecturePlanService: new ArchitecturePlanService(new PostgresArchitectureSyncStore(db), {
+  architectureArtifactService: new ArchitectureArtifactService(new PostgresArchitectureSyncStore(db, { artifactStorage }), { architectureStore, targetStore: architectureTargetStore, releaseDependencies: { skillRepository, submissionService } }),
+  architecturePlanService: new ArchitecturePlanService(new PostgresArchitectureSyncStore(db, { artifactStorage }), {
     architectureStore, targetStore: architectureTargetStore, releaseDependencies: { skillRepository, submissionService },
   }),
   discoveryFinalAuthority: createPostgresDiscoveryFinalAuthority(db),

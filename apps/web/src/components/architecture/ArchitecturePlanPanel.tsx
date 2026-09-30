@@ -1,3 +1,4 @@
+import { ArchitectureArtifactHandoff } from "./ArchitectureArtifactHandoff.js";
 import { useEffect, useRef, useState } from "react";
 import type { ArchitectureSyncRun } from "@myskills-app/core";
 import { safeArchitectureTargetErrorMessage, type ArchitectureRevisionSummary, type ArchitectureTargetObservationRecord, type ArchitectureTargetRecord, type RegistryClient } from "../../api.js";
@@ -90,7 +91,7 @@ export function ArchitecturePlanPanel({ client, target, observation }: {
       if (current !== epoch.current) return;
       setSelected(result.run);
       setRuns(previous => previous.map(run => run.identity.runId === result.run.identity.runId ? result.run : run));
-      setState("ready"); setMessage("Review approved. Target execution is unavailable for this architecture plan.");
+      setState("ready"); setMessage("Review approved. Composed delivery requires a supported enrolled workspace and a separate execution approval.");
     } catch (error) {
       if (current !== epoch.current) return;
       setState("error"); setMessage(safeArchitectureTargetErrorMessage(error));
@@ -100,7 +101,7 @@ export function ArchitecturePlanPanel({ client, target, observation }: {
   if (!supported) return <section className="cp-section" aria-label="Architecture review plans"><h3>Architecture review plans</h3><p>Review history is unavailable in this client.</p></section>;
   return <section className="cp-section architecture-plan-panel" aria-label="Architecture review plans">
     <div className="cp-section-head"><h3>Architecture review plans</h3><Button size="sm" variant="outline" disabled={locked} onClick={() => { setMessage(null); setState("loading"); setRefresh(value => value + 1); }}>Refresh plans</Button></div>
-    <p className="cp-muted">Create a dry run from a saved revision and the latest observation. Review approval only records your review; target execution is unavailable.</p>
+    <p className="cp-muted">Create a dry run from a saved revision and the latest observation. Review approval only records your review; it does not authorize target execution.</p>
     <div className="cp-actions"><label>Saved revision<select value={revisionId} disabled={locked} onChange={event => setRevisionId(event.target.value)}><option value="">Choose a saved revision</option>{revisions.map(revision => <option key={revision.id} value={revision.id}>Revision {revision.revisionNumber} · {revision.id}</option>)}</select></label><Button size="sm" disabled={!canCreate} onClick={() => void createPlan()}>Create dry-run plan</Button></div>
     {!observation && <p className="cp-muted">Record an authorized observation before creating a plan.</p>}
     {state === "loading" && <p role="status">Loading review history…</p>}
@@ -113,6 +114,7 @@ export function ArchitecturePlanPanel({ client, target, observation }: {
       <div className="architecture-plan-table"><table><thead><tr><th>Node</th><th>Planned action</th><th>State</th></tr></thead><tbody>{selected.steps.map(step => <tr key={step.id}><td>{step.nodeId}</td><td>{step.action}</td><td>{step.state}</td></tr>)}</tbody></table></div>
       {selected.receipts.length > 0 && <ul>{selected.receipts.map(receipt => <li key={receipt.id}>{receipt.kind} · {receipt.status} · {receipt.code}</li>)}</ul>}
       <Button size="sm" disabled={locked || selected.state !== "drafted" || target.status === "revoked" || target.consent.status !== "granted" || typeof selected.metadata?.reviewDigest !== "string"} onClick={() => void approve()}>Approve this review</Button>
+      <ArchitectureArtifactHandoff key={selected.identity.runId} client={client} review={selected} target={target}/>
     </div>}
   </section>;
 }
