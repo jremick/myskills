@@ -45,7 +45,7 @@ const organizationAdminId = "target-route-organization-admin";
 const organizationMemberId = "target-route-organization-member";
 const outsiderId = "target-route-outsider";
 
-test("target routes expose the capability, use sessions, enforce owner MFA, and keep terminal lifecycle state", async (t) => {
+test("target routes expose the capability, enforce scoped access, owner MFA, and keep terminal lifecycle state", async (t) => {
   const fixture = await createFixture({ includeTenants: false });
   t.after(() => fixture.app.close());
   const userArchitecture = await seedArchitecture(fixture.architectureStore, {
@@ -117,7 +117,8 @@ test("target routes expose the capability, use sessions, enforce owner MFA, and 
       headers: { authorization: `Bearer ${apiToken}` },
     });
     assert.equal(response.statusCode, 403, `${request.method} ${request.url}`);
-    assert.equal(response.json().error.code, "SESSION_AUTH_REQUIRED", `${request.method} ${request.url}`);
+    const localProducer = request.method === "POST" && (request.url.endsWith("/observations") || request.url.endsWith("/health"));
+    assert.equal(response.json().error.code, localProducer ? "SESSION_AUTH_REQUIRED" : "API_TOKEN_SCOPE_REQUIRED", `${request.method} ${request.url}`);
   }
 
   const detail = await fixture.app.inject({

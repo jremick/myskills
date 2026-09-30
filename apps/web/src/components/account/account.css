@@ -316,8 +316,38 @@ main.account-workspace {
   .account-workspace .account-providers { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* Remote connections row */
+.account-workspace .remote-endpoint { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.account-workspace .remote-endpoint code { padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-subtle, #f6f8fa); }
+.account-workspace .remote-providers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
+.account-workspace .remote-providers h3 { margin: 0 0 4px; color: var(--ink); font-size: 14px; line-height: 20px; font-weight: 600; }
+.account-workspace .remote-providers p { color: var(--muted); font-size: 13px; line-height: 19px; }
+
+/* Remote connection consent (login-page layout) */
+.login-panel.connect-panel { width: min(100%, 560px); }
+.connect-panel h1 { overflow-wrap: anywhere; }
+.connect-panel .connect-details { display: grid; gap: 18px; min-width: 0; }
+.connect-panel .connect-facts { display: grid; gap: 10px; margin: 0; }
+.connect-panel .connect-facts > div { display: grid; grid-template-columns: 116px minmax(0, 1fr); gap: 12px; }
+.connect-panel .connect-facts dt { color: #58667a; font-size: 13px; line-height: 20px; }
+.connect-panel .connect-facts dd { display: grid; gap: 2px; margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.connect-panel .connect-facts small { color: #58667a; font-size: 12.5px; line-height: 18px; }
+.connect-panel .connect-subheading { margin: 4px 0 0; color: #101827; font-size: 15px; line-height: 22px; }
+.connect-panel .connect-scopes { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.connect-panel .connect-scopes li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; color: #33415c; font-size: 14px; line-height: 20px; }
+.connect-panel .connect-scopes svg { margin-top: 2px; color: #0f766e; }
+.connect-panel .connect-note { font-size: 13px; }
+.connect-panel .connect-mfa,
+.connect-panel .connect-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.connect-panel .connect-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
 @container (max-width: 640px) {
   .account-workspace .account-token { grid-template-columns: minmax(0, 1fr) auto; }
+  .account-workspace .remote-providers { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 480px) {
+  .connect-panel .connect-facts > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }
 
 @container (max-width: 560px) {

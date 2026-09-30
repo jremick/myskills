@@ -2,7 +2,7 @@ import { parseBranding } from "./branding.js";
 import type { SiteSettings } from "./types.js";
 import { chronologicalKey, chronologicalPagePosition, chronologicalPageResult } from "../repositories/chronological-pagination.js";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
-import { AppError, type BrandSettings } from "@myskills-app/core";
+import { AppError, APPLICATION_SCOPES, APPLICATION_PRIVILEGED_SCOPES, NEW_APPLICATION_SCOPES, type BrandSettings } from "@myskills-app/core";
 import {
   createApiToken,
   createRecoveryCodes,
@@ -24,6 +24,7 @@ import {
   type UserStatus,
 } from "@myskills-app/auth";
 import { encryptAuthNotification } from "./notification-outbox.js";
+import { ACCESS_TOKEN_PREFIX as OAUTH_ACCESS_TOKEN_PREFIX } from "../oauth/tokens.js";
 import type { AuthRateLimiter } from "./rate-limit.js";
 import {
   apiTokenScopes,
@@ -54,7 +55,7 @@ const DEFAULT_REGISTRATION_INVITATION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const DEFAULT_API_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 90;
 const MAX_API_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 365;
 const API_TOKEN_PREFIX_LENGTH = 12;
-const MCP_SESSION_REQUIRED_SCOPES: readonly ApiTokenScope[] = ["skills:read", "architectures:read"];
+const MCP_SESSION_REQUIRED_SCOPES: readonly ApiTokenScope[] = APPLICATION_SCOPES;
 const DEFAULT_TOTP_ISSUER = "MySkills";
 const DEV_AUTH_SECRET = "dev-only-myskills-app-auth-secret-change-before-production";
 
@@ -293,7 +294,7 @@ export interface ListAdminAuditEventsInput {
   cursor?: string;
 }
 
-export type McpSessionCredentialKind = "none" | "session" | "api";
+export type McpSessionCredentialKind = "none" | "session" | "api" | "oauth";
 export type McpSessionAuditReason =
   | "missing_bearer"
   | "invalid_bearer"
@@ -312,10 +313,27 @@ export interface RecordMcpSessionDecisionInput {
 export interface AuthContext {
   user: AuthResponseUser;
   credential: {
-    kind: "session" | "api_token";
+    kind: "session" | "api_token" | "oauth";
     scopes: ApiTokenScope[];
     tokenId?: string;
+    /** OAuth connector credentials only. */
+    grantId?: string;
+    clientId?: string;
+    resource?: string;
   };
+}
+
+/** Verifies remote MCP connector access tokens; see src/oauth/service.ts. */
+export interface OAuthAccessTokenVerifier {
+  verifyAccessToken(token: string): Promise<{
+    user: AuthUserRecord;
+    grantId: string;
+    clientId: string;
+    scopes: ApiTokenScope[];
+    resource: string;
+    mfaVerifiedAt?: Date | null;
+    assuranceExpiresAt?: Date | null;
+  } | null>;
 }
 
 export class AuthService {
@@ -336,6 +354,7 @@ export class AuthService {
       passwordResetTtlMs?: number;
       registrationInvitationTtlMs?: number;
       notificationSink?: AuthNotificationSink;
+      oauthAccessTokens?: OAuthAccessTokenVerifier;
     } = {},
   ) {}
 
@@ -746,6 +765,36 @@ export class AuthService {
     if (!token) {
       return null;
     }
+    if (token.startsWith(OAUTH_ACCESS_TOKEN_PREFIX)) {
+      const connector = await this.options.oauthAccessTokens?.verifyAccessToken(token);
+      if (!connector || !isUsableAuthenticatedAccount(connector.user)) {
+        return null;
+      }
+      const verifiedAt = connector.mfaVerifiedAt instanceof Date ? connector.mfaVerifiedAt.getTime() : undefined;
+      const expiresAt = connector.assuranceExpiresAt instanceof Date ? connector.assuranceExpiresAt.getTime() : undefined;
+      const now = Date.now();
+      const validProvenance = verifiedAt !== undefined && expiresAt !== undefined
+        && Number.isFinite(verifiedAt) && Number.isFinite(expiresAt)
+        && verifiedAt <= now && expiresAt > verifiedAt && expiresAt <= verifiedAt + 15 * 60_000;
+      const mfaVerified = validProvenance && expiresAt > now;
+      // Old read-only grants carry no consent assurance. Preserve their original
+      // role ceiling; upgrading the server cannot enlarge an existing grant.
+      // Modern/expired grants retain roles so expiry cannot bypass role-gated MFA.
+      const legacyReadGrant = !validProvenance
+        && connector.scopes.every((scope) => scope === "skills:read" || scope === "architectures:read");
+      const roles: Role[] = legacyReadGrant
+        ? connector.user.roles.filter((role) => role === "author" || role === "user") : connector.user.roles;
+      return {
+        user: responseUser({ ...connector.user, roles: roles.length > 0 ? roles : ["user"] }, mfaVerified),
+        credential: {
+          kind: "oauth",
+          scopes: connector.scopes,
+          grantId: connector.grantId,
+          clientId: connector.clientId,
+          resource: connector.resource,
+        },
+      };
+    }
     const sessionUser = await this.store.findUserBySessionTokenHash(hashSessionToken(token));
     if (sessionUser && isUsableAuthenticatedAccount(sessionUser)) {
       return {
@@ -1134,17 +1183,38 @@ export class AuthService {
     return { events: page.items.map(safeAuditEvent), nextCursor: page.nextCursor };
   }
 
+  async recordDelegatedActionDecision(input: { context: AuthContext; actionId: string; statusCode: number }): Promise<void> {
+    const credential = input.context.credential;
+    if (credential.kind === "session") return;
+    await this.store.recordAuditEvent({
+      actorUserId: input.context.user.id,
+      action: `delegated.${input.actionId}`,
+      decision: input.statusCode < 400 ? "allow" : "deny",
+      resourceType: "delegated_action",
+      resourceId: credential.kind === "api_token" ? credential.tokenId ?? null : credential.grantId ?? null,
+      details: {
+        actionId: input.actionId,
+        credentialKind: credential.kind === "api_token" ? "api" : "oauth",
+        credentialId: credential.kind === "api_token" ? credential.tokenId : credential.grantId,
+        ...(credential.kind === "oauth" ? { grantId: credential.grantId, clientId: credential.clientId } : {}),
+        statusCode: input.statusCode,
+      },
+    });
+  }
+
   async recordMcpSessionDecision(input: RecordMcpSessionDecisionInput): Promise<void> {
     await this.store.recordAuditEvent({
       actorUserId: input.context?.user.id ?? null,
       action: "mcp.session",
       decision: input.decision,
       resourceType: "mcp_session",
-      resourceId: input.context?.credential.kind === "api_token" ? input.context.credential.tokenId ?? null : null,
+      resourceId: input.context?.credential.kind === "api_token"
+        ? input.context.credential.tokenId ?? null
+        : input.context?.credential.kind === "oauth" ? input.context.credential.grantId ?? null : null,
       details: {
         endpoint: "/v1/mcp/session",
         // Keep requiredScope for beta.2 audit consumers. requiredScopes
-        // records the legacy OR gate or the narrower native content gate.
+        // records the application-scope OR gate or the narrower native content gate.
         requiredScope: "skills:read",
         requiredScopes: input.method ? ["skills:read"] : [...MCP_SESSION_REQUIRED_SCOPES],
         credentialKind: input.credentialKind,
@@ -1822,7 +1892,9 @@ function requiresVerifiedMfaForApiToken(actor: AuthResponseUser, scopes: ApiToke
   }
   const privilegedRole = actor.roles.some((role) => role === "owner" || role === "admin" || role === "maintainer");
   if (scopes.includes("targets:execute")) return true;
-  const privilegedScope = scopes.some((scope) => scope === "review:read" || scope === "review:write");
+  if (scopes.some((scope) => scope === "sharing:write" || scope === "organizations:write")) return true;
+  const privilegedScope = scopes.some((scope) => scope === "review:read" || scope === "review:write"
+    || ((NEW_APPLICATION_SCOPES as readonly string[]).includes(scope) && (APPLICATION_PRIVILEGED_SCOPES as readonly string[]).includes(scope)));
   return privilegedRole && privilegedScope;
 }
 

@@ -45,6 +45,45 @@ server {
     return 308 /api/;
   }
 
+  # Remote MCP connections (opt-in). OAuth discovery and endpoints must reach
+  # the API, and the MCP endpoint and its protected-resource metadata must
+  # reach the MCP service, never the SPA fallback. With OAuth disabled the API
+  # answers 404; without an MCP service /mcp answers 502.
+  location = /.well-known/oauth-authorization-server {
+    proxy_pass ${API_PROXY_TARGET}/.well-known/oauth-authorization-server;
+    proxy_http_version 1.1;
+    proxy_set_header Host $proxy_host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  location /oauth/ {
+    proxy_pass ${API_PROXY_TARGET}/oauth/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $proxy_host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  location ^~ /.well-known/oauth-protected-resource {
+    proxy_pass ${MCP_PROXY_TARGET};
+    proxy_http_version 1.1;
+    proxy_set_header Host $proxy_host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  location = /mcp {
+    proxy_pass ${MCP_PROXY_TARGET}/mcp;
+    proxy_http_version 1.1;
+    proxy_buffering off;
+    proxy_set_header Host $proxy_host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
   location = /health {
     access_log off;
     add_header Content-Type text/plain;

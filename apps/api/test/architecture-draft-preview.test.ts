@@ -154,7 +154,7 @@ test("draft preview rejects a stale base without persisting a revision", async (
   assert.equal((await architectureStore.listRevisions("stale-owner", created.id))?.length, 1);
 });
 
-test("team draft preview is owner-only, session-only, and rejects exact team-private references", async (t) => {
+test("team draft preview is owner-only, explicitly scoped, and rejects exact team-private references", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const teamId = "draft-team";
   const architectureStore = new MemoryArchitectureStore({
@@ -221,7 +221,7 @@ test("team draft preview is owner-only, session-only, and rejects exact team-pri
     payload: { expectedCurrentRevisionId: null, spec: flatSpec("client-token-id", safeSlug) },
   });
   assert.equal(tokenDenied.statusCode, 403);
-  assert.equal(tokenDenied.json().error.code, "SESSION_AUTH_REQUIRED");
+  assert.equal(tokenDenied.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
 });
 
 function flatSpec(

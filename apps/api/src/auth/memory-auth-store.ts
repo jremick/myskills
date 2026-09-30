@@ -156,6 +156,12 @@ interface MemoryAuditEvent {
   createdAt: Date;
 }
 
+export interface LinkedCredentialStore {
+  revokeUserCredentials(userId: string, revokedAt: Date): void;
+  snapshotUserCredentials(userId: string): unknown;
+  restoreUserCredentials(snapshot: unknown): void;
+}
+
 export class MemoryAuthStore implements AuthStore {
   private users = new Map<string, MemoryUser>();
   private sessions = new Map<string, MemorySession>();
@@ -170,6 +176,7 @@ export class MemoryAuthStore implements AuthStore {
   private auditSequence = 0;
   private adminMutationTail: Promise<void> = Promise.resolve();
   private accountActionTails = new Map<string, Promise<void>>();
+  private linkedCredentialStores: LinkedCredentialStore[] = [];
 
   private branding: BrandSettings = { ...DEFAULT_BRANDING };
 
@@ -715,6 +722,30 @@ export class MemoryAuthStore implements AuthStore {
     this.revokeCredentialsInMemory(userId);
   }
 
+  /** Lets another in-memory credential store follow account-level revocation and its rollback. */
+  linkCredentialStore(store: LinkedCredentialStore): void {
+    this.linkedCredentialStores.push(store);
+  }
+
+  /** Synchronous account check for linked stores' atomic transitions. */
+  isUsableAccountSync(userId: string): boolean {
+    const user = [...this.users.values()].find((candidate) => candidate.id === userId);
+    return Boolean(user && user.status === "active" && user.emailVerifiedAt);
+  }
+
+  /** Synchronous session check for linked stores' atomic transitions. */
+  hasActiveSessionSync(tokenHash: string, userId: string, now: Date): boolean {
+    const session = this.sessions.get(tokenHash);
+    return Boolean(session && session.userId === userId && !session.revokedAt && session.expiresAt > now);
+  }
+
+  /** Captures actual session assurance during a linked store's synchronous transition. */
+  activeSessionMfaVerifiedAtSync(tokenHash: string, userId: string, now: Date): Date | null {
+    if (!this.hasActiveSessionSync(tokenHash, userId, now)) return null;
+    const stamp = this.sessions.get(tokenHash)?.mfaVerifiedAt;
+    return stamp ? new Date(stamp) : null;
+  }
+
   private revokeCredentialsInMemory(userId: string): void {
     const now = new Date();
     for (const session of this.sessions.values()) {
@@ -726,6 +757,9 @@ export class MemoryAuthStore implements AuthStore {
       if (token.userId === userId && !token.revokedAt) {
         token.revokedAt = now;
       }
+    }
+    for (const store of this.linkedCredentialStores) {
+      store.revokeUserCredentials(userId, now);
     }
   }
 
@@ -1134,6 +1168,7 @@ export class MemoryAuthStore implements AuthStore {
   private snapshotCredentialRevocationState(userId: string): {
     sessions: Array<{ tokenHash: string; revokedAt: Date | null }>;
     apiTokens: Array<{ tokenHash: string; revokedAt: Date | null }>;
+    linked: Array<{ store: LinkedCredentialStore; snapshot: unknown }>;
   } {
     return {
       sessions: [...this.sessions.entries()]
@@ -1142,13 +1177,18 @@ export class MemoryAuthStore implements AuthStore {
       apiTokens: [...this.apiTokens.entries()]
         .filter(([, token]) => token.userId === userId)
         .map(([tokenHash, token]) => ({ tokenHash, revokedAt: token.revokedAt })),
+      linked: this.linkedCredentialStores.map((store) => ({ store, snapshot: store.snapshotUserCredentials(userId) })),
     };
   }
 
   private restoreCredentialRevocationState(snapshot: {
     sessions: Array<{ tokenHash: string; revokedAt: Date | null }>;
     apiTokens: Array<{ tokenHash: string; revokedAt: Date | null }>;
+    linked: Array<{ store: LinkedCredentialStore; snapshot: unknown }>;
   }): void {
+    for (const linked of snapshot.linked) {
+      linked.store.restoreUserCredentials(linked.snapshot);
+    }
     for (const state of snapshot.sessions) {
       const session = this.sessions.get(state.tokenHash);
       if (session) {

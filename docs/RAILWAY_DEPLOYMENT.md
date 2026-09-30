@@ -262,6 +262,13 @@ Do not deploy this project into any team or work Railway workspace.
   and artifact recovery sets. See [Coordinated registry backups](BACKUPS.md).
 
 The optional HTTP MCP service is not part of the maintained live beta service set.
+Remote MCP connections for ChatGPT and Claude (OAuth) are an opt-in source
+feature that has not been deployed; the web template's `/mcp` and OAuth routes
+are inert until an MCP service and `MYSKILLS_OAUTH_ENABLED` are configured.
+The enablement, verification and rollback steps are in
+[Remote MCP connections](MCP_CONNECTIONS.md#railway-runbook-not-executed).
+Web images now read `MCP_PROXY_TARGET` (default `http://127.0.0.1:3002`); leave
+it unset until the MCP service exists, because nginx resolves it at startup.
 
 `Dockerfile.api` and `Dockerfile.web` are the current Railway image sources. CI and release verification build those exact files in addition to the root multi-target `Dockerfile` used by the production Compose example. The root, API, and web Dockerfiles default to Node 22; the backup Dockerfile pins Node 24. CI verifies both supported Node lines. Production starts use injected variables and do not copy the local `.env` into images. These source defaults do not establish the runtime version of an earlier deployment.
 

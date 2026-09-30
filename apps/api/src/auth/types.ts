@@ -1,23 +1,9 @@
-import type { BrandSettings } from "@myskills-app/core";
+import { APPLICATION_SCOPES, type BrandSettings } from "@myskills-app/core";
 import type { ChronologicalPosition } from "../repositories/chronological-pagination.js";
 import type { AuthNotificationClaim, AuthNotificationIntent, FinishAuthNotificationInput } from "./notification-outbox.js";
 import type { AuthenticatedUser, RegistrationMode, Role, UserStatus } from "@myskills-app/auth";
 
-export const apiTokenScopes = [
-  "profile:read",
-  "skills:read",
-  "architectures:read",
-  "skills:submit",
-  "review:read",
-  "review:write",
-  "targets:execute",
-  "improvements:read",
-  "improvements:configure",
-  "improvements:run",
-  "improvements:report",
-  "libraries:read",
-  "libraries:write",
-] as const;
+export const apiTokenScopes = [...APPLICATION_SCOPES, "targets:execute"] as const;
 export const authActionTokenPurposes = ["email_verification", "password_reset", "registration_invitation", "email_change"] as const;
 export const providerTypes = ["oidc", "saml", "cloudflare_access", "github", "google"] as const;
 

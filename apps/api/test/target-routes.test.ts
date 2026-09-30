@@ -61,7 +61,7 @@ test("architecture target routes bind targets, protect credentials, and gate obs
     headers: { authorization: `Bearer ${apiToken}` },
   });
   assert.equal(tokenRead.statusCode, 403);
-  assert.equal(tokenRead.json().error.code, "SESSION_AUTH_REQUIRED");
+  assert.equal(tokenRead.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
 
   const mfaRequired = await fixture.app.inject({
     method: "POST",

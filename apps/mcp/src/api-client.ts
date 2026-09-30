@@ -1,4 +1,5 @@
-import type { PublicSkill } from "@myskills-app/core";
+import { createHash } from "node:crypto";
+import { DELEGATED_ACTIONS, type PublicSkill } from "@myskills-app/core";
 
 export interface ReleaseMetadata {
   slug: string;
@@ -23,7 +24,9 @@ export interface RegistryApiClient {
   readonly hasToken: boolean;
   bundleRequest?(request: import("@myskills-app/core").BundleRequest): Promise<Record<string, unknown>>;
   authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;
-  searchSkills(input: { query?: string; limit?: number }): Promise<PublicSkill[]>;
+  searchSkills(input: { query?: string; limit?: number; cursor?: string }): Promise<PublicSkill[]>;
+  searchSkillPage?(input: { query?: string; limit?: number; cursor?: string }): Promise<{ skills: PublicSkill[]; nextCursor?: string | null }>;
+  applicationRequest?(actionId: string, input: ApplicationRequestInput, signal?: AbortSignal): Promise<Record<string, unknown>>;
   getSkill(slug: string): Promise<PublicSkill>;
   getRelease(slug: string, version: string): Promise<ReleaseMetadata>;
   listArchitecturePatterns(): Promise<Record<string, unknown>>;
@@ -37,6 +40,12 @@ export interface RegistryApiClient {
   }): Promise<Record<string, unknown>>;
 }
 
+export interface ApplicationRequestInput {
+  path?: Record<string, string>;
+  query?: Record<string, string | number | boolean>;
+  body?: unknown;
+}
+
 export interface McpSession {
   user: {
     id: string;
@@ -46,11 +55,10 @@ export interface McpSession {
     emailVerified: boolean;
     mfaVerified: boolean;
   };
-  credential: {
-    kind: "api_token";
-    tokenId: string;
-    scopes: string[];
-  };
+  credential:
+    | { kind: "api_token"; tokenId: string; scopes: string[] }
+    /** A remote MCP connector token bound to one resource (see API src/oauth). */
+    | { kind: "oauth"; grantId: string; clientId: string; scopes: string[]; resource: string };
 }
 
 export type FetchLike = (
@@ -73,6 +81,8 @@ export interface RegistryApiClientOptions {
 export type NativeMcpMethod = "skills/list" | "skills/get" | "resources/read";
 export const NATIVE_API_METADATA_BYTES = 512 * 1024;
 export const NATIVE_API_BUNDLE_BYTES = 10 * 1024 * 1024;
+/** Match the existing API package JSON body limit (ZIP base64 has overhead). */
+export const APPLICATION_API_REQUEST_BYTES = 14 * 1024 * 1024;
 
 /** Each instance belongs to one native operation, including its deadline. */
 export function createNativeRegistryApiClient(options: RegistryApiClientOptions, signal: AbortSignal) {
@@ -189,10 +199,29 @@ export function createRegistryApiClient(options: RegistryApiClientOptions = {}):
         ? await nativeRequestJson<McpSession>(fetchImpl, token, `${baseUrl}/v1/mcp/session`, signal, {
           "x-myskills-mcp-method": method,
         })
-        : await requestJson<McpSession>(fetchImpl, token, `${baseUrl}/v1/mcp/session`);
+        : await requestJson<McpSession>(fetchImpl, token, `${baseUrl}/v1/mcp/session`, { signal });
       return body;
     },
+    async applicationRequest(actionId, input, signal) {
+      const action = DELEGATED_ACTIONS.find((item) => item.id === actionId);
+      if (!action) throw new RegistryApiError(400, "INVALID_APPLICATION_ACTION");
+      const path = action.route.replace(/:([A-Za-z][A-Za-z0-9]*)/g, (_match, name: string) => {
+        const value = input.path?.[name];
+        if (!value || !/^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,159}$/.test(value)) throw new RegistryApiError(400, "INVALID_APPLICATION_INPUT");
+        return encodeURIComponent(value);
+      });
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(input.query ?? {})) params.set(key, String(value));
+      return requestJson<Record<string, unknown>>(fetchImpl, token, `${baseUrl}${path}${params.size ? `?${params}` : ""}`, {
+        method: action.method, body: input.body, signal,
+        maxBytes: action.id.endsWith(".export") ? NATIVE_API_BUNDLE_BYTES : NATIVE_API_METADATA_BYTES,
+        ...(action.id.endsWith(".export") ? { artifactDigest: action.id.startsWith("review.") ? "required" as const : "computed" as const } : {}),
+      });
+    },
     async searchSkills(input) {
+      return (await this.searchSkillPage!(input)).skills;
+    },
+    async searchSkillPage(input) {
       const params = new URLSearchParams();
       if (input.query?.trim()) {
         params.set("q", input.query.trim());
@@ -200,9 +229,10 @@ export function createRegistryApiClient(options: RegistryApiClientOptions = {}):
       if (input.limit !== undefined) {
         params.set("limit", String(input.limit));
       }
+      if (input.cursor !== undefined) params.set("cursor", input.cursor);
       const suffix = params.size > 0 ? `?${params}` : "";
-      const body = await requestJson<{ skills: PublicSkill[] }>(fetchImpl, token, `${baseUrl}/v1/skills${suffix}`);
-      return body.skills;
+      const body = await requestJson<{ skills: PublicSkill[]; nextCursor?: string | null }>(fetchImpl, token, `${baseUrl}/v1/skills${suffix}`);
+      return body;
     },
     async getSkill(slug) {
       const body = await requestJson<{ skill: PublicSkill }>(
@@ -272,41 +302,79 @@ function normalizeBaseUrl(value: string): string {
 
 async function requestJson<T>(fetchImpl: FetchLike, token: string | undefined, url: string, options: {
   body?: unknown;
-  method?: "GET" | "POST" | "PATCH";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  signal?: AbortSignal;
+  maxBytes?: number;
+  artifactDigest?: "required" | "computed";
 } = {}): Promise<T> {
+  const signal = AbortSignal.any([AbortSignal.timeout(10_000), ...(options.signal ? [options.signal] : [])]);
   const headers: Record<string, string> = { accept: "application/json" };
-  if (token) {
-    headers.authorization = `Bearer ${token}`;
-  }
-  if (options.body !== undefined) {
+  if (token) headers.authorization = `Bearer ${token}`;
+  const serialized = options.body === undefined ? undefined : JSON.stringify(options.body);
+  if (serialized !== undefined) {
+    if (Buffer.byteLength(serialized) > APPLICATION_API_REQUEST_BYTES) throw new RegistryApiError(413, "API_REQUEST_TOO_LARGE");
     headers["content-type"] = "application/json";
   }
-  const response = await fetchImpl(url, {
-    ...(options.method === undefined ? {} : { method: options.method }),
-    headers,
-    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
-  });
-  const text = await response.text();
-  let body: Record<string, unknown>;
   try {
-    const parsed = text ? JSON.parse(text) as unknown : {};
-    body = parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : {};
-  } catch {
-    throw new RegistryApiError(response.status, "API_INVALID_JSON");
+    signal.throwIfAborted();
+    const response = await abortable(fetchImpl(url, { method: options.method ?? "GET", headers, redirect: "error", signal, ...(serialized === undefined ? {} : { body: serialized }) }), signal);
+    const maxBytes = response.ok ? options.maxBytes ?? NATIVE_API_METADATA_BYTES : 16_384;
+    const length = response.headers?.get("content-length");
+    if (length !== null && length !== undefined && (!/^\d+$/.test(length) || Number(length) > maxBytes)) {
+      void response.body?.cancel().catch(() => {});
+      throw new RegistryApiError(502, "API_RESPONSE_TOO_LARGE");
+    }
+    if (!response.body) throw new RegistryApiError(502, "API_RESPONSE_BODY_REQUIRED");
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    try {
+      while (true) {
+        const chunk = await abortable(reader.read(), signal);
+        if (chunk.done) break;
+        total += chunk.value.byteLength;
+        if (total > maxBytes) throw new RegistryApiError(502, "API_RESPONSE_TOO_LARGE");
+        chunks.push(chunk.value);
+      }
+    } finally {
+      void reader.cancel().catch(() => {});
+      reader.releaseLock();
+    }
+    let body: Record<string, unknown>;
+    try {
+      const parsed = total ? JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks, total))) as unknown : {};
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+      body = parsed as Record<string, unknown>;
+    } catch { throw new RegistryApiError(response.status, "API_INVALID_JSON"); }
+    if (!response.ok) throw new RegistryApiError(response.status, safeResponseCode(body));
+    if (options.artifactDigest) {
+      const sha256 = createHash("sha256").update(Buffer.concat(chunks, total)).digest("hex");
+      const expected = response.headers?.get("x-myskills-artifact-sha256");
+      if (options.artifactDigest === "required" && (!expected || !/^[a-f0-9]{64}$/.test(expected) || expected !== sha256)) throw new RegistryApiError(502, "ARTIFACT_SHA256_MISMATCH");
+      return { artifact: { sha256, byteSize: total, verification: options.artifactDigest === "required" ? "response_header" : "computed" }, bundle: body } as T;
+    }
+    return body as T;
+  } catch (error) {
+    if (error instanceof RegistryApiError) throw error;
+    throw new RegistryApiError(signal.aborted ? 504 : 503, signal.aborted ? "API_REQUEST_ABORTED" : "API_UNAVAILABLE");
   }
-  if (!response.ok) {
-    throw new RegistryApiError(response.status, safeResponseCode(body));
-  }
-  return body as T;
 }
 
+// An upstream error is untrusted. Only these source-known codes may reach model
+// output; never echo its message, details, headers or arbitrary code strings.
+const SAFE_ERROR_CODES = new Set([
+  "API_TOKEN_SCOPE_REQUIRED", "AUTHENTICATION_REQUIRED", "MFA_VERIFICATION_REQUIRED", "OAUTH_TOKEN_NOT_ALLOWED",
+  "TEAM_OWNER_REQUIRED", "TEAM_MEMBER_REQUIRED", "ADMIN_ROLE_REQUIRED", "REVIEW_ROLE_REQUIRED", "AUTHOR_ROLE_REQUIRED",
+  "SKILL_NOT_FOUND", "ARCHITECTURE_NOT_FOUND", "SUBMISSION_NOT_FOUND", "LIBRARY_NOT_FOUND", "IMPROVEMENT_NOT_FOUND",
+  "INVALID_REQUEST_BODY", "INVALID_APPLICATION_INPUT", "INVALID_APPLICATION_ACTION", "INVALID_REVIEW_ACTION",
+  "ARCHITECTURE_REVISION_CONFLICT", "LIBRARY_REVISION_CONFLICT", "BUNDLE_REVISION_CONFLICT", "IDEMPOTENCY_CONFLICT",
+  "TARGET_OPERATION_IDEMPOTENCY_CONFLICT", "TARGET_CONSENT_REQUIRED", "ARCHITECTURE_TARGET_CONSENT_REQUIRED",
+  "ARTIFACT_HASH_MISMATCH", "ARTIFACT_SHA256_MISMATCH", "IMPROVEMENT_BINDING_MISMATCH",
+  "FEATURE_DISABLED", "BUNDLES_DISABLED", "SHARING_DISABLED", "TEAMS_DISABLED", "RATE_LIMITED",
+]);
 function safeResponseCode(body: Record<string, unknown>): string {
   const error = body.error;
-  if (!error || typeof error !== "object" || Array.isArray(error)) {
-    return "API_ERROR";
-  }
+  if (!error || typeof error !== "object" || Array.isArray(error)) return "API_ERROR";
   const code = (error as { code?: unknown }).code;
-  return typeof code === "string" ? code : "API_ERROR";
+  return typeof code === "string" && SAFE_ERROR_CODES.has(code) ? code : "API_ERROR";
 }

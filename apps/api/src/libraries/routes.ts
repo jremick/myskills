@@ -17,6 +17,7 @@ import {
 import { MemoryAuthRateLimiter, type AuthRateLimiter } from "../auth/rate-limit.js";
 import type { AuthContext, AuthService } from "../auth/service.js";
 import type { ApiTokenScope } from "../auth/types.js";
+import { requireDelegatedAction } from "../auth/delegated-actions.js";
 import type { SubmissionService } from "../submissions/service.js";
 import type { MappingOverrides } from "./packaging.js";
 import { decodeCursor, type LibraryActor, type LibraryService } from "./service.js";
@@ -69,8 +70,7 @@ export function registerLibraryRoutes(app: FastifyInstance, options: LibraryRout
       return null;
     }
     if (need.sessionOnly && context.credential.kind !== "session") {
-      await reply.code(403).send({ error: { code: "SESSION_AUTH_REQUIRED", message: "Session authentication is required." } });
-      return null;
+      requireDelegatedAction(context, request);
     }
     for (const scope of need.scopes) helpers.requireScope(context, scope);
     if ((need.mfa === "always" || (need.mfa === "privileged" && helpers.requiresMfaForRole(context))) && !context.user.mfaVerified) {

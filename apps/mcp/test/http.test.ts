@@ -1,3 +1,4 @@
+import { ALL_APPLICATION_TOOL_NAMES, FRIENDLY_READ_TOOLS } from "./application-tool-names.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { request as httpRequest } from "node:http";
@@ -335,7 +336,7 @@ test("HTTP MCP transport executes tools with the request bearer token", async (t
     const tools = await client.listTools();
     assert.deepEqual(
       tools.tools.map((tool) => tool.name).sort(),
-      ["browse_bundles", "curate_bundle", "get_architecture_projection", "get_install_instructions", "get_skill_info", "list_architecture_patterns", "list_architectures", "search_skills"],
+      ALL_APPLICATION_TOOL_NAMES,
     );
 
     const result = await client.callTool({
@@ -405,7 +406,7 @@ test("HTTP MCP transport forwards architecture organization context end to end",
   }
 });
 
-test("HTTP MCP transport negotiates modern discovery and preserves the six tools", async (t) => {
+test("HTTP MCP transport negotiates modern discovery and preserves friendly tools alongside application actions", async (t) => {
   const server = createAiSkillsMcpHttpServer({
     fetchImpl: async (url, init) => {
       assert.equal(init?.headers?.authorization, "Bearer aiss_modern_test");
@@ -429,11 +430,8 @@ test("HTTP MCP transport negotiates modern discovery and preserves the six tools
     assert.equal(client.getServerVersion()?.name, "myskills-app");
     assert.ok(client.getDiscoverResult());
     const tools = await client.listTools();
-    assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
-      "browse_bundles", "curate_bundle", "get_architecture_projection", "get_install_instructions", "get_skill_info",
-      "list_architecture_patterns", "list_architectures", "search_skills",
-    ]);
-    assert.equal(tools.tools.filter(tool => tool.name !== "curate_bundle").every((tool) => tool.annotations?.readOnlyHint === true), true);
+    assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), ALL_APPLICATION_TOOL_NAMES);
+    assert.equal(tools.tools.filter(tool => FRIENDLY_READ_TOOLS.includes(tool.name)).every((tool) => tool.annotations?.readOnlyHint === true), true);
     const result = await client.callTool({ name: "search_skills", arguments: { query: "release" } });
     assert.equal(result.isError, undefined);
     assert.match(JSON.stringify(result), /release-notes-helper/);
@@ -711,13 +709,7 @@ async function slowPartialBodyClose(url: string): Promise<number> {
 }
 
 function jsonResponse(status: number, body: Record<string, unknown>): Awaited<ReturnType<FetchLike>> {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    async text() {
-      return JSON.stringify(body);
-    },
-  };
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
 function mcpSession(scopes: string[] = ["skills:read"]) {

@@ -1,3 +1,5 @@
+import { libraryCandidateStates } from "@myskills-app/core";
+
 /** Explicit library command routing. Payloads use the documented API schema so
  * previews, artifact attestations and mutation IDs remain inspectable/replayable. */
 export interface LibraryCommandRequest { method: string; pathname: string; payload?: Record<string, unknown> }
@@ -48,6 +50,8 @@ export const libraryCommandHelp = [
   "Targets: bindings, bind, detach. Admin: settings, set-settings, review-requests, review-bundle, elevate",
   "bind, detach and set-settings require an MFA-verified myskills login session; API tokens cannot perform these actions.",
   "List pagination: --cursor <cursor> --limit <1-100>. Remove library: --revision <current revision>.",
+  "Filter entries: --kind source|skill. Filter candidates: --state ready-for-review|blocked|accepted|ignored|superseded|expired.",
+  "Filter inbox: --unread true|false.",
   "Writes with a body require a reviewed JSON file. Preserve clientMutationId when retrying creation/import.",
   "review-bundle <submission-id> [--artifact-sha256 <review-request-digest>] [--output <new-file>] verifies the response hash and, when supplied, the review request digest. --output keeps exact verified bytes.",
   "Detach a local adoption: libraries unbind-local <slug> --dir <install-root>. Files remain unchanged.",
@@ -63,6 +67,18 @@ export function libraryCommandRequest(actionName: string, reference: string | un
   if (!action.input && payload) throw new Error("This library command does not accept a request body.");
   if (action.kind && payload?.kind !== undefined && payload.kind !== action.kind) throw new Error("The entry kind does not match the command.");
   const query = new URLSearchParams();
+  if (options.unread !== undefined) {
+    if (actionName !== "inbox" || (options.unread !== "true" && options.unread !== "false")) throw new Error("--unread requires true or false on the inbox command.");
+    query.set("unread", options.unread);
+  }
+  for (const key of ["kind", "state"] as const) {
+    const value = options[key];
+    if (value === undefined) continue;
+    const valid = key === "kind" ? actionName === "entries" && (value === "source" || value === "skill")
+      : actionName === "candidates" && typeof value === "string" && libraryCandidateStates.some((state) => state === value);
+    if (!valid || typeof value !== "string") throw new Error(`--${key} is invalid for this command.`);
+    query.set(key, value);
+  }
   for (const key of ["cursor", "limit"]) {
     const value = options[key];
     if (value !== undefined) {

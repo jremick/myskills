@@ -1,3 +1,4 @@
+import { ALL_APPLICATION_TOOL_NAMES } from "./application-tool-names.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -59,10 +60,7 @@ for (const era of ["legacy", "modern"] as const) {
         assert.ok(client.getDiscoverResult());
       }
       const tools = await client.listTools();
-      assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
-        "browse_bundles", "curate_bundle", "get_architecture_projection", "get_install_instructions", "get_skill_info",
-        "list_architecture_patterns", "list_architectures", "search_skills",
-      ]);
+      assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), ALL_APPLICATION_TOOL_NAMES);
       const result = await client.callTool({ name: "search_skills", arguments: { query: "stdio" } });
       assert.equal(result.isError, undefined);
       assert.match(JSON.stringify(result), /stdio-helper/);

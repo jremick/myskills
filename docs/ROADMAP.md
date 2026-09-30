@@ -649,7 +649,9 @@ that the host activated a skill. See [MCP App](../apps/mcp/README.md).
 
 Remaining decisions and acceptance include host-specific authorization integration,
 a verified on-demand host path, the supported host matrix, and any further audit
-retention requirements. This work does not
+retention requirements. An opt-in OAuth connection for remote hosts (ChatGPT,
+Claude) is implemented in source with a `read_skill_file` tool; deployment and
+real provider acceptance remain open. See [Remote MCP connections](MCP_CONNECTIONS.md). This work does not
 include agent write tools or automatic skill execution. MCP-1 remains open.
 
 Delivery sequence:

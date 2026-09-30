@@ -14,7 +14,7 @@ import { MemorySkillRepository } from "../src/repositories/memory-skill-reposito
 // fresh-store persistence and concurrent old/new audit history without test-only hooks.
 const defaultBranding = { text: "MySkills", showText: true, logoDataUrl: null };
 
-test("branding changes are public, fresh, audited and restricted to MFA admin sessions", async (t) => {
+test("branding changes are public, fresh, audited and restricted to MFA admins and named scopes", async (t) => {
   const store = new MemoryAuthStore("closed");
   const app = buildAdminApp(store);
   t.after(() => app.close());
@@ -31,7 +31,7 @@ test("branding changes are public, fresh, audited and restricted to MFA admin se
   const beforeDenied = await store.listAuditEvents({ limit: 100 });
   for (const [token, status, code] of [
     [undefined, 401, "AUTHENTICATION_REQUIRED"], [member, 403, "ADMIN_ROLE_REQUIRED"],
-    [noMfa, 403, "MFA_VERIFICATION_REQUIRED"], [apiToken, 403, "SESSION_AUTH_REQUIRED"],
+    [noMfa, 403, "MFA_VERIFICATION_REQUIRED"], [apiToken, 403, "API_TOKEN_SCOPE_REQUIRED"],
   ] as const) {
     for (const method of ["GET", "PUT"] as const) {
       const result = await app.inject({ method, url: "/v1/admin/branding", headers: token ? { authorization: `Bearer ${token}` } : {}, ...(method === "PUT" ? { payload: custom } : {}) });
@@ -45,7 +45,11 @@ test("branding changes are public, fresh, audited and restricted to MFA admin se
     assert.equal(result.json().error.code, "COOKIE_ORIGIN_REJECTED");
   }
   assert.deepEqual((await app.inject({ method: "GET", url: "/v1/branding" })).json(), initial.json());
-  assert.deepEqual(await store.listAuditEvents({ limit: 100 }), beforeDenied);
+  const afterDenied = await store.listAuditEvents({ limit: 100 });
+  assert.deepEqual(afterDenied.filter((event) => !event.action.startsWith("delegated.")), beforeDenied);
+  assert.deepEqual(afterDenied.filter((event) => event.action.startsWith("delegated.")).map((event) => [event.action, event.decision]).sort(), [
+    ["delegated.admin.branding.get", "deny"], ["delegated.admin.branding.update", "deny"],
+  ]);
   const settings = [custom, { text: "A".repeat(80), showText: true, logoDataUrl: brandingImages.jpeg }, { text: "Skills & Research", showText: true, logoDataUrl: brandingImages.webp }, { text: "Text only", showText: false, logoDataUrl: null }, defaultBranding];
   let previous = defaultBranding as { text: string; showText: boolean; logoDataUrl: string | null };
   for (const branding of settings) {
@@ -140,7 +144,7 @@ test("site settings are public, fresh, strictly validated and writable only by M
     [undefined, 401, "AUTHENTICATION_REQUIRED"],
     [member, 403, "ADMIN_ROLE_REQUIRED"],
     [noMfa, 403, "MFA_VERIFICATION_REQUIRED"],
-    [apiToken, 403, "SESSION_AUTH_REQUIRED"],
+    [apiToken, 403, "API_TOKEN_SCOPE_REQUIRED"],
   ] as const) {
     for (const method of ["GET", "PUT"] as const) {
       const response = await app.inject({ method, url: "/v1/admin/site", headers: token ? { authorization: `Bearer ${token}` } : {}, ...(method === "PUT" ? { payload: { landingPageEnabled: false } } : {}) });
@@ -914,7 +918,7 @@ test("admin user actions reject missing users and invalid actions without mutati
   assert.equal((await authStore.findUserById("deleted-1"))?.status, "deleted");
 });
 
-test("admin routes require session auth, admin role, and MFA", async (t) => {
+test("admin routes require explicit scopes, admin role, and MFA", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const app = buildAdminApp(authStore);
   t.after(() => app.close());
@@ -944,7 +948,7 @@ test("admin routes require session auth, admin role, and MFA", async (t) => {
     headers: { authorization: `Bearer ${userApiToken}` },
   });
   assert.equal(apiTokenDenied.statusCode, 403);
-  assert.equal(apiTokenDenied.json().error.code, "SESSION_AUTH_REQUIRED");
+  assert.equal(apiTokenDenied.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
 
   const mfaRequired = await app.inject({
     method: "GET",
@@ -968,7 +972,7 @@ test("admin routes require session auth, admin role, and MFA", async (t) => {
     headers: { authorization: `Bearer ${userApiToken}` },
   });
   assert.equal(auditApiTokenDenied.statusCode, 403);
-  assert.equal(auditApiTokenDenied.json().error.code, "SESSION_AUTH_REQUIRED");
+  assert.equal(auditApiTokenDenied.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
 
   const auditMfaRequired = await app.inject({
     method: "GET",
@@ -992,7 +996,7 @@ test("admin routes require session auth, admin role, and MFA", async (t) => {
     headers: { authorization: `Bearer ${userApiToken}` },
   });
   assert.equal(providerApiTokenDenied.statusCode, 403);
-  assert.equal(providerApiTokenDenied.json().error.code, "SESSION_AUTH_REQUIRED");
+  assert.equal(providerApiTokenDenied.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
 
   const providerOwnerApiTokenDenied = await app.inject({
     method: "PUT",
@@ -1001,7 +1005,7 @@ test("admin routes require session auth, admin role, and MFA", async (t) => {
     payload: { type: "oidc", displayName: "OIDC", roleMappings: [] },
   });
   assert.equal(providerOwnerApiTokenDenied.statusCode, 403);
-  assert.equal(providerOwnerApiTokenDenied.json().error.code, "SESSION_AUTH_REQUIRED");
+  assert.equal(providerOwnerApiTokenDenied.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
 
   const providerMfaRequired = await app.inject({
     method: "PUT",
@@ -1027,7 +1031,7 @@ test("admin routes require session auth, admin role, and MFA", async (t) => {
     payload: { roles: ["author"] },
   });
   assert.equal(roleUpdateApiTokenDenied.statusCode, 403);
-  assert.equal(roleUpdateApiTokenDenied.json().error.code, "SESSION_AUTH_REQUIRED");
+  assert.equal(roleUpdateApiTokenDenied.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
 
   const roleUpdateMfaRequired = await app.inject({
     method: "PUT",
@@ -1062,7 +1066,7 @@ test("admin routes require session auth, admin role, and MFA", async (t) => {
     payload: { email: "new@example.com" },
   });
   assert.equal(inviteApiTokenDenied.statusCode, 403);
-  assert.equal(inviteApiTokenDenied.json().error.code, "SESSION_AUTH_REQUIRED");
+  assert.equal(inviteApiTokenDenied.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
 
   const inviteMfaRequired = await app.inject({
     method: "POST",

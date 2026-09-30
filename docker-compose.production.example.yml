@@ -124,6 +124,14 @@ services:
       S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
       S3_FORCE_PATH_STYLE: "true"
       S3_ALLOW_INSECURE_ENDPOINT: "true" # Only for the private Docker network MinIO endpoint above.
+      # Optional remote MCP connections; off unless explicitly enabled. See docs/MCP_CONNECTIONS.md.
+      MYSKILLS_OAUTH_ENABLED: ${MYSKILLS_OAUTH_ENABLED:-false}
+      MYSKILLS_OAUTH_ISSUER: ${MYSKILLS_OAUTH_ISSUER:-}
+      MYSKILLS_OAUTH_CONSENT_ORIGIN: ${MYSKILLS_OAUTH_CONSENT_ORIGIN:-}
+      MYSKILLS_MCP_PUBLIC_URL: ${MYSKILLS_MCP_PUBLIC_URL:-}
+      MYSKILLS_OAUTH_DYNAMIC_REGISTRATION: ${MYSKILLS_OAUTH_DYNAMIC_REGISTRATION:-false}
+      MYSKILLS_OAUTH_REDIRECT_HOSTS: ${MYSKILLS_OAUTH_REDIRECT_HOSTS:-}
+      MYSKILLS_OAUTH_CLIENTS: ${MYSKILLS_OAUTH_CLIENTS:-}
     # Keep the API private to the Compose network. Browser and authenticated
     # traffic enters through web's same-origin /api proxy. TRUST_PROXY must trust
     # the private-network nginx source range and cannot be bypassed through a
@@ -144,6 +152,8 @@ services:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:?set VITE_API_BASE_URL}
     environment:
       API_PROXY_TARGET: ${API_PROXY_TARGET:-http://api:3001}
+      # Set to http://mcp-http:3002 only when the mcp profile runs; nginx must resolve it at startup.
+      MCP_PROXY_TARGET: ${MCP_PROXY_TARGET:-http://127.0.0.1:3002}
     restart: unless-stopped
     depends_on:
       api:
@@ -173,6 +183,10 @@ services:
       MYSKILLS_MCP_PATH: ${MYSKILLS_MCP_PATH:-/mcp}
       MYSKILLS_MCP_ALLOWED_HOSTS: ${MYSKILLS_MCP_ALLOWED_HOSTS:?set MYSKILLS_MCP_ALLOWED_HOSTS}
       MYSKILLS_MCP_ALLOWED_ORIGINS: ${MYSKILLS_MCP_ALLOWED_ORIGINS:-}
+      MYSKILLS_MCP_TRUST_PROXY_HOPS: ${MYSKILLS_MCP_TRUST_PROXY_HOPS:-0}
+      # Remote connectors: set both (same values as the API) or neither.
+      MYSKILLS_OAUTH_ISSUER: ${MYSKILLS_OAUTH_ISSUER:-}
+      MYSKILLS_MCP_PUBLIC_URL: ${MYSKILLS_MCP_PUBLIC_URL:-}
     ports:
       - "${MCP_HTTP_PORT:-3002}:3002"
     healthcheck:

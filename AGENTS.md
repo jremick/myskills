@@ -1,7 +1,7 @@
 # MySkills Agent Instructions
 
-Version: 1.0.0
-Last updated: 2026-06-19
+Version: 1.1.0
+Last updated: 2026-09-29
 
 ## Source Of Truth
 
@@ -39,6 +39,7 @@ For Codex cloud environment setup, prefer the maintained runbook in `docs/CODEX_
 Run the narrowest check that proves the change, then broaden when touching shared contracts or user workflows.
 
 - General repo gate: `npm run check`
+- Capability inventory/render gate: `npm run check:parity`
 - Disposable Postgres integration gate: `TEST_DATABASE_URL=postgres://myskills_test:myskills_test@localhost:5432/myskills_test npm run test:postgres`
 - Release artifact gate: `npm run release:artifacts`
 - Production env preflight: `npm run check:prod-env -- --env-file .env.production`
@@ -53,6 +54,12 @@ Run the narrowest check that proves the change, then broaden when touching share
 - Do not commit or print `.env` contents, API tokens, database URLs with real credentials, npm tokens, Railway variables, object-storage keys, or seeded owner credentials.
 - Keep merge, release, npm publish, and Railway deploy steps approval-gated unless the user explicitly asks for them.
 - Do not add GitHub Copilot coding-agent workflows or API-billed Codex GitHub Actions automation unless explicitly requested.
+
+## Capability Parity
+
+- The UI is the baseline for authorized user outcomes. Maintain delivery priority **API → CLI → MCP**, with the API and its services as the state and permission authority.
+- In each capability change, update `docs/capability-parity.json` with stable IDs, surface coverage, permission/handoff reasons and actual verification evidence. Generate `docs/CAPABILITY_PARITY.md` with `npm run docs:parity`; do not hand-edit the generated matrix.
+- Run `npm run check:parity` and the affected workflow checks. Static inventory coverage is not runtime parity; preserve partial/missing cells and distinguish local, real-host and deployed proof. See `docs/CAPABILITY_PARITY_IMPLEMENTATION.md` for the delivery sequence and verification ledger.
 
 ## Deployment Notes
 

@@ -1,8 +1,10 @@
 import { createBundleClient, type BundleClient } from "./bundle-api.js";
 import { createImprovementClient, type ImprovementClient } from "./improvement-api";
 import { createLibraryClient, type LibraryClient } from "./library-api.js";
+import { createOAuthConnectionClient, type OAuthConnectionClient } from "./oauth-api.js";
 import { MAX_BRAND_LOGO_BYTES, MAX_BRAND_TEXT_LENGTH } from "@myskills-app/core";
 import type {
+  ApplicationScope,
   BrandSettings,
   AccessibleArchitectureOutline,
   ArchitectureTarget,
@@ -107,7 +109,7 @@ export interface AdminUser {
   mfaEnabled: boolean;
 }
 
-export type ApiTokenScope = "profile:read" | "skills:read" | "architectures:read" | "skills:submit" | "review:read" | "review:write" | "targets:execute" | "improvements:read" | "improvements:configure" | "improvements:run" | "improvements:report" | "libraries:read" | "libraries:write";
+export type ApiTokenScope = ApplicationScope | "targets:execute";
 
 export interface ApiToken {
   id: string;
@@ -801,6 +803,8 @@ export interface UserSubmissionDetail extends UserSubmissionSummary, SubmissionE
 export interface ReviewSubmissionDetail extends ReviewSubmissionSummary, SubmissionEvidence {}
 
 export interface RegistryClient {
+  /** Remote MCP connection consent and management. */
+  oauth?: OAuthConnectionClient;
   improvements?: ImprovementClient;
   libraries?: LibraryClient;
   bundles?: BundleClient;
@@ -993,6 +997,7 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
   const root = baseUrl.replace(/\/+$/, "");
   const cookieSessionHeaders = { "x-myskills-session-response": "cookie" };
   return {
+    oauth: createOAuthConnectionClient(root, fetchImpl, token),
     improvements: createImprovementClient(<T,>(url: string, init?: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown }) => requestJson<T>(fetchImpl, `${root}${url}`, { ...init, token })),
     libraries: createLibraryClient(root, fetchImpl, token),
     bundles: createBundleClient(root, fetchImpl, token),

@@ -49,7 +49,8 @@ export function createNativeSkillsHandlers(options: RegistryApiClientOptions) {
       const boundedSignal = AbortSignal.any([AbortSignal.timeout(10_000), ...(signal ? [signal] : [])]);
       const client = createNativeRegistryApiClient(options, boundedSignal);
       const session = await client.authenticate(method);
-      if (session.credential?.kind !== "api_token" || !session.credential.scopes.includes("skills:read")) {
+      const kind = session.credential?.kind;
+      if ((kind !== "api_token" && kind !== "oauth") || !session.credential.scopes.includes("skills:read")) {
         throw new RegistryApiError(403);
       }
       return run(client);
@@ -152,10 +153,43 @@ export function createNativeSkillsHandlers(options: RegistryApiClientOptions) {
         const { files, identity } = await loadUri(client, input.uri, false);
         const file = files.find((item) => item.path === identity.path);
         if (!file) throw new IncompatibleSkill();
-        return { ...privateResult, contents: [{ uri: input.uri, mimeType: file.path.endsWith(".md") ? "text/markdown" : "text/plain", text: file.content }] };
+        return { ...privateResult, contents: [{ uri: input.uri, mimeType: mimeType(file.path), text: file.content }] };
+      });
+    },
+    /**
+     * One verified file for hosts that use standard tools rather than native
+     * Skills methods. The same session, release, digest, manifest and path
+     * checks as resources/read apply; nothing is installed or executed.
+     */
+    readFile(input: { slug: string; version?: string; path?: string }, signal?: AbortSignal) {
+      return operation("resources/read", signal, async (client) => {
+        const slug = skillSlugSchema.parse(input.slug);
+        const path = input.path ?? "SKILL.md";
+        if (typeof path !== "string" || normalizePackageFilePath(path) !== path) throw new IncompatibleSkill();
+        let version = input.version === undefined ? undefined : versionSchema.parse(input.version);
+        if (version === undefined) {
+          const latest = z.object({ skill: z.object({ slug: z.literal(slug), latestVersion: z.string().nullable() }) })
+            .parse(await client.json(`/v1/skills/${encodeURIComponent(slug)}`)).skill.latestVersion;
+          version = versionSchema.parse(latest);
+        }
+        const { skill, files } = await load(client, slug, version);
+        const file = files.find((item) => item.path === path);
+        if (!file) throw new IncompatibleSkill();
+        return {
+          skill: { slug, version, name: skill.frontmatter.name, description: skill.frontmatter.description },
+          file: { path: file.path, sha256: digest(file.content), size: Buffer.byteLength(file.content, "utf8"), mimeType: mimeType(file.path) },
+          files: files
+            .map((item) => ({ path: item.path, sha256: digest(item.content), size: Buffer.byteLength(item.content, "utf8") }))
+            .sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0),
+          content: file.content,
+        };
       });
     },
   };
+}
+
+function mimeType(path: string): string {
+  return path.endsWith(".md") ? "text/markdown" : "text/plain";
 }
 
 function digest(value: string | Uint8Array): string {

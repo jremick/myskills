@@ -1,12 +1,22 @@
+import { APPLICATION_SCOPES } from "@myskills-app/core";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { isIP } from "node:net";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import { createMcpHandler, isLegacyRequest, WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/server";
-import { createRegistryApiClient, RegistryApiError } from "./api-client.js";
+import { createRegistryApiClient, RegistryApiError, APPLICATION_API_REQUEST_BYTES } from "./api-client.js";
 import { createAiSkillsMcpServer } from "./server.js";
-import type { FetchLike } from "./api-client.js";
+import type { FetchLike, McpSession } from "./api-client.js";
+
+export interface AiSkillsMcpOAuthOptions {
+  /** Authorization server issuer (an origin), from trusted configuration. */
+  issuer: string;
+  /** This endpoint's public URL; connector tokens must be bound to it. */
+  resourceUrl: string;
+}
 
 export interface AiSkillsMcpHttpServerOptions {
+  /** Opt-in OAuth protected-resource mode for remote connectors. */
+  oauth?: AiSkillsMcpOAuthOptions;
   allowedHosts?: string[];
   allowedOrigins?: string[];
   apiBaseUrl?: string;
@@ -33,7 +43,7 @@ export interface AiSkillsMcpHttpServerOptions {
 const DEFAULT_ENDPOINT_PATH = "/mcp";
 const MAX_AUTHORIZATION_HEADER_CHARS = 512;
 const MAX_BEARER_TOKEN_CHARS = 256;
-const DEFAULT_MAX_REQUEST_BODY_BYTES = 256 * 1024;
+const DEFAULT_MAX_REQUEST_BODY_BYTES = APPLICATION_API_REQUEST_BYTES + 64 * 1024;
 const DEFAULT_MAX_HEADER_BYTES = 8 * 1024;
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 const DEFAULT_HEADERS_TIMEOUT_MS = 10_000;
@@ -69,6 +79,7 @@ interface HttpPolicy {
 
 export function createAiSkillsMcpHttpServer(options: AiSkillsMcpHttpServerOptions = {}): Server {
   const endpointPath = normalizeEndpointPath(options.endpointPath ?? DEFAULT_ENDPOINT_PATH);
+  const oauth = options.oauth ? normalizeOAuthOptions(options.oauth, endpointPath) : null;
   const allowedHosts = normalizeHeaderValues(options.allowedHosts);
   const allowedOrigins = normalizeHeaderValues(options.allowedOrigins);
   const policy = normalizeHttpPolicy(options);
@@ -84,6 +95,7 @@ export function createAiSkillsMcpHttpServer(options: AiSkillsMcpHttpServerOption
       allowedHosts,
       allowedOrigins,
       endpointPath,
+      oauthResource: oauth,
       policy,
       rateLimiter,
     }).catch(() => {
@@ -115,15 +127,32 @@ async function handleHttpRequest(
     allowedHosts: string[];
     allowedOrigins: string[];
     endpointPath: string;
+    oauthResource: OAuthResource | null;
     policy: HttpPolicy;
     rateLimiter: BoundedIpRateLimiter;
   },
 ): Promise<void> {
   const path = requestPath(request);
+  const oauth = options.oauthResource;
   if (request.method === "GET" && path === "/health") {
     sendJson(response, 200, { ok: true, service: "myskills-app-mcp-http" });
     return;
   }
+  // RFC 9728 protected resource metadata, path-inserted and root forms. Static
+  // and derived only from trusted configuration, like /health.
+  if (oauth && request.method === "GET" && (path === oauth.metadataPath || path === PROTECTED_RESOURCE_METADATA_PATH)) {
+    sendJson(response, 200, {
+      resource: oauth.resource,
+      authorization_servers: [oauth.issuer],
+      scopes_supported: [...CONNECTOR_SCOPES],
+      bearer_methods_supported: ["header"],
+      resource_name: "MySkills",
+    }, { "cache-control": "public, max-age=300" });
+    return;
+  }
+  const challenge = (error?: "invalid_token" | "insufficient_scope"): Record<string, string> => oauth
+    ? { "www-authenticate": `Bearer ${error ? `error="${error}", ` : ""}resource_metadata="${oauth.metadataUrl}", scope="skills:read"` }
+    : {};
   const rateLimit = options.rateLimiter.consume(clientIp(request, options.policy.trustedProxyHops));
   if (!rateLimit.allowed) {
     sendPreBodyJsonRpcError(request, response, 429, -32004, "Too many MCP HTTP requests.", {
@@ -154,7 +183,7 @@ async function handleHttpRequest(
   }
   const token = bearerToken(request.headers.authorization);
   if (!token) {
-    sendPreBodyJsonRpcError(request, response, 401, -32001, "MCP HTTP transport requires a bearer API token.");
+    sendPreBodyJsonRpcError(request, response, 401, -32001, "MCP HTTP transport requires a bearer API token.", challenge());
     return;
   }
   const fetchImpl = withRequestTimeout(options.fetchImpl ?? fetch, options.policy.upstreamRequestTimeoutMs);
@@ -163,8 +192,9 @@ async function handleHttpRequest(
     fetchImpl,
     token,
   });
+  let session: McpSession;
   try {
-    await authClient.authenticateMcp();
+    session = await authClient.authenticateMcp();
   } catch (error) {
     const isAuthDenial = error instanceof RegistryApiError && (error.status === 401 || error.status === 403);
     sendPreBodyJsonRpcError(
@@ -175,7 +205,15 @@ async function handleHttpRequest(
       isAuthDenial
         ? "MCP HTTP transport requires a scoped API token."
         : "MCP HTTP authentication service is temporarily unavailable.",
+      isAuthDenial ? challenge(error.status === 401 ? "invalid_token" : "insufficient_scope") : {},
     );
+    return;
+  }
+  // A connector token is accepted only by an adapter configured as the exact
+  // resource it was issued for (RFC 8707 audience binding).
+  const connector = session?.credential?.kind === "oauth";
+  if (connector && (!oauth || canonicalResource(String((session.credential as { resource?: unknown }).resource)) !== oauth.resource)) {
+    sendPreBodyJsonRpcError(request, response, 401, -32001, "MCP HTTP transport requires a scoped API token.", challenge("invalid_token"));
     return;
   }
 
@@ -194,6 +232,8 @@ async function handleHttpRequest(
     return;
   }
 
+  const authInfo = { token, clientId: session.credential.kind === "oauth" ? session.credential.clientId : "api-token", scopes: session.credential.scopes, ...(oauth ? { resource: new URL(oauth.resource), resourceMetadataUrl: oauth.metadataUrl } : {}) };
+
   let closing = false;
   const createServer = () => {
     if (closing) {
@@ -203,6 +243,7 @@ async function handleHttpRequest(
       apiBaseUrl: options.apiBaseUrl,
       fetchImpl,
       token,
+      session,
     });
   };
   const handler = createMcpHandler(createServer, {
@@ -227,9 +268,9 @@ async function handleHttpRequest(
           maxRequestBodySize: options.policy.maxRequestBodyBytes,
         });
         await legacyServer.connect(legacyTransport);
-        return legacyTransport.handleRequest(webRequest, context);
+        return legacyTransport.handleRequest(webRequest, { ...context, authInfo });
       }
-      return handler.fetch(webRequest, context);
+      return handler.fetch(webRequest, { ...context, authInfo });
     },
   }, { maxRequestBodySize: options.policy.maxRequestBodyBytes });
 
@@ -557,6 +598,59 @@ function isAllowedOrigin(request: IncomingMessage, allowedOrigins: string[]): bo
     return true;
   }
   return allowedOrigins.includes(origin);
+}
+
+const PROTECTED_RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource";
+const CONNECTOR_SCOPES = APPLICATION_SCOPES;
+
+interface OAuthResource {
+  issuer: string;
+  resource: string;
+  metadataPath: string;
+  metadataUrl: string;
+}
+
+function normalizeOAuthOptions(options: AiSkillsMcpOAuthOptions, endpointPath: string): OAuthResource {
+  const issuer = publicUrl(options.issuer, "MCP OAuth issuer");
+  if (issuer.pathname !== "/") throw new Error("MCP OAuth issuer must be an origin without a path.");
+  const resource = publicUrl(options.resourceUrl, "MYSKILLS_MCP_PUBLIC_URL");
+  const resourcePath = resource.pathname.replace(/\/+$/, "");
+  if (resourcePath !== endpointPath) {
+    throw new Error("MYSKILLS_MCP_PUBLIC_URL path must equal the MCP endpoint path so public and served URLs stay consistent.");
+  }
+  return {
+    issuer: issuer.origin,
+    resource: `${resource.origin}${resourcePath}`,
+    metadataPath: `${PROTECTED_RESOURCE_METADATA_PATH}${endpointPath}`,
+    metadataUrl: `${resource.origin}${PROTECTED_RESOURCE_METADATA_PATH}${resourcePath}`,
+  };
+}
+
+function publicUrl(value: string, name: string): URL {
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    throw new Error(`${name} must be an absolute URL.`);
+  }
+  if (url.username || url.password || url.search || url.hash || value.includes("?") || value.includes("#")) {
+    throw new Error(`${name} must not contain credentials, a query or a fragment.`);
+  }
+  const loopback = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
+    throw new Error(`${name} must use https (plain http is accepted only on loopback).`);
+  }
+  return url;
+}
+
+function canonicalResource(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.username || url.password || url.search || url.hash) return null;
+    return `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeEndpointPath(value: string): string {

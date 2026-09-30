@@ -543,13 +543,7 @@ test("architecture projection rejects unsafe identifiers before the architecture
 });
 
 function jsonResponse(status: number, body: Record<string, unknown>): Awaited<ReturnType<FetchLike>> {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    async text() {
-      return JSON.stringify(body);
-    },
-  };
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
 function mcpSession(scopes = ["skills:read"]) {

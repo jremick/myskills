@@ -1,10 +1,11 @@
+import { ALL_APPLICATION_TOOL_NAMES, FRIENDLY_READ_TOOLS } from "./application-tool-names.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Client, type JSONRPCMessage, type Transport } from "@modelcontextprotocol/client";
 import { createAiSkillsMcpServer } from "../src/server.js";
 import type { FetchLike } from "../src/api-client.js";
 
-test("MCP server registers read-only registry tools and executes search", async () => {
+test("MCP server registers scoped application and read-only registry tools and executes search", async () => {
   const calls: string[] = [];
   const { clientTransport, serverTransport } = linkedTransports();
   const server = createAiSkillsMcpServer({
@@ -54,9 +55,9 @@ test("MCP server registers read-only registry tools and executes search", async 
     const tools = await client.listTools();
     assert.deepEqual(
       tools.tools.map((tool) => tool.name).sort(),
-      ["browse_bundles", "curate_bundle", "get_architecture_projection", "get_install_instructions", "get_skill_info", "list_architecture_patterns", "list_architectures", "search_skills"],
+      ALL_APPLICATION_TOOL_NAMES,
     );
-    assert.equal(tools.tools.filter(tool => tool.name !== "curate_bundle").every((tool) => tool.annotations?.readOnlyHint === true), true);
+    assert.equal(tools.tools.filter(tool => FRIENDLY_READ_TOOLS.includes(tool.name)).every((tool) => tool.annotations?.readOnlyHint === true), true);
 
     const result = await client.callTool({
       name: "search_skills",
@@ -188,11 +189,5 @@ function linkedTransports(): { clientTransport: MemoryTransport; serverTransport
 }
 
 function jsonResponse(status: number, body: Record<string, unknown>): Awaited<ReturnType<FetchLike>> {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    async text() {
-      return JSON.stringify(body);
-    },
-  };
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
