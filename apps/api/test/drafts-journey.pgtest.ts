@@ -332,8 +332,8 @@ test("private draft route journey preserves history, isolation and atomic submis
         const strict = structuredClone(policy); strict.teams.requireOrganizationMembershipForTeamMembers = true;
         const mutation = writer === "policy"
           ? orgs.appendPolicyRevision({ organizationId: org.organization.id, policy: strict, policySha256: organizationPolicyDigest(strict), reason: "Require organization membership", createdByUserId: users.alice })
-          : pool.query("UPDATE organizations SET status='suspended' WHERE id=$1", [org.organization.id]);
-        await waitForLocks(pool, writer === "policy" ? "organizations" : "UPDATE organizations", 1);
+          : orgs.archiveOrganization({ organizationId: org.organization.id, actorUserId: users.alice });
+        await waitForLocks(pool, "organizations", 1);
         await gate.query("SELECT pg_advisory_unlock($1)", [gateId]);
         ok(await fork, 201); await mutation;
         const before = (await pool.query("SELECT count(*)::int AS n FROM author_drafts WHERE owner_user_id=$1", [users.bob])).rows[0].n;

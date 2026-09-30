@@ -36,7 +36,7 @@ test("server worker crash recovers durable attempt and SIGTERM drains completion
   t.after(() => { for (const child of processes) if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); });
   const launch = () => {
     const child = spawn(process.execPath, ["--import", "tsx", "src/server.ts"], { cwd: new URL("../", import.meta.url),
-      env: { ...process.env, DATABASE_URL: url, NODE_ENV: "test", HOST: "127.0.0.1", PORT: String(port), AUTH_SECRET: "process-fixture-secret-at-least-32-bytes", PACKAGE_SCAN_WORKER: "enabled" }, stdio: ["ignore", "pipe", "pipe"] });
+      env: { PATH: process.env.PATH, DATABASE_URL: url, NODE_ENV: "test", HOST: "127.0.0.1", PORT: String(port), AUTH_SECRET: "process-fixture-secret-at-least-32-bytes", PACKAGE_SCAN_WORKER: "enabled" }, stdio: ["ignore", "pipe", "pipe"] });
     processes.push(child); return child;
   };
   const waitBlocked = () => until(async () => Number((await pool.query("SELECT count(*)::int AS n FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%UPDATE scan_runs%'" )).rows[0].n) > 0);

@@ -61,3 +61,73 @@ Shared API production registration, CLI/MCP dispatch and browser entry paths are
 Production uses backgroundScans and the durable worker starts after listen and stops before pool shutdown. Evidence DTOs retain digest, runner, attempt and failure code with legacy nulls. Completed-evidence trigger locking serializes concurrent finding insertion with scan completion. Version-aware eval expansion remains assigned to the next bounded worker.
 
 Wave2 local proof: the21-test narrow integration selection includes worker batch deduplication and shutdown drain; the25-test Chromium selection covers actual pending wording and digest/attempt/failure display. Combined source build, web typecheck, lint and parity are checked in the wave2 report. The Postgres journey now also holds a real worker terminal write before commit and requires a concurrent late finding insertion to wait, then fail without changing completed evidence. This test is prepared for canonical CI and remains locally unexecuted.
+
+## QUALITY-02 exact-version static evaluations
+
+The API evaluates held, verified artifact bytes. It reuses `improvement_documents`
+(kind `suite`) and immutable `improvement_document_revisions`; it does not add a
+suite registry. Suites can include bounded static assertions with exact content
+and rubric digests. Legacy provider suites remain readable, but cannot be used
+as static suites without an explicit revision containing assertions.
+
+Migration `0042_package_evaluations` adds completed, append-only evaluation
+records. Each record binds the immutable version ID, artifact digest, existing
+suite revision ID/document digest, platform and submission/release context,
+runner `package-static/1`, actor and idempotency key. The review/lifecycle context
+is captured by the server under the version locks. Concurrent identical writes
+return one record; changed replay bindings conflict. Database triggers reject
+updates, deletion and cross-artifact or cross-suite insertion. New suite revisions
+and corrected skill versions create new evidence. Completed records are retained.
+
+Assertions cover safe package structure/manifest and entrypoint presence
+(installability), declared supported platforms (compatibility), the existing
+admission risk scanner (safety), and exact protected file hashes (regression).
+These are static checks, not successful installation on a real target or measured
+model effectiveness. Behavior assertions always return `skipped` with
+`provider_unconfigured`. Pass, fail, warning, skipped and incompatible counts
+remain distinct. No package hooks, commands, scripts or providers execute.
+
+Existing `improvements:run` and `improvements:read` scopes apply. The API retains
+current account/credential/scope/role authority through completion, derives MFA
+from the current credential for reviewer access to unpublished records, and uses
+current registry permissions for evidence reads. Presented invalid credentials
+fail closed, including on anonymous-capable summary routes. Private details do
+not fall back to public summaries after denial. Static evaluation is advisory;
+scan approval/publication gates remain mandatory.
+
+CLI `evals local <directory-or-zip> --platform <name> [--suite <json>]` uses the
+existing bounded snapshot/archive reader. JSON/human output is labelled
+`self-reported`, contains no local path or package text, and never uploads.
+`evals run <slug> <version> --input <json>` explicitly requests the authenticated
+API evaluator. Existing improvement suite create/append commands manage suite
+identities. A local report cannot approve or publish a version. MCP delegates the
+same fixed API routes and scopes. Reviewer views show current authorized
+assertions. Approved, published releases expose a bounded allow-list summary:
+IDs/digests, runner, target, status and totals, without paths, findings, prompts,
+raw task text or account data.
+
+### Review remediation and legacy boundaries
+
+Draft create/save now carry credential provenance past allocation/head waits,
+retain current account and credential locks, and recheck scopes, role, expiry
+and actual credential MFA before commit. Release forks retain teams' parent
+organizations even for external team members. The draft UI remounts on connection
+identity changes, invalidates old requests, and isolates tab recovery by registry
+and connection epoch plus actor/draft identity.
+
+Approval and publication require successful evidence for the exact current
+artifact digest. New synchronous intake scans carry a digest and runner. The
+explicit immutable `legacy_package_scan_allowances` migration captures only
+unbound synchronous scans predating migration0039's recorded application time.
+Fresh schemas without that historical journal admit no legacy exceptions. Later
+null digests cannot enter the allowance or approve a version. Historical evidence
+is retained without inventing retrospective digest provenance.
+
+Canonical PG fixtures now include blocked draft create/save credential
+revocation/expiry and valid controls, real parent-organization policy/archive
+writers, consistent A-to-B metadata/payload drift at approval and publication,
+completed finding update/delete/reassignment and insertion rejection, and an
+actual production API process crash/restart/SIGTERM drain. They remain prepared,
+not locally executed. Mini PostgreSQL/Docker and real Linux restore are outside
+this worker's execution scope. Local source checks and final exact commits will
+be recorded in `reports/quality-evals-build.md` after the architecture handoff.

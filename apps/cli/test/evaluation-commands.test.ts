@@ -1,0 +1,29 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { runEvaluationCommand } from "../src/evaluation-commands.js";
+import { encodePackageArchive } from "@myskills-app/skill-package";
+import type { ParityCommandContext } from "../src/parity-types.js";
+test("local evaluation safely reads directories/archives and never uploads", async t=> {
+  const directory=await mkdtemp(join(tmpdir(),"eval-cli-")); t.after(()=>rm(directory,{recursive:true,force:true}));
+  const pkg=join(directory,"package");await mkdir(pkg);
+  const files=[{path:"skill.json",content:JSON.stringify({name:"local-eval",title:"Local",summary:"Fixture",version:"1.0.0",license:"MIT",visibility:"public",platforms:[{name:"codex",install_target:"codex-skill"}]})},{path:"SKILL.md",content:"# Fixture"}];
+  for (const file of files) await writeFile(join(pkg,file.path),file.content);
+  const zip=join(directory,"package.zip");await writeFile(zip,encodePackageArchive(files));
+  const output: unknown[]=[];
+  const context={output:(value:unknown)=>output.push(value),request:async()=>assert.fail("local eval must never call API")} as unknown as ParityCommandContext;
+  for(const input of [pkg,zip]) await runEvaluationCommand({command:"evals",args:["local",input],options:{platform:"codex"}},context);
+  const first=output[0] as {run:{artifactSha256:string;provenance:string;totals:{skipped:number}}};
+  assert.equal(first.run.artifactSha256,(output[1] as typeof first).run.artifactSha256);
+  assert.equal(first.run.provenance,"self-reported"); assert.equal(first.run.totals.skipped,1);
+  assert.equal(JSON.stringify(output).includes(directory),false);
+  await assert.rejects(runEvaluationCommand({command:"evals",args:["local",pkg],options:{platform:"codex",upload:true}},context),/Unknown/);
+});
+test("authenticated evaluation adapters preserve exact request and denial without fallback", async()=> {
+  const requests: unknown[]=[];const body={suiteRevisionId:"revision",artifactSha256:"a".repeat(64),platform:"codex",idempotencyKey:"eval-replay"};
+  const context={readInput:async()=>body,output(){},request:async(...args:unknown[])=>{requests.push(args);throw new Error("AUTHENTICATION_REQUIRED");}} as unknown as ParityCommandContext;
+  await assert.rejects(runEvaluationCommand({command:"evals",args:["run","skill","1.0.0"],options:{input:"body.json"}},context),/AUTHENTICATION_REQUIRED/);
+  assert.equal(requests.length,1);assert.deepEqual(requests[0],["POST","/v1/evaluations/releases/skill/1.0.0/runs",body]);
+});
