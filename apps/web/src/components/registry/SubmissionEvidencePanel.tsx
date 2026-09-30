@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { safeReviewErrorMessage, type RegistryClient, type ReviewSubmissionDetail, type UserSubmissionDetail } from "../../api.js";
-import { chipTone, reviewEventLabel, securityStatusLabel, severityLabel } from "./status-display.js";
+import { reviewEventLabel } from "./status-display.js";
+import { ScanRunEvidence } from "./ScanRunEvidence.js";
 
 export function SubmissionEvidencePanel({ client, submissionId, mode, onCorrect, focusOnOpen, onClose }: {
   client: RegistryClient;
@@ -61,10 +62,7 @@ export function SubmissionEvidencePanel({ client, submissionId, mode, onCorrect,
       <h4>Review history</h4>
       {detail.reviewHistory.length === 0 ? <p>No review decisions have been recorded.</p> : <ol>{detail.reviewHistory.map((event, index) => <li key={`${event.createdAt}:${event.action}:${index}`}><strong>{reviewEventLabel(event.action)}</strong> · <time dateTime={event.createdAt}>{displayDate(event.createdAt)}</time><p>{event.reason || "No reason was supplied."}</p></li>)}</ol>}
       <h4>Scan history</h4>
-      {detail.scanRuns.length === 0 ? <p>No scan evidence has been recorded.</p> : detail.scanRuns.map((run) => {
-        const scan = securityStatusLabel(run.status);
-        return <article className="control-plane-section submission-scan" key={run.id}><p><span className="registry-chip" data-tone={chipTone(scan.tone)}>{scan.label}</span> · <time dateTime={run.createdAt}>{displayDate(run.createdAt)}</time></p>{run.findings.length === 0 ? <p>No findings were recorded for this scan.</p> : <ul>{run.findings.map((finding, index) => <li key={`${finding.category}:${finding.path}:${index}`}><strong>{severityLabel(finding.severity).label}: {finding.category}</strong>{finding.path && <span> · <code>{finding.path}</code></span>}<p>{finding.message}</p></li>)}</ul>}</article>;
-      })}
+      {detail.scanRuns.length === 0 ? <p>No scan evidence has been recorded.</p> : detail.scanRuns.map((run) => <ScanRunEvidence key={run.id} run={run} />)}
     </>}
   </section>;
 }

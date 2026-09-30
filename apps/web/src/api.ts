@@ -797,7 +797,7 @@ export interface RegistryPageInput { query?: string; cursor?: string; limit?: nu
 export interface SubmissionEvidence {
   changeRequestReason: string | null;
   reviewHistory: Array<{ action: ReviewActionName; reason: string | null; createdAt: string }>;
-  scanRuns: Array<{ id: string; status: string; createdAt: string; startedAt: string | null; completedAt: string | null; findings: SubmissionScanFinding[] }>;
+  scanRuns: Array<{ id: string; status: string; createdAt: string; startedAt: string | null; completedAt: string | null; artifactSha256?: string | null; runnerVersion?: string | null; attempt?: number | null; failureCode?: string | null; findings: SubmissionScanFinding[] }>;
 }
 
 export interface UserSubmissionDetail extends UserSubmissionSummary, SubmissionEvidence {

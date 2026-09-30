@@ -63,6 +63,7 @@ import type {
 import { assertNoVisibilityMetadataUpdate } from "./types.js";
 import { artifactPayloadSha256 } from "./artifact-hash.js";
 import { reviewHistoryActions, submissionReviewHistory } from "./feedback.js";
+import { enqueuePackageScan } from "../package-quality/scan-jobs.js";
 
 /**
  * Optional precondition owned by another domain. It runs inside the publication transaction after
@@ -84,7 +85,7 @@ const DEFAULT_SHARING_SETTINGS: SharingSettings = {
 export class PostgresSubmissionStore implements SubmissionStore {
   constructor(
     private readonly db: Database,
-    private readonly options: { artifactStorage?: ArtifactObjectStorage; publicationGuard?: PostgresReleasePublicationGuard } = {},
+    private readonly options: { artifactStorage?: ArtifactObjectStorage; publicationGuard?: PostgresReleasePublicationGuard; backgroundScans?: boolean } = {},
   ) {}
 
   async createSubmission(input: CreateSubmissionInput & {
@@ -215,7 +216,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
         compatibility: input.release.compatibility,
         lifecycleStatus: "submitted",
         reviewStatus: "unreviewed",
-        securityStatus: input.securityStatus,
+        securityStatus: this.options.backgroundScans ? "not-run" : input.securityStatus,
       }).returning();
 
       if (!version) {
@@ -244,6 +245,9 @@ export class PostgresSubmissionStore implements SubmissionStore {
         payload: this.options.artifactStorage ? { files: [] } : input.artifact.payload,
       });
 
+      if (this.options.backgroundScans) {
+        await enqueuePackageScan(tx, { versionId: version.id, artifactSha256: input.artifact.sha256 });
+      } else {
       const now = new Date();
       const [scanRun] = await tx.insert(scanRuns).values({
         skillVersionId: version.id,
@@ -265,6 +269,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
           path: finding.path ?? null,
         })));
       }
+      }
 
       await tx.insert(auditEvents).values({
         actorUserId: input.actor.id,
@@ -279,7 +284,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
           byteSize: input.artifact.byteSize,
           fileCount: input.files.length,
           findingCount: input.findings.length,
-          securityStatus: input.securityStatus,
+          securityStatus: version.securityStatus,
           ownerUserId: skill.ownerUserId,
           ownerTeamId: skill.ownerTeamId,
         },
@@ -318,8 +323,8 @@ export class PostgresSubmissionStore implements SubmissionStore {
         release: input.release,
         artifact: input.artifact,
         scan: {
-          status: "succeeded",
-          findings: input.findings,
+          status: this.options.backgroundScans ? "queued" : "succeeded",
+          findings: this.options.backgroundScans ? [] : input.findings,
         },
       };
       });

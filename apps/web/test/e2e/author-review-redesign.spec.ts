@@ -13,13 +13,18 @@ const approved = { ...base, id: "approved", slug: "code-review-guide", title: "C
 const blocked = { ...base, id: "blocked", slug: "research-brief", title: "Research Brief", summary: "Gather cited evidence.", version: "0.8.0", lifecycleStatus: "quarantined", reviewStatus: "pending", securityStatus: "failed", findingCount: 3, allowedActions: ["request-changes", "reject"] };
 const managed = [pending, approved, blocked].map((s, i) => ({ ...s, tags: [], lifecycleStatus: i === 2 ? "archived" : "approved", latestVersion: s.version, allowedActions: i === 2 ? ["restore"] : ["edit", "archive"] }));
 
-async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; failReview?: boolean; bootstrap?: boolean; teamImport?: boolean } = {}) {
+async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; failReview?: boolean; bootstrap?: boolean; teamImport?: boolean; durableScans?: boolean } = {}) {
   const user = { id: "owner-1", email: "owner@example.test", name: "Example owner", status: "active", roles: ["owner"], emailVerified: true, mfaVerified: options.mfa !== false };
   await page.addInitScript(user => localStorage.setItem("myskills-app:web-session", JSON.stringify({ user, expiresAt: "2027-09-27T00:00:00Z" })), user);
   let rows = structuredClone([pending, approved, blocked]);
   let failReview = options.failReview === true;
   const writes: Array<{ path: string; body: Record<string, unknown> }> = [];
   const misses: string[] = [];
+  let scanCompleted = false;
+  const scanRuns = () => options.durableScans ? [
+    { id: "attempt-1", status: "failed", createdAt: date, startedAt: date, completedAt: date, artifactSha256: hash, runnerVersion: "package-scan-v1", attempt: 1, failureCode: "lease_expired", findings: [] },
+    { id: "attempt-2", status: scanCompleted ? "succeeded" : "running", createdAt: date, startedAt: date, completedAt: scanCompleted ? date : null, artifactSha256: hash, runnerVersion: "package-scan-v1", attempt: 2, failureCode: null, findings: [] },
+  ] : [];
   const release = (slug: string, version: string) => ({ ...base, id: `${slug}-${version}`, slug, version, lifecycleStatus: "approved", reviewStatus: "approved", securityStatus: "passed", releaseNotes: `Exact release ${version}.`, allowedActions: ["unpublish"] });
   await page.route("**/api/v1/**", async route => {
     const url = new URL(route.request().url());
@@ -50,7 +55,7 @@ async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; 
     if (path === "/v1/submissions/mine") return reply({ submissions: rows.map(s => ({ ...s, ...(options.teamImport && s.id === "blocked" ? { owner: { type: "team", id: "engineering-team" } } : {}), reviewStatus: s.id === "blocked" ? "changes-requested" : s.reviewStatus, allowedActions: ["withdraw"] })), nextCursor: null });
     if (/^\/v1\/(review\/)?submissions\/[^/]+\/bundle$/.test(path)) return route.fulfill({ json: { files: [{ path: "SKILL.md", content: "# Reviewed exact artifact\nUse verified release evidence." }] }, headers: { "x-myskills-artifact-sha256": hash } });
     const detail = path.match(/^\/v1\/(?:review\/)?submissions\/([^/]+)$/);
-    if (detail) return reply({ submission: { ...rows.find(s => s.id === detail[1]), ...(options.teamImport && detail[1] === "blocked" ? { owner: { type: "team", id: "engineering-team" } } : {}), reviewStatus: detail[1] === "blocked" ? "changes-requested" : rows.find(s => s.id === detail[1])?.reviewStatus, changeRequestReason: detail[1] === "blocked" ? "Cite the original research sources." : null, reviewHistory: [], scanRuns: [], correction: { requiresNewVersion: true, canSubmitNewVersion: !options.teamImport } } });
+    if (detail) return reply({ submission: { ...rows.find(s => s.id === detail[1]), ...(options.teamImport && detail[1] === "blocked" ? { owner: { type: "team", id: "engineering-team" } } : {}), reviewStatus: detail[1] === "blocked" ? "changes-requested" : rows.find(s => s.id === detail[1])?.reviewStatus, changeRequestReason: detail[1] === "blocked" ? "Cite the original research sources." : null, reviewHistory: [], scanRuns: scanRuns(), correction: { requiresNewVersion: true, canSubmitNewVersion: !options.teamImport } } });
     if (path === "/v1/manage/skills") return reply({ skills: managed.filter(s => s.title.toLowerCase().includes((url.searchParams.get("q") ?? "").toLowerCase())), nextCursor: null });
     const managedDetail = path.match(/^\/v1\/manage\/skills\/([^/]+)$/);
     if (managedDetail) {
@@ -67,7 +72,7 @@ async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; 
     misses.push(`${method} ${path}`);
     return reply({ error: { code: "NOT_FOUND" } }, 404);
   });
-  return { writes, misses, recover: () => { failReview = false; } };
+  return { writes, misses, recover: () => { failReview = false; }, finishScan: () => { scanCompleted = true; } };
 }
 
 async function evidence(page: Page, info: TestInfo, writes: unknown) {
@@ -155,6 +160,24 @@ test("submission feedback opens beside its context and returns focus without an 
   await trigger.click();
   await page.getByRole("button", { name: "Choose corrected package", exact: true }).click();
   await expect(page.locator('#package-archive')).toBeFocused();
+  expect(state.writes).toHaveLength(0);
+  await evidence(page, info, state.writes);
+});
+
+test("durable scan evidence shows exact attempts and refreshes completion on mobile", async ({ page }, info) => {
+  const state = await fixture(page, { durableScans: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/submit");
+  await page.getByRole("button", { name: "View feedback for 0.8.0", exact: true }).click();
+  const panel = page.getByRole("region", { name: "Submission feedback", exact: true });
+  await expect(panel.getByText("The worker lease expired. A later attempt can retry this scan.", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Scan in progress. Refresh evidence to check its result.", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Attempt 2", { exact: true })).toBeVisible();
+  await expect(panel.getByText(hash, { exact: true })).toHaveCount(2);
+  state.finishScan();
+  await panel.getByRole("button", { name: "Refresh evidence", exact: true }).click();
+  await expect(panel.getByText("Scan in progress. Refresh evidence to check its result.", { exact: true })).toHaveCount(0);
+  await expect(panel.getByText("No findings were recorded for this completed scan.", { exact: true })).toBeVisible();
   expect(state.writes).toHaveLength(0);
   await evidence(page, info, state.writes);
 });

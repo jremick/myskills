@@ -104,7 +104,7 @@ export interface StoredSubmission {
     payload: ArtifactPayload;
   };
   scan: {
-    status: "succeeded";
+    status: "queued" | "running" | "succeeded" | "failed";
     findings: ScanFinding[];
   };
 }
@@ -200,6 +200,11 @@ export interface SubmissionFeedback {
     createdAt: string;
     startedAt: string | null;
     completedAt: string | null;
+    /** Absent on legacy synchronous records. Exact evidence bindings on durable scans. */
+    artifactSha256?: string | null;
+    runnerVersion?: string | null;
+    attempt?: number | null;
+    failureCode?: string | null;
     findings: ScanFinding[];
   }>;
 }

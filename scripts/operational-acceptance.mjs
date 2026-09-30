@@ -470,6 +470,13 @@ export async function runOperationalAcceptance({ env = process.env, callbacks = 
     await writeFile(releaseNotesFile, releaseNotes, { mode: 0o600 });
     const result = await cli(["submit", "--path", directory, "--change-kind", changeKind, "--release-notes-file", releaseNotesFile], actors.author, { json: true });
     if (!result.submission?.id || result.submission.securityStatus === "blocked") throw new Error("Acceptance submission did not pass intake.");
+    const deadline = Date.now() + 30_000;
+    while (true) {
+      const { submission } = await api(`/v1/submissions/${result.submission.id}`, { token: actors.author.token });
+      if (submission.securityStatus === (warning ? "warning" : "passed")) break;
+      if (submission.securityStatus === "failed" || Date.now() >= deadline) throw new Error("Acceptance confirmation scan failed or did not complete within 30 seconds.");
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+    }
     return { id: result.submission.id, version, directory, files, changeKind, releaseNotes };
   }
 
