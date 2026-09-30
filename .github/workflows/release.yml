@@ -78,6 +78,13 @@ jobs:
       - name: Build Railway API image
         run: docker build --file Dockerfile.api --tag myskills-app-railway-api:${{ github.ref_name }} .
 
+      - name: Build and smoke Railway MCP image without credentials
+        run: |
+          docker build --file Dockerfile.mcp --tag myskills-app-railway-mcp:${{ github.ref_name }} .
+          docker run -d --name myskills-mcp-smoke --network none -e PORT=43123 -e MYSKILLS_MCP_ALLOWED_HOSTS=127.0.0.1:43123 myskills-app-railway-mcp:${{ github.ref_name }}
+          trap 'docker rm -f myskills-mcp-smoke >/dev/null' EXIT
+          docker exec myskills-mcp-smoke node scripts/smoke-mcp-http.mjs
+
       - name: Build Railway web image
         run: docker build --file Dockerfile.web --build-arg VITE_API_BASE_URL=/api --tag myskills-app-railway-web:${{ github.ref_name }} .
 

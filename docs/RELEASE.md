@@ -187,7 +187,8 @@ Set `LOCAL_CI_RUN_ID`, `LOCAL_CI_EVIDENCE_DIR` and the Node toolchains as descri
 - requires the tag to equal `v<root package version>` and to point at the checked-out commit;
 - requires that commit to be an ancestor of `refs/remotes/origin/main` (or `LOCAL_CI_MAIN_REF`);
 - runs the canonical release gate with tag enforcement against disposable `postgres:17`;
-- builds the root Dockerfile `api`, `web`, and `mcp-http` targets plus the exact `Dockerfile.api` and `Dockerfile.web` used by Railway;
+- builds the root Dockerfile `api`, `web`, and `mcp-http` targets plus the exact `Dockerfile.api`, `Dockerfile.mcp` and `Dockerfile.web` used by Railway;
+- starts the Railway MCP image's default command with a non-default platform `PORT` and verifies health plus anonymous-request rejection without credentials or network access;
 - builds `Dockerfile.backup` and checks both command entrypoints without credentials or network access;
 - verifies the artifact set, checksums and metadata, rebuilds the source archive from the tagged commit, and exports the verified artifacts as evidence only.
 

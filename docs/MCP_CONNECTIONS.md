@@ -164,10 +164,15 @@ staging-first promotion, backups and API-ready-then-web order.
    through the normal API start. These add connection storage and nullable
    assurance provenance; legacy rows do not gain new authority. Keep
    `MYSKILLS_OAUTH_ENABLED` unset for this step.
-2. Add an MCP HTTP service built from the root `Dockerfile` target `mcp-http`
+2. Add an MCP HTTP service built from `Dockerfile.mcp` (set Railway's
+   `RAILWAY_DOCKERFILE_PATH=Dockerfile.mcp`)
    with `MYSKILLS_API_URL` (private API URL), `MYSKILLS_MCP_HOST=0.0.0.0`,
    `MYSKILLS_MCP_ALLOWED_HOSTS`, `MYSKILLS_MCP_TRUST_PROXY_HOPS`,
-   `MYSKILLS_OAUTH_ISSUER` and `MYSKILLS_MCP_PUBLIC_URL`. Verify `/health`.
+   `MYSKILLS_OAUTH_ISSUER` and `MYSKILLS_MCP_PUBLIC_URL`. Leave
+   `MYSKILLS_MCP_PORT` unset so the server uses Railway's `PORT`; its standalone
+   default is 3002. Verify `/health`. The local CI and release image gates start
+   this image's default command with network disabled and a non-default `PORT`,
+   then check health and rejection of anonymous MCP requests.
 3. Set the web service's `MCP_PROXY_TARGET` to that MCP service and redeploy
    web from the same commit.
 4. On the API set `MYSKILLS_OAUTH_ENABLED=true`, the issuer, MCP public URL,

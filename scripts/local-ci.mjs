@@ -667,6 +667,19 @@ class JobContext {
     }
   }
 
+  async smokeMcp(image) {
+    const name = containerName(this.run.runId, this.id, "mcp-smoke");
+    const entry = this.ledger.track("container", name, this.id, "creating");
+    const created = await this.step("smoke-mcp-start", "docker", [
+      "run", "-d", "--name", name, "--label", `io.myskills.local-ci.run-id=${this.run.runId}`,
+      "--network", "none", "-e", "PORT=43123", "-e", "MYSKILLS_MCP_ALLOWED_HOSTS=127.0.0.1:43123", image,
+    ]);
+    // A failed create can mean the name belongs to someone else.
+    this.ledger.mark(entry, created ? "created" : "not-created");
+    if (!created) return;
+    await this.step("smoke-mcp-health", "docker", ["exec", name, "node", "scripts/smoke-mcp-http.mjs"]);
+  }
+
   trackComposeProject(suffix) {
     const project = composeProjectName(this.run.runId, this.id, suffix);
     this.ledger.track("compose-project", project, this.id, "created");
@@ -710,6 +723,8 @@ const jobRunners = {
     if (!await job.checkout()) return;
     const tag = (repository) => `${repository}:local-ci-${job.run.runId}`;
     await job.build("build-railway-api", ["--file", "Dockerfile.api"], tag("myskills-app-api"));
+    await job.build("build-railway-mcp", ["--file", "Dockerfile.mcp"], tag("myskills-app-mcp"));
+    await job.smokeMcp(tag("myskills-app-mcp"));
     await job.build("build-railway-web", ["--file", "Dockerfile.web", "--build-arg", "VITE_API_BASE_URL=/api"], tag("myskills-app-web"));
     await job.build("build-backup", ["--file", "Dockerfile.backup"], tag("myskills-registry-backup"));
     await job.smokeBackup(tag("myskills-registry-backup"));
@@ -740,6 +755,8 @@ const jobRunners = {
     await job.build("build-mcp-http", ["--file", "Dockerfile", "--target", "mcp-http"], image("myskills-app-mcp-http"));
     await job.build("build-web", ["--file", "Dockerfile", "--target", "web", "--build-arg", "VITE_API_BASE_URL=/api"], image("myskills-app-web"));
     await job.build("build-railway-api", ["--file", "Dockerfile.api"], image("myskills-app-railway-api"));
+    await job.build("build-railway-mcp", ["--file", "Dockerfile.mcp"], image("myskills-app-railway-mcp"));
+    await job.smokeMcp(image("myskills-app-railway-mcp"));
     await job.build("build-railway-web", ["--file", "Dockerfile.web", "--build-arg", "VITE_API_BASE_URL=/api"], image("myskills-app-railway-web"));
     await job.build("build-backup", ["--file", "Dockerfile.backup"], image("myskills-registry-backup"));
     await job.smokeBackup(image("myskills-registry-backup"));

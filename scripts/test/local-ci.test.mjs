@@ -53,6 +53,9 @@ import test from "node:test";
 // - Invalid concurrency or shared port overrides silently select an unsafe execution plan.
 // - Private HOME hides Docker's implicit config, so preflight, job commands and cleanup select
 //   different contexts or daemons. Preserve the original configuration path without copying it.
+// Railway MCP delivery failures, written before the image gate:
+// - CI/release omit the standalone image, bypass its default command, ignore Railway's PORT,
+//   or pass despite a failed health/auth smoke. A name conflict must never remove another container.
 
 const runId = `fixture-run-${process.pid}`;
 const rootPackage = JSON.parse(readFileSync(resolve("package.json"), "utf8"));
@@ -173,9 +176,11 @@ test("verify runs every required job on both Node lines and reports gating conte
   assert.ok(docker.some(({ args }) => args[0] === "run" && args.includes("postgres:17-alpine")));
   const builds = docker.filter(({ args }) => args[0] === "build").map(({ args }) => args.join(" "));
   assert.ok(builds.some((build) => build.includes("--file Dockerfile.api")));
+  assert.ok(builds.some((build) => build.includes("--file Dockerfile.mcp")));
   assert.ok(builds.some((build) => build.includes("--file Dockerfile.web") && build.includes("--build-arg VITE_API_BASE_URL=/api")));
   assert.ok(builds.some((build) => build.includes("--file Dockerfile.backup")));
   assert.equal(docker.filter(({ args }) => args[0] === "run" && args.includes("--rm") && args.includes("--network") && args.includes("none")).length, 2);
+  assertMcpSmoke(docker, "myskills-app-mcp");
   assertNoPublication(records);
 
   for (const line of ["22", "24"]) {
@@ -194,6 +199,20 @@ test("verify runs every required job on both Node lines and reports gating conte
   assert.equal(existsSync(fixture.runWorkspace), false);
   assert.equal(listFiles(run.evidence).some((file) => readFileSync(join(run.evidence, file)).includes(canary)), false);
   assert.equal(run.output.includes(canary), false);
+});
+
+test("Railway MCP smoke failures fail the image job and cleanup only its created container", (t) => {
+  for (const conflict of [false, true]) {
+    const fixture = makeFixture(t);
+    const name = `myskills-ci-${runId}-railway-images-mcp-smoke`;
+    fixture.configure(conflict ? { dockerConflicts: [name] } : { rules: [{ tool: "docker", prefix: `exec ${name} `, exit: 1 }] });
+    const run = runLocalCi(fixture, ["verify", "--job", "railway-images"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+    assert.equal(run.status, 1, run.output);
+    assert.equal(run.result.jobs[0].status, "failed");
+    const docker = fixture.records().filter(({ tool }) => tool === "docker");
+    assertExactCleanup(docker, [], { conflicts: conflict ? [name] : [] });
+    assert.equal(docker.some(({ args }) => args[0] === "exec" && args[1] === name), !conflict);
+  }
 });
 
 for (const lanes of ["1", "4"]) test(`job failures are isolated and fail contexts with ${lanes} lane(s) without removing another run's container`, (t) => {
@@ -468,8 +487,9 @@ test("release-check verifies tagged artifacts and release images without publish
   const builds = docker.filter(({ args }) => args[0] === "build").map(({ args }) => args.join(" "));
   for (const target of ["api", "mcp-http"]) assert.ok(builds.some((build) => build.includes(`--target ${target} `)), target);
   assert.ok(builds.some((build) => build.includes("--target web ") && build.includes("--build-arg VITE_API_BASE_URL=/api")));
-  for (const file of ["Dockerfile.api", "Dockerfile.web", "Dockerfile.backup"]) assert.ok(builds.some((build) => build.includes(`--file ${file} `)), file);
+  for (const file of ["Dockerfile.api", "Dockerfile.mcp", "Dockerfile.web", "Dockerfile.backup"]) assert.ok(builds.some((build) => build.includes(`--file ${file} `)), file);
   assert.equal(docker.filter(({ args }) => args[0] === "run" && args.includes("--rm") && args.includes("none")).length, 2);
+  assertMcpSmoke(docker, "myskills-app-railway-mcp");
   assertExactCleanup(docker, [verify.env.MYSKILLS_E2E_COMPOSE_PROJECT]);
   assertNoPublication(records);
 
@@ -837,6 +857,17 @@ function readJson(path) {
     // Missing, or a sentinel that the entrypoint must leave untouched.
     return null;
   }
+}
+
+function assertMcpSmoke(docker, repository) {
+  const run = docker.find(({ args }) => args[0] === "run" && args.at(-1).startsWith(`${repository}:`));
+  assert.ok(run, "smoke must start the image's default command");
+  assert.ok(run.args.includes("none") && run.args.includes("--network"));
+  assert.ok(run.args.includes("PORT=43123"), "exercise Railway's injected port");
+  assert.ok(run.args.includes("MYSKILLS_MCP_ALLOWED_HOSTS=127.0.0.1:43123"));
+  assert.equal(run.args.some((arg) => ["-p", "--publish", "--entrypoint", "--env-file"].includes(arg)), false);
+  const name = run.args[run.args.indexOf("--name") + 1];
+  assert.ok(docker.some(({ args }) => args.join(" ") === `exec ${name} node scripts/smoke-mcp-http.mjs`));
 }
 
 function assertExactCleanup(docker, projects, { conflicts = [] } = {}) {
