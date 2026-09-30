@@ -101,6 +101,18 @@ test("Library selections: multi-source tracking, overlap, isolation and concurre
   assert.equal(next.members[0].entry.id, entries[1]!.id);
   assert.equal(next.members[0].position, 1);
   assert.equal(next.nextCursor, null);
+  // Shared cursor decoding accepts this character shape; selection list SQL
+  // must reject it before PostgreSQL attempts a UUID cast.
+  const invalidCursorId = "-".repeat(36);
+  const malformedListCursor = Buffer.from(JSON.stringify(["2026-09-30T00:00:00.000000Z", invalidCursorId])).toString("base64url");
+  for (const entity of [{ plural: "collections", id: collection.id }, { plural: "groups", id: groupB.id }]) {
+    error(await call("GET", `/v1/libraries/${library.id}/${entity.plural}?cursor=${encodeURIComponent(malformedListCursor)}`, alice), 400, "INVALID_PAGE_CURSOR");
+    const validMemberPage = ok(await call("GET", `/v1/library-${entity.plural}/${entity.id}/members?limit=1`, alice));
+    const memberCursor = JSON.parse(Buffer.from(validMemberPage.nextCursor, "base64url").toString("utf8"));
+    memberCursor[1] = invalidCursorId;
+    const malformedMemberCursor = Buffer.from(JSON.stringify(memberCursor)).toString("base64url");
+    error(await call("GET", `/v1/library-${entity.plural}/${entity.id}/members?cursor=${encodeURIComponent(malformedMemberCursor)}`, alice), 400, "INVALID_PAGE_CURSOR");
+  }
   const groupsPage = ok(await call("GET", `/v1/libraries/${library.id}/groups?limit=1`, alice));
   assert.ok(groupsPage.nextCursor);
   assert.equal(ok(await call("GET", `/v1/libraries/${library.id}/groups?limit=1&cursor=${encodeURIComponent(groupsPage.nextCursor)}`, alice)).groups.length, 1);

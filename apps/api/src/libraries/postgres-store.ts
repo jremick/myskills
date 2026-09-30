@@ -481,6 +481,7 @@ export class PostgresLibraryStore {
   }
 
   async listSelections(libraryId: string, kind: LibrarySelectionKind, page: { limit: number; cursor: PageCursor | null }): Promise<SelectionRecord[]> {
+    if (page.cursor && !isUuid(page.cursor.id)) throw new AppError("Invalid cursor for this list.", "INVALID_PAGE_CURSOR", 400);
     const result = await this.db.execute<Row>(sql`SELECT s.*, ${CURSOR_AT(sql`s.created_at`)} AS cursor_at
       FROM library_selections s WHERE s.library_id = ${libraryId}::uuid AND s.kind = ${kind} AND s.status = 'active'
       ${page.cursor ? sql`AND (s.created_at, s.id) < (${page.cursor.at}::timestamptz, ${page.cursor.id}::uuid)` : sql``}
