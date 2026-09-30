@@ -4892,7 +4892,7 @@
             "check": "Saved exact-revision target-observation plan/history/review envelope, generation/policy/consent/capability/digest fences, concurrent approval and stale rejection."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes and current credential boundaries; apps/api/test/postgres-architecture-plan-authority.pgtest.ts API lock-wait revocation/no-write tests prepared, canonical PG pending."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes, actual target/writer lock barriers and successful-first-write approval rollback; real receiving-organization history/grant regressions in postgres-architecture-artifact.pgtest.ts. Correction source cases prepared; canonical Windows PG pending."
       }
     },
     {
@@ -4928,7 +4928,7 @@
             "check": "Saved exact-revision target-observation plan/history/review envelope, generation/policy/consent/capability/digest fences, concurrent approval and stale rejection."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes and current credential boundaries; apps/api/test/postgres-architecture-plan-authority.pgtest.ts API lock-wait revocation/no-write tests prepared, canonical PG pending."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes, actual target/writer lock barriers and successful-first-write approval rollback; real receiving-organization history/grant regressions in postgres-architecture-artifact.pgtest.ts. Correction source cases prepared; canonical Windows PG pending."
       }
     },
     {
@@ -4957,7 +4957,7 @@
             "check": "Selected graph artifact/router/exposure execution contract, controlled mixed-step apply/verify/partial-failure/recovery/rollback plus separately consented live target evidence."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -7751,7 +7751,7 @@
             "check": "Two isolated explicit Codex workspace registrations, placements/install/update/rollback and unrelated-workspace preservation; broader adapters separately selected and tested."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending. docs/COMPOSED_ARCHITECTURE_DELIVERY.md: preserved graph/editor/migration source plus browser/MCP composed intent inspection and CLI handoff. Local transport/byte fixtures do not complete connected-host graph acceptance."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -7785,7 +7785,7 @@
             "check": "Two isolated explicit Codex workspace registrations, placements/install/update/rollback and unrelated-workspace preservation; broader adapters separately selected and tested."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending. docs/COMPOSED_ARCHITECTURE_DELIVERY.md: preserved graph/editor/migration source plus browser/MCP composed intent inspection and CLI handoff. Local transport/byte fixtures do not complete connected-host graph acceptance."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -7819,7 +7819,7 @@
             "check": "Two isolated explicit Codex workspace registrations, placements/install/update/rollback and unrelated-workspace preservation; broader adapters separately selected and tested."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending. docs/COMPOSED_ARCHITECTURE_DELIVERY.md: preserved graph/editor/migration source plus browser/MCP composed intent inspection and CLI handoff. Local transport/byte fixtures do not complete connected-host graph acceptance."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -7853,7 +7853,7 @@
             "check": "Two isolated explicit Codex workspace registrations, placements/install/update/rollback and unrelated-workspace preservation; broader adapters separately selected and tested."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending. docs/COMPOSED_ARCHITECTURE_DELIVERY.md: preserved graph/editor/migration source plus browser/MCP composed intent inspection and CLI handoff. Local transport/byte fixtures do not complete connected-host graph acceptance."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -7887,7 +7887,7 @@
             "check": "Two isolated explicit Codex workspace registrations, placements/install/update/rollback and unrelated-workspace preservation; broader adapters separately selected and tested."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending. docs/COMPOSED_ARCHITECTURE_DELIVERY.md: preserved graph/editor/migration source plus browser/MCP composed intent inspection and CLI handoff. Local transport/byte fixtures do not complete connected-host graph acceptance."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -7921,7 +7921,7 @@
             "check": "Two isolated explicit Codex workspace registrations, placements/install/update/rollback and unrelated-workspace preservation; broader adapters separately selected and tested."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending. docs/COMPOSED_ARCHITECTURE_DELIVERY.md: preserved graph/editor/migration source plus browser/MCP composed intent inspection and CLI handoff. Local transport/byte fixtures do not complete connected-host graph acceptance."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -7955,7 +7955,7 @@
             "check": "Two isolated explicit Codex workspace registrations, placements/install/update/rollback and unrelated-workspace preservation; broader adapters separately selected and tested."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending. docs/COMPOSED_ARCHITECTURE_DELIVERY.md: preserved graph/editor/migration source plus browser/MCP composed intent inspection and CLI handoff. Local transport/byte fixtures do not complete connected-host graph acceptance."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -7989,7 +7989,7 @@
             "check": "Two isolated explicit Codex workspace registrations, placements/install/update/rollback and unrelated-workspace preservation; broader adapters separately selected and tested."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending. docs/COMPOSED_ARCHITECTURE_DELIVERY.md: preserved graph/editor/migration source plus browser/MCP composed intent inspection and CLI handoff. Local transport/byte fixtures do not complete connected-host graph acceptance."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -8023,7 +8023,7 @@
             "check": "Two isolated explicit Codex workspace registrations, placements/install/update/rollback and unrelated-workspace preservation; broader adapters separately selected and tested."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending. docs/COMPOSED_ARCHITECTURE_DELIVERY.md: preserved graph/editor/migration source plus browser/MCP composed intent inspection and CLI handoff. Local transport/byte fixtures do not complete connected-host graph acceptance."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -8057,7 +8057,7 @@
             "check": "Two isolated explicit Codex workspace registrations, placements/install/update/rollback and unrelated-workspace preservation; broader adapters separately selected and tested."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending. docs/COMPOSED_ARCHITECTURE_DELIVERY.md: preserved graph/editor/migration source plus browser/MCP composed intent inspection and CLI handoff. Local transport/byte fixtures do not complete connected-host graph acceptance."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -8119,7 +8119,7 @@
             "check": "Two isolated explicit Codex workspace registrations, placements/install/update/rollback and unrelated-workspace preservation; broader adapters separately selected and tested."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending. docs/COMPOSED_ARCHITECTURE_DELIVERY.md: preserved graph/editor/migration source plus browser/MCP composed intent inspection and CLI handoff. Local transport/byte fixtures do not complete connected-host graph acceptance."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -8153,7 +8153,7 @@
             "check": "Two isolated explicit Codex workspace registrations, placements/install/update/rollback and unrelated-workspace preservation; broader adapters separately selected and tested."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending. docs/COMPOSED_ARCHITECTURE_DELIVERY.md: preserved graph/editor/migration source plus browser/MCP composed intent inspection and CLI handoff. Local transport/byte fixtures do not complete connected-host graph acceptance."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -8187,7 +8187,7 @@
             "check": "Two isolated explicit Codex workspace registrations, placements/install/update/rollback and unrelated-workspace preservation; broader adapters separately selected and tested."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending. docs/COMPOSED_ARCHITECTURE_DELIVERY.md: preserved graph/editor/migration source plus browser/MCP composed intent inspection and CLI handoff. Local transport/byte fixtures do not complete connected-host graph acceptance."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -8221,7 +8221,7 @@
             "check": "Two isolated explicit Codex workspace registrations, placements/install/update/rollback and unrelated-workspace preservation; broader adapters separately selected and tested."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending. docs/COMPOSED_ARCHITECTURE_DELIVERY.md: preserved graph/editor/migration source plus browser/MCP composed intent inspection and CLI handoff. Local transport/byte fixtures do not complete connected-host graph acceptance."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -8255,7 +8255,7 @@
             "check": "Two isolated explicit Codex workspace registrations, placements/install/update/rollback and unrelated-workspace preservation; broader adapters separately selected and tested."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending. docs/COMPOSED_ARCHITECTURE_DELIVERY.md: preserved graph/editor/migration source plus browser/MCP composed intent inspection and CLI handoff. Local transport/byte fixtures do not complete connected-host graph acceptance."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -11277,7 +11277,7 @@
             "check": "Saved exact-revision target-observation plan/history/review envelope, generation/policy/consent/capability/digest fences, concurrent approval and stale rejection."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes and current credential boundaries; apps/api/test/postgres-architecture-plan-authority.pgtest.ts API lock-wait revocation/no-write tests prepared, canonical PG pending."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes, actual target/writer lock barriers and successful-first-write approval rollback; real receiving-organization history/grant regressions in postgres-architecture-artifact.pgtest.ts. Correction source cases prepared; canonical Windows PG pending."
       }
     },
     {
@@ -11305,7 +11305,7 @@
             "check": "Saved exact-revision target-observation plan/history/review envelope, generation/policy/consent/capability/digest fences, concurrent approval and stale rejection."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes and current credential boundaries; apps/api/test/postgres-architecture-plan-authority.pgtest.ts API lock-wait revocation/no-write tests prepared, canonical PG pending."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes, actual target/writer lock barriers and successful-first-write approval rollback; real receiving-organization history/grant regressions in postgres-architecture-artifact.pgtest.ts. Correction source cases prepared; canonical Windows PG pending."
       }
     },
     {
@@ -11338,7 +11338,7 @@
             "check": "Saved exact-revision target-observation plan/history/review envelope, generation/policy/consent/capability/digest fences, concurrent approval and stale rejection."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes and current credential boundaries; apps/api/test/postgres-architecture-plan-authority.pgtest.ts API lock-wait revocation/no-write tests prepared, canonical PG pending."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes, actual target/writer lock barriers and successful-first-write approval rollback; real receiving-organization history/grant regressions in postgres-architecture-artifact.pgtest.ts. Correction source cases prepared; canonical Windows PG pending."
       }
     },
     {
@@ -11371,7 +11371,7 @@
             "check": "Saved exact-revision target-observation plan/history/review envelope, generation/policy/consent/capability/digest fences, concurrent approval and stale rejection."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes and current credential boundaries; apps/api/test/postgres-architecture-plan-authority.pgtest.ts API lock-wait revocation/no-write tests prepared, canonical PG pending."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes, actual target/writer lock barriers and successful-first-write approval rollback; real receiving-organization history/grant regressions in postgres-architecture-artifact.pgtest.ts. Correction source cases prepared; canonical Windows PG pending."
       },
       "duplicate_text_of": "REQ-61b921b37a53"
     },
@@ -11401,7 +11401,7 @@
             "check": "Selected graph artifact/router/exposure execution contract, controlled mixed-step apply/verify/partial-failure/recovery/rollback plus separately consented live target evidence."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -11430,7 +11430,7 @@
             "check": "Selected graph artifact/router/exposure execution contract, controlled mixed-step apply/verify/partial-failure/recovery/rollback plus separately consented live target evidence."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -11463,7 +11463,7 @@
             "check": "Saved exact-revision target-observation plan/history/review envelope, generation/policy/consent/capability/digest fences, concurrent approval and stale rejection."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes and current credential boundaries; apps/api/test/postgres-architecture-plan-authority.pgtest.ts API lock-wait revocation/no-write tests prepared, canonical PG pending."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes, actual target/writer lock barriers and successful-first-write approval rollback; real receiving-organization history/grant regressions in postgres-architecture-artifact.pgtest.ts. Correction source cases prepared; canonical Windows PG pending."
       }
     },
     {
@@ -11496,7 +11496,7 @@
             "check": "Saved exact-revision target-observation plan/history/review envelope, generation/policy/consent/capability/digest fences, concurrent approval and stale rejection."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes and current credential boundaries; apps/api/test/postgres-architecture-plan-authority.pgtest.ts API lock-wait revocation/no-write tests prepared, canonical PG pending."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes, actual target/writer lock barriers and successful-first-write approval rollback; real receiving-organization history/grant regressions in postgres-architecture-artifact.pgtest.ts. Correction source cases prepared; canonical Windows PG pending."
       }
     },
     {
@@ -11529,7 +11529,7 @@
             "check": "Saved exact-revision target-observation plan/history/review envelope, generation/policy/consent/capability/digest fences, concurrent approval and stale rejection."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes and current credential boundaries; apps/api/test/postgres-architecture-plan-authority.pgtest.ts API lock-wait revocation/no-write tests prepared, canonical PG pending."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: exact-review routes, actual target/writer lock barriers and successful-first-write approval rollback; real receiving-organization history/grant regressions in postgres-architecture-artifact.pgtest.ts. Correction source cases prepared; canonical Windows PG pending."
       }
     },
     {
@@ -11923,7 +11923,7 @@
             "check": "Selected graph artifact/router/exposure execution contract, controlled mixed-step apply/verify/partial-failure/recovery/rollback plus separately consented live target evidence."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {
@@ -12036,7 +12036,7 @@
             "check": "Selected graph artifact/router/exposure execution contract, controlled mixed-step apply/verify/partial-failure/recovery/rollback plus separately consented live target evidence."
           }
         ],
-        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: immutable composed intent and whole local journal; core/API/CLI fixture cases and postgres-architecture-artifact.pgtest.ts; maintained operational-journey fullstack invokes required object-backed composed check. Canonical PG/MinIO and actual host acceptance pending."
+        "criterion_binding": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md: compact immutable approval, actor/fence binding, post-baseline-wait credential/window authority, durable whole-artifact staging/recovery ancestry and isolated roots; API/CLI source regressions and current-schema PG organization/lock tests prepared. Canonical Windows PG/MinIO/Linux and actual host acceptance pending."
       }
     },
     {

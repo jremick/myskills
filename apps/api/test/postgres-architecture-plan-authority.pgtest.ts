@@ -58,8 +58,9 @@ test("Postgres exact-revision review retains authority, rejects prior changes an
   for(const action of ["create","approve"]){
     const drafted=action==="approve"?await service.createPlan(actor,target.id,{...request,idempotencyKey:"credential-approve"}):null;
     const blocker=await pool.connect();await blocker.query("BEGIN");await blocker.query("SELECT id FROM skill_architecture_targets WHERE id=$1 FOR UPDATE",[target.id]);
-    const pending=app.inject({method:"POST",url:drafted?`/v1/architecture-plans/${drafted.run.identity.runId}/approve`:`/v1/architecture-targets/${target.id}/plans`,headers:{authorization:"Bearer pg-plan-session"},payload:drafted?{expectedReviewDigest:String(drafted.run.metadata!.reviewDigest)}:{...request,idempotencyKey:"credential-create"}});
-    try{await waitForLock(pool,"%skill_architecture_targets%",true);await pool.query("UPDATE auth_sessions SET revoked_at=clock_timestamp() WHERE token_hash=$1",[actor.artifactCredential.hash]);await blocker.query("COMMIT");const response=await pending;assert.equal(response.statusCode,403,response.body);
+    const blockerPid = (await blocker.query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
+    const pending=app.inject({method:"POST",url:drafted?`/v1/architecture-plans/${drafted.run.identity.runId}/approve`:`/v1/architecture-targets/${target.id}/plans`,headers:{authorization:"Bearer pg-plan-session"},payload:drafted?{expectedReviewDigest:String(drafted.run.metadata!.reviewDigest)}:{...request,idempotencyKey:"credential-create"}}).then(response=>response); // Dispatch the injection before observing its blocked SQL.
+    try{await waitForLock(pool,"%skill_architecture_targets%",true,blockerPid);await pool.query("UPDATE auth_sessions SET revoked_at=clock_timestamp() WHERE token_hash=$1",[actor.artifactCredential.hash]);await blocker.query("COMMIT");const response=await pending;assert.equal(response.statusCode,403,response.body);
       if(drafted)assert.deepEqual(await store.getRun(drafted.run.identity.runId),drafted.run);else assert.equal((await store.listRuns({targetId:target.id})).some(run=>run.metadata?.source==="architecture-plan"),false);
     }finally{await blocker.query("ROLLBACK");blocker.release();await pool.query("UPDATE auth_sessions SET revoked_at=NULL WHERE token_hash=$1",[actor.artifactCredential.hash]);}
   }
@@ -95,10 +96,17 @@ test("Postgres exact-revision review retains authority, rejects prior changes an
   }
 
   const drafted = await service.createPlan(actor, target.id, { ...request, idempotencyKey: "approval-rollback" });
-  await pool.query("CREATE FUNCTION reject_review_approval() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.state='approved' THEN RAISE EXCEPTION 'test approval failure'; END IF; RETURN NEW; END $$");
+  let firstApprovalWrite = false;
+  store.withPlanAuthority = (input, operation) => authority(input, (scoped, deps) => {
+    const save = scoped.saveRun.bind(scoped);
+    scoped.saveRun = async run => { const saved = await save(run); if (saved.state === "awaiting_approval") firstApprovalWrite = true; return saved; };
+    return operation(scoped, deps);
+  });
+  await pool.query("CREATE FUNCTION reject_review_approval() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.status='approved' THEN IF OLD.status<>'awaiting_approval' THEN RAISE EXCEPTION 'test first write missing'; END IF; RAISE EXCEPTION 'test approval failure after awaiting_approval'; END IF; RETURN NEW; END $$");
   await pool.query("CREATE TRIGGER reject_review_approval BEFORE UPDATE ON skill_architecture_sync_runs FOR EACH ROW EXECUTE FUNCTION reject_review_approval()");
-  try { await assert.rejects(service.approvePlan(actor, drafted.run.identity.runId, { expectedReviewDigest: String(drafted.run.metadata?.reviewDigest) })); }
-  finally { await pool.query("DROP TRIGGER reject_review_approval ON skill_architecture_sync_runs"); await pool.query("DROP FUNCTION reject_review_approval()"); }
+  try { await assert.rejects(service.approvePlan(actor, drafted.run.identity.runId, { expectedReviewDigest: String(drafted.run.metadata?.reviewDigest) }), error => error instanceof AppError && error.code === "ARCHITECTURE_SYNC_SAVE_FAILED"); }
+  finally { await pool.query("DROP TRIGGER reject_review_approval ON skill_architecture_sync_runs"); await pool.query("DROP FUNCTION reject_review_approval()"); store.withPlanAuthority = authority; }
+  assert.equal(firstApprovalWrite, true, "the actual first write completed inside the rolled-back transaction");
   assert.deepEqual(await store.getRun(drafted.run.identity.runId), drafted.run, "first awaiting-approval write rolls back with the failed second write");
   const approvals = await Promise.all([1, 2].map(() => service.approvePlan(actor, drafted.run.identity.runId, { expectedReviewDigest: String(drafted.run.metadata?.reviewDigest) })));
   assert.equal(approvals.filter(result => !result.replayed).length, 1);
@@ -134,9 +142,9 @@ test("Postgres exact-revision review retains authority, rejects prior changes an
   }
 });
 
-async function waitForLock(pool: ReturnType<typeof createPgPool>, query: string, pattern = false) {
+async function waitForLock(pool: ReturnType<typeof createPgPool>, query: string, pattern = false, blockingPid?: number) {
   for (let i = 0; i < 200; i++) {
-    if ((await pool.query(`SELECT 1 FROM pg_stat_activity WHERE query ${pattern ? "LIKE" : "="} $1 AND wait_event_type='Lock'`, [query])).rows.length) return;
+    if ((await pool.query(`SELECT 1 FROM pg_stat_activity WHERE query ${pattern ? "LIKE" : "="} $1 AND wait_event_type='Lock' AND cardinality(pg_blocking_pids(pid))>0 AND ($2::int IS NULL OR $2=ANY(pg_blocking_pids(pid)))`, [query, blockingPid ?? null])).rows.length) return;
     await new Promise(resolve => setTimeout(resolve, 10));
   }
   assert.fail("Independent writer did not wait on retained plan authority");

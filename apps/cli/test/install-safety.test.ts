@@ -395,7 +395,7 @@ test("release selection rejects malformed envelopes, unknown lifecycle states, a
   }
 });
 
-test("late companion renewal failure restores update and rollback bytes before returning the original error", async (t) => {
+test("late denied companion renewal quarantines update and rollback bytes without implicit restoration", async (t) => {
   for (const action of ["update", "rollback"] as const) {
     const workspace = await temp(t);
     const root = path.join(workspace, ".agents", "skills");
@@ -423,9 +423,21 @@ test("late companion renewal failure restores update and rollback bytes before r
     assert.equal(api.renewalCount, 3);
     assert.match(fixture.output.stderr.join("\n"), /Consent was revoked/);
     // Inspect files directly: another CLI command would hide delayed recovery.
-    assert.equal(await readFile(path.join(root, slug, "README.md"), "utf8"), before.version);
+    await assert.rejects(readFile(path.join(root, slug, "README.md")), { code: "ENOENT" });
     assert.deepEqual(JSON.parse(await readFile(path.join(root, ".myskills-app", "installed.json"), "utf8")), JSON.parse(registryBefore));
-    assert.deepEqual(await readdir(path.join(root, ".myskills-app", "transactions")), []);
+    const journals = await readdir(path.join(root, ".myskills-app", "transactions"));
+    assert.equal(journals.length, 1);
+    const journal = JSON.parse(await readFile(path.join(root, ".myskills-app", "transactions", journals[0]), "utf8"));
+    assert.equal(journal.snapshotCreated, true);
+    const snapshot = path.join(root, ".myskills-app", "history", slug, `${journal.id}-${before.version}`);
+    assert.equal(await readFile(path.join(snapshot, "README.md"), "utf8"), before.version);
+    const candidate = path.join(root, ".myskills-app", "staging", journal.id);
+    assert.equal(await readFile(path.join(candidate, "README.md"), "utf8"), action === "update" ? "0.2.0" : "0.1.0");
+    const readOnly = await invoke(api, ["list", "--workspace", workspace]);
+    assert.equal(readOnly.code, 1);
+    assert.match(readOnly.stderr.join("\n"), /recovery requires current authority/);
+    await assert.rejects(readFile(path.join(root, slug, "README.md")), { code: "ENOENT" });
+    assert.equal(await readFile(path.join(snapshot, "README.md"), "utf8"), before.version);
     assert.equal(api.calls.filter((call) => call.path.endsWith("/receipt")).some((call) => (call.body.result as { status: string }).status === "succeeded"), false);
     for (const snapshot of before.history) {
       assert.equal(await readFile(path.join(snapshot.snapshotPath, "README.md"), "utf8"), "0.1.0");
@@ -510,4 +522,14 @@ test("latest install retains the first equal-precedence build in either registry
     assert.equal((await installed(root)).version, versions[0]);
     assert.equal(await readFile(path.join(root, slug, "README.md"), "utf8"), versions[0]);
   }
+});
+
+
+test("currently authorized managed companion rollback verifies historical bytes and records success", async t => {
+  const workspace=await temp(t),root=path.join(workspace,".agents/skills");const api=new RegistryFixture();api.add("0.1.0");api.add("0.2.0");await enroll(api,workspace);
+  for(const version of ["0.1.0","0.2.0"])assert.equal((await invoke(api,["install",slug,"--workspace",workspace,"--version",version])).code,0);
+  api.plan("rollback","0.1.0","0.2.0");const result=await invoke(api,["companion","run-once","--workspace",workspace,"--holder","authorized-rollback"]);
+  assert.equal(result.code,0,result.stderr.join("\n"));assert.equal(await readFile(path.join(root,slug,"README.md"),"utf8"),"0.1.0");assert.equal((await installed(root)).version,"0.1.0");
+  assert.deepEqual(await readdir(path.join(root,".myskills-app/transactions")),[]);
+  assert.equal(api.calls.filter(call=>call.path.endsWith("/receipt")).some(call=>(call.body.result as {status:string}).status==="succeeded"),true);
 });

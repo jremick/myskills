@@ -1,3 +1,4 @@
+import { assertIsolatedArtifactWorkspace, type ArtifactDurabilityObserver } from "./architecture-artifact-filesystem.js";
 import { prepareLocalArchitectureArtifact, applyLocalArchitectureArtifact, verifyLocalArchitectureArtifact, rollbackLocalArchitectureArtifact, type ArtifactFaultPoint } from "./architecture-artifact.js";
 import { artifactHash, type ArchitectureArtifactIntent } from "@myskills-app/core";
 import { ConfigurationProfileError, selectConfigurationProfile } from "./configuration-profile.js";
@@ -188,6 +189,7 @@ export interface CliRuntime {
   /** Test-only clock seam for deterministic local target observations. */
   codexAdapterClock?: () => Date;
   /** Test-only fault seam for deterministic install crash-recovery coverage. */
+  artifactDurability?: ArtifactDurabilityObserver;
   artifactFault?: (point: ArtifactFaultPoint) => void | Promise<void>;
   installFault?: (point: InstallFaultPoint) => void | Promise<void>;
   /** Internal executor fence, checked immediately before either promotion. */
@@ -239,6 +241,7 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
           const relative = path.relative(path.join(os.homedir(), directory), canonicalWorkspace);
           return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
         })) throw new CliError("Choose a project workspace, not global configuration.", 2);
+        if (parsed.command === "architecture-artifacts" || parsed.command === "codex" && parsed.args[0] === "enroll" || ["install", "update", "rollback", "companion"].includes(parsed.command)) await assertIsolatedArtifactWorkspace(canonicalWorkspace);
         await ensureSafeDirectory(canonicalWorkspace, path.join(canonicalWorkspace, ".agents", "skills"));
         parsed.options.workspace = canonicalWorkspace;
       }
@@ -2474,7 +2477,7 @@ async function architectureArtifactCommand(parsed: ParsedArgs, runtime: CliRunti
       const bundle = await downloadVerifiedBundle({slug:pkg.slug,version:pkg.version,platform:"codex"},parsed,runtime,token);
       if(bundle.artifact.sha256!==pkg.digest||bundle.artifact.byteSize!==pkg.size)throw new CliError("Downloaded release differs from composed exact pin.",1);
       return bundle.files;
-    },fault:runtime.artifactFault};
+    },fault:runtime.artifactFault,durability:runtime.artifactDurability};
   const result = action === "create" ? await (async()=>{if(id!==current.id)throw new CliError("Create target must match this enrolled workspace.",2);const file=stringOption(parsed,"input");return context.request("POST",`/v1/architecture-targets/${encodeURIComponent(id)}/artifacts`,await parityCommandContext(parsed,runtime).readInput(file));})()
     : action === "prepare" ? await prepareLocalArchitectureArtifact(context,id)
     : action === "apply" ? await applyLocalArchitectureArtifact(context,id)

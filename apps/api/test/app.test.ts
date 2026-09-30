@@ -92,9 +92,12 @@ test("GET /v1/capabilities describes enabled server features", async (t) => {
       sharing: false,
       architectures: false,
       architectureTargets: false,
+      architecturePlans: false,
       architectureObservationSlugValidation: false,
       architectureOrganizationGrants: false,
       architecturePatternMigrations: false,
+      drafts: false,
+      taskDiscovery: false,
     },
   });
 });

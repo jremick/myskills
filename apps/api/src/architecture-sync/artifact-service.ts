@@ -3,7 +3,7 @@ import {
   AppError, artifactHash, architectureSyncPlanDigest, architectureSyncSnapshotDigest,
   createArchitectureArtifactIntent, projectArchitectureArtifact, renderArchitectureArtifact,
   composeSkillUpgradePolicies, compareSemanticVersions, isPrereleaseVersion, skillReleaseUpgradeRange,
-  skillReleaseUpdateBlockers,
+  skillReleaseUpdateBlockers, skillUpgradePoliciesAllowExecution,
   type ArchitectureArtifactIntent, type ArchitectureSyncRun, type ArchitectureSyncRunState,
   type SkillUpgradePolicyConstraint, type ArtifactFile,
 } from "@myskills-app/core";
@@ -88,7 +88,8 @@ export class ArchitectureArtifactService {
   private async materialize(actor: ArchitecturePlanActor, snapshot: Awaited<ReturnType<ArchitectureArtifactService["snapshot"]>>, baseline: ArchitectureArtifactIntent|null, readPayload = true) {
     const submissions=this.dependencies.artifactSubmissions!;
     const constraintsValue=await this.dependencies.readPolicyConstraints!(snapshot.target) as {constraints?:SkillUpgradePolicyConstraint[]};
-    const policies=(constraintsValue?.constraints ?? composeSkillUpgradePolicies({})).map(c=>c.policy);
+    const constraints=constraintsValue?.constraints ?? composeSkillUpgradePolicies({});
+    const policies=constraints.map(c=>c.policy);
     const packages=[]; const payloads=new Map<string,readonly ArtifactFile[]>();
     for(const ref of snapshot.compiled.skills) {
       const bundle=await submissions.getPublicRelease({slug:ref.slug,version:ref.version,actorId:actor.id});
@@ -114,14 +115,12 @@ export class ArchitectureArtifactService {
       packages.push({refId:ref.skillRefId,slug:ref.slug,version:ref.version,digest:ref.digest,size:bundle.artifact.byteSize,platform:"codex" as const});
     }
     const m=snapshot.metadata; const projection=projectArchitectureArtifact(snapshot.compiled,{revisionId:snapshot.revision.id,targetId:snapshot.target.id,generation:snapshot.target.generation,targetIdentityDigest:snapshot.target.identityDigest,adapterDigest:String(m.adapterDigest),capabilitiesDigest:String(m.capabilitiesDigest),profileId:snapshot.target.profileId,environmentId:snapshot.target.environmentId,policyDigest:String(m.policyDigest),consentDigest:String(m.consentDigest),observationId:snapshot.observation.id!,observationDigest:snapshot.observation.observedDigest,packages});
-    const files=readPayload ? renderArchitectureArtifact(projection,payloads) : []; validatePortableFilePaths(files); return {projection,files};
+    const files=readPayload ? renderArchitectureArtifact(projection,payloads) : []; validatePortableFilePaths(files); return {projection,files,constraints};
   }
   private async revalidate(actor: ArchitecturePlanActor, run: ArchitectureSyncRun, intent: ArchitectureArtifactIntent, rollback=false) {
     const snapshot=await this.snapshot(actor,run.identity.targetId,run.identity.revisionId);
     const baseline=intent.baselineRunId ? (await this.load(intent.baselineRunId)).intent : null;
     const current=await this.materialize(actor,snapshot,baseline,false);
-    await this.dependencies.assertArtifactCredential?.(actor, true);
-    if (!rollback && run.approval?.expiresAt && Date.parse(run.approval.expiresAt) <= Date.parse(await this.now())) throw fail("APPROVAL_EXPIRED", "Execution approval expired after current-authority checks.");
     if(artifactHash(current.projection)!==artifactHash(intent.projection)) throw fail("AUTHORITY_STALE","Current target, observation, policy, consent or release authority changed.");
     if(rollback&&baseline) {
       const previous=await this.snapshot(actor,run.identity.targetId,baseline.projection.revisionId);
@@ -130,6 +129,12 @@ export class ArchitectureArtifactService {
       // and release pins must still satisfy today's receiving-target authority.
       if(artifactHash(eligible.projection.nodes)!==artifactHash(baseline.projection.nodes) || artifactHash(eligible.projection.packages)!==artifactHash(baseline.projection.packages)) throw fail("ROLLBACK_DENIED","Baseline exposure or exact releases are now forbidden. Retain quarantine.");
     }
+    // Baseline-only release locks can wait after desired-tree authorization.
+    // Check credentials and the execution clock after both sets of locks.
+    await this.dependencies.assertArtifactCredential?.(actor, true);
+    const now=new Date(await this.now());
+    if (!skillUpgradePoliciesAllowExecution(current.constraints,now)) throw fail("MAINTENANCE_WINDOW_CLOSED","Current target and organization maintenance windows do not permit execution.");
+    if (!rollback && run.approval?.expiresAt && Date.parse(run.approval.expiresAt) <= now.getTime()) throw fail("APPROVAL_EXPIRED", "Execution approval expired after current-authority checks.");
   }
   async approve(actor: ArchitecturePlanActor, runId: string, input: ArtifactExecutionInput) {
     validateExecution(input); const loaded=await this.load(runId);
@@ -138,7 +143,9 @@ export class ArchitectureArtifactService {
       if(run.approval) { if(run.approval.actorId!==actor.id) throw fail("APPROVAL_CONFLICT","Another actor owns execution approval."); return {run,replayed:true}; }
       if(run.state!=="drafted") throw fail("STATE_CONFLICT","Artifact is not awaiting execution approval.");
       run=await service.store.saveRun({...run,state:"awaiting_approval",updatedAt:await service.now()});
-      const approval={schemaVersion:1 as const,id:`execution-${randomUUID()}`,runId,actorId:actor.id,planDigest:run.digests.planDigest,approvedAt:await service.now(),expiresAt:new Date(Date.parse(await service.now())+600_000).toISOString(),metadata:{artifactDigest:artifactHash(intent),treeDigest:intent.treeDigest,baselineDigest:intent.baselineDigest,execution:true}};
+      // The immutable intent digest covers the staged tree and baseline. Keep
+      // its binding within migration 0019's 256-character metadata field.
+      const approval={schemaVersion:1 as const,id:`execution-${randomUUID()}`,runId,actorId:actor.id,planDigest:run.digests.planDigest,approvedAt:await service.now(),expiresAt:new Date(Date.parse(await service.now())+600_000).toISOString(),metadata:{artifactDigest:artifactHash(intent),execution:true}};
       run=await service.store.saveRun({...run,state:"approved",approval,digests:{...run.digests,approvalDigest:architectureSyncSnapshotDigest(approval)},receipts:[...run.receipts,{schemaVersion:1,id:`execution-receipt-${randomUUID()}`,runId,kind:"approval",status:"succeeded",code:"artifact.execution.approved",recordedAt:await service.now(),evidenceDigest:artifactHash(intent)}],updatedAt:await service.now()});
       return {run,replayed:false};
     });
@@ -148,6 +155,7 @@ export class ArchitectureArtifactService {
     return this.authority(actor,loaded.run.identity.targetId,async service=>{
       const {run:initialRun,intent}=await service.load(runId); let run=initialRun;
       if(input.expectedIntentDigest!==artifactHash(intent) || !run.approval || run.approval.actorId!==actor.id) throw fail("APPROVAL_REQUIRED","The exact actor execution approval is required.");
+      service.assertClaimActor(actor,run,intent);
       await service.revalidate(actor,run,intent);
       const result=await service.store.claimApply({runId,targetId:run.identity.targetId,targetGeneration:run.identity.targetGeneration,holderId:input.holderId,now:await service.now(),leaseSeconds:600});
       if(result.decision!=="claimed") return result;
@@ -157,10 +165,20 @@ export class ArchitectureArtifactService {
     });
   }
   private async assertFence(actor: ArchitecturePlanActor,run:ArchitectureSyncRun,intent:ArchitectureArtifactIntent,input:ArtifactFenceInput,rollback=false) {
+    this.assertClaimActor(actor,run,intent,rollback,input);
     await this.revalidate(actor,run,intent,rollback);
     const lease=await this.store.getCurrentLease(run.identity.targetId);
     if(!lease||lease.runId!==run.identity.runId||lease.holderId!==input.holderId||lease.fencingToken!==input.fencingToken||Date.parse(lease.expiresAt)<=Date.parse(await this.now())) throw fail("FENCE_LOST","The composed target lease is no longer current.");
     return lease;
+  }
+  private assertClaimActor(actor:ArchitecturePlanActor,run:ArchitectureSyncRun,intent:ArchitectureArtifactIntent,rollback=false,input?:ArtifactFenceInput):void {
+    const digest=artifactHash(intent);
+    if(!rollback) {
+      if(run.approval?.actorId!==actor.id || run.approval.metadata?.execution!==true || run.approval.metadata.artifactDigest!==digest) throw fail("CLAIM_ACTOR_REQUIRED","This operation belongs to its authenticated execution approver.");
+      return;
+    }
+    const approval=[...run.receipts].reverse().find(receipt=>receipt.code==="artifact.rollback.approved");
+    if(!input || approval?.kind!=="approval" || approval.status!=="succeeded" || approval.evidenceDigest!==digest || approval.metadata?.actorId!==actor.id || approval.metadata.holderId!==input.holderId || approval.metadata.fence!==input.fencingToken) throw fail("CLAIM_ACTOR_REQUIRED","This rollback belongs to the authenticated actor of its explicit approval and fence.");
   }
   async checkpoint(actor:ArchitecturePlanActor,runId:string,input:ArtifactFenceInput) {
     validateFence(input); const loaded=await this.load(runId);
@@ -172,10 +190,10 @@ export class ArchitectureArtifactService {
       const {run:initialRun,intent}=await service.load(runId); let run=initialRun; const rollback=run.state==="rolling_back"||run.state==="rolled_back";
       const expected=rollback?(intent.baselineRunId?(await service.load(intent.baselineRunId)).intent.treeDigest:artifactHash([])):intent.treeDigest;
       if(input.treeDigest!==expected) throw fail("READBACK_CONFLICT","Aggregate readback differs from the approved tree.");
-      if(run.state==="succeeded"||run.state==="rolled_back") { await service.revalidate(actor,run,intent,rollback); const previous=run.receipts.at(-1); if(previous?.metadata?.holderId!==input.holderId||previous.metadata.fence!==input.fencingToken) throw fail("FENCE_LOST","Receipt replay belongs to a different claim."); return {run,replayed:true}; }
+      if(run.state==="succeeded"||run.state==="rolled_back") { service.assertClaimActor(actor,run,intent,rollback,input); await service.revalidate(actor,run,intent,rollback); const previous=run.receipts.at(-1); if(previous?.metadata?.actorId!==actor.id||previous.metadata.holderId!==input.holderId||previous.metadata.fence!==input.fencingToken) throw fail("FENCE_LOST","Receipt replay belongs to a different claim."); return {run,replayed:true}; }
       await service.assertFence(actor,run,intent,input,rollback);
       if(!rollback) { if(run.state!=="applying"&&run.state!=="verifying") throw fail("STATE_CONFLICT","Artifact is not applying."); if(run.state==="applying") run=await service.store.saveRun({...run,state:"verifying",updatedAt:await service.now()}); }
-      run=await service.store.saveRun({...run,state:rollback?"rolled_back":"succeeded",receipts:[...run.receipts,{schemaVersion:1,id:`artifact-readback-${randomUUID()}`,runId,kind:rollback?"rollback":"verify",status:"succeeded",code:rollback?"artifact.rollback.verified":"artifact.aggregate.verified",recordedAt:await service.now(),evidenceDigest:input.treeDigest,metadata:{holderId:input.holderId,fence:input.fencingToken,runtimeRecognized:false}}],updatedAt:await service.now()});
+      run=await service.store.saveRun({...run,state:rollback?"rolled_back":"succeeded",receipts:[...run.receipts,{schemaVersion:1,id:`artifact-readback-${randomUUID()}`,runId,kind:rollback?"rollback":"verify",status:"succeeded",code:rollback?"artifact.rollback.verified":"artifact.aggregate.verified",recordedAt:await service.now(),evidenceDigest:input.treeDigest,metadata:{actorId:actor.id,holderId:input.holderId,fence:input.fencingToken,runtimeRecognized:false}}],updatedAt:await service.now()});
       await service.store.releaseLease({targetId:run.identity.targetId,runId,fencingToken:input.fencingToken}); return {run,replayed:false};
     });
   }
@@ -185,7 +203,7 @@ export class ArchitectureArtifactService {
       const {run:initialRun,intent}=await service.load(runId); let run=initialRun; bindExecution(intent,input); await service.revalidate(actor,run,intent,true);
       if(!["succeeded","applying","verifying","rollback_required","rolling_back"].includes(run.state)) throw fail("STATE_CONFLICT","Artifact cannot begin an explicit rollback.");
       const active=await service.store.getCurrentLease(run.identity.targetId);
-      if(active&&active.runId===runId&&active.holderId===input.holderId&&run.state!=="rolling_back") await service.store.releaseLease({targetId:run.identity.targetId,runId,fencingToken:active.fencingToken});
+      if(active&&active.runId===runId&&active.holderId===input.holderId&&run.state!=="rolling_back") { service.assertClaimActor(actor,run,intent); await service.store.releaseLease({targetId:run.identity.targetId,runId,fencingToken:active.fencingToken}); }
       if (run.state==="rolling_back" && active?.runId===runId && active.holderId===input.holderId) {
         await service.assertFence(actor,run,intent,{holderId:input.holderId,fencingToken:active.fencingToken},true);
         return {run,intent,baseline:intent.baselineRunId?(await service.load(intent.baselineRunId)).intent:null};

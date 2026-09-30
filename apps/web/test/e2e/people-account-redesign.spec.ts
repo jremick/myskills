@@ -181,7 +181,7 @@ for (const width of [1440, 390]) test(`admin sections preserve unsaved settings 
   await expect(page.getByRole("button", { name: "Open", exact: true })).toBeFocused();
   await tabs.getByRole("tab", { name: "People", exact: true }).focus();
   await page.keyboard.press("End");
-  await expect(tabs.getByRole("tab", { name: "Audit", exact: true })).toBeFocused();
+  await expect(tabs.getByRole("tab", { name: "Recovery", exact: true })).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
   expect(state.missing).toEqual([]);
   await page.screenshot({ path: info.outputPath("admin-sections.png"), fullPage: true });
