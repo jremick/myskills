@@ -1,7 +1,7 @@
 // Mounted into the real candidate API/OPS images by the internal rehearsal.
 // Fixture credentials, tokens, MFA seeds and package contents stay in /proof.
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
@@ -11,7 +11,26 @@ const data = JSON.parse(readFileSync(configPath, "utf8"));
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const save = () => writeFileSync(configPath, `${JSON.stringify(data)}\n`, { mode: 0o600 });
 
-if (mode === "bucket") {
+if (mode === "seed-nonowner") {
+  // Only a generated disposable Compose database is supplied by the driver.
+  // Use the existing store; no mail provider or new account ingress is needed.
+  const database = new URL(process.env.DATABASE_URL);
+  assert.equal(database.hostname, "postgres"); assert.equal(database.pathname, "/myskills");
+  assert.ok(["fresh", "legacy"].includes(data.fixtureName));
+  const { hashPassword } = await import("/app/packages/auth/dist/index.js");
+  const { createDb, createPgPool } = await import("/app/apps/api/dist/db/client.js");
+  const { PostgresAuthStore } = await import("/app/apps/api/dist/auth/postgres-auth-store.js");
+  const pool = createPgPool(process.env.DATABASE_URL);
+  try {
+    const store = new PostgresAuthStore(createDb(pool));
+    data.nonowner = { email: `nonowner-${randomBytes(8).toString("hex")}@operator.test`, password: randomBytes(32).toString("hex") };
+    const result = await store.createUserWithPassword({ ...data.nonowner, name: "Disposable HOST non-owner", passwordHash: await hashPassword(data.nonowner.password) });
+    assert.equal(result.created, true); assert.deepEqual(result.user.roles, ["user"]);
+    data.nonowner.id = result.user.id;
+    assert.ok(await store.updateUserStatus({ userId: result.user.id, status: "active", emailVerifiedAt: new Date() }));
+    save();
+  } finally { await pool.end(); }
+} else if (mode === "bucket") {
   const { S3Client, CreateBucketCommand } = require("/app/node_modules/@aws-sdk/client-s3");
   const client = new S3Client({ endpoint: data.MYSKILLS_RECOVERY_BACKUP_S3_ENDPOINT, region: "local", forcePathStyle: true, maxAttempts: 1,
     credentials: { accessKeyId: data.MYSKILLS_RECOVERY_BACKUP_S3_ACCESS_KEY_ID, secretAccessKey: data.MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY } });
@@ -31,7 +50,7 @@ if (mode === "bucket") {
       ...(token && !anonymous ? { authorization: `Bearer ${token}` } : {}), ...(body ? { "content-type": "application/json" } : {}),
     }, ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15_000) });
     assert.equal(response.status, status, `HTTP ${path} expected ${status}; returned ${response.status}`);
-    return raw ? Buffer.from(await response.arrayBuffer()) : response.json();
+    return response.status === 204 ? null : raw ? Buffer.from(await response.arrayBuffer()) : response.json();
   }
   const source = await api("/version.json");
   assert.deepEqual(source, { version: data.expectedSource.version, revision: data.expectedSource.commit });
@@ -47,13 +66,25 @@ if (mode === "bucket") {
   let session = await api("/v1/auth/login", credentials);
   if (mode === "create") {
     token = session.token; assert.ok(token);
-    const enrollment = await api("/v1/auth/mfa/totp/enroll", { password: credentials.password });
+    const enrollment = await api("/v1/auth/mfa/totp/enroll", { password: credentials.password }, { status: 201 });
     data.mfaSecret = enrollment.enrollment.secret;
-    const confirmed = await api("/v1/auth/mfa/totp/confirm", { factorId: enrollment.enrollment.factorId, code: generateTotpCode(data.mfaSecret) });
+    const enrolledAt = Date.now(); data.enrolledTotpCounter = Math.floor(enrolledAt / 30_000);
+    const confirmed = await api("/v1/auth/mfa/totp/confirm", { factorId: enrollment.enrollment.factorId, code: generateTotpCode(data.mfaSecret, { now: enrolledAt }) });
     data.recoveryCodes = confirmed.mfa.recoveryCodes;
     session = await api("/v1/auth/login", credentials, { anonymous: true });
   }
   assert.ok(session.challengeToken, "original account must require MFA");
+  // Recovery codes exercise a separate path. A restored runtime must also
+  // decrypt the original encrypted TOTP factor and accept a fresh real code.
+  if (mode !== "create") {
+    const until = Date.now() + 35_000;
+    while (Math.floor(Date.now() / 30_000) <= data.enrolledTotpCounter && Date.now() < until) await new Promise((done) => setTimeout(done, 250));
+    assert.ok(Math.floor(Date.now() / 30_000) > data.enrolledTotpCounter);
+    const totp = await api("/v1/auth/mfa/verify", { challengeToken: session.challengeToken, code: generateTotpCode(data.mfaSecret) }, { anonymous: true });
+    assert.equal(totp.user.id, data.ownerId); assert.equal(totp.user.mfaVerified, true); assert.ok(totp.token);
+    session = await api("/v1/auth/login", credentials, { anonymous: true });
+    assert.ok(session.challengeToken);
+  }
   const verified = await api("/v1/auth/mfa/verify", { challengeToken: session.challengeToken, recoveryCode: data.recoveryCodes.shift() }, { anonymous: true });
   token = verified.token; assert.ok(token); assert.equal(verified.user.mfaVerified, true);
   if (mode === "create") {
@@ -85,6 +116,25 @@ if (mode === "bucket") {
     assert.equal(hash(bundle), data.packageSha256); assert.equal(bundle.length, data.packageBytes);
   }
   await api(`/v1/submissions/${data.submissionId}/bundle`, undefined, { anonymous: true, status: 401 });
+  const ownerToken = token;
+  if (mode === "create") {
+    data.revokedSessionToken = token;
+    await api("/v1/auth/logout", undefined, { method: "POST", status: 204 });
+  }
+  token = data.revokedSessionToken;
+  assert.ok(token); await api(`/v1/submissions/${data.submissionId}/bundle`, undefined, { status: 401 });
+  const nonowner = await api("/v1/auth/login", { email: data.nonowner.email, password: data.nonowner.password }, { anonymous: true });
+  assert.ok(nonowner.token); assert.equal(nonowner.user.id, data.nonowner.id); assert.deepEqual(nonowner.user.roles, ["user"]);
+  token = nonowner.token;
+  await api(`/v1/submissions/${data.submissionId}/bundle`, undefined, { status: 404 });
+  token = ownerToken;
+  if (mode === "create") {
+    session = await api("/v1/auth/login", credentials, { anonymous: true });
+    const resumed = await api("/v1/auth/mfa/verify", { challengeToken: session.challengeToken, recoveryCode: data.recoveryCodes.shift() }, { anonymous: true });
+    token = resumed.token; assert.ok(token);
+  }
+  data.authProof = { totp: mode === "create" ? "enrollment-confirmed" : "original-factor-decrypted-and-verified",
+    recoveryCode: "verified", nonownerPrivateArtifact: "denied", revokedSession: "denied" };
   // Read the feedback through the real API; do not fabricate scan/eval evidence.
   let submission = await api(`/v1/submissions/${data.submissionId}`);
   if (mode === "create") {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { chmodSync, existsSync, lstatSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, constants, existsSync, fstatSync, fsyncSync, lstatSync, openSync, readSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { Writable } from "node:stream";
@@ -153,9 +153,18 @@ function protectedDirectory(path) {
 }
 function safeFile(path, privateFile = false) {
   if (!path || !isAbsolute(path)) fail("file paths must be absolute.");
-  const stat = lstatSync(path);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 1024 * 1024 || (privateFile && ((stat.mode & 0o777) !== 0o600 || (process.getuid && stat.uid !== process.getuid())))) fail("protected files must be owned by the operator, mode 0600 and not symlinks.");
-  return readFileSync(path, "utf8");
+  // Validate and read the same opened inode. NOFOLLOW protects the final
+  // component; this does not defend against hostile ancestor replacement.
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try {
+    const stat = fstatSync(fd);
+    const limit = 1024 * 1024;
+    if (!stat.isFile() || stat.size > limit || (privateFile && ((stat.mode & 0o777) !== 0o600 || (process.getuid && stat.uid !== process.getuid())))) fail("protected files must be owned by the operator, mode 0600 and not symlinks.");
+    const bytes = Buffer.alloc(limit + 1); let size = 0, count;
+    while (size < bytes.length && (count = readSync(fd, bytes, size, bytes.length - size, null)) > 0) size += count;
+    if (size > limit) fail("protected file exceeds the size limit.");
+    return bytes.subarray(0, size).toString("utf8");
+  } finally { closeSync(fd); }
 }
 function readJson(path, privateFile = false) { return JSON.parse(safeFile(path, privateFile)); }
 function readEnv(path, keys, privateFile = true) {
@@ -163,7 +172,7 @@ function readEnv(path, keys, privateFile = true) {
   for (const raw of safeFile(path, privateFile).split(/\r?\n/)) {
     if (!raw.trim() || raw.startsWith("#")) continue;
     const match = raw.match(/^([A-Z][A-Z0-9_]*)=(?:'([^'\\]*)'|([^'"\\\s]*))$/);
-    if (!match || !keys.includes(match[1]) || Object.hasOwn(result, match[1])) fail("environment file has unsupported keys, duplicates or quoting; use the example format.");
+    if (!match || !keys.includes(match[1]) || Object.hasOwn(result, match[1]) || match[3]?.includes("$")) fail("environment file has unsupported keys, duplicates or quoting; single-quote dollar-bearing values.");
     result[match[1]] = match[2] ?? match[3];
   }
   return result;
@@ -221,7 +230,13 @@ function envBytes(values) { return Object.entries(values).map(([key, value]) => 
 function atomicJson(path, value) {
   if (existsSync(path)) safeFile(path, true);
   const temp = `${path}.${randomBytes(8).toString("hex")}.tmp`;
-  try { writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: "wx" }); renameSync(temp, path); } finally { if (existsSync(temp)) unlinkSync(temp); }
+  try {
+    const fd = openSync(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    try { writeFileSync(fd, `${JSON.stringify(value, null, 2)}\n`); fsyncSync(fd); } finally { closeSync(fd); }
+    renameSync(temp, path);
+    const directory = openSync(dirname(path), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    try { fsyncSync(directory); } finally { closeSync(directory); }
+  } finally { if (existsSync(temp)) unlinkSync(temp); }
 }
 
 async function setup(configDir, bundle, answersPath) {

@@ -10,7 +10,8 @@ import { arch, platform } from "node:os";
 import { join, resolve } from "node:path";
 import { createSelfHostBundle } from "./lib/self-host-release.mjs";
 import { hostBaselineCommit, resolveHostBaseline } from "./lib/self-host-baseline.mjs";
-import { saveHostLedger } from "./lib/host-rehearsal-resources.mjs";
+import { hostDocker, saveHostLedger } from "./lib/host-rehearsal-resources.mjs";
+import { rehearseComposeClientInterruption, rehearseComposeInterruption } from "./lib/host-compose-interruption.mjs";
 
 const baseline = hostBaselineCommit;
 const root = process.cwd();
@@ -46,11 +47,10 @@ function mark(kind, name, state = "created") {
   saveHostLedger(ledgerPath, resources);
 }
 function docker(args, options) {
-  if (args[0] === "run") {
-    const name = `${owner}-driver-${++sequence}`; reserve("container", name);
-    args = ["run", "--name", name, "--label", `io.myskills.host-rehearsal=${owner}`, ...args.slice(1)];
-    const result = call(executable, args, options);
-    if (result.status === 0) mark("container", name);
+  if (["run", "compose"].includes(args[0])) {
+    const { ok = true, ...settings } = options ?? {};
+    const result = hostDocker(ledgerPath, executable, args, { cwd: root, env: process.env, encoding: "utf8", timeout: 600_000, maxBuffer: 4 * 1024 * 1024, ...settings });
+    if (ok && result.status !== 0) throw new Error("bounded-command-failed");
     return result;
   }
   return call(executable, args, options);
@@ -133,9 +133,44 @@ function operatorJson(bundle, config, args) {
   const lines = result.stdout.trim().split("\n");
   return JSON.parse(lines.findLast((line) => line.startsWith("{")));
 }
-function driver(image, args, config, ok = true) {
-  return docker(["run", "--rm", "--network", "host", "--user", `${process.getuid()}:${process.getgid()}`, "--mount", `type=bind,source=${proof},target=/proof`,
+function driver(image, args, config, ok = true, { network = "host", envFile } = {}) {
+  return docker(["run", "--rm", "--network", network, ...(envFile ? ["--env-file", envFile] : []), "--user", `${process.getuid()}:${process.getgid()}`, "--mount", `type=bind,source=${proof},target=/proof`,
     image, "node", "/proof/fixture.mjs", ...args, `/proof/${config}`], { ok });
+}
+function seedNonowner(image, config, project, dataFile) {
+  const file = join(proof, `${project}-fixture-db.env`);
+  const database = parsedEnv(join(config, "runtime.env")).DATABASE_URL;
+  assert.ok(!/[\r\n$]/.test(database));
+  writeFileSync(file, `DATABASE_URL=${database}\n`, { mode: 0o600 });
+  driver(image, ["seed-nonowner"], dataFile, true, { network: `${project}_default`, envFile: file });
+}
+function composeProtectedInputs(bundle, config, project, backup = false) {
+  const runtimePath = join(config, "runtime.env"), bootstrapPath = join(config, "bootstrap.env"), backupPath = join(config, "backup.env");
+  const runtimeBytes = readFileSync(runtimePath, "utf8"), bootstrapBytes = readFileSync(bootstrapPath, "utf8");
+  const runtime = parsedEnv(runtimePath), bootstrap = parsedEnv(bootstrapPath);
+  const configuration = () => JSON.parse(compose(bundle, config, project, ["--profile", "bootstrap", "--profile", "operations", "config", "--format", "json"]).stdout);
+  const model = configuration();
+  assert.equal(model.services.api.environment.SMTP_PASSWORD, runtime.SMTP_PASSWORD);
+  assert.equal(model.services.bootstrap.environment.SEED_OWNER_PASSWORD, bootstrap.SEED_OWNER_PASSWORD);
+  if (backup) {
+    const bytes = readFileSync(backupPath, "utf8"), values = parsedEnv(backupPath);
+    assert.equal(model.services.ops.environment.MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY, values.MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY);
+    try {
+      writeFileSync(backupPath, bytes.replace(/^MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY=.*$/m, () => `MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY=${values.MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY}`));
+      assert.notEqual(configuration().services.ops.environment.MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY, values.MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY);
+      assert.notEqual(operator(bundle, config, ["backup", "config"], false).status, 0);
+    } finally { writeFileSync(backupPath, bytes); }
+  } else {
+    try {
+      writeFileSync(runtimePath, runtimeBytes.replace(/^SMTP_PASSWORD=.*$/m, () => `SMTP_PASSWORD=${runtime.SMTP_PASSWORD}`));
+      assert.notEqual(configuration().services.api.environment.SMTP_PASSWORD, runtime.SMTP_PASSWORD);
+      assert.notEqual(operator(bundle, config, ["preflight"], false).status, 0);
+    } finally { writeFileSync(runtimePath, runtimeBytes); }
+    try {
+      writeFileSync(bootstrapPath, `${bootstrapBytes}NODE_OPTIONS=--inspect\n`);
+      assert.notEqual(operator(bundle, config, ["bootstrap"], false).status, 0);
+    } finally { writeFileSync(bootstrapPath, bootstrapBytes); }
+  }
 }
 
 try {
@@ -158,6 +193,15 @@ try {
     await ready(`http://127.0.0.1:${registryPort}/v2/`); return `127.0.0.1:${registryPort}`;
   });
   const postgresImage = pullPinned("postgres:17-alpine");
+  await measured("compose-interruption", async () => {
+    const project = `${owner}-interrupt`; reserve("compose-project", project);
+    receipt.composeInterruption = await rehearseComposeInterruption({ directory: proof, owner, project, executable, image: postgresImage });
+    // The supervised request acknowledged success and exact cleanup completed.
+    mark("compose-project", project);
+    const clientProject = `${owner}-interrupt-client`; reserve("compose-project", clientProject);
+    receipt.composeInterruption.client = rehearseComposeClientInterruption({ directory: proof, owner, project: clientProject, executable, image: `myskills-app-api:local-ci-${runId}` });
+    mark("compose-project", clientProject);
+  });
   const minioImage = build("minio", root, ["--file", join(root, "Dockerfile.minio"), "--label", `org.opencontainers.image.revision=${candidate}`,
     "--label", `org.opencontainers.image.version=${source.version}`]);
   const network = `${owner}-backup-network`; reserve("network", network);
@@ -169,7 +213,7 @@ try {
   call("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-keyout", join(certs, "private.key"),
     "-out", join(certs, "public.crt"), "-subj", "/CN=MySkills disposable backup", "-addext", `subjectAltName=IP:${backupIP}`]);
   chmodSync(join(certs, "private.key"), 0o600);
-  const backupUser = `fixture${randomBytes(6).toString("hex")}`; const backupPassword = randomBytes(32).toString("hex");
+  const backupUser = `fixture${randomBytes(6).toString("hex")}`; const backupPassword = `${randomBytes(32).toString("hex")}$HOST_INTERPOLATION_PROBE$$`;
   // Docker --env-file is deliberately unquoted here; operator configuration uses
   // its parsed path and Compose's quoting semantics instead.
   writeFileSync(join(proof, "backup-minio.env"), `MINIO_ROOT_USER=${backupUser}\nMINIO_ROOT_PASSWORD=${backupPassword}\n`, { mode: 0o600 });
@@ -197,12 +241,14 @@ try {
   driver(opsImage, ["bucket"], "backup-admin.json");
   await measured("fresh-install-and-recovery", async () => {
     const installStarted = Date.now();
-    const config = join(proof, "fresh-config"); const project = `${owner}-fresh`; reserve("compose-project", project); mark("compose-project", project);
+    const config = join(proof, "fresh-config"); const project = `${owner}-fresh`; reserve("compose-project", project); mark("compose-project", project, "reserved");
     const webPort = await port(); const answers = join(proof, "answers.json");
     jsonFile(answers, { APP_BASE_URL: "https://fixture.operator.test", TRUST_PROXY: "false", AUTH_NOTIFICATION_MODE: "smtp", SMTP_HOST: "smtp.fixture.test",
-      SMTP_FROM: "fixture@operator.test", SMTP_USER: "fixture", SMTP_PASSWORD: randomBytes(24).toString("hex"),
+      SMTP_FROM: "fixture@operator.test", SMTP_USER: "fixture", SMTP_PASSWORD: `${randomBytes(24).toString("hex")}$HOST_INTERPOLATION_PROBE$$`,
       SEED_OWNER_EMAIL: "owner@operator.test", SEED_OWNER_PASSWORD: randomBytes(32).toString("hex"), MYSKILLS_COMPOSE_PROJECT: project, WEB_PORT: webPort });
-    operator(bundle, config, ["setup", "--answers-file", answers]); operator(bundle, config, ["preflight"]); operator(bundle, config, ["up"]);
+    operator(bundle, config, ["setup", "--answers-file", answers]); operator(bundle, config, ["preflight"]);
+    composeProtectedInputs(bundle, config, project);
+    operator(bundle, config, ["up"]);
     operator(bundle, config, ["bootstrap"]); operator(bundle, config, ["bootstrap"]); // retry must preserve the sole original owner
     const ownerCount = compose(bundle, config, project, ["exec", "-T", "postgres", "sh", "-ec", 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM users"']).stdout.trim();
     assert.equal(ownerCount, "1"); receipt.ownerCount = 1;
@@ -210,12 +256,15 @@ try {
     const dataFile = "fresh.json"; jsonFile(join(proof, dataFile), { api: `http://127.0.0.1:${webPort}/api`, web: `http://127.0.0.1:${webPort}`,
       ...bootstrap, expectedSource: source, fixtureName: "fresh", ...backupBase });
     await ready(`http://127.0.0.1:${webPort}/api/ready`);
+    seedNonowner(images.api.ref, config, project, dataFile);
     driver(images.api.ref, ["create"], dataFile);
     const data = JSON.parse(readFileSync(join(proof, dataFile)));
     receipt.freshInstallDurationMs = Date.now() - installStarted;
     receipt.freshInstall = { operatorPackage: "tested", ownerBootstrapRetries: "credential-preserving", sourceCommit: candidate,
-      matchingApiWebIdentity: "passed", login: "passed", mfa: "passed", unauthorizedPackage: "denied", persisted: data.persistedBoundaries };
+      matchingApiWebIdentity: "passed", login: "passed", mfa: "passed", unauthorizedPackage: "denied", authProof: data.authProof, persisted: data.persistedBoundaries };
     const identity = data.instanceId; privateEnv(join(config, "backup.env"), { ...backupBase, MYSKILLS_BACKUP_INSTANCE_ID: identity });
+    composeProtectedInputs(bundle, config, project, true);
+    receipt.protectedComposeInputs = { quotedRuntimeAndBootstrapAndBackup: "exact-values", unquotedDollars: "rejected-before-quiescence", bootstrapExtraKey: "rejected-before-container" };
     const minio = compose(bundle, config, project, ["ps", "-q", "minio"]).stdout.trim(); docker(["network", "connect", network, minio]);
     compose(bundle, config, project, ["stop", "api", "web"]);
     const report = await measured("coordinated-backup", async () => operatorJson(bundle, config, ["backup", "execute"])); assert.equal(report.passed, true);
@@ -249,10 +298,11 @@ try {
       jsonFile(join(proof, "restored.json"), { ...data, api: `http://127.0.0.1:${apiPort}`, web: null });
       driver(images.api.ref, ["verify"], "restored.json");
       receipt.backup.manifestSha256 = restoredReport.manifestSha256;
+      const restoredData = JSON.parse(readFileSync(join(proof, "restored.json")));
       receipt.restore = { manifestSha256: restoredReport.manifestSha256, databaseDumpSha256: restoredReport.databaseDumpSha256,
         tableCount: restoredReport.tableCount, artifactCount: restoredReport.artifactCount, artifactBytes: restoredReport.artifactBytes,
         dataRestoreElapsedSeconds: restoredReport.elapsedSeconds, runId: report.runId, instanceId: identity, dataVerified: true, restoredApplicationRuntime: "tested",
-        login: "passed", mfa: "passed", unauthorizedPackage: "denied", exactPackageBytes: "passed", originalArchitecture: "passed", persisted: JSON.parse(readFileSync(join(proof, "restored.json"))).persistedBoundaries };
+        login: "passed", mfa: "passed", authProof: restoredData.authProof, unauthorizedPackage: "denied", exactPackageBytes: "passed", originalArchitecture: "passed", persisted: restoredData.persistedBoundaries };
       receipt.restore.packageSha256 = data.packageSha256; receipt.restore.packageBytes = data.packageBytes;
     });
   });
@@ -271,7 +321,7 @@ try {
     copyFileSync(join(bundle, "compose.yml"), join(bridge, "compose.yml"));
     writeFileSync(join(bridge, "release.env"), readFileSync(join(bundle, "release.env"), "utf8")
       .replace(images.api.ref, oldApi).replace(images.web.ref, oldWeb));
-    const config = join(proof, "baseline-config"); const project = `${owner}-legacy`; reserve("compose-project", project); mark("compose-project", project);
+    const config = join(proof, "baseline-config"); const project = `${owner}-legacy`; reserve("compose-project", project); mark("compose-project", project, "reserved");
     const webPort = await port(); const answers = JSON.parse(readFileSync(join(proof, "answers.json")));
     jsonFile(join(proof, "legacy-answers.json"), { ...answers, MYSKILLS_COMPOSE_PROJECT: project, WEB_PORT: webPort });
     operator(bundle, config, ["setup", "--answers-file", join(proof, "legacy-answers.json")]);
@@ -282,6 +332,7 @@ try {
     compose(bridge, config, project, ["up", "-d", "--wait", "--no-deps", "api", "web"]);
     jsonFile(join(proof, "legacy.json"), { api: `http://127.0.0.1:${webPort}/api`, web: `http://127.0.0.1:${webPort}`, fixtureName: "legacy",
       ...parsedEnv(join(config, "bootstrap.env")), expectedSource: { commit: baseline, version: legacyVersion } });
+    seedNonowner(images.api.ref, config, project, "legacy.json");
     driver(images.api.ref, ["create"], "legacy.json");
     const data = JSON.parse(readFileSync(join(proof, "legacy.json")));
     const minio = compose(bridge, config, project, ["ps", "-q", "minio"]).stdout.trim(); docker(["network", "connect", network, minio]);
@@ -295,7 +346,8 @@ try {
     jsonFile(join(proof, "upgraded.json"), { ...data, expectedSource: source }); driver(images.api.ref, ["verify"], "upgraded.json");
     receipt.upgrade = { durationMs: Date.now() - upgradeStarted, baselineCommit: baseline, candidateCommit: candidate, sourceAppImages: { api: inspect(oldApi).Id, web: inspect(oldWeb).Id },
       kind: "exact-source-database-and-runtime-transition", backupRunId: before.runId, forwardMigrations: "passed", originalIdentity: "passed",
-      originalLoginMfaPermissionsAndBytes: "passed", legacyBootstrapTooling: "candidate-fresh-only-bridge", operatorPackageUpgrade: "not-tested" };
+      originalLoginMfaPermissionsAndBytes: "passed", authProof: JSON.parse(readFileSync(join(proof, "upgraded.json"))).authProof,
+      legacyBootstrapTooling: "candidate-fresh-only-bridge", operatorPackageUpgrade: "not-tested" };
   });
   receipt.status = "passed";
   receipt.boundaries = ["No production data, public publication, deployment, public TLS/email delivery or arm64 runtime proof.",

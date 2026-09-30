@@ -113,6 +113,49 @@ test("startup waits for storage and migration; bootstrap is a separate fresh-onl
   assert.doesNotMatch(bootstrap.output, new RegExp(canary));
 });
 
+test("public bootstrap rejects unsafe protected files before any bootstrap container consumes them", (t) => {
+  for (const change of [
+    (path) => { const real = `${path}.real`; copyFileSync(path, real); rmSync(path); symlinkSync(real, path); },
+    (path) => chmodSync(path, 0o644),
+    (path) => writeFileSync(path, "x".repeat(1024 * 1024 + 1)),
+    (path) => writeFileSync(path, readFileSync(path, "utf8") + "SEED_OWNER_EMAIL=duplicate@operator.test\n"),
+    (path) => writeFileSync(path, readFileSync(path, "utf8") + "NODE_OPTIONS=--inspect\n"),
+  ]) {
+    const f = configured(t); change(join(f.config, "bootstrap.env"));
+    const run = execute(f, ["bootstrap"]); assert.notEqual(run.status, 0);
+    assert.ok(f.records().some(({ args }) => args.includes("bootstrap-check")));
+    assert.deepEqual(composeCalls(f), []);
+    assert.doesNotMatch(run.output, new RegExp(canary));
+  }
+});
+
+test("unquoted Compose dollar expressions fail before upgrade writer quiescence; quoted values remain literal", (t) => {
+  for (const file of ["runtime.env", "backup.env"]) {
+    const f = configured(t); backup(f); const target = targetBundle(f, "0.1.0-beta.19");
+    const path = join(f.config, file); const key = file === "runtime.env" ? "SMTP_PASSWORD" : "MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY";
+    const original = readFileSync(path, "utf8");
+    for (const value of ["$NAME", "${NAME}", "literal$$value"]) {
+      writeFileSync(path, original.replace(new RegExp(`^${key}=.*$`, "m"), () => `${key}=${value}`));
+      assert.notEqual(execute(f, ["upgrade", target, "--accept-forward-migrations"]).status, 0);
+      assert.deepEqual(composeCalls(f), [], "validation must precede pull and stop");
+    }
+    writeFileSync(path, original.replace(new RegExp(`^${key}=.*$`, "m"), () => `${key}='$NAME${"${NAME}"}$$'`));
+    assert.equal(execute(f, file === "runtime.env" ? ["preflight"] : ["backup", "config"]).status, 0);
+  }
+});
+
+test("protected input uses a nofollow descriptor and reads the validated inode after final-component replacement", (t) => {
+  for (const when of ["before-open", "after-open"]) {
+    const f = fixture(t); const replacement = join(f.root, "replacement.json");
+    writeFileSync(replacement, JSON.stringify(when === "before-open" ? answers : { ...answers, APP_BASE_URL: "http://unsafe.operator.test" }), { mode: when === "before-open" ? 0o600 : 0o644 });
+    writeFileSync(f.replacement, JSON.stringify({ path: f.answers, replacement, when }));
+    const run = execute(f, ["setup", "--answers-file", f.answers]);
+    assert.equal(run.status === 0, when === "after-open", run.output);
+    assert.equal(existsSync(join(f.config, "runtime.env")), when === "after-open");
+    assert.doesNotMatch(run.output, new RegExp(canary));
+  }
+});
+
 test("backup requires a protected external destination and withholds raw diagnostics", (t) => {
   const f = configured(t);
   assert.notEqual(execute(f, ["backup", "execute"]).status, 0);
@@ -185,6 +228,33 @@ test("a later upgrade interrupted between barrier and state writes remains exact
   assert.equal(JSON.parse(readFileSync(join(f.config, "state.json"))).source.commit, "d".repeat(40));
   const receipt = JSON.parse(readFileSync(join(f.config, "upgrade-receipt.json")));
   assert.equal(receipt.status, "passed"); assert.ok(receipt.backupRunId);
+});
+
+test("barrier and state file/directory fsync precede SQL, including replacement on a second upgrade", (t) => {
+  for (const second of [false, true]) {
+    const f = configured(t); backup(f); const target = targetBundle(f, "0.1.0-beta.19");
+    if (second) {
+      const state = JSON.parse(readFileSync(join(f.config, "state.json")));
+      writeFileSync(join(f.config, "migration-barrier.json"), JSON.stringify({ schemaVersion: 1, source: { ...state, source: { version: "0.1.0-beta.17", commit: "b".repeat(40) } }, target: state }), { mode: 0o600 });
+    }
+    rmSync(f.syncLog, { force: true });
+    assert.equal(execute(f, ["upgrade", target, "--accept-forward-migrations"]).status, 0);
+    const events = readFileSync(f.syncLog, "utf8").trim().split("\n").map(JSON.parse).map(({ event, target }) => `${event}:${target}`);
+    assertOrder(events, ["sync:migration-barrier.json-file", "rename:migration-barrier.json", "sync:migration-barrier.json-directory",
+      "sync:state.json-file", "rename:state.json", "sync:state.json-directory", "sql:migrate"]);
+  }
+});
+
+test("file or directory fsync failure in either durable fence prevents target SQL", (t) => {
+  for (const failure of ["migration-barrier.json-file", "migration-barrier.json-directory", "state.json-file", "state.json-directory"]) {
+    const f = configured(t); backup(f); const target = targetBundle(f, "0.1.0-beta.19");
+    writeFileSync(f.syncFailure, failure);
+    assert.notEqual(execute(f, ["upgrade", target, "--accept-forward-migrations"]).status, 0);
+    assert.ok(readFileSync(f.syncLog, "utf8").trim().split("\n").map(JSON.parse).some((event) => event.event === "sync" && event.target === failure), "the intended sync failure must be reached");
+    assert.equal(composeCalls(f).some((call) => call.includes("run --rm --no-deps migrate")), false);
+    assert.equal(existsSync(join(f.config, "operation.lock")), false);
+    if (failure.startsWith("migration-barrier")) assert.equal(JSON.parse(readFileSync(join(f.config, "state.json"))).source.commit, commit);
+  }
 });
 
 test("standalone backup cannot attach to an unrelated upgrade receipt; pre-migration failure leaves no barrier", (t) => {
@@ -281,11 +351,20 @@ test("unsafe restore destinations fail before the guarded restore child receives
 
 function fixture(t) {
   const dir = mkdtempSync(join(tmpdir(), "myskills-operator-test-")); t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const f = { root: dir, bundle: join(dir, "bundle"), config: join(dir, "private"), bin: join(dir, "bin"), answers: join(dir, "answers.json"), log: join(dir, "docker.jsonl"), failure: join(dir, "failure") };
+  const f = { root: dir, bundle: join(dir, "bundle"), config: join(dir, "private"), bin: join(dir, "bin"), answers: join(dir, "answers.json"), log: join(dir, "docker.jsonl"), failure: join(dir, "failure"),
+    syncLog: join(dir, "sync.jsonl"), syncFailure: join(dir, "sync-failure"), replacement: join(dir, "replace-input.json") };
   mkdirSync(f.bundle); mkdirSync(f.bin); makeBundle(f.bundle, version); writeFileSync(f.answers, JSON.stringify(answers), { mode: 0o600 });
   const preload = join(dir, "child-preload.mjs");
-  writeFileSync(preload, `import cp from 'node:child_process';import {syncBuiltinESMExports} from 'node:module';import {writeFileSync} from 'node:fs';const original=cp.spawnSync;cp.spawnSync=(command,args,options)=>{if(args?.[0]?.endsWith('/restore-registry-backup.mjs')){writeFileSync(${JSON.stringify(join(dir,"recovery-child.json"))},JSON.stringify(options.env),{mode:384});return {status:0,stdout:JSON.stringify({passed:true,runId:args[2]})+'\\n',stderr:''};}return original(command,args,options);};syncBuiltinESMExports();`);
-  writeFileSync(join(f.bin, "docker"), `#!${process.execPath}\nimport {appendFileSync,existsSync,readFileSync} from 'node:fs';import {spawnSync} from 'node:child_process';\nconst args=process.argv.slice(2);appendFileSync(${JSON.stringify(f.log)},JSON.stringify({args})+'\\n');\nif(args[0]==='run' && args.includes('/app/deploy/self-host/configure.mjs')){let cmd=args.slice(args.indexOf('/app/deploy/self-host/configure.mjs')+1);const mounts=[];for(let i=0;i<args.length;i++)if(args[i]==='--mount') {const fields=Object.fromEntries(args[i+1].split(',').map(v=>v.split('=')));mounts.push(fields);}cmd=cmd.map(v=>{for(const m of mounts)if(v===m.target||v.startsWith(m.target+'/'))return m.source+v.slice(m.target.length);return v;});const result=spawnSync(process.execPath,["--import",${JSON.stringify(preload)},${JSON.stringify(join(root, "deploy/self-host/configure.mjs"))},...cmd],{stdio:'inherit',env:process.env});process.exit(result.status??1);}\nconst fail=existsSync(${JSON.stringify(f.failure)})?readFileSync(${JSON.stringify(f.failure)},'utf8'):'';if(fail && (fail==='ready-api'?args.includes('up')&&args.includes('api'):args.some(a=>a===fail) && (fail!=='migrate'||args.includes('run')))){console.error('provider-canary DATABASE_URL=secret');process.exit(1);}\nconst ids={api:'111111111111',web:'222222222222',minio:'333333333333',postgres:'444444444444','mcp-http':'555555555555'};if(args.includes('ps')) {if(args.includes('-q'))console.log(ids[args.at(-1)]);else console.log('myskills-fixture api running');}if(args[0]==='inspect'){let service=Object.keys(ids).find(k=>ids[k]===args.at(-1));if(service==='mcp-http')service='mcp';console.log('registry.operator.test/myskills/'+service+'@sha256:'+(fail==='image-drift'?'f'.repeat(64):'${digest}')+(args.includes('{{.Config.Image}}')?'':' healthy'));}if(args.includes('scripts/run-registry-backup.mjs'))console.log(JSON.stringify({schemaVersion:1,passed:fail!=='stale-backup',reason:fail==='stale-backup'?'stale':'current',runId:'2026-10-01T00-00-00.000Z_${"e".repeat(16)}',capturedAt:new Date().toISOString()}));if(args.includes('exec'))console.log('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee');if(args[0]==='context')console.log('unix:///var/run/docker.sock');if(args[0]==='info')console.log('linux/amd64');\n`, { mode: 0o755 });
+  writeFileSync(preload, `import cp from 'node:child_process';import fs from 'node:fs';import {basename} from 'node:path';import {syncBuiltinESMExports} from 'node:module';
+const original=cp.spawnSync;cp.spawnSync=(command,args,options)=>{if(args?.[0]?.endsWith('/restore-registry-backup.mjs')){fs.writeFileSync(${JSON.stringify(join(dir,"recovery-child.json"))},JSON.stringify(options.env),{mode:384});return {status:0,stdout:JSON.stringify({passed:true,runId:args[2]})+'\\n',stderr:''};}return original(command,args,options);};
+const open=fs.openSync,close=fs.closeSync,sync=fs.fsyncSync,rename=fs.renameSync;const paths=new Map();let renamed;
+const record=(event,target)=>fs.appendFileSync(${JSON.stringify(f.syncLog)},JSON.stringify({event,target})+'\\n');
+const rp=${JSON.stringify(f.replacement)};let change=fs.existsSync(rp)?JSON.parse(fs.readFileSync(rp)):null;
+fs.openSync=(path,...args)=>{const action=change&&path===change.path?change:null;if(action)change=null;if(action?.when==='before-open'){fs.unlinkSync(rp);fs.unlinkSync(path);fs.symlinkSync(action.replacement,path);}const fd=open(path,...args);paths.set(fd,String(path));if(action?.when==='after-open'){fs.unlinkSync(rp);rename(action.replacement,path);}return fd;};
+fs.closeSync=(fd)=>{paths.delete(fd);return close(fd);};
+fs.renameSync=(from,to)=>{record('rename',basename(to));renamed=basename(to);return rename(from,to);};
+fs.fsyncSync=(fd)=>{const path=paths.get(fd);const target=fs.fstatSync(fd).isDirectory()?renamed+'-directory':basename(path).replace(/\\.[a-f0-9]{16}\\.tmp$/,'')+'-file';record('sync',target);if(fs.existsSync(${JSON.stringify(f.syncFailure)})&&fs.readFileSync(${JSON.stringify(f.syncFailure)},'utf8')===target)throw new Error('injected-sync-failure');return sync(fd);};syncBuiltinESMExports();`);
+  writeFileSync(join(f.bin, "docker"), `#!${process.execPath}\nimport {appendFileSync,existsSync,readFileSync} from 'node:fs';import {spawnSync} from 'node:child_process';\nconst args=process.argv.slice(2);appendFileSync(${JSON.stringify(f.log)},JSON.stringify({args})+'\\n');if(args[0]==='compose'&&args.includes('run')&&args.includes('migrate'))appendFileSync(${JSON.stringify(f.syncLog)},JSON.stringify({event:'sql',target:'migrate'})+'\\n');\nif(args[0]==='run' && args.includes('/app/deploy/self-host/configure.mjs')){let cmd=args.slice(args.indexOf('/app/deploy/self-host/configure.mjs')+1);const mounts=[];for(let i=0;i<args.length;i++)if(args[i]==='--mount') {const fields=Object.fromEntries(args[i+1].split(',').map(v=>v.split('=')));mounts.push(fields);}cmd=cmd.map(v=>{for(const m of mounts)if(v===m.target||v.startsWith(m.target+'/'))return m.source+v.slice(m.target.length);return v;});const result=spawnSync(process.execPath,["--import",${JSON.stringify(preload)},${JSON.stringify(join(root, "deploy/self-host/configure.mjs"))},...cmd],{stdio:'inherit',env:process.env});process.exit(result.status??1);}\nconst fail=existsSync(${JSON.stringify(f.failure)})?readFileSync(${JSON.stringify(f.failure)},'utf8'):'';if(fail && (fail==='ready-api'?args.includes('up')&&args.includes('api'):args.some(a=>a===fail) && (fail!=='migrate'||args.includes('run')))){console.error('provider-canary DATABASE_URL=secret');process.exit(1);}\nconst ids={api:'111111111111',web:'222222222222',minio:'333333333333',postgres:'444444444444','mcp-http':'555555555555'};if(args.includes('ps')) {if(args.includes('-q'))console.log(ids[args.at(-1)]);else console.log('myskills-fixture api running');}if(args[0]==='inspect'){let service=Object.keys(ids).find(k=>ids[k]===args.at(-1));if(service==='mcp-http')service='mcp';console.log('registry.operator.test/myskills/'+service+'@sha256:'+(fail==='image-drift'?'f'.repeat(64):'${digest}')+(args.includes('{{.Config.Image}}')?'':' healthy'));}if(args.includes('scripts/run-registry-backup.mjs'))console.log(JSON.stringify({schemaVersion:1,passed:fail!=='stale-backup',reason:fail==='stale-backup'?'stale':'current',runId:'2026-10-01T00-00-00.000Z_${"e".repeat(16)}',capturedAt:new Date().toISOString()}));if(args.includes('exec'))console.log('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee');if(args[0]==='context')console.log('unix:///var/run/docker.sock');if(args[0]==='info')console.log('linux/amd64');\n`, { mode: 0o755 });
   f.records = () => existsSync(f.log) ? readFileSync(f.log, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
   return f;
 }

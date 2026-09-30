@@ -722,7 +722,12 @@ class JobContext {
     this.details.hostRehearsal = receipt;
     if (this.ran("host-rehearsal") && (receipt?.status !== "passed" || receipt.sourceCommit !== this.run.head
       || receipt.restore?.restoredApplicationRuntime !== "tested" || receipt.restore?.exactPackageBytes !== "passed"
-      || receipt.upgrade?.forwardMigrations !== "passed")) this.fail("host-rehearsal-evidence-missing");
+      || receipt.upgrade?.forwardMigrations !== "passed" || receipt.composeInterruption?.cleanup !== "complete"
+      || receipt.composeInterruption.client?.actualComposeClient !== "interrupted-in-health-wait"
+      || receipt.protectedComposeInputs?.quotedRuntimeAndBootstrapAndBackup !== "exact-values"
+      || [receipt.restore, receipt.upgrade].some((phase) => phase?.authProof?.totp !== "original-factor-decrypted-and-verified"
+        || phase.authProof.recoveryCode !== "verified" || phase.authProof.nonownerPrivateArtifact !== "denied"
+        || phase.authProof.revokedSession !== "denied"))) this.fail("host-rehearsal-evidence-missing");
   }
 
   trackComposeProject(suffix) {

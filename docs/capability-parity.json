@@ -14300,7 +14300,7 @@
           },
           {
             "level": "contract",
-            "detail": "Local operator stub regressions passed for serialization, migration barriers, parsed recovery values and attached upgrade backup ID. These checks are not installation, migration or restored-runtime evidence.",
+            "detail": "Focused local operator, cleanup and auth-driver contract regressions passed for file/directory fsync, pre-quiescence env validation, public bootstrap validation, fd nofollow reads and unresolved Compose cleanup. Contract stubs do not establish installation, physical power loss, actual Compose interpretation or restored runtime.",
             "source": {
               "path": "scripts/test/self-host-operator.test.mjs",
               "line": 1
@@ -14322,7 +14322,7 @@
           },
           {
             "level": "contract",
-            "detail": "Local operator stub regressions passed for serialization, migration barriers, parsed recovery values and attached upgrade backup ID. These checks are not installation, migration or restored-runtime evidence.",
+            "detail": "Focused local operator, cleanup and auth-driver contract regressions passed for file/directory fsync, pre-quiescence env validation, public bootstrap validation, fd nofollow reads and unresolved Compose cleanup. Contract stubs do not establish installation, physical power loss, actual Compose interpretation or restored runtime.",
             "source": {
               "path": "scripts/test/self-host-operator.test.mjs",
               "line": 1
@@ -14344,7 +14344,7 @@
           },
           {
             "level": "contract",
-            "detail": "Local operator stub regressions passed for serialization, migration barriers, parsed recovery values and attached upgrade backup ID. These checks are not installation, migration or restored-runtime evidence.",
+            "detail": "Focused local operator, cleanup and auth-driver contract regressions passed for file/directory fsync, pre-quiescence env validation, public bootstrap validation, fd nofollow reads and unresolved Compose cleanup. Contract stubs do not establish installation, physical power loss, actual Compose interpretation or restored runtime.",
             "source": {
               "path": "scripts/test/self-host-operator.test.mjs",
               "line": 1
@@ -14366,7 +14366,7 @@
           },
           {
             "level": "contract",
-            "detail": "Local operator stub regressions passed for serialization, migration barriers, parsed recovery values and attached upgrade backup ID. These checks are not installation, migration or restored-runtime evidence.",
+            "detail": "Focused local operator, cleanup and auth-driver contract regressions passed for file/directory fsync, pre-quiescence env validation, public bootstrap validation, fd nofollow reads and unresolved Compose cleanup. Contract stubs do not establish installation, physical power loss, actual Compose interpretation or restored runtime.",
             "source": {
               "path": "scripts/test/self-host-operator.test.mjs",
               "line": 1
@@ -14388,7 +14388,7 @@
           },
           {
             "level": "contract",
-            "detail": "Local operator stub regressions passed for serialization, migration barriers, parsed recovery values and attached upgrade backup ID. These checks are not installation, migration or restored-runtime evidence.",
+            "detail": "Focused local operator, cleanup and auth-driver contract regressions passed for file/directory fsync, pre-quiescence env validation, public bootstrap validation, fd nofollow reads and unresolved Compose cleanup. Contract stubs do not establish installation, physical power loss, actual Compose interpretation or restored runtime.",
             "source": {
               "path": "scripts/test/self-host-operator.test.mjs",
               "line": 1
@@ -14409,7 +14409,7 @@
     "No production deployment or real ChatGPT/Claude host acceptance in this audit.",
     "All registered business API routes are mapped, including dynamically registered profile/suite routes and OAuth scope routes.",
     "MCP request body ceiling is 14 MiB plus a 64 KiB JSON-RPC envelope; metadata responses are bounded to 512 KiB and exports to 10 MiB. These transport limits are not domain or real-host acceptance proof.",
-    "HOST-01 records standalone operator source and local contract tests. Fresh install, exact c74ecd33-to-candidate database/runtime upgrade and full-app restore require actual canonical host-rehearsal.json; no new Linux runtime result, external backup durability, public image, deployed behavior or arm64 proof has been recorded here."
+    "HOST-01 records standalone operator source and local contract tests. Canonical Compose interpretation/interruption and restored TOTP, recovery-code, authenticated non-owner denial and revoked-session denial are prepared. Fresh install, exact c74ecd33-to-candidate database/runtime upgrade and full-app restore require actual canonical host-rehearsal.json; no new Linux runtime result, external backup durability, public image, deployed behavior or arm64 proof has been recorded here."
   ],
   "mcp_tool_inventory": [
     {

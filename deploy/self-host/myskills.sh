@@ -193,6 +193,7 @@ case "$command" in
     printf '%s\n' 'Compose startup completed with service health checks. Verify HTTPS, email, owner/MFA and real client workflows before reporting a live deployment.' ;;
   bootstrap)
     cfg startup-check || die 'forward migration requires the exact target bundle for startup; preserve the barrier and use isolated recovery if needed.'
+    cfg bootstrap-check || die 'protected bootstrap configuration is invalid; use the documented owned mode-0600 file.'
     # The API command itself enforces fresh-only, atomic and credential-preserving retries.
     quiet_compose --profile bootstrap run --rm --no-deps bootstrap
     printf '%s\n' 'Fresh-only owner bootstrap command completed. Verify owner sign-in and MFA through HTTPS.' ;;
