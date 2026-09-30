@@ -54,3 +54,10 @@ Independent native reviewers inspected queue correctness and migration/security 
 ## Remaining QUALITY work
 
 Version-aware deterministic eval suites and runs must bind exact release/artifact, runner, and target. Reuse improvement suite/run contracts; keep fail, warning, skipped, and incompatible distinct. Provider or paid execution remains disabled without explicit configuration and budget. Reviewer evidence and public-safe summaries follow the API authority. Milestones 3/6/9 remain incomplete until their runtime acceptance is proved.
+
+## Wave2 integration source state
+
+Shared API production registration, CLI/MCP dispatch and browser entry paths are integrated on the roadmap candidate. Historical leaf-check receipts above remain historical and are not whole-candidate acceptance. Current Node22 source/narrow checks and parent canonical PostgreSQL/browser/image results are recorded in the wave2 build report.
+Production uses backgroundScans and the durable worker starts after listen and stops before pool shutdown. Evidence DTOs retain digest, runner, attempt and failure code with legacy nulls. Completed-evidence trigger locking serializes concurrent finding insertion with scan completion. Version-aware eval expansion remains assigned to the next bounded worker.
+
+Wave2 local proof: the21-test narrow integration selection includes worker batch deduplication and shutdown drain; the25-test Chromium selection covers actual pending wording and digest/attempt/failure display. Combined source build, web typecheck, lint and parity are checked in the wave2 report. The Postgres journey now also holds a real worker terminal write before commit and requires a concurrent late finding insertion to wait, then fail without changing completed evidence. This test is prepared for canonical CI and remains locally unexecuted.

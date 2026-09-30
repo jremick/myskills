@@ -83,6 +83,8 @@ import { SkillManagePanel } from "@/components/registry/SkillManagePanel";
 import { ManagedReleaseSelect, SkillSectionTabs, SkillVersionsPanel } from "@/components/registry/SkillSections";
 import { isPublishedRelease, parseSkillScope, parseSkillTab, safeLibraryReturn, sectionPanelId, sectionTabId, type SkillScope, type SkillTab } from "@/components/registry/skill-workspace";
 import { SubmissionEvidencePanel } from "@/components/registry/SubmissionEvidencePanel";
+import { TaskDiscovery } from "@/components/registry/TaskDiscovery";
+import { ReleaseComparison } from "@/components/registry/ReleaseComparison";
 import { DraftWorkspace, ForkReleaseDraft } from "@/components/authoring/DraftWorkspace";
 import { SkillImprovementPanel } from "@/components/registry/SkillImprovementPanel";
 import { BundleWorkspace } from "@/components/registry/BundleWorkspace";
@@ -1476,6 +1478,8 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   const renderSectionPanel = (bundles: ReactNode) => {
     if (activeTab === "versions" && detailSlug) {
       return (
+        <>
+        <ReleaseComparison client={registryClient} slug={detailSlug} releases={selectableReleases} historyState={historyState} contextKey={JSON.stringify([session?.user.id ?? "anonymous", workspaceVersion, platform])} />
         <SkillVersionsPanel
           historyState={historyState}
           latestVersion={latestVisibleRelease?.version ?? null}
@@ -1485,6 +1489,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
           selectedVersion={workspaceVersion}
           versionHref={(version) => browseUrl(detailSlug, query, platform, version)}
         />
+        </>
       );
     }
     if (activeTab === "manage" && detailSlug) {
@@ -1775,6 +1780,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
                   )}
                   {workspaceScope === "all" && showRegistryList && (
                     <section className="registry-results-panel registry-list" aria-label="Skill search results">
+                      <TaskDiscovery key={session?.user.id ?? "anonymous"} client={registryClient} skillHref={(slug, version) => browseUrl(slug, query, platform, version)} />
                       <div className="registry-list-label">
                         <h2>Skills</h2>
                         <span aria-live="polite">{listState === "ready" ? (nextCursor ? `${skills.length} loaded` : String(skills.length)) : ""}</span>
@@ -2316,6 +2322,7 @@ function SubmitDashboard({ client, onOpenSkill, session, url, onDraftNavigate, o
   const resultReview = result ? reviewStatusLabel(result.submission.reviewStatus) : null;
   const resultSecurity = result ? securityStatusLabel(result.submission.securityStatus) : null;
   const resultFindings = result ? findingsLabel(result.scan.findingCount) : null;
+  const archiveScanPending = Boolean(result && (["queued", "running"].includes(result.scan.status) || result.submission.securityStatus === "not-run"));
 
   return (
     <main className="registry-workspace author-review submit-dashboard" aria-label="Skill package submission">
@@ -2323,7 +2330,7 @@ function SubmitDashboard({ client, onOpenSkill, session, url, onDraftNavigate, o
         <h1>Submit package</h1>
       </header>
 
-      {client.drafts && <DraftWorkspace key={session.user.id} api={client.drafts} actorId={session.user.id} url={url} onNavigate={onDraftNavigate} onNavigationGuardChange={onNavigationGuardChange} correctionSource={correctionSource} onSubmitted={async (submission) => { setResult({ submission, scan: submission.scan }); await refreshSubmissions(); }} />}
+      {client.drafts && <DraftWorkspace key={session.user.id} api={client.drafts} actorId={session.user.id} url={url} onNavigate={onDraftNavigate} onNavigationGuardChange={onNavigationGuardChange} correctionSource={correctionSource} onSubmitted={async () => { setResult(null); await refreshSubmissions(); }} />}
       <div className="registry-surface">
         <section aria-labelledby={`${baseId}-upload`} className="submit-upload">
           <h2 id={`${baseId}-upload`}>Package archive</h2>
@@ -2369,8 +2376,11 @@ function SubmitDashboard({ client, onOpenSkill, session, url, onDraftNavigate, o
                 <span className="registry-chip" data-tone={chipTone(resultSecurity.tone)}>{resultSecurity.label}</span>
                 <span className="registry-chip" data-tone={chipTone(resultFindings.tone)}>{resultFindings.label}</span>
               </p>
-              <p className="author-status" data-tone={result.scan.findings.length > 0 ? "amber" : "teal"}>
-                {result.scan.findings.length > 0 ? "Review the scan warnings before a maintainer approves this package." : "No scan findings. The package is ready for maintainer review."}
+              <p className="author-status" data-tone={archiveScanPending || result.scan.findings.length > 0 || result.submission.securityStatus !== "passed" ? "amber" : "teal"}>
+                {archiveScanPending ? "The confirmation scan is pending. Check submission history for completion before review."
+                  : result.scan.findings.length > 0 ? "Review the scan warnings before a maintainer approves this package."
+                    : result.submission.securityStatus === "passed" ? "No scan findings. The package is ready for maintainer review."
+                      : "The confirmation scan did not pass. Check submission feedback before review."}
               </p>
               <dl className="registry-facts" data-labels="wide">
                 <div>

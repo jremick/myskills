@@ -40,7 +40,8 @@ test("SDK draft tools preserve package bytes, strict unions, revisions, API erro
     assert.equal(result.isError, undefined, JSON.stringify(result));
     assert.deepEqual(f.requests.at(-1), { method, url, body });
     if (["draft_create", "draft_get", "draft_update", "draft_revision", "draft_preview"].includes(name)) {
-      assert.deepEqual((result.structuredContent as any).draft?.files ?? (result.structuredContent as any).preview?.files, files);
+      const content = result.structuredContent as { draft?: { files: unknown }; preview?: { files: unknown } };
+      assert.deepEqual(content.draft?.files ?? content.preview?.files, files);
       assert.equal("artifact" in result.structuredContent!, false, "mutable drafts are not immutable artifact exports");
     }
   }
@@ -48,8 +49,9 @@ test("SDK draft tools preserve package bytes, strict unions, revisions, API erro
   const submitted = await client.callTool({ name: "draft_submit", arguments: { path: { id: "draft-1" }, body } });
   assert.equal(submitted.isError, undefined, JSON.stringify(submitted));
   assert.deepEqual(f.requests.at(-1), { method: "POST", url: "/v1/drafts/draft-1/submit", body });
-  assert.equal((submitted.structuredContent as any).submission.securityStatus, "not-run");
-  assert.equal((submitted.structuredContent as any).submission.scan.status, "queued");
+  const receipt = submitted.structuredContent as { submission: { securityStatus: string; scan: { status: string } } };
+  assert.equal(receipt.submission.securityStatus, "not-run");
+  assert.equal(receipt.submission.scan.status, "queued");
   const invalid = [
     ["draft_create", { body: { title: "One", files: [], owner: { type: "team", id: "other" } } }],
     ["draft_create", { body: { title: "One", files: [{ path: "SKILL.md", content: "x", encoding: "base64" }] } }],
@@ -73,7 +75,7 @@ test("SDK draft tools preserve package bytes, strict unions, revisions, API erro
   for (const [id, code] of [["foreign", "DRAFT_NOT_FOUND"], ["stale", "DRAFT_REVISION_CONFLICT"], ["denied", "SUBMISSION_ROLE_REQUIRED"], ["unknown", "API_ERROR"]]) {
     const result = await client.callTool({ name: "draft_validate", arguments: { path: { id }, body: { expectedRevision: 7 } } });
     assert.equal(result.isError, true);
-    assert.equal((result.structuredContent as any).error.code, code);
+    assert.equal((result.structuredContent as { error: { code: string } }).error.code, code);
     assert.equal(JSON.stringify(result).includes("synthetic-sensitive-content"), false);
   }
 });

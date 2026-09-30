@@ -157,3 +157,4 @@ export * from "./bundle-request.js";
 export * from "./branding.js";
 
 export * from "./delegated-actions.js";
+export * from "./task-discovery.js";

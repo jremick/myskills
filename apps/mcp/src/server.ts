@@ -1,3 +1,4 @@
+import { registerTaskDiscoveryTool } from "./task-discovery.js";
 import { registerApplicationHandoffTools } from "./application-handoffs.js";
 import { registerApplicationTools } from "./application-tools.js";
 import type { McpSession } from "./api-client.js";
@@ -24,6 +25,7 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
   const client = createRegistryApiClient(options);
   const handlers = createAiSkillsMcpHandlers(client);
   registerBundleTools(server, client, { session: options.session });
+  registerTaskDiscoveryTool(server, client, { session: options.session });
   registerApplicationTools(server, client, { session: options.session });
   registerApplicationHandoffTools(server, { appBaseUrl: options.trustedAppBaseUrl });
   const skills = createNativeSkillsHandlers(options);

@@ -2,13 +2,13 @@
 
 Prepared: 2026-10-01
 Base source: `c74ecd33ce987d24ef5ddf40a0fef98f1a50fc9b`
-Status: implementation in progress. No AUTHOR-1 runtime, release or deployment completion is claimed.
+Status: wave2 source integration complete with bounded local Node22 and Chromium checks. PostgreSQL, full-stack, connected-host, release and deployment acceptance remain separate gates.
 
 The [implementation plan](plans/2026-10-01-author-drafts.md) and [API contract](plans/2026-10-01-author-drafts-contract.md) define private multi-file workspaces, saved history, stale-edit recovery, held-file imports, exact-source forks and correction through new immutable submissions. The API, browser and adapter work use distinct file ownership.
 
-Shared wiring is held while the coordinator advances other ready workstreams. The browser's initial `App.tsx`/`api.ts` authoring hunks are preserved and frozen. API and adapter registration hunks are not yet applied. Dedicated draft modules, browser components and acceptance tests continue independently. The authoring migration slot is `0037_author_drafts.sql`. Existing submission hooks remain the transaction boundary; queued confirmation scans from the quality workstream must remain visibly pending until actual completion.
+Shared API/store/services, CLI dispatch, MCP schemas/actions and browser registration are integrated in wave2. Immutable saves/history/diff/OCC and safe folder/ZIP preview reuse the API permission authority. Draft submission refreshes history and clears the previous archive receipt. Production queues a digest-bound confirmation scan and reports queued/not-run until the worker completes. Retry replay selects the latest applicable attempt.
 
-When the AUTHOR slot returns, the browser submission callback must refresh history and clear the old archive receipt. The new workspace displays its own receipt with the service's actual scan status. Reusing the old archive summary would incorrectly call an empty, queued scan ready for review.
+Source forks verify held canonical bytes and retain source, team/organization and lifecycle authority through persistence after allocation waits. Canonical PostgreSQL regressions include concurrent saves/submits, expired-scan replay, rollback, correction and private source byte identity. Their execution remains for the parent controller.
 
 ## Verification ledger
 
@@ -27,4 +27,10 @@ When the AUTHOR slot returns, the browser submission callback must refresh histo
 
 The current source supports selecting exact published versions, preserving version URLs and browser history, showing per-release notes, lifecycle, digest and export guidance. `apps/web/test/e2e/release-history.spec.ts` verifies those behaviors against controlled API responses. It does not compare two packages or prove persisted release comparisons.
 
-No published package comparison implementation was found in the directly relevant registry components or submission API. The roadmap still lists version comparison as open. Private draft revision comparison in this slice must not be used as evidence for published-version comparison. HIST-01 remains an explicit integration acceptance gap for the coordinator to assign after the shared authoring slot is released.
+The release comparison browser now uses both exact authorized bundle reads and checks their digests, package manifest identity and complete file contents. It shows added/removed/modified/unchanged files without changing the pinned URL. Dedicated CLI/MCP comparison remains partial; their exact exports are available. Browser fixture and canonical exact-version authorization tests are prepared. No real PostgreSQL or deployed comparison proof is claimed by source registration.
+
+## Wave2 local verification
+
+The combined eight-workspace build, web typecheck and capability gate pass on Node22.23.2. Draft CLI/MCP transport tests pass within the21-test narrow integration suite. The143-test web DOM/API selection passes. The25-test affected Chromium browser selection includes queued draft history, archive-receipt clearing even when history fails, pending archive wording, and exact release comparison. Comparison also has a real AuthService/API memory journey for two exact private published versions, denied foreign/anonymous reads, stale digests and revoked credentials. These are bounded local proofs, not PostgreSQL or real-host acceptance.
+
+Canonical CI will execute the real queued draft/retry/correction journey, concurrent OCC/submit rollback, allocation-wait membership removal, and changed database-backed source-byte denial. No PostgreSQL run was performed locally in this wave.

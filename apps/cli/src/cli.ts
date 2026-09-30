@@ -2,6 +2,9 @@ import { ConfigurationProfileError, selectConfigurationProfile } from "./configu
 import { browserDeviceLogin } from "./device-login.js";
 import { readBoundedResponse, decodeResponseUtf8, MAX_PACKAGE_RESPONSE_BYTES } from "./bounded-response.js";
 import { bundleRequest } from "@myskills-app/core";
+import { authorDraftHelp, authorDraftApiErrorCodes, runAuthorDraftCommand } from "./author-draft-commands.js";
+import { architecturePlanHelp, runArchitecturePlanCommand } from "./architecture-plan-commands.js";
+import { taskDiscoveryRequest } from "./task-discovery-command.js";
 import { libraryCommandHelp, libraryCommandRequest } from "./library-command.js";
 import { registryCollaborationHelp, runRegistryCollaborationCommand } from "./registry-collaboration-commands.js";
 import { accountAdminHelp, runAccountAdminCommand } from "./account-admin-commands.js";
@@ -263,6 +266,15 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
 }
 
 async function dispatchCli(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+    if (await runAuthorDraftCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
+    if (await runArchitecturePlanCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
+    if (parsed.command === "discover") {
+      let request: ReturnType<typeof taskDiscoveryRequest>;
+      try { request = taskDiscoveryRequest(parsed); } catch (error) { throw new CliError(error instanceof Error ? error.message : "Invalid discovery input.", 2, "CLI_ARGUMENTS_INVALID"); }
+      const context = parityCommandContext(parsed, runtime);
+      context.output(await context.request("POST", request.path, request.body, "optional"));
+      return 0;
+    }
     if (await runRegistryCollaborationCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
     if (await runAccountAdminCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
     if (await runArchitectureTargetCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
@@ -383,11 +395,13 @@ function parityCommandContext(parsed: ParsedArgs, runtime: CliRuntime): ParityCo
       }
     },
     async readInput(inputPath) {
+      const inputLimit = parsed.command === "drafts" ? 14 * 1024 * 1024 : 256_000;
+      const inputLimitLabel = parsed.command === "drafts" ? "14 MiB" : "256 KB";
       const info = await lstat(inputPath);
-      if (!info.isFile() || info.size > 256_000) throw new CliError("Input must be a regular JSON file of at most 256 KB.", 2, "CLI_ARGUMENTS_INVALID");
+      if (!info.isFile() || info.size > inputLimit) throw new CliError(`Input must be a regular JSON file of at most ${inputLimitLabel}.`, 2, "CLI_ARGUMENTS_INVALID");
       let input: unknown;
-      try { input = JSON.parse(await readRegularText(await realpath(inputPath), 256_000)); }
-      catch { throw new CliError("Input must contain a JSON object of at most 256 KB.", 2, "CLI_ARGUMENTS_INVALID"); }
+      try { input = JSON.parse(await readRegularText(await realpath(inputPath), inputLimit)); }
+      catch { throw new CliError(`Input must contain a JSON object of at most ${inputLimitLabel}.`, 2, "CLI_ARGUMENTS_INVALID"); }
       if (!input || typeof input !== "object" || Array.isArray(input)) throw new CliError("Input must contain a JSON object.", 2, "CLI_ARGUMENTS_INVALID");
       return input as Record<string, unknown>;
     },
@@ -5197,6 +5211,9 @@ async function recoverInstallTransactions(root: string): Promise<void> {
       throw new CliError("Recovery found active files that match neither the previous nor staged package. Preserve the active files and recovery copies for operator recovery.", 1);
     }
 
+    if (snapshotPath && await pathExists(snapshotPath) && !previousAtOutput && await pathExists(workspaceBindingPath(root))) {
+      throw new CliError("Managed workspace recovery requires current authority. Retained copies remain private; use an authorized recovery workflow.", 1, "WORKSPACE_RECOVERY_REQUIRED");
+    }
     if (snapshotPath && await pathExists(snapshotPath)) {
       if (!transaction.previous?.contentDigest || !await directoryMatchesDigest(snapshotPath, transaction.previous.contentDigest, transaction.previous.contentDigestAlgorithm)) {
         throw new CliError("Recovery snapshot does not match its verified bytes. Preserve both copies for operator recovery.", 1);
@@ -5561,6 +5578,7 @@ function apiErrorFromBody(pathname: string, baseUrl: string, status: number, bod
   const code = typeof error?.code === "string" && /^[A-Za-z0-9_.:-]{1,80}$/.test(error.code)
     ? error.code
     : "API_REQUEST_FAILED";
+  if (pathname.startsWith("/v1/drafts")) return new CliError("Draft request failed. Check permission, revision and validated package input.", 1, authorDraftApiErrorCodes.has(code) ? code : "API_REQUEST_FAILED", status);
   return new CliError(safeApiErrorMessage(pathname, message, status), 1, code, status);
 }
 
@@ -6156,6 +6174,9 @@ function helpText(runtime: CliRuntime): string {
     "Commands:",
     ...registryCollaborationHelp.map((line) => `  ${line}`),
     ...accountAdminHelp.map((line) => `  ${line}`),
+    ...authorDraftHelp,
+    ...architecturePlanHelp,
+    "  discover <task description> [--limit <1-20>]",
     ...architectureTargetHelp.map((line) => `  ${line}`),
     "  libraries <action> [id] [--input <request.json>] [--json] (libraries help for actions)",
     "  version",

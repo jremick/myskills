@@ -9,11 +9,13 @@ import { createArchitecturePlanFixture } from "../../api/test/fixtures/architect
 // identity. Invented apply fields must fail before forwarding. No real host proof.
 test("MCP architecture plan actions retain exact input and explicit review approval", async (t) => {
   const fixture = await createArchitecturePlanFixture(t);
-  const tokenResponse = await fixture.app.inject({ method: "POST", url: "/v1/auth/api-tokens", headers: { authorization: `Bearer ${fixture.sessions.owner}` }, payload: { name: "Synthetic plan parity", scopes: ["targets:read", "targets:control"] } });
+  const tokenResponse = await fixture.app.inject({ method: "POST", url: "/v1/auth/api-tokens", headers: { authorization: `Bearer ${fixture.sessions.owner}` }, payload: { name: "Synthetic plan parity", scopes: ["targets:read", "targets:control", "architectures:read"] } });
   assert.equal(tokenResponse.statusCode, 201, tokenResponse.body);
   let requests = 0;
   const server = createAiSkillsMcpHttpServer({ apiBaseUrl: "http://fixture.test", fetchImpl: async (url, init) => {
-    requests += 1;
+    // HTTP authenticates each SDK request before argument validation. Count
+    // domain forwarding, not that required credential bootstrap.
+    if (new URL(url).pathname !== "/v1/mcp/session") requests += 1;
     const response = await fixture.app.inject({ method: (init?.method ?? "GET") as "GET" | "POST", url: new URL(url).pathname + new URL(url).search, headers: init?.headers, ...(init?.body ? { payload: JSON.parse(init.body) } : {}) });
     return new Response(response.body, { status: response.statusCode, headers: response.headers as Record<string, string> });
   } });

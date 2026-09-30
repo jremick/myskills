@@ -24,6 +24,7 @@ export interface RegistryApiClient {
   readonly hasToken: boolean;
   bundleRequest?(request: import("@myskills-app/core").BundleRequest): Promise<Record<string, unknown>>;
   authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;
+  discoverTask?(input: import("@myskills-app/core").TaskDiscoveryInput): Promise<import("@myskills-app/core").TaskDiscoveryResponse>;
   searchSkills(input: { query?: string; limit?: number; cursor?: string }): Promise<PublicSkill[]>;
   searchSkillPage?(input: { query?: string; limit?: number; cursor?: string }): Promise<{ skills: PublicSkill[]; nextCursor?: string | null }>;
   applicationRequest?(actionId: string, input: ApplicationRequestInput, signal?: AbortSignal): Promise<Record<string, unknown>>;
@@ -191,6 +192,7 @@ export function createRegistryApiClient(options: RegistryApiClientOptions = {}):
   return {
     baseUrl,
     hasToken: Boolean(token),
+    discoverTask: input => requestJson(fetchImpl, token, `${baseUrl}/v1/skills/discover`, { method: "POST", body: input }),
     bundleRequest: request => requestJson<Record<string, unknown>>(fetchImpl, token, `${baseUrl}${request.pathname}`, { method: request.method, ...(request.payload ? {body: request.payload} : {}) }),
     async authenticateMcp(method, signal) {
       if (!token) {
@@ -215,7 +217,7 @@ export function createRegistryApiClient(options: RegistryApiClientOptions = {}):
       for (const [key, value] of Object.entries(input.query ?? {})) params.set(key, String(value));
       return requestJson<Record<string, unknown>>(fetchImpl, token, `${baseUrl}${path}${params.size ? `?${params}` : ""}`, {
         method: action.method, body: input.body, signal,
-        maxBytes: action.id.endsWith(".export") ? NATIVE_API_BUNDLE_BYTES : NATIVE_API_METADATA_BYTES,
+        maxBytes: action.id.startsWith("draft.") || action.id.endsWith(".export") ? NATIVE_API_BUNDLE_BYTES : NATIVE_API_METADATA_BYTES,
         ...(action.id.endsWith(".export") ? { artifactDigest: action.id.startsWith("review.") || action.id === "skills.releases.export" ? "required" as const : "computed" as const } : {}),
       });
     },
@@ -364,6 +366,8 @@ async function requestJson<T>(fetchImpl: FetchLike, token: string | undefined, u
 // An upstream error is untrusted. Only these source-known codes may reach model
 // output; never echo its message, details, headers or arbitrary code strings.
 const SAFE_ERROR_CODES = new Set([
+  "DRAFT_NOT_FOUND", "DRAFT_REVISION_CONFLICT", "SUBMISSION_ROLE_REQUIRED", "DRAFT_SOURCE_NOT_FOUND", "DRAFT_LIMIT", "DRAFT_HISTORY_LIMIT", "INVALID_DRAFT_INPUT",
+  "ARCHITECTURE_PLAN_REVIEW_ONLY", "ARCHITECTURE_PLAN_POLICY_STALE", "ARCHITECTURE_PLAN_OBSERVATION_STALE", "ARCHITECTURE_PLAN_REVIEW_DIGEST_CONFLICT",
   "API_TOKEN_SCOPE_REQUIRED", "AUTHENTICATION_REQUIRED", "MFA_VERIFICATION_REQUIRED", "OAUTH_TOKEN_NOT_ALLOWED",
   "TEAM_OWNER_REQUIRED", "TEAM_MEMBER_REQUIRED", "ADMIN_ROLE_REQUIRED", "REVIEW_ROLE_REQUIRED", "AUTHOR_ROLE_REQUIRED",
   "SKILL_NOT_FOUND", "ARCHITECTURE_NOT_FOUND", "SUBMISSION_NOT_FOUND", "LIBRARY_NOT_FOUND", "IMPROVEMENT_NOT_FOUND",

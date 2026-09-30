@@ -1,3 +1,9 @@
+import { registerDraftRoutes } from "./drafts/routes.js";
+import type { DraftService } from "./drafts/service.js";
+import { registerArchitecturePlanRoutes } from "./architecture-sync/routes.js";
+import type { ArchitecturePlanService } from "./architecture-sync/plan-service.js";
+import { registerTaskDiscoveryRoutes } from "./discovery/routes.js";
+import type { DiscoveryFinalAuthority } from "./discovery/service.js";
 import { registerBundleRoutes } from "./bundles/routes.js";
 import { readAuthorizedArtifactBundle } from "./artifacts/delivery.js";
 import type { BundleService } from "./bundles/service.js";
@@ -130,6 +136,9 @@ export interface BuildAppOptions {
   organizationService?: OrganizationService;
   architectureStore?: ArchitectureStore;
   architectureTargetService?: ArchitectureTargetService;
+  architecturePlanService?: ArchitecturePlanService;
+  draftService?: DraftService;
+  discoveryFinalAuthority?: DiscoveryFinalAuthority;
   targetSkillOperationService?: TargetSkillOperationService;
   skillUpgradePolicyService?: SkillUpgradePolicyService;
   improvementService?: ImprovementService;
@@ -366,6 +375,9 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         organizations: phase2ArchitectureReady && Boolean(options.authService && options.organizationService),
         sharing: Boolean(options.authService),
         architectures: phase2ArchitectureReady && Boolean(options.authService && options.architectureStore && options.submissionService),
+        drafts: Boolean(options.authService && options.draftService),
+        taskDiscovery: Boolean(options.submissionService),
+        architecturePlans: phase2ArchitectureReady && Boolean(options.authService && options.architecturePlanService),
         architectureTargets: phase2ArchitectureReady && Boolean(options.authService && options.architectureTargetService),
         architectureObservationSlugValidation: phase2ArchitectureReady && observationPrivacyReady && Boolean(options.authService && options.architectureTargetService),
         architectureOrganizationGrants: phase2ArchitectureReady && Boolean(options.authService && options.architectureOrganizationGrantService),
@@ -2458,6 +2470,13 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       ...parseReviewActionInput(request.body),
     });
     return reply.send({ submission: result });
+  });
+
+  registerDraftRoutes(app, options, { requestAuthorization, authFailureReply, requireScope, requiresMfaForRole });
+  registerTaskDiscoveryRoutes(app, options, { requestAuthorization, requireScope });
+  if (options.architecturePlanService) registerArchitecturePlanRoutes(app, {
+    service: options.architecturePlanService,
+    authenticate: (request, reply) => authenticateArchitectureTargetSession(options, request, reply),
   });
 
   registerImprovementRoutes(app, {

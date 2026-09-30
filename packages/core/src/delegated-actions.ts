@@ -89,6 +89,21 @@ export interface DelegatedAction {
 }
 
 export const DELEGATED_ACTIONS = [
+  {"id": "draft.list", "capabilityId": "PUB-10", "method": "GET", "route": "/v1/drafts", "requiredScopes": ["submissions:read"], "assurance": "authenticated", "classification": "delegated_action"},
+  {"id": "draft.get", "capabilityId": "PUB-10", "method": "GET", "route": "/v1/drafts/:id", "requiredScopes": ["submissions:read"], "assurance": "authenticated", "classification": "delegated_action"},
+  {"id": "draft.history", "capabilityId": "PUB-10", "method": "GET", "route": "/v1/drafts/:id/history", "requiredScopes": ["submissions:read"], "assurance": "authenticated", "classification": "delegated_action"},
+  {"id": "draft.revision", "capabilityId": "PUB-10", "method": "GET", "route": "/v1/drafts/:id/revisions/:revision", "requiredScopes": ["submissions:read"], "assurance": "authenticated", "classification": "delegated_action"},
+  {"id": "draft.create", "capabilityId": "PUB-10", "method": "POST", "route": "/v1/drafts", "requiredScopes": ["skills:submit"], "assurance": "mfa_if_privileged_role", "classification": "delegated_action"},
+  {"id": "draft.update", "capabilityId": "PUB-10", "method": "PUT", "route": "/v1/drafts/:id", "requiredScopes": ["skills:submit"], "assurance": "mfa_if_privileged_role", "classification": "delegated_action"},
+  {"id": "draft.preview", "capabilityId": "PUB-10", "method": "POST", "route": "/v1/drafts/preview", "requiredScopes": ["skills:submit"], "assurance": "mfa_if_privileged_role", "classification": "delegated_action"},
+  {"id": "draft.validate", "capabilityId": "PUB-10", "method": "POST", "route": "/v1/drafts/:id/validate", "requiredScopes": ["skills:submit"], "assurance": "mfa_if_privileged_role", "classification": "delegated_action"},
+  {"id": "draft.submit", "capabilityId": "PUB-10", "method": "POST", "route": "/v1/drafts/:id/submit", "requiredScopes": ["skills:submit"], "assurance": "mfa_if_privileged_role", "classification": "delegated_action"},
+  {"id": "architecture_plans.create", "capabilityId": "ARC-10", "method": "POST", "route": "/v1/architecture-targets/:id/plans", "requiredScopes": ["targets:control", "architectures:read"], "assurance": "mfa", "classification": "delegated_action"},
+  {"id": "architecture_plans.list", "capabilityId": "ARC-10", "method": "GET", "route": "/v1/architecture-targets/:id/plans", "requiredScopes": ["targets:read", "architectures:read"], "assurance": "authenticated", "classification": "delegated_action"},
+  {"id": "architecture_plans.get", "capabilityId": "ARC-10", "method": "GET", "route": "/v1/architecture-plans/:id", "requiredScopes": ["targets:read", "architectures:read"], "assurance": "authenticated", "classification": "delegated_action"},
+  {"id": "architecture_plans.approve", "capabilityId": "ARC-10", "method": "POST", "route": "/v1/architecture-plans/:id/approve", "requiredScopes": ["targets:control", "architectures:read"], "assurance": "mfa", "classification": "delegated_action"},
+  {"id": "skills.discover", "capabilityId": "REG-11", "method": "POST", "route": "/v1/skills/discover", "requiredScopes": ["skills:read"], "assurance": "authenticated_or_existing_public_read", "classification": "delegated_action"},
+
   {"id": "skills.list", "capabilityId": "REG-01", "method": "GET", "route": "/v1/skills", "requiredScopes": ["skills:read"], "assurance": "authenticated_or_existing_public_read", "classification": "delegated_action"},
   {"id": "skills.get", "capabilityId": "REG-02", "method": "GET", "route": "/v1/skills/:slug", "requiredScopes": ["skills:read"], "assurance": "authenticated_or_existing_public_read", "classification": "delegated_action"},
   {"id": "skills.releases.list", "capabilityId": "REG-03", "method": "GET", "route": "/v1/skills/:slug/releases", "requiredScopes": ["skills:read"], "assurance": "authenticated_or_existing_public_read", "classification": "delegated_action"},

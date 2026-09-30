@@ -100,3 +100,10 @@ operation, including router storage/exposure semantics and rollback baseline.
 This document does not invent a platform contract or authorize a live pilot.
 
 Verification results and the exact reviewed commit are recorded at closeout.
+
+## Wave2 integration source state
+
+Shared API production registration, CLI/MCP dispatch and browser entry paths are integrated on the roadmap candidate. Historical leaf-check receipts above remain historical and are not whole-candidate acceptance. Current Node22 source/narrow checks and parent canonical PostgreSQL/browser/image results are recorded in the wave2 build report.
+Plans remain permanently review-only. Apply, claim, lease, recovery and rollback reject their purpose before mutation. Historical exposure must be permitted by the current effective profile and ancestors; current policy constraints are fenced. Organization target grants and receiving-organization release visibility are independent from personal ownership. The memory fixture provides point-in-time review intent and is not execution authority. The Postgres production wrapper retains authority through review persistence. Full composed graph artifact delivery from ARCHITECTURE_DECISION.md remains for the next worker; per-skill success is not composed acceptance.
+
+Wave2 local proof: memory API route/instance and CLI/MCP transport journeys pass in the21-test narrow selection. Desktop/mobile selected-revision and stale-review browser journeys pass in the25-test affected Chromium selection. Canonical PostgreSQL additions cover held consent/account/exact-release authority, actual observation/policy writers, post-change refusal, atomic approval rollback, concurrent same-actor replay, restart and permanent review-purpose denial. Strict test-source typecheck is a syntax/contract check only; PostgreSQL execution remains with the controller. Current upgrade revisions fence review, while complete composed delivery and execution-time upgrade eligibility remain the next bounded workstream.

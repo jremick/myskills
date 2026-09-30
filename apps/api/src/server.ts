@@ -1,3 +1,10 @@
+import { PostgresDraftStore } from "./drafts/postgres-store.js";
+import { DraftService } from "./drafts/service.js";
+import { PackageScanService } from "./package-quality/scan-service.js";
+import { PackageScanWorker } from "./package-quality/scan-worker.js";
+import { ArchitecturePlanService } from "./architecture-sync/plan-service.js";
+import { PostgresArchitectureSyncStore } from "./architecture-sync/postgres-store.js";
+import { createPostgresDiscoveryFinalAuthority } from "./discovery/postgres-authority.js";
 import { BundleService } from "./bundles/service.js";
 import { isIP } from "node:net";
 import { LIBRARY_LIMITS } from "@myskills-app/core";
@@ -61,7 +68,7 @@ if (!registryInstanceId || !/^[a-f0-9-]{36}$/.test(registryInstanceId)) {
 const artifactStorage = createArtifactObjectStorageFromEnv(process.env);
 const improvementStore = new PostgresImprovementStore(db);
 // Publication rechecks the latest release declaration inside its own transaction.
-const submissionStore = new PostgresSubmissionStore(db, { artifactStorage, publicationGuard: improvementStore });
+const submissionStore = new PostgresSubmissionStore(db, { artifactStorage, publicationGuard: improvementStore, backgroundScans: true });
 await submissionStore.reconcilePendingArtifactWrites();
 const teamStore = new PostgresTeamStore(db);
 const teamService = new TeamService(teamStore);
@@ -157,6 +164,11 @@ const app = buildApp({
     notificationSink,
   }),
   submissionService,
+  draftService: new DraftService(new PostgresDraftStore(db), submissionService),
+  architecturePlanService: new ArchitecturePlanService(new PostgresArchitectureSyncStore(db), {
+    architectureStore, targetStore: architectureTargetStore, releaseDependencies: { skillRepository, submissionService },
+  }),
+  discoveryFinalAuthority: createPostgresDiscoveryFinalAuthority(db),
   teamService,
   organizationService,
   architectureStore,
@@ -215,10 +227,17 @@ const librarySourceWorker = process.env.LIBRARY_SOURCE_WORKER?.trim() === "disab
     onError: () => app.log.error("Library source check failed; due checks will be retried."),
   });
 
+const packageScanWorker = process.env.PACKAGE_SCAN_WORKER?.trim() === "disabled"
+  ? undefined
+  : new PackageScanWorker(new PackageScanService(db, { artifactStorage }), {
+    onError: () => app.log.error("Package scan failed; durable attempts will be retried."),
+  });
+
 try {
   await app.listen({ port, host });
   authNotificationWorker?.start();
   librarySourceWorker?.start();
+  packageScanWorker?.start();
 } catch (error) {
   app.log.error(error);
   await pool.end();
@@ -235,6 +254,7 @@ const shutdown = () => shutdownPromise ??= (async () => {
   }
   await authNotificationWorker?.stop();
   await librarySourceWorker?.stop();
+  await packageScanWorker?.stop();
   await app.close();
   await pool.end();
 })();

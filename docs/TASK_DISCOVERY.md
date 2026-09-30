@@ -86,3 +86,10 @@ and membership revocation. The browser journey in `task-discovery.spec.ts` recor
 desktop/mobile screenshots and a structured interaction receipt. Its mocked API
 does not establish database or deployed proof. Real-host and deployed acceptance
 must be recorded separately.
+
+## Wave2 integration source state
+
+Shared API production registration, CLI/MCP dispatch and browser entry paths are integrated on the roadmap candidate. Historical leaf-check receipts above remain historical and are not whole-candidate acceptance. Current Node22 source/narrow checks and parent canonical PostgreSQL/browser/image results are recorded in the wave2 build report.
+The production final decision uses one read-only REPEATABLE READ snapshot for credential/account, visibility/grants, current default metadata and exact release identity. Results are lexical overlap only. Browser connection/credential changes remount and discard all task/result state. Fixed synthetic ordinary-search/no-match/latency receipt remains required under reports; no provider calls or effectiveness/activation/trust claim is authorized.
+
+Wave2 local proof: fixed synthetic memory API corpus/ordinary-search/no-match/latency checks and CLI/MCP transport tests pass. The JSON receipt is retained in the wave2 reports. Desktop/mobile keyboard browser journeys pass, and two DOM regressions confirm that completed results, private task text and pending state cannot cross token/connection changes. Twelve static-site tests pass after aligning the home copy with composed skill sets, profiles/environments and architecture lifecycle; local rendering does not prove composed rollout or live host acceptance. Final coherent PostgreSQL snapshot tests are prepared and typechecked for controller execution, not run locally.
