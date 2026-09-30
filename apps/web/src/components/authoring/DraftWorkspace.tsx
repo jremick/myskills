@@ -17,8 +17,10 @@ let nextConnection = 0;
 export function DraftWorkspace(props: Omit<Parameters<typeof DraftWorkspaceState>[0], "recoveryScope"> & { credentialEpoch?: string }) {
   if (!connections.has(props.api)) connections.set(props.api, ++nextConnection);
   const epoch = connections.get(props.api)!;
-  const scope = `${props.api.registryIdentity ?? window.location.origin}:${epoch}:${props.credentialEpoch ?? ""}`;
-  return <DraftWorkspaceState key={`${props.actorId}:${scope}`} {...props} recoveryScope={scope} />;
+  const registry = props.api.registryIdentity ?? window.location.origin;
+  const credential = props.credentialEpoch ?? props.api.credentialIdentity ?? String(epoch);
+  const scope = `${registry}:${credential}`;
+  return <DraftWorkspaceState key={`${props.actorId}:${registry}:${epoch}:${credential}`} {...props} recoveryScope={scope} />;
 }
 
 function DraftWorkspaceState({ api, actorId, recoveryScope, url, onNavigate, onNavigationGuardChange, correctionSource, onSubmitted }: {

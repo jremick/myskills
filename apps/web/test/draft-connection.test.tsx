@@ -45,3 +45,14 @@ test("same client reference with a new credential epoch clears private edits and
   assert.equal(view.queryByRole("region",{name:"Unsaved edit recovery"}),null);
   await view.findByDisplayValue("Private content canary");
 });
+
+test("authorized same-credential recovery remains available across client reconstruction, but not another registry", async () => {
+  const api={...client("https://one.example",async()=>({draft:head})),credentialIdentity:"opaque-credential"};
+  const view=render(<DraftWorkspace {...props} api={api}/>);await view.findByDisplayValue("Private content canary");
+  fireEvent.change(view.getByRole("textbox",{name:"File contents"}),{target:{value:"Private recovery canary"}});
+  const reconstructed={...api};view.rerender(<DraftWorkspace {...props} api={reconstructed}/>);
+  await view.findByRole("region",{name:"Unsaved edit recovery"});
+  assert.equal(view.queryByDisplayValue("Private recovery canary"),null);
+  const other={...api,registryIdentity:"https://two.example"};view.rerender(<DraftWorkspace {...props} api={other}/>);
+  await view.findByDisplayValue("Private content canary");assert.equal(view.queryByRole("region",{name:"Unsaved edit recovery"}),null);
+});
