@@ -13,6 +13,7 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  mkdtempSync,
   openSync,
   readFileSync,
   readdirSync,
@@ -41,6 +42,15 @@ const contextJobs = {
   "web-e2e": ["web-e2e-node22", "web-e2e-node24"],
   "postgres-integration": ["postgres-node22", "postgres-node24"],
 };
+// The measured four-lane verify plan. The controller still holds one global worker lock around
+// the whole invocation; this does not allow separate app runs to overlap on the Docker daemon.
+const verifyLanes = [
+  ["web-e2e-node22"],
+  ["web-e2e-node24"],
+  ["postgres-node22", "check-node22"],
+  ["postgres-node24", "check-node24", "railway-images"],
+];
+const browserPortNames = ["MYSKILLS_E2E_PORT", "MYSKILLS_E2E_WEB_PORT", "MYSKILLS_E2E_MAILPIT_PORT"];
 const usage = `Usage: scripts/local-ci.sh <verify|release-check|codeql> [--job <id>]...
 
 Jobs:
@@ -191,6 +201,14 @@ function validateEvidenceDirectory(value) {
 }
 
 function prepareRun(options, runId, evidence) {
+  const laneCount = process.env.LOCAL_CI_VERIFY_LANES ?? "1";
+  if (!["1", "4"].includes(laneCount) || (laneCount === "4" && options.mode !== "verify")) {
+    throw new Rejection("invalid-verify-lanes", "LOCAL_CI_VERIFY_LANES must be 1 (serial) or 4 (verify only).");
+  }
+  if (laneCount === "4" && options.jobs.filter((id) => id.startsWith("web-e2e-")).length > 1
+    && browserPortNames.some((name) => process.env[name] !== undefined)) {
+    throw new Rejection("parallel-port-override", "Parallel browser jobs need automatic distinct ports; unset MYSKILLS_E2E_PORT, MYSKILLS_E2E_WEB_PORT and MYSKILLS_E2E_MAILPIT_PORT.");
+  }
   const top = git(["rev-parse", "--show-toplevel"]);
   if (top.status !== 0 || realpathSync(top.stdout.trim()) !== realpathSync(sourceRoot)) {
     throw new Rejection("source-not-repository", "The entrypoint must run from its own git checkout.");
@@ -219,6 +237,8 @@ function prepareRun(options, runId, evidence) {
     expectedSha,
     rootPackage,
     npmVersion,
+    laneCount: Number(laneCount),
+    browserPorts: new Set(),
     gatingBlockers: [
       ...(options.complete ? [] : ["partial-job-selection"]),
       ...(expectedSha ? [] : ["source-sha-not-supplied"]),
@@ -356,23 +376,27 @@ async function executeRun(run, base) {
   ledger.track("workspace", run.workspace, null, "created");
   mkdirSync(join(run.evidence, "logs"), { recursive: true });
   const environment = collectEnvironment(run);
-  const jobs = [];
+  const results = new Map();
   const failureReasons = [];
   const sinks = [];
   console.log(`[local-ci] ${run.mode} ${run.runId}: ${run.jobs.join(", ")}`);
-  try {
-    for (const id of run.jobs) {
+  const lanes = run.laneCount === 4 ? verifyLanes.map((lane) => lane.filter((id) => run.jobs.includes(id))) : [run.jobs];
+  // Wait for every lane even on an internal error. Cleanup must never race a still-running job.
+  const outcomes = await Promise.allSettled(lanes.map(async (lane) => {
+    for (const id of lane) {
       if (state.cancelled) {
-        jobs.push({ id, status: "not-run", reason: "cancelled", steps: [] });
-        continue;
+        results.set(id, { id, status: "not-run", reason: "cancelled", steps: [] });
+      } else {
+        const job = new JobContext(id, run, ledger, environment);
+        sinks.push({ id, sink: job.sink });
+        results.set(id, await job.execute());
       }
-      const job = new JobContext(id, run, ledger, environment);
-      sinks.push({ id, sink: job.sink });
-      jobs.push(await job.execute());
     }
-  } catch (error) {
-    failureReasons.push(`internal-error: ${error instanceof Error ? error.message : String(error)}`);
+  }));
+  for (const outcome of outcomes) {
+    if (outcome.status === "rejected") failureReasons.push(`internal-error: ${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}`);
   }
+  const jobs = run.jobs.map((id) => results.get(id) ?? { id, status: "not-run", reason: "internal-error", steps: [] });
 
   const cleanupFailures = ledger.cleanup(new LogSink(null));
   try {
@@ -452,6 +476,19 @@ class JobContext {
     this.clone = null;
     this.deadline = id.startsWith("web-e2e-") ? Date.now() + webE2eTimeoutMs : null;
     this.details = {};
+    this.privateEnvironment = {};
+    if (run.laneCount === 4) {
+      // Keep TMPDIR short enough for the Unix sockets used by test tooling. The controller supplies
+      // its own short run TMPDIR; every job gets an exclusively created child recorded for cleanup.
+      const directory = mkdtempSync(join(tmpdir(), "msci-"));
+      ledger.track("job-directory", directory, id, "created");
+      for (const name of ["h", "t", "r"]) mkdirSync(join(directory, name), { mode: 0o700 });
+      this.privateEnvironment = {
+        HOME: join(directory, "h"), TMPDIR: join(directory, "t"),
+        XDG_CONFIG_HOME: join(directory, "h", ".config"), XDG_CACHE_HOME: join(directory, "h", ".cache"),
+        XDG_RUNTIME_DIR: join(directory, "r"),
+      };
+    }
   }
 
   get stopped() {
@@ -525,7 +562,7 @@ class JobContext {
   }
 
   env(extra = {}) {
-    return jobEnvironment(this.toolchain?.dir ?? null, extra);
+    return jobEnvironment(this.toolchain?.dir ?? null, { ...extra, ...this.privateEnvironment });
   }
 
   skip(name) {
@@ -650,7 +687,7 @@ const jobRunners = {
 
   async "web-e2e"(job, line) {
     if (!job.useToolchain(line) || !await job.checkout()) return;
-    const ports = await e2ePorts();
+    const ports = await e2ePorts(job.run);
     job.details.ports = ports;
     await job.step("install", "npm", ["ci"]);
     await job.step("playwright-browser", "npx", ["playwright", "install", "chromium"]);
@@ -680,7 +717,7 @@ const jobRunners = {
     const tags = git(["tag", "--points-at", "HEAD"], job.clone).stdout.split(/\r?\n/);
     if (!tags.includes(tag)) return job.fail("release-tag-missing-in-clone");
     const databaseUrl = await job.postgres("postgres:17", { interval: "10s", timeout: "5s", retries: "5" });
-    const ports = await e2ePorts();
+    const ports = await e2ePorts(job.run);
     job.details.ports = ports;
     await job.step("install", "npm", ["ci"]);
     await job.step("playwright-browser", "npx", ["playwright", "install", "chromium"]);
@@ -893,6 +930,15 @@ class ResourceLedger {
 }
 
 function removeResource(entry, sink) {
+  if (entry.kind === "job-directory") {
+    try {
+      rmSync(entry.name, { recursive: true, force: true });
+      return true;
+    } catch (error) {
+      sink.note(`job directory cleanup failed: ${error.code ?? error.message}`);
+      return false;
+    }
+  }
   if (entry.kind === "container") return removeContainers([entry.name], sink);
   if (entry.kind === "image") return removeImage(entry.name, sink);
   if (entry.kind === "compose-project") {
@@ -1058,7 +1104,7 @@ function cancel(signal) {
   if (state.cancelled) return;
   state.cancelled = true;
   state.signal = signal;
-  console.error(`[local-ci] ${signal} received; stopping the current step and cleaning up this run's resources.`);
+  console.error(`[local-ci] ${signal} received; stopping active steps and cleaning up this run's resources.`);
   for (const handle of state.activeSteps) handle.stop();
 }
 
@@ -1118,6 +1164,7 @@ function collectEnvironment(run) {
     git: git(["--version"]).stdout.trim(),
     toolchains: {},
     docker: null,
+    verifyLanes: run.laneCount,
   };
   if (run.jobs.some((id) => !id.startsWith("check-") && !id.startsWith("codeql-"))) {
     const version = docker(["version", "--format", "{{.Server.Version}} {{.Server.Os}}/{{.Server.Arch}}"]);
@@ -1126,13 +1173,18 @@ function collectEnvironment(run) {
   return environment;
 }
 
-async function e2ePorts() {
+async function e2ePorts(run) {
   const ports = {};
-  for (const name of ["MYSKILLS_E2E_PORT", "MYSKILLS_E2E_WEB_PORT", "MYSKILLS_E2E_MAILPIT_PORT"]) {
+  for (const name of browserPortNames) {
     const supplied = process.env[name];
-    ports[name] = supplied && /^\d+$/.test(supplied) && Number(supplied) >= 1024 && Number(supplied) <= 65535
+    let port = supplied && /^\d+$/.test(supplied) && Number(supplied) >= 1024 && Number(supplied) <= 65535
       ? supplied
       : String(await freeLoopbackPort());
+    if (run.laneCount === 4) {
+      while (run.browserPorts.has(port)) port = String(await freeLoopbackPort());
+      run.browserPorts.add(port);
+    }
+    ports[name] = port;
   }
   return ports;
 }
