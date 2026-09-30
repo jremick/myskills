@@ -2,9 +2,22 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
-## 0.1.0-beta.17 - candidate
+## 0.1.0-beta.18 - candidate
+
+Target release: `v0.1.0-beta.18`.
+
+- Extend named CLI and MCP workflows across registry, Library, collaboration, administration and account operations while preserving API permissions, scopes and MFA requirements.
+- Add opt-in remote MCP connections with OAuth consent, authorization code and PKCE, refresh rotation, connection revocation and bounded MFA assurance. Keep credential entry and local execution behind explicit handoffs.
+- Add a standalone Railway MCP image with startup, health and anonymous-request checks, retained connector evidence and isolated parallel verification.
+- Patch the fast-uri and brace-expansion dependencies without changing the dependency set.
+
+Final-source verification, real ChatGPT/Claude acceptance, publication and hosted promotion remain pending. Tracked Collections and Library Groups are excluded while their model choices remain open. Apply the two additive OAuth migrations before enabling connections. See [release preparation](docs/BETA18_RELEASE_DELIVERY.md) for scope, gate states and rollback.
+
+## 0.1.0-beta.17 - 2026-09-29
 
 Target release: `v0.1.0-beta.17`.
+
+GitHub publication is verified; hosted and npm delivery are separate. See [release evidence](docs/BETA17_RELEASE_DELIVERY.md).
 
 - Open architecture editing in a full-page Workbench, with saved Overview, Skills, History, and Access tabs, responsive editing, draft protection, and direct links.
 - Browse and manage skills in one workspace, preserving the selected skill and exact version across scopes and detail tabs.

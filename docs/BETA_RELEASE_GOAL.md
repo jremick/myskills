@@ -1,15 +1,23 @@
 # Operational Beta Delivery Brief
 
-Version: 0.1.0-beta.17
-Last updated: 2026-09-29
+Version: 0.1.0-beta.18
+Last updated: 2026-09-30
 
-Target release: `v0.1.0-beta.17`.
+Target release: `v0.1.0-beta.18`.
 
-Status: beta.17 release candidate. Publish the unified Skills workspace and
-full-page architecture Workbench with GitHub source authentication and team Library sourcing through the regular
-GitHub release pathway. Instance operators apply the update. Required CI and
-tagged release verification remain publication gates. Broader work-pilot
-acceptance and unrelated follow-up work are outside this release.
+Status: beta.18 release preparation. This candidate adds CLI/MCP capability
+parity, opt-in OAuth connections, dependency repairs and delivery tooling to
+beta.17. Final-source verification, staging, actual ChatGPT/Claude acceptance,
+GitHub/npm publication and hosted promotion remain pending. Tracked Collections
+and Library Groups remain in progress pending model decisions and are excluded
+from this candidate. See [Beta.18 release preparation](BETA18_RELEASE_DELIVERY.md).
+
+## Beta.17 Release Record
+
+The unified Skills workspace, full-page architecture Workbench, GitHub source
+authentication and team Library sourcing are published on GitHub as beta.17.
+That publication does not establish hosted or npm delivery. See
+[Beta.17 release delivery](BETA17_RELEASE_DELIVERY.md).
 
 ## Beta.16 Release Record
 

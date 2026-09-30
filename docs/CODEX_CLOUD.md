@@ -1,7 +1,7 @@
 # Codex Cloud Setup
 
-Version: 0.1.0-beta.17
-Last updated: 2026-09-29
+Version: 0.1.0-beta.18
+Last updated: 2026-09-30
 
 This runbook makes MySkills ready for subscription-based Codex cloud/web tasks while keeping implementation work on GitHub pull requests and avoiding API-billed GitHub Actions agents for now.
 
