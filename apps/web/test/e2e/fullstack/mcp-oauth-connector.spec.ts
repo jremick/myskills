@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 /**
  * Real browser + nginx web proxy + API + MCP service + Postgres. One public
@@ -101,9 +101,11 @@ test("remote MCP connector: MFA consent, scoped writes, persistent readback and 
   const scopeDenied = await mcp(request, tokens.access_token, "tools/call", { name: "teams_create", arguments: { body: { name: blockedName } } });
   expect(scopeDenied.status()).toBe(403);
   expect(scopeDenied.headers()["www-authenticate"]).toContain("teams:write");
-  const initialTeams = await page.request.get(`${origin}/api/v1/teams`);
-  expect(initialTeams.status()).toBe(200);
-  expect((await initialTeams.json()).teams.some((team: { name: string }) => team.name === blockedName)).toBe(false);
+  await page.goto("/teams");
+  await expect(page.getByRole("heading", { name: "Teams", exact: true, level: 1 })).toBeVisible();
+  const initialTeams = await readBrowserTeams(page);
+  expect(initialTeams.status).toBe(200);
+  expect(initialTeams.teams.some((team) => team.name === blockedName)).toBe(false);
 
   // New permissions require a separate explicit consent. Reuse only the real
   // browser session that completed MFA above; never inject a verified flag.
@@ -159,9 +161,9 @@ test("remote MCP connector: MFA consent, scoped writes, persistent readback and 
   await page.goto("/teams");
   await page.reload();
   await expect(page.getByText(teamName, { exact: true }).first()).toBeVisible();
-  const persistedResponse = await page.request.get(`${origin}/api/v1/teams`);
-  expect(persistedResponse.status()).toBe(200);
-  const persisted = (await persistedResponse.json()).teams as Array<{ id: string; name: string }>;
+  const persistedResponse = await readBrowserTeams(page);
+  expect(persistedResponse.status).toBe(200);
+  const persisted = persistedResponse.teams;
   const saved = persisted.filter((team) => team.name === teamName);
   expect(saved).toHaveLength(1);
   expect(saved[0]!.id).toBe(createdTeamId);
@@ -187,9 +189,9 @@ test("remote MCP connector: MFA consent, scoped writes, persistent readback and 
   expect(revokedWrite.status()).toBe(401);
   const revokedRefresh = await request.post("/oauth/token", { form: { grant_type: "refresh_token", refresh_token: writeTokens.refresh_token, client_id: clientId } });
   expect((await revokedRefresh.json()).error).toBe("invalid_grant");
-  const finalReadback = await page.request.get(`${origin}/api/v1/teams`);
-  expect(finalReadback.status()).toBe(200);
-  const finalTeams = (await finalReadback.json()).teams as Array<{ id: string; name: string }>;
+  const finalReadback = await readBrowserTeams(page);
+  expect(finalReadback.status).toBe(200);
+  const finalTeams = finalReadback.teams;
   expect(finalTeams.filter((team) => team.id === saved[0]!.id && team.name === teamName)).toHaveLength(1);
   expect(finalTeams.some((team) => team.name === blockedName || team.name === afterRevocationName)).toBe(false);
 
@@ -202,6 +204,16 @@ test("remote MCP connector: MFA consent, scoped writes, persistent readback and 
   });
   await testInfo.attach("mcp-oauth-fullstack", { body: JSON.stringify(evidence), contentType: "application/json" });
 });
+
+async function readBrowserTeams(page: Page) {
+  // Preserve the real MFA session. Chromium sends its Secure cookie on HTTP
+  // loopback; Playwright's separate API request cookie filter excludes it.
+  return page.evaluate(async () => {
+    const response = await fetch("/api/v1/teams", { credentials: "same-origin" });
+    const body = await response.json() as { teams: Array<{ id: string; name: string }> };
+    return { status: response.status, teams: body.teams };
+  });
+}
 
 function mcp(request: APIRequestContext, token: string | undefined, method: string, params: Record<string, unknown> = {}) {
   return request.post("/mcp", {
