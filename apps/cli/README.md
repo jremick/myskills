@@ -654,6 +654,27 @@ List reads accept `--limit <1-100>` and `--cursor <cursor>`; retain the filters
 when continuing a page. Library deletion requires the current revision:
 `myskills libraries remove <library-id> --revision <current-revision>`.
 
+Collections and Groups organize existing skill entries in one Library. List with
+`libraries collections <library-id>` or `libraries groups <library-id>`; inspect
+with `libraries collection <collection-id>` or `libraries group <group-id>`.
+`collection-members` and `group-members` list ordered entries with the same
+`--limit` and `--cursor` pagination. Collection summaries include source tracking
+health and authorized pending candidate counts.
+
+Create with `libraries create-collection <library-id> --input reviewed.json`
+or `libraries create-group <library-id> --input reviewed.json`. The JSON contains
+`name`, optional `description`, `memberEntryIds` (up to 200 existing skill entry
+IDs), and an optional `clientMutationId`. Preserve the mutation ID and payload
+for retries. Edit with `edit-collection <collection-id>` or `edit-group <group-id>`
+and `--input reviewed.json`; include `expectedRevision` from the latest read.
+Supplying `memberEntryIds` replaces the complete ordered membership. An empty
+array clears it; omitting the field preserves it. Use `remove-collection` or
+`remove-group` with `--revision <current-revision>` to delete the organization
+only. Library entries, source tracking, adoptions and installations remain intact.
+Reads require `libraries:read`; changes require `libraries:write`, current
+Library curation permission and MFA for team Libraries. Groups can overlap and
+are independent of Collections.
+
 Bind an installation to an adopted version with
 `myskills install <slug> --library-entry <entry-id>`. If the adopted release
 requires user action, read its notes and add `--accept-user-action`. Updates

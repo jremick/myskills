@@ -197,6 +197,11 @@ staging-first promotion, backups and API-ready-then-web order.
    dynamic registration with `MYSKILLS_OAUTH_REDIRECT_HOSTS` limited to the
    provider hosts you intend to support, and/or `MYSKILLS_OAUTH_CLIENTS`.
    Run `npm run check:prod-env -- --env-file <file>` against the planned values.
+   Wait for the final API restart after enabling OAuth to become ready. Then
+   restart or redeploy web from the same source revision before the routing
+   checks. The current nginx configuration resolves `API_PROXY_TARGET` at
+   startup; an API restart can otherwise leave web pointing at the previous
+   private address.
 5. Verify routing and public URL consistency from outside the platform:
    `node scripts/check-mcp-oauth-routing.mjs --origin https://skills.example.com`.
    It must pass all six checks. Then sign in, open Settings and confirm the

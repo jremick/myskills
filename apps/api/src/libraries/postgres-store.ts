@@ -17,6 +17,7 @@ import {
   type SecurityStatus,
   type VisibilityScope,
 } from "@myskills-app/core";
+import { PostgresSkillRepository } from "../repositories/postgres-skill-repository.js";
 import { assertCurrentTeamOwner, effectiveTeamOwnerPredicate } from "../repositories/team-ownership.js";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type { Database, DatabaseTransaction } from "../db/client.js";
@@ -37,6 +38,19 @@ export interface LibraryRecord {
   revision: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export type LibrarySelectionKind = "collection" | "group";
+export interface SelectionRecord {
+  id: string;
+  libraryId: string;
+  kind: LibrarySelectionKind;
+  name: string;
+  description: string;
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+  cursorAt: string;
 }
 
 export interface SourceRecord {
@@ -453,6 +467,112 @@ export class PostgresLibraryStore {
       await tx.execute(sql`UPDATE libraries SET status = 'deleted', deleted_at = now(), revision = revision + 1, updated_at = now() WHERE id = ${input.id}::uuid`);
       await audit(tx, { actorUserId: input.actorId, action: "library.delete", resourceType: "library", resourceId: input.id, details: { ...effects } });
       return effects;
+    });
+  }
+
+  // ---- Library collections and groups -------------------------------------
+
+  async getSelection(id: string, kind: LibrarySelectionKind): Promise<SelectionRecord | null> {
+    if (!isUuid(id)) return null;
+    const rows = await this.db.execute<Row>(sql`SELECT s.*, ${CURSOR_AT(sql`s.created_at`)} AS cursor_at
+      FROM library_selections s JOIN libraries l ON l.id = s.library_id
+      WHERE s.id = ${id}::uuid AND s.kind = ${kind} AND s.status = 'active' AND l.status = 'active'`);
+    return rows.rows[0] ? selectionRecord(rows.rows[0]) : null;
+  }
+
+  async listSelections(libraryId: string, kind: LibrarySelectionKind, page: { limit: number; cursor: PageCursor | null }): Promise<SelectionRecord[]> {
+    if (page.cursor && !isUuid(page.cursor.id)) throw new AppError("Invalid cursor for this list.", "INVALID_PAGE_CURSOR", 400);
+    const result = await this.db.execute<Row>(sql`SELECT s.*, ${CURSOR_AT(sql`s.created_at`)} AS cursor_at
+      FROM library_selections s WHERE s.library_id = ${libraryId}::uuid AND s.kind = ${kind} AND s.status = 'active'
+      ${page.cursor ? sql`AND (s.created_at, s.id) < (${page.cursor.at}::timestamptz, ${page.cursor.id}::uuid)` : sql``}
+      ORDER BY s.created_at DESC, s.id DESC LIMIT ${page.limit + 1}`);
+    return result.rows.map(selectionRecord);
+  }
+
+  /** Bounded to 100 sets of 200 references. Callers project each distinct entry only once. */
+  async selectionMembers(selectionIds: string[]): Promise<Array<{ selectionId: string; entry: EntryRecord }>> {
+    if (!selectionIds.length) return [];
+    const result = await this.db.execute<Row>(sql`SELECT m.selection_id, ${ENTRY_COLUMNS}
+      FROM library_selection_members m JOIN library_selections s ON s.id = m.selection_id
+      JOIN library_entries e ON e.id = m.entry_id AND e.library_id = s.library_id
+      WHERE m.selection_id = ANY(${sql.param(selectionIds)}::uuid[]) AND s.status = 'active' AND e.status = 'active' AND e.kind = 'skill'
+      ORDER BY m.selection_id, m.position`);
+    return result.rows.map((row) => ({ selectionId: String(row.selection_id), entry: entryRecord(row) }));
+  }
+
+  async selectionCandidateCounts(libraryId: string, entryIds: string[], now: Date): Promise<Map<string, number>> {
+    if (!entryIds.length) return new Map();
+    const result = await this.db.execute<{ entry_id: string; count: number }>(sql`
+      SELECT e.id AS entry_id, count(DISTINCT c.id)::int AS count
+      FROM library_entries e JOIN libraries l ON l.id = e.library_id
+      JOIN library_entries source ON source.id = e.source_entry_id AND source.library_id = l.id AND source.status = 'active' AND source.kind = 'source'
+      JOIN library_import_candidates c ON c.source_entry_id = source.id AND c.lineage_id = e.lineage_id
+        AND c.owner_user_id IS NOT DISTINCT FROM l.owner_user_id AND c.owner_team_id IS NOT DISTINCT FROM l.owner_team_id
+      WHERE e.id = ANY(${sql.param(entryIds)}::uuid[]) AND e.library_id = ${libraryId}::uuid AND e.status = 'active'
+        AND c.state IN ('ready-for-review', 'blocked') AND c.expires_at > ${now}
+      GROUP BY e.id`);
+    return new Map(result.rows.map((row) => [row.entry_id, row.count]));
+  }
+
+  async createSelection(input: {
+    libraryId: string; kind: LibrarySelectionKind; name: string; description: string; memberEntryIds: string[];
+    actorId: string; mfaVerified: boolean; clientMutationId: string | null; clientMutationDigest: string;
+  }): Promise<{ id: string; replayed: boolean }> {
+    return this.db.transaction(async (tx) => {
+      await lockSelectionSkills(tx, input.memberEntryIds, input.libraryId, input.actorId);
+      await assertSelectionWriter(tx, input.libraryId, input.actorId, input.mfaVerified);
+      // The Library lock serializes quota and mutation-key checks, including retries.
+      if (input.clientMutationId) {
+        const replay = (await tx.execute<{ id: string; status: string; client_mutation_digest: string }>(sql`
+          SELECT id, status, client_mutation_digest FROM library_selections WHERE library_id = ${input.libraryId}::uuid
+            AND kind = ${input.kind} AND created_by_user_id = ${input.actorId}::uuid AND client_mutation_id = ${input.clientMutationId}`)).rows[0];
+        if (replay) {
+          if (replay.client_mutation_digest !== input.clientMutationDigest) throw new AppError("The client mutation id was already used for a different request.", "CLIENT_MUTATION_ID_CONFLICT", 409);
+          if (replay.status !== 'active') throw selectionNotFound(input.kind);
+          return { id: replay.id, replayed: true };
+        }
+      }
+      const count = (await tx.execute<{ count: number }>(sql`SELECT count(*)::int AS count FROM library_selections
+        WHERE library_id = ${input.libraryId}::uuid AND kind = ${input.kind} AND status = 'active'`)).rows[0]!.count;
+      if (count >= LIBRARY_LIMITS.maxSelectionsPerKindPerLibrary) throw new AppError("The Library has reached the limit for this kind of selection.", "LIBRARY_SELECTION_LIMIT_EXCEEDED", 422, { limit: LIBRARY_LIMITS.maxSelectionsPerKindPerLibrary });
+      await assertSelectionMembers(tx, input.libraryId, input.memberEntryIds, input.actorId);
+      const id = (await tx.execute<{ id: string }>(sql`INSERT INTO library_selections
+        (library_id, kind, name, description, created_by_user_id, client_mutation_id, client_mutation_digest)
+        VALUES (${input.libraryId}::uuid, ${input.kind}, ${input.name}, ${input.description}, ${input.actorId}::uuid, ${input.clientMutationId}, ${input.clientMutationDigest}) RETURNING id`)).rows[0]!.id;
+      await replaceSelectionMembers(tx, id, input.memberEntryIds);
+      await audit(tx, { actorUserId: input.actorId, action: `library.${input.kind}.create`, resourceType: `library_${input.kind}`, resourceId: id, details: { libraryId: input.libraryId } });
+      return { id, replayed: false };
+    });
+  }
+
+  async updateSelection(input: {
+    id: string; libraryId: string; kind: LibrarySelectionKind; expectedRevision: number; name?: string; description?: string; memberEntryIds?: string[];
+    actorId: string; mfaVerified: boolean;
+  }): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await lockSelectionSkills(tx, input.memberEntryIds ?? [], input.libraryId, input.actorId);
+      await assertSelectionWriter(tx, input.libraryId, input.actorId, input.mfaVerified);
+      await lockSelectionRevision(tx, input);
+      if (input.memberEntryIds !== undefined) {
+        await assertSelectionMembers(tx, input.libraryId, input.memberEntryIds, input.actorId);
+        await replaceSelectionMembers(tx, input.id, input.memberEntryIds);
+      }
+      await tx.execute(sql`UPDATE library_selections SET name = coalesce(${input.name ?? null}, name),
+        description = coalesce(${input.description ?? null}, description), revision = revision + 1, updated_at = now()
+        WHERE id = ${input.id}::uuid`);
+      await audit(tx, { actorUserId: input.actorId, action: `library.${input.kind}.update`, resourceType: `library_${input.kind}`, resourceId: input.id,
+        details: { fields: [input.name !== undefined ? "name" : null, input.description !== undefined ? "description" : null, input.memberEntryIds !== undefined ? "members" : null].filter(Boolean) } });
+    });
+  }
+
+  async deleteSelection(input: { id: string; libraryId: string; kind: LibrarySelectionKind; expectedRevision: number; actorId: string; mfaVerified: boolean }): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await lockSelectionSkills(tx, [], input.libraryId, input.actorId);
+      await assertSelectionWriter(tx, input.libraryId, input.actorId, input.mfaVerified);
+      await lockSelectionRevision(tx, input);
+      await tx.execute(sql`DELETE FROM library_selection_members WHERE selection_id = ${input.id}::uuid`);
+      await tx.execute(sql`UPDATE library_selections SET status = 'deleted', deleted_at = now(), revision = revision + 1, updated_at = now() WHERE id = ${input.id}::uuid`);
+      await audit(tx, { actorUserId: input.actorId, action: `library.${input.kind}.delete`, resourceType: `library_${input.kind}`, resourceId: input.id });
     });
   }
 
@@ -1595,6 +1715,95 @@ async function selectReusableSnapshot(db: Db, input: SnapshotIdentity): Promise<
       AND s.upstream_label IS NOT DISTINCT FROM ${input.upstreamLabel}::text AND s.release_id IS NOT DISTINCT FROM ${input.releaseId}::text
   `);
   return result.rows[0] ? snapshotRecord(result.rows[0]) : null;
+}
+
+export function selectionNotFound(kind: LibrarySelectionKind): AppError {
+  return new AppError(`Library ${kind} not found.`, `LIBRARY_${kind.toUpperCase()}_NOT_FOUND`, 404);
+}
+
+async function lockSelectionRevision(tx: DatabaseTransaction, input: { id: string; libraryId: string; kind: LibrarySelectionKind; expectedRevision: number }): Promise<void> {
+  const row = (await tx.execute<{ revision: number }>(sql`SELECT revision FROM library_selections
+    WHERE id = ${input.id}::uuid AND library_id = ${input.libraryId}::uuid AND kind = ${input.kind} AND status = 'active' FOR UPDATE`)).rows[0];
+  if (!row) throw selectionNotFound(input.kind);
+  if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) throw new AppError("expectedRevision must be a positive integer.", "INVALID_REQUEST_BODY", 400);
+  if (row.revision !== input.expectedRevision) throw new AppError(`The ${input.kind} changed. Refresh and retry.`, `LIBRARY_${input.kind.toUpperCase()}_REVISION_CONFLICT`, 409, { currentRevision: row.revision });
+}
+
+/** Sharing writers use settings -> skill -> authority -> Library -> entry. */
+async function lockSelectionSkills(tx: DatabaseTransaction, ids: string[], libraryId: string, actorId: string): Promise<void> {
+  await tx.execute(sql`SELECT key FROM instance_settings WHERE key = 'sharing' FOR SHARE`);
+  if (!ids.length) return;
+  const skillIds = (await tx.execute<{ id: string }>(sql`SELECT s.id FROM skills s
+    WHERE s.slug IN (SELECT skill_slug FROM library_entries WHERE id = ANY(${sql.param(ids)}::uuid[])) ORDER BY s.id FOR SHARE`)).rows.map((row) => row.id);
+  await tx.execute(sql`SELECT id FROM skill_versions WHERE skill_id = ANY(${sql.param(skillIds)}::uuid[]) ORDER BY id FOR SHARE`);
+  // Retain the real grant and membership facts through commit, including access
+  // obtained through a different team or organization from the owning Library.
+  await tx.execute(sql`SELECT skill_id FROM skill_team_grants WHERE skill_id = ANY(${sql.param(skillIds)}::uuid[]) ORDER BY skill_id, team_id FOR SHARE`);
+  await tx.execute(sql`SELECT skill_id FROM skill_user_grants WHERE skill_id = ANY(${sql.param(skillIds)}::uuid[]) ORDER BY skill_id, user_id FOR SHARE`);
+  await tx.execute(sql`SELECT skill_id FROM skill_organization_grants WHERE skill_id = ANY(${sql.param(skillIds)}::uuid[]) ORDER BY skill_id, organization_id FOR SHARE`);
+  const teams = (await tx.execute<{ id: string; organization_id: string | null }>(sql`SELECT id, organization_id FROM teams WHERE id IN (
+    SELECT owner_team_id FROM libraries WHERE id = ${libraryId}::uuid
+    UNION SELECT owner_team_id FROM skills WHERE id = ANY(${sql.param(skillIds)}::uuid[])
+    UNION SELECT team_id FROM skill_team_grants WHERE skill_id = ANY(${sql.param(skillIds)}::uuid[])
+  ) ORDER BY id FOR SHARE`)).rows;
+  const teamIds = teams.map((row) => row.id);
+  const organizations = (await tx.execute<{ id: string }>(sql`SELECT id FROM organizations WHERE id IN (
+    SELECT organization_id FROM teams WHERE id = ANY(${sql.param(teamIds)}::uuid[])
+    UNION SELECT organization_id FROM skill_organization_grants WHERE skill_id = ANY(${sql.param(skillIds)}::uuid[])
+  ) ORDER BY id FOR SHARE`)).rows.map((row) => row.id);
+  await tx.execute(sql`SELECT id FROM organization_memberships WHERE organization_id = ANY(${sql.param(organizations)}::uuid[])
+    AND user_id = ${actorId}::uuid ORDER BY organization_id FOR SHARE`);
+  const library = (await tx.execute<{ owner_team_id: string | null }>(sql`SELECT owner_team_id FROM libraries WHERE id = ${libraryId}::uuid`)).rows[0];
+  // Match assertLibraryWriter's lock mode up front; avoid SHARE->UPDATE upgrades
+  // between two personal mutations from the same actor.
+  await tx.execute(sql`SELECT id FROM users WHERE id = ${actorId}::uuid ${library?.owner_team_id ? sql`FOR SHARE` : sql`FOR UPDATE`}`);
+  await tx.execute(sql`SELECT id FROM team_memberships WHERE team_id = ANY(${sql.param(teamIds)}::uuid[]) AND user_id = ${actorId}::uuid ORDER BY team_id FOR SHARE`);
+}
+
+async function assertSelectionWriter(tx: DatabaseTransaction, libraryId: string, actorId: string, mfaVerified: boolean): Promise<void> {
+  await assertLibraryWriter(tx, libraryId, actorId);
+  const row = (await tx.execute<{ owner_team_id: string | null }>(sql`SELECT owner_team_id FROM libraries WHERE id = ${libraryId}::uuid`)).rows[0];
+  if (row?.owner_team_id && !mfaVerified) throw new AppError("MFA verification is required.", "MFA_VERIFICATION_REQUIRED", 403);
+}
+
+async function assertSelectionMembers(tx: DatabaseTransaction, libraryId: string, ids: string[], actorId: string): Promise<void> {
+  const invalid = () => new AppError("Members must be distinct readable active skill entries in this Library.", "LIBRARY_SELECTION_MEMBER_INVALID", 400);
+  if (ids.length > LIBRARY_LIMITS.maxSelectionMembers || new Set(ids).size !== ids.length) throw invalid();
+  if (!ids.length) return;
+  const rows = await tx.execute<Row>(sql`SELECT ${ENTRY_COLUMNS} FROM library_entries e
+    WHERE e.id = ANY(${sql.param(ids)}::uuid[]) AND e.library_id = ${libraryId}::uuid AND e.kind = 'skill' AND e.status = 'active'
+    ORDER BY e.id FOR SHARE OF e`);
+  if (rows.rows.length !== ids.length) throw invalid();
+  const repository = new PostgresSkillRepository(tx);
+  for (const row of rows.rows) {
+    const entry = entryRecord(row);
+    // Match the Library's owner-curator override, otherwise require real release access.
+    const ownership = (await tx.execute<{ owned: boolean }>(sql`SELECT s.owner_user_id = ${actorId}::uuid
+      OR (s.owner_team_id IS NOT NULL AND ${effectiveTeamOwnerPredicate(sql`s.owner_team_id`, actorId)}) AS owned
+      FROM skills s WHERE s.slug = ${entry.skillSlug}`)).rows[0];
+    if (ownership?.owned) continue;
+    if (!entry.skillSlug || !await repository.getVisibleSkillBySlug(entry.skillSlug, actorId)) throw invalid();
+    if (entry.currentAdoptionId) {
+      const visibleVersion = await tx.execute(sql`SELECT v.id FROM library_adoptions a
+        JOIN skill_versions v ON v.id = a.skill_version_id JOIN skills s ON s.id = v.skill_id JOIN skill_artifacts artifact ON artifact.skill_version_id = v.id
+        WHERE a.id = ${entry.currentAdoptionId}::uuid AND s.slug = ${entry.skillSlug}
+          AND v.lifecycle_status IN ('approved', 'deprecated') AND v.review_status = 'approved' AND v.security_status = 'passed'
+          AND v.published_at IS NOT NULL AND v.deleted_at IS NULL`);
+      if (!visibleVersion.rows.length) throw invalid();
+    }
+  }
+}
+
+async function replaceSelectionMembers(tx: DatabaseTransaction, id: string, ids: string[]): Promise<void> {
+  await tx.execute(sql`DELETE FROM library_selection_members WHERE selection_id = ${id}::uuid`);
+  if (ids.length) await tx.execute(sql`INSERT INTO library_selection_members (selection_id, entry_id, position)
+    SELECT ${id}::uuid, entry_id, (position - 1)::integer FROM unnest(${sql.param(ids)}::uuid[]) WITH ORDINALITY AS selected(entry_id, position)`);
+}
+
+function selectionRecord(row: Row): SelectionRecord {
+  return { id: String(row.id), libraryId: String(row.library_id), kind: row.kind as LibrarySelectionKind,
+    name: String(row.name), description: String(row.description), revision: Number(row.revision),
+    createdAt: iso(row.created_at), updatedAt: iso(row.updated_at), cursorAt: String(row.cursor_at) };
 }
 
 async function assertLibraryWriter(tx: DatabaseTransaction, libraryId: string, actorId: string): Promise<void> {

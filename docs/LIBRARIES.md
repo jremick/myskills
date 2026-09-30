@@ -60,6 +60,22 @@ A team Library can still reference an already-authorized contributor-owned relea
 
 Organization-owned Libraries, private GitHub connections, and ownership transfers are outside this extension.
 
+## Collections and Groups
+
+Collections and Groups belong to a personal or team Library. They use its existing permissions. Curators can create and edit them; team writes require MFA. Members can read the skills they are authorized to access. See the [implementation and verification plan](plans/2026-09-30-library-collections-groups.md) for delivery status.
+
+A **Collection** keeps selected skill entries together and summarizes their sources' tracking health, last successful check, next check and pending changes. Open a source from the Collection to check it or review candidates. Pending candidates remain visible only to curators. Source changes do not add members, adopt versions or install files automatically.
+
+A **Group** organizes related skill entries. A skill can belong to several Groups, and a Group does not need a parent Collection. Entries can also appear in more than one Collection.
+
+1. Open a Library and select **Collections** or **Groups**.
+2. Select **New collection** or **New group**, name it, and choose skills already saved in that Library. Use **Load more skills** to reach later pages.
+3. Open the saved set to inspect its skills. Editing replaces the complete selection, including members on later pages. If another curator changed it, refresh and review the current version before retrying.
+
+Each Library allows up to 100 Collections and 100 Groups, with up to 200 skills in each. Unreadable or removed skills are omitted from members and counts. Deleting a Collection or Group leaves the underlying entries, source tracking, adopted versions and installed copies intact. The Library remains its owner if the creating curator leaves or their account is deleted.
+
+The API, CLI and MCP expose list, detail, member, create, update and delete operations for both. Run `myskills libraries help` for command names and JSON input shapes. Member lists support pagination; an edit invalidates older member cursors. Updates and deletes require the current revision. Create retries use `clientMutationId`.
+
 ## CLI workflow
 
 Run `myskills libraries help` for all commands. Read/write commands use the same API authorization as the browser. API tokens need `libraries:read` or `libraries:write`; importing and self-review also require `skills:submit`. Administrator settings and target binding changes require an MFA-verified session.

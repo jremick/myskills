@@ -677,7 +677,7 @@
         "detail": "skills_metadata_update",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 98
+          "line": 103
         },
         "evidence": [
           {
@@ -695,7 +695,7 @@
         "detail": "skills_metadata_update",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 98
+          "line": 103
         },
         "evidence": [
           {
@@ -781,7 +781,7 @@
         "detail": "skills_lifecycle_decide",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 99
+          "line": 104
         },
         "evidence": [
           {
@@ -799,7 +799,7 @@
         "detail": "skills_lifecycle_decide",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 99
+          "line": 104
         },
         "evidence": [
           {
@@ -877,7 +877,7 @@
         "detail": "skills_releases_lifecycle_decide",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 100
+          "line": 105
         },
         "evidence": [
           {
@@ -895,7 +895,7 @@
         "detail": "skills_releases_lifecycle_decide",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 100
+          "line": 105
         },
         "evidence": [
           {
@@ -979,7 +979,7 @@
         "detail": "skills_sharing_get, skills_sharing_replace",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 101
+          "line": 106
         },
         "evidence": [
           {
@@ -997,7 +997,7 @@
         "detail": "skills_sharing_get, skills_sharing_replace",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 101
+          "line": 106
         },
         "evidence": [
           {
@@ -1099,7 +1099,7 @@
         "detail": "registry_catalog_list, bundles_list, bundles_get, bundles_members_list, skills_bundles_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 103
+          "line": 108
         },
         "evidence": [
           {
@@ -1117,7 +1117,7 @@
         "detail": "registry_catalog_list, bundles_list, bundles_get, bundles_members_list, skills_bundles_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 103
+          "line": 108
         },
         "evidence": [
           {
@@ -1199,7 +1199,7 @@
         "detail": "bundles_sources_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 108
+          "line": 113
         },
         "evidence": [
           {
@@ -1217,7 +1217,7 @@
         "detail": "bundles_sources_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 108
+          "line": 113
         },
         "evidence": [
           {
@@ -1300,7 +1300,7 @@
         "detail": "bundles_create, bundles_update",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 109
+          "line": 114
         },
         "evidence": [
           {
@@ -1318,7 +1318,7 @@
         "detail": "bundles_create, bundles_update",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 109
+          "line": 114
         },
         "evidence": [
           {
@@ -1404,7 +1404,7 @@
         "detail": "bundles_library_reference_create",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 111
+          "line": 116
         },
         "evidence": [
           {
@@ -1422,7 +1422,7 @@
         "detail": "bundles_library_reference_create",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 111
+          "line": 116
         },
         "evidence": [
           {
@@ -1500,7 +1500,7 @@
         "detail": "submissions_create",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 112
+          "line": 117
         },
         "evidence": [
           {
@@ -1518,7 +1518,7 @@
         "detail": "submissions_create",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 112
+          "line": 117
         },
         "evidence": [
           {
@@ -1596,7 +1596,7 @@
         "detail": "submissions_mine_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 113
+          "line": 118
         },
         "evidence": [
           {
@@ -1614,7 +1614,7 @@
         "detail": "submissions_mine_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 113
+          "line": 118
         },
         "evidence": [
           {
@@ -1699,7 +1699,7 @@
         "detail": "submissions_mine_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 114
+          "line": 119
         },
         "evidence": [
           {
@@ -1717,7 +1717,7 @@
         "detail": "submissions_mine_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 114
+          "line": 119
         },
         "evidence": [
           {
@@ -1802,7 +1802,7 @@
         "detail": "submissions_mine_export",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 115
+          "line": 120
         },
         "evidence": [
           {
@@ -1820,7 +1820,7 @@
         "detail": "submissions_mine_export",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 115
+          "line": 120
         },
         "evidence": [
           {
@@ -1898,7 +1898,7 @@
         "detail": "submissions_mine_withdraw",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 116
+          "line": 121
         },
         "evidence": [
           {
@@ -1916,7 +1916,7 @@
         "detail": "submissions_mine_withdraw",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 116
+          "line": 121
         },
         "evidence": [
           {
@@ -2002,7 +2002,7 @@
         "detail": "review_submissions_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 117
+          "line": 122
         },
         "evidence": [
           {
@@ -2020,7 +2020,7 @@
         "detail": "review_submissions_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 117
+          "line": 122
         },
         "evidence": [
           {
@@ -2105,7 +2105,7 @@
         "detail": "review_submissions_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 118
+          "line": 123
         },
         "evidence": [
           {
@@ -2123,7 +2123,7 @@
         "detail": "review_submissions_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 118
+          "line": 123
         },
         "evidence": [
           {
@@ -2201,7 +2201,7 @@
         "detail": "review_submissions_export",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 119
+          "line": 124
         },
         "evidence": [
           {
@@ -2219,7 +2219,7 @@
         "detail": "review_submissions_export",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 119
+          "line": 124
         },
         "evidence": [
           {
@@ -2297,7 +2297,7 @@
         "detail": "review_submissions_decide",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 120
+          "line": 125
         },
         "evidence": [
           {
@@ -2315,7 +2315,7 @@
         "detail": "review_submissions_decide",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 120
+          "line": 125
         },
         "evidence": [
           {
@@ -2384,7 +2384,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 124,
+          "line": 128,
           "anchor": "void client.listTeams().then((result) => { if (active) setTeams(result.teams.filter((team) => team.role === \"owner\")); }).catch(() => {});"
         },
         "evidence": [
@@ -2399,7 +2399,7 @@
         "detail": "libraries_list, libraries_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 121
+          "line": 126
         },
         "evidence": [
           {
@@ -2417,7 +2417,7 @@
         "detail": "libraries_list, libraries_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 121
+          "line": 126
         },
         "evidence": [
           {
@@ -2481,7 +2481,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 79,
+          "line": 80,
           "anchor": "const [createError, setCreateError] = useState<string | null>(null);"
         },
         "evidence": [
@@ -2496,7 +2496,7 @@
         "detail": "libraries_create",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 123
+          "line": 128
         },
         "evidence": [
           {
@@ -2514,7 +2514,7 @@
         "detail": "libraries_create",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 123
+          "line": 128
         },
         "evidence": [
           {
@@ -2587,7 +2587,7 @@
         "detail": "libraries_update",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 124
+          "line": 129
         },
         "evidence": [
           {
@@ -2605,7 +2605,7 @@
         "detail": "libraries_update",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 124
+          "line": 129
         },
         "evidence": [
           {
@@ -2668,7 +2668,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 148,
+          "line": 152,
           "anchor": "function removed() {"
         },
         "evidence": [
@@ -2683,7 +2683,7 @@
         "detail": "libraries_delete",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 125
+          "line": 130
         },
         "evidence": [
           {
@@ -2701,7 +2701,7 @@
         "detail": "libraries_delete",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 125
+          "line": 130
         },
         "evidence": [
           {
@@ -2731,13 +2731,13 @@
           "method": "GET",
           "path": "/v1/libraries/:libraryId/entries",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 148
+          "line": 249
         },
         {
           "method": "GET",
           "path": "/v1/library-entries/:entryId",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 200
+          "line": 301
         }
       ],
       "api": {
@@ -2755,7 +2755,7 @@
         "detail": "library entries/show; entries supports --kind and existing pagination",
         "source": {
           "path": "apps/cli/src/library-command.ts",
-          "line": 62,
+          "line": 77,
           "anchor": "export function libraryCommandRequest(actionName: string, reference: string | undefined, options: Record<string, string | boolean | string[]>, payload?: Record<string, unknown>): LibraryCommandRequest {"
         },
         "evidence": [
@@ -2778,7 +2778,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 229,
+          "line": 235,
           "anchor": "const [entries, setEntries] = useState<LibraryEntry[]>([]);"
         },
         "evidence": [
@@ -2793,7 +2793,7 @@
         "detail": "libraries_entries_list, library_entries_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 126
+          "line": 131
         },
         "evidence": [
           {
@@ -2811,7 +2811,7 @@
         "detail": "libraries_entries_list, library_entries_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 126
+          "line": 131
         },
         "evidence": [
           {
@@ -2842,7 +2842,7 @@
           "method": "POST",
           "path": "/v1/libraries/:libraryId/entries",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 158
+          "line": 259
         }
       ],
       "api": {
@@ -2875,7 +2875,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 327,
+          "line": 333,
           "anchor": "const result = await api.addSource(libraryId, { url, ...(path.trim() ? { path: path.trim() } : {}), ...(refKind === \"url\" ? {} : { ref: { kind: refKind, ...(refValue.trim() ? { value: refValue.trim() } : {}) } }), clientMutationId: sourceKey.current });"
         },
         "evidence": [
@@ -2890,7 +2890,7 @@
         "detail": "libraries_entries_create",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 128
+          "line": 145
         },
         "evidence": [
           {
@@ -2908,7 +2908,7 @@
         "detail": "libraries_entries_create",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 128
+          "line": 145
         },
         "evidence": [
           {
@@ -2938,7 +2938,7 @@
           "method": "DELETE",
           "path": "/v1/library-entries/:entryId",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 207
+          "line": 308
         }
       ],
       "api": {
@@ -2971,7 +2971,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 1082,
+          "line": 1091,
           "anchor": "return <div className=\"library-remove\">{confirm ? <div className=\"library-confirm\"><p>Remove this entry? Installed files and skill releases stay intact.</p><div className=\"library-actions\"><Button variant=\"destructive\" size=\"sm\" disabled={busy} onClick={() => { setBusy(true); void api.removeEntry(entry.id).then(() => onChanged()).catch((e) => setError(libraryError(e))).finally(() => setBusy(false)); }}>Confirm remove</Button><Button variant=\"ghost\" size=\"sm\" onClick={() => setConfirm(false)}>Cancel</Button></div></div> : <Button variant=\"ghost\" size=\"sm\" className=\"library-remove-button\" onClick={() => setConfirm(true)}><Trash2 size={14} aria-hidden=\"true\" />Remove entry</Button>}{error && <p role=\"alert\" className=\"library-alert\">{error}</p>}</div>;"
         },
         "evidence": [
@@ -2986,7 +2986,7 @@
         "detail": "library_entries_delete",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 129
+          "line": 146
         },
         "evidence": [
           {
@@ -3004,7 +3004,7 @@
         "detail": "library_entries_delete",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 129
+          "line": 146
         },
         "evidence": [
           {
@@ -3034,7 +3034,7 @@
           "method": "POST",
           "path": "/v1/library-entries/:entryId/discoveries",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 238
+          "line": 339
         }
       ],
       "api": {
@@ -3067,7 +3067,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 344,
+          "line": 350,
           "anchor": "const sourceSelection = candidateId && entryId ? { id: entryId, discover: false } : manualImport && manualImport.id === selectedId ? manualImport : null;"
         },
         "evidence": [
@@ -3082,7 +3082,7 @@
         "detail": "library_entries_discover",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 130
+          "line": 147
         },
         "evidence": [
           {
@@ -3100,7 +3100,7 @@
         "detail": "library_entries_discover",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 130
+          "line": 147
         },
         "evidence": [
           {
@@ -3130,7 +3130,7 @@
           "method": "POST",
           "path": "/v1/library-entries/:entryId/previews",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 247
+          "line": 348
         }
       ],
       "api": {
@@ -3163,7 +3163,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 789,
+          "line": 798,
           "anchor": "async function preview() {"
         },
         "evidence": [
@@ -3178,7 +3178,7 @@
         "detail": "library_entries_preview",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 131
+          "line": 148
         },
         "evidence": [
           {
@@ -3196,7 +3196,7 @@
         "detail": "library_entries_preview",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 131
+          "line": 148
         },
         "evidence": [
           {
@@ -3226,13 +3226,13 @@
           "method": "GET",
           "path": "/v1/library-entries/:entryId/candidates",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 263
+          "line": 364
         },
         {
           "method": "GET",
           "path": "/v1/library-candidates/:candidateId",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 337
+          "line": 438
         }
       ],
       "api": {
@@ -3250,7 +3250,7 @@
         "detail": "library candidates/candidate; candidates supports --state and existing pagination",
         "source": {
           "path": "apps/cli/src/library-command.ts",
-          "line": 62,
+          "line": 77,
           "anchor": "export function libraryCommandRequest(actionName: string, reference: string | undefined, options: Record<string, string | boolean | string[]>, payload?: Record<string, unknown>): LibraryCommandRequest {"
         },
         "evidence": [
@@ -3288,7 +3288,7 @@
         "detail": "library_entries_candidates_list, library_candidates_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 132
+          "line": 149
         },
         "evidence": [
           {
@@ -3306,7 +3306,7 @@
         "detail": "library_entries_candidates_list, library_candidates_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 132
+          "line": 149
         },
         "evidence": [
           {
@@ -3337,7 +3337,7 @@
           "method": "POST",
           "path": "/v1/library-candidates/:candidateId/import",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 345
+          "line": 446
         }
       ],
       "api": {
@@ -3384,7 +3384,7 @@
         "detail": "library_candidates_import",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 134
+          "line": 151
         },
         "evidence": [
           {
@@ -3402,7 +3402,7 @@
         "detail": "library_candidates_import",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 134
+          "line": 151
         },
         "evidence": [
           {
@@ -3432,7 +3432,7 @@
           "method": "POST",
           "path": "/v1/library-candidates/:candidateId/ignore",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 364
+          "line": 465
         }
       ],
       "api": {
@@ -3465,7 +3465,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 894,
+          "line": 903,
           "anchor": "<Button variant=\"ghost\" size=\"sm\" disabled={busy} onClick={() => void run(async () => setCandidate((await api.ignore(candidate.id)).candidate))}>Ignore candidate</Button>"
         },
         "evidence": [
@@ -3480,7 +3480,7 @@
         "detail": "library_candidates_ignore",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 135
+          "line": 152
         },
         "evidence": [
           {
@@ -3498,7 +3498,7 @@
         "detail": "library_candidates_ignore",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 135
+          "line": 152
         },
         "evidence": [
           {
@@ -3528,7 +3528,7 @@
           "method": "POST",
           "path": "/v1/library-candidates/:candidateId/self-review",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 371
+          "line": 472
         }
       ],
       "api": {
@@ -3561,7 +3561,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 916,
+          "line": 925,
           "anchor": "<Button size=\"sm\" disabled={busy || !inspected || !attested || !candidate.packageDigest} onClick={() => void run(async () => setCandidate((await api.selfReview(candidate.id, candidate.packageDigest!)).candidate))}>Approve for my private use</Button>"
         },
         "evidence": [
@@ -3576,7 +3576,7 @@
         "detail": "library_candidates_self_review",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 136
+          "line": 153
         },
         "evidence": [
           {
@@ -3594,7 +3594,7 @@
         "detail": "library_candidates_self_review",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 136
+          "line": 153
         },
         "evidence": [
           {
@@ -3624,7 +3624,7 @@
           "method": "POST",
           "path": "/v1/library-candidates/:candidateId/instance-review-requests",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 383
+          "line": 484
         }
       ],
       "api": {
@@ -3657,7 +3657,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 921,
+          "line": 930,
           "anchor": "{candidate.registry.attestation === \"private-self-reviewed\" && <Button size=\"sm\" variant=\"outline\" disabled={busy} onClick={() => void run(async () => { await api.requestReview(candidate.id); setMessage(\"Instance review requested. Sharing stays restricted until review is complete.\"); })}>Request instance review for sharing</Button>}"
         },
         "evidence": [
@@ -3672,7 +3672,7 @@
         "detail": "library_candidates_request_instance_review",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 137
+          "line": 154
         },
         "evidence": [
           {
@@ -3690,7 +3690,7 @@
         "detail": "library_candidates_request_instance_review",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 137
+          "line": 154
         },
         "evidence": [
           {
@@ -3720,7 +3720,7 @@
           "method": "POST",
           "path": "/v1/library-entries/:entryId/adoptions",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 277
+          "line": 378
         }
       ],
       "api": {
@@ -3753,7 +3753,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 643,
+          "line": 652,
           "anchor": "const attestation = entry.adoption ? attestationLabel(entry.adoption.attestation) : null;"
         },
         "evidence": [
@@ -3768,7 +3768,7 @@
         "detail": "library_entries_adopt",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 138
+          "line": 155
         },
         "evidence": [
           {
@@ -3786,7 +3786,7 @@
         "detail": "library_entries_adopt",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 138
+          "line": 155
         },
         "evidence": [
           {
@@ -3816,7 +3816,7 @@
           "method": "GET",
           "path": "/v1/library-entries/:entryId/adoptions",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 294
+          "line": 395
         }
       ],
       "api": {
@@ -3859,7 +3859,7 @@
         "detail": "library_entries_adoptions_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 139
+          "line": 156
         },
         "evidence": [
           {
@@ -3877,7 +3877,7 @@
         "detail": "library_entries_adoptions_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 139
+          "line": 156
         },
         "evidence": [
           {
@@ -3907,7 +3907,7 @@
           "method": "GET",
           "path": "/v1/library-entries/:entryId/resolution",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 301
+          "line": 402
         }
       ],
       "api": {
@@ -3940,7 +3940,7 @@
         "detail": "Current adoption shown; no resolution/status operation",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 925,
+          "line": 934,
           "anchor": "setMessage(\"Version adopted. Installed copies change only when you update them.\");"
         },
         "evidence": [
@@ -3955,7 +3955,7 @@
         "detail": "library_entries_resolve",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 140
+          "line": 157
         },
         "evidence": [
           {
@@ -3973,7 +3973,7 @@
         "detail": "library_entries_resolve",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 140
+          "line": 157
         },
         "evidence": [
           {
@@ -4003,7 +4003,7 @@
           "method": "PATCH",
           "path": "/v1/library-entries/:entryId/tracking",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 214
+          "line": 315
         }
       ],
       "api": {
@@ -4051,7 +4051,7 @@
         "detail": "library_entries_tracking_update",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 141
+          "line": 158
         },
         "evidence": [
           {
@@ -4069,7 +4069,7 @@
         "detail": "library_entries_tracking_update",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 141
+          "line": 158
         },
         "evidence": [
           {
@@ -4099,7 +4099,7 @@
           "method": "POST",
           "path": "/v1/library-entries/:entryId/checks",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 229
+          "line": 330
         }
       ],
       "api": {
@@ -4132,7 +4132,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 514,
+          "line": 520,
           "anchor": "<label className=\"library-switch-field\"><input type=\"checkbox\" className=\"library-switch-input\" checked={subscriptionPending ?? Boolean(library.subscription)} disabled={busy} onChange={(event) => { const enabled = event.target.checked; setSubscriptionPending(enabled); void action(() => enabled ? api.subscribe(libraryId) : api.unsubscribe(libraryId)).finally(() => setSubscriptionPending(null)); }} /><span>Notify me about changes</span></label>"
         },
         "evidence": [
@@ -4147,7 +4147,7 @@
         "detail": "library_entries_check",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 142
+          "line": 159
         },
         "evidence": [
           {
@@ -4165,7 +4165,7 @@
         "detail": "library_entries_check",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 142
+          "line": 159
         },
         "evidence": [
           {
@@ -4195,13 +4195,13 @@
           "method": "PUT",
           "path": "/v1/libraries/:libraryId/subscription",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 183
+          "line": 284
         },
         {
           "method": "DELETE",
           "path": "/v1/libraries/:libraryId/subscription",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 191
+          "line": 292
         }
       ],
       "api": {
@@ -4234,7 +4234,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 514,
+          "line": 520,
           "anchor": "<label className=\"library-switch-field\"><input type=\"checkbox\" className=\"library-switch-input\" checked={subscriptionPending ?? Boolean(library.subscription)} disabled={busy} onChange={(event) => { const enabled = event.target.checked; setSubscriptionPending(enabled); void action(() => enabled ? api.subscribe(libraryId) : api.unsubscribe(libraryId)).finally(() => setSubscriptionPending(null)); }} /><span>Notify me about changes</span></label>"
         },
         "evidence": [
@@ -4249,7 +4249,7 @@
         "detail": "libraries_subscription_set, libraries_subscription_delete",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 143
+          "line": 160
         },
         "evidence": [
           {
@@ -4267,7 +4267,7 @@
         "detail": "libraries_subscription_set, libraries_subscription_delete",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 143
+          "line": 160
         },
         "evidence": [
           {
@@ -4298,13 +4298,13 @@
           "method": "GET",
           "path": "/v1/library-inbox",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 392
+          "line": 493
         },
         {
           "method": "POST",
           "path": "/v1/library-inbox/read",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 400
+          "line": 501
         }
       ],
       "api": {
@@ -4322,7 +4322,7 @@
         "detail": "libraries inbox --unread true|false and mark-read; rejects filter on other actions",
         "source": {
           "path": "apps/cli/src/library-command.ts",
-          "line": 70,
+          "line": 85,
           "anchor": "if (options.unread !== undefined) {"
         },
         "evidence": [
@@ -4345,7 +4345,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 1117,
+          "line": 1126,
           "anchor": "useEffect(() => { let active = true; void api.inbox().then((value) => { if (active) { setItems(value.items); setCursor(value.nextCursor); setUnread(value.unreadCount ?? 0); } }).catch((e) => { if (active) setError(libraryError(e)); }); return () => { active = false; }; }, [api]);"
         },
         "evidence": [
@@ -4360,7 +4360,7 @@
         "detail": "library_inbox_list, library_inbox_mark_read",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 145
+          "line": 162
         },
         "evidence": [
           {
@@ -4378,7 +4378,7 @@
         "detail": "library_inbox_list, library_inbox_mark_read",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 145
+          "line": 162
         },
         "evidence": [
           {
@@ -4409,7 +4409,7 @@
           "method": "GET",
           "path": "/v1/library-entries/:entryId/bindings",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 321
+          "line": 422
         }
       ],
       "api": {
@@ -4442,7 +4442,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 519,
+          "line": 525,
           "anchor": "<p className=\"library-muted\">Deleting a library stops tracking and subscriptions. Installed files stay in place; bindings stop following new recommendations.</p>"
         },
         "evidence": [
@@ -4457,7 +4457,7 @@
         "detail": "library_entries_bindings_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 147
+          "line": 164
         },
         "evidence": [
           {
@@ -4475,7 +4475,7 @@
         "detail": "library_entries_bindings_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 147
+          "line": 164
         },
         "evidence": [
           {
@@ -4505,13 +4505,13 @@
           "method": "POST",
           "path": "/v1/library-entries/:entryId/bindings",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 308
+          "line": 409
         },
         {
           "method": "DELETE",
           "path": "/v1/library-bindings/:bindingId",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 328
+          "line": 429
         }
       ],
       "api": {
@@ -4559,7 +4559,7 @@
         "detail": "library_entries_bindings_create, library_bindings_delete",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 148
+          "line": 165
         },
         "evidence": [
           {
@@ -4577,7 +4577,7 @@
         "detail": "library_entries_bindings_create, library_bindings_delete",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 148
+          "line": 165
         },
         "evidence": [
           {
@@ -4608,13 +4608,13 @@
           "method": "GET",
           "path": "/v1/admin/library-settings",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 413
+          "line": 514
         },
         {
           "method": "PUT",
           "path": "/v1/admin/library-settings",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 420
+          "line": 521
         }
       ],
       "api": {
@@ -4647,7 +4647,7 @@
         "detail": "Libraries workspace",
         "source": {
           "path": "apps/web/src/components/library/LibrariesDashboard.tsx",
-          "line": 516,
+          "line": 522,
           "anchor": "{library.access.canWrite && <LibraryDisclosure label=\"Library settings\" iconOnly focusPanel variant=\"ghost\" icon={<Settings2 size={16} aria-hidden=\"true\" />}>"
         },
         "evidence": [
@@ -4662,7 +4662,7 @@
         "detail": "admin_libraries_settings_get, admin_libraries_settings_update",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 150
+          "line": 167
         },
         "evidence": [
           {
@@ -4680,7 +4680,7 @@
         "detail": "admin_libraries_settings_get, admin_libraries_settings_update",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 150
+          "line": 167
         },
         "evidence": [
           {
@@ -4711,19 +4711,19 @@
           "method": "GET",
           "path": "/v1/review/self-reviewed-releases",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 433
+          "line": 534
         },
         {
           "method": "GET",
           "path": "/v1/review/self-reviewed-releases/:submissionId/bundle",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 440
+          "line": 541
         },
         {
           "method": "POST",
           "path": "/v1/review/self-reviewed-releases/:submissionId/elevate",
           "source": "apps/api/src/libraries/routes.ts",
-          "line": 449
+          "line": 550
         }
       ],
       "api": {
@@ -4770,7 +4770,7 @@
         "detail": "review_self_reviewed_list, review_self_reviewed_export, review_self_reviewed_elevate",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 152
+          "line": 169
         },
         "evidence": [
           {
@@ -4788,7 +4788,7 @@
         "detail": "review_self_reviewed_list, review_self_reviewed_export, review_self_reviewed_elevate",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 152
+          "line": 169
         },
         "evidence": [
           {
@@ -4809,6 +4809,530 @@
         "review.self_reviewed.elevate"
       ],
       "initial_authorization": "Reviewer role plus review:read/write and privileged-role MFA; exact inspected artifact required."
+    },
+    {
+      "id": "LIB-26",
+      "domain": "Libraries",
+      "capability": "List and inspect Library Collections and members",
+      "category": "product",
+      "api_operations": [
+        {
+          "method": "GET",
+          "path": "/v1/libraries/:libraryId/collections",
+          "source": "apps/api/src/libraries/routes.ts",
+          "line": 150
+        },
+        {
+          "method": "GET",
+          "path": "/v1/library-collections/:collectionId",
+          "source": "apps/api/src/libraries/routes.ts",
+          "line": 168
+        },
+        {
+          "method": "GET",
+          "path": "/v1/library-collections/:collectionId/members",
+          "source": "apps/api/src/libraries/routes.ts",
+          "line": 174
+        }
+      ],
+      "api": {
+        "status": "A",
+        "detail": "Registered Library selection routes; domain persistence and complete workflow verification pending.",
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "All three route registrations delegate to the Library service; state and permission authority remain in the API. Postgres workflow results are not yet recorded.",
+            "source": {
+              "path": "apps/api/src/libraries/routes.ts",
+              "line": 150
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "Local real Fastify/API-token and issuer-fixture OAuth credential test passed for all 12 selection routes: wrong read/write scope denied, correct scope reaches the configured-service check. The fixture intentionally has no Library service; this is named-action/scope proof, not persistence or Library authorization proof.",
+            "source": {
+              "path": "apps/api/test/delegated-actions.e2e.test.ts",
+              "line": 83
+            }
+          }
+        ]
+      },
+      "cli": {
+        "status": "A",
+        "detail": "libraries collections/collection/collection-members; opaque cursor and bounded limit",
+        "source": {
+          "path": "apps/cli/src/library-command.ts",
+          "line": 77,
+          "anchor": "export function libraryCommandRequest(actionName: string, reference: string | undefined, options: Record<string, string | boolean | string[]>, payload?: Record<string, unknown>): LibraryCommandRequest {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local real CLI-to-HTTP contract fixture passed on 2026-09-30: all six actions, ordered replacement and empty membership, retry payload identity, opaque cursors, bounded pagination, safe delete revisions and server error codes. This tests adapter transport, not API persistence or deployment.",
+            "source": {
+              "path": "apps/cli/test/library-selections.e2e.test.ts",
+              "line": 13
+            }
+          }
+        ]
+      },
+      "ui": {
+        "status": "A",
+        "detail": "Library Collections list, detail and members with source tracking summary",
+        "source": {
+          "path": "apps/web/src/components/library/LibrarySelections.tsx",
+          "line": 30,
+          "anchor": "export function LibrarySelections({ api, library, kind, selectedId, onSelect, onEntry, onRefreshLibrary }: {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local Playwright browser journeys passed on 2026-09-30 with synthetic API responses: create/edit/delete, overlapping Groups, later list/member/skill pages, keyboard and source navigation, stale-edit recovery, MFA denial, permission loss, and Library switching. Desktop and 390px mobile screenshots were inspected. This is rendered UI and transport proof; real API/Postgres persistence and deployment are separate gates.",
+            "source": {
+              "path": "apps/web/test/e2e/library-selections-journey.spec.ts",
+              "line": 73
+            }
+          }
+        ]
+      },
+      "authorization": "Exact libraries:read scope plus current Library resource policy. Only currently readable active members contribute to counts and positions. Collection tracking derives from readable source lineages; pending candidates remain curator-only.",
+      "gap": "G03",
+      "delegated_action_ids": [
+        "libraries.collections.list",
+        "library_collections.get",
+        "library_collections.members.list"
+      ],
+      "mcp_api_token": {
+        "status": "A",
+        "detail": "libraries_collections_list, library_collections_get, library_collections_members_list",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 9,
+          "anchor": "export function registerApplicationTools(server: McpServer, client: RegistryApiClient, options: { session?: McpSession } = {}) {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local MCP SDK-to-HTTP API-token session contract fixture passed on 2026-09-30: six named actions, exact scope metadata, ordered membership, retry keys, revisions, cursor/limit bounds, invalid input rejection and known API errors without upstream message disclosure. The API session is a fixture; no provider-host, OAuth issuance, domain persistence or deployment proof.",
+            "source": {
+              "path": "apps/mcp/test/library-selections.e2e.test.ts",
+              "line": 11
+            }
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "A",
+        "detail": "libraries_collections_list, library_collections_get, library_collections_members_list",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 9,
+          "anchor": "export function registerApplicationTools(server: McpServer, client: RegistryApiClient, options: { session?: McpSession } = {}) {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local MCP SDK-to-HTTP OAuth session contract fixture passed on 2026-09-30: six named actions, exact scope metadata, ordered membership, retry keys, revisions, cursor/limit bounds, invalid input rejection and known API errors without upstream message disclosure. The API session is a fixture; no provider-host, OAuth issuance, domain persistence or deployment proof.",
+            "source": {
+              "path": "apps/mcp/test/library-selections.e2e.test.ts",
+              "line": 11
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "LIB-27",
+      "domain": "Libraries",
+      "capability": "Create, edit and delete Library Collections",
+      "category": "product",
+      "api_operations": [
+        {
+          "method": "POST",
+          "path": "/v1/libraries/:libraryId/collections",
+          "source": "apps/api/src/libraries/routes.ts",
+          "line": 157
+        },
+        {
+          "method": "PATCH",
+          "path": "/v1/library-collections/:collectionId",
+          "source": "apps/api/src/libraries/routes.ts",
+          "line": 180
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/library-collections/:collectionId",
+          "source": "apps/api/src/libraries/routes.ts",
+          "line": 192
+        }
+      ],
+      "api": {
+        "status": "A",
+        "detail": "Registered Library selection routes; domain persistence and complete workflow verification pending.",
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "All three route registrations delegate to the Library service; state and permission authority remain in the API. Postgres workflow results are not yet recorded.",
+            "source": {
+              "path": "apps/api/src/libraries/routes.ts",
+              "line": 150
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "Local real Fastify/API-token and issuer-fixture OAuth credential test passed for all 12 selection routes: wrong read/write scope denied, correct scope reaches the configured-service check. The fixture intentionally has no Library service; this is named-action/scope proof, not persistence or Library authorization proof.",
+            "source": {
+              "path": "apps/api/test/delegated-actions.e2e.test.ts",
+              "line": 83
+            }
+          }
+        ]
+      },
+      "cli": {
+        "status": "A",
+        "detail": "libraries create-collection/edit-collection/remove-collection",
+        "source": {
+          "path": "apps/cli/src/library-command.ts",
+          "line": 77,
+          "anchor": "export function libraryCommandRequest(actionName: string, reference: string | undefined, options: Record<string, string | boolean | string[]>, payload?: Record<string, unknown>): LibraryCommandRequest {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local real CLI-to-HTTP contract fixture passed on 2026-09-30: all six actions, ordered replacement and empty membership, retry payload identity, opaque cursors, bounded pagination, safe delete revisions and server error codes. This tests adapter transport, not API persistence or deployment.",
+            "source": {
+              "path": "apps/cli/test/library-selections.e2e.test.ts",
+              "line": 13
+            }
+          }
+        ]
+      },
+      "ui": {
+        "status": "A",
+        "detail": "Library Collections list, detail and members; create, edit and delete controls for curators",
+        "source": {
+          "path": "apps/web/src/components/library/LibrarySelections.tsx",
+          "line": 30,
+          "anchor": "export function LibrarySelections({ api, library, kind, selectedId, onSelect, onEntry, onRefreshLibrary }: {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local Playwright browser journeys passed on 2026-09-30 with synthetic API responses: create/edit/delete, overlapping Groups, later list/member/skill pages, keyboard and source navigation, stale-edit recovery, MFA denial, permission loss, and Library switching. Desktop and 390px mobile screenshots were inspected. This is rendered UI and transport proof; real API/Postgres persistence and deployment are separate gates.",
+            "source": {
+              "path": "apps/web/test/e2e/library-selections-journey.spec.ts",
+              "line": 73
+            }
+          }
+        ]
+      },
+      "authorization": "Exact libraries:write scope plus current Library resource policy. Writes require curation permission; team Library writes also require MFA. Create retry keys preserve payload identity; update/delete require a positive safe expectedRevision. Membership replacement is ordered. No adoption or installation.",
+      "gap": "G03",
+      "delegated_action_ids": [
+        "libraries.collections.create",
+        "library_collections.update",
+        "library_collections.delete"
+      ],
+      "mcp_api_token": {
+        "status": "A",
+        "detail": "libraries_collections_create, library_collections_update, library_collections_delete",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 9,
+          "anchor": "export function registerApplicationTools(server: McpServer, client: RegistryApiClient, options: { session?: McpSession } = {}) {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local MCP SDK-to-HTTP API-token session contract fixture passed on 2026-09-30: six named actions, exact scope metadata, ordered membership, retry keys, revisions, cursor/limit bounds, invalid input rejection and known API errors without upstream message disclosure. The API session is a fixture; no provider-host, OAuth issuance, domain persistence or deployment proof.",
+            "source": {
+              "path": "apps/mcp/test/library-selections.e2e.test.ts",
+              "line": 11
+            }
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "A",
+        "detail": "libraries_collections_create, library_collections_update, library_collections_delete",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 9,
+          "anchor": "export function registerApplicationTools(server: McpServer, client: RegistryApiClient, options: { session?: McpSession } = {}) {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local MCP SDK-to-HTTP OAuth session contract fixture passed on 2026-09-30: six named actions, exact scope metadata, ordered membership, retry keys, revisions, cursor/limit bounds, invalid input rejection and known API errors without upstream message disclosure. The API session is a fixture; no provider-host, OAuth issuance, domain persistence or deployment proof.",
+            "source": {
+              "path": "apps/mcp/test/library-selections.e2e.test.ts",
+              "line": 11
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "LIB-28",
+      "domain": "Libraries",
+      "capability": "List and inspect Library Groups and members",
+      "category": "product",
+      "api_operations": [
+        {
+          "method": "GET",
+          "path": "/v1/libraries/:libraryId/groups",
+          "source": "apps/api/src/libraries/routes.ts",
+          "line": 200
+        },
+        {
+          "method": "GET",
+          "path": "/v1/library-groups/:groupId",
+          "source": "apps/api/src/libraries/routes.ts",
+          "line": 218
+        },
+        {
+          "method": "GET",
+          "path": "/v1/library-groups/:groupId/members",
+          "source": "apps/api/src/libraries/routes.ts",
+          "line": 224
+        }
+      ],
+      "api": {
+        "status": "A",
+        "detail": "Registered Library selection routes; domain persistence and complete workflow verification pending.",
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "All three route registrations delegate to the Library service; state and permission authority remain in the API. Postgres workflow results are not yet recorded.",
+            "source": {
+              "path": "apps/api/src/libraries/routes.ts",
+              "line": 150
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "Local real Fastify/API-token and issuer-fixture OAuth credential test passed for all 12 selection routes: wrong read/write scope denied, correct scope reaches the configured-service check. The fixture intentionally has no Library service; this is named-action/scope proof, not persistence or Library authorization proof.",
+            "source": {
+              "path": "apps/api/test/delegated-actions.e2e.test.ts",
+              "line": 83
+            }
+          }
+        ]
+      },
+      "cli": {
+        "status": "A",
+        "detail": "libraries groups/group/group-members; opaque cursor and bounded limit",
+        "source": {
+          "path": "apps/cli/src/library-command.ts",
+          "line": 77,
+          "anchor": "export function libraryCommandRequest(actionName: string, reference: string | undefined, options: Record<string, string | boolean | string[]>, payload?: Record<string, unknown>): LibraryCommandRequest {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local real CLI-to-HTTP contract fixture passed on 2026-09-30: all six actions, ordered replacement and empty membership, retry payload identity, opaque cursors, bounded pagination, safe delete revisions and server error codes. This tests adapter transport, not API persistence or deployment.",
+            "source": {
+              "path": "apps/cli/test/library-selections.e2e.test.ts",
+              "line": 13
+            }
+          }
+        ]
+      },
+      "ui": {
+        "status": "A",
+        "detail": "Library Groups list, detail and members with independent, overlapping membership",
+        "source": {
+          "path": "apps/web/src/components/library/LibrarySelections.tsx",
+          "line": 30,
+          "anchor": "export function LibrarySelections({ api, library, kind, selectedId, onSelect, onEntry, onRefreshLibrary }: {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local Playwright browser journeys passed on 2026-09-30 with synthetic API responses: create/edit/delete, overlapping Groups, later list/member/skill pages, keyboard and source navigation, stale-edit recovery, MFA denial, permission loss, and Library switching. Desktop and 390px mobile screenshots were inspected. This is rendered UI and transport proof; real API/Postgres persistence and deployment are separate gates.",
+            "source": {
+              "path": "apps/web/test/e2e/library-selections-journey.spec.ts",
+              "line": 73
+            }
+          }
+        ]
+      },
+      "authorization": "Exact libraries:read scope plus current Library resource policy. Only currently readable active members contribute to counts and positions. Collection tracking derives from readable source lineages; pending candidates remain curator-only.",
+      "gap": "G03",
+      "delegated_action_ids": [
+        "libraries.groups.list",
+        "library_groups.get",
+        "library_groups.members.list"
+      ],
+      "mcp_api_token": {
+        "status": "A",
+        "detail": "libraries_groups_list, library_groups_get, library_groups_members_list",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 9,
+          "anchor": "export function registerApplicationTools(server: McpServer, client: RegistryApiClient, options: { session?: McpSession } = {}) {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local MCP SDK-to-HTTP API-token session contract fixture passed on 2026-09-30: six named actions, exact scope metadata, ordered membership, retry keys, revisions, cursor/limit bounds, invalid input rejection and known API errors without upstream message disclosure. The API session is a fixture; no provider-host, OAuth issuance, domain persistence or deployment proof.",
+            "source": {
+              "path": "apps/mcp/test/library-selections.e2e.test.ts",
+              "line": 11
+            }
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "A",
+        "detail": "libraries_groups_list, library_groups_get, library_groups_members_list",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 9,
+          "anchor": "export function registerApplicationTools(server: McpServer, client: RegistryApiClient, options: { session?: McpSession } = {}) {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local MCP SDK-to-HTTP OAuth session contract fixture passed on 2026-09-30: six named actions, exact scope metadata, ordered membership, retry keys, revisions, cursor/limit bounds, invalid input rejection and known API errors without upstream message disclosure. The API session is a fixture; no provider-host, OAuth issuance, domain persistence or deployment proof.",
+            "source": {
+              "path": "apps/mcp/test/library-selections.e2e.test.ts",
+              "line": 11
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "LIB-29",
+      "domain": "Libraries",
+      "capability": "Create, edit and delete Library Groups",
+      "category": "product",
+      "api_operations": [
+        {
+          "method": "POST",
+          "path": "/v1/libraries/:libraryId/groups",
+          "source": "apps/api/src/libraries/routes.ts",
+          "line": 207
+        },
+        {
+          "method": "PATCH",
+          "path": "/v1/library-groups/:groupId",
+          "source": "apps/api/src/libraries/routes.ts",
+          "line": 230
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/library-groups/:groupId",
+          "source": "apps/api/src/libraries/routes.ts",
+          "line": 242
+        }
+      ],
+      "api": {
+        "status": "A",
+        "detail": "Registered Library selection routes; domain persistence and complete workflow verification pending.",
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "All three route registrations delegate to the Library service; state and permission authority remain in the API. Postgres workflow results are not yet recorded.",
+            "source": {
+              "path": "apps/api/src/libraries/routes.ts",
+              "line": 150
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "Local real Fastify/API-token and issuer-fixture OAuth credential test passed for all 12 selection routes: wrong read/write scope denied, correct scope reaches the configured-service check. The fixture intentionally has no Library service; this is named-action/scope proof, not persistence or Library authorization proof.",
+            "source": {
+              "path": "apps/api/test/delegated-actions.e2e.test.ts",
+              "line": 83
+            }
+          }
+        ]
+      },
+      "cli": {
+        "status": "A",
+        "detail": "libraries create-group/edit-group/remove-group",
+        "source": {
+          "path": "apps/cli/src/library-command.ts",
+          "line": 77,
+          "anchor": "export function libraryCommandRequest(actionName: string, reference: string | undefined, options: Record<string, string | boolean | string[]>, payload?: Record<string, unknown>): LibraryCommandRequest {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local real CLI-to-HTTP contract fixture passed on 2026-09-30: all six actions, ordered replacement and empty membership, retry payload identity, opaque cursors, bounded pagination, safe delete revisions and server error codes. This tests adapter transport, not API persistence or deployment.",
+            "source": {
+              "path": "apps/cli/test/library-selections.e2e.test.ts",
+              "line": 13
+            }
+          }
+        ]
+      },
+      "ui": {
+        "status": "A",
+        "detail": "Library Groups list, detail and members; create, edit and delete controls for curators",
+        "source": {
+          "path": "apps/web/src/components/library/LibrarySelections.tsx",
+          "line": 30,
+          "anchor": "export function LibrarySelections({ api, library, kind, selectedId, onSelect, onEntry, onRefreshLibrary }: {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local Playwright browser journeys passed on 2026-09-30 with synthetic API responses: create/edit/delete, overlapping Groups, later list/member/skill pages, keyboard and source navigation, stale-edit recovery, MFA denial, permission loss, and Library switching. Desktop and 390px mobile screenshots were inspected. This is rendered UI and transport proof; real API/Postgres persistence and deployment are separate gates.",
+            "source": {
+              "path": "apps/web/test/e2e/library-selections-journey.spec.ts",
+              "line": 73
+            }
+          }
+        ]
+      },
+      "authorization": "Exact libraries:write scope plus current Library resource policy. Writes require curation permission; team Library writes also require MFA. Create retry keys preserve payload identity; update/delete require a positive safe expectedRevision. Membership replacement is ordered. No adoption or installation.",
+      "gap": "G03",
+      "delegated_action_ids": [
+        "libraries.groups.create",
+        "library_groups.update",
+        "library_groups.delete"
+      ],
+      "mcp_api_token": {
+        "status": "A",
+        "detail": "libraries_groups_create, library_groups_update, library_groups_delete",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 9,
+          "anchor": "export function registerApplicationTools(server: McpServer, client: RegistryApiClient, options: { session?: McpSession } = {}) {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local MCP SDK-to-HTTP API-token session contract fixture passed on 2026-09-30: six named actions, exact scope metadata, ordered membership, retry keys, revisions, cursor/limit bounds, invalid input rejection and known API errors without upstream message disclosure. The API session is a fixture; no provider-host, OAuth issuance, domain persistence or deployment proof.",
+            "source": {
+              "path": "apps/mcp/test/library-selections.e2e.test.ts",
+              "line": 11
+            }
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "A",
+        "detail": "libraries_groups_create, library_groups_update, library_groups_delete",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 9,
+          "anchor": "export function registerApplicationTools(server: McpServer, client: RegistryApiClient, options: { session?: McpSession } = {}) {"
+        },
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Local MCP SDK-to-HTTP OAuth session contract fixture passed on 2026-09-30: six named actions, exact scope metadata, ordered membership, retry keys, revisions, cursor/limit bounds, invalid input rejection and known API errors without upstream message disclosure. The API session is a fixture; no provider-host, OAuth issuance, domain persistence or deployment proof.",
+            "source": {
+              "path": "apps/mcp/test/library-selections.e2e.test.ts",
+              "line": 11
+            }
+          }
+        ]
+      }
     },
     {
       "id": "TEAM-01",
@@ -4868,7 +5392,7 @@
         "detail": "teams_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 155
+          "line": 172
         },
         "evidence": [
           {
@@ -4886,7 +5410,7 @@
         "detail": "teams_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 155
+          "line": 172
         },
         "evidence": [
           {
@@ -4972,7 +5496,7 @@
         "detail": "teams_create",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 156
+          "line": 173
         },
         "evidence": [
           {
@@ -4990,7 +5514,7 @@
         "detail": "teams_create",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 156
+          "line": 173
         },
         "evidence": [
           {
@@ -5082,7 +5606,7 @@
         "detail": "teams_invitations_create, teams_invitations_accept",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 157
+          "line": 174
         },
         "evidence": [
           {
@@ -5100,7 +5624,7 @@
         "detail": "teams_invitations_create, teams_invitations_accept",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 157
+          "line": 174
         },
         "evidence": [
           {
@@ -5189,7 +5713,7 @@
         "detail": "teams_invitations_revoke",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 159
+          "line": 176
         },
         "evidence": [
           {
@@ -5207,7 +5731,7 @@
         "detail": "teams_invitations_revoke",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 159
+          "line": 176
         },
         "evidence": [
           {
@@ -5293,7 +5817,7 @@
         "detail": "teams_members_update, teams_members_remove",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 160
+          "line": 177
         },
         "evidence": [
           {
@@ -5311,7 +5835,7 @@
         "detail": "teams_members_update, teams_members_remove",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 160
+          "line": 177
         },
         "evidence": [
           {
@@ -5390,7 +5914,7 @@
         "detail": "teams_shared_skills_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 162
+          "line": 179
         },
         "evidence": [
           {
@@ -5408,7 +5932,7 @@
         "detail": "teams_shared_skills_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 162
+          "line": 179
         },
         "evidence": [
           {
@@ -5499,7 +6023,7 @@
         "detail": "organizations_list, organizations_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 163
+          "line": 180
         },
         "evidence": [
           {
@@ -5517,7 +6041,7 @@
         "detail": "organizations_list, organizations_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 163
+          "line": 180
         },
         "evidence": [
           {
@@ -5609,7 +6133,7 @@
         "detail": "organizations_create, organizations_lifecycle_decide",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 165
+          "line": 182
         },
         "evidence": [
           {
@@ -5627,7 +6151,7 @@
         "detail": "organizations_create, organizations_lifecycle_decide",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 165
+          "line": 182
         },
         "evidence": [
           {
@@ -5725,7 +6249,7 @@
         "detail": "organizations_members_list, organizations_invitations_list, organizations_my_invitations_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 167
+          "line": 184
         },
         "evidence": [
           {
@@ -5743,7 +6267,7 @@
         "detail": "organizations_members_list, organizations_invitations_list, organizations_my_invitations_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 167
+          "line": 184
         },
         "evidence": [
           {
@@ -5836,7 +6360,7 @@
         "detail": "organizations_invitations_create, organizations_invitations_accept",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 170
+          "line": 187
         },
         "evidence": [
           {
@@ -5854,7 +6378,7 @@
         "detail": "organizations_invitations_create, organizations_invitations_accept",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 170
+          "line": 187
         },
         "evidence": [
           {
@@ -5946,7 +6470,7 @@
         "detail": "organizations_members_update, organizations_members_remove",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 172
+          "line": 189
         },
         "evidence": [
           {
@@ -5964,7 +6488,7 @@
         "detail": "organizations_members_update, organizations_members_remove",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 172
+          "line": 189
         },
         "evidence": [
           {
@@ -6062,7 +6586,7 @@
         "detail": "organizations_policies_list, organizations_policies_append, organizations_policies_decide",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 174
+          "line": 191
         },
         "evidence": [
           {
@@ -6080,7 +6604,7 @@
         "detail": "organizations_policies_list, organizations_policies_append, organizations_policies_decide",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 174
+          "line": 191
         },
         "evidence": [
           {
@@ -6179,7 +6703,7 @@
         "detail": "organizations_teams_list, organizations_teams_create, teams_organization_set",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 177
+          "line": 194
         },
         "evidence": [
           {
@@ -6197,7 +6721,7 @@
         "detail": "organizations_teams_list, organizations_teams_create, teams_organization_set",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 177
+          "line": 194
         },
         "evidence": [
           {
@@ -6290,7 +6814,7 @@
         "detail": "organizations_update_policy_get, organizations_update_policy_set",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 180
+          "line": 197
         },
         "evidence": [
           {
@@ -6308,7 +6832,7 @@
         "detail": "organizations_update_policy_get, organizations_update_policy_set",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 180
+          "line": 197
         },
         "evidence": [
           {
@@ -6387,7 +6911,7 @@
         "detail": "architectures_patterns_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 182
+          "line": 199
         },
         "evidence": [
           {
@@ -6405,7 +6929,7 @@
         "detail": "architectures_patterns_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 182
+          "line": 199
         },
         "evidence": [
           {
@@ -6483,7 +7007,7 @@
         "detail": "architectures_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 183
+          "line": 200
         },
         "evidence": [
           {
@@ -6501,7 +7025,7 @@
         "detail": "architectures_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 183
+          "line": 200
         },
         "evidence": [
           {
@@ -6598,7 +7122,7 @@
         "detail": "architectures_get, architectures_revisions_list, architectures_revisions_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 184
+          "line": 201
         },
         "evidence": [
           {
@@ -6616,7 +7140,7 @@
         "detail": "architectures_get, architectures_revisions_list, architectures_revisions_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 184
+          "line": 201
         },
         "evidence": [
           {
@@ -6702,7 +7226,7 @@
         "detail": "architectures_create",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 187
+          "line": 204
         },
         "evidence": [
           {
@@ -6720,7 +7244,7 @@
         "detail": "architectures_create",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 187
+          "line": 204
         },
         "evidence": [
           {
@@ -6805,7 +7329,7 @@
         "detail": "architectures_revisions_append",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 188
+          "line": 205
         },
         "evidence": [
           {
@@ -6823,7 +7347,7 @@
         "detail": "architectures_revisions_append",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 188
+          "line": 205
         },
         "evidence": [
           {
@@ -6901,7 +7425,7 @@
         "detail": "architectures_preview",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 189
+          "line": 206
         },
         "evidence": [
           {
@@ -6919,7 +7443,7 @@
         "detail": "architectures_preview",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 189
+          "line": 206
         },
         "evidence": [
           {
@@ -7004,7 +7528,7 @@
         "detail": "architectures_draft_preview",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 190
+          "line": 207
         },
         "evidence": [
           {
@@ -7022,7 +7546,7 @@
         "detail": "architectures_draft_preview",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 190
+          "line": 207
         },
         "evidence": [
           {
@@ -7112,7 +7636,7 @@
         "detail": "architectures_organization_grants_get, architectures_organization_grants_replace",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 191
+          "line": 208
         },
         "evidence": [
           {
@@ -7130,7 +7654,7 @@
         "detail": "architectures_organization_grants_get, architectures_organization_grants_replace",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 191
+          "line": 208
         },
         "evidence": [
           {
@@ -7221,7 +7745,7 @@
         "detail": "architectures_pattern_migration_preview, architectures_pattern_migration_create",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 193
+          "line": 210
         },
         "evidence": [
           {
@@ -7239,7 +7763,7 @@
         "detail": "architectures_pattern_migration_preview, architectures_pattern_migration_create",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 193
+          "line": 210
         },
         "evidence": [
           {
@@ -7331,7 +7855,7 @@
         "detail": "targets_list, targets_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 195
+          "line": 212
         },
         "evidence": [
           {
@@ -7349,7 +7873,7 @@
         "detail": "targets_list, targets_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 195
+          "line": 212
         },
         "evidence": [
           {
@@ -7441,7 +7965,7 @@
         "detail": "targets_register, targets_consent_set",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 197
+          "line": 214
         },
         "evidence": [
           {
@@ -7459,7 +7983,7 @@
         "detail": "targets_register, targets_consent_set",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 197
+          "line": 214
         },
         "evidence": [
           {
@@ -7545,7 +8069,7 @@
         "detail": "targets_observations_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 199
+          "line": 216
         },
         "evidence": [
           {
@@ -7563,7 +8087,7 @@
         "detail": "targets_observations_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 199
+          "line": 216
         },
         "evidence": [
           {
@@ -7846,7 +8370,7 @@
         "detail": "targets_revoke",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 200
+          "line": 217
         },
         "evidence": [
           {
@@ -7864,7 +8388,7 @@
         "detail": "targets_revoke",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 200
+          "line": 217
         },
         "evidence": [
           {
@@ -7949,7 +8473,7 @@
         "detail": "targets_updates_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 201
+          "line": 218
         },
         "evidence": [
           {
@@ -7967,7 +8491,7 @@
         "detail": "targets_updates_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 201
+          "line": 218
         },
         "evidence": [
           {
@@ -8052,7 +8576,7 @@
         "detail": "targets_operations_schedule",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 202
+          "line": 219
         },
         "evidence": [
           {
@@ -8070,7 +8594,7 @@
         "detail": "targets_operations_schedule",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 202
+          "line": 219
         },
         "evidence": [
           {
@@ -8155,7 +8679,7 @@
         "detail": "target_operations_batch_schedule",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 203
+          "line": 220
         },
         "evidence": [
           {
@@ -8173,7 +8697,7 @@
         "detail": "target_operations_batch_schedule",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 203
+          "line": 220
         },
         "evidence": [
           {
@@ -8264,7 +8788,7 @@
         "detail": "targets_operations_list, target_operations_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 204
+          "line": 221
         },
         "evidence": [
           {
@@ -8282,7 +8806,7 @@
         "detail": "targets_operations_list, target_operations_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 204
+          "line": 221
         },
         "evidence": [
           {
@@ -8368,7 +8892,7 @@
         "detail": "target_operations_cancel",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 206
+          "line": 223
         },
         "evidence": [
           {
@@ -8386,7 +8910,7 @@
         "detail": "target_operations_cancel",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 206
+          "line": 223
         },
         "evidence": [
           {
@@ -8477,7 +9001,7 @@
         "detail": "targets_update_policy_get, targets_update_policy_set",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 207
+          "line": 224
         },
         "evidence": [
           {
@@ -8495,7 +9019,7 @@
         "detail": "targets_update_policy_get, targets_update_policy_set",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 207
+          "line": 224
         },
         "evidence": [
           {
@@ -8686,7 +9210,7 @@
         "detail": "improvements_compatibility_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 209
+          "line": 226
         },
         "evidence": [
           {
@@ -8704,7 +9228,7 @@
         "detail": "improvements_compatibility_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 209
+          "line": 226
         },
         "evidence": [
           {
@@ -8788,7 +9312,7 @@
         "detail": "improvements_declarations_append, improvements_declarations_review",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 210
+          "line": 227
         },
         "evidence": [
           {
@@ -8806,7 +9330,7 @@
         "detail": "improvements_declarations_append, improvements_declarations_review",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 210
+          "line": 227
         },
         "evidence": [
           {
@@ -8891,7 +9415,7 @@
         "detail": "improvements_policy_get, improvements_policy_set",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 212
+          "line": 229
         },
         "evidence": [
           {
@@ -8909,7 +9433,7 @@
         "detail": "improvements_policy_get, improvements_policy_set",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 212
+          "line": 229
         },
         "evidence": [
           {
@@ -9006,7 +9530,7 @@
         "detail": "improvements_profiles_list, improvements_profiles_create, improvements_profiles_get, improvements_profiles_append",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 214
+          "line": 231
         },
         "evidence": [
           {
@@ -9024,7 +9548,7 @@
         "detail": "improvements_profiles_list, improvements_profiles_create, improvements_profiles_get, improvements_profiles_append",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 214
+          "line": 231
         },
         "evidence": [
           {
@@ -9118,7 +9642,7 @@
         "detail": "improvements_suites_list, improvements_suites_create, improvements_suites_get, improvements_suites_append",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 218
+          "line": 235
         },
         "evidence": [
           {
@@ -9136,7 +9660,7 @@
         "detail": "improvements_suites_list, improvements_suites_create, improvements_suites_get, improvements_suites_append",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 218
+          "line": 235
         },
         "evidence": [
           {
@@ -9237,7 +9761,7 @@
         "detail": "improvements_plans_preview, improvements_plans_create, improvements_plans_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 222
+          "line": 239
         },
         "evidence": [
           {
@@ -9255,7 +9779,7 @@
         "detail": "improvements_plans_preview, improvements_plans_create, improvements_plans_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 222
+          "line": 239
         },
         "evidence": [
           {
@@ -9434,7 +9958,7 @@
         "detail": "improvements_runs_get, improvements_runs_cancel",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 225
+          "line": 242
         },
         "evidence": [
           {
@@ -9452,7 +9976,7 @@
         "detail": "improvements_runs_get, improvements_runs_cancel",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 225
+          "line": 242
         },
         "evidence": [
           {
@@ -9539,7 +10063,7 @@
         "detail": "improvements_evidence_share",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 227
+          "line": 244
         },
         "evidence": [
           {
@@ -9557,7 +10081,7 @@
         "detail": "improvements_evidence_share",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 227
+          "line": 244
         },
         "evidence": [
           {
@@ -9641,7 +10165,7 @@
         "detail": "improvements_evidence_get, improvements_evidence_decide",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 228
+          "line": 245
         },
         "evidence": [
           {
@@ -9659,7 +10183,7 @@
         "detail": "improvements_evidence_get, improvements_evidence_decide",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 228
+          "line": 245
         },
         "evidence": [
           {
@@ -9941,7 +10465,7 @@
         "detail": "account_identity_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 230
+          "line": 247
         },
         "evidence": [
           {
@@ -9959,7 +10483,7 @@
         "detail": "account_identity_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 230
+          "line": 247
         },
         "evidence": [
           {
@@ -10638,7 +11162,7 @@
         "detail": "connections_connector_get, connections_list, connections_revoke",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 234
+          "line": 251
         },
         "evidence": [
           {
@@ -10656,7 +11180,7 @@
         "detail": "connections_connector_get, connections_list, connections_revoke",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 234
+          "line": 251
         },
         "evidence": [
           {
@@ -10756,7 +11280,7 @@
         "detail": "instance_branding_get, instance_site_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 237
+          "line": 254
         },
         "evidence": [
           {
@@ -10774,7 +11298,7 @@
         "detail": "instance_branding_get, instance_site_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 237
+          "line": 254
         },
         "evidence": [
           {
@@ -10865,7 +11389,7 @@
         "detail": "admin_branding_get, admin_branding_update",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 239
+          "line": 256
         },
         "evidence": [
           {
@@ -10883,7 +11407,7 @@
         "detail": "admin_branding_get, admin_branding_update",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 239
+          "line": 256
         },
         "evidence": [
           {
@@ -10974,7 +11498,7 @@
         "detail": "admin_site_get, admin_site_update",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 241
+          "line": 258
         },
         "evidence": [
           {
@@ -10992,7 +11516,7 @@
         "detail": "admin_site_get, admin_site_update",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 241
+          "line": 258
         },
         "evidence": [
           {
@@ -11089,7 +11613,7 @@
         "detail": "admin_registration_get, admin_registration_set, admin_registration_invite",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 243
+          "line": 260
         },
         "evidence": [
           {
@@ -11107,7 +11631,7 @@
         "detail": "admin_registration_get, admin_registration_set, admin_registration_invite",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 243
+          "line": 260
         },
         "evidence": [
           {
@@ -11188,7 +11712,7 @@
         "detail": "admin_sharing_get, admin_sharing_set",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 246
+          "line": 263
         },
         "evidence": [
           {
@@ -11206,7 +11730,7 @@
         "detail": "admin_sharing_get, admin_sharing_set",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 246
+          "line": 263
         },
         "evidence": [
           {
@@ -11297,7 +11821,7 @@
         "detail": "admin_providers_list, admin_providers_upsert",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 248
+          "line": 265
         },
         "evidence": [
           {
@@ -11315,7 +11839,7 @@
         "detail": "admin_providers_list, admin_providers_upsert",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 248
+          "line": 265
         },
         "evidence": [
           {
@@ -11406,7 +11930,7 @@
         "detail": "admin_users_list, admin_users_lifecycle_decide",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 250
+          "line": 267
         },
         "evidence": [
           {
@@ -11424,7 +11948,7 @@
         "detail": "admin_users_list, admin_users_lifecycle_decide",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 250
+          "line": 267
         },
         "evidence": [
           {
@@ -11509,7 +12033,7 @@
         "detail": "admin_users_roles_set",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 252
+          "line": 269
         },
         "evidence": [
           {
@@ -11527,7 +12051,7 @@
         "detail": "admin_users_roles_set",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 252
+          "line": 269
         },
         "evidence": [
           {
@@ -11617,7 +12141,7 @@
         "detail": "admin_tokens_list, admin_tokens_revoke",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 253
+          "line": 270
         },
         "evidence": [
           {
@@ -11635,7 +12159,7 @@
         "detail": "admin_tokens_list, admin_tokens_revoke",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 253
+          "line": 270
         },
         "evidence": [
           {
@@ -11720,7 +12244,7 @@
         "detail": "admin_audit_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 255
+          "line": 272
         },
         "evidence": [
           {
@@ -11738,7 +12262,7 @@
         "detail": "admin_audit_list",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 255
+          "line": 272
         },
         "evidence": [
           {
@@ -12324,7 +12848,7 @@
         "detail": "system_health_get, system_readiness_get, system_version_get, system_features_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 256
+          "line": 273
         },
         "evidence": [
           {
@@ -12342,7 +12866,7 @@
         "detail": "system_health_get, system_readiness_get, system_version_get, system_features_get",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
-          "line": 256
+          "line": 273
         },
         "evidence": [
           {
@@ -15457,6 +15981,162 @@
         "path": "apps/mcp/src/application-tools.ts",
         "line": 13
       }
+    },
+    {
+      "name": "libraries_collections_list",
+      "action_id": "libraries.collections.list",
+      "capability_ids": [
+        "LIB-26"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
+    },
+    {
+      "name": "library_collections_get",
+      "action_id": "library_collections.get",
+      "capability_ids": [
+        "LIB-26"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
+    },
+    {
+      "name": "library_collections_members_list",
+      "action_id": "library_collections.members.list",
+      "capability_ids": [
+        "LIB-26"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
+    },
+    {
+      "name": "libraries_collections_create",
+      "action_id": "libraries.collections.create",
+      "capability_ids": [
+        "LIB-27"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
+    },
+    {
+      "name": "library_collections_update",
+      "action_id": "library_collections.update",
+      "capability_ids": [
+        "LIB-27"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
+    },
+    {
+      "name": "library_collections_delete",
+      "action_id": "library_collections.delete",
+      "capability_ids": [
+        "LIB-27"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
+    },
+    {
+      "name": "libraries_groups_list",
+      "action_id": "libraries.groups.list",
+      "capability_ids": [
+        "LIB-28"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
+    },
+    {
+      "name": "library_groups_get",
+      "action_id": "library_groups.get",
+      "capability_ids": [
+        "LIB-28"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
+    },
+    {
+      "name": "library_groups_members_list",
+      "action_id": "library_groups.members.list",
+      "capability_ids": [
+        "LIB-28"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
+    },
+    {
+      "name": "libraries_groups_create",
+      "action_id": "libraries.groups.create",
+      "capability_ids": [
+        "LIB-29"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
+    },
+    {
+      "name": "library_groups_update",
+      "action_id": "library_groups.update",
+      "capability_ids": [
+        "LIB-29"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
+    },
+    {
+      "name": "library_groups_delete",
+      "action_id": "library_groups.delete",
+      "capability_ids": [
+        "LIB-29"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      }
     }
   ],
   "mcp_transport_source": {
@@ -15937,6 +16617,10 @@
         "LIB-23",
         "LIB-24",
         "LIB-25",
+        "LIB-26",
+        "LIB-27",
+        "LIB-28",
+        "LIB-29",
         "LOC-05"
       ],
       "source": {
@@ -15972,6 +16656,10 @@
         "LIB-23",
         "LIB-24",
         "LIB-25",
+        "LIB-26",
+        "LIB-27",
+        "LIB-28",
+        "LIB-29",
         "LOC-05"
       ],
       "source": {
