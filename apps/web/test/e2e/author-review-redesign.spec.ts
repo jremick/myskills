@@ -271,3 +271,49 @@ test("team import feedback identifies ownership and routes corrections through L
   expect(state.writes).toHaveLength(0);
   await info.attach("team-submission-feedback-receipt", { body: JSON.stringify({ ownershipVisible: true, correctionRoute: "/libraries", mutations: 0 }), contentType: "application/json" });
 });
+
+for (const historyFails of [false, true]) test(`queued draft clears the archive receipt and refreshes history with history failure ${historyFails}`, async ({ page }) => {
+  await fixture(page);
+  const draft = { id: "queued-draft", title: "Queued draft", revision: 1, source: null, createdAt: date, updatedAt: date, submission: null, files: [{ path: "skill.json", content: "{}" }, { path: "SKILL.md", content: "# Queued draft\n" }] };
+  const submission = { id: "queued-submission", slug: "queued-helper", version: "1.0.0", artifactSha256: hash, reviewStatus: "pending", securityStatus: "not-run", scan: { status: "queued", findings: [], findingCount: 0 } };
+  let historyReads = 0;
+  let submissionReads = 0;
+  await page.route("**/api/v1/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    const method = route.request().method();
+    if (path === "/api/v1/submissions/mine") { submissionReads++; return route.fallback(); }
+    if (path === "/api/v1/submissions" && method === "POST") return route.fulfill({ json: { submission: pending, scan: { status: "passed", findings: [], findingCount: 0 } } });
+    if (path === "/api/v1/drafts/queued-draft") return route.fulfill({ json: { draft } });
+    if (path === "/api/v1/drafts/queued-draft/submit") return route.fulfill({ status: 202, json: { draft: { ...draft, submission }, submission } });
+    if (path === "/api/v1/drafts/queued-draft/history") {
+      historyReads++;
+      return historyFails ? route.fulfill({ status: 503, json: { error: { code: "SERVICE_UNAVAILABLE" } } })
+        : route.fulfill({ json: { revisions: [{ ...draft, submission, fileCount: 2, textBytes: 20 }] } });
+    }
+    return route.fallback();
+  });
+  await page.goto("/submit?draft=queued-draft");
+  const workspace = page.getByRole("region", { name: "Private package drafts", exact: true });
+  await expect(workspace.getByLabel("Draft title", { exact: true })).toHaveValue(draft.title);
+  await page.locator("#package-archive").setInputFiles({ name: "old.zip", mimeType: "application/zip", buffer: Buffer.from("fixture archive") });
+  await page.getByRole("button", { name: "Submit for review", exact: true }).click();
+  await expect(page.getByText("No scan findings. The package is ready for maintainer review.", { exact: true })).toBeVisible();
+  const before = submissionReads;
+  await workspace.getByRole("button", { name: "Submit saved revision", exact: true }).click();
+  await expect(workspace.locator(".draft-receipt")).toContainText("Scan: queued");
+  await expect(workspace.locator(".draft-receipt")).toContainText("Scan completion and review are separate steps");
+  await expect(page.locator(".submit-result-block")).toHaveCount(0);
+  await expect.poll(() => submissionReads).toBeGreaterThan(before);
+  await expect.poll(() => historyReads).toBe(1);
+  if (!historyFails) await expect(workspace.getByRole("region", { name: "Saved draft history", exact: true })).toContainText("submitted 1.0.0");
+});
+
+test("queued archive never reports ready before the confirmation scan completes", async ({ page }) => {
+  await fixture(page);
+  await page.route("**/api/v1/submissions", route => route.fulfill({ status: 202, json: { submission: { ...pending, securityStatus: "not-run" }, scan: { status: "queued", findings: [], findingCount: 0 } } }));
+  await page.goto("/submit");
+  await page.locator("#package-archive").setInputFiles({ name: "pending.zip", mimeType: "application/zip", buffer: Buffer.from("fixture archive") });
+  await page.getByRole("button", { name: "Submit for review", exact: true }).click();
+  await expect(page.getByText("The confirmation scan is pending. Check submission history for completion before review.", { exact: true })).toBeVisible();
+  await expect(page.getByText(/The package is ready for maintainer review/)).toHaveCount(0);
+});

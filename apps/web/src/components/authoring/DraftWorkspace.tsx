@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import type { ArchitectureNavigationGuard } from "@/components/architecture/useArchitectureNavigationGuard";
 import { reviewStatusLabel, securityStatusLabel } from "@/components/registry/status-display";
 import type { AuthorDraft, DraftClient, DraftFile, DraftPreview, DraftSourceInput, DraftSubmission, DraftSummary, DraftValidation } from "@/drafts-api";
-import "./draft-workspace.css";
 
 const MAX_TEXT = 1_048_576;
 const MAX_FILES = 500;
@@ -193,7 +192,12 @@ export function DraftWorkspace({ api, actorId, url, onNavigate, onNavigationGuar
         acceptHead(result.draft, false); setReceipt(result.submission);
         setNotice({ text: `Submitted ${result.submission.slug}@${result.submission.version}.` });
         void refreshList();
-        try { await onSubmitted(result.submission); } catch { /* Receipt remains valid if the separate history refresh fails. */ }
+        try { await onSubmitted(result.submission); }
+        catch { /* The immutable submission receipt remains valid. */ }
+        try {
+          const refreshed = await api.history(savedHead.id);
+          if (ticket === generation.current) setHistory(refreshed.revisions);
+        } catch { /* Receipt remains valid if the separate history refresh fails. */ }
       }
     } catch (error) {
       if (ticket !== generation.current) return;

@@ -126,7 +126,7 @@ test("clears held comparison when a repeated exact fetch loses current visibilit
   await expect(comparison(page).getByLabel("Compared file")).toBeVisible();
   f.fail();
   await comparison(page).getByRole("button", { name: "Compare releases", exact: true }).click();
-  await expect(comparison(page).getByRole("alert")).toContainText("no longer readable");
+  await expect(comparison(page).getByRole("alert")).toContainText("may no longer be readable");
   await expect(comparison(page).getByLabel("Compared file")).toHaveCount(0);
   await expect(comparison(page).getByLabel(/contents of/)).toHaveCount(0);
 });
@@ -138,10 +138,10 @@ test("ignores an old delayed target after a new exact selection", async ({ page 
   await expect.poll(() => f.reads.filter(path => path.endsWith("/2.0.0/bundle")).length).toBe(1);
   await comparison(page).getByLabel("Target version").selectOption("3.0.0");
   await comparison(page).getByRole("button", { name: "Compare releases", exact: true }).click();
-  await expect(comparison(page).getByRole("heading", { name: "Target · 3.0.0", exact: true })).toBeVisible();
+  await expect(comparison(page).getByRole("heading", { name: "Target · 3.0.0", exact: true, level: 4 })).toBeVisible();
   f.unblock();
   await expect(comparison(page).getByRole("heading", { name: "Target · 2.0.0", exact: true })).toHaveCount(0);
-  await expect(comparison(page).getByRole("heading", { name: "Target · 3.0.0", exact: true })).toBeVisible();
+  await expect(comparison(page).getByRole("heading", { name: "Target · 3.0.0", exact: true, level: 4 })).toBeVisible();
 });
 
 test("changing the pinned release or selected skill discards an old delayed comparison", async ({ page }) => {
@@ -172,7 +172,7 @@ test("signing out fences a delayed package response before returning to release 
   await page.getByLabel("Sign out").click();
   await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
   f.unblock();
-  await page.goBack();
+  await page.goto(`/skills/${slug}?tab=versions`);
   await expect(comparison(page).getByLabel("Base version")).toHaveValue("");
   await expect(comparison(page).getByLabel("Compared file")).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("myskills-app:web-session"))).toBeNull();
@@ -182,7 +182,7 @@ test("management history cannot make an unpublished package comparable and signi
   const f = await fixture(page, { manager: true });
   await page.goto(`/skills/${slug}?tab=versions`);
   const panel = comparison(page);
-  await expect(panel.getByLabel("Target version").locator("option[value='4.0.0']")).toBeDisabled();
+  await expect(panel.getByLabel("Target version").locator("option[value='4.0.0']")).toHaveAttribute("disabled", "");
   await expect(panel).toContainText("Unpublished and unavailable releases cannot be compared with the existing package reader.");
   await choose(page);
   await expect(panel.getByLabel("Compared file")).toBeVisible();

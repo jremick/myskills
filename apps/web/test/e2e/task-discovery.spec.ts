@@ -30,7 +30,7 @@ for (const width of [1440, 390]) test(`task discovery keeps exact releases and o
   await page.keyboard.press("Tab"); await expect(page.getByRole("button", { name: "Find relevant skills" })).toBeFocused();
   await page.keyboard.press("Enter");
   const panel = page.getByRole("region", { name: "Task discovery results" });
-  await expect(panel.getByRole("link", { name: "Release notes · 1.0.0" })).toHaveAttribute("href", /\/registry\/skills\/release-notes\?version=1.0.0/);
+  await expect(panel.getByRole("link", { name: "Release notes · 1.0.0" })).toHaveAttribute("href", "/skills/release-notes?version=1.0.0");
   await expect(panel).toContainText("Word overlap"); await expect(panel).toContainText("lexical-v1");
   await expect(panel).toContainText("No model calls");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

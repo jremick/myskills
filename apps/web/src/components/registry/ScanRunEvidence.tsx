@@ -1,6 +1,5 @@
 import type { SubmissionEvidence } from "../../api.js";
 import { chipTone, securityStatusLabel, severityLabel } from "./status-display.js";
-import "./scan-evidence.css";
 
 const failures: Record<string, string> = {
   lease_expired: "The worker lease expired. A later attempt can retry this scan.",

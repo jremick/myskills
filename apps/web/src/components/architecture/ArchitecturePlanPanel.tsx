@@ -3,7 +3,6 @@ import type { ArchitectureSyncRun } from "@myskills-app/core";
 import { safeArchitectureTargetErrorMessage, type ArchitectureRevisionSummary, type ArchitectureTargetObservationRecord, type ArchitectureTargetRecord, type RegistryClient } from "../../api.js";
 import type { ArchitecturePlanClient, ArchitecturePlanCreateInput } from "../../architecture-plan-client.js";
 import { Button } from "../ui/button.js";
-import "./architecture-plan.css";
 
 export function ArchitecturePlanPanel({ client, target, observation }: {
   client: RegistryClient & Partial<ArchitecturePlanClient>;

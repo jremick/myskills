@@ -46,7 +46,7 @@ for (const width of [1280, 390]) test(`architecture plan inspection preserves st
     if (path.endsWith("/observations")) return json({ observations: [observation] });
     if (path.endsWith("/plans")) return json({ runs: created ? [run] : [] });
     if (path === "/v1/architecture-plans/review-run") return json({ run });
-    if (path === `/v1/architectures/${target.architectureId}`) return json({ architecture: { id: target.architectureId, name: "Router architecture", patternId: "multi-level-router", currentRevisionId: "revision-2", access: { canRead: true, canAppend: true }, revisions: [{ id: "revision-2", revisionNumber: 2, digest }, { id: "revision-1", revisionNumber: 1, digest }], latestRevision: { id: "revision-2", revisionNumber: 2, digest } } });
+    if (path === `/v1/architectures/${target.architectureId}`) return json({ architecture: { id: target.architectureId, name: "Router architecture", patternId: "multi-level-router", currentRevisionId: "revision-2", access: { canRead: true, canAppend: true } }, revisions: [{ id: "revision-2", revisionNumber: 2, digest }, { id: "revision-1", revisionNumber: 1, digest }], latestRevision: { id: "revision-2", revisionNumber: 2, digest } });
     if (path === "/v1/architectures") return json({ architectures: [] });
     if (path === "/v1/architecture-patterns") return json({ patterns: [] });
     if (path === "/v1/teams") return json({ teams: [], invitations: [] });

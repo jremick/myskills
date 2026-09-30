@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { safeErrorMessage, type RegistryClient, type SkillPackageBundle, type SkillReleaseSummary } from "../../api.js";
 import { isPublishedRelease } from "./skill-workspace.js";
 import { releaseVersionLabel } from "./status-display.js";
-import "./ReleaseComparison.css";
 
 const MAX_FILES = 500;
 const MAX_PACKAGE_CHARACTERS = 1_048_576;
@@ -109,7 +108,7 @@ function ComparisonWorkspace({ client, slug, releases, historyState, unavailable
     <div className="release-comparison-controls">
       {(["Base", "Target"] as const).map(side => <label key={side} htmlFor={`${baseId}-${side}`}>
         <span>{side} version</span>
-        <select id={`${baseId}-${side}`} value={side === "Base" ? baseVersion : targetVersion} disabled={Boolean(unavailable)} onChange={event => {
+        <select aria-label={`${side} version`} id={`${baseId}-${side}`} value={side === "Base" ? baseVersion : targetVersion} disabled={Boolean(unavailable)} onChange={event => {
           clear();
           (side === "Base" ? setBaseVersion : setTargetVersion)(event.target.value);
         }}>
@@ -135,7 +134,7 @@ function ComparisonWorkspace({ client, slug, releases, historyState, unavailable
         </div>)}
       </div>
       <p className="registry-muted" role="status">{counts("Added")} added · {counts("Removed")} removed · {counts("Modified")} modified · {counts("Unchanged")} unchanged</p>
-      <label className="release-comparison-file" htmlFor={`${baseId}-file`}><span>Compared file</span><select id={`${baseId}-file`} value={selectedPath} onChange={event => setSelectedPath(event.target.value)}>
+      <label className="release-comparison-file" htmlFor={`${baseId}-file`}><span>Compared file</span><select aria-label="Compared file" id={`${baseId}-file`} value={selectedPath} onChange={event => setSelectedPath(event.target.value)}>
         {visibleResult.files.map(file => <option key={file.path} value={file.path}>{file.path} · {file.kind}</option>)}
       </select></label>
       {selected && <div className="release-comparison-contents">

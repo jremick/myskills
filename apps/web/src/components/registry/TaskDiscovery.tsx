@@ -1,8 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { TaskDiscoveryResponse } from "@myskills-app/core";
 import type { RegistryClient } from "../../api.js";
 
-export function TaskDiscovery({ client, token, skillHref }: { client: RegistryClient; token?: string; skillHref(slug: string, version: string): string }) {
+const connectionIds = new WeakMap<RegistryClient, number>();
+let nextConnectionId = 0;
+export function TaskDiscovery(props: { client: RegistryClient; token?: string; skillHref(slug: string, version: string): string }) {
+  if (!connectionIds.has(props.client)) connectionIds.set(props.client, ++nextConnectionId);
+  return <DiscoveryWorkspace key={JSON.stringify([connectionIds.get(props.client), props.token])} {...props} />;
+}
+
+function DiscoveryWorkspace({ client, token, skillHref }: { client: RegistryClient; token?: string; skillHref(slug: string, version: string): string }) {
+  const taskId = useId();
   const [task, setTask] = useState("");
   const [response, setResponse] = useState<TaskDiscoveryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -22,8 +30,8 @@ export function TaskDiscovery({ client, token, skillHref }: { client: RegistryCl
   return <details className="task-discovery">
     <summary>Find skills for a task</summary>
     <form onSubmit={event => { event.preventDefault(); void find(); }}>
-      <label htmlFor="task-description">Task description</label>
-      <textarea id="task-description" maxLength={4000} required value={task} onChange={event => { generation.current++; setTask(event.target.value); setResponse(null); setError(null); setBusy(false); }} placeholder="Describe what you need to do…" />
+      <label htmlFor={taskId}>Task description</label>
+      <textarea id={taskId} maxLength={4000} required value={task} onChange={event => { generation.current++; setTask(event.target.value); setResponse(null); setError(null); setBusy(false); }} placeholder="Describe what you need to do…" />
       <button className="button button-primary" type="submit" disabled={busy || !task.trim()}>{busy ? "Finding skills…" : "Find relevant skills"}</button>
       <p>Find approved releases by word overlap. No model calls. Review each skill before choosing how to use it.</p>
     </form>
