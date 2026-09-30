@@ -387,6 +387,70 @@ test("configured confidential clients must authenticate at the token endpoint", 
   assert.equal(both.json().error, "invalid_request", "a client must use one authentication method");
 });
 
+// Failure inventory before enforcing registered client authentication methods:
+// - Basic and POST secrets are interchangeable despite client registration.
+// - Public clients accept an empty secret through Basic or a form field.
+// - Malformed/unsupported Authorization falls back to body or public auth.
+// - Mixed methods or failures consume a code, rotate/revoke a grant, or echo secrets.
+for (const registration of ["none", "client_secret_basic", "client_secret_post", "configured_basic"] as const) {
+  for (const operation of ["authorization_code", "refresh_token", "revocation"] as const) {
+    test(`OAuth ${registration} client enforces its method during ${operation}`, async (t) => {
+      const { app, authStore } = oauthApp(t);
+      const client = registration === "configured_basic"
+        ? { client_id: "configured-connector", client_secret: CONFIGURED_SECRET, token_endpoint_auth_method: "client_secret_basic" }
+        : await register(app, { client_name: "Method-bound connector", redirect_uris: [CLAUDE_REDIRECT], token_endpoint_auth_method: registration });
+      const clientId = client.client_id as string;
+      const secret = (client.client_secret ?? "") as string;
+      const method = client.token_endpoint_auth_method as "none" | "client_secret_basic" | "client_secret_post";
+      const authentication = (suppliedMethod: typeof method, value = secret): { fields: Record<string, string>; headers: Record<string, string> } => suppliedMethod === "client_secret_basic"
+        ? { fields: {}, headers: basicAuthorization(clientId, value) }
+        : { fields: { client_id: clientId, ...(suppliedMethod === "client_secret_post" ? { client_secret: value } : {}) }, headers: {} };
+      const correct = authentication(method);
+      const session = await addAndLogin(app, authStore, { id: "reader-1", email: "reader@example.test", roles: ["user"] });
+      const { code, pkce } = await approvedCode(app, session, { clientId, redirectUri: CLAUDE_REDIRECT });
+      let fields: Record<string, string> = { grant_type: "authorization_code", code, redirect_uri: CLAUDE_REDIRECT, code_verifier: pkce.verifier };
+      let accessToken: string | undefined;
+      if (operation !== "authorization_code") {
+        const exchange = await tokenRequest(app, { ...fields, ...correct.fields }, correct.headers);
+        assert.equal(exchange.statusCode, 200, "registered client authentication must prepare the lifecycle fixture");
+        const tokens = exchange.json();
+        accessToken = tokens.access_token;
+        fields = operation === "refresh_token"
+          ? { grant_type: "refresh_token", refresh_token: tokens.refresh_token }
+          : { token: tokens.refresh_token, token_type_hint: "refresh_token" };
+      }
+      const endpoint = operation === "revocation" ? "/oauth/revoke" : "/oauth/token";
+      const rejected = [
+        ...(["none", "client_secret_basic", "client_secret_post"] as const).filter((value) => value !== method).map((value) => ({ label: `unregistered ${value}`, ...authentication(value), status: 401, error: "invalid_client" })),
+        ...["Basic !!!", "Basic\t%%%", "Basic", "Bearer unsupported"].map((authorization) => ({ label: "malformed or unsupported Authorization", fields: correct.fields, headers: { authorization }, status: 401, error: "invalid_client" })),
+        { label: "mixed Basic and form secret", fields: authentication("client_secret_post").fields, headers: basicAuthorization(clientId, secret), status: 400, error: "invalid_request" },
+        { label: "conflicting client identifiers", fields: { client_id: "another-client" }, headers: basicAuthorization(clientId, secret), status: 400, error: "invalid_request" },
+        ...(method === "none" ? [] : [{ label: "wrong secret with registered method", ...authentication(method, "incorrect-client-secret"), status: 401, error: "invalid_client" }]),
+      ];
+      for (const attempt of rejected) {
+        const response = await formRequest(app, endpoint, { ...fields, ...attempt.fields }, attempt.headers);
+        assert.equal(response.statusCode, attempt.status, attempt.label);
+        assert.equal(response.json().error, attempt.error, attempt.label);
+        assert.deepEqual(Object.keys(response.json()).sort(), ["error", "error_description"], attempt.label);
+        for (const credential of [secret, code, fields.refresh_token, fields.token, accessToken]) {
+          if (credential) assert.equal(response.body.includes(credential), false, `${attempt.label}: credential leaked`);
+        }
+        if (accessToken) {
+          const stillActive = await app.inject({ method: "GET", url: "/v1/mcp/session", headers: bearer(accessToken) });
+          assert.equal(stillActive.statusCode, 200, `${attempt.label}: rejected authentication changed the connection`);
+        }
+      }
+      // A repeated matching client_id is metadata, not a second secret method.
+      const accepted = await formRequest(app, endpoint, { ...fields, ...correct.fields, client_id: clientId }, correct.headers);
+      assert.equal(accepted.statusCode, 200, "registered client authentication must remain usable after rejected attempts");
+      const liveToken = operation === "revocation" ? accessToken : accepted.json().access_token;
+      assert.ok(liveToken);
+      const live = await app.inject({ method: "GET", url: "/v1/mcp/session", headers: bearer(liveToken) });
+      assert.equal(live.statusCode, operation === "revocation" ? 401 : 200);
+    });
+  }
+}
+
 test("refresh tokens rotate, reject reuse, downscope and revoke the connection on reuse", async (t) => {
   const { app, authStore } = oauthApp(t);
   const client = await register(app, { client_name: "ChatGPT", redirect_uris: [CHATGPT_REDIRECT], token_endpoint_auth_method: "none" });
@@ -404,7 +468,7 @@ test("refresh tokens rotate, reject reuse, downscope and revoke the connection o
   const downscoped = await app.inject({ method: "GET", url: "/v1/mcp/session", headers: bearer(second.access_token) });
   assert.deepEqual(downscoped.json().credential.scopes, ["skills:read"]);
 
-  const wrongClient = await tokenRequest(app, { grant_type: "refresh_token", refresh_token: second.refresh_token, client_id: "configured-connector", client_secret: CONFIGURED_SECRET });
+  const wrongClient = await tokenRequest(app, { grant_type: "refresh_token", refresh_token: second.refresh_token }, basicAuthorization("configured-connector", CONFIGURED_SECRET));
   assert.equal(wrongClient.json().error, "invalid_grant");
 
   const reuse = await tokenRequest(app, { grant_type: "refresh_token", refresh_token: first.refresh_token, client_id: client.client_id });
@@ -518,7 +582,8 @@ test("RFC 7009 revocation, account connection management and account security ev
   assert.equal((await app.inject({ method: "GET", url: "/v1/mcp/session", headers: bearer(revokedByClient.access_token) })).statusCode, 401);
   assert.equal((await formRequest(app, "/oauth/revoke", { token: "myskills_rt.unknown", client_id: client.client_id })).statusCode, 200);
   const foreign = await connect(app, session, { clientId: client.client_id, redirectUri: CHATGPT_REDIRECT });
-  await formRequest(app, "/oauth/revoke", { token: foreign.refresh_token, client_id: "configured-connector", client_secret: CONFIGURED_SECRET });
+  const foreignRevocation = await formRequest(app, "/oauth/revoke", { token: foreign.refresh_token }, basicAuthorization("configured-connector", CONFIGURED_SECRET));
+  assert.equal(foreignRevocation.statusCode, 200, "a correctly authenticated client cannot revoke another client's token");
   assert.equal((await app.inject({ method: "GET", url: "/v1/mcp/session", headers: bearer(foreign.access_token) })).statusCode, 200, "another client cannot revoke this connection");
 
   const listed = await app.inject({ method: "GET", url: "/v1/oauth/connections", headers: bearer(session) });
@@ -682,6 +747,10 @@ function createPkce() {
 }
 
 function bearer(token: string) { return { authorization: `Bearer ${token}` }; }
+
+function basicAuthorization(clientId: string, secret: string) {
+  return { authorization: `Basic ${Buffer.from(`${encodeURIComponent(clientId)}:${encodeURIComponent(secret)}`).toString("base64")}` };
+}
 
 async function register(app: App, body: Record<string, unknown>, remoteAddress = "203.0.113.5") {
   const response = await app.inject({ method: "POST", url: "/oauth/register", payload: body, remoteAddress });

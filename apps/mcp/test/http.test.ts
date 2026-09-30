@@ -1,8 +1,10 @@
 import { ALL_APPLICATION_TOOL_NAMES, FRIENDLY_READ_TOOLS } from "./application-tool-names.js";
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { connect as connectSocket } from "node:net";
+import { parseEnv } from "node:util";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { McpServer } from "@modelcontextprotocol/server";
 import { createAiSkillsMcpHttpServer, withRequestTimeout } from "../src/http.js";
@@ -526,6 +528,34 @@ test("HTTP MCP transport returns health and rejects non-POST MCP methods", async
   assert.match(await getMcp.text(), /Method not allowed/);
   const optionsMcp = await fetch(url, { method: "OPTIONS" });
   assert.equal(optionsMcp.status, 405);
+});
+
+test("production Compose MCP example reaches OAuth authentication through the configured proxy host", async (t) => {
+  const template = readFileSync(new URL("../../../.env.production.example", import.meta.url), "utf8");
+  // Enable the documented optional connector settings. nginx forwards the
+  // MCP_PROXY_TARGET authority as Host ($proxy_host), including its port.
+  const env = parseEnv(template.replace(/^# (?=(?:MCP_PROXY_TARGET|MYSKILLS_OAUTH_ISSUER|MYSKILLS_MCP_PUBLIC_URL)=)/gm, ""));
+  const proxyHost = new URL(env.MCP_PROXY_TARGET).host;
+  const server = createAiSkillsMcpHttpServer({
+    allowedHosts: env.MYSKILLS_MCP_ALLOWED_HOSTS.split(","),
+    allowedOrigins: env.MYSKILLS_MCP_ALLOWED_ORIGINS.split(","),
+    oauth: { issuer: env.MYSKILLS_OAUTH_ISSUER, resourceUrl: env.MYSKILLS_MCP_PUBLIC_URL },
+    fetchImpl: async () => { throw new Error("Anonymous requests must not reach the API."); },
+  });
+  const url = await listen(t, server);
+  const response = await postRaw(url, { host: proxyHost, "content-type": "application/json" });
+  assert.equal(response.status, 401, response.body);
+  assert.ok(response.headers["www-authenticate"]?.includes(
+    `resource_metadata="${new URL(env.MYSKILLS_MCP_PUBLIC_URL).origin}/.well-known/oauth-protected-resource/mcp"`,
+  ));
+
+  const hostileHost = await postRaw(url, {
+    host: "hostile.test",
+    "x-forwarded-host": proxyHost,
+    "content-type": "application/json",
+  });
+  assert.equal(hostileHost.status, 403);
+  assert.match(hostileHost.body, /host is not allowed/);
 });
 
 test("HTTP MCP transport rejects untrusted Host and Origin before registry calls", async (t) => {

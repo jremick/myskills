@@ -146,7 +146,24 @@ service's `MCP_PROXY_TARGET` to the MCP service's verified private or public
 URL (an origin, no path); it defaults to `http://127.0.0.1:3002`, so without an
 MCP service `/mcp` answers 502. nginx resolves the target at startup: do not
 point it at a service that does not exist. The MCP service must allow the Host
-value nginx forwards (`MYSKILLS_MCP_ALLOWED_HOSTS`).
+value nginx forwards (`MYSKILLS_MCP_ALLOWED_HOSTS`). nginx uses `$proxy_host`,
+which is the upstream hostname and port, including a non-default port. The
+allowlist checks that complete value; the public OAuth URL does not determine it.
+
+| Web-to-MCP route | `MCP_PROXY_TARGET` on web | `MYSKILLS_MCP_ALLOWED_HOSTS` on MCP |
+| --- | --- | --- |
+| Production Compose (`mcp` profile) | `http://mcp-http:3002` | `mcp-http:3002` |
+| Railway private upstream | `http://<verified-private-host>:<listening-port>` | `<verified-private-host>:<listening-port>` |
+| Public HTTPS upstream | `https://mcp.skills.example.com` | `mcp.skills.example.com` |
+
+The production environment example defaults to the Compose allowlist. Enable
+its commented `MCP_PROXY_TARGET` setting when starting the `mcp` profile. For
+a standalone MCP endpoint behind a dedicated TLS reverse proxy, configure
+the exact Host that proxy sends. For example, a proxy preserving
+`mcp.skills.example.com` needs `MYSKILLS_MCP_ALLOWED_HOSTS=mcp.skills.example.com`;
+it does not need the web service's `MCP_PROXY_TARGET`. If both ingress paths
+are used, list both exact Host values, comma separated. Keep the allowlist
+explicit; forwarded headers do not replace the Host check.
 
 For this topology use `MYSKILLS_OAUTH_ISSUER=https://skills.example.com` and
 `MYSKILLS_MCP_PUBLIC_URL=https://skills.example.com/mcp`. Separate hosts also

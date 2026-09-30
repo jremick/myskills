@@ -496,8 +496,9 @@ export class OAuthService {
       secret = basic.secret;
     }
     if (!clientId || clientId.length > 160) throw invalidClient();
+    const suppliedMethod: OAuthClientAuthMethod = basic ? "client_secret_basic" : secret !== undefined ? "client_secret_post" : "none";
     const client = await this.resolveClient(clientId);
-    if (!client) throw invalidClient();
+    if (!client || client.tokenEndpointAuthMethod !== suppliedMethod) throw invalidClient();
     if (client.clientSecretHash === null) {
       if (secret) throw invalidClient();
       return client;
@@ -606,7 +607,7 @@ function parseScopes(value: string | undefined): OAuthScope[] | null {
 function parseBasicAuthorization(header: string | undefined): { clientId: string; secret: string } | null | "invalid" {
   if (!header) return null;
   const match = /^Basic[ \t]+([A-Za-z0-9+/=]{1,1024})[ \t]*$/i.exec(header);
-  if (!match) return header.slice(0, 6).toLowerCase() === "basic " ? "invalid" : null;
+  if (!match) return "invalid";
   const decoded = Buffer.from(match[1]!, "base64").toString("utf8");
   const separator = decoded.indexOf(":");
   if (separator < 1) return "invalid";
