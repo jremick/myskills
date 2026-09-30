@@ -43,6 +43,12 @@ export function ArchitectureWorkbenchPanel({
   overviewHref,
   onOverviewLink,
   titleRef,
+  selectedNodeId,
+  onSelectedNodeChange,
+  selectedProfileId,
+  selectedEnvironmentId,
+  onProfileChange,
+  onEnvironmentChange,
   notices,
   contextSelectors,
   draftPreview,
@@ -63,6 +69,14 @@ export function ArchitectureWorkbenchPanel({
   overviewHref: string;
   onOverviewLink: (event: MouseEvent<HTMLAnchorElement>) => void;
   titleRef: RefObject<HTMLHeadingElement | null>;
+  /** Node shared with the overview Structure; validated by the dashboard. */
+  selectedNodeId?: string | null;
+  onSelectedNodeChange?: (id: string | null) => void;
+  /** Saved preview context shared with the overview. */
+  selectedProfileId?: string;
+  selectedEnvironmentId?: string;
+  onProfileChange?: (id: string) => void;
+  onEnvironmentChange?: (id: string) => void;
   notices?: ReactNode;
   contextSelectors: ReactNode;
   draftPreview: ArchitectureDraftPreview | null;
@@ -128,6 +142,13 @@ export function ArchitectureWorkbenchPanel({
           heading={heading}
           initialSpec={editorSeed?.spec ?? latest?.spec ?? bootstrapArchitectureSpec(architecture, detail)}
           expectedRevisionId={latest?.id ?? null}
+          {...(editorSeed || latest ? { baselineLabel: editorSeed?.revisionLabel ?? revisionLabel(latest) } : {})}
+          selectedNodeId={selectedNodeId ?? null}
+          {...(onSelectedNodeChange ? { onSelectedNodeChange } : {})}
+          {...(selectedProfileId ? { selectedProfileId } : {})}
+          {...(selectedEnvironmentId ? { selectedEnvironmentId } : {})}
+          {...(onProfileChange ? { onProfileChange } : {})}
+          {...(onEnvironmentChange ? { onEnvironmentChange } : {})}
           onPreview={readOnly || !latest ? undefined : onDraftPreview}
           onSave={readOnly ? undefined : onDraftSave}
           onDraftChange={onDraftChange}

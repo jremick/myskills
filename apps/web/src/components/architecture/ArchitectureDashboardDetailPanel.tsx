@@ -1,11 +1,14 @@
-import { useId, type MouseEvent, type ReactNode, type RefObject } from "react";
+import { useId, useState, type MouseEvent, type ReactNode, type RefObject } from "react";
 import {
   ArrowLeft,
   ArrowRight,
+  ChevronDown,
   CircleAlert,
+  Shuffle,
   SquarePen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ArchitectureExplorer, type ArchitectureExplorerView } from "./ArchitectureExplorer.js";
 import { ArchitectureOrganizationGrantsCard } from "./ArchitectureOrganizationGrantsCard.js";
 import { ArchitecturePatternMigrationCard } from "./ArchitecturePatternMigrationCard.js";
 import {
@@ -28,7 +31,6 @@ import {
   ArchitecturePlanBanner,
   ArchitectureSkillsSection,
   ArchitectureTechnicalDetails,
-  ArchitectureTopologySection,
 } from "./ArchitectureDashboardPreviewPanel.js";
 import { ObservedFixturePreviewCard } from "./ArchitectureDashboardEditorPanels.js";
 import { RevisionHistoryPanel } from "./ArchitectureDashboardHistoryPanel.js";
@@ -44,10 +46,21 @@ export interface ArchitectureLauncher {
   ref: RefObject<HTMLAnchorElement | null>;
 }
 
-/** Saved-revision overview. Editing happens on the Workbench surface. */
+/**
+ * Saved-revision overview. Editing happens on the Workbench surface.
+ *
+ * Tab ids keep their original keys ("overview" is Structure, "access" is
+ * Sharing) so existing state and panel ids stay stable.
+ */
 export function ArchitectureDetailPanel({
   tab,
   onTabChange,
+  selectedNodeId,
+  onSelectNode,
+  structureView,
+  onStructureViewChange,
+  onEditNode,
+  contextLabel,
   architecture,
   detail,
   detailState,
@@ -76,6 +89,15 @@ export function ArchitectureDetailPanel({
 }: {
   tab: ArchitectureOverviewTab;
   onTabChange: (tab: ArchitectureOverviewTab) => void;
+  /** Shared with the Workbench; validated by the dashboard against the loaded projection. */
+  selectedNodeId: string | null;
+  onSelectNode: (id: string) => void;
+  structureView: ArchitectureExplorerView;
+  onStructureViewChange: (view: ArchitectureExplorerView) => void;
+  /** Present only when the reader can save revisions of this architecture. */
+  onEditNode?: (id: string) => void;
+  /** Readable profile and environment (or organization) of the preview. */
+  contextLabel?: string;
   titleRef?: RefObject<HTMLHeadingElement | null>;
   /** Shown in the stacked layout; returns to the list without unmounting the draft. */
   onBack?: () => void;
@@ -105,6 +127,8 @@ export function ArchitectureDetailPanel({
   onRetry: () => void;
 }) {
   const idPrefix = useId();
+  // Scoped to one architecture so switching closes the disclosure.
+  const [patternOpenFor, setPatternOpenFor] = useState<string | null>(null);
   const back = onBack && (
     <Button className="cp-back" type="button" variant="ghost" onClick={onBack}>
       <ArrowLeft size={16} aria-hidden="true" />
@@ -129,13 +153,15 @@ export function ArchitectureDetailPanel({
     ? revisionLabel(currentRevision)
     : architecture.latestRevision || architecture.revisionCount ? architectureRevisionLabel(architecture) : "No revision yet";
   const tabs: Array<ArchitectureTab<ArchitectureOverviewTab>> = [
-    { id: "overview", label: "Overview" },
+    { id: "overview", label: "Structure" },
     { id: "skills", label: <>Skills{preview && <span className="architecture-tab-count">{preview.compiled.skills.length}</span>}</> },
     { id: "history", label: "History" },
-    ...(detail && canManage ? [{ id: "access" as const, label: "Access" }] : []),
+    ...(detail && canManage ? [{ id: "access" as const, label: "Sharing" }] : []),
   ];
   const selectedTab = tabs.some((candidate) => candidate.id === tab) ? tab : "overview";
   const LauncherIcon = hasUnsavedDraft ? ArrowRight : SquarePen;
+  const patternPanelId = `${idPrefix}-pattern`;
+  const patternOpen = patternOpenFor === architecture.id;
 
   return (
     <article className="cp-detail architecture-detail" aria-labelledby="architecture-detail-title">
@@ -152,16 +178,50 @@ export function ArchitectureDetailPanel({
               <span data-access={readOnly ? "read-only" : "append"}>{readOnly ? "Read-only access" : "Can save revisions"}</span>
             </p>
           </div>
-          {launcher && (
-            <Button asChild className="architecture-launcher" size="sm">
-              <a href={launcher.href} ref={launcher.ref} onClick={launcher.onClick}>
-                <LauncherIcon size={15} aria-hidden="true" />{launcher.label}
-              </a>
-            </Button>
+          {(launcher || (detail && canManage)) && (
+            <div className="architecture-overview-actions">
+              {detail && canManage && (
+                <Button
+                  aria-controls={patternPanelId}
+                  aria-expanded={patternOpen}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={() => setPatternOpenFor(patternOpen ? null : architecture.id)}
+                >
+                  <Shuffle size={15} aria-hidden="true" />Change pattern
+                  <ChevronDown className="architecture-disclosure-chevron" size={14} aria-hidden="true" />
+                </Button>
+              )}
+              {launcher && (
+                <Button asChild className="architecture-launcher" size="sm">
+                  <a href={launcher.href} ref={launcher.ref} onClick={launcher.onClick}>
+                    <LauncherIcon size={15} aria-hidden="true" />{launcher.label}
+                  </a>
+                </Button>
+              )}
+            </div>
           )}
         </div>
         {contextSelectors}
       </header>
+      {detail && canManage && (
+        // Stays mounted while closed, which preserves the migration draft and
+        // its retry idempotency key.
+        <section aria-label="Change pattern" className="architecture-pattern-panel" hidden={!patternOpen} id={patternPanelId}>
+          <ArchitecturePatternMigrationCard
+            key={`pattern-migration:${architecture.id}:${detail.latestRevision?.id ?? "empty"}`}
+            architectureId={architecture.id}
+            architectureName={architecture.name}
+            currentPatternId={architecture.patternId}
+            currentRevisionId={detail.latestRevision?.id ?? architecture.currentRevisionId ?? null}
+            detail={detail}
+            patterns={patterns}
+            client={client}
+            onCreated={onPatternMigrationCreated}
+          />
+        </section>
+      )}
       {hasUnsavedDraft && (
         <p className="architecture-draft-note" role="status"><CircleAlert size={15} aria-hidden="true" /> You have an unsaved draft in the workbench.</p>
       )}
@@ -182,7 +242,15 @@ export function ArchitectureDetailPanel({
           {detailState !== "loading" && !message && preview && (
             <>
               <ArchitecturePlanBanner preview={preview} />
-              <ArchitectureTopologySection preview={preview} title="Routing overview" />
+              <ArchitectureExplorer
+                preview={preview}
+                selectedNodeId={selectedNodeId}
+                onSelectNode={onSelectNode}
+                view={structureView}
+                onViewChange={onStructureViewChange}
+                {...(onEditNode ? { onEditNode } : {})}
+                {...(contextLabel ? { contextLabel } : {})}
+              />
               <ArchitectureTechnicalDetails
                 preview={preview}
                 fixture={<ObservedFixturePreviewCard key={fixtureKey} onPreview={onFixturePreview} />}
@@ -192,7 +260,17 @@ export function ArchitectureDetailPanel({
         </ArchitectureTabPanel>
         <ArchitectureTabPanel className="architecture-overview-panel" id="skills" idPrefix={idPrefix} selected={selectedTab}>
           {preview
-            ? <ArchitectureSkillsSection preview={preview} />
+            ? (
+              <ArchitectureSkillsSection
+                preview={preview}
+                {...(contextLabel ? { contextLabel } : {})}
+                onShowInStructure={(nodeId) => {
+                  onSelectNode(nodeId);
+                  onStructureViewChange("list");
+                  onTabChange("overview");
+                }}
+              />
+            )
             : <p className="architecture-muted">Effective skills appear when the saved revision compiles for the selected context.</p>}
         </ArchitectureTabPanel>
       </div>
@@ -212,8 +290,7 @@ export function ArchitectureDetailPanel({
         ) : <p className="architecture-muted">Revision history is available after the architecture loads.</p>}
       </ArchitectureTabPanel>
       {detail && canManage && (
-        // Hidden tab panels stay mounted, which preserves grant drafts and the
-        // migration retry idempotency key.
+        // Hidden tab panels stay mounted, which preserves grant drafts.
         <ArchitectureTabPanel className="architecture-overview-panel" id="access" idPrefix={idPrefix} selected={selectedTab}>
           <ArchitectureOrganizationGrantsCard
             key={`organization-grants:${architecture.id}:${detail.latestRevision?.id ?? "empty"}`}
@@ -221,17 +298,6 @@ export function ArchitectureDetailPanel({
             currentRevisionId={detail.latestRevision?.id ?? architecture.currentRevisionId ?? null}
             client={client}
             onSaved={() => onRetry()}
-          />
-          <ArchitecturePatternMigrationCard
-            key={`pattern-migration:${architecture.id}:${detail.latestRevision?.id ?? "empty"}`}
-            architectureId={architecture.id}
-            architectureName={architecture.name}
-            currentPatternId={architecture.patternId}
-            currentRevisionId={detail.latestRevision?.id ?? architecture.currentRevisionId ?? null}
-            detail={detail}
-            patterns={patterns}
-            client={client}
-            onCreated={onPatternMigrationCreated}
           />
         </ArchitectureTabPanel>
       )}

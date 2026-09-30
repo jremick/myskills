@@ -1,0 +1,402 @@
+/* Architecture explorer: dense structure list, node inspector and a
+   complementary router map. The explorer measures its own width and sets
+   data-layout="split" (list + inspector column) or "stack" (inspector as a
+   closable bottom sheet). Every rule is scoped to .architecture-explorer. */
+
+.architecture-explorer {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 18px;
+}
+.architecture-explorer [hidden] { display: none !important; }
+.architecture-explorer p { margin: 0; }
+
+/* Toolbar: view switch, search, exposure filter and counts wrap freely. */
+.architecture-explorer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  min-width: 0;
+}
+.architecture-explorer-segment {
+  display: inline-flex;
+  flex: none;
+  max-width: 100%;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.architecture-explorer-segment > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--muted);
+  background: none;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.architecture-explorer-segment > button:hover { color: var(--ink); background: var(--surface-soft); }
+.architecture-explorer-segment > button[aria-pressed="true"] { color: var(--teal-dark); background: var(--teal-soft); font-weight: 600; }
+.architecture-explorer-segment > button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+
+.architecture-explorer-search { position: relative; flex: 1 1 200px; min-width: 0; max-width: 360px; }
+.architecture-explorer-search > svg { position: absolute; top: 50%; left: 10px; color: var(--muted); transform: translateY(-50%); pointer-events: none; }
+.architecture-explorer-search input { height: 32px; padding-left: 32px; background: var(--surface); font-size: 13px; }
+
+.architecture-explorer-summary { min-width: 0; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+/* The live region stays rendered (even when empty) so updates are announced. */
+.architecture-explorer-results { color: var(--ink-soft); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Body: list (primary) and inspector column. */
+.architecture-explorer-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(260px, 34%, 320px);
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+}
+.architecture-explorer[data-layout="stack"] .architecture-explorer-body { grid-template-columns: minmax(0, 1fr); }
+.architecture-explorer-main { min-width: 0; }
+
+.architecture-explorer-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  container: architecture-explorer-pane / inline-size;
+}
+.architecture-explorer-pane-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-height: 38px;
+  padding: 4px 8px 4px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: 12px;
+}
+.architecture-explorer-pane-title { flex: 1 1 auto; min-width: 0; }
+.architecture-explorer-pane-actions { display: inline-flex; flex-wrap: wrap; gap: 2px; }
+.architecture-explorer-pane-actions [data-slot="button"] { color: var(--ink-soft); }
+
+.architecture-explorer-scroll {
+  max-height: clamp(360px, calc(100dvh - 300px), 760px);
+  padding: 6px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.architecture-explorer[data-layout="stack"] .architecture-explorer-scroll { max-height: none; overflow: visible; }
+
+/* Nested list. Plain ul/li with buttons; no tree roles. */
+.architecture-explorer-tree,
+.architecture-explorer-tree ul { margin: 0; padding: 0; list-style: none; }
+.architecture-explorer-tree ul {
+  margin-left: 13px;
+  padding-left: 6px;
+  border-left: 1px solid var(--line-soft);
+}
+.architecture-explorer-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 32px;
+  border-radius: 6px;
+}
+.architecture-explorer-row:hover { background: var(--surface-soft); }
+.architecture-explorer-row[data-selected="true"] { background: var(--teal-soft); box-shadow: inset 2px 0 0 var(--teal); }
+
+.architecture-explorer-toggle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  color: var(--muted);
+  background: none;
+}
+.architecture-explorer-toggle:hover:not(:disabled) { color: var(--ink); background: var(--line-soft); }
+.architecture-explorer-toggle:disabled { cursor: default; opacity: 0.5; }
+.architecture-explorer-toggle svg { transition: transform 120ms ease; }
+.architecture-explorer-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.architecture-explorer-toggle-spacer { flex: none; width: 26px; }
+
+.architecture-explorer-node {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  background: none;
+  font-size: 13px;
+  line-height: 18px;
+  text-align: left;
+}
+.architecture-explorer-node > svg { flex: none; color: var(--muted); }
+.architecture-explorer-row[data-selected="true"] .architecture-explorer-node > svg { color: var(--teal); }
+.architecture-explorer-item[data-node-kind="router"] > .architecture-explorer-row[data-depth="0"] .architecture-explorer-label { font-weight: 600; }
+.architecture-explorer-toggle:focus-visible,
+.architecture-explorer-node:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+
+.architecture-explorer-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.architecture-explorer-item[data-exposed="false"] > .architecture-explorer-row .architecture-explorer-label { color: var(--muted); }
+.architecture-explorer mark { padding: 0 1px; border-radius: 2px; color: inherit; background: #fbe8a0; }
+
+.architecture-explorer-count {
+  flex: none;
+  min-width: 22px;
+  padding: 0 7px;
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--line-soft);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.architecture-explorer-version { flex: none; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.architecture-explorer-tag {
+  flex: none;
+  padding: 0 6px;
+  border: 1px dashed var(--line-strong, var(--line));
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+/* Narrow panes keep deep branches (up to the topology depth limit) readable. */
+@container architecture-explorer-pane (max-width: 420px) {
+  .architecture-explorer-tree ul { margin-left: 8px; padding-left: 3px; }
+  .architecture-explorer-toggle,
+  .architecture-explorer-toggle-spacer { width: 24px; }
+  .architecture-explorer-node { gap: 6px; padding-inline: 6px; }
+  .architecture-explorer-version { display: none; }
+  .architecture-explorer-tag { max-width: 5.5em; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* Empty and no-results states. */
+.architecture-explorer-empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 32px 16px;
+  color: var(--muted);
+  text-align: center;
+}
+.architecture-explorer-empty strong { color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+.architecture-explorer-empty [data-slot="button"] { margin-top: 6px; }
+
+/* Inspector: side column when split, closable bottom sheet when stacked. */
+.architecture-explorer-inspector {
+  position: sticky;
+  top: 12px;
+  min-width: 0;
+  max-height: calc(100dvh - 24px);
+  padding: 14px 16px 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.architecture-explorer[data-layout="stack"] .architecture-explorer-inspector {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 40;
+  width: auto;
+  max-height: min(75dvh, 640px);
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  border-width: 1px 0 0;
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -10px 30px rgba(17, 26, 38, 0.18);
+}
+.architecture-explorer-inspector-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
+.architecture-explorer-inspector-close { flex: none; margin: -4px -6px 0 auto; }
+.architecture-explorer-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 9px;
+  border-radius: 12px;
+  color: var(--teal-dark);
+  background: var(--teal-soft);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.architecture-explorer-inspector-title {
+  margin: 8px 0 0;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+.architecture-explorer-inspector-title:focus { outline: none; }
+.architecture-explorer-inspector-title:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 3px; }
+
+.architecture-explorer-facts { display: grid; gap: 8px; margin: 12px 0 0; }
+.architecture-explorer-facts > div {
+  display: grid;
+  grid-template-columns: minmax(76px, 30%) minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+.architecture-explorer-facts dt { color: var(--muted); }
+.architecture-explorer-facts dd { display: grid; gap: 2px; align-content: start; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.architecture-explorer-facts code { font-family: var(--font-mono); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+.architecture-explorer-muted { color: var(--muted); }
+.architecture-explorer-note { margin: 0; padding: 6px 8px; border-radius: 6px; color: var(--muted); background: var(--surface-soft); font-size: 12px; }
+
+.architecture-explorer-path { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; margin: 0; padding: 0; list-style: none; }
+.architecture-explorer-path li { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.architecture-explorer-path-separator { color: var(--muted); }
+.architecture-explorer-link {
+  padding: 0 2px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--teal-dark);
+  background: none;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.architecture-explorer-link:hover { text-decoration: underline; }
+.architecture-explorer-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+
+.architecture-explorer-facts dd.architecture-explorer-digest-row { display: flex; align-items: center; gap: 4px; }
+.architecture-explorer-digest { min-width: 0; }
+.architecture-explorer-copy { flex: none; color: var(--muted); }
+
+.architecture-explorer-exposure {
+  justify-self: start;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink-soft);
+  background: var(--surface-soft);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+.architecture-explorer-exposure[data-state="included"] { border-color: rgba(11, 112, 102, 0.3); color: var(--teal-dark); background: var(--teal-soft); }
+.architecture-explorer-exposure[data-state="conditional"] { border-color: rgba(122, 75, 0, 0.3); color: var(--warning); background: var(--warning-soft); }
+.architecture-explorer-exposure[data-state="excluded"] { border-style: dashed; color: var(--muted); }
+.architecture-explorer-exposure-reason { color: var(--muted); font-size: 12px; }
+
+.architecture-explorer-inspector-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.architecture-explorer-inspector-actions:empty { display: none; }
+
+.architecture-explorer-inspector-empty { display: grid; justify-items: center; gap: 6px; padding: 28px 8px; color: var(--muted); text-align: center; }
+.architecture-explorer-inspector-empty strong { color: var(--ink); font-weight: 600; }
+
+/* Router map (React Flow). */
+.architecture-explorer-map-title { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--ink-soft); text-overflow: ellipsis; white-space: nowrap; }
+.architecture-explorer-map-canvas {
+  position: relative;
+  height: clamp(380px, calc(100dvh - 320px), 680px);
+  min-width: 0;
+  background: var(--surface-soft);
+}
+.architecture-explorer[data-layout="stack"] .architecture-explorer-map-canvas { height: min(62dvh, 520px); min-height: 320px; }
+.architecture-explorer-map-canvas .react-flow { font-family: inherit; }
+.architecture-explorer-map-canvas .react-flow__pane { cursor: grab; }
+.architecture-explorer-map-canvas .react-flow__pane.dragging { cursor: grabbing; }
+.architecture-explorer-map-canvas .react-flow__node { border-radius: 8px; cursor: pointer; }
+.architecture-explorer-map-canvas .react-flow__node:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.architecture-explorer-map-canvas .react-flow__edge-path { stroke: var(--line-strong, #c8d1db); stroke-width: 1.5; }
+.architecture-explorer-map-canvas .react-flow__edge.is-active .react-flow__edge-path { stroke: var(--teal); stroke-width: 2; }
+.architecture-explorer-map-canvas .react-flow__controls { margin: 8px; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; box-shadow: none; }
+.architecture-explorer-map-canvas .react-flow__controls-button { width: 28px; height: 28px; border-color: var(--line-soft); color: var(--ink-soft); background: var(--surface); }
+.architecture-explorer-map-canvas .react-flow__controls-button:hover { color: var(--teal-dark); background: var(--teal-soft); }
+.architecture-explorer-map-canvas .react-flow__controls-button:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+
+.architecture-explorer-map-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(17, 26, 38, 0.06);
+}
+.architecture-explorer-map-node > svg { flex: none; color: var(--muted); }
+.architecture-explorer-map-node:hover { border-color: var(--line-control, #9aabbc); }
+.architecture-explorer-map-node[data-root="true"] { border-color: var(--surface-strong); color: #ffffff; background: var(--surface-strong); }
+.architecture-explorer-map-node[data-root="true"] > svg { color: #8fdcd1; }
+.architecture-explorer-map-node[data-root="true"] .architecture-explorer-map-meta { color: rgba(255, 255, 255, 0.72); }
+.architecture-explorer-map-node[data-exposed="false"] { border-style: dashed; color: var(--muted); background: var(--surface-soft); }
+.architecture-explorer-map-node[data-selected="true"] { border-color: var(--teal); background: var(--teal-soft); box-shadow: 0 0 0 1px var(--teal); color: var(--ink); }
+.architecture-explorer-map-node[data-selected="true"] > svg { color: var(--teal); }
+.architecture-explorer-map-node[data-root="true"][data-selected="true"] { color: #ffffff; background: var(--surface-strong); box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--teal); }
+.architecture-explorer-map-node[data-root="true"][data-selected="true"] .architecture-explorer-map-meta { color: rgba(255, 255, 255, 0.72); }
+.architecture-explorer-map-node[data-dimmed="true"] { opacity: 0.45; }
+.architecture-explorer-map-node[data-match="true"] .architecture-explorer-map-label { text-decoration: underline; text-decoration-color: #e0b400; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.architecture-explorer-map-copy { display: grid; flex: 1 1 auto; min-width: 0; }
+.architecture-explorer-map-label { overflow: hidden; font-size: 13px; font-weight: 600; line-height: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.architecture-explorer-map-node[data-node-kind="leaf"] .architecture-explorer-map-label { font-weight: 500; }
+.architecture-explorer-map-meta { overflow: hidden; color: var(--muted); font-size: 11px; line-height: 15px; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.architecture-explorer-map-canvas .architecture-explorer-map-handle {
+  width: 6px;
+  min-width: 0;
+  height: 6px;
+  min-height: 0;
+  border: 0;
+  background: var(--line-strong, #c8d1db);
+  opacity: 0;
+  pointer-events: none;
+}
+.architecture-explorer-map-note,
+.architecture-explorer-map-hint {
+  padding: 6px 12px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .architecture-explorer *,
+  .architecture-explorer *::before,
+  .architecture-explorer *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+  .architecture-explorer button:active { transform: none; }
+}

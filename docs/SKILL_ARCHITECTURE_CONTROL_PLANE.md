@@ -242,12 +242,14 @@ deferred.
 ## Diagram and accessible artifacts
 
 The compiler produces one authorized effective node set. The API returns a
-positioned graph and escaped Mermaid projection. The browser derives a
-deterministic SVG from that graph and renders a matching accessible outline
-and table. The SVG uses a labelled `role="img"` with title/description; the
-outline remains usable without a canvas. Labels are escaped and unauthorized
-nodes, package content, paths, credentials, and private inventories are not
-included.
+positioned graph and escaped Mermaid projection. The browser renders that
+projection as a nested HTML list with a node inspector, plus a complementary
+router map (React Flow with a per-render Dagre layout that is never saved).
+The list remains the complete accessible structure without the map. Nodes
+that are not exposed in the selected context are shown only to readers who
+received the full revision; organization-only readers see exactly the exposed
+projection. Labels are escaped and unauthorized nodes, package content, paths,
+credentials, and private inventories are not included.
 
 These graph, Mermaid, SVG, and outline values are derived artifacts. They are
 useful for inspection, copying, background review, and browser download of

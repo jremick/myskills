@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { canonicalArchitectureDiagramArtifactJson } from "@myskills-app/core";
 import {
   AlertTriangle,
@@ -6,30 +6,35 @@ import {
   CircleAlert,
   Clipboard,
   Download,
-  Maximize2,
+  Search,
   ShieldCheck,
   TerminalSquare,
 } from "lucide-react";
-import { ArchitectureDiagram } from "./ArchitectureDiagram.js";
+import { ArchitectureExplorer } from "./ArchitectureExplorer.js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   type ArchitecturePreview,
   type ArchitecturePreviewPlan,
-  type ArchitectureTopologyEdge,
-  type ArchitectureTopologyNode,
 } from "../../api.js";
 import {
-  isLeafNodeKind,
+  packageVisibilityLabel,
   runtimeExposureLabel,
 } from "./architecture-dashboard-helpers.js";
 
 /** The full API result stack, used for the Workbench's unsaved draft preview. */
 export function ArchitecturePreviewPanel({ preview }: { preview: ArchitecturePreview }) {
+  const headingId = useId();
   return (
     <div className="architecture-preview-stack">
       <ArchitecturePlanBanner preview={preview} />
-      <ArchitectureTopologySection preview={preview} title="Router and leaf map" />
+      <section className="architecture-panel-section" aria-labelledby={headingId}>
+        <div className="architecture-panel-section-heading">
+          <h3 id={headingId}>Draft structure</h3>
+        </div>
+        <ArchitectureExplorer preview={preview} />
+      </section>
       <ArchitectureSkillsSection preview={preview} />
       <ArchitectureSyncPlan plan={preview.plan} />
       <ArchitectureCompiledSection preview={preview} />
@@ -52,57 +57,167 @@ export function ArchitecturePlanBanner({ preview }: { preview: ArchitecturePrevi
   );
 }
 
-export function ArchitectureTopologySection({ preview, title }: { preview: ArchitecturePreview; title: string }) {
+type SkillExposureFilter = "all" | "leaf" | "router";
+
+interface ArchitectureSkillRow {
+  key: string;
+  skillRefId: string;
+  title: string;
+  slug: string;
+  version: string;
+  digest: string;
+  packageVisibility: string;
+  /** Exposed nodes that use this skill in the compiled projection. */
+  nodeIds: string[];
+  branches: string[];
+  exposures: Array<"router" | "leaf">;
+}
+
+/**
+ * Effective skills for the selected context. Rows come only from the compiled
+ * projection the API returned for this reader, so filters never reveal more.
+ */
+export function ArchitectureSkillsSection({ preview, contextLabel, onShowInStructure }: {
+  preview: ArchitecturePreview;
+  /** Readable name of the selected profile and environment. */
+  contextLabel?: string;
+  /** Selects the skill's node on the Structure tab. */
+  onShowInStructure?: (nodeId: string) => void;
+}) {
   const headingId = useId();
-  const topology = topologyForPreview(preview);
-  const [diagramExpanded, setDiagramExpanded] = useState(false);
+  const searchId = useId();
+  const exposureId = useId();
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState("");
+  const [exposure, setExposure] = useState<SkillExposureFilter>("all");
+  const rows = useMemo(() => architectureSkillRows(preview), [preview]);
+  const normalized = query.trim().toLowerCase();
+  const visible = rows.filter((row) => (exposure === "all" || row.exposures.includes(exposure))
+    && (!normalized || [row.title, row.slug, row.version, ...row.branches].some((value) => value.toLowerCase().includes(normalized))));
+  const filtered = normalized !== "" || exposure !== "all";
+  function clearFilters() {
+    setQuery("");
+    setExposure("all");
+    searchRef.current?.focus();
+  }
   return (
-    <section className="architecture-panel-section" aria-labelledby={headingId}>
+    <section className="architecture-panel-section architecture-skills-section" aria-labelledby={headingId}>
       <div className="architecture-panel-section-heading">
-        <h3 id={headingId}>{title}</h3>
-        <div className="architecture-diagram-actions">
-          <span className="architecture-section-note">{topology.nodes.length} nodes · {topology.edges.length} links</span>
-          <Button aria-haspopup="dialog" disabled={topology.nodes.length === 0} onClick={() => setDiagramExpanded(true)} size="sm" type="button" variant="outline"><Maximize2 size={14} aria-hidden="true" />Expand diagram</Button>
-        </div>
+        <h3 id={headingId}>Skills available in this context</h3>
+        <span className="architecture-section-note">{contextLabel ? `Exposure in ${contextLabel}. ` : ""}Routers are not counted.</span>
       </div>
-      <ArchitectureDiagram topology={topology} expanded={diagramExpanded} onClose={() => setDiagramExpanded(false)} />
-      <ArchitectureOutline outline={preview.outline} />
+      {rows.length === 0 ? (
+        <div className="architecture-empty-inline"><CircleAlert size={17} aria-hidden="true" /> No skills are effective for this profile and environment.</div>
+      ) : (
+        <>
+          <div className="architecture-skills-toolbar">
+            <div className="architecture-skills-search">
+              <Search size={15} aria-hidden="true" />
+              <label className="sr-only" htmlFor={searchId}>Search skills</label>
+              <Input
+                autoComplete="off"
+                id={searchId}
+                placeholder="Search skills, versions and branches"
+                ref={searchRef}
+                spellCheck={false}
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && query) {
+                    event.preventDefault();
+                    setQuery("");
+                  }
+                }}
+              />
+            </div>
+            <div className="architecture-skills-filter">
+              <label htmlFor={exposureId}>Exposure</label>
+              <select id={exposureId} value={exposure} onChange={(event) => setExposure(event.target.value as SkillExposureFilter)}>
+                <option value="all">All exposures</option>
+                <option value="leaf">Direct leaf</option>
+                <option value="router">Router only</option>
+              </select>
+            </div>
+            <span className="architecture-section-note" role="status">
+              {filtered ? `Showing ${visible.length} of ${pluralize(rows.length, "skill")}` : pluralize(rows.length, "skill")}
+            </span>
+          </div>
+          {visible.length === 0 ? (
+            <div className="architecture-empty-inline architecture-skills-empty">
+              <Search size={17} aria-hidden="true" />
+              <span>{normalized ? `No skills match “${query.trim()}”.` : "No skills match this exposure filter."}</span>
+              <Button size="sm" type="button" variant="outline" onClick={clearFilters}>Clear filters</Button>
+            </div>
+          ) : (
+            <div className="architecture-skill-table-wrap">
+              <table className="architecture-skill-table">
+                <thead><tr><th scope="col">Skill</th><th scope="col">Branch</th><th scope="col">Version</th><th scope="col">Exposure</th><th scope="col">Package access</th></tr></thead>
+                <tbody>
+                  {visible.map((row) => (
+                    <tr key={row.key}>
+                      <th scope="row">
+                        <strong>{row.title}</strong>
+                        <small>{row.slug}</small>
+                        {onShowInStructure && row.nodeIds[0] && (
+                          <button className="architecture-skill-locate" type="button" onClick={() => onShowInStructure(row.nodeIds[0]!)}>
+                            Show in structure<span className="sr-only">: {row.title}</span>
+                          </button>
+                        )}
+                      </th>
+                      <td>{row.branches.length > 0 ? row.branches.join(", ") : "Top level"}</td>
+                      <td><span className="architecture-skill-version">{row.version}</span><small className="architecture-skill-digest" title={row.digest}>{row.digest.slice(0, 12)}</small></td>
+                      <td>
+                        {row.exposures.length === 0
+                          ? <span className="architecture-exposure excluded">{runtimeExposureLabel(undefined)}</span>
+                          : row.exposures.map((value) => <span className="architecture-exposure" key={value}>{runtimeExposureLabel(value)}</span>)}
+                      </td>
+                      <td>{packageVisibilityLabel(row.packageVisibility)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
     </section>
   );
 }
 
-export function ArchitectureSkillsSection({ preview }: { preview: ArchitecturePreview }) {
-  const headingId = useId();
-  return (
-    <section className="architecture-panel-section" aria-labelledby={headingId}>
-      <div className="architecture-panel-section-heading">
-        <h3 id={headingId}>Skills available in this context</h3>
-        <span className="architecture-section-note">Authorization is resolved server-side.</span>
-      </div>
-      {preview.compiled.skills.length === 0 ? (
-        <div className="architecture-empty-inline"><CircleAlert size={17} aria-hidden="true" /> No skills are effective for this profile and environment.</div>
-      ) : (
-        <div className="architecture-skill-table-wrap">
-          <table className="architecture-skill-table">
-            <thead><tr><th scope="col">Skill</th><th scope="col">Version</th><th scope="col">Exposure</th><th scope="col">Reason</th></tr></thead>
-            <tbody>
-              {preview.compiled.skills.map((skill) => {
-                const node = preview.compiled.nodes.find((candidate) => candidate.skillRefId === skill.skillRefId);
-                return (
-                <tr key={`${skill.skillRefId}:${skill.version}`}>
-                  <th scope="row"><strong>{skill.title || skill.slug}</strong><small>{skill.slug}</small></th>
-                  <td>{skill.version}</td>
-                  <td><span className="architecture-exposure">{runtimeExposureLabel(node?.runtimeExposure)}</span></td>
-                  <td>Enabled by profile {preview.compiled.profileId} for {preview.compiled.environmentId}; package access remains {skill.packageVisibility}.</td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  );
+function architectureSkillRows(preview: ArchitecturePreview): ArchitectureSkillRow[] {
+  const nodes = preview.compiled.nodes;
+  const labels = new Map(nodes.map((node) => [node.id, node.label]));
+  const parents = new Map<string, string[]>();
+  for (const node of nodes) {
+    for (const childId of node.childNodeIds) parents.set(childId, [...(parents.get(childId) ?? []), node.id]);
+  }
+  return preview.compiled.skills.map((skill) => {
+    const skillNodes = nodes.filter((node) => node.skillRefId === skill.skillRefId);
+    const branches = new Set<string>();
+    for (const node of skillNodes) {
+      for (const parentId of parents.get(node.id) ?? []) {
+        const label = labels.get(parentId);
+        if (label) branches.add(label);
+      }
+    }
+    return {
+      key: `${skill.skillRefId}:${skill.version}`,
+      skillRefId: skill.skillRefId,
+      title: skill.title || skill.slug,
+      slug: skill.slug,
+      version: skill.version,
+      digest: skill.digest,
+      packageVisibility: skill.packageVisibility,
+      nodeIds: skillNodes.map((node) => node.id),
+      branches: [...branches].sort((left, right) => left.localeCompare(right)),
+      exposures: [...new Set(skillNodes.map((node) => node.runtimeExposure))].sort(),
+    };
+  });
+}
+
+function pluralize(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 /** Saved-revision technical output: sync plan, observed fixture and exports. */
@@ -164,51 +279,6 @@ function ArchitectureCompiledSection({ preview }: { preview: ArchitecturePreview
         </div>
       </section>
   );
-}
-
-function ArchitectureOutline({ outline }: { outline: ArchitecturePreview["outline"] }) {
-  return (
-    <div className="architecture-outline">
-      <div className="architecture-outline-heading"><h4>Accessible outline</h4><span>Same nodes as the diagram</span></div>
-      {outline.tree.length === 0 ? <p className="architecture-muted">No outline is available.</p> : (
-        // Large outlines scroll inside a keyboard-focusable region.
-        <div className="architecture-outline-scroll" role="region" aria-label="Accessible outline" tabIndex={0}>
-          <ol aria-label="Architecture topology outline">
-            {outline.tree.map((node) => <ArchitectureOutlineItem key={node.id} node={node} />)}
-          </ol>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ArchitectureOutlineItem({ node }: { node: ArchitecturePreview["outline"]["tree"][number] }) {
-  return (
-    <li>
-      <span className={isLeafNodeKind(node.kind) ? "architecture-outline-dot skill" : "architecture-outline-dot router"} aria-hidden="true" />
-      <span><strong>{node.label}</strong><small>{isLeafNodeKind(node.kind) ? "Leaf skill" : "Router branch"}</small></span>
-      {node.children.length > 0 && <ol>{node.children.map((child) => <ArchitectureOutlineItem key={child.id} node={child} />)}</ol>}
-    </li>
-  );
-}
-
-function topologyForPreview(preview: ArchitecturePreview): { nodes: ArchitectureTopologyNode[]; edges: ArchitectureTopologyEdge[] } {
-  return {
-    nodes: preview.graph.nodes.map((node) => ({
-      id: node.id,
-      kind: node.kind,
-      label: node.label,
-      ...(node.skillRefId ? { slug: node.skillRefId } : {}),
-      depth: node.depth,
-      position: { x: node.x, y: node.y },
-    })),
-    edges: preview.graph.edges.map((edge, index) => ({
-      id: `edge-${index + 1}`,
-      from: edge.from,
-      to: edge.to,
-      relationship: edge.kind,
-    })),
-  };
 }
 
 function ArchitectureSyncPlan({ plan }: { plan?: ArchitecturePreviewPlan }) {

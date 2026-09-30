@@ -6,6 +6,7 @@ import type {
   ArchitectureSpecV1,
   ArchitectureValidationIssue,
 } from "@myskills-app/core";
+import type { ArchitectureDraftChange } from "./architecture-draft-changes.js";
 
 /**
  * The editor deliberately treats the architecture spec as the only durable
@@ -79,6 +80,51 @@ export interface ArchitectureEditorProps {
   advancedPanel?: ReactNode;
   /** Team members can inspect a draft without being offered write controls. */
   readOnly?: boolean;
+  className?: string;
+  /**
+   * Node to select in the Design outline and inspector on mount, and again
+   * whenever this value changes to a different node that exists in the
+   * current draft (its branch is expanded and scrolled into view). Unknown
+   * ids are ignored. Applying it never calls `onSelectedNodeChange`.
+   */
+  initialSelectedNodeId?: string | null;
+  /**
+   * Called only when the user changes the selected node: outline or canvas
+   * selection, adding or removing a node, or discarding the draft. The id can
+   * belong to a node that exists only in this draft.
+   */
+  onSelectedNodeChange?: (nodeId: string | null) => void;
+  /**
+   * Shared profile context for the Profiles & environments tab. Adopted on
+   * mount and whenever it changes to a profile that exists in the draft;
+   * otherwise the editor keeps its own default (the first profile).
+   */
+  selectedProfileId?: string;
+  /** Shared environment context; same rules as `selectedProfileId`. */
+  selectedEnvironmentId?: string;
+  /**
+   * Called only when the user picks another active profile in the editor.
+   * The id can belong to a profile that exists only in this draft.
+   */
+  onProfileChange?: (profileId: string) => void;
+  /** Called only when the user picks another active environment in the editor. */
+  onEnvironmentChange?: (environmentId: string) => void;
+  /**
+   * Short name of the revision this draft started from, such as
+   * "Revision 2". Shown with the draft changes; omit it for an unnamed base.
+   */
+  baselineLabel?: string;
+}
+
+export interface ArchitectureDraftChangesProps {
+  /** Named changes, usually from `describeArchitectureDraftChanges`. */
+  changes: readonly ArchitectureDraftChange[];
+  /** Short name of the baseline revision, such as "Revision 2". */
+  baselineLabel?: string;
+  /** While collapsed, show the change for this node first (the selected node). */
+  focusNodeId?: string | null;
+  /** Maximum changes rendered when expanded; the remainder is counted. */
+  limit?: number;
   className?: string;
 }
 

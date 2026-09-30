@@ -1,0 +1,213 @@
+/* Named draft changes: one quiet line beside Save, expandable to the full
+   list. Uses the app tokens with fallbacks so the editor also works alone. */
+.architecture-draft-changes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 36px;
+  margin: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--line, #dce3ea);
+  border-radius: 6px;
+  color: var(--ink-soft, #46556a);
+  background: var(--surface, #ffffff);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.architecture-draft-changes *,
+.architecture-draft-changes *::before,
+.architecture-draft-changes *::after {
+  box-sizing: border-box;
+}
+
+.architecture-draft-changes[data-state="changed"] {
+  border-color: #efd5a2;
+  background: #fffbf3;
+}
+
+.architecture-draft-changes-head {
+  display: inline-flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  order: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.architecture-draft-changes-head h3 {
+  margin: 0;
+  color: var(--ink, #111a26);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.architecture-draft-changes-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  color: var(--muted, #5c6879);
+  background: var(--surface-sunken, #eaeff4);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.architecture-draft-changes[data-state="changed"] .architecture-draft-changes-count {
+  color: var(--warning, #7a4b00);
+  background: var(--warning-soft, #fef4e1);
+}
+
+.architecture-draft-changes-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.architecture-draft-changes-baseline {
+  color: var(--muted, #5c6879);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.architecture-draft-changes-empty {
+  flex: 1 1 240px;
+  order: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--muted, #5c6879);
+}
+
+.architecture-draft-changes-body {
+  flex: 1 1 260px;
+  order: 1;
+  min-width: 0;
+}
+
+.architecture-draft-changes-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  order: 2;
+  min-height: 26px;
+  margin-left: auto;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--teal-dark, #095c54);
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.architecture-draft-changes-toggle:hover {
+  background: var(--teal-soft, #e7f6f4);
+}
+
+.architecture-draft-changes-toggle:focus-visible,
+.architecture-draft-changes-body:focus-visible {
+  outline: 2px solid var(--ring, #0b7066);
+  outline-offset: 2px;
+}
+
+.architecture-draft-changes-list {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.architecture-draft-changes-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ink, #111a26);
+}
+
+.architecture-draft-changes-list li > svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--muted, #5c6879);
+}
+
+.architecture-draft-changes-list li[data-kind="add"] > svg {
+  color: var(--teal-dark, #095c54);
+}
+
+.architecture-draft-changes-list li[data-kind="remove"] > svg {
+  color: var(--danger, #b42318);
+}
+
+/* Collapsed, the single change keeps one line; the full text stays in the
+   DOM for assistive technology and in the title for pointer users. */
+.architecture-draft-changes-list li > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.architecture-draft-changes-list .architecture-draft-changes-more {
+  padding-left: 20px;
+  color: var(--muted, #5c6879);
+}
+
+.architecture-draft-changes.is-expanded .architecture-draft-changes-toggle {
+  order: 1;
+}
+
+.architecture-draft-changes.is-expanded .architecture-draft-changes-body {
+  flex-basis: 100%;
+  order: 2;
+  max-height: min(260px, 45dvh);
+  padding-top: 4px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--line-soft, #e8edf2);
+}
+
+.architecture-draft-changes.is-expanded .architecture-draft-changes-list li > span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Narrow: heading and toggle on the first row, the change(s) below. */
+@media (max-width: 900px) {
+  .architecture-draft-changes-toggle {
+    order: 1;
+    min-height: 32px;
+  }
+
+  .architecture-draft-changes-body,
+  .architecture-draft-changes-empty {
+    flex-basis: 100%;
+    order: 2;
+  }
+
+  .architecture-draft-changes-list li > span {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
