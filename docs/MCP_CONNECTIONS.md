@@ -1,8 +1,9 @@
 # Remote MCP connections (ChatGPT, Claude and other hosts)
 
-Status: opt-in source feature. It is **not deployed** to the hosted beta, and
-no ChatGPT or Claude acceptance has been performed. See
-[MCP Connections Delivery](MCP_CONNECTIONS_DELIVERY.md) for evidence and gates.
+Status: opt-in feature deployed to phase-1 Railway staging. Production remains
+beta.16; Collections are not in that staging deployment, and real ChatGPT/Claude
+acceptance is pending. See [Beta.18 staging evidence](BETA18_RELEASE_DELIVERY.md#phase-1-staging-evidence)
+and [MCP Connections Delivery](MCP_CONNECTIONS_DELIVERY.md) for evidence and gates.
 
 The UI is the baseline for authorized user outcomes. Coverage is maintained in
 **API → CLI → MCP** order in the [capability matrix](CAPABILITY_PARITY.md).
@@ -171,9 +172,14 @@ work (for example the API as issuer and a dedicated MCP host) when each host
 routes the paths above to the right service and the consent origin carries
 the MySkills session cookie.
 
-## Railway runbook (not executed)
+<a id="railway-runbook-not-executed"></a>
 
-These steps describe a future change; they were not performed. Follow
+## Railway runbook
+
+The phase-1 staging rollout was completed on 30 September 2026 at
+`14970ba10a67f7372b713a3c29a17b8b72d91a24`; see the
+[staging evidence](BETA18_RELEASE_DELIVERY.md#phase-1-staging-evidence).
+Collections staging and real provider acceptance remain pending. Follow
 [Railway Deployment](RAILWAY_DEPLOYMENT.md) and [Release](RELEASE.md) for
 staging-first promotion, backups and API-ready-then-web order.
 

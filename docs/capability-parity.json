@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
   "audit_date": "2026-09-30",
-  "evidence_level": "source inventory with scoped local contract/runtime evidence; real-host and deployment acceptance unverified",
+  "evidence_level": "source inventory with scoped contract/runtime evidence; real-host acceptance unverified; deployment evidence recorded separately",
   "base_commit": "3ab55b5da86bef5e3f6864657445b9f0ba38288d",
-  "github_main_checked": "8468ae9f",
+  "github_main_checked": "6905bf690cd0b9108fc74a392f51909c9726aeb2",
   "includes_uncommitted_mcp_connector": false,
   "statuses": {
     "A": "Operation exposed in inspected source; policy/configuration still apply",
@@ -4837,11 +4837,11 @@
       ],
       "api": {
         "status": "A",
-        "detail": "Registered Library selection routes; domain persistence and complete workflow verification pending.",
+        "detail": "Library selection routes with real PostgreSQL workflow evidence; deployed Collections acceptance remains pending.",
         "evidence": [
           {
             "level": "source",
-            "detail": "All three route registrations delegate to the Library service; state and permission authority remain in the API. Postgres workflow results are not yet recorded.",
+            "detail": "All three route registrations delegate to the Library service; state and permission authority remain in the API.",
             "source": {
               "path": "apps/api/src/libraries/routes.ts",
               "line": 150
@@ -4853,6 +4853,14 @@
             "source": {
               "path": "apps/api/test/delegated-actions.e2e.test.ts",
               "line": 83
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "Real HTTP/API/PostgreSQL selection journey passed on Node 22 and 24 in myskills-verify-c2bd1e71d7-1 on tested merge c2bd1e71d7bb6118f79ad1f07f28ae6d022a27e6, sharing tree 9e647634a7e28d6b63c7b324664ce9d9ee6f4219 with merged main 6905bf690cd0b9108fc74a392f51909c9726aeb2. Covers multiple sources, overlapping Groups, independent Library pins, inherited permissions, hidden-member filtering, revision/quota concurrency, retries, read races and deletion without changing adoption. GitHub transport is a fixture; no deployed or real-provider acceptance is claimed.",
+            "source": {
+              "path": "apps/api/test/library-selections-journey.pgtest.ts",
+              "line": 33
             }
           }
         ]
@@ -4891,6 +4899,14 @@
             "source": {
               "path": "apps/web/test/e2e/library-selections-journey.spec.ts",
               "line": 73
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "Persistent full-stack browser journey passed without retries on Node 22 and 24 in myskills-verify-c2bd1e71d7-1 on tested merge c2bd1e71d7bb6118f79ad1f07f28ae6d022a27e6. Collections and overlapping Groups persist through the real API/PostgreSQL stack without changing adopted skills. Separate mocked journeys cover responsive views and permission/stale-edit recovery. No Railway deployment or real-provider acceptance is claimed.",
+            "source": {
+              "path": "apps/web/test/e2e/fullstack/library-selections.spec.ts",
+              "line": 7
             }
           }
         ]
@@ -4968,11 +4984,11 @@
       ],
       "api": {
         "status": "A",
-        "detail": "Registered Library selection routes; domain persistence and complete workflow verification pending.",
+        "detail": "Library selection routes with real PostgreSQL workflow evidence; deployed Collections acceptance remains pending.",
         "evidence": [
           {
             "level": "source",
-            "detail": "All three route registrations delegate to the Library service; state and permission authority remain in the API. Postgres workflow results are not yet recorded.",
+            "detail": "All three route registrations delegate to the Library service; state and permission authority remain in the API.",
             "source": {
               "path": "apps/api/src/libraries/routes.ts",
               "line": 150
@@ -4984,6 +5000,14 @@
             "source": {
               "path": "apps/api/test/delegated-actions.e2e.test.ts",
               "line": 83
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "Real HTTP/API/PostgreSQL selection journey passed on Node 22 and 24 in myskills-verify-c2bd1e71d7-1 on tested merge c2bd1e71d7bb6118f79ad1f07f28ae6d022a27e6, sharing tree 9e647634a7e28d6b63c7b324664ce9d9ee6f4219 with merged main 6905bf690cd0b9108fc74a392f51909c9726aeb2. Covers multiple sources, overlapping Groups, independent Library pins, inherited permissions, hidden-member filtering, revision/quota concurrency, retries, read races and deletion without changing adoption. GitHub transport is a fixture; no deployed or real-provider acceptance is claimed.",
+            "source": {
+              "path": "apps/api/test/library-selections-journey.pgtest.ts",
+              "line": 33
             }
           }
         ]
@@ -5022,6 +5046,14 @@
             "source": {
               "path": "apps/web/test/e2e/library-selections-journey.spec.ts",
               "line": 73
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "Persistent full-stack browser journey passed without retries on Node 22 and 24 in myskills-verify-c2bd1e71d7-1 on tested merge c2bd1e71d7bb6118f79ad1f07f28ae6d022a27e6. Collections and overlapping Groups persist through the real API/PostgreSQL stack without changing adopted skills. Separate mocked journeys cover responsive views and permission/stale-edit recovery. No Railway deployment or real-provider acceptance is claimed.",
+            "source": {
+              "path": "apps/web/test/e2e/fullstack/library-selections.spec.ts",
+              "line": 7
             }
           }
         ]
@@ -5099,11 +5131,11 @@
       ],
       "api": {
         "status": "A",
-        "detail": "Registered Library selection routes; domain persistence and complete workflow verification pending.",
+        "detail": "Library selection routes with real PostgreSQL workflow evidence; deployed Collections acceptance remains pending.",
         "evidence": [
           {
             "level": "source",
-            "detail": "All three route registrations delegate to the Library service; state and permission authority remain in the API. Postgres workflow results are not yet recorded.",
+            "detail": "All three route registrations delegate to the Library service; state and permission authority remain in the API.",
             "source": {
               "path": "apps/api/src/libraries/routes.ts",
               "line": 150
@@ -5115,6 +5147,14 @@
             "source": {
               "path": "apps/api/test/delegated-actions.e2e.test.ts",
               "line": 83
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "Real HTTP/API/PostgreSQL selection journey passed on Node 22 and 24 in myskills-verify-c2bd1e71d7-1 on tested merge c2bd1e71d7bb6118f79ad1f07f28ae6d022a27e6, sharing tree 9e647634a7e28d6b63c7b324664ce9d9ee6f4219 with merged main 6905bf690cd0b9108fc74a392f51909c9726aeb2. Covers multiple sources, overlapping Groups, independent Library pins, inherited permissions, hidden-member filtering, revision/quota concurrency, retries, read races and deletion without changing adoption. GitHub transport is a fixture; no deployed or real-provider acceptance is claimed.",
+            "source": {
+              "path": "apps/api/test/library-selections-journey.pgtest.ts",
+              "line": 33
             }
           }
         ]
@@ -5153,6 +5193,14 @@
             "source": {
               "path": "apps/web/test/e2e/library-selections-journey.spec.ts",
               "line": 73
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "Persistent full-stack browser journey passed without retries on Node 22 and 24 in myskills-verify-c2bd1e71d7-1 on tested merge c2bd1e71d7bb6118f79ad1f07f28ae6d022a27e6. Collections and overlapping Groups persist through the real API/PostgreSQL stack without changing adopted skills. Separate mocked journeys cover responsive views and permission/stale-edit recovery. No Railway deployment or real-provider acceptance is claimed.",
+            "source": {
+              "path": "apps/web/test/e2e/fullstack/library-selections.spec.ts",
+              "line": 7
             }
           }
         ]
@@ -5230,11 +5278,11 @@
       ],
       "api": {
         "status": "A",
-        "detail": "Registered Library selection routes; domain persistence and complete workflow verification pending.",
+        "detail": "Library selection routes with real PostgreSQL workflow evidence; deployed Collections acceptance remains pending.",
         "evidence": [
           {
             "level": "source",
-            "detail": "All three route registrations delegate to the Library service; state and permission authority remain in the API. Postgres workflow results are not yet recorded.",
+            "detail": "All three route registrations delegate to the Library service; state and permission authority remain in the API.",
             "source": {
               "path": "apps/api/src/libraries/routes.ts",
               "line": 150
@@ -5246,6 +5294,14 @@
             "source": {
               "path": "apps/api/test/delegated-actions.e2e.test.ts",
               "line": 83
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "Real HTTP/API/PostgreSQL selection journey passed on Node 22 and 24 in myskills-verify-c2bd1e71d7-1 on tested merge c2bd1e71d7bb6118f79ad1f07f28ae6d022a27e6, sharing tree 9e647634a7e28d6b63c7b324664ce9d9ee6f4219 with merged main 6905bf690cd0b9108fc74a392f51909c9726aeb2. Covers multiple sources, overlapping Groups, independent Library pins, inherited permissions, hidden-member filtering, revision/quota concurrency, retries, read races and deletion without changing adoption. GitHub transport is a fixture; no deployed or real-provider acceptance is claimed.",
+            "source": {
+              "path": "apps/api/test/library-selections-journey.pgtest.ts",
+              "line": 33
             }
           }
         ]
@@ -5284,6 +5340,14 @@
             "source": {
               "path": "apps/web/test/e2e/library-selections-journey.spec.ts",
               "line": 73
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "Persistent full-stack browser journey passed without retries on Node 22 and 24 in myskills-verify-c2bd1e71d7-1 on tested merge c2bd1e71d7bb6118f79ad1f07f28ae6d022a27e6. Collections and overlapping Groups persist through the real API/PostgreSQL stack without changing adopted skills. Separate mocked journeys cover responsive views and permission/stale-edit recovery. No Railway deployment or real-provider acceptance is claimed.",
+            "source": {
+              "path": "apps/web/test/e2e/fullstack/library-selections.spec.ts",
+              "line": 7
             }
           }
         ]
@@ -16204,7 +16268,7 @@
   "overview": [
     "## Baseline and meaning of parity\n",
     "The product target is the same authorized application outcomes across UI, API, CLI and MCP. Remote ChatGPT and Claude connections are included. A read-only connector is an implementation stage, not the final capability boundary.\n",
-    "- Initial audit base: `3ab55b5da86bef5e3f6864657445b9f0ba38288d`, including the preserved MCP OAuth connector. GitHub main checked at `8468ae9f`; the integration reconciles GitHub controls, managed detail, local workspace commands and the current full-stack harness. This is a source baseline, not deployment proof.",
+    "- Initial audit base: `3ab55b5da86bef5e3f6864657445b9f0ba38288d`, including the preserved MCP OAuth connector. The initial integration checked main at `8468ae9f`. Collections PR #124 landed at `6905bf690cd0b9108fc74a392f51909c9726aeb2` with the same tree as tested merge `c2bd1e71d7bb6118f79ad1f07f28ae6d022a27e6`. The final Node 22/24 matrix and CodeQL passed; [retained verification and separate phase-1 staging evidence](BETA18_RELEASE_DELIVERY.md) record their proof limits.",
     "- Current cell provenance is recorded individually. Existing connector test evidence is in [MCP delivery evidence](MCP_CONNECTIONS_DELIVERY.md). Static inventory checks do not replace cross-surface scenarios or real host acceptance.\n",
     "The API and its domain services remain the state and authorization authority. Adapters must not create a second ACL or a more permissive mutation path.\n",
     "`effective action = user permissions ∩ resource policy ∩ credential scopes/consent ∩ required assurance ∩ instance availability`\n",
@@ -16238,7 +16302,7 @@
     {
       "id": "G03",
       "title": "Libraries and bundle curation",
-      "detail": "Named MCP tools now cover the 25 library groups and bundle writes under explicit scopes. CLI filters have scoped journey/transport evidence. UI library editing/adoption history and some filters remain gaps. The full browse-to-adoption/subscription/target-binding journey needs capability-specific runtime and host evidence."
+      "detail": "Named MCP tools now cover the 29 Library capability groups and bundle writes under explicit scopes. CLI filters have scoped journey/transport evidence. UI library editing/adoption history and some filters remain gaps. The full browse-to-adoption/subscription/target-binding journey needs capability-specific runtime and host evidence. Collections/Groups now have PostgreSQL and persistent browser evidence; their CLI/MCP fixtures prove adapter contracts, not complete adapter-to-PostgreSQL parity."
     },
     {
       "id": "G04",

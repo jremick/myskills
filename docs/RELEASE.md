@@ -10,11 +10,15 @@ The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md
 ## Beta.18 candidate
 
 The next candidate targets `v0.1.0-beta.18` with CLI/MCP capability parity,
-opt-in OAuth connections, dependency repairs and delivery tooling. The beta.17
-tag remains unchanged. Final-source verification, staging, real ChatGPT/Claude
-acceptance, publication and production promotion remain pending. Tracked
-Collections and Library Groups are excluded while their model choices remain
-open. See [Beta.18 release preparation](BETA18_RELEASE_DELIVERY.md).
+opt-in OAuth connections, dependency repairs, delivery tooling, and personal
+and team Library Collections and Groups. The beta.17 tag remains unchanged.
+Phase-1 verification and Railway staging passed at
+`14970ba10a67f7372b713a3c29a17b8b72d91a24`, before Collections. Collections PR #124
+merged after its full Node 22/24 matrix and CodeQL passed; the tested merge and
+landed source have the same tree. Collections staging, real ChatGPT/Claude
+acceptance, canonical release verification, tagging, publication and production
+promotion remain pending.
+See [Beta.18 release preparation](BETA18_RELEASE_DELIVERY.md).
 
 ## Current published status
 
