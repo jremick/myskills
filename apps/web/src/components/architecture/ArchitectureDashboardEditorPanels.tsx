@@ -37,10 +37,27 @@ export function ArchitectureEditorCard({
   onMessageDirtyChange,
   onSearchRegistrySkills,
   onLoadRegistryReleases,
+  selectedNodeId,
+  onSelectedNodeChange,
+  selectedProfileId,
+  selectedEnvironmentId,
+  onProfileChange,
+  onEnvironmentChange,
+  baselineLabel,
 }: {
   detail: ArchitectureDetail;
   initialSpec?: ArchitectureSpecV1;
   expectedRevisionId?: string | null;
+  /** Shared node selection; the editor ignores ids outside its draft. */
+  selectedNodeId?: string | null;
+  onSelectedNodeChange?: (id: string | null) => void;
+  /** Shared saved preview context. */
+  selectedProfileId?: string;
+  selectedEnvironmentId?: string;
+  onProfileChange?: (id: string) => void;
+  onEnvironmentChange?: (id: string) => void;
+  /** The revision the draft started from, such as "Revision 2". */
+  baselineLabel?: string;
   readOnly: boolean;
   heading?: ReactNode;
   previewPanel?: ReactNode;
@@ -92,6 +109,13 @@ export function ArchitectureEditorCard({
         readOnly={readOnly}
         revisionMessage={revisionMessage}
         onRevisionMessageChange={readOnly ? undefined : setRevisionMessage}
+        initialSelectedNodeId={selectedNodeId ?? null}
+        onSelectedNodeChange={onSelectedNodeChange}
+        selectedProfileId={selectedProfileId}
+        selectedEnvironmentId={selectedEnvironmentId}
+        onProfileChange={onProfileChange}
+        onEnvironmentChange={onEnvironmentChange}
+        baselineLabel={baselineLabel}
       />
     </section>
   );

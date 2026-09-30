@@ -241,6 +241,11 @@
 .app-shell main.architecture-workspace.cp-page .architecture-overview-title { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 16px; min-width: 0; }
 .app-shell main.architecture-workspace.cp-page .architecture-overview-title > .cp-title-block { flex: 1 1 260px; }
 .app-shell main.architecture-workspace.cp-page .architecture-launcher { flex: none; text-decoration: none; }
+.app-shell main.architecture-workspace.cp-page .architecture-overview-actions { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.app-shell main.architecture-workspace.cp-page .architecture-disclosure-chevron { transition: transform 120ms ease; }
+.app-shell main.architecture-workspace.cp-page [aria-expanded="true"] > .architecture-disclosure-chevron { transform: rotate(180deg); }
+.app-shell main.architecture-workspace.cp-page .architecture-pattern-panel { display: grid; min-width: 0; }
+.app-shell main.architecture-workspace.cp-page .architecture-pattern-panel[hidden] { display: none; }
 .app-shell main.architecture-workspace.cp-page .architecture-meta-line > span + span::before { content: "·"; margin-right: 8px; color: var(--line-strong); }
 .app-shell main.architecture-workspace.cp-page .architecture-meta-line > [data-access="append"] { color: var(--teal-dark); }
 .app-shell main.architecture-workspace.cp-page .architecture-context-bar {
@@ -320,10 +325,42 @@
 .app-shell main.architecture-workspace.cp-page .architecture-preview-stack { gap: 0; }
 .app-shell main.architecture-workspace.cp-page .architecture-panel-section-heading { flex-wrap: wrap; align-items: center; }
 .app-shell main.architecture-workspace.cp-page .architecture-panel-section-heading h3 { margin: 0; color: var(--ink); font-size: 15px; line-height: 22px; font-weight: 600; }
-.app-shell main.architecture-workspace.cp-page .architecture-outline h4 { margin: 0; color: var(--ink-soft); font-size: 13px; line-height: 18px; font-weight: 600; }
-.app-shell main.architecture-workspace.cp-page .architecture-outline-scroll { max-height: 320px; overflow: auto; overscroll-behavior: contain; }
-.app-shell main.architecture-workspace.cp-page .architecture-outline-scroll:focus-visible { border-radius: 6px; outline: 2px solid var(--ring); outline-offset: 2px; }
 .app-shell main.architecture-workspace.cp-page .architecture-technical-details > .cp-details-body { gap: 20px; padding: 8px 0 0; }
+
+/* Skills tab: search, exposure filter and a readable effective-skill table. */
+.app-shell main.architecture-workspace.cp-page .architecture-skills-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.app-shell main.architecture-workspace.cp-page .architecture-skills-search { position: relative; flex: 1 1 240px; min-width: 0; max-width: 420px; }
+.app-shell main.architecture-workspace.cp-page .architecture-skills-search > svg { position: absolute; top: 50%; left: 10px; color: var(--muted); transform: translateY(-50%); pointer-events: none; }
+.app-shell main.architecture-workspace.cp-page .architecture-skills-search input { height: 32px; padding-left: 32px; font-size: 13px; }
+.app-shell main.architecture-workspace.cp-page .architecture-skills-filter { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; line-height: 18px; }
+.app-shell main.architecture-workspace.cp-page .architecture-skills-filter select {
+  height: 32px;
+  max-width: 100%;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  background-color: var(--surface);
+  font-size: 13px;
+}
+.app-shell main.architecture-workspace.cp-page .architecture-skills-filter select:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.app-shell main.architecture-workspace.cp-page .architecture-skills-empty { flex-wrap: wrap; }
+.app-shell main.architecture-workspace.cp-page .architecture-skill-table .architecture-exposure + .architecture-exposure { margin-left: 4px; }
+.app-shell main.architecture-workspace.cp-page .architecture-skill-version { color: var(--ink); font-variant-numeric: tabular-nums; }
+.app-shell main.architecture-workspace.cp-page .architecture-skill-digest { display: block; color: var(--muted); font: 11px/16px var(--font-mono); }
+.app-shell main.architecture-workspace.cp-page .architecture-skill-locate {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  color: var(--teal-dark);
+  background: none;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.app-shell main.architecture-workspace.cp-page .architecture-skill-locate:focus-visible { border-radius: 4px; outline: 2px solid var(--ring); outline-offset: 2px; }
 .app-shell main.architecture-workspace.cp-page .architecture-text-link { color: var(--teal-dark); font-size: 14px; font-weight: 600; text-underline-offset: 2px; }
 .app-shell main.architecture-workspace.cp-page .architecture-unavailable { align-items: start; }
 
@@ -358,7 +395,14 @@
 
 @media (max-width: 680px) {
   .app-shell main.architecture-workspace.cp-page[data-surface="workbench"] { padding: 12px 12px 24px; }
+  .app-shell main.architecture-workspace.cp-page .architecture-overview-actions { width: 100%; }
+  .app-shell main.architecture-workspace.cp-page .architecture-overview-actions > * { flex: 1 1 auto; }
   .app-shell main.architecture-workspace.cp-page .architecture-launcher { width: 100%; }
+  .app-shell main.architecture-workspace.cp-page .architecture-skills-search { flex-basis: 100%; max-width: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell main.architecture-workspace.cp-page .architecture-disclosure-chevron { transition: none; }
 }
 
 /* System update centre */

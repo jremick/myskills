@@ -6,6 +6,8 @@ import { CreateArchitectureCard } from "./ArchitectureDashboardCreatePanel.js";
 import { ArchitectureDetailPanel, type ArchitectureOverviewTab } from "./ArchitectureDashboardDetailPanel.js";
 import { ArchitectureWorkbenchPanel, type ArchitectureEditorSeed } from "./ArchitectureWorkbenchPanel.js";
 import { ArchitectureContextSelectors } from "./ArchitectureContextSelectors.js";
+import type { ArchitectureExplorerView } from "./ArchitectureExplorer.js";
+import { architectureExplorerNodeIds } from "./architecture-explorer-model.js";
 import { useSplitLayout } from "../registry/useSplitLayout.js";
 import { ArchitectureState } from "./ArchitectureDashboardFeedback.js";
 import {
@@ -24,11 +26,14 @@ import { useArchitectureNavigationGuard, type ArchitectureNavigationGuard } from
 import { useArchitectureRegistry } from "./useArchitectureRegistry.js";
 import {
   architectureContextKey,
+  architectureSelectionKey,
   architectureUrl,
   hasRequestedContext,
+  normalizeArchitectureSelection,
   parseArchitectureRoute,
   type ArchitectureContextParams,
   type ArchitectureRoute,
+  type ArchitectureSelectionParams,
 } from "./architecture-route.js";
 import {
   BUILTIN_PATTERNS,
@@ -49,7 +54,7 @@ import {
   type RegistryClient,
 } from "../../api.js";
 
-const ROOT_ROUTE: ArchitectureRoute = { architectureId: null, surface: "overview", context: {} };
+const ROOT_ROUTE: ArchitectureRoute = { architectureId: null, surface: "overview", context: {}, selection: {} };
 const CONTEXT_FALLBACK_NOTICE = "The requested preview context isn't available for this architecture. Showing the default context.";
 
 type PendingFocus =
@@ -79,6 +84,10 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
   const [patterns, setPatterns] = useState<ArchitecturePattern[]>(BUILTIN_PATTERNS);
   const [architectures, setArchitectures] = useState<ArchitectureSummary[]>([]);
   const [overviewTab, setOverviewTab] = useState<ArchitectureOverviewTab>("overview");
+  // Requested node and Structure view, shared by the overview and the
+  // Workbench. A node is used only when the loaded projection contains it.
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(route.selection.node ?? null);
+  const [structureView, setStructureView] = useState<ArchitectureExplorerView>(route.selection.view === "map" ? "map" : "list");
   const [profiles, setProfiles] = useState<ArchitectureProfile[]>([]);
   const [environments, setEnvironments] = useState<ArchitectureEnvironment[]>([]);
   const [selectedArchitectureId, setSelectedArchitectureId] = useState<string | null>(null);
@@ -114,6 +123,11 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
   const [seenRouteId, setSeenRouteId] = useState(routeId);
   const routeContextKey = architectureContextKey(route.context);
   const [seenRouteContextKey, setSeenRouteContextKey] = useState(routeContextKey);
+  const routeSelectionKey = architectureSelectionKey(route.selection);
+  const [seenRouteSelectionKey, setSeenRouteSelectionKey] = useState(routeSelectionKey);
+  // The preview context a loaded preview belongs to; a stale preview never
+  // validates (or drops) a node requested for the next context.
+  const [previewKey, setPreviewKey] = useState("");
   // Changes whenever the draft being edited is replaced (another architecture
   // or a history seed), so late async completions cannot touch a newer draft.
   const draftSessionRef = useRef(0);
@@ -142,7 +156,11 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
       ? selectedArchitectureId
       : architectures[0]?.id ?? null);
   if (resolvedArchitectureId !== selectedArchitectureId) {
-    adoptArchitecture(resolvedArchitectureId, routeId === resolvedArchitectureId ? route.context : {});
+    adoptArchitecture(
+      resolvedArchitectureId,
+      routeId === resolvedArchitectureId ? route.context : {},
+      routeId === resolvedArchitectureId ? route.selection : {},
+    );
   }
   if (routeId !== seenRouteId) {
     setSeenRouteId(routeId);
@@ -150,8 +168,12 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
     if (routeId === null) setOpened(false);
   }
 
-  function adoptArchitecture(id: string | null, context: ArchitectureContextParams) {
+  function adoptArchitecture(id: string | null, context: ArchitectureContextParams, selection: ArchitectureSelectionParams) {
     setSelectedArchitectureId(id);
+    // Requested node is validated once this architecture's preview loads.
+    setSelectedNodeId(selection.node ?? null);
+    setStructureView(selection.view === "map" ? "map" : "list");
+    setPreviewKey("");
     setSelectedDetail(null);
     setHistoryRevisionId(null);
     setHistoryRevision(null);
@@ -316,6 +338,44 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
     ? `organization:${selectedOrganizationId}`
     : `context:${selectedProfileId}:${selectedEnvironmentId}:${selectedDetail?.latestRevision?.id ?? ""}:${selectedOrganizationId}`;
 
+  // Node ids the reader may select. `null` means not loaded yet, which keeps a
+  // requested node pending; nothing here requests data or widens access.
+  const currentPreview = preview && previewKey === previewSelectionKey ? preview : null;
+  const selectableNodeIds = useMemo(() => currentPreview ? architectureExplorerNodeIds(currentPreview) : null, [currentPreview]);
+  // The Workbench edits the full spec, which only non-organization readers receive.
+  const savedSpec = organizationOnly || selectedDetail?.id !== selectedArchitectureId
+    ? null
+    : editorSeed?.spec ?? selectedDetail?.latestRevision?.spec ?? null;
+  const workbenchNodeIds = useMemo(() => {
+    if (!savedSpec) return selectableNodeIds;
+    const ids = new Set<string>(selectableNodeIds ?? []);
+    for (const node of Array.isArray(savedSpec.nodes) ? savedSpec.nodes : []) ids.add(node.id);
+    return ids;
+  }, [savedSpec, selectableNodeIds]);
+  const overviewSelection = useMemo(() => normalizeArchitectureSelection({
+    ...(selectedNodeId && (selectableNodeIds === null || selectableNodeIds.has(selectedNodeId)) ? { node: selectedNodeId } : {}),
+    ...(structureView === "map" ? { view: "map" as const } : {}),
+  }, "overview"), [selectableNodeIds, selectedNodeId, structureView]);
+  const workbenchSelection = useMemo(() => normalizeArchitectureSelection(
+    selectedNodeId && (workbenchNodeIds === null || workbenchNodeIds.has(selectedNodeId)) ? { node: selectedNodeId } : {},
+    "workbench",
+  ), [selectedNodeId, workbenchNodeIds]);
+  const urlSelection = route.surface === "workbench" ? workbenchSelection : overviewSelection;
+  const urlSelectionKey = architectureSelectionKey(urlSelection);
+
+  // Back and Forward restore the entry's node and view. Our own replaceState
+  // writes already match urlSelection, so they never reset the selection.
+  if (routeSelectionKey !== seenRouteSelectionKey) {
+    setSeenRouteSelectionKey(routeSelectionKey);
+    if (routeId !== null
+      && routeId === selectedArchitectureId
+      && resolvedArchitectureId === selectedArchitectureId
+      && routeSelectionKey !== urlSelectionKey) {
+      setSelectedNodeId(route.selection.node ?? null);
+      if (route.surface === "overview") setStructureView(route.selection.view === "map" ? "map" : "list");
+    }
+  }
+
   useEffect(() => {
     void refresh();
   }, [refresh, refreshKey]);
@@ -453,6 +513,7 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
         setSelectedEnvironmentId(environmentId);
       }
       setPreview(nextPreview);
+      setPreviewKey(previewSelectionKey);
       setDetailState("ready");
     }).catch((error: unknown) => {
       if (!active) return;
@@ -465,13 +526,15 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
     };
   }, [client, previewSelectionKey, selectedArchitectureId, selectedDetail, selectedOrganizationId]);
 
-  // Keep the explicit URL in step with the validated context, replacing the
-  // entry so reloads, new tabs and Back/Forward restore the same view.
+  // Keep the explicit URL in step with the validated context and selection,
+  // replacing the entry so reloads, new tabs and Back/Forward restore the
+  // same view. A node outside the loaded projection is dropped here.
   useEffect(() => {
     if (routeId === null || routeId !== selectedArchitectureId || selectedDetail?.id !== routeId) return;
-    if (architectureContextKey(route.context) === architectureContextKey(currentContext)) return;
-    onNavigateRef.current(architectureUrl(routeId, route.surface, currentContext), "replace");
-  }, [currentContext, route, routeId, selectedArchitectureId, selectedDetail]);
+    if (architectureContextKey(route.context) === architectureContextKey(currentContext)
+      && architectureSelectionKey(route.selection) === urlSelectionKey) return;
+    onNavigateRef.current(architectureUrl(routeId, route.surface, currentContext, urlSelection), "replace");
+  }, [currentContext, route, routeId, selectedArchitectureId, selectedDetail, urlSelection, urlSelectionKey]);
 
   const previewContextKey = [
     selectedArchitectureId ?? "",
@@ -525,8 +588,8 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
     setDraftPreview(null);
     setSavedNotice(null);
     draftPreviewEpoch.current += 1;
-    onNavigateRef.current(architectureUrl(selectedArchitectureId, "workbench", currentContext), "push");
-  }, [confirmDiscardDraft, currentContext, selectedArchitectureId, selectedDetail]);
+    onNavigateRef.current(architectureUrl(selectedArchitectureId, "workbench", currentContext, workbenchSelection), "push");
+  }, [confirmDiscardDraft, currentContext, selectedArchitectureId, selectedDetail, workbenchSelection]);
 
   const handleDraftChange = useCallback((status: ArchitectureEditorStatus) => {
     setSpecDirty(status.dirty);
@@ -550,9 +613,26 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
     onNavigate(href, "push");
   }
 
-  // Replace a root URL once the reader picks a context, so it can be shared.
-  function syncRootContext(context: ArchitectureContextParams) {
-    if (routeId === null && selectedArchitectureId) onNavigate(architectureUrl(selectedArchitectureId, "overview", context), "replace");
+  // Replace a root URL once the reader picks a context or node, so it can be shared.
+  function syncRootContext(context: ArchitectureContextParams, selection: ArchitectureSelectionParams = overviewSelection) {
+    if (routeId === null && selectedArchitectureId) onNavigate(architectureUrl(selectedArchitectureId, "overview", context, selection), "replace");
+  }
+
+  function selectNode(id: string) {
+    setSelectedNodeId(id);
+    syncRootContext(currentContext, normalizeArchitectureSelection({ node: id, ...(structureView === "map" ? { view: "map" } : {}) }, "overview"));
+  }
+
+  function changeStructureView(view: ArchitectureExplorerView) {
+    setStructureView(view);
+    syncRootContext(currentContext, normalizeArchitectureSelection({ ...(overviewSelection.node ? { node: overviewSelection.node } : {}), ...(view === "map" ? { view: "map" } : {}) }, "overview"));
+  }
+
+  // Hands the selected node and context to the Workbench; Back returns here.
+  function editNode(id: string) {
+    if (!selectedArchitectureId) return;
+    setSelectedNodeId(id);
+    onNavigate(architectureUrl(selectedArchitectureId, "workbench", currentContext, normalizeArchitectureSelection({ node: id }, "workbench")), "push");
   }
 
   function openArchitecture(id: string) {
@@ -563,7 +643,9 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
       setOpened(true);
       pendingFocus.current = { kind: "title" };
     }
-    const next = architectureUrl(id, "overview", id === selectedArchitectureId ? currentContext : {});
+    const next = id === selectedArchitectureId
+      ? architectureUrl(id, "overview", currentContext, overviewSelection)
+      : architectureUrl(id, "overview");
     if (routeId !== id || route.surface !== "overview") onNavigate(next, "push");
   }
 
@@ -594,6 +676,8 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
   const showList = !workbench && (!stacked || (!detailOpen && !newVisible));
   const showInspector = workbench || !stacked || detailOpen || newVisible;
   const readOnly = !(selectedDetail?.access?.canAppend ?? selectedArchitecture?.access?.canAppend ?? false);
+  // Only readers who can save revisions get the node-level Workbench handoff.
+  const canEditNodes = !readOnly && !organizationOnly && Boolean(selectedDetail?.id === selectedArchitectureId && selectedDetail?.latestRevision);
   const launcherLabel = !selectedDetail || selectedDetail.id !== selectedArchitectureId
     ? null
     : hasUnsavedDraft
@@ -603,6 +687,36 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
         : readOnly ? null : "Build first revision";
   const allowedOrganizationIds = architectureOrganizationIds(selectedDetail ?? selectedArchitecture);
   const contextAvailable = (profiles.length > 0 && environments.length > 0) || (organizationOnly && allowedOrganizationIds.length > 0);
+  const choices = organizationChoices(allowedOrganizationIds, visibleOrganizations);
+  // Display only; the preview request and the API decide what is exposed.
+  const contextLabel = organizationOnly
+    ? choices.find((choice) => choice.id === selectedOrganizationId)?.name
+    : [
+      profiles.find((item) => item.id === selectedProfileId)?.name,
+      environments.find((item) => item.id === selectedEnvironmentId)?.name,
+    ].filter(Boolean).join(" · ") || undefined;
+  // Saved-context changes validate against the saved revision's contexts; a
+  // profile or environment that exists only in the draft is ignored here.
+  function changeProfile(value: string) {
+    const profile = profiles.find((item) => item.id === value);
+    const environment = profile ? boundEnvironmentForProfile(environments, profile.id) : undefined;
+    if (!profile || !environment) return;
+    setDraftPreview(null);
+    setContextNotice(false);
+    setSelectedProfileId(profile.id);
+    setSelectedEnvironmentId(environment.id);
+    syncRootContext({ ...currentContext, profile: profile.id, environment: environment.id });
+  }
+  function changeEnvironment(value: string) {
+    const environment = environments.find((item) => item.id === value);
+    const profileId = environment ? environmentProfileId(environment, profiles) : undefined;
+    if (!environment || !profileId) return;
+    setDraftPreview(null);
+    setContextNotice(false);
+    setSelectedProfileId(profileId);
+    setSelectedEnvironmentId(environment.id);
+    syncRootContext({ ...currentContext, profile: profileId, environment: environment.id });
+  }
   const contextSelectors = (
     <ArchitectureContextSelectors
       profiles={profiles}
@@ -610,29 +724,11 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
       selectedProfileId={selectedProfileId}
       selectedEnvironmentId={selectedEnvironmentId}
       allowedOrganizationIds={allowedOrganizationIds}
-      organizationChoices={organizationChoices(allowedOrganizationIds, visibleOrganizations)}
+      organizationChoices={choices}
       organizationOnly={organizationOnly}
       selectedOrganizationId={selectedOrganizationId}
-      onProfileChange={(value) => {
-        const profile = profiles.find((item) => item.id === value);
-        const environment = profile ? boundEnvironmentForProfile(environments, profile.id) : undefined;
-        if (!profile || !environment) return;
-        setDraftPreview(null);
-        setContextNotice(false);
-        setSelectedProfileId(profile.id);
-        setSelectedEnvironmentId(environment.id);
-        syncRootContext({ ...currentContext, profile: profile.id, environment: environment.id });
-      }}
-      onEnvironmentChange={(value) => {
-        const environment = environments.find((item) => item.id === value);
-        const profileId = environment ? environmentProfileId(environment, profiles) : undefined;
-        if (!environment || !profileId) return;
-        setDraftPreview(null);
-        setContextNotice(false);
-        setSelectedProfileId(profileId);
-        setSelectedEnvironmentId(environment.id);
-        syncRootContext({ ...currentContext, profile: profileId, environment: environment.id });
-      }}
+      onProfileChange={changeProfile}
+      onEnvironmentChange={changeEnvironment}
       onOrganizationChange={(value) => {
         if (value && !allowedOrganizationIds.includes(value)) return;
         setDraftPreview(null);
@@ -723,6 +819,12 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
                     <ArchitectureDetailPanel
                       tab={overviewTab}
                       onTabChange={setOverviewTab}
+                      selectedNodeId={overviewSelection.node ?? null}
+                      onSelectNode={selectNode}
+                      structureView={structureView}
+                      onStructureViewChange={changeStructureView}
+                      {...(canEditNodes ? { onEditNode: editNode } : {})}
+                      {...(contextLabel ? { contextLabel } : {})}
                       titleRef={titleRef}
                       onBack={stacked ? backToArchitectures : undefined}
                       architecture={selectedArchitecture}
@@ -740,7 +842,7 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
                       contextSelectors={workbench ? null : contextSelectors}
                       notices={workbench ? null : contextNoticeNode}
                       launcher={selectedArchitectureId && launcherLabel ? {
-                        href: architectureUrl(selectedArchitectureId, "workbench", currentContext),
+                        href: architectureUrl(selectedArchitectureId, "workbench", currentContext, workbenchSelection),
                         label: launcherLabel,
                         onClick: followSectionLink,
                         ref: launcherRef,
@@ -801,9 +903,15 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
                         detailState={detailState}
                         message={detailMessage}
                         editorSeed={editorSeed}
-                        overviewHref={architectureUrl(selectedArchitecture.id, "overview", currentContext)}
+                        overviewHref={architectureUrl(selectedArchitecture.id, "overview", currentContext, overviewSelection)}
                         onOverviewLink={followSectionLink}
                         titleRef={workbenchTitleRef}
+                        selectedNodeId={workbenchSelection.node ?? null}
+                        onSelectedNodeChange={setSelectedNodeId}
+                        selectedProfileId={selectedProfileId}
+                        selectedEnvironmentId={selectedEnvironmentId}
+                        onProfileChange={changeProfile}
+                        onEnvironmentChange={changeEnvironment}
                         notices={workbench ? <>
                           {savedNotice && <p className="architecture-saved-note" role="status"><Check size={15} aria-hidden="true" /> {savedNotice}</p>}
                           {contextNoticeNode}

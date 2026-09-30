@@ -1,4 +1,7 @@
 export { ArchitectureEditor } from "./ArchitectureEditor.js";
+export { ArchitectureDraftChanges } from "./ArchitectureDraftChanges.js";
+export { describeArchitectureDraftChanges } from "./architecture-draft-changes.js";
+export type { ArchitectureDraftChange, ArchitectureDraftChangeKind } from "./architecture-draft-changes.js";
 export {
   addArchitectureSkillRelease,
   addArchitectureEnvironment,
@@ -31,6 +34,7 @@ export {
   projectArchitectureToFlow,
 } from "./layout.js";
 export type {
+  ArchitectureDraftChangesProps,
   ArchitectureEditorPreviewRequest,
   ArchitectureEditorProps,
   ArchitectureRegistryReleaseOption,

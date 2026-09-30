@@ -6372,7 +6372,7 @@
         "detail": "Architecture pattern picker",
         "source": {
           "path": "apps/web/src/components/architecture/ArchitecturesDashboard.tsx",
-          "line": 298,
+          "line": 320,
           "anchor": "client.listArchitecturePatterns(),"
         },
         "evidence": [
@@ -6468,7 +6468,7 @@
         "detail": "Architecture dashboard",
         "source": {
           "path": "apps/web/src/components/architecture/ArchitecturesDashboard.tsx",
-          "line": 299,
+          "line": 321,
           "anchor": "client.listArchitectures(),"
         },
         "evidence": [
@@ -6580,16 +6580,33 @@
       },
       "ui": {
         "status": "A",
-        "detail": "Revision inspection",
+        "detail": "Structure list, map, node inspector and validated Workbench handoff; History",
         "source": {
           "path": "apps/web/src/components/architecture/ArchitecturesDashboard.tsx",
-          "line": 508,
+          "line": 571,
           "anchor": "const nextRevision = await client.getArchitectureRevision(selectedArchitectureId, revisionId);"
         },
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: Revision inspection. Runtime parity is not implied."
+          },
+          {
+            "level": "source",
+            "detail": "2026-09-30 Architecture explorer: presentation uses existing API-owned revisions, projections and permissions. No API, CLI or MCP contract changes; browser verification is recorded separately.",
+            "source": {
+              "path": "apps/web/src/components/architecture/ArchitectureExplorer.tsx",
+              "line": 1
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "2026-09-30 local Chromium with mocked API responses: List/map selection, ancestor search and skill-only counts exercised with 82/500-node fixtures; restricted organization projection and responsive widths also passed. This is browser proof, not a live API, PostgreSQL, provider-host or deployment claim.",
+            "source": {
+              "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
+              "line": 1609,
+              "anchor": "test(\"the 500-node library opens collapsed, counts only skills, finds deep matches with their ancestors and keeps one selection across List and Map\", async ({ page }, info) => {"
+            }
           }
         ]
       },
@@ -6787,16 +6804,33 @@
       },
       "ui": {
         "status": "A",
-        "detail": "Architecture editor",
+        "detail": "Workbench with named draft changes and revision save",
         "source": {
           "path": "apps/web/src/components/architecture/ArchitectureDashboardEditorPanels.tsx",
-          "line": 134,
+          "line": 158,
           "anchor": "await client.createArchitectureRevision(architectureId, {"
         },
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: Architecture editor. Runtime parity is not implied."
+          },
+          {
+            "level": "source",
+            "detail": "2026-09-30 Architecture explorer: presentation uses existing API-owned revisions, projections and permissions. No API, CLI or MCP contract changes; browser verification is recorded separately.",
+            "source": {
+              "path": "apps/web/src/components/architecture/editor/ArchitectureDraftChanges.tsx",
+              "line": 1
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "2026-09-30 local Chromium with mocked API responses: Named rename/add/remove/move changes survive failed and conflicting saves; a flat four-entry journey verifies named exposure changes and the saved projection. This is browser proof, not a live API, PostgreSQL, provider-host or deployment claim.",
+            "source": {
+              "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
+              "line": 1759,
+              "anchor": "test(\"a flat four-entry architecture keeps independent skills and names an exposure change through save\", async ({ page }, info) => {"
+            }
           }
         ]
       },
@@ -6883,16 +6917,33 @@
       },
       "ui": {
         "status": "A",
-        "detail": "Preview and observed-state plan",
+        "detail": "Context explorer, Skills filters and observed-state plan",
         "source": {
           "path": "apps/web/src/components/architecture/ArchitecturesDashboard.tsx",
-          "line": 445,
+          "line": 505,
           "anchor": "client.previewArchitecture(selectedArchitectureId, request).then((nextPreview) => {"
         },
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: Preview and observed-state plan. Runtime parity is not implied."
+          },
+          {
+            "level": "source",
+            "detail": "2026-09-30 Architecture explorer: presentation uses existing API-owned revisions, projections and permissions. No API, CLI or MCP contract changes; browser verification is recorded separately.",
+            "source": {
+              "path": "apps/web/src/components/architecture/ArchitectureDashboardPreviewPanel.tsx",
+              "line": 1
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "2026-09-30 local Chromium with mocked API responses: Context-filtered list/map inspection, Skills search and exact Mermaid/canonical JSON export payloads passed. This is browser proof, not a live API, PostgreSQL, provider-host or deployment claim.",
+            "source": {
+              "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
+              "line": 42,
+              "anchor": "test(\"signed-in owner inspects the same profile-filtered nodes in the Structure list and map, and exports stay the exact API artifact\", async ({ page, context }) => {"
+            }
           }
         ]
       },
@@ -6986,16 +7037,33 @@
       },
       "ui": {
         "status": "A",
-        "detail": "Draft preview",
+        "detail": "Unsaved draft explorer and preview",
         "source": {
           "path": "apps/web/src/components/architecture/ArchitecturesDashboard.tsx",
-          "line": 823,
+          "line": 931,
           "anchor": "const nextPreview = await client.previewArchitectureDraft(selectedArchitectureId, {"
         },
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: Draft preview. Runtime parity is not implied."
+          },
+          {
+            "level": "source",
+            "detail": "2026-09-30 Architecture explorer: presentation uses existing API-owned revisions, projections and permissions. No API, CLI or MCP contract changes; browser verification is recorded separately.",
+            "source": {
+              "path": "apps/web/src/components/architecture/ArchitectureDashboardPreviewPanel.tsx",
+              "line": 1
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "2026-09-30 local Chromium with mocked API responses: Draft preview and late-response guards passed, keeping saved state separate from unsaved edits. This is browser proof, not a live API, PostgreSQL, provider-host or deployment claim.",
+            "source": {
+              "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
+              "line": 1114,
+              "anchor": "test(\"stale saved and draft previews never replace the current architecture or context, and edits clear an older draft preview\", async ({ page }) => {"
+            }
           }
         ]
       },
@@ -7095,7 +7163,7 @@
       },
       "ui": {
         "status": "A",
-        "detail": "Organization grants card",
+        "detail": "Sharing tab organization grants",
         "source": {
           "path": "apps/web/src/components/architecture/ArchitectureOrganizationGrantsCard.tsx",
           "line": 1
@@ -7104,6 +7172,23 @@
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: Organization grants card. Runtime parity is not implied."
+          },
+          {
+            "level": "source",
+            "detail": "2026-09-30 Architecture explorer: presentation uses existing API-owned revisions, projections and permissions. No API, CLI or MCP contract changes; browser verification is recorded separately.",
+            "source": {
+              "path": "apps/web/src/components/architecture/ArchitectureDashboardDetailPanel.tsx",
+              "line": 1
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "2026-09-30 local Chromium with mocked API responses: Sharing updates and confirmed revocation passed with API request readback. This is browser proof, not a live API, PostgreSQL, provider-host or deployment claim.",
+            "source": {
+              "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
+              "line": 198,
+              "anchor": "test(\"owner saves and confirms organization access revocation in Sharing, then retries a migration from Change pattern with the same idempotency key\", async ({ page }) => {"
+            }
           }
         ]
       },
@@ -7204,7 +7289,7 @@
       },
       "ui": {
         "status": "A",
-        "detail": "Pattern migration card",
+        "detail": "Change pattern disclosure",
         "source": {
           "path": "apps/web/src/components/architecture/ArchitecturePatternMigrationCard.tsx",
           "line": 1
@@ -7213,6 +7298,23 @@
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: Pattern migration card. Runtime parity is not implied."
+          },
+          {
+            "level": "source",
+            "detail": "2026-09-30 Architecture explorer: presentation uses existing API-owned revisions, projections and permissions. No API, CLI or MCP contract changes; browser verification is recorded separately.",
+            "source": {
+              "path": "apps/web/src/components/architecture/ArchitectureDashboardDetailPanel.tsx",
+              "line": 1
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "2026-09-30 local Chromium with mocked API responses: Change pattern disclosure preserves the migration retry idempotency key across close/reopen and retry. This is browser proof, not a live API, PostgreSQL, provider-host or deployment claim.",
+            "source": {
+              "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
+              "line": 198,
+              "anchor": "test(\"owner saves and confirms organization access revocation in Sharing, then retries a migration from Change pattern with the same idempotency key\", async ({ page }) => {"
+            }
           }
         ]
       },

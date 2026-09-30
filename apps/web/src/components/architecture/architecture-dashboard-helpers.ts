@@ -250,6 +250,19 @@ export function runtimeExposureLabel(value: string | undefined): string {
   return "Not exposed";
 }
 
+/** Package catalogue visibility; separate from runtime exposure. */
+export function packageVisibilityLabel(value: string): string {
+  switch (value) {
+    case "public": return "Public";
+    case "authenticated": return "Signed-in users";
+    case "organization": return "Organization";
+    case "team": return "Team";
+    case "private": return "Private";
+    case "explicit-users": return "Specific people";
+    default: return value;
+  }
+}
+
 export function isUnsupportedError(error: unknown): boolean {
   if (!error || typeof error !== "object") {
     return false;

@@ -1,4 +1,14 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import {
+  architectureUi as ui,
+  chooseExposure,
+  effectiveFontSize,
+  expandAllNodes,
+  expectArchitectureUrl,
+  MIN_LEGIBLE_LABEL_PX,
+  noDocumentOverflow,
+  visibleNodeIds,
+} from "./architecture-explorer-support.js";
 
 const browserExecutable = process.env.MYSKILLS_E2E_BROWSER_EXECUTABLE?.trim();
 test.use({ launchOptions: browserExecutable ? { executablePath: browserExecutable } : {} });
@@ -29,7 +39,8 @@ test.beforeEach(async ({ page }) => {
   }, { expiresAt, user: owner });
 });
 
-test("signed-in owner inspects the same profile-filtered nodes in the diagram and accessible outline", async ({ page }) => {
+test("signed-in owner inspects the same profile-filtered nodes in the Structure list and map, and exports stay the exact API artifact", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const state = await installMockArchitectureRoutes(page);
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.goto("/architectures");
@@ -55,43 +66,79 @@ test("signed-in owner inspects the same profile-filtered nodes in the diagram an
     context.profileId === "personal" && context.environmentId === "personal-laptop"
   ))).toBe(true);
 
-  const diagram = page.getByRole("img", { name: "Skill architecture topology" });
-  const outline = page.getByRole("list", { name: "Architecture topology outline" });
-  await expect(diagram).toBeVisible();
-  await expect(outline).toBeVisible();
+  // Structure is the default tab. With exposed nodes shown, the list holds
+  // exactly the server's graph and outline for this context.
+  await expect(ui.tab(page, "Structure")).toHaveAttribute("aria-selected", "true");
+  const explorer = ui.explorer(page);
+  await expect(ui.row(page, "personal-root")).toBeVisible();
+  await chooseExposure(page, "Exposed only");
+  await expandAllNodes(page);
+  await expect.poll(() => visibleNodeIds(page)).toEqual(["personal-domain", "personal-root", "release-notes"]);
+  await expect(explorer).not.toContainText("Work Deploy Helper");
+  await expect(explorer).not.toContainText("Work review router");
+  // The owner may also list the revision's disabled nodes, never others.
+  if (await chooseExposure(page, "All nodes")) {
+    await expandAllNodes(page);
+    const allIds = await visibleNodeIds(page);
+    expect(allIds).toEqual(expect.arrayContaining(["personal-domain", "personal-root", "release-notes"]));
+    expect(["personal-domain", "personal-root", "release-notes", "work-deploy", "work-domain"]).toEqual(expect.arrayContaining(allIds));
+    await chooseExposure(page, "Exposed only");
+  }
+
+  // Nesting follows the outline: the leaf's path names both routers.
+  const leafSelect = ui.rowSelect(ui.row(page, "release-notes"));
+  await leafSelect.click();
+  await expect(leafSelect).toHaveAttribute("aria-current", "true");
+  const inspector = ui.inspector(page);
+  await expect(inspector).toContainText("Release Notes Helper");
+  await expect(inspector).toContainText("Personal router");
+  await expect(inspector).toContainText("Personal review router");
+  await expect(inspector).toContainText("0.1.0");
+  await expect(ui.editInWorkbench(page)).toBeVisible();
+  await expectArchitectureUrl(page, { id: "architecture-1", context: { profile: "personal", environment: "personal-laptop" }, node: "release-notes" });
+
+  // The map is complementary: same selection, readable labels, same projection.
+  await ui.view(page, "Map").click();
+  await expect(ui.view(page, "Map")).toHaveAttribute("aria-pressed", "true");
+  const map = ui.map(page);
+  await expect(map).toBeVisible();
+  await expect(inspector).toContainText("Release Notes Helper");
+  const routerLabel = map.getByText("Personal review router", { exact: true }).first();
+  await expect(routerLabel).toBeVisible();
+  expect(await effectiveFontSize(routerLabel)).toBeGreaterThanOrEqual(MIN_LEGIBLE_LABEL_PX);
+  await expect(map).not.toContainText("Work Deploy Helper");
+  await expectArchitectureUrl(page, { id: "architecture-1", context: { profile: "personal", environment: "personal-laptop" }, node: "release-notes", view: "map" });
+  await ui.view(page, "List").click();
+  await expect(leafSelect).toHaveAttribute("aria-current", "true");
+
+  // After list, map, filter and selection changes, exports are still the
+  // exact artifact the API returned for this context.
   await page.getByText("Technical details", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Copy canonical diagram JSON" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Download canonical diagram JSON" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy Mermaid architecture export" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Download Mermaid architecture export" })).toBeVisible();
   await expect(page.getByText("Plain-text outline fallback")).toBeVisible();
+  const apiDiagram = state.previewDiagrams.filter((diagram) => diagram.profileId === "personal").at(-1)!;
+  const { artifactDigest: _artifactDigest, ...semanticDiagram } = apiDiagram;
+  const readClipboard = () => page.evaluate(() => navigator.clipboard.readText());
+  await page.getByRole("button", { name: "Copy Mermaid architecture export" }).click();
+  await expect.poll(readClipboard).toBe(apiDiagram.mermaid);
+  await page.getByRole("button", { name: "Copy canonical diagram JSON" }).click();
+  await expect.poll(readClipboard).toMatch(/^\{/);
+  expect(JSON.parse(await readClipboard())).toEqual(semanticDiagram);
 
-  const diagramLabels = (await diagram.locator(".architecture-diagram-label").allTextContents()).sort();
-  const outlineLabels = (await outline.locator("strong").allTextContents()).sort();
-  expect(diagramLabels).toEqual(["Personal review router", "Personal router", "Release Notes Helper"]);
-  expect(outlineLabels).toEqual(diagramLabels);
-  await expect(outline.locator("li > ol > li > ol > li > span > strong")).toHaveText("Release Notes Helper");
-  await expect(page.locator(".architecture-preview-stack")).not.toContainText("Work Deploy Helper");
-  await page.getByRole("tab", { name: /^Skills/ }).click();
-  await expect(page.getByRole("cell", { name: "0.1.0" })).toBeVisible();
-  await page.getByRole("tab", { name: "Overview" }).click();
+  // Skills search and filters never reveal skills outside the context.
+  await ui.tab(page, "Skills").click();
+  await expect(ui.skillsPanel(page).getByRole("cell", { name: "0.1.0" })).toBeVisible();
+  await expect(ui.skillsTable(page)).toContainText(ui.readableLeafExposure);
+  await expect(ui.skillsTable(page)).not.toContainText("personal-laptop");
+  await ui.skillsSearch(page).fill("deploy");
+  await expect(ui.skillRows(page)).toHaveCount(0);
+  await ui.skillsSearch(page).fill("release");
+  await expect(ui.skillRows(page)).toHaveCount(1);
+  await ui.tab(page, "Structure").click();
   await expect(page.getByText("No sync plan generated. Provide an observed-state fixture to preview a target dry run.")).toBeVisible();
-
-  const viewBox = await diagram.getAttribute("viewBox");
-  const [, , viewBoxWidth, viewBoxHeight] = (viewBox ?? "").split(/\s+/).map(Number);
-  expect(viewBoxWidth).toBeGreaterThan(900);
-  expect(viewBoxHeight).toBeGreaterThan(400);
-  const mapMetrics = await diagram.evaluate((element) => {
-    const svg = element as SVGSVGElement;
-    const scale = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
-    return { scale, labelSize: parseFloat(getComputedStyle(svg.querySelector(".architecture-diagram-label")!).fontSize) * scale };
-  });
-  expect(mapMetrics.scale).toBeGreaterThanOrEqual(0.9);
-  expect(mapMetrics.labelSize).toBeGreaterThanOrEqual(11);
-  const mapRegion = page.getByRole("region", { name: "Scrollable architecture topology" });
-  await mapRegion.focus();
-  await page.keyboard.press("ArrowRight");
-  await expect.poll(() => mapRegion.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
 
 
   await page.getByText("Compare observed-state fixture").click();
@@ -132,7 +179,7 @@ test("owner creates a private draft without a preview and the narrow layout rema
   const workbenchMeasurements = await measure();
   await page.getByRole("link", { name: "Architecture overview" }).click();
   await expect(page.getByText("No revision yet. Build and save the first revision in the workbench.")).toBeVisible();
-  await expect(page.getByRole("img", { name: "Skill architecture topology" })).toHaveCount(0);
+  await expect(ui.explorer(page)).toHaveCount(0);
   await expect.poll(() => state.draftPreviewAttempts).toBe(0);
   expect(state.createdBodies).toEqual([{
     name: "Private experiment",
@@ -148,12 +195,20 @@ test("owner creates a private draft without a preview and the narrow layout rema
   }
 });
 
-test("owner saves and confirms organization access revocation, then retries a migration with the same idempotency key", async ({ page }) => {
+test("owner saves and confirms organization access revocation in Sharing, then retries a migration from Change pattern with the same idempotency key", async ({ page }) => {
   const state = await installMockArchitectureRoutes(page, { failFirstMigrationCreate: true });
   await page.goto("/architectures");
 
   await expect(page.getByRole("heading", { name: "Review assistant", level: 2 })).toBeVisible();
-  await page.getByRole("tab", { name: "Access" }).click();
+  // Sharing is the last section tab and is reachable from the keyboard.
+  await expect(ui.tab(page, "Sharing")).toBeVisible();
+  await ui.tab(page, "Structure").focus();
+  await page.keyboard.press("End");
+  await expect(ui.tab(page, "Sharing")).toHaveAttribute("aria-selected", "true");
+  await expect(ui.tab(page, "Sharing")).toBeFocused();
+  const sharing = ui.tabPanel(page, "Sharing");
+  // Pattern migration no longer lives in Sharing.
+  await expect(sharing.getByLabel("Target pattern")).toHaveCount(0);
   const organizationCheckbox = page.getByRole("checkbox", { name: "Share with Phase 2 UAT Organization" });
   await expect(organizationCheckbox).toBeVisible();
   await organizationCheckbox.check();
@@ -168,6 +223,10 @@ test("owner saves and confirms organization access revocation, then retries a mi
   await expect.poll(() => state.organizationGrantBodies.length).toBe(2);
   expect(state.organizationGrantBodies[1]?.organizationIds).toEqual([]);
 
+  const changePattern = ui.changePattern(page);
+  await expect(changePattern).toHaveAttribute("aria-expanded", "false");
+  await changePattern.click();
+  await expect(changePattern).toHaveAttribute("aria-expanded", "true");
   await page.getByLabel("Target pattern").selectOption("domain-router");
   await page.getByRole("button", { name: "Preview migration" }).click();
   await expect(page.getByText("Migration preview ready. The source architecture is unchanged.")).toBeVisible();
@@ -176,8 +235,14 @@ test("owner saves and confirms organization access revocation, then retries a mi
   await page.getByLabel("Derived architecture name").fill("Domain review assistant");
   await page.getByRole("button", { name: "Review create" }).click();
   await page.getByRole("button", { name: "Confirm create derived shell" }).click();
-  await expect(page.getByRole("button", { name: "Retry create" })).toBeVisible();
-  await page.getByRole("button", { name: "Retry create" }).click();
+  const retry = page.getByRole("button", { name: "Retry create" });
+  await expect(retry).toBeVisible();
+  // Closing and reopening the disclosure keeps the pending retry and its key.
+  await changePattern.click();
+  await expect(changePattern).toHaveAttribute("aria-expanded", "false");
+  await expect(retry).toBeHidden();
+  await changePattern.click();
+  await retry.click();
   await expect.poll(() => state.migrationCreateBodies.length).toBe(2);
   expect(state.migrationCreateBodies[0]?.idempotencyKey).toBeTruthy();
   expect(state.migrationCreateBodies[1]?.idempotencyKey).toBe(state.migrationCreateBodies[0]?.idempotencyKey);
@@ -430,6 +495,8 @@ interface MockArchitectureState {
   draftPreviewAttempts: number;
   fixturePreviewRequests: number;
   previewContexts: Array<{ profileId?: string; environmentId?: string }>;
+  /** Diagram artifacts exactly as returned by each preview response. */
+  previewDiagrams: Array<Record<string, unknown>>;
   organizationGrantBodies: Array<Record<string, unknown>>;
   migrationPreviewBodies: Array<Record<string, unknown>>;
   migrationCreateBodies: Array<Record<string, unknown>>;
@@ -451,6 +518,7 @@ async function installMockArchitectureRoutes(
     draftPreviewAttempts: 0,
     fixturePreviewRequests: 0,
     previewContexts: [],
+    previewDiagrams: [],
     organizationGrantBodies: [],
     migrationPreviewBodies: [],
     migrationCreateBodies: [],
@@ -921,6 +989,20 @@ async function installMockArchitectureRoutes(
       if (body.fixture !== undefined) {
         state.fixturePreviewRequests += 1;
       }
+      const diagram = {
+        schemaVersion: 1,
+        architectureId: architecture.id,
+        revisionDigest: "c".repeat(64),
+        profileId: profile,
+        environmentId: environment,
+        accessibleTitle: `Architecture ${architecture.id}`,
+        accessibleDescription: "A deterministic topology projection.",
+        mermaid: `flowchart TD\naccTitle: Architecture ${architecture.id}\naccDescr: A deterministic topology projection.\n  personal_root[Personal router] --> ${branch.id}[${branch.label}]\n  ${branch.id} --> ${leaf.id}[${leaf.label}]`,
+        mermaidSha256: "d".repeat(64),
+        accessibleOutline: `Architecture ${architecture.id}\n- Personal router (router)\n  - ${branch.label} (router)\n    - ${leaf.label} (leaf)`,
+        artifactDigest: "e".repeat(64),
+      };
+      state.previewDiagrams.push(diagram);
       return json(route, 200, {
         revision,
         compiled: {
@@ -965,19 +1047,7 @@ async function installMockArchitectureRoutes(
           text: `Architecture ${architecture.id}\n- Personal router (router)\n  - ${branch.label} (router)\n    - ${leaf.label} (leaf)`,
           tree: [{ id: "personal-root", label: "Personal router", kind: "router", children: [{ id: branch.id, label: branch.label, kind: "router", children: [{ id: leaf.id, label: leaf.label, kind: "leaf", children: [] }] }] }],
         },
-        diagram: {
-          schemaVersion: 1,
-          architectureId: architecture.id,
-          revisionDigest: "c".repeat(64),
-          profileId: profile,
-          environmentId: environment,
-          accessibleTitle: `Architecture ${architecture.id}`,
-          accessibleDescription: "A deterministic topology projection.",
-          mermaid: `flowchart TD\naccTitle: Architecture ${architecture.id}\naccDescr: A deterministic topology projection.\n  personal_root[Personal router] --> ${branch.id}[${branch.label}]\n  ${branch.id} --> ${leaf.id}[${leaf.label}]`,
-          mermaidSha256: "d".repeat(64),
-          accessibleOutline: `Architecture ${architecture.id}\n- Personal router (router)\n  - ${branch.label} (router)\n    - ${leaf.label} (leaf)`,
-          artifactDigest: "e".repeat(64),
-        },
+        diagram,
         ...(body.fixture !== undefined ? {
           plan: {
             dryRun: true,
@@ -1013,89 +1083,57 @@ function json(route: Route, status: number, body: unknown) {
   });
 }
 
-// Full-screen viewer acceptance, authored before the implementation. Existing
-// outline parity tests do not exercise modal focus or viewport interactions.
-for (const width of [1440, 390, 320]) test(`architecture diagram overlay supports zoom pan and keyboard return at ${width}`, async ({ page }, info) => {
+// Replaces the full-screen SVG overlay test: the static diagram and its
+// "Expand diagram" dialog are no longer rendered anywhere. At the same widths,
+// the accessible list, the inspector's keyboard return and the map must stay
+// reachable without document overflow.
+for (const width of [1440, 390, 320]) test(`the Structure list, inspector and map stay reachable and keyboard-operable at ${width}`, async ({ page }, info) => {
   await installMockArchitectureRoutes(page);
   await page.setViewportSize({ width, height: 900 });
   await page.goto("/architectures");
   await page.getByRole("button", { name: /Review assistant/ }).click();
   await page.getByLabel("Preview profile").selectOption("personal");
   await page.getByLabel("Preview environment").selectOption("personal-laptop");
-  await expect(page.getByRole("img", { name: "Skill architecture topology" })).toContainText("Release Notes Helper");
-  await page.screenshot({ path: info.outputPath("architecture-inline.png") });
-  const open = page.getByRole("button", { name: "Expand diagram", exact: true });
-  await expect(open).toBeVisible();
-  await open.click();
-  const dialog = page.getByRole("dialog", { name: "Architecture diagram", exact: true });
-  await expect(dialog).toBeVisible();
-  const close = dialog.getByRole("button", { name: "Close diagram", exact: true });
-  await expect(close).toBeFocused();
-  const bounds = (await dialog.boundingBox())!;
-  expect(bounds.x).toBeLessThanOrEqual(1);
-  expect(bounds.y).toBeLessThanOrEqual(1);
-  expect(bounds.width).toBeGreaterThanOrEqual(width - 1);
-  expect(bounds.height).toBeGreaterThanOrEqual(899);
-  const image = dialog.getByRole("img", { name: "Skill architecture topology" });
-  await expect(image).toContainText("Personal review router");
-  await expect(image).not.toContainText("Work Deploy Helper");
-  await page.screenshot({ path: info.outputPath("architecture-overlay-open.png") });
-  const initialWidth = (await image.boundingBox())!.width;
-  await dialog.getByRole("button", { name: "Zoom in", exact: true }).click();
-  await expect.poll(async () => (await image.boundingBox())!.width).toBeGreaterThan(initialWidth);
-  await dialog.getByRole("button", { name: "Actual size, 1:1", exact: true }).click();
-  const viewport = dialog.getByRole("region", { name: "Diagram viewport", exact: true });
-  await viewport.focus();
-  await page.keyboard.press("+");
-  await page.keyboard.press("+");
-  const scroll = () => viewport.evaluate(el => ({ x: el.scrollLeft, y: el.scrollTop }));
-  await viewport.hover();
-  const beforeWheel = await scroll();
-  await page.mouse.wheel(500, 500);
-  await expect.poll(async () => { const p = await scroll(); return p.x > beforeWheel.x || p.y > beforeWheel.y; }).toBe(true);
-  const beforeDrag = await scroll();
-  const canvasBox = (await viewport.boundingBox())!;
-  const x = canvasBox.x + canvasBox.width / 2;
-  const y = canvasBox.y + canvasBox.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x + 75, y + 50, { steps: 5 });
-  await page.mouse.up();
-  await expect.poll(async () => { const p = await scroll(); return p.x < beforeDrag.x || p.y < beforeDrag.y; }).toBe(true);
-  await viewport.focus();
-  const keyboardStart = await scroll();
-  await page.keyboard.press("ArrowRight");
-  await expect.poll(async () => (await scroll()).x).toBeGreaterThan(keyboardStart.x);
-  const beforePinch = (await image.boundingBox())!.width;
-  await viewport.hover();
-  await page.keyboard.down("Control");
-  await page.mouse.wheel(0, -150);
-  await page.keyboard.up("Control");
-  await expect.poll(async () => (await image.boundingBox())!.width).toBeGreaterThan(beforePinch);
-  expect((await dialog.boundingBox())!.width).toBe(width);
-  await dialog.getByRole("button", { name: "Fit diagram", exact: true }).click();
-  await expect.poll(() => viewport.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
-  await expect.poll(() => viewport.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
-  await page.screenshot({ path: info.outputPath("architecture-overlay.png") });
-  await page.setViewportSize({ width: 900, height: 600 });
-  await expect.poll(() => viewport.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
-  await expect.poll(() => viewport.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
-  await page.setViewportSize({ width, height: 900 });
-  const lockedScroll = await page.evaluate(() => window.scrollY);
-  await viewport.hover();
-  await page.mouse.wheel(0, 800);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(lockedScroll);
-  // Native modal focus must stay inside the overlay when tabbing past the end.
-  for (let i = 0; i < 9; i++) {
-    await page.keyboard.press("Tab");
-    expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+  const routerSelect = ui.rowSelect(ui.row(page, "personal-domain"));
+  await expect(routerSelect).toBeVisible();
+  await expect(ui.row(page, "release-notes")).toBeVisible();
+  await page.screenshot({ path: info.outputPath("architecture-structure.png") });
+
+  // Rows are real buttons: Enter selects and shows details. Narrow screens
+  // use a sheet that Escape closes, returning focus to the row.
+  await routerSelect.focus();
+  await page.keyboard.press("Enter");
+  await expect(routerSelect).toHaveAttribute("aria-current", "true");
+  await expect(ui.inspector(page)).toContainText("Personal review router");
+  if (width <= 900) {
+    const close = ui.closeDetails(page);
+    await expect(close).toBeVisible();
+    await close.focus();
+    await page.keyboard.press("Escape");
+    await expect(close).toBeHidden();
+    await expect(routerSelect).toBeFocused();
   }
-  await page.keyboard.press("Escape");
-  await expect(dialog).toBeHidden();
-  await expect(open).toBeFocused();
-  await open.click();
-  await close.click();
-  await expect(dialog).toBeHidden();
-  await expect(open).toBeFocused();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  expect(await noDocumentOverflow(page)).toBe(true);
+
+  // The map is reachable from the keyboard, fits the viewport width and keeps
+  // the selection in the URL and on return to the list.
+  const mapButton = ui.view(page, "Map");
+  await mapButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(mapButton).toHaveAttribute("aria-pressed", "true");
+  const map = ui.map(page);
+  await expect(map).toBeVisible();
+  await expect(map).toContainText("Personal review router");
+  const mapBox = (await map.boundingBox())!;
+  expect(mapBox.x).toBeGreaterThanOrEqual(-1);
+  expect(mapBox.x + mapBox.width).toBeLessThanOrEqual(width + 1);
+  expect(await noDocumentOverflow(page)).toBe(true);
+  await expectArchitectureUrl(page, { id: "architecture-1", context: { profile: "personal", environment: "personal-laptop" }, node: "personal-domain", view: "map" });
+  await page.screenshot({ path: info.outputPath("architecture-map.png") });
+  const listButton = ui.view(page, "List");
+  await listButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(listButton).toHaveAttribute("aria-pressed", "true");
+  await expect(routerSelect).toHaveAttribute("aria-current", "true");
+  expect(await noDocumentOverflow(page)).toBe(true);
 });

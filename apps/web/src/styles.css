@@ -5,10 +5,12 @@
 @import "./components/registry/author-review.css";
 @import "./components/control-plane/control-plane-surface.css";
 @import "./components/architecture/architecture-diagram.css";
+@import "./components/architecture/architecture-explorer.css";
 @import "./components/people/people.css";
 @import "./components/account/account.css";
 @import "./components/github/github.css";
 @import "./components/architecture/editor/architecture-editor.css";
+@import "./components/architecture/editor/architecture-draft-changes.css";
 @import "@xyflow/react/dist/style.css";
 @import "tailwindcss";
 

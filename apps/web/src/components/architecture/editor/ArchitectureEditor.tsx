@@ -1,6 +1,7 @@
 import {
   memo,
   useCallback,
+  useDeferredValue,
   useEffect,
   useId,
   useMemo,
@@ -10,6 +11,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type MutableRefObject,
   type FormEvent,
+  type RefObject,
 } from "react";
 import {
   Background,
@@ -87,6 +89,8 @@ import {
   projectArchitectureToFlow,
   type ArchitectureFlowNode,
 } from "./layout.js";
+import { describeArchitectureDraftChanges } from "./architecture-draft-changes.js";
+import { ArchitectureDraftChanges } from "./ArchitectureDraftChanges.js";
 import type {
   ArchitectureEditorPreviewRequest,
   ArchitectureEditorProps,
@@ -121,22 +125,42 @@ export function ArchitectureEditor({
   advancedPanel,
   readOnly = false,
   className,
+  initialSelectedNodeId,
+  onSelectedNodeChange,
+  selectedProfileId: requestedProfileId,
+  selectedEnvironmentId: requestedEnvironmentId,
+  onProfileChange,
+  onEnvironmentChange: onActiveEnvironmentChange,
+  baselineLabel,
 }: ArchitectureEditorProps) {
   const idPrefix = useId();
   const [tab, setTab] = useState<EditorTab>("design");
-  // Narrow layouts show one design pane at a time; wider layouts show both.
-  const [mobilePane, setMobilePane] = useState<"canvas" | "outline">("canvas");
+  // Narrow layouts show one design pane at a time, outline first; wider
+  // layouts show both.
+  const [mobilePane, setMobilePane] = useState<"canvas" | "outline">("outline");
   const [pickerOpen, setPickerOpen] = useState(() => initialSpec.skills.length === 0);
   const flowRef = useRef<ReactFlowInstance<ArchitectureFlowNode, Edge> | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const treeRef = useRef<HTMLDivElement>(null);
   const initialSpecKey = useMemo(() => architectureSpecKey(initialSpec), [initialSpec]);
   const [draft, setDraft] = useState<ArchitectureSpecV1>(() => cloneArchitectureSpec(initialSpec));
-  const [baselineKey, setBaselineKey] = useState(initialSpecKey);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => initialSpec.nodes[0]?.id ?? null);
-  const [selectedProfileId, setSelectedProfileId] = useState(() => initialSpec.profiles[0]?.id ?? "");
-  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState(() => initialSpec.environments[0]?.id ?? "");
+  // The revision this draft started from, or the last draft saved from it.
+  // Dirty state and the named draft changes are both measured against it.
+  const [baseline, setBaseline] = useState<{ spec: ArchitectureSpecV1; key: string }>(() => ({
+    spec: cloneArchitectureSpec(initialSpec),
+    key: initialSpecKey,
+  }));
+  const baselineKey = baseline.key;
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => pickNodeId(initialSpec, initialSelectedNodeId));
+  const [selectedProfileId, setSelectedProfileId] = useState(() => pickContextId(initialSpec.profiles, requestedProfileId));
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState(() => pickContextId(initialSpec.environments, requestedEnvironmentId));
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(() => new Set(initialSpec.nodes.filter((node) => node.kind === "router").map((node) => node.id)));
-  const [treeFocusId, setTreeFocusId] = useState<string | null>(() => initialSpec.nodes[0]?.id ?? null);
+  const [treeFocusId, setTreeFocusId] = useState<string | null>(() => pickNodeId(initialSpec, initialSelectedNodeId));
+  // A requested node is revealed in the outline once the tree has a size.
+  const [revealRequest, setRevealRequest] = useState(0);
+  const pendingRevealRef = useRef<string | null>(
+    initialSelectedNodeId && initialSpec.nodes.some((node) => node.id === initialSelectedNodeId) ? initialSelectedNodeId : null,
+  );
   const [newLeafSkillId, setNewLeafSkillId] = useState(() => initialSpec.skills[0]?.id ?? "");
   const [registryQuery, setRegistryQuery] = useState("");
   const [registrySkills, setRegistrySkills] = useState<ArchitectureRegistrySkillOption[]>([]);
@@ -154,6 +178,19 @@ export function ArchitectureEditor({
   const latestInitialSpec = useRef(initialSpec);
   const appliedInitialSpecKey = useRef(initialSpecKey);
   latestInitialSpec.current = initialSpec;
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const selectedNodeIdRef = useRef(selectedNodeId);
+  selectedNodeIdRef.current = selectedNodeId;
+  const selectedProfileIdRef = useRef(selectedProfileId);
+  selectedProfileIdRef.current = selectedProfileId;
+  const selectedEnvironmentIdRef = useRef(selectedEnvironmentId);
+  selectedEnvironmentIdRef.current = selectedEnvironmentId;
+  const requestedContextRef = useRef({ profileId: requestedProfileId, environmentId: requestedEnvironmentId });
+  requestedContextRef.current = { profileId: requestedProfileId, environmentId: requestedEnvironmentId };
+  // Outgoing callbacks are read from a ref so they never re-run effects.
+  const callbacksRef = useRef({ onSelectedNodeChange, onProfileChange, onActiveEnvironmentChange });
+  callbacksRef.current = { onSelectedNodeChange, onProfileChange, onActiveEnvironmentChange };
 
   // State already contains the initial spec on mount. Reset only for a changed
   // server spec so an early input cannot be overwritten by the first effect.
@@ -162,13 +199,16 @@ export function ArchitectureEditor({
     if (appliedInitialSpecKey.current === initialSpecKey) return;
     appliedInitialSpecKey.current = initialSpecKey;
     const nextSpec = latestInitialSpec.current;
+    const requested = requestedContextRef.current;
+    // Keep the selected node and context where the new revision still has them.
+    const nextNodeId = pickNodeId(nextSpec, selectedNodeIdRef.current);
     setDraft(cloneArchitectureSpec(nextSpec));
-    setBaselineKey(initialSpecKey);
-    setSelectedNodeId(nextSpec.nodes[0]?.id ?? null);
-    setSelectedProfileId(nextSpec.profiles[0]?.id ?? "");
-    setSelectedEnvironmentId(nextSpec.environments[0]?.id ?? "");
+    setBaseline({ spec: cloneArchitectureSpec(nextSpec), key: initialSpecKey });
+    setSelectedNodeId(nextNodeId);
+    setSelectedProfileId(pickContextId(nextSpec.profiles, requested.profileId, selectedProfileIdRef.current));
+    setSelectedEnvironmentId(pickContextId(nextSpec.environments, requested.environmentId, selectedEnvironmentIdRef.current));
     setExpandedNodeIds(new Set(nextSpec.nodes.filter((node) => node.kind === "router").map((node) => node.id)));
-    setTreeFocusId(nextSpec.nodes[0]?.id ?? null);
+    setTreeFocusId(nextNodeId);
     setNewLeafSkillId(nextSpec.skills[0]?.id ?? "");
     setRegistrySkills([]);
     setRegistrySkillSlug("");
@@ -198,8 +238,6 @@ export function ArchitectureEditor({
   const issues = useMemo(() => validation.valid ? [] : validation.errors, [validation]);
   const dirty = architectureSpecKey(draft) !== baselineKey;
   const messageDirty = Boolean(onRevisionMessageChange && revisionMessage?.trim());
-  const selectedNodeIdRef = useRef(selectedNodeId);
-  selectedNodeIdRef.current = selectedNodeId;
 
   const focusFlowNode = useCallback((nodeId: string, zoom: number) => {
     const node = flowRef.current?.getNode(nodeId);
@@ -309,13 +347,110 @@ export function ArchitectureEditor({
 
   useEffect(() => {
     if (selectedProfileId && draft.profiles.some((profile) => profile.id === selectedProfileId)) return;
-    setSelectedProfileId(draft.profiles[0]?.id ?? "");
+    setSelectedProfileId(pickContextId(draft.profiles, requestedContextRef.current.profileId));
   }, [draft.profiles, selectedProfileId]);
 
   useEffect(() => {
     if (selectedEnvironmentId && draft.environments.some((environment) => environment.id === selectedEnvironmentId)) return;
-    setSelectedEnvironmentId(draft.environments[0]?.id ?? "");
+    setSelectedEnvironmentId(pickContextId(draft.environments, requestedContextRef.current.environmentId));
   }, [draft.environments, selectedEnvironmentId]);
+
+  // Scroll only the outline's own list so a revealed row never moves the page.
+  const revealTreeRow = useCallback((nodeId: string): boolean => {
+    const treeElement = treeRef.current;
+    const row = treeItemRefs.current.get(nodeId);
+    if (!treeElement || !row || treeElement.clientHeight === 0) return false;
+    const treeBox = treeElement.getBoundingClientRect();
+    const rowBox = row.getBoundingClientRect();
+    if (rowBox.top < treeBox.top) treeElement.scrollTop -= treeBox.top - rowBox.top + 8;
+    else if (rowBox.bottom > treeBox.bottom) treeElement.scrollTop += rowBox.bottom - treeBox.bottom + 8;
+    return true;
+  }, []);
+
+  // Select a node requested by the caller, open its branch and show it in the
+  // Design outline. This is not a user selection, so it is never echoed back.
+  // The current tab and narrow-layout pane are kept: the outline row is
+  // scrolled into view once the outline is shown.
+  const revealRequestedNode = useCallback((nodeId: string) => {
+    const ancestors = ancestorNodeIds(draftRef.current, nodeId);
+    selectedNodeIdRef.current = nodeId;
+    setSelectedNodeId(nodeId);
+    setTreeFocusId(nodeId);
+    if (ancestors.length > 0) {
+      setExpandedNodeIds((current) => {
+        if (ancestors.every((id) => current.has(id))) return current;
+        const next = new Set(current);
+        for (const id of ancestors) next.add(id);
+        return next;
+      });
+    }
+    pendingRevealRef.current = nodeId;
+    setRevealRequest((value) => value + 1);
+  }, []);
+
+  // Incoming values apply only when they change, so a caller that mirrors the
+  // outgoing callbacks back into these props cannot start a loop.
+  const appliedRequestedNodeId = useRef(initialSelectedNodeId);
+  useEffect(() => {
+    if (appliedRequestedNodeId.current === initialSelectedNodeId) return;
+    appliedRequestedNodeId.current = initialSelectedNodeId;
+    if (!initialSelectedNodeId || initialSelectedNodeId === selectedNodeIdRef.current) return;
+    if (!draftRef.current.nodes.some((node) => node.id === initialSelectedNodeId)) return;
+    revealRequestedNode(initialSelectedNodeId);
+  }, [initialSelectedNodeId, revealRequestedNode]);
+
+  const appliedRequestedProfileId = useRef(requestedProfileId);
+  useEffect(() => {
+    if (appliedRequestedProfileId.current === requestedProfileId) return;
+    appliedRequestedProfileId.current = requestedProfileId;
+    if (!requestedProfileId || requestedProfileId === selectedProfileIdRef.current) return;
+    if (!draftRef.current.profiles.some((profile) => profile.id === requestedProfileId)) return;
+    setSelectedProfileId(requestedProfileId);
+  }, [requestedProfileId]);
+
+  const appliedRequestedEnvironmentId = useRef(requestedEnvironmentId);
+  useEffect(() => {
+    if (appliedRequestedEnvironmentId.current === requestedEnvironmentId) return;
+    appliedRequestedEnvironmentId.current = requestedEnvironmentId;
+    if (!requestedEnvironmentId || requestedEnvironmentId === selectedEnvironmentIdRef.current) return;
+    if (!draftRef.current.environments.some((environment) => environment.id === requestedEnvironmentId)) return;
+    setSelectedEnvironmentId(requestedEnvironmentId);
+  }, [requestedEnvironmentId]);
+
+  // A tree hidden on another tab, pane or surface has no size yet; finish the
+  // reveal as soon as it is shown.
+  useEffect(() => {
+    const nodeId = pendingRevealRef.current;
+    if (!nodeId) return;
+    if (revealTreeRow(nodeId)) {
+      pendingRevealRef.current = null;
+      return;
+    }
+    const treeElement = treeRef.current;
+    if (!treeElement || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      const pending = pendingRevealRef.current;
+      if (!pending || revealTreeRow(pending)) {
+        pendingRevealRef.current = null;
+        observer.disconnect();
+      }
+    });
+    observer.observe(treeElement);
+    return () => observer.disconnect();
+  }, [revealRequest, revealTreeRow]);
+
+  // Named changes against the same baseline as the dirty state. Deferred so a
+  // large draft keeps typing responsive; a clean draft has none by definition.
+  const deferredDraft = useDeferredValue(draft);
+  const draftChanges = useMemo(
+    () => (readOnly || !dirty ? [] : describeArchitectureDraftChanges(baseline.spec, deferredDraft)),
+    [baseline.spec, deferredDraft, dirty, readOnly],
+  );
+  const baselineNodeLabel = useMemo(() => {
+    if (!selectedNodeId) return undefined;
+    const node = baseline.spec.nodes.find((candidate) => candidate.id === selectedNodeId);
+    return node ? node.label : null;
+  }, [baseline.spec, selectedNodeId]);
 
   // Semantic edits pause while a save is pending: a successful save reloads
   // the saved revision, which would otherwise drop edits typed meanwhile.
@@ -331,9 +466,28 @@ export function ArchitectureEditor({
     });
   }, [readOnly]);
 
-  const selectNode = useCallback((nodeId: string) => {
+  // User-driven selection: the only path that reports a change to the caller.
+  const selectNode = useCallback((nodeId: string | null) => {
+    const changed = selectedNodeIdRef.current !== nodeId;
     setSelectedNodeId(nodeId);
     setTreeFocusId(nodeId);
+    if (!changed) return;
+    selectedNodeIdRef.current = nodeId;
+    callbacksRef.current.onSelectedNodeChange?.(nodeId);
+  }, []);
+
+  const handleProfileSelect = useCallback((profileId: string) => {
+    if (profileId === selectedProfileIdRef.current) return;
+    selectedProfileIdRef.current = profileId;
+    setSelectedProfileId(profileId);
+    callbacksRef.current.onProfileChange?.(profileId);
+  }, []);
+
+  const handleEnvironmentSelect = useCallback((environmentId: string) => {
+    if (environmentId === selectedEnvironmentIdRef.current) return;
+    selectedEnvironmentIdRef.current = environmentId;
+    setSelectedEnvironmentId(environmentId);
+    callbacksRef.current.onActiveEnvironmentChange?.(environmentId);
   }, []);
 
   const handleNodesChange = useCallback((changes: NodeChange<ArchitectureFlowNode>[]) => {
@@ -447,11 +601,7 @@ export function ArchitectureEditor({
     const next = removeArchitectureNode(draft, selectedNodeId);
     commitDraft(() => next);
     const fallback = next.nodes.find((node) => !removed.has(node.id)) ?? next.nodes[0];
-    if (fallback) selectNode(fallback.id);
-    else {
-      setSelectedNodeId(null);
-      setTreeFocusId(null);
-    }
+    selectNode(fallback?.id ?? null);
     setExpandedNodeIds((current) => {
       const nextExpanded = new Set(current);
       for (const id of removed) nextExpanded.delete(id);
@@ -490,12 +640,14 @@ export function ArchitectureEditor({
       expectedRevisionId,
       ...(revisionMessage?.trim() ? { message: revisionMessage.trim() } : {}),
     };
+    // Edits pause while saving, so this is exactly the draft being saved.
+    const savedDraft = draft;
     savingRef.current = true;
     setBusy("save");
     setOperation(null);
     try {
       await onSave(request);
-      setBaselineKey(architectureSpecKey(draft));
+      setBaseline({ spec: savedDraft, key: architectureSpecKey(savedDraft) });
       onRevisionMessageChange?.("");
       setOperation({ kind: "success", message: "Draft saved as an immutable revision." });
     } catch (error) {
@@ -511,12 +663,13 @@ export function ArchitectureEditor({
     if (!confirmEditorAction("Discard all unsaved architecture changes?")) return;
     if (dirty) {
       setDraft(cloneArchitectureSpec(initialSpec));
-      setBaselineKey(initialSpecKey);
-      setSelectedNodeId(initialSpec.nodes[0]?.id ?? null);
+      setBaseline({ spec: cloneArchitectureSpec(initialSpec), key: initialSpecKey });
+      // Stay on the selected node when the discarded draft did not add it.
+      selectNode(pickNodeId(initialSpec, selectedNodeIdRef.current));
     }
     onRevisionMessageChange?.("");
     setOperation({ kind: "success", message: "Unsaved changes were discarded." });
-  }, [dirty, initialSpec, initialSpecKey, messageDirty, onRevisionMessageChange, readOnly]);
+  }, [dirty, initialSpec, initialSpecKey, messageDirty, onRevisionMessageChange, readOnly, selectNode]);
 
   const unsaved = dirty || messageDirty;
   const statusText = readOnly ? "Read-only" : unsaved ? "Unsaved changes" : "No unsaved changes";
@@ -552,14 +705,17 @@ export function ArchitectureEditor({
         </div>
       </header>
 
+      {/* Named changes sit beside Save and stay visible on every tab. */}
+      {!readOnly && <ArchitectureDraftChanges changes={draftChanges} baselineLabel={baselineLabel} focusNodeId={selectedNodeId} />}
+
       {operation && <div className={`architecture-editor-operation ${operation.kind}`} role={operation.kind === "error" ? "alert" : "status"}><OperationIcon size={16} aria-hidden="true" /> {operation.message}</div>}
 
       <ArchitectureTabList className="architecture-editor-tabs" idPrefix={idPrefix} label="Workbench sections" selected={tab} tabs={tabs} onSelect={setTab} />
 
       <ArchitectureTabPanel className="architecture-editor-design" id="design" idPrefix={idPrefix} selected={tab}>
       <div className="architecture-editor-pane-switch" role="group" aria-label="Design view">
-        <button type="button" aria-pressed={mobilePane === "canvas"} onClick={() => setMobilePane("canvas")}><Workflow size={15} aria-hidden="true" /> Canvas</button>
         <button type="button" aria-pressed={mobilePane === "outline"} onClick={() => setMobilePane("outline")}><ListTree size={15} aria-hidden="true" /> Outline &amp; details</button>
+        <button type="button" aria-pressed={mobilePane === "canvas"} onClick={() => setMobilePane("canvas")}><Workflow size={15} aria-hidden="true" /> Canvas</button>
       </div>
       <div className="architecture-editor-workbench" data-pane={mobilePane}>
         <aside className="architecture-editor-outline-pane" aria-label="Semantic architecture outline">
@@ -616,6 +772,7 @@ export function ArchitectureEditor({
             selectedNodeId={selectedNodeId}
             focusNodeId={treeFocusId}
             treeItemRefs={treeItemRefs}
+            treeRef={treeRef}
             onSelect={selectNode}
             onSetFocus={setTreeFocusId}
             onToggle={(nodeId) => setExpandedNodeIds((current) => {
@@ -631,6 +788,7 @@ export function ArchitectureEditor({
           {selectedNode && !readOnly && <NodeInspector
             spec={draft}
             node={selectedNode}
+            previousLabel={baselineNodeLabel ?? null}
             onLabelChange={(label) => commitDraft((current) => updateArchitectureNodeLabel(current, selectedNode.id, label))}
             onMove={handleMoveNode}
             disabled={saving}
@@ -682,8 +840,8 @@ export function ArchitectureEditor({
         spec={draft}
         selectedProfileId={selectedProfileId}
         selectedEnvironmentId={selectedEnvironmentId}
-        onProfileSelect={setSelectedProfileId}
-        onEnvironmentSelect={setSelectedEnvironmentId}
+        onProfileSelect={handleProfileSelect}
+        onEnvironmentSelect={handleEnvironmentSelect}
         onAddProfile={() => {
           const next = addArchitectureProfile(draft);
           commitDraft(() => next);
@@ -736,6 +894,39 @@ function confirmEditorAction(message: string): boolean {
     // receive the confirmation prompt.
     return true;
   }
+}
+
+/** The first candidate node present in the spec, else its first node. */
+function pickNodeId(spec: ArchitectureSpecV1, ...candidates: Array<string | null | undefined>): string | null {
+  for (const candidate of candidates) {
+    if (candidate && spec.nodes.some((node) => node.id === candidate)) return candidate;
+  }
+  return spec.nodes[0]?.id ?? null;
+}
+
+/** The first candidate profile or environment present, else the first declared one. */
+function pickContextId(items: ReadonlyArray<{ id: string }>, ...candidates: Array<string | null | undefined>): string {
+  for (const candidate of candidates) {
+    if (candidate && items.some((item) => item.id === candidate)) return candidate;
+  }
+  return items[0]?.id ?? "";
+}
+
+/** Ancestors along first incoming edges, as the outline nests them; cycle-safe. */
+function ancestorNodeIds(spec: ArchitectureSpecV1, nodeId: string): string[] {
+  const parents = new Map<string, string>();
+  for (const edge of spec.edges) {
+    if (!parents.has(edge.to)) parents.set(edge.to, edge.from);
+  }
+  const ancestors: string[] = [];
+  const seen = new Set([nodeId]);
+  let current = parents.get(nodeId);
+  while (current && !seen.has(current)) {
+    ancestors.push(current);
+    seen.add(current);
+    current = parents.get(current);
+  }
+  return ancestors;
 }
 
 function resolveBindingForEditor(
@@ -806,6 +997,7 @@ function ArchitectureOutline({
   selectedNodeId,
   focusNodeId,
   treeItemRefs,
+  treeRef,
   onSelect,
   onSetFocus,
   onToggle,
@@ -816,6 +1008,7 @@ function ArchitectureOutline({
   selectedNodeId: string | null;
   focusNodeId: string | null;
   treeItemRefs: MutableRefObject<Map<string, HTMLDivElement>>;
+  treeRef: RefObject<HTMLDivElement | null>;
   onSelect: (nodeId: string) => void;
   onSetFocus: (nodeId: string) => void;
   onToggle: (nodeId: string) => void;
@@ -872,7 +1065,7 @@ function ArchitectureOutline({
   return (
     <div className="architecture-editor-tree-wrap">
       <div className="architecture-editor-tree-help" id="architecture-editor-tree-help">Arrow keys navigate. Right and left expand or collapse routers. Enter selects a node.</div>
-      <div className="architecture-editor-tree" role="tree" aria-label="Semantic architecture nodes" aria-describedby="architecture-editor-tree-help">
+      <div className="architecture-editor-tree" ref={treeRef} role="tree" aria-label="Semantic architecture nodes" aria-describedby="architecture-editor-tree-help">
         {tree.length === 0 ? <div className="architecture-editor-empty-tree">No nodes yet. Add a router or leaf to begin.</div> : tree.map((item) => (
           <ArchitectureTreeItem
             key={item.node.id}
@@ -953,6 +1146,7 @@ function ArchitectureTreeItem({
 function NodeInspector({
   spec,
   node,
+  previousLabel,
   disabled,
   onLabelChange,
   onMove,
@@ -960,20 +1154,29 @@ function NodeInspector({
 }: {
   spec: ArchitectureSpecV1;
   node: ArchitectureNode;
+  /** The label in the revision this draft started from; null for a node added in this draft. */
+  previousLabel: string | null;
   disabled: boolean;
   onLabelChange: (label: string) => void;
   onMove: (parentId: string | null) => void;
   onRemove: () => void;
 }) {
+  const hintId = useId();
   const targets = moveTargetsForNode(spec, node.id);
   const currentParent = parentNodeId(spec, node.id);
   const descendantCount = descendantsOf(spec, node.id).size;
+  const labelHint = previousLabel === null
+    ? "Added in this draft"
+    : previousLabel !== node.label
+      ? `Previously “${previousLabel.trim() ? previousLabel : "(unnamed)"}”`
+      : null;
   return (
     <section className="architecture-editor-inspector" aria-labelledby="architecture-editor-inspector-heading">
       <div className="architecture-editor-inspector-heading"><Settings2 size={15} aria-hidden="true" /><h4 id="architecture-editor-inspector-heading">Selected node</h4><span>{node.kind}</span></div>
       <label className="architecture-editor-field">
         <span>Label</span>
-        <input aria-label="Selected node label" disabled={disabled} value={node.label} onChange={(event) => onLabelChange(event.target.value)} />
+        <input aria-label="Selected node label" aria-describedby={labelHint ? hintId : undefined} disabled={disabled} value={node.label} onChange={(event) => onLabelChange(event.target.value)} />
+        {labelHint && <small className="architecture-editor-field-hint" id={hintId}>{labelHint}</small>}
       </label>
       <label className="architecture-editor-field">
         <span>Move selected under</span>

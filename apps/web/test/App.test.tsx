@@ -1308,7 +1308,6 @@ test("architecture context selectors request a new API preview without compiling
     environmentId: "codex-work",
     revisionId: "revision-1",
   });
-  assert.equal(document.body.textContent?.includes("Authorization is resolved server-side."), true);
   assert.equal(document.body.textContent?.includes("No sync plan generated. Provide an observed-state fixture to preview a target dry run."), true);
 });
 
@@ -2055,7 +2054,7 @@ test("stale exact-release responses cannot replace the release selected for a ne
   await view.findByTestId("architecture-editor");
   await openArchitectureWorkbench(view);
   fireEvent.click(view.getByText("Add exact release"));
-  fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "skill" } });
+  fireEvent.input(within(view.getByTestId("architecture-editor")).getByLabelText("Search skills"), { target: { value: "skill" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
   const skillSelector = await view.findByLabelText("Skill");
   fireEvent.change(skillSelector, { target: { value: "skill-a" } });
@@ -2080,7 +2079,7 @@ test("router release picker requires an explicit parent and creates a routes edg
   await view.findByTestId("architecture-editor");
   await openArchitectureWorkbench(view);
   fireEvent.click(view.getByText("Add exact release"));
-  fireEvent.input(view.getByLabelText("Search skills"), { target: { value: "audit" } });
+  fireEvent.input(within(view.getByTestId("architecture-editor")).getByLabelText("Search skills"), { target: { value: "audit" } });
   fireEvent.click(view.getByRole("button", { name: "Search" }));
   fireEvent.change(await view.findByLabelText("Skill"), { target: { value: "audit-helper" } });
   fireEvent.change(await view.findByLabelText("Exact release"), { target: { value: "release-audit-123" } });
