@@ -75,7 +75,7 @@ export class EvaluationService {
     const row = result.rows[0];
     if (!row) throw missing();
     if (actor) {
-      await retainAudience(tx, actor.id);
+      await retainAudience(tx, actor.id, String(row.skill_id));
       await assertActionAuthority(tx, actor, [write ? "improvements:run" : "improvements:read"], "read");
     }
     const authority = new PostgresSubmissionStore(tx as unknown as Database);
@@ -96,10 +96,12 @@ function record(row: Record<string, unknown>): EvaluationRecord {
   return { id: String(row.id), versionId: String(row.skill_version_id), suiteRevisionId: String(row.suite_revision_id),
     createdAt: new Date(String(row.created_at)).toISOString(), reviewContext: row.review_context as EvaluationRecord["reviewContext"], result: row.result as PackageEvaluationResult };
 }
-async function retainAudience(tx: DatabaseTransaction, actorId: string) {
-  await tx.execute(sql`SELECT id FROM teams WHERE id IN (SELECT team_id FROM team_memberships WHERE user_id=${actorId}::uuid) ORDER BY id FOR SHARE`);
+async function retainAudience(tx: DatabaseTransaction, actorId: string, skillId: string) {
+  await tx.execute(sql`SELECT id FROM teams WHERE id IN (SELECT team_id FROM team_memberships WHERE user_id=${actorId}::uuid
+    UNION SELECT team_id FROM skill_team_grants WHERE skill_id=${skillId}::uuid UNION SELECT owner_team_id FROM skills WHERE id=${skillId}::uuid) ORDER BY id FOR SHARE`);
   await tx.execute(sql`SELECT id FROM organizations WHERE id IN (SELECT organization_id FROM organization_memberships WHERE user_id=${actorId}::uuid
-    UNION SELECT t.organization_id FROM teams t JOIN team_memberships m ON m.team_id=t.id WHERE m.user_id=${actorId}::uuid) ORDER BY id FOR SHARE`);
+    UNION SELECT t.organization_id FROM teams t WHERE t.id IN (SELECT team_id FROM team_memberships WHERE user_id=${actorId}::uuid
+      UNION SELECT team_id FROM skill_team_grants WHERE skill_id=${skillId}::uuid UNION SELECT owner_team_id FROM skills WHERE id=${skillId}::uuid)) ORDER BY id FOR SHARE`);
 }
 async function canReadSuite(tx: DatabaseTransaction, actorId: string, type: string, id: string): Promise<boolean> {
   if (type === "user") return id === actorId;

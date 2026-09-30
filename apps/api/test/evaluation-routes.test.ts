@@ -12,7 +12,7 @@ test("evaluation HTTP contracts reject invented authority and unusable credentia
   await authStore.updateUserStatus({userId:user.id,status:"active",emailVerifiedAt:new Date()});
   const calls:unknown[]=[];
   const evaluator={create:async(actor:unknown,input:unknown)=>{calls.push({actor,input});return {run:{id:"contract-run"},created:true};},list:async(...args:unknown[])=>{calls.push(args);return [];}} as unknown as EvaluationService;
-  const app=buildApp({skillRepository:new MemorySkillRepository(),authService:new AuthService(authStore,{}),evaluationService:evaluator});t.after(()=>app.close());
+  const app=buildApp({skillRepository:new MemorySkillRepository([]),authService:new AuthService(authStore,{}),evaluationService:evaluator});t.after(()=>app.close());
   const login=await app.inject({method:"POST",url:"/v1/auth/login",payload:{email:user.email,password:"Evaluation-http-password-827!"}});const token=login.json().token;
   const root="/v1/evaluations/releases/fixture/1.0.0";const body={artifactSha256:"a".repeat(64),suiteRevisionId:"11111111-1111-4111-8111-111111111111",platform:"codex",idempotencyKey:"contract-evaluation"};
   const response=await app.inject({method:"POST",url:`${root}/runs`,headers:{authorization:`Bearer ${token}`},payload:body});assert.equal(response.statusCode,201,response.body);

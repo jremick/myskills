@@ -116,7 +116,7 @@ identity changes, invalidates old requests, and isolates tab recovery by registr
 and connection epoch plus actor/draft identity.
 
 Approval and publication require successful evidence for the exact current
-artifact digest. New synchronous intake scans carry a digest and runner. The
+artifact digest. New synchronous intake scans carry a digest and runner, insert findings before terminalization, and use the same completed-evidence immutability fences as background scans. The
 explicit immutable `legacy_package_scan_allowances` migration captures only
 unbound synchronous scans predating migration0039's recorded application time.
 Fresh schemas without that historical journal admit no legacy exceptions. Later

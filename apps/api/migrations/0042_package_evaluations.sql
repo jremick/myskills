@@ -54,3 +54,35 @@ BEGIN
 END;
 $$;
 CREATE TRIGGER bind_package_evaluation BEFORE INSERT ON package_evaluation_runs FOR EACH ROW EXECUTE FUNCTION bind_package_evaluation();
+
+-- Synchronous admission now also binds digests and inserts findings before terminalizing.
+-- Preserve all newly bound evidence, including synchronous completed scans.
+CREATE OR REPLACE FUNCTION preserve_completed_scan() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF OLD.status IN ('succeeded','failed') AND (OLD.job_id IS NOT NULL OR OLD.artifact_sha256 IS NOT NULL) THEN
+    IF TG_OP='UPDATE' OR EXISTS (SELECT 1 FROM skill_versions WHERE id=OLD.skill_version_id) THEN
+      RAISE EXCEPTION 'Completed package scan evidence is immutable';
+    END IF;
+  END IF;
+  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+CREATE OR REPLACE FUNCTION preserve_bound_scan_findings() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM id FROM scan_runs WHERE id IN (
+    CASE WHEN TG_OP<>'INSERT' THEN OLD.scan_run_id ELSE NULL END,
+    CASE WHEN TG_OP<>'DELETE' THEN NEW.scan_run_id ELSE NULL END
+  ) ORDER BY id FOR SHARE;
+  IF TG_OP<>'INSERT' AND EXISTS (SELECT 1 FROM scan_runs WHERE id=OLD.scan_run_id
+    AND (job_id IS NOT NULL OR artifact_sha256 IS NOT NULL) AND status IN ('succeeded','failed')) THEN
+    RAISE EXCEPTION 'Completed package scan findings are immutable';
+  END IF;
+  IF TG_OP<>'DELETE' AND EXISTS (SELECT 1 FROM scan_runs WHERE id=NEW.scan_run_id
+    AND (job_id IS NOT NULL OR artifact_sha256 IS NOT NULL) AND status IN ('succeeded','failed')) THEN
+    RAISE EXCEPTION 'Completed package scan findings are immutable';
+  END IF;
+  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;

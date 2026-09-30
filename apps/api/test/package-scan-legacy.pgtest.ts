@@ -17,12 +17,13 @@ test("only genuinely pre-binding migrated scans receive the explicit legacy allo
   for(const name of await readdir(dir))if(name.endsWith(".sql") && name<"0039_")await writeFile(join(old,name),await readFile(new URL(name,dir)));
   await runMigrations(pool,{migrationsDir:old});
   const actor=(await pool.query("INSERT INTO users(email,normalized_email,name,status,email_verified_at) VALUES('legacy@quality.test','legacy@quality.test','Legacy','active',now()) RETURNING id")).rows[0].id;
-  const skill=(await pool.query("INSERT INTO skills(slug,title,summary,visibility,owner_user_id) VALUES('legacy-scan','Legacy','Fixture','public',$1) RETURNING id",[actor])).rows[0].id;
+  const skill=(await pool.query("INSERT INTO skills(slug,title,summary,visibility,owner_user_id,lifecycle_status) VALUES('legacy-scan','Legacy','Fixture','public',$1,'submitted') RETURNING id",[actor])).rows[0].id;
   const version=(await pool.query("INSERT INTO skill_versions(skill_id,version,security_status,lifecycle_status) VALUES($1,'1.0.0','passed','review') RETURNING id",[skill])).rows[0].id;
   const files=[{path:"SKILL.md",content:"# Legacy"},{path:"skill.json",content:JSON.stringify({name:"legacy-scan",title:"Legacy",summary:"Fixture",version:"1.0.0",license:"MIT",visibility:"public",platforms:[{name:"codex",install_target:"codex-skill"}]})}];
   const body=JSON.stringify({files});const sha=createHash("sha256").update(body).digest("hex");
   await pool.query("INSERT INTO skill_artifacts(skill_version_id,storage_key,sha256,byte_size,content_type,payload) VALUES($1,'legacy-scan',$2,$3,'application/vnd.myskills-app.package+json',$4::jsonb)",[version,sha,Buffer.byteLength(body),body]);
   const scan=(await pool.query("INSERT INTO scan_runs(skill_version_id,status,started_at,completed_at) VALUES($1,'succeeded',now(),now()) RETURNING id",[version])).rows[0].id;
+  await pool.query("INSERT INTO skill_platform_variants(skill_version_id,name,install_target,status) VALUES($1,'codex','codex-skill','supported')",[version]);
   await runMigrations(pool);
   assert.deepEqual((await pool.query("SELECT scan_run_id FROM legacy_package_scan_allowances")).rows.map(r=>r.scan_run_id),[scan]);
   const service=new SubmissionService(new PostgresSubmissionStore(createDb(pool)));
@@ -35,6 +36,7 @@ test("only genuinely pre-binding migrated scans receive the explicit legacy allo
   const correctedBody=JSON.stringify({files:corrected});const correctedSha=createHash("sha256").update(correctedBody).digest("hex");
   await pool.query("INSERT INTO skill_artifacts(skill_version_id,storage_key,sha256,byte_size,content_type,payload) VALUES($1,'current-unbound',$2,$3,'application/vnd.myskills-app.package+json',$4::jsonb)",[current,correctedSha,Buffer.byteLength(correctedBody),correctedBody]);
   await pool.query("INSERT INTO scan_runs(skill_version_id,status,started_at,completed_at) VALUES($1,'succeeded',now(),now())",[current]);
+  await pool.query("INSERT INTO skill_platform_variants(skill_version_id,name,install_target,status) VALUES($1,'codex','codex-skill','supported')",[current]);
   await assert.rejects(service.performReviewAction({actor:{id:actor,roles:["maintainer"],mfaVerified:true},submissionId:current,action:"approve",artifactSha256:correctedSha}),error=>Boolean(error && typeof error==='object' && 'code' in error && error.code==='PACKAGE_SCAN_REQUIRED'));
   assert.equal((await pool.query("SELECT count(*)::int AS n FROM legacy_package_scan_allowances")).rows[0].n,1);
 });

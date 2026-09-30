@@ -14,10 +14,10 @@ type Notice = { text: string; error?: boolean };
 const connections = new WeakMap<DraftClient, number>();
 let nextConnection = 0;
 /** A render-time remount clears private state before the new client can respond. */
-export function DraftWorkspace(props: Omit<Parameters<typeof DraftWorkspaceState>[0], "recoveryScope">) {
+export function DraftWorkspace(props: Omit<Parameters<typeof DraftWorkspaceState>[0], "recoveryScope"> & { credentialEpoch?: string }) {
   if (!connections.has(props.api)) connections.set(props.api, ++nextConnection);
   const epoch = connections.get(props.api)!;
-  const scope = `${props.api.registryIdentity ?? window.location.origin}:${epoch}`;
+  const scope = `${props.api.registryIdentity ?? window.location.origin}:${epoch}:${props.credentialEpoch ?? ""}`;
   return <DraftWorkspaceState key={`${props.actorId}:${scope}`} {...props} recoveryScope={scope} />;
 }
 

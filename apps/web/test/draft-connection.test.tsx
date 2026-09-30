@@ -17,7 +17,7 @@ for (const boundary of ["client", "credential", "registry"] as const) test(`draf
   const view = render(<DraftWorkspace {...props} api={first} />);
   await view.findByDisplayValue("Private content canary");
   fireEvent.click(view.getByRole("button", { name: /history/i }));
-  await view.findByText("Private history canary");
+  await view.findByText(/Private history canary/);
   fireEvent.change(view.getByRole("textbox", { name: "File contents" }), { target: { value: "Private recovery canary" } });
   let resolve!: (value: { draft: AuthorDraft }) => void;
   const pending = client("https://first.example", () => new Promise(done => { resolve = done; }));
@@ -25,7 +25,7 @@ for (const boundary of ["client", "credential", "registry"] as const) test(`draf
   const denied = client(boundary === "registry" ? "https://other.example" : "https://first.example", async () => { throw new Error("Access denied"); });
   view.rerender(<DraftWorkspace {...props} api={denied} />);
   assert.equal(view.queryByDisplayValue("Private content canary"), null);
-  assert.equal(view.queryByText("Private history canary"), null);
+  assert.equal(view.queryByText(/Private history canary/), null);
   assert.equal(view.queryByDisplayValue("Private recovery canary"), null);
   await act(async () => { resolve({ draft: head }); });
   assert.equal(view.queryByDisplayValue("Private content canary"), null);
@@ -33,4 +33,15 @@ for (const boundary of ["client", "credential", "registry"] as const) test(`draf
   view.rerender(<DraftWorkspace {...props} api={authorized} />);
   await view.findByDisplayValue("New authorized content");
   assert.equal(view.queryByText(/Recover unsaved/), null);
+});
+
+test("same client reference with a new credential epoch clears private edits and history immediately", async () => {
+  const api=client("https://registry.example",async()=>({draft:head}));
+  const view=render(<DraftWorkspace {...props} api={api} credentialEpoch="first"/>);
+  await view.findByDisplayValue("Private content canary");
+  fireEvent.change(view.getByRole("textbox",{name:"File contents"}),{target:{value:"Private recovery canary"}});
+  view.rerender(<DraftWorkspace {...props} api={api} credentialEpoch="second"/>);
+  assert.equal(view.queryByDisplayValue("Private recovery canary"),null);
+  assert.equal(view.queryByRole("region",{name:"Unsaved edit recovery"}),null);
+  await view.findByDisplayValue("Private content canary");
 });

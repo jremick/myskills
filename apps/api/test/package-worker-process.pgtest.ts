@@ -16,24 +16,30 @@ import { SubmissionService } from "../src/submissions/service.js";
 test("server worker crash recovers durable attempt and SIGTERM drains completion before pool shutdown", { timeout: 90_000 }, async t => {
   const url = process.env.TEST_DATABASE_URL!;
   assert.match(new URL(url).pathname, /(^|[_/-])(test|ci)([_-]|$)/i);
-  const pool = createPgPool(url); t.after(() => pool.end());
+  const pool = createPgPool(url);
+  let gate: Awaited<ReturnType<typeof pool.connect>> | undefined;
+  const processes: ChildProcess[] = [];
+  t.after(async () => {
+    for (const child of processes) if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+    if (gate) { await gate.query("SELECT pg_advisory_unlock_all()"); gate.release(); }
+    await pool.end();
+  });
   await pool.query("DROP SCHEMA public CASCADE"); await pool.query("CREATE SCHEMA public"); await runMigrations(pool);
   const db = createDb(pool);
   const auth = new PostgresAuthStore(db);
   const user = (await auth.createUserWithPassword({ email: "process@example.com", name: "Process", passwordHash: await hashPassword("Process-test-password-983!") })).user!;
+  await auth.updateUserStatus({ userId: user.id, status: "active", emailVerifiedAt: new Date() });
+  await pool.query("INSERT INTO role_assignments(user_id,role) VALUES($1,'author') ON CONFLICT DO NOTHING",[user.id]);
   const submissions = new SubmissionService(new PostgresSubmissionStore(db, { backgroundScans: true }));
   const manifest = parseSkillManifest({ name: "process-worker", title: "Worker", summary: "Real process fixture", version: "1.0.0", license: "MIT", visibility: "public", platforms: [{ name: "codex", install_target: "codex-skill" }] });
-  const gate = await pool.connect(); t.after(() => gate.release());
+  gate = await pool.connect();
   const gateId = 724211;
   await pool.query(`CREATE FUNCTION pause_process_scan() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
     IF NEW.status='succeeded' THEN PERFORM pg_advisory_xact_lock(${gateId}); END IF; RETURN NEW; END; $$`);
   await pool.query("CREATE TRIGGER pause_process_scan BEFORE UPDATE ON scan_runs FOR EACH ROW EXECUTE FUNCTION pause_process_scan()");
   await gate.query("SELECT pg_advisory_lock($1)", [gateId]);
-  t.after(() => gate.query("SELECT pg_advisory_unlock_all()"));
   const pending = await submissions.createSubmission({ actor: { id: user.id, roles: ["author"] }, manifest, files: [{ path: "skill.json", content: JSON.stringify(manifest) }, { path: "SKILL.md", content: "# Real process worker fixture" }] });
   const port = await freePort();
-  const processes: ChildProcess[] = [];
-  t.after(() => { for (const child of processes) if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); });
   const launch = () => {
     const child = spawn(process.execPath, ["--import", "tsx", "src/server.ts"], { cwd: new URL("../", import.meta.url),
       env: { PATH: process.env.PATH, DATABASE_URL: url, NODE_ENV: "test", HOST: "127.0.0.1", PORT: String(port), AUTH_SECRET: "process-fixture-secret-at-least-32-bytes", PACKAGE_SCAN_WORKER: "enabled" }, stdio: ["ignore", "pipe", "pipe"] });

@@ -13,7 +13,9 @@ export async function runEvaluationCommand(input: ParityCommandInput, context: P
   if (Object.keys(input.options).some(key=>!allowed.has(key))) throw new Error("Unknown evaluation option.");
   if (action === "local") {
     if (args.length!==1 || typeof input.options.platform!=="string") throw new Error("Local eval requires one package path and --platform.");
-    const files=await readPackageFilesFromPath(args[0]!);
+    let files;
+    try { files=await readPackageFilesFromPath(args[0]!); }
+    catch { throw new Error("Package input could not be read safely. Use a bounded directory or ZIP archive with regular text files."); }
     const suite = input.options.suite === undefined ? defaultPackageEvaluationSuite() : normalizeImprovementEvaluationSuiteV1(await context.readInput(option(input,"suite")));
     context.output({ run: evaluatePackageFiles({files,suite,target:{platform:input.options.platform,context:"local"},provenance:"self-reported"}), notice: "Static local evidence is self-reported. Provider behavior is unconfigured. Nothing was uploaded; this result cannot approve or publish a version." });
     return true;

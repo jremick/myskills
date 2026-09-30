@@ -381,6 +381,26 @@ test("private draft route journey preserves history, isolation and atomic submis
     }
   });
 
+  await t.test("blocked draft writes use current scopes, roles and credential MFA provenance", async () => {
+    const files=packageFiles("current-authority", "1.0.0");
+    for(const failure of ["scope", "role", "assurance"] as const) {
+      const credential=failure==="assurance" ? reviewer : ok(await call("POST","/v1/auth/api-tokens",alice,{name:"Current writer",scopes:["skills:submit"]}),201).token.token as string;
+      const ownerId=failure==="assurance" ? users.reviewer : users.alice;
+      const before=(await pool.query("SELECT count(*)::int AS n FROM author_drafts WHERE owner_user_id=$1",[ownerId])).rows[0].n;
+      const locker=await pool.connect();await locker.query("BEGIN");await locker.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`author-drafts:${ownerId}`]);
+      const pending=call("POST","/v1/drafts",credential,{title:"Current authority",files});
+      try {
+        await waitForLocks(pool,"pg_advisory_xact_lock",1);
+        if(failure==="scope")await pool.query("UPDATE api_tokens SET scopes='[]'::jsonb WHERE token_hash=$1",[hashSessionToken(credential)]);
+        else if(failure==="role")await pool.query("DELETE FROM role_assignments WHERE user_id=$1 AND role='author'",[ownerId]);
+        else await pool.query("UPDATE auth_sessions SET mfa_verified_at=NULL WHERE token_hash=$1",[hashSessionToken(credential)]);
+      } finally {await locker.query("COMMIT");locker.release();}
+      denied(await pending,403,failure==="scope"?"API_TOKEN_SCOPE_REQUIRED":failure==="role"?"SUBMISSION_ROLE_REQUIRED":"MFA_VERIFICATION_REQUIRED");
+      assert.equal((await pool.query("SELECT count(*)::int AS n FROM author_drafts WHERE owner_user_id=$1",[ownerId])).rows[0].n,before);
+      if(failure==="role")await pool.query("INSERT INTO role_assignments(user_id,role) VALUES($1,'author')",[ownerId]);
+    }
+  });
+
   await t.test("history and author limits refuse without pruning", async () => {
     const files = packageFiles("limits-workflow", "1.0.0");
     const created = ok(await call("POST", "/v1/drafts", bob, { title: "History", files }), 201).draft;
