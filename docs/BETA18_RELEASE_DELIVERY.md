@@ -43,7 +43,8 @@ merge; these earlier identities describe ancestry only.
 | --- | --- |
 | Earlier local repository gate | Passed at `0b2dacece7c8be298eabebd6791a7b47af145d4b` with Node 22.23.2/npm 10.9.8: 1,341 tests passed and two existing skips. This is not the declared-toolchain Windows gate. |
 | Standalone image tooling | At `dcc45c0df7526e82ef2e90ed426430da5ee16f64`, 83 tooling tests, lint and repository drift/privacy checks passed. Actual image execution was not part of that local proof. |
-| Final-source Windows matrix and required branch checks | Passed for Collections PR #124: all seven matrix jobs and CodeQL succeeded; tested merge `c2bd1e71d7bb6118f79ad1f07f28ae6d022a27e6` and landed source `6905bf690cd0b9108fc74a392f51909c9726aeb2` have the same tree. See the verification record below. |
+| Collections source Windows matrix and branch checks | Passed for PR #124: all seven matrix jobs and CodeQL succeeded; tested merge `c2bd1e71d7bb6118f79ad1f07f28ae6d022a27e6` and landed source `6905bf690cd0b9108fc74a392f51909c9726aeb2` have the same tree. See the verification record below. |
+| Final release-candidate Windows matrix and required branch checks | Pending for the frozen release candidate. The recorded Collections result does not verify later revisions, including this documentation update. Retain exact-revision evidence before advancing the final candidate. |
 | Additive migration upgrade, staging and deployed routing | Phase-1 OAuth schema and staging routing passed at `14970ba10a67f7372b713a3c29a17b8b72d91a24`. Migration `0036_library_selections` passed disposable PostgreSQL journeys; its staging upgrade and final-candidate deployment remain pending. |
 | Real ChatGPT and Claude consent, tool use and revocation | Pending in both actual personal accounts. |
 | Tag and canonical release verification | Pending; preserve the immutable beta.17 tag and use a new beta.18 tag. |
