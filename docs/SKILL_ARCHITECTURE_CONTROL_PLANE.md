@@ -272,9 +272,11 @@ recovery evidence, target leases, fencing tokens, digests, and safe metadata.
 The API-side `ArchitectureSyncService`, in-memory fixture executor, and
 Postgres store persist and exercise approval, synthetic apply/verify/rollback
 state transitions, recovery decisions, lease loss, and idempotency for tests.
-This does not mutate a target. No public sync-run route, live adapter
-executor, package installer, filesystem writer, or live apply/rollback path is
-enabled. Each bounded sync run allows at most 500 steps and 2,004 append-only
+This does not mutate a target. The separate review-plan surface retains a
+server-compiled exact revision and trusted observation in this journal. Its
+create/list/inspect/approve routes record review only. They do not invoke the
+fixture executor or expose live apply/rollback. Each bounded sync run allows
+at most 500 steps and 2,004 append-only
 receipts. That capacity covers a 1,002-receipt max-step lifecycle, one full
 apply/verify retry, and two recovery/terminal receipts; further retries require
 a new bounded run.
@@ -283,15 +285,17 @@ a new bounded run.
 
 | Surface | Current branch capability | Explicit gap |
 | --- | --- | --- |
-| API | Architecture patterns/list/detail/revision/preview and draft-preview; organization membership/policy/team routes; atomic architecture-grant GET/PUT; pattern-migration preview/create; target registration/consent/observation/health/revoke. | No public sync-run route or live target operation. |
-| Web | Architecture dashboard, semantic editor, exact-release selection, immutable revision history/diff, “use as new draft,” profile/environment preview, SVG plus JSON/Mermaid downloads and a plain-outline projection, user-supplied fixture dry run, organization management, manager grant save/revoke, pattern-migration preview/create, and connected-target workbench. | CLI/MCP write parity, public sync-run UI, live adapters, and durable server-side diagram artifacts. |
-| CLI | Read-only `architectures patterns`, `list`, `show`, `preview`, `compile`, `plan`, and `dry-run`, plus local explicit-root `architectures observe` and `architectures health`; skill-sharing commands include organization grants. | No architecture organization-grant/target/sync/migration API commands and no live Codex upload or mutation connector. |
-| MCP | Read-only `list_architecture_patterns`, `list_architectures`, and `get_architecture_projection`, plus registry discovery tools. | No architecture writes, organization/target/sync/migration tools, or target mutation. |
+| API | Architecture patterns/list/detail/revision/preview and draft-preview; organization membership/policy/team routes; architecture grants; pattern migration; target lifecycle and per-skill operations; persisted review-plan create/list/inspect/approve. | Full architecture execution and second-provider write activation. |
+| Web | Architecture explorer and Workbench with immutable history, scoped drafts and derived diagrams; grants and migrations; connected targets, per-skill operations and saved-revision review-plan inspection. | Full architecture execution, live-provider acceptance and durable server-side layout artifacts. |
+| CLI | Existing architecture reads and fixture dry runs; revision/grant/migration and target management commands; explicit-root observe/health and Codex workspace companion; `architecture-plans create/list/show/approve`. | Full architecture orchestration and provider-host recognition require separate contracts and acceptance. |
+| MCP | Existing projections and named architecture/grant/migration/target management actions; four `architecture_plans_*` review actions with strict inputs; local observation/executor handoffs. | Local handoff completion, real host acceptance and full architecture execution. |
 
 API authorization is the source of truth. Web, CLI, and MCP do not recreate
 membership, release, organization, consent, or target policy. The current
-parity is intentionally asymmetric: API/web provide architecture editing,
-API provides tenancy and target lifecycle, and CLI/MCP provide safe reads.
+parity inventory records each operation and its actual proof. Source coverage,
+memory-API journeys, PostgreSQL evidence, provider-host acceptance and deployment
+are separate claims. Review approval records no target execution authority.
+See [ARCH_LIFE_DELIVERY.md](ARCH_LIFE_DELIVERY.md) for the lifecycle residual ledger.
 
 ## Migration sequence
 

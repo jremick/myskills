@@ -131,6 +131,14 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
     return run ? cloneRun(run) : null;
   }
 
+  async listRuns(input: { readonly targetId: string; readonly limit?: number; readonly source?: string }): Promise<ArchitectureSyncRun[]> {
+    const targetId = validateIdentifier(input.targetId, "targetId");
+    const limit = input.limit ?? 100;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw new AppError("Sync history limit is invalid.", "ARCHITECTURE_SYNC_LIMIT_INVALID", 400);
+    return [...this.runs.values()].filter(run => run.identity.targetId === targetId && (input.source === undefined || run.metadata?.source === input.source))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.identity.runId.localeCompare(left.identity.runId)).slice(0, limit).map(cloneRun);
+  }
+
   /**
    * Atomically claim an apply delivery in the in-memory model. JavaScript
    * executes this synchronous section without interleaving another caller, so
@@ -593,6 +601,7 @@ function immutableRunProjection(run: ArchitectureSyncRun): Record<string, unknow
       ...(step.metadata === undefined ? {} : { metadata: step.metadata }),
     })),
     capabilities: run.capabilities,
+    metadata: run.metadata,
   };
 }
 

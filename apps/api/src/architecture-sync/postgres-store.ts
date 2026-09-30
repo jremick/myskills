@@ -31,6 +31,7 @@ import { sanitizeAuditDetails } from "../audit/sanitize.js";
 import type { Database } from "../db/client.js";
 import {
   auditEvents,
+  skillArchitectures,
   skillArchitectureObservations,
   skillArchitectureRevisions,
   skillArchitectureSyncBaselines,
@@ -62,6 +63,15 @@ import type {
   ArchitectureSyncStore,
 } from "./types.js";
 import { architectureSyncRecoveryReceiptCode } from "./types.js";
+
+import { PostgresArchitectureStore } from "../architectures/postgres-store.js";
+import { PostgresArchitectureTargetStore } from "../targets/postgres-target-store.js";
+import { PostgresSkillRepository } from "../repositories/postgres-skill-repository.js";
+import { PostgresSubmissionStore } from "../submissions/postgres-submission-store.js";
+import { SubmissionService } from "../submissions/service.js";
+import { lockOperationTarget, lockOperationSharing } from "../target-operations/postgres-authorization.js";
+import { reauthorizeInternalRegistrySnapshot } from "../architectures/postgres-pattern-migration-authorization.js";
+import type { ArchitecturePlanDependencies } from "./plan-service.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const COMPACT_UUID_PATTERN = /^[0-9a-f]{32}$/i;
@@ -95,7 +105,8 @@ interface RecoveryEvidenceShape {
 }
 
 /**
- * PostgreSQL persistence for the metadata-only, fixture sync journal.
+ * PostgreSQL persistence for the metadata-only architecture journal.
+ * Target execution remains confined to the separate fixture sync service.
  *
  * Migration 0019 stores UUIDs while the core contract permits bounded public
  * identifiers. UUID values are passed through unchanged. Other bounded ids
@@ -117,6 +128,34 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
     this.now = options.now ?? (() => new Date());
     this.idFactory = options.idFactory ?? randomUUID;
     this.onRecoveryPhase = options.onRecoveryPhase;
+  }
+
+  /** Hold canonical target/owner/sharing/architecture/release authority through
+   * the complete review write. Scoped stores use nested transaction savepoints.
+   */
+  async withPlanAuthority<T>(input: { readonly actorId: string; readonly targetId: string }, operation: (store: ArchitectureSyncStore, dependencies: ArchitecturePlanDependencies) => Promise<T>): Promise<T> {
+    const actorId = dbUuid(validateIdentifier(input.actorId, "actorId"), "actorId");
+    const targetId = dbUuid(validateIdentifier(input.targetId, "targetId"), "targetId");
+    try {
+      return await this.db.transaction(async tx => {
+        const target = await lockOperationTarget(tx, actorId, targetId, false);
+        if (target.status === "revoked" || target.consent.status === "revoked") throw new AppError("The architecture target is revoked.", "ARCHITECTURE_TARGET_REVOKED", 410);
+        await lockOperationSharing(tx);
+        // Existing architecture writers own this lock first. NOWAIT avoids a
+        // reverse-order wait while holding the target lifecycle authority.
+        await tx.select({ id: skillArchitectures.id }).from(skillArchitectures).where(eq(skillArchitectures.id, target.architectureId)).for("update", { noWait: true }).limit(1);
+        const scoped = new PostgresArchitectureSyncStore(tx as unknown as Database, { now: this.now, idFactory: this.idFactory, onRecoveryPhase: this.onRecoveryPhase });
+        const dependencies: ArchitecturePlanDependencies = {
+          architectureStore: new PostgresArchitectureStore(tx as unknown as Database),
+          targetStore: new PostgresArchitectureTargetStore(tx as unknown as Database),
+          releaseDependencies: { skillRepository: new PostgresSkillRepository(tx as unknown as Database), submissionService: new SubmissionService(new PostgresSubmissionStore(tx as unknown as Database)) },
+          authorizeRevision: async ({ architecture, revision }) => reauthorizeInternalRegistrySnapshot(tx, { actorId, architectureId: target.architectureId, owner: architecture.owner, organizationIds: target.owner.type === "organization" ? [target.owner.id] : architecture.access.allowedOrganizationIds, spec: revision.spec }),
+        };
+        return operation(scoped, dependencies);
+      });
+    } catch (error) {
+      throw mapPersistenceError(error, "Architecture plan authority could not be retained.", "ARCHITECTURE_PLAN_AUTHORITY_CONFLICT");
+    }
   }
 
   async createRun(input: ArchitectureSyncCreateRunStoreInput): Promise<ArchitectureSyncCreateRunStoreResult> {
@@ -234,6 +273,22 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
       });
     } catch (error) {
       throw mapPersistenceError(error, "Sync run could not be read.", "ARCHITECTURE_SYNC_READ_FAILED");
+    }
+  }
+
+  async listRuns(input: { readonly targetId: string; readonly limit?: number; readonly source?: string }): Promise<ArchitectureSyncRun[]> {
+    const targetId = dbUuid(validateIdentifier(input.targetId, "targetId"), "targetId");
+    const limit = input.limit ?? 100;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw new AppError("Sync history limit is invalid.", "ARCHITECTURE_SYNC_LIMIT_INVALID", 400);
+    try {
+      return await this.db.transaction(async tx => {
+        const rows = await tx.select({ id: skillArchitectureSyncRuns.id }).from(skillArchitectureSyncRuns)
+          .where(and(eq(skillArchitectureSyncRuns.targetId, targetId), input.source === undefined ? undefined : sql`${skillArchitectureSyncRuns.metadata}->>'source' = ${input.source}`))
+          .orderBy(desc(skillArchitectureSyncRuns.createdAt), desc(skillArchitectureSyncRuns.id)).limit(limit);
+        return Promise.all(rows.map(row => this.requireHydratedRun(tx, row.id)));
+      });
+    } catch (error) {
+      throw mapPersistenceError(error, "Sync history could not be read.", "ARCHITECTURE_SYNC_READ_FAILED");
     }
   }
 
@@ -1116,6 +1171,7 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
         ...(step.metadata === undefined ? {} : { metadata: step.metadata }),
       })),
       capabilities: run.capabilities,
+      metadata: run.metadata,
     });
     if (canonicalizeJson(projection(previous)) !== canonicalizeJson(projection(next))) {
       throw new AppError("Sync run identity and digests are immutable.", "ARCHITECTURE_SYNC_DIGEST_CONFLICT", 409);

@@ -102,6 +102,74 @@ test("PostgresArchitectureSyncStore persists the fixture service journal atomica
   );
 });
 
+// Test first: the existing PostgreSQL journal must retain bounded history and
+// cannot rewrite the review envelope stored in run metadata.
+test("PostgresArchitectureSyncStore retains immutable plan metadata and lists bounded target history", { timeout: 60_000 }, async (t) => {
+  const pool = await freshPool(t);
+  await pool.query(readFileSync(join(migrationsDir, "0040_architecture_plan_history.sql"), "utf8"));
+  await seedFixture(pool);
+  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date(now) });
+  const service = new ArchitectureSyncService(store, new MemoryArchitectureSyncFixtureExecutor(), {
+    authorization: { authorize: async () => true },
+    mfa: { verify: async () => true },
+    consent: { check: async () => true },
+    recovery: recoveryPort(),
+  }, { now: () => new Date(now), idFactory: () => "e".repeat(32) });
+  const draft = await service.createPreviewRun(input({ metadata: { source: "architecture-plan", reviewOnly: true, dryRun: true, canApply: false, reviewDigest: "e".repeat(64) } }));
+  assert.deepEqual(await store.listRuns({ targetId, limit: 1 }), [draft.run]);
+  const reopened = new PostgresArchitectureSyncStore(createDb(pool));
+  assert.deepEqual((await reopened.getRun(draft.run.identity.runId))?.metadata, draft.run.metadata);
+  await assert.rejects(reopened.saveRun({ ...draft.run, metadata: { ...draft.run.metadata, reviewDigest: "f".repeat(64) } }),
+    (error: unknown) => (error as { code?: string }).code === "ARCHITECTURE_SYNC_DIGEST_CONFLICT");
+  assert.deepEqual(await reopened.getRun(draft.run.identity.runId), draft.run);
+  for (const change of [{ source: "fixture" }, { reviewOnly: false }, { reviewDigest: "f".repeat(64) }, { syncPublicId: "run-corrupt" }, { syncCapabilities: "{}" }]) {
+    await assert.rejects(pool.query("UPDATE skill_architecture_sync_runs SET metadata = metadata || $2::jsonb WHERE id = $1", [dbRunId(draft.run.identity.runId), JSON.stringify(change)]),
+      (error: unknown) => (error as { code?: string }).code === "55000");
+  }
+  await assert.rejects(pool.query("UPDATE skill_architecture_sync_runs SET metadata = metadata - 'reviewDigest' WHERE id = $1", [dbRunId(draft.run.identity.runId)]),
+    (error: unknown) => (error as { code?: string }).code === "55000");
+  assert.deepEqual(await reopened.getRun(draft.run.identity.runId), draft.run);
+});
+
+// Persistence journey: a lifecycle change waits behind the held review authority
+// and a revocation that commits first prevents callback/journal writes.
+test("Postgres architecture review authority serializes lifecycle revocation through approval commit", { timeout: 60_000 }, async (t) => {
+  const pool = await freshPool(t);
+  await pool.query(readFileSync(join(migrationsDir, "0040_architecture_plan_history.sql"), "utf8"));
+  await seedFixture(pool);
+  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date(now) });
+  const ports: ArchitectureSyncPorts = { authorization: { authorize: async () => true }, mfa: { verify: async () => true }, consent: { check: async () => true }, recovery: recoveryPort() };
+  const service = new ArchitectureSyncService(store, new MemoryArchitectureSyncFixtureExecutor(), ports, { now: () => new Date(now), idFactory: () => "f".repeat(32) });
+  const draft = await service.createPreviewRun(input({ metadata: { source: "architecture-plan", reviewOnly: true, dryRun: true, canApply: false, reviewDigest: "e".repeat(64) } }));
+  let entered!: () => void;
+  let release!: () => void;
+  const entry = new Promise<void>(resolve => { entered = resolve; });
+  const pause = new Promise<void>(resolve => { release = resolve; });
+  const approval = store.withPlanAuthority({ actorId: ownerId, targetId }, async scoped => {
+    entered();
+    await pause;
+    return new ArchitectureSyncService(scoped, new MemoryArchitectureSyncFixtureExecutor(), ports, { now: () => new Date(now), idFactory: () => "9".repeat(32) }).approve({ actor: ownerId, runId: draft.run.identity.runId });
+  });
+  t.after(release);
+  await Promise.race([entry, approval]);
+  const revokeSql = "UPDATE skill_architecture_targets SET status = 'revoked', consent_status = 'revoked', consent_revoked_at = now(), generation = generation + 1 WHERE id = $1";
+  const revocation = pool.query(revokeSql, [targetId]);
+  let waiting = false;
+  for (let attempt = 0; attempt < 100 && !waiting; attempt += 1) {
+    waiting = Boolean((await pool.query("SELECT 1 FROM pg_stat_activity WHERE query = $1 AND wait_event_type = 'Lock'", [revokeSql])).rows[0]);
+    if (!waiting) await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.equal(waiting, true, "Lifecycle update must wait on the retained target row lock.");
+  release();
+  const approved = await approval;
+  await revocation;
+  assert.equal(approved.state, "approved");
+  let callbackEntered = false;
+  await assert.rejects(store.withPlanAuthority({ actorId: ownerId, targetId }, async () => { callbackEntered = true; return approved; }));
+  assert.equal(callbackEntered, false);
+  assert.deepEqual(await store.getRun(draft.run.identity.runId), approved);
+});
+
 test("PostgresArchitectureSyncStore replays a concurrent apply without blocking the winning lease", { timeout: 60_000 }, async (t) => {
   const pool = await freshPool(t);
   await seedFixture(pool);

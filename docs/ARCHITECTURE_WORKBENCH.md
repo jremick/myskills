@@ -1,6 +1,6 @@
 # Architecture overview and Workbench
 
-Last updated: 2026-09-30
+Last updated: 2026-10-01
 
 This page records how the web app presents skill architectures and the URL contract it keeps. Architecture data, access and revisions stay owned by the MySkills API; see [SKILL_ARCHITECTURE_CONTROL_PLANE.md](SKILL_ARCHITECTURE_CONTROL_PLANE.md).
 
@@ -50,3 +50,18 @@ Read-only members can inspect a saved revision without save, message or advanced
 - The app asks once before a draft would be lost: another architecture, a page outside the section, Refresh, replacing the draft from history, or leaving the page. If you cancel, the URL and the draft stay as they were.
 - Drafts are not stored in the browser. Reloading or closing the page loses them after the browser's leave-page warning.
 - A failed save or a revision conflict keeps the draft and the message. A save that finishes after you move to another draft does not change that newer draft.
+
+## Connected-target review plans
+
+The connected-target inspector at `/targets` provides **Architecture review plans**.
+Choose an exact saved revision to create a server-owned dry run against the latest
+authorized observation. The plan retains its target generation, logical profile
+and environment, revision, steps, digests and approval receipt in the API journal.
+It does not use an unsaved Workbench draft.
+
+**Approve this review** records an explicit review with current MFA and the full
+review digest. The API rechecks current access, observation, consent, capabilities
+and policy. A stale request keeps the existing plan visible for inspection.
+Review approval does not schedule or execute target changes. See the
+[delivery ledger](ARCH_LIFE_DELIVERY.md) for verification and remaining execution
+contracts.
