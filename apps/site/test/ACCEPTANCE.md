@@ -32,3 +32,8 @@ not a deployed MySkills instance, published package, or provider connection.
 These are the first site tests. Existing app tests cover app behavior and cannot
 exercise independent static hosting, public-site navigation, or this content.
 They require no production-only seam, live service, credentials, or dependency.
+
+Wave2 copy regression: the home page must state the composed skill-set and
+architecture lifecycle thesis, name profiles/environments, and distinguish
+current review source/fixtures from rollout and live host acceptance. The local
+browser suite asserts this wording while retaining the existing layout checks.

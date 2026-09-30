@@ -41,23 +41,23 @@ const command = (id, label, text, copy = false) => `<div class="command-block"><
 function home() {
   return `<section class="hero" aria-labelledby="hero-title"><div class="wrap hero-grid"><div>
     <p class="eyebrow">Public beta</p><h1 id="hero-title">MySkills</h1>
-    <p class="hero-promise">Your AI’s best skills,<br>kept in order.</p>
-    <p class="hero-summary">Find reusable instructions. Inspect their files. Share reviewed versions and choose when to update.</p>
+    <p class="hero-promise">Compose your AI’s skill set.<br>Govern its lifecycle.</p>
+    <p class="hero-summary">Build versioned architectures from exact skill releases. Choose profiles and environments, review desired versus observed changes, and control updates.</p>
     <div class="actions">${button(appUrl("/registry"), "Explore skills")}${button("/setup/", "Run the local demo", true)}</div>
     <p class="beta-note">Open source · Apache-2.0 · Use for evaluation and non-critical workloads. ${link("/security/", "Read beta limits")}</p>
   </div><figure class="artifact"><div class="file-header"><span>release-notes-helper / SKILL.md</span><span>v0.1.0</span></div>
     <div class="file-body"><pre id="skill-excerpt">${esc(excerpt)}</pre></div>
     <figcaption>Excerpt from a public example package</figcaption>${link(source("examples/skills/release-notes-helper/SKILL.md"), "Read the full source ↗", "artifact-link")}
   </figure></div></section>
-  <section class="section"><div class="wrap"><div class="section-heading"><h2>A skill is a set of instructions<br>you can use again.</h2><p>A folder built around SKILL.md gives an AI agent a repeatable way to handle a task. MySkills helps you decide which versions belong in your workflow.</p></div>
-    <ol class="workflow"><li><span class="step-number">01 / Find</span><h3>Start with a useful task.</h3><p>Browse public skills or read a small example package before creating your own.</p>${link("/examples/", "Read the public examples →")}</li>
-    <li><span class="step-number">02 / Review</span><h3>See what you are adopting.</h3><p>Inspect instructions, supporting files, compatibility, and reviewed release details.</p>${link(source("docs/SECURITY_MODEL.md"), "Understand package review ↗")}</li>
-    <li><span class="step-number">03 / Keep</span><h3>Choose an exact version.</h3><p>Save references in a Library. Install a version separately, then review changes before updating.</p>${link(source("docs/LIBRARIES.md"), "Learn about Libraries ↗")}</li></ol>
+  <section class="section"><div class="wrap"><div class="section-heading"><h2>One skill set.<br>Clear boundaries.</h2><p>Compose routers and skill leaves into saved architecture revisions. Select the profiles and environments that define each target’s scope. A package built around SKILL.md is one part of that larger skill set.</p></div>
+    <ol class="workflow"><li><span class="step-number">01 / Compose</span><h3>Define the complete skill set.</h3><p>Build a flat, domain-router, or multi-level architecture with exact package references and explicit profiles.</p>${link(source("docs/ARCHITECTURE_WORKBENCH.md"), "Read the architecture guide ↗")}</li>
+    <li><span class="step-number">02 / Review</span><h3>Review desired and observed state.</h3><p>Inspect a saved revision against a target observation. Review approval records that decision; it does not execute a rollout.</p>${link(source("docs/ARCH_LIFE_DELIVERY.md"), "Read the lifecycle delivery state ↗")}</li>
+    <li><span class="step-number">03 / Govern</span><h3>Control each lifecycle change.</h3><p>Keep target consent, current permissions, exact revisions, update policy, and recovery authority visible before changing a workspace.</p>${link(source("docs/SKILL_ARCHITECTURE_CONTROL_PLANE.md"), "Understand target governance ↗")}</li></ol>
   </div></section>
-  <section class="section"><div class="wrap two-columns"><div><p class="eyebrow">For you and your team</p><h2>Keep good instructions<br>within reach.</h2><p>Use a personal Library or curate a shared one. Keep review, saved references, and workspace installation as clear, separate steps.</p>${link("/docs/", "Find your guide →", "text-link")}</div><ul class="plain-list">
-    <li><strong>Share reviewed skills</strong><p>Maintainer review, roles, and audit history support shared use.</p></li>
-    <li><strong>Control changes</strong><p>Use exact versions, preserve local edits, and roll back when needed.</p></li>
-    <li><strong>Work through your preferred surface</strong><p>Use the web app, CLI, API, or MCP. Managed workspace installation currently supports Codex; check each skill’s compatibility.</p></li>
+  <section class="section"><div class="wrap two-columns"><div><p class="eyebrow">For you and your team</p><h2>Keep architecture intent<br>and target state in view.</h2><p>Use personal or shared architectures to govern a complete skill set. Libraries hold reusable references; saved revisions preserve the composition you review.</p>${link("/docs/", "Find your guide →", "text-link")}</div><ul class="plain-list">
+    <li><strong>Preserve reviewed intent</strong><p>Saved plans bind exact revisions, observations, and review fences. Package inspection supports that review.</p></li>
+    <li><strong>Evaluate the current boundaries</strong><p>Architecture review is available in roadmap source and local fixtures. Composed workspace rollout is still being verified. Live host recognition and consent need separate acceptance.</p></li>
+    <li><strong>Work through your preferred surface</strong><p>Use the web app, CLI, API, or MCP for authorized registry and architecture review actions. Runtime policy enforcement depends on the target and verified delivery path.</p></li>
   </ul></div></section>
   <section class="closing"><div class="wrap"><div><h2>Run the registry on your terms.</h2><p>Self-host your accounts and skill packages. Start with a local evaluation, then use the production guide when you are ready.</p></div>${button("/setup/", "Run the local demo")}</div></section>`;
 }

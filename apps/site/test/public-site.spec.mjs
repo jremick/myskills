@@ -13,6 +13,10 @@ test("newcomer follows a truthful example into the local evaluation setup", asyn
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("MySkills");
   await expect(page.getByText("Public beta", { exact: true }).first()).toBeVisible();
+  await expect(page.locator(".hero-promise")).toHaveText("Compose your AI’s skill set.Govern its lifecycle.");
+  await expect(page.locator(".hero-summary")).toContainText("profiles and environments");
+  await expect(page.getByText(/Composed workspace rollout is still being verified/)).toBeVisible();
+  await expect(page.getByText(/Live host recognition and consent need separate acceptance/)).toBeVisible();
   await expect(page.getByText("Excerpt from a public example package", { exact: true })).toBeVisible();
   const source = await readFile(new URL("examples/skills/release-notes-helper/SKILL.md", repo), "utf8");
   const excerpt = await page.locator("#skill-excerpt").innerText();
@@ -106,9 +110,10 @@ test("gallery presents real public examples and exact source references", async 
 });
 
 test("release status separates verified prerelease, source version, and deployment", async ({ page }) => {
+  const sourceVersion = JSON.parse(await readFile(new URL("package.json", repo), "utf8")).version;
   await page.goto("/downloads/");
   await expect(page.getByText("v0.1.0-beta.17", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("0.1.0-beta.18", { exact: true })).toBeVisible();
+  await expect(page.getByText(sourceVersion, { exact: true })).toBeVisible();
   await expect(page.getByText(/2026-09-29/).first()).toBeVisible();
   await expect(page.getByText(/does not confirm a running instance/)).toBeVisible();
   await expect(page.getByRole("link", { name: "Open verified GitHub release" })).toHaveAttribute("href", `${github}/releases/tag/v0.1.0-beta.17`);

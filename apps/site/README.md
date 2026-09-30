@@ -74,3 +74,9 @@ The test starts its own local build and server. Dated desktop/mobile screenshots
 and JSON scope receipts are saved under the ignored `test-results` directory,
 with a browsable report under `playwright-report`. These establish local site
 rendering only; they do not establish production runtime behavior.
+
+The home page leads with composed skill sets, versioned architectures,
+profiles/environments and desired-versus-observed review. It identifies current
+roadmap review source and fixture coverage separately from composed rollout
+verification and live host recognition/consent. The example package remains a
+concrete building block, not proof of a whole architecture rollout.

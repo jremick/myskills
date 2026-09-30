@@ -10,7 +10,7 @@ export const release = {
 };
 
 export const surfaces = [
-  { path: "/", label: "Home", title: "MySkills — find, share, and manage AI skills", description: "Keep reusable AI instructions in order. Explore MySkills, its public example packages, and the local public beta setup." },
+  { path: "/", label: "Home", title: "MySkills — compose and govern AI skill sets", description: "Compose versioned skill architectures, choose profiles and environments, and review lifecycle changes. Explore the public beta and its current delivery boundaries." },
   { path: "/setup/", label: "Setup", title: "Local setup — MySkills", description: "Start a local MySkills evaluation with the canonical setup guide, supported runtimes, and a clear path to self-hosting." },
   { path: "/docs/", label: "Docs", title: "Documentation — MySkills", description: "Canonical MySkills guides for setup, deployment, CLI, API, MCP, skill packages, security, and release operations." },
   { path: "/examples/", label: "Examples", title: "Public skill examples — MySkills", description: "Read the real public Release Notes Helper, App and Environment Reviewer, and Model Guidance Reviewer skill packages." },
@@ -19,6 +19,7 @@ export const surfaces = [
 ];
 
 export const guides = [
+  { group: "Use and integrate", title: "Architecture lifecycle", path: "docs/ARCH_LIFE_DELIVERY.md", text: "Composed skill sets, exact-revision reviews, target fences, and current rollout acceptance." },
   { group: "Start and operate", title: "Getting started", path: "docs/GETTING_STARTED.md", text: "Supported runtimes, local dependencies, first run, and example validation." },
   { group: "Start and operate", title: "Production deployment", path: "docs/DEPLOYMENT.md", text: "Production configuration, containers, and deployment preflight." },
   { group: "Start and operate", title: "Railway deployment", path: "docs/RAILWAY_DEPLOYMENT.md", text: "The maintained Railway deployment shape and verification path." },
