@@ -199,8 +199,11 @@ become execution authority.
 Initial HOST recovery, version preparation and hardening are integrated as
 `6c09e24`, `6b3a352` and `84e6cae`. The independent site version is aligned to
 beta.19 in `2b27113`. HOST remediation is separately committed at
-`6a45918e28043bd5436cd15e9145acd68897019d` with a clean source tree. Its
-independent Astra remediation review and integration are pending.
+`6a45918e28043bd5436cd15e9145acd68897019d` and integrated as `d6c4694`. Its
+independent Astra remediation review required two further fixes: retry startup
+must persist both durable fences before SQL, and expected failing helpers need
+verifiable terminal cleanup. These fixes passed local contract regressions;
+independent follow-up review and real Linux execution remain pending.
 
 The fixes cover durable migration barriers before SQL, protected env parsing,
 bootstrap validation on the public shell path and unresolved interrupted
@@ -217,6 +220,40 @@ disclosed candidate setup/bootstrap bridge because that baseline has no
 historical operator package. It cannot prove a historical package-to-package
 upgrade, arm64 runtime or the current production beta.16 migration path.
 No public image, release or deployment is inferred from this preparation.
+
+### Independent wave2 findings and active corrections
+
+Independent Astra reviewed exact `8fafa42`, tree
+`64c56711ecbfa86ad0c4037458e14f277759514f`, against `35ae506`. Four material
+findings remain subject to corrected-source acceptance: current credentials
+must survive draft/plan lock waits; external team members need their parent
+organization policy retained during private forks; approval/publication must
+consume the successful scan's exact artifact digest; and draft state must clear
+when the API connection changes for the same actor.
+
+Architecture owns plan authority and HOST follow-ups. The separate QUALITY
+branch committed draft/scan/browser corrections in
+`efadbc1e18439250361ea9f07162bf7d30dde295`; this source is not yet integrated or
+tested. Its no-cost evaluation extension reuses improvement suite revisions,
+labels local results as self-reported and leaves provider behavior unconfigured.
+Actual source and runtime acceptance remain pending.
+
+Architecture working-tree checks passed nine focused cases, including bounded
+journal replay and a counted-download regression, and 85 combined HOST fixture
+cases. API/MCP builds and web typecheck passed before subsequent source edits.
+The expanded OAuth MCP transport case and four targeted release-check cases
+also passed. Earlier fixture runs retained a loopback sandbox failure, an OAuth
+fixture configuration failure, and two 34/35 controller failures. The final
+release-check correction keeps early provenance rejection and distinguishes
+never-created resources from removed resources. None of these counts is a
+whole-candidate or deployed acceptance claim.
+
+New PostgreSQL and real MinIO composed-workspace tests are prepared for the
+maintained canonical jobs. Missing local browser executables prevented the
+first ten-case browser run from launching; its configured-browser rerun is
+pending. The source inventory remains 426 original contracts and 24 groups.
+The final candidate still needs all seven canonical jobs, CodeQL, independent
+review of the final corrections and explicit external release/deployment gates.
 
 ## External decisions and gates
 
