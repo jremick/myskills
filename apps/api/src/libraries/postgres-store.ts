@@ -494,7 +494,7 @@ export class PostgresLibraryStore {
     const result = await this.db.execute<Row>(sql`SELECT m.selection_id, ${ENTRY_COLUMNS}
       FROM library_selection_members m JOIN library_selections s ON s.id = m.selection_id
       JOIN library_entries e ON e.id = m.entry_id AND e.library_id = s.library_id
-      WHERE m.selection_id = ANY(${selectionIds}::uuid[]) AND s.status = 'active' AND e.status = 'active' AND e.kind = 'skill'
+      WHERE m.selection_id = ANY(${sql.param(selectionIds)}::uuid[]) AND s.status = 'active' AND e.status = 'active' AND e.kind = 'skill'
       ORDER BY m.selection_id, m.position`);
     return result.rows.map((row) => ({ selectionId: String(row.selection_id), entry: entryRecord(row) }));
   }
@@ -507,7 +507,7 @@ export class PostgresLibraryStore {
       JOIN library_entries source ON source.id = e.source_entry_id AND source.library_id = l.id AND source.status = 'active' AND source.kind = 'source'
       JOIN library_import_candidates c ON c.source_entry_id = source.id AND c.lineage_id = e.lineage_id
         AND c.owner_user_id IS NOT DISTINCT FROM l.owner_user_id AND c.owner_team_id IS NOT DISTINCT FROM l.owner_team_id
-      WHERE e.id = ANY(${entryIds}::uuid[]) AND e.library_id = ${libraryId}::uuid AND e.status = 'active'
+      WHERE e.id = ANY(${sql.param(entryIds)}::uuid[]) AND e.library_id = ${libraryId}::uuid AND e.status = 'active'
         AND c.state IN ('ready-for-review', 'blocked') AND c.expires_at > ${now}
       GROUP BY e.id`);
     return new Map(result.rows.map((row) => [row.entry_id, row.count]));
@@ -1733,30 +1733,30 @@ async function lockSelectionSkills(tx: DatabaseTransaction, ids: string[], libra
   await tx.execute(sql`SELECT key FROM instance_settings WHERE key = 'sharing' FOR SHARE`);
   if (!ids.length) return;
   const skillIds = (await tx.execute<{ id: string }>(sql`SELECT s.id FROM skills s
-    WHERE s.slug IN (SELECT skill_slug FROM library_entries WHERE id = ANY(${ids}::uuid[])) ORDER BY s.id FOR SHARE`)).rows.map((row) => row.id);
-  await tx.execute(sql`SELECT id FROM skill_versions WHERE skill_id = ANY(${skillIds}::uuid[]) ORDER BY id FOR SHARE`);
+    WHERE s.slug IN (SELECT skill_slug FROM library_entries WHERE id = ANY(${sql.param(ids)}::uuid[])) ORDER BY s.id FOR SHARE`)).rows.map((row) => row.id);
+  await tx.execute(sql`SELECT id FROM skill_versions WHERE skill_id = ANY(${sql.param(skillIds)}::uuid[]) ORDER BY id FOR SHARE`);
   // Retain the real grant and membership facts through commit, including access
   // obtained through a different team or organization from the owning Library.
-  await tx.execute(sql`SELECT skill_id FROM skill_team_grants WHERE skill_id = ANY(${skillIds}::uuid[]) ORDER BY skill_id, team_id FOR SHARE`);
-  await tx.execute(sql`SELECT skill_id FROM skill_user_grants WHERE skill_id = ANY(${skillIds}::uuid[]) ORDER BY skill_id, user_id FOR SHARE`);
-  await tx.execute(sql`SELECT skill_id FROM skill_organization_grants WHERE skill_id = ANY(${skillIds}::uuid[]) ORDER BY skill_id, organization_id FOR SHARE`);
+  await tx.execute(sql`SELECT skill_id FROM skill_team_grants WHERE skill_id = ANY(${sql.param(skillIds)}::uuid[]) ORDER BY skill_id, team_id FOR SHARE`);
+  await tx.execute(sql`SELECT skill_id FROM skill_user_grants WHERE skill_id = ANY(${sql.param(skillIds)}::uuid[]) ORDER BY skill_id, user_id FOR SHARE`);
+  await tx.execute(sql`SELECT skill_id FROM skill_organization_grants WHERE skill_id = ANY(${sql.param(skillIds)}::uuid[]) ORDER BY skill_id, organization_id FOR SHARE`);
   const teams = (await tx.execute<{ id: string; organization_id: string | null }>(sql`SELECT id, organization_id FROM teams WHERE id IN (
     SELECT owner_team_id FROM libraries WHERE id = ${libraryId}::uuid
-    UNION SELECT owner_team_id FROM skills WHERE id = ANY(${skillIds}::uuid[])
-    UNION SELECT team_id FROM skill_team_grants WHERE skill_id = ANY(${skillIds}::uuid[])
+    UNION SELECT owner_team_id FROM skills WHERE id = ANY(${sql.param(skillIds)}::uuid[])
+    UNION SELECT team_id FROM skill_team_grants WHERE skill_id = ANY(${sql.param(skillIds)}::uuid[])
   ) ORDER BY id FOR SHARE`)).rows;
   const teamIds = teams.map((row) => row.id);
   const organizations = (await tx.execute<{ id: string }>(sql`SELECT id FROM organizations WHERE id IN (
-    SELECT organization_id FROM teams WHERE id = ANY(${teamIds}::uuid[])
-    UNION SELECT organization_id FROM skill_organization_grants WHERE skill_id = ANY(${skillIds}::uuid[])
+    SELECT organization_id FROM teams WHERE id = ANY(${sql.param(teamIds)}::uuid[])
+    UNION SELECT organization_id FROM skill_organization_grants WHERE skill_id = ANY(${sql.param(skillIds)}::uuid[])
   ) ORDER BY id FOR SHARE`)).rows.map((row) => row.id);
-  await tx.execute(sql`SELECT id FROM organization_memberships WHERE organization_id = ANY(${organizations}::uuid[])
+  await tx.execute(sql`SELECT id FROM organization_memberships WHERE organization_id = ANY(${sql.param(organizations)}::uuid[])
     AND user_id = ${actorId}::uuid ORDER BY organization_id FOR SHARE`);
   const library = (await tx.execute<{ owner_team_id: string | null }>(sql`SELECT owner_team_id FROM libraries WHERE id = ${libraryId}::uuid`)).rows[0];
   // Match assertLibraryWriter's lock mode up front; avoid SHARE->UPDATE upgrades
   // between two personal mutations from the same actor.
   await tx.execute(sql`SELECT id FROM users WHERE id = ${actorId}::uuid ${library?.owner_team_id ? sql`FOR SHARE` : sql`FOR UPDATE`}`);
-  await tx.execute(sql`SELECT id FROM team_memberships WHERE team_id = ANY(${teamIds}::uuid[]) AND user_id = ${actorId}::uuid ORDER BY team_id FOR SHARE`);
+  await tx.execute(sql`SELECT id FROM team_memberships WHERE team_id = ANY(${sql.param(teamIds)}::uuid[]) AND user_id = ${actorId}::uuid ORDER BY team_id FOR SHARE`);
 }
 
 async function assertSelectionWriter(tx: DatabaseTransaction, libraryId: string, actorId: string, mfaVerified: boolean): Promise<void> {
@@ -1770,7 +1770,7 @@ async function assertSelectionMembers(tx: DatabaseTransaction, libraryId: string
   if (ids.length > LIBRARY_LIMITS.maxSelectionMembers || new Set(ids).size !== ids.length) throw invalid();
   if (!ids.length) return;
   const rows = await tx.execute<Row>(sql`SELECT ${ENTRY_COLUMNS} FROM library_entries e
-    WHERE e.id = ANY(${ids}::uuid[]) AND e.library_id = ${libraryId}::uuid AND e.kind = 'skill' AND e.status = 'active'
+    WHERE e.id = ANY(${sql.param(ids)}::uuid[]) AND e.library_id = ${libraryId}::uuid AND e.kind = 'skill' AND e.status = 'active'
     ORDER BY e.id FOR SHARE OF e`);
   if (rows.rows.length !== ids.length) throw invalid();
   const repository = new PostgresSkillRepository(tx);
@@ -1796,7 +1796,7 @@ async function assertSelectionMembers(tx: DatabaseTransaction, libraryId: string
 async function replaceSelectionMembers(tx: DatabaseTransaction, id: string, ids: string[]): Promise<void> {
   await tx.execute(sql`DELETE FROM library_selection_members WHERE selection_id = ${id}::uuid`);
   if (ids.length) await tx.execute(sql`INSERT INTO library_selection_members (selection_id, entry_id, position)
-    SELECT ${id}::uuid, entry_id, (position - 1)::integer FROM unnest(${ids}::uuid[]) WITH ORDINALITY AS selected(entry_id, position)`);
+    SELECT ${id}::uuid, entry_id, (position - 1)::integer FROM unnest(${sql.param(ids)}::uuid[]) WITH ORDINALITY AS selected(entry_id, position)`);
 }
 
 function selectionRecord(row: Row): SelectionRecord {

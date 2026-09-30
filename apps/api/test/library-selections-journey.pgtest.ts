@@ -78,7 +78,7 @@ test("Library selections: multi-source tracking, overlap, isolation and concurre
     const discovery = ok(await call("POST", `/v1/library-entries/${source.id}/discoveries`, alice)).discovery;
     const preview = ok(await call("POST", `/v1/library-entries/${source.id}/previews`, alice, { snapshotId: discovery.snapshot.id, paths: ["skills/main"] })).preview;
     const candidate = preview.candidates[0];
-    const imported = ok(await call("POST", `/v1/library-candidates/${candidate.id}/import`, alice, { expectedPackageDigest: candidate.packageDigest, release: { classification: "unclassified" } }), 201);
+    const imported = ok(await call("POST", `/v1/library-candidates/${candidate.id}/import`, alice, { expectedPackageDigest: candidate.packageDigest, release: { classification: "unclassified" } }), 202);
     await publish(imported.submission.id);
     ok(await call("POST", `/v1/library-entries/${imported.entry.id}/adoptions`, alice, { version: "0.0.1", artifactSha256: candidate.packageDigest, expectedCurrentAdoptionId: null }), 201);
     entries.push(ok(await call("GET", `/v1/library-entries/${imported.entry.id}`, alice)).entry);
@@ -176,7 +176,7 @@ test("Library selections: multi-source tracking, overlap, isolation and concurre
   const invariant = async () => (await pool.query(`SELECT
     (SELECT jsonb_agg(to_jsonb(e) ORDER BY e.id) FROM library_entries e WHERE kind = 'skill') AS entries,
     (SELECT jsonb_agg(to_jsonb(a) ORDER BY a.id) FROM library_adoptions a) AS adoptions,
-    (SELECT jsonb_agg(to_jsonb(b) ORDER BY b.id) FROM library_bindings b) AS bindings`)).rows[0];
+    (SELECT jsonb_agg(to_jsonb(b) ORDER BY b.id) FROM library_target_bindings b) AS bindings`)).rows[0];
   const beforeCheck = await invariant();
   github.commit("fixture/planning", { files: { "skills/main/SKILL.md": skillMd("planning", "Review the updated planning workflow."), "skills/new/SKILL.md": skillMd("new", "This new root is not automatically selected.") } });
   ok(await call("POST", `/v1/library-entries/${sources[0]!.id}/checks`, alice));
@@ -186,7 +186,7 @@ test("Library selections: multi-source tracking, overlap, isolation and concurre
   assert.equal(tracked.memberCount, 2);
   assert.equal(ok(await call("GET", `/v1/library-collections/${collection.id}`, reader)).collection.tracking.pendingCandidateCount, 0);
   const pending = ok(await call("GET", `/v1/library-entries/${sources[0]!.id}/candidates?state=ready-for-review`, alice)).candidates[0];
-  const update = ok(await call("POST", `/v1/library-candidates/${pending.id}/import`, alice, { expectedPackageDigest: pending.packageDigest, release: { classification: "unclassified" } }), 201);
+  const update = ok(await call("POST", `/v1/library-candidates/${pending.id}/import`, alice, { expectedPackageDigest: pending.packageDigest, release: { classification: "unclassified" } }), 202);
   await publish(update.submission.id);
   ok(await call("POST", `/v1/library-entries/${entries[0]!.id}/adoptions`, alice, { version: "0.0.2", artifactSha256: pending.packageDigest, expectedCurrentAdoptionId: entries[0]!.adoption.id }), 201);
   assert.equal(ok(await call("GET", `/v1/library-entries/${siblingEntry.id}`, alice)).entry.adoption.version, "0.0.1");
