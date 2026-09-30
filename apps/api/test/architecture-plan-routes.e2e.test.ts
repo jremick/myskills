@@ -129,3 +129,40 @@ test("architecture review fences reject changed target generation, capabilities 
     assert.deepEqual(await f.syncStore.getRun(run.identity.runId), run);
   }
 });
+
+
+test("historical exposure denied by current ancestors is refused before review creation", async t => {
+  const f = await createArchitecturePlanFixture(t);
+  const denied = structuredClone(f.spec);
+  denied.profiles[0].bindings = denied.profiles[0].bindings.map(binding => binding.nodeId === "leaf-plan-alpha" ? { ...binding, enabled: false, runtimeExposure: "disabled" as const } : binding);
+  await f.architectureStore.createRevision({ actor: f.ownerId, architectureId: f.spec.id, expectedCurrentRevisionId: f.revision.id, message: "Current exposure denial", spec: denied });
+  const response = await f.app.inject({ method: "POST", url: `/v1/architecture-targets/${f.target.id}/plans`, headers: { authorization: `Bearer ${f.sessions.owner}` }, payload: { ...f.request, idempotencyKey: "historical-denial" } });
+  assert.equal(response.statusCode, 409, response.body);
+  assert.equal(response.json().error.code, "ARCHITECTURE_PLAN_POLICY_STALE");
+  assert.deepEqual(await f.syncStore.listRuns({ targetId: f.target.id }), []);
+});
+
+test("review-only purpose refuses lease and apply without changing the journal", async t => {
+  const f = await createArchitecturePlanFixture(t);
+  const created = await f.planService.createPlan({ id: f.ownerId, mfaVerified: true }, f.target.id, f.request);
+  const approved = await f.planService.approvePlan({ id: f.ownerId, mfaVerified: true }, created.run.identity.runId, { expectedReviewDigest: String(created.run.metadata?.reviewDigest) });
+  const lease = { runId: approved.run.identity.runId, targetId: f.target.id, targetGeneration: f.target.generation, holderId: "forbidden", now: new Date().toISOString(), leaseSeconds: 30 };
+  await assert.rejects(f.syncStore.claimApply(lease), /review-only/);
+  await assert.rejects(f.syncStore.acquireLease(lease), /review-only/);
+  assert.equal(await f.syncStore.getCurrentLease(f.target.id), null);
+  assert.deepEqual(await f.syncStore.getRun(lease.runId), approved.run);
+});
+
+
+test("personal owner authority cannot bypass a receiving organization's revoked grant", async t => {
+  const f = await createArchitecturePlanFixture(t);
+  const read = f.targetStore.getTarget.bind(f.targetStore);
+  f.targetStore.getTarget = async (actor, id) => {
+    const target = await read(actor, id);
+    return target ? { ...target, owner: { type: "organization", id: "receiving-org" } } : null;
+  };
+  const response = await f.app.inject({ method: "POST", url: `/v1/architecture-targets/${f.target.id}/plans`, headers: { authorization: `Bearer ${f.sessions.owner}` }, payload: f.request });
+  assert.equal(response.statusCode, 404, response.body);
+  assert.equal(response.json().error.code, "ARCHITECTURE_TARGET_NOT_FOUND");
+  assert.deepEqual(await f.syncStore.listRuns({ targetId: f.target.id }), []);
+});

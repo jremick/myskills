@@ -1,3 +1,5 @@
+import { hashSessionToken } from "@myskills-app/auth";
+import { createPostgresDiscoveryFinalAuthority } from "../src/discovery/postgres-authority.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
@@ -30,10 +32,13 @@ test("Postgres discovery preserves approved identity and rechecks live membershi
   ]).returning({ id: skills.id, slug: skills.slug });
   const versions = await db.insert(skillVersions).values(rows.map(s => ({ skillId: s.id, version: "1.0.0", lifecycleStatus: "approved" as const, reviewStatus: "approved" as const, securityStatus: "passed" as const, approvedArtifactSha256: "a".repeat(64), publishedAt: new Date() }))).returning({ id: skillVersions.id });
   await db.insert(skillArtifacts).values(versions.map(v => ({ skillVersionId: v.id, storageKey: `discovery/${v.id}`, sha256: "a".repeat(64), byteSize: 10, contentType: "application/vnd.myskills-app.package+json", payload: { files: [] } })));
-  await db.insert(skillTeamGrants).values({ skillId: rows.find(r => r.slug === "team-incident")!.id, teamId: team!.id, createdByUserId: owner!.id });
+  await db.insert(skillTeamGrants).values({ skillId: rows.find(r => r.slug === "team-incident")!.id, teamId: team!.id });
   const repository = new PostgresSkillRepository(db);
   const submissions = new SubmissionService(new PostgresSubmissionStore(db));
-  const options = { repository, readRelease: submissions.getPublicRelease.bind(submissions), readActor: async () => reader!.id };
+  const tokenHash = hashSessionToken("synthetic-discovery-pg-session");
+  await pool.query("INSERT INTO auth_sessions(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '1 day')", [reader!.id, tokenHash]);
+  const final = createPostgresDiscoveryFinalAuthority(db);
+  const options = { credential: { kind: "session" as const, tokenHash }, finalAuthority: final, repository, readRelease: submissions.getPublicRelease.bind(submissions), readActor: async () => reader!.id };
   const found = await discoverTask({ task: "Write incident recovery report", limit: 10 }, options);
   assert.deepEqual(found.results.map(r => r.skill.slug).sort(), ["public-incident", "team-incident"]);
   assert.ok(found.results.every(r => r.release.version === "1.0.0" && r.release.sha256 === "a".repeat(64)));
@@ -46,4 +51,36 @@ test("Postgres discovery preserves approved identity and rechecks live membershi
   const revoked = await discoverTask({ task: "Write incident recovery report", limit: 10 }, options);
   assert.deepEqual(revoked.results.map(r => r.skill.slug), ["public-incident"]);
   assert.deepEqual((await discoverTask({ task: "Calibrate telescope photometry", limit: 10 }, options)).results, []);
+  // The actual final credential SELECT fixes a snapshot. The concurrent writer
+  // moves from active/no-membership to disabled/membership; neither state can
+  // authorize a team result. READ COMMITTED would splice those two states.
+  repository.searchVisibleSkills = search;
+  let entered!: () => void, release!: () => void;
+  const entry = new Promise<void>(resolve => { entered = resolve; });
+  const paused = new Promise<void>(resolve => { release = resolve; });
+  const pending = discoverTask({ task: "Write incident recovery report", limit: 10 }, { ...options,
+    // Include the team in initial ranking, while retaining denied membership at
+    // the final snapshot. A stale catalog must never supply return authority.
+    repository: { ...repository, searchVisibleSkills: async filters => {
+      const publicRows = await search(filters);
+      const team = { ...publicRows[0]!, slug: "team-incident", title: "Team incident report", visibility: "team" as const };
+      return [...publicRows, team];
+    } } as typeof repository,
+    finalAuthority: (input, read) => final(input, async authority => { entered(); await paused; return read(authority); }),
+  });
+  await Promise.race([entry, pending]);
+  try {
+    const writer = await pool.connect();
+    try {
+      await writer.query("BEGIN");
+      await writer.query("UPDATE users SET status='disabled' WHERE id=$1", [reader!.id]);
+      await writer.query("INSERT INTO team_memberships(team_id,user_id,role) VALUES($1,$2,'member')", [team!.id, reader!.id]);
+      await writer.query("COMMIT");
+    } finally { writer.release(); }
+    release();
+    const coherent = await pending;
+    assert.ok(!coherent.results.some(result => result.skill.slug === "team-incident"));
+  } finally { release(); }
+  await assert.rejects(discoverTask({ task: "incident report" }, options), /Authentication/);
+
 });

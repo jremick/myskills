@@ -16,5 +16,5 @@ test("Postgres device login persists through API/service restart and serializes 
   await pool.query("CREATE SCHEMA public");
   await runMigrations(pool);
   const db = createDb(pool);
-  t.diagnostic(JSON.stringify(await deviceLoginJourney(new PostgresAuthStore(db), new PostgresDeviceLoginStore(db))));
+  t.diagnostic(JSON.stringify(await deviceLoginJourney(new PostgresAuthStore(db), clock => new PostgresDeviceLoginStore(db, clock))));
 });

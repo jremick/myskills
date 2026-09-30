@@ -546,6 +546,10 @@ export const skillUserGrants = pgTable("skill_user_grants", {
 ]);
 
 export const scanRuns = pgTable("scan_runs", {
+  artifactSha256: text("artifact_sha256"),
+  runnerVersion: text("runner_version"),
+  attempt: integer("attempt"),
+  failureCode: text("failure_code"),
   id: uuid("id").primaryKey().defaultRandom(),
   skillVersionId: uuid("skill_version_id").references(() => skillVersions.id, { onDelete: "cascade" }),
   status: jobStatus("status").notNull().default("queued"),

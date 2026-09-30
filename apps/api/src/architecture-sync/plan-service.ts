@@ -34,6 +34,7 @@ export interface ArchitecturePlanDependencies {
   readonly architectureStore: ArchitectureStore;
   readonly targetStore: ArchitectureTargetStore;
   readonly releaseDependencies: ExactReleaseResolutionDependencies;
+  readonly readPolicyConstraints?: (target: ArchitectureTargetRecord) => Promise<unknown>;
   readonly authorizeRevision?: (input: { actorId: string; target: ArchitectureTargetRecord; architecture: ArchitectureRecord; revision: ArchitectureRevisionRecord }) => Promise<void>;
 }
 
@@ -129,7 +130,7 @@ export class ArchitecturePlanService {
     const target = await this.dependencies.targetStore.getTarget(actor.id, targetId);
     if (!target) throw targetNotFound();
     const architecture = await this.dependencies.architectureStore.getArchitecture(actor.id, target.architectureId);
-    if (!architecture || !architecture.access.canRead) throw targetNotFound();
+    if (!architecture || !architecture.access.canRead || (target.owner.type === "organization" && !architecture.access.allowedOrganizationIds.includes(target.owner.id))) throw targetNotFound();
     if (control) {
       if (target.status === "revoked" || target.consent.status === "revoked") throw new AppError("The architecture target is revoked.", "ARCHITECTURE_TARGET_REVOKED", 410);
       const access = await this.dependencies.targetStore.getTargetAccess(actor.id, targetId, "revoke");
@@ -156,6 +157,7 @@ export class ArchitecturePlanService {
     // organization context is taken from that target rather than a client label.
     const organizationId = target.owner.type === "organization" ? target.owner.id : undefined;
     const revision = await this.dependencies.architectureStore.getRevisionForPreview(actor.id, target.architectureId, revisionId, organizationId);
+    if (organizationId && revision?.spec.skills.some(skill => !["public", "authenticated", "organization"].includes(skill.packageVisibility))) throw targetNotFound();
     if (!revision) throw new AppError("Architecture revision was not found.", "ARCHITECTURE_REVISION_NOT_FOUND", 404);
     const current = await this.dependencies.architectureStore.getRevisionForPreview(actor.id, target.architectureId, undefined, organizationId);
     if (!current) throw new AppError("The current architecture policy is unavailable.", "ARCHITECTURE_PLAN_POLICY_STALE", 409);
@@ -163,8 +165,19 @@ export class ArchitecturePlanService {
     const currentProfile = current.spec.profiles.find(profile => profile.id === target.profileId);
     if (!currentProfile || !currentEnvironment || currentEnvironment.profileId !== target.profileId) throw stale("POLICY", "The target profile binding is no longer current.");
     await this.dependencies.authorizeRevision?.({ actorId: actor.id, target, architecture, revision });
+    if (organizationId) {
+      for (const reference of revision.spec.skills) {
+        const visible = await this.dependencies.releaseDependencies.skillRepository.getSkillVisibleToOrganizationBySlug(reference.slug, organizationId);
+        if (!visible || visible.visibility !== reference.packageVisibility) throw new AppError("The receiving organization cannot read an exact release.", "ARCHITECTURE_SKILL_RELEASE_UNAVAILABLE", 422);
+      }
+    }
     const registry = await resolveAuthorizedArchitectureRegistry(this.dependencies.releaseDependencies, actor.id, revision.spec, { ...(architecture.owner.type === "team" ? { teamId: architecture.owner.id } : {}), organizationIds: organizationId ? [organizationId] : architecture.access.allowedOrganizationIds });
     const compiled = compileArchitecture(revision.spec, { registry, profileId: target.profileId, environmentId: target.environmentId });
+    const currentCompiled = compileArchitecture(current.spec, { registry: current.spec.skills, profileId: target.profileId, environmentId: target.environmentId });
+    const currentNodes = new Map(currentCompiled.nodes.map(node => [node.id, node]));
+    if (compiled.nodes.some(node => !currentNodes.has(node.id))) {
+      throw stale("POLICY", "Historical exposure conflicts with the current target profile policy.");
+    }
     const observation = (await this.dependencies.targetStore.listObservations({ actor: actor.id, targetId: target.id, limit: 1 }))?.[0];
     if (!observation?.id) throw new AppError("A trusted target observation is required.", "ARCHITECTURE_PLAN_OBSERVATION_REQUIRED", 409);
     const validated = validateArchitectureTargetObservation(observation);
@@ -177,7 +190,7 @@ export class ArchitecturePlanService {
     // Generic nodes preserve missing evidence as unsupported rather than
     // manufacturing defaults for version, enabled state or runtime exposure.
     const plan = planArchitectureSync(compiled, { targetId: target.id, nodes: observation.skills.map(skill => ({ ...skill })) });
-    const metadata: ArchitectureSyncMetadata = { source: "architecture-plan", reviewOnly: true, dryRun: true, canApply: false, observationId: observation.id, observationDigest: observation.observedDigest, revisionDigest: compiled.revisionDigest, targetIdentityDigest: target.identityDigest, adapterDigest, capabilitiesDigest, consentDigest: architectureSyncSnapshotDigest(target.consent), policyDigest: architectureSyncSnapshotDigest({ owner: architecture.owner, access: architecture.access, profiles: current.spec.profiles, environments: current.spec.environments }) };
+    const metadata: ArchitectureSyncMetadata = { source: "architecture-plan", reviewOnly: true, dryRun: true, canApply: false, observationId: observation.id, observationDigest: observation.observedDigest, revisionDigest: compiled.revisionDigest, targetIdentityDigest: target.identityDigest, adapterDigest, capabilitiesDigest, consentDigest: architectureSyncSnapshotDigest(target.consent), policyDigest: architectureSyncSnapshotDigest({ upgradeConstraints: await this.dependencies.readPolicyConstraints?.(target) ?? null, owner: architecture.owner, access: architecture.access, currentRevisionDigest: currentCompiled.revisionDigest, profiles: current.spec.profiles, environments: current.spec.environments }) };
     return { revision, compiled, observation, plan, metadata: sanitizeArchitectureSyncMetadata(metadata)! };
   }
 

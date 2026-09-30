@@ -1,3 +1,4 @@
+import { assertExecutableSyncRun } from "./purpose.js";
 import {
   AppError,
   architectureSyncControlLimits,
@@ -261,6 +262,7 @@ export class ArchitectureSyncService {
   async apply(input: ArchitectureSyncApplyInput): Promise<ArchitectureSyncRun> {
     const actor = normalizeActor(input.actor);
     let run = await this.requireRun(input.runId);
+    assertExecutableSyncRun(run);
     this.assertExpectedPlanDigest(run, input.expectedPlanDigest);
     this.assertMutationCapabilitiesFailClosed(run);
     if (run.state === "succeeded") return this.finalizeTerminalRun(run, actor.userId, "apply", "run.succeeded");
@@ -378,6 +380,7 @@ export class ArchitectureSyncService {
   async recover(input: ArchitectureSyncRecoveryInput): Promise<{ run: ArchitectureSyncRun; recovery: ArchitectureSyncRecoveryResult }> {
     const actor = normalizeActor(input.actor);
     const run = await this.requireRun(input.runId);
+    assertExecutableSyncRun(run);
     if (!isInterruptedRunState(run.state)) {
       const replay = this.replayRecovery(run, input.condition);
       if (replay) return replay;
@@ -472,6 +475,7 @@ export class ArchitectureSyncService {
   async rollback(input: ArchitectureSyncRollbackInput): Promise<ArchitectureSyncRun> {
     const actor = normalizeActor(input.actor);
     let run = await this.requireRun(input.runId);
+    assertExecutableSyncRun(run);
     if (run.state === "rolled_back") return this.finalizeTerminalRun(run, actor.userId, "rollback", "rollback.succeeded");
     if (run.state === "rollback_failed") return this.finalizeTerminalRun(run, actor.userId, "rollback", "rollback.failed", "failed", "deny");
     if (run.state !== "rollback_required" && run.state !== "rolling_back") {

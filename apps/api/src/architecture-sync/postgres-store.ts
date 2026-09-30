@@ -1,3 +1,4 @@
+import { assertExecutableSyncRun } from "./purpose.js";
 import { createHash, randomUUID } from "node:crypto";
 import { asc, desc, eq, and, sql } from "drizzle-orm";
 import {
@@ -69,7 +70,7 @@ import { PostgresArchitectureTargetStore } from "../targets/postgres-target-stor
 import { PostgresSkillRepository } from "../repositories/postgres-skill-repository.js";
 import { PostgresSubmissionStore } from "../submissions/postgres-submission-store.js";
 import { SubmissionService } from "../submissions/service.js";
-import { lockOperationTarget, lockOperationSharing } from "../target-operations/postgres-authorization.js";
+import { lockOperationTarget, lockOperationSharing, resolveLockedUpgradePolicy } from "../target-operations/postgres-authorization.js";
 import { reauthorizeInternalRegistrySnapshot } from "../architectures/postgres-pattern-migration-authorization.js";
 import type { ArchitecturePlanDependencies } from "./plan-service.js";
 
@@ -149,6 +150,13 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
           architectureStore: new PostgresArchitectureStore(tx as unknown as Database),
           targetStore: new PostgresArchitectureTargetStore(tx as unknown as Database),
           releaseDependencies: { skillRepository: new PostgresSkillRepository(tx as unknown as Database), submissionService: new SubmissionService(new PostgresSubmissionStore(tx as unknown as Database)) },
+          readPolicyConstraints: async target => ({
+            constraints: await resolveLockedUpgradePolicy(tx, target),
+            revisions: (await tx.execute(sql`SELECT DISTINCT ON (scope_type, scope_id) id, scope_type, scope_id, revision_number
+              FROM skill_upgrade_policy_revisions WHERE (scope_type='target' AND scope_id=${target.id}::uuid)
+                OR (scope_type='organization' AND scope_id=${target.owner.type === "organization" ? target.owner.id : "00000000-0000-0000-0000-000000000000"}::uuid)
+              ORDER BY scope_type, scope_id, revision_number DESC`)).rows,
+          }),
           authorizeRevision: async ({ architecture, revision }) => reauthorizeInternalRegistrySnapshot(tx, { actorId, architectureId: target.architectureId, owner: architecture.owner, organizationIds: target.owner.type === "organization" ? [target.owner.id] : architecture.access.allowedOrganizationIds, spec: revision.spec }),
         };
         return operation(scoped, dependencies);
@@ -320,6 +328,7 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
           throw new AppError("Sync run and target lease binding do not match.", "ARCHITECTURE_SYNC_BINDING_CONFLICT", 409);
         }
         const run = await this.requireHydratedRun(tx, row.id);
+        assertExecutableSyncRun(run);
         if (run.state === "succeeded" || run.state === "rolled_back") return { decision: "completed", run };
         if (target.generation !== targetGeneration) {
           throw new AppError("Sync target generation is stale.", "ARCHITECTURE_SYNC_GENERATION_STALE", 409, {
@@ -379,6 +388,7 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
     const actorId = validateIdentifier(input.actorId, "actorId");
     const holderId = validateIdentifier(input.holderId, "holderId");
     const now = validateTimestamp(input.now, "now");
+    assertExecutableSyncRun(run);
     const evidenceDigest = validateDigest(input.evidenceDigest, "evidenceDigest");
     if (!Number.isInteger(input.leaseSeconds)
       || input.leaseSeconds < 1
@@ -563,6 +573,7 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
           || run.targetGeneration !== targetGeneration) {
           throw new AppError("Sync run and target lease binding do not match.", "ARCHITECTURE_SYNC_BINDING_CONFLICT", 409);
         }
+        assertExecutableSyncRun(await this.requireHydratedRun(tx, run.id));
         const current = await this.selectLease(tx, dbTargetId, true);
         const nowDate = new Date(now);
         if (current?.status === "active" && current.expiresAt.getTime() > nowDate.getTime()) {

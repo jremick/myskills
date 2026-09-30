@@ -41,9 +41,8 @@ export class PostgresDraftStore implements DraftStore {
 
   async create(input: Parameters<DraftStore["create"]>[0]): Promise<Draft> {
     const id = await this.db.transaction(async (tx) => {
-      // Source authorization locks before the personal draft allocation lock.
-      await input.authorizeSource?.(tx);
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`author-drafts:${input.ownerId}`}, 0))`);
+      await input.authorizeSource?.(tx);
       const count = await tx.execute(sql`SELECT count(*)::int AS n FROM author_drafts WHERE owner_user_id=${input.ownerId}::uuid`);
       if (Number(count.rows[0]?.n) >= 100) throw new AppError("An author can retain at most 100 drafts.", "DRAFT_LIMIT", 409);
       const created = await tx.execute(sql`INSERT INTO author_drafts (owner_user_id, source)
@@ -86,7 +85,7 @@ export class PostgresDraftStore implements DraftStore {
   }
 
   async authorizeSource(tx: DatabaseTransaction, ownerId: string, source: DraftSource): Promise<void> {
-    await tx.execute(sql`SELECT key FROM instance_settings WHERE key='sharing' FOR SHARE`);
+    await tx.execute(sql`LOCK TABLE instance_settings IN SHARE MODE`);
     // Release lifecycle/sharing mutations lock these same registry rows.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`submission:${source.slug}`}, 0))`);
     const row = await tx.execute(sql`SELECT s.id FROM skills s JOIN skill_versions v ON v.skill_id=s.id
@@ -96,6 +95,12 @@ export class PostgresDraftStore implements DraftStore {
       FOR SHARE OF s, v, a`);
     if (!row.rows.length) throw sourceUnavailable();
     if (source.kind === "release") {
+      // Membership/policy writers lock their aggregate first. Retain those
+      // same authorities through the private copy, including allocation waits.
+      await tx.execute(sql`SELECT t.id FROM teams t WHERE t.id IN (SELECT team_id FROM team_memberships WHERE user_id=${ownerId}::uuid) ORDER BY t.id FOR SHARE`);
+      await tx.execute(sql`SELECT o.id FROM organizations o WHERE o.id IN (SELECT organization_id FROM organization_memberships WHERE user_id=${ownerId}::uuid) ORDER BY o.id FOR SHARE`);
+      const actor = await tx.execute(sql`SELECT id FROM users WHERE id=${ownerId}::uuid AND status='active' AND email_verified_at IS NOT NULL FOR SHARE`);
+      if (!actor.rows.length) throw sourceUnavailable();
       // Reuse the registry's current visibility/lifecycle policy without another object read.
       const authority = new PostgresSubmissionStore(tx as unknown as Database);
       const current = await authority.getPublicRelease({ slug: source.slug, version: source.version, actorId: ownerId });

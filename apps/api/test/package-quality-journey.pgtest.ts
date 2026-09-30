@@ -76,6 +76,37 @@ test("durable quality journey: held bytes, retries, restart, stale workers, corr
   const prior = await submissions.getPublicBundle({ slug: first.skillSlug, version: first.version });
   assert.ok(prior);
 
+  // Pause a real worker after its terminal evidence write, before COMMIT.
+  // A finding writer whose statement starts before that commit must wait and
+  // then reject; a snapshot taken before completion cannot admit a late finding.
+  const fenced = await submissions.createSubmission({ actor, ...packageInput("0.1.9") });
+  const fencedClaim = await scans.claimNext();
+  assert.ok(fencedClaim);
+  const gate = await pool.connect();
+  const gateId = 2026100139;
+  await gate.query("SELECT pg_advisory_lock($1::bigint)", [gateId]);
+  await pool.query(`CREATE FUNCTION pause_scan_completion() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(${gateId}::bigint); RETURN NEW; END $$`);
+  await pool.query("CREATE TRIGGER pause_scan_completion AFTER UPDATE ON scan_runs FOR EACH ROW WHEN (OLD.status='running' AND NEW.status='succeeded') EXECUTE FUNCTION pause_scan_completion()");
+  const completion = scans.processClaim(fencedClaim);
+  let lateFinding: Promise<unknown> | undefined;
+  try {
+    await waitForDatabaseLock(pool, "SELECT 1 FROM pg_locks WHERE locktype='advisory' AND objid=$1 AND NOT granted", [gateId]);
+    const insertion = "INSERT INTO scan_findings (scan_run_id, category, severity, message) VALUES ($1,'policy','warning','concurrent late finding')";
+    lateFinding = pool.query(insertion, [fencedClaim.scanRunId]).then(() => null, error => error);
+    await waitForDatabaseLock(pool, "SELECT 1 FROM pg_stat_activity WHERE query=$1 AND wait_event_type='Lock'", [insertion]);
+    await gate.query("SELECT pg_advisory_unlock($1::bigint)", [gateId]);
+    assert.equal(await completion, true);
+    assert.match(String(await lateFinding), /immutable/);
+    assert.equal((await submissions.getUserSubmissionDetail({ actor, submissionId: fenced.id }))!.scanRuns[0]!.findings.length, 0);
+  } finally {
+    await gate.query("SELECT pg_advisory_unlock_all()");
+    await completion;
+    await lateFinding;
+    gate.release();
+    await pool.query("DROP TRIGGER pause_scan_completion ON scan_runs");
+    await pool.query("DROP FUNCTION pause_scan_completion()");
+  }
+
   // Expiry during a row-lock wait is not evaluated using transaction-start time.
   const delayed = await submissions.createSubmission({ actor, ...packageInput("0.1.1") });
   const delayedClaim = await scans.claimNext();
@@ -159,11 +190,19 @@ test("durable quality journey: held bytes, retries, restart, stale workers, corr
     await mkdir(process.env.QUALITY_EVIDENCE_DIR, { recursive: true });
     await writeFile(join(process.env.QUALITY_EVIDENCE_DIR, "package-quality-journey.json"), JSON.stringify({
       schemaVersion: 1, evidence: "postgres-service-journey", runnerVersion: PACKAGE_SCAN_RUNNER_VERSION,
-      assertions: ["concurrent-claim", "restart-recovery", "stale-fence", "retry-exhaustion", "immutable-completed-scan", "artifact-drift-denied", "withdrawal-preserved", "corrected-version-published", "prior-artifact-preserved", "private-detail-denied", "public-summary-safe", "audit-safe"],
+      assertions: ["concurrent-claim", "restart-recovery", "stale-fence", "retry-exhaustion", "immutable-completed-scan", "concurrent-late-finding-denied", "artifact-drift-denied", "withdrawal-preserved", "corrected-version-published", "prior-artifact-preserved", "private-detail-denied", "public-summary-safe", "audit-safe"],
       status: "passed", providerExecution: false, deployed: false,
     }, null, 2) + "\n");
   }
 });
+
+async function waitForDatabaseLock(pool: ReturnType<typeof createPgPool>, query: string, values: unknown[]) {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    if ((await pool.query(query, values)).rows.length) return;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.fail("Expected database lock wait did not occur");
+}
 
 function packageInput(version: string) {
   const manifest = parseSkillManifest({

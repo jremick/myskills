@@ -1,3 +1,4 @@
+import { assertExecutableSyncRun } from "./purpose.js";
 import { randomUUID } from "node:crypto";
 import {
   AppError,
@@ -155,6 +156,7 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
     }
     const currentRun = this.runs.get(runId);
     if (!currentRun) throw new AppError("Sync run was not found.", "ARCHITECTURE_SYNC_RUN_NOT_FOUND", 404);
+    assertExecutableSyncRun(currentRun);
     if (currentRun.identity.targetId !== targetId || currentRun.identity.targetGeneration !== targetGeneration) {
       throw new AppError("Sync run and target lease binding do not match.", "ARCHITECTURE_SYNC_BINDING_CONFLICT", 409);
     }
@@ -205,6 +207,7 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
     const run = assertValidArchitectureSyncRun(input.run);
     const nextRun = assertValidArchitectureSyncRun(input.nextRun);
     const runId = validateIdentifier(run.identity.runId, "runId");
+    assertExecutableSyncRun(run);
     const targetId = validateIdentifier(run.identity.targetId, "targetId");
     const actorId = validateIdentifier(input.actorId, "actorId");
     const holderId = validateIdentifier(input.holderId, "holderId");
@@ -379,6 +382,7 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
     }
     const run = this.runs.get(runId);
     if (!run) throw new AppError("Sync run was not found.", "ARCHITECTURE_SYNC_RUN_NOT_FOUND", 404);
+    assertExecutableSyncRun(run);
     if (run.identity.targetId !== targetId || run.identity.targetGeneration !== targetGeneration) {
       throw new AppError("Sync run and target lease binding do not match.", "ARCHITECTURE_SYNC_BINDING_CONFLICT", 409);
     }

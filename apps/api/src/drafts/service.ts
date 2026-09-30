@@ -5,6 +5,7 @@ import {
   type PackageInputFile,
 } from "@myskills-app/skill-package";
 import { canonicalArtifactPayload, type SubmissionService } from "../submissions/service.js";
+import { assertArtifactBodyMatchesMetadata } from "../artifacts/package-payload.js";
 import { artifactPayloadSha256 } from "../submissions/artifact-hash.js";
 import type { SubmissionActor, StoredSubmission, UserSubmissionDetail } from "../submissions/types.js";
 import { revisionConflict, sourceUnavailable } from "./postgres-store.js";
@@ -38,6 +39,7 @@ export class DraftService {
       if (input.source.kind === "release") {
         const bundle = await this.submissions.getPublicBundle({ ...input.source, actorId: actor.id });
         if (!bundle) throw sourceUnavailable();
+        assertArtifactBodyMatchesMetadata(JSON.stringify(bundle.payload), bundle.artifact);
         files = bundle.payload.files;
         title = input.title ?? bundle.title;
         source = { ...input.source, artifactSha256: bundle.artifact.sha256 };
@@ -45,6 +47,7 @@ export class DraftService {
         const bundle = await this.submissions.getUserSubmissionBundle({ actor, submissionId: input.source.submissionId });
         // A team-owned correction stays in the Library import workflow.
         if (!bundle || (bundle.owner && bundle.owner.type !== "user")) throw sourceUnavailable();
+        assertArtifactBodyMatchesMetadata(JSON.stringify(bundle.payload), bundle.artifact);
         files = bundle.payload.files;
         title = input.title ?? bundle.title;
         source = { ...input.source, slug: bundle.slug, version: bundle.version, artifactSha256: bundle.artifact.sha256 };
@@ -141,7 +144,7 @@ function validate(files: PackageInputFile[]): DraftValidation {
   return { valid: issues.length === 0 && !hasBlockingFindings(findings), manifest, issues, findings };
 }
 function submissionDto(submission: StoredSubmission | UserSubmissionDetail) {
-  const scan = "scan" in submission ? submission.scan : submission.scanRuns[0];
+  const scan = "scan" in submission ? submission.scan : [...submission.scanRuns].filter(run => !run.artifactSha256 || run.artifactSha256 === submission.artifact.sha256).sort((a, b) => (b.attempt ?? 0) - (a.attempt ?? 0) || b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0];
   const findings = scan?.findings ?? [];
   return {
     id: submission.id, slug: "skillSlug" in submission ? submission.skillSlug : submission.slug,

@@ -301,7 +301,7 @@ export class MemoryArchitectureStore implements ArchitectureStore {
     const access = this.accessForArchitecture(actor, architecture);
     if (!access.canPreview) return null;
     if (
-      access.reasons.includes("organization")
+      (Boolean(organizationId) || access.reasons.includes("organization"))
       && (!organizationId || !access.allowedOrganizationIds.includes(organizationId))
     ) {
       return null;
@@ -309,7 +309,7 @@ export class MemoryArchitectureStore implements ArchitectureStore {
     const revision = revisionId
       ? architecture.revisions.find((candidate) => candidate.id === revisionId)
       : architecture.revisions.at(-1);
-    return revision && revisionSpecReadableToActor(revision.spec, access)
+    return revision && revisionSpecReadableToActor(revision.spec, access) && (!organizationId || organizationRevisionSpecIsSafe(revision.spec))
       ? this.cloneRevision(revision, architecture, actor)
       : null;
   }

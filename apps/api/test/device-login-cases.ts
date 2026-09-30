@@ -9,8 +9,9 @@ import { MemorySkillRepository } from "../src/repositories/memory-skill-reposito
 
 // First written before production code. These exercise consent and token use at
 // the actual API boundary, with a second API instance and a recreated service.
-export async function deviceLoginJourney(auth: AuthStore, store: DeviceLoginStore) {
+export async function deviceLoginJourney(auth: AuthStore, storeInput: DeviceLoginStore | ((clock: () => Date) => DeviceLoginStore)) {
   let now = new Date();
+  const store = typeof storeInput === "function" ? storeInput(() => now) : storeInput;
   const user = (await auth.createUserWithPassword({ email: "device@example.com", name: "Device fixture", passwordHash: "unused-fixture-hash" })).user!;
   await auth.updateUserStatus({ userId: user.id, status: "active", emailVerifiedAt: now });
   let session = createSessionToken();
@@ -19,7 +20,7 @@ export async function deviceLoginJourney(auth: AuthStore, store: DeviceLoginStor
   const app = () => buildApp({ skillRepository: new MemorySkillRepository([]), authService: new AuthService(auth), deviceLoginService: new DeviceLoginService(store, options) });
   const first = app();
   const second = app();
-  const call = (url: string, payload: unknown, token?: string, target = first) => target.inject({ method: "POST", url: `/v1/auth/device/${url}`, payload, headers: token ? { authorization: `Bearer ${token}` } : {} });
+  const call = (url: string, payload: unknown, token?: string, target = first) => target.inject({ method: "POST", url: `/v1/auth/device/${url}`, payload: payload as Record<string, unknown>, headers: token ? { authorization: `Bearer ${token}` } : {} });
   try {
     assert.equal((await call("start", { scopes: ["admin:invented"] })).statusCode, 400);
     const started = await call("start", { scopes: ["profile:read", "skills:read"] });

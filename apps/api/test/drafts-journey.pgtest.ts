@@ -1,3 +1,4 @@
+import { AppError } from "@myskills-app/core";
 /**
  * Written before AUTHOR-1 production code, 2026-10-01.
  * Independent boundary: real HTTP auth + real Postgres draft and registry writes.
@@ -23,6 +24,7 @@ import { PostgresAuthStore } from "../src/auth/postgres-auth-store.js";
 import { MemoryAuthRateLimiter } from "../src/auth/rate-limit.js";
 import type { ArtifactObjectStorage } from "../src/artifacts/storage.js";
 import { createDb, createPgPool } from "../src/db/client.js";
+import { PackageScanService } from "../src/package-quality/scan-service.js";
 import { DraftService } from "../src/drafts/service.js";
 import { PostgresDraftStore } from "../src/drafts/postgres-store.js";
 import { PostgresSkillRepository } from "../src/repositories/postgres-skill-repository.js";
@@ -49,7 +51,8 @@ test("private draft route journey preserves history, isolation and atomic submis
   }
   const db = createDb(pool);
   const storage = new HeldStorage();
-  const submissions = new SubmissionService(new PostgresSubmissionStore(db, { artifactStorage: storage }));
+  const submissions = new SubmissionService(new PostgresSubmissionStore(db, { artifactStorage: storage, backgroundScans: true }));
+  const scans = new PackageScanService(db, { artifactStorage: storage });
   const store = new PostgresDraftStore(db);
   const service = new DraftService(store, submissions);
   const app = buildApp({
@@ -136,6 +139,16 @@ test("private draft route journey preserves history, isolation and atomic submis
     assert.equal(submits[0]!.body.submission.id, submits[1]!.body.submission.id);
     const submitted = submits[0]!.body.submission;
     assert.equal(submitted.artifactSha256, digest(files));
+    assert.equal(submitted.securityStatus, "not-run");
+    assert.equal(submitted.scan.status, "queued");
+    const crashed = await scans.claimNext();
+    assert.ok(crashed);
+    await pool.query("UPDATE jobs SET lease_expires_at=now()-interval '1 second' WHERE id=$1", [crashed.jobId]);
+    await scans.runOnce();
+    const replay = ok(await call("POST", `/v1/drafts/${created.id}/submit`, alice, { expectedRevision: 3 }));
+    assert.equal(replay.submission.id, submitted.id);
+    assert.equal(replay.submission.scan.status, "succeeded");
+    assert.equal(replay.submission.securityStatus, "passed");
     assert.equal((await pool.query("SELECT count(*)::int AS n FROM skill_versions")).rows[0].n, 1);
     assert.equal(submits[0]!.body.draft.submission.id, submitted.id);
     await submissions.performReviewAction({ actor: { id: users.reviewer, roles: ["maintainer"], mfaVerified: true }, submissionId: submitted.id, action: "request-changes", reason: "Clarify the guide." });
@@ -232,7 +245,7 @@ test("private draft route journey preserves history, isolation and atomic submis
     const files = packageFiles("source-workflow", "1.0.0", "public");
     const submitted = await submissions.createSubmission({ actor: { id: users.alice, roles: ["author"] }, manifest: JSON.parse(files.find((file) => file.path === "skill.json")!.content), files });
     // Confirmation scan is a separate stream: establish actual scan completion in this fixture.
-    await pool.query("UPDATE skill_versions SET security_status='passed' WHERE id=$1", [submitted.id]);
+    await scans.runOnce();
     await submissions.performReviewAction({ actor: { id: users.reviewer, roles: ["maintainer"], mfaVerified: true }, submissionId: submitted.id, action: "approve", artifactSha256: submitted.artifact.sha256 });
     await submissions.performReviewAction({ actor: { id: users.reviewer, roles: ["maintainer"], mfaVerified: true }, submissionId: submitted.id, action: "publish" });
     const fork = ok(await call("POST", "/v1/drafts", bob, { source: { kind: "release", slug: "source-workflow", version: "1.0.0", platform: "codex" } }), 201).draft;
@@ -243,6 +256,50 @@ test("private draft route journey preserves history, isolation and atomic submis
     denied(await call("POST", "/v1/drafts", bob, { source: { kind: "release", slug: "source-workflow", version: "1.0.0" } }), 404, "DRAFT_SOURCE_NOT_FOUND");
     assert.equal((await pool.query("SELECT count(*)::int AS n FROM author_drafts WHERE owner_user_id=$1", [users.bob])).rows[0].n, before);
     evidence.push({ check: "source-revocation", sourceId: submitted.id, artifactSha256: submitted.artifact.sha256 });
+  });
+
+
+  await t.test("source membership revoked while draft allocation waits cannot persist held bytes", async () => {
+    const files = packageFiles("team-source", "1.0.0", "team");
+    const submitted = await submissions.createSubmission({ actor: { id: users.alice, roles: ["author"] }, manifest: JSON.parse(files.find(file => file.path === "skill.json")!.content), files });
+    await scans.runOnce(25);
+    const reviewerActor = { id: users.reviewer, roles: ["maintainer" as const], mfaVerified: true };
+    await submissions.performReviewAction({ actor: reviewerActor, submissionId: submitted.id, action: "approve", artifactSha256: submitted.artifact.sha256 });
+    await submissions.performReviewAction({ actor: reviewerActor, submissionId: submitted.id, action: "publish" });
+    const teamId = randomUUID();
+    await pool.query("INSERT INTO teams(id,name,slug,created_by_user_id) VALUES($1,'Fork team','fork-team',$2)", [teamId, users.alice]);
+    await pool.query("INSERT INTO team_memberships(team_id,user_id,role) VALUES($1,$2,'member')", [teamId, users.bob]);
+    await pool.query("INSERT INTO skill_team_grants(skill_id,team_id) SELECT id,$1 FROM skills WHERE slug='team-source'", [teamId]);
+    const before = (await pool.query("SELECT count(*)::int AS n FROM author_drafts WHERE owner_user_id=$1", [users.bob])).rows[0].n;
+    const locker = await pool.connect();
+    await locker.query("BEGIN");
+    await locker.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`author-drafts:${users.bob}`]);
+    const pending = call("POST", "/v1/drafts", bob, { source: { kind: "release", slug: "team-source", version: "1.0.0" } });
+    try {
+      await waitForLocks(pool, "pg_advisory_xact_lock", 1);
+      await pool.query("DELETE FROM team_memberships WHERE team_id=$1 AND user_id=$2", [teamId, users.bob]);
+    } finally { await locker.query("COMMIT"); locker.release(); }
+    denied(await pending, 404, "DRAFT_SOURCE_NOT_FOUND");
+    assert.equal((await pool.query("SELECT count(*)::int AS n FROM author_drafts WHERE owner_user_id=$1", [users.bob])).rows[0].n, before);
+  });
+
+  await t.test("database payload drift cannot be attributed to the original release or submission digest", async () => {
+    const localSubmissions = new SubmissionService(new PostgresSubmissionStore(db, { backgroundScans: true }));
+    const localDrafts = new DraftService(store, localSubmissions);
+    const files = packageFiles("database-source", "1.0.0", "public");
+    const submitted = await localSubmissions.createSubmission({ actor: { id: users.alice, roles: ["author"] }, manifest: JSON.parse(files.find(file => file.path === "skill.json")!.content), files });
+    const corrupt = () => pool.query("UPDATE skill_artifacts SET payload=jsonb_set(payload,'{files,1,content}',to_jsonb('altered text'::text)) WHERE skill_version_id=$1", [submitted.id]);
+    const before = (await pool.query("SELECT count(*)::int AS n FROM author_drafts")).rows[0].n;
+    await corrupt();
+    await assert.rejects(localDrafts.create({ id: users.alice, roles: ["author"] }, { source: { kind: "submission", submissionId: submitted.id } }), (error: unknown) => error instanceof AppError && error.code === "ARTIFACT_METADATA_MISMATCH");
+    await pool.query("UPDATE skill_artifacts SET payload=$2::jsonb WHERE skill_version_id=$1", [submitted.id, JSON.stringify(submitted.artifact.payload)]);
+    await new PackageScanService(db).runOnce(25);
+    const reviewerActor = { id: users.reviewer, roles: ["maintainer" as const], mfaVerified: true };
+    await localSubmissions.performReviewAction({ actor: reviewerActor, submissionId: submitted.id, action: "approve", artifactSha256: submitted.artifact.sha256 });
+    await localSubmissions.performReviewAction({ actor: reviewerActor, submissionId: submitted.id, action: "publish" });
+    await corrupt();
+    await assert.rejects(localDrafts.create({ id: users.bob, roles: ["author"] }, { source: { kind: "release", slug: "database-source", version: "1.0.0" } }), (error: unknown) => error instanceof AppError && error.code === "ARTIFACT_METADATA_MISMATCH");
+    assert.equal((await pool.query("SELECT count(*)::int AS n FROM author_drafts")).rows[0].n, before);
   });
 
   await t.test("history and author limits refuse without pruning", async () => {

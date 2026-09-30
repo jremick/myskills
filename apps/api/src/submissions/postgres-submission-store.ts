@@ -1,3 +1,4 @@
+import { assertRegistryReadCredential } from "../artifacts/postgres-read-authority.js";
 import { assertCurrentTeamOwner, effectiveTeamOwnerPredicate, isCurrentTeamOwner } from "../repositories/team-ownership.js";
 import type { ChronologicalStoreQuery } from "../repositories/chronological-pagination.js";
 import { and, eq, ilike, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
@@ -836,6 +837,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
         version: preparedRow?.version,
         reason: error instanceof AppError ? error.code : "invalid_artifact_manifest",
       });
+      if (error instanceof AppError && error.code === "ARTIFACT_METADATA_MISMATCH") throw new AppError("Approved artifact hash does not match the current submission artifact.", "APPROVED_ARTIFACT_HASH_MISMATCH", 409);
       throw error;
     }
     if (manifest.name !== preparedRow.slug || manifest.version !== preparedRow.version || manifest.visibility !== preparedRow.visibility) {
@@ -1159,25 +1161,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
     // Revocations committed before it are visible; overlapping writes may
     // serialize after it. No slow object read or usage UPDATE runs inside it.
     return this.db.transaction(async (tx) => {
-      if (input.credential) {
-        const { kind, tokenHash } = input.credential;
-        const credential = kind === "session"
-          ? sql`SELECT user_id, '[]'::jsonb AS scopes FROM auth_sessions WHERE token_hash = ${tokenHash} AND revoked_at IS NULL AND expires_at > clock_timestamp()`
-          : kind === "api_token"
-            ? sql`SELECT user_id, scopes FROM api_tokens WHERE token_hash = ${tokenHash} AND revoked_at IS NULL AND expires_at > clock_timestamp()`
-            : sql`SELECT g.user_id, t.scopes FROM oauth_access_tokens t JOIN oauth_grants g ON g.id = t.grant_id
-                WHERE t.token_hash = ${tokenHash} AND t.revoked_at IS NULL AND g.revoked_at IS NULL
-                AND t.expires_at > clock_timestamp() AND g.expires_at > clock_timestamp()
-                AND g.resource = ${input.credential.resource ?? ""} AND g.client_id = ${input.credential.clientId ?? ""}`;
-        const result = await tx.execute<{ scopes: string[] }>(sql`SELECT c.scopes FROM (${credential}) c JOIN users u ON u.id = c.user_id
-          WHERE u.id = ${input.actorId} AND u.status = 'active' AND u.email_verified_at IS NOT NULL`);
-        if (!result.rows[0]) throw new AppError("Authentication is required.", "AUTHENTICATION_REQUIRED", 401);
-        if (kind !== "session" && !result.rows[0].scopes.includes("skills:read")) {
-          throw new AppError("API token scope is required.", "API_TOKEN_SCOPE_REQUIRED", 403, { scope: "skills:read" });
-        }
-      } else if (input.actorId) {
-        throw new AppError("Authentication is required.", "AUTHENTICATION_REQUIRED", 401);
-      }
+      await assertRegistryReadCredential(tx, input);
       const sharing = await getSharingSettings(tx);
       const row = await selectVisibleRelease(tx, input, sharing);
       return row ? publicRelease(row) : null;
@@ -2024,6 +2008,8 @@ async function selectSubmissionFeedback(
         createdAt: run.createdAt.toISOString(),
         startedAt: run.startedAt?.toISOString() ?? null,
         completedAt: run.completedAt?.toISOString() ?? null,
+        artifactSha256: run.artifactSha256, runnerVersion: run.runnerVersion,
+        attempt: run.attempt, failureCode: run.failureCode,
         findings: [],
       };
       scans.set(run.id, scan);

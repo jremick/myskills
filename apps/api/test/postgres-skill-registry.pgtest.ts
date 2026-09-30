@@ -651,6 +651,11 @@ test("Postgres publish fails when artifact payload changes after approval", {
     }),
     (error) => error instanceof AppError && error.code === "APPROVED_ARTIFACT_HASH_MISMATCH",
   );
+  const state = await pool.query("SELECT lifecycle_status, published_at FROM skill_versions WHERE id=$1", [submitted.id]);
+  assert.equal(state.rows[0].lifecycle_status, "review");
+  assert.equal(state.rows[0].published_at, null);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM audit_events WHERE resource_id=$1 AND action='release.publish' AND decision='deny'", [submitted.id])).rows[0].n, 1);
+
 });
 
 test("Postgres publish rejects artifact payload mutation between pre-read and revalidation", {

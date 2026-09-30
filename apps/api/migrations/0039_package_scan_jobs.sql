@@ -32,6 +32,13 @@ CREATE TRIGGER preserve_completed_scan BEFORE UPDATE OR DELETE ON scan_runs FOR 
 
 CREATE FUNCTION preserve_bound_scan_findings() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+  -- Lock the evidence parent before reading its terminal status. Completion
+  -- then waits for every admitted finding transaction, or the late writer
+  -- observes completion and refuses. Sorting avoids a reassignment lock cycle.
+  PERFORM id FROM scan_runs WHERE id IN (
+    CASE WHEN TG_OP <> 'INSERT' THEN OLD.scan_run_id ELSE NULL END,
+    CASE WHEN TG_OP <> 'DELETE' THEN NEW.scan_run_id ELSE NULL END
+  ) ORDER BY id FOR SHARE;
   IF TG_OP <> 'INSERT' AND EXISTS (SELECT 1 FROM scan_runs WHERE id = OLD.scan_run_id AND job_id IS NOT NULL AND status IN ('succeeded', 'failed')) THEN
     RAISE EXCEPTION 'Completed package scan findings are immutable';
   END IF;

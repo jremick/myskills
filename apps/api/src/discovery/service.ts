@@ -1,11 +1,17 @@
 import { AppError, taskDiscoveryLimits, type PublicSkill, type SkillRepository, type TaskDiscoveryInput, type TaskDiscoveryResponse, type TaskDiscoveryResult } from "@myskills-app/core";
 import type { PublicReleaseMetadata } from "../submissions/types.js";
 
-interface DiscoveryOptions {
+export interface DiscoveryAuthority {
   repository: SkillRepository;
   readRelease(input: { slug: string; version: string; actorId: string | null }): Promise<PublicReleaseMetadata | null>;
   /** Resolve the live credential each time; never downgrade a revoked token to anonymous. */
   readActor(): Promise<string | null>;
+}
+
+export type DiscoveryFinalAuthority = (input: { actorId: string | null; credential?: import("../submissions/types.js").ArtifactDeliveryInput["credential"] }, read: (authority: DiscoveryAuthority) => Promise<TaskDiscoveryResult[]>) => Promise<TaskDiscoveryResult[]>;
+interface DiscoveryOptions extends DiscoveryAuthority {
+  credential?: import("../submissions/types.js").ArtifactDeliveryInput["credential"];
+  finalAuthority?: DiscoveryFinalAuthority;
 }
 
 const stopWords = new Set("a an and are as at be been but by can could do for from have help i in into is it me my of on or our please should that the their them there these they this to us use using want was we were will with would you your".split(" "));
@@ -52,18 +58,27 @@ export async function discoverTask(input: TaskDiscoveryInput, options: Discovery
   const ranked = catalog.slice(0, taskDiscoveryLimits.catalogEntries).filter(eligible).map(skill => ({ skill, relevance: relevance(skill, terms) })).filter(r => r.relevance.score > 0).sort((a, b) => b.relevance.score - a.relevance.score || (a.skill.slug < b.skill.slug ? -1 : a.skill.slug > b.skill.slug ? 1 : 0)).slice(0, input.limit ?? 10);
   // Each result is bound to the release selected during authorized catalog read.
   // Re-read both current visibility and that exact release before returning it.
-  const current = await Promise.all(ranked.map(async candidate => {
-    const [skill, release] = await Promise.all([
-      options.repository.getVisibleSkillBySlug(candidate.skill.slug, actorId),
-      options.readRelease({ slug: candidate.skill.slug, version: candidate.skill.latestVersion, actorId }),
-    ]);
-    if (!eligible(skill) || skill.latestVersion !== candidate.skill.latestVersion || !release || release.slug !== skill.slug || release.version !== candidate.skill.latestVersion || release.lifecycleStatus !== "approved" || release.reviewStatus !== "approved" || release.securityStatus !== "passed" || !/^[a-f0-9]{64}$/i.test(release.artifact.sha256)) return null;
-    const score = relevance(skill, terms);
-    if (!score.score) return null;
-    return { skill: safeMetadata(skill), release: { slug: release.slug, version: release.version, sha256: release.artifact.sha256, reviewStatus: "approved", securityStatus: "passed" }, relevance: score } satisfies TaskDiscoveryResult;
-  }));
-  if (await options.readActor() !== actorId) throw new AppError("Authentication is required.", "AUTHENTICATION_REQUIRED", 401);
-  response.results = current.filter((r): r is NonNullable<typeof r> => r !== null).sort((a, b) => b.relevance.score - a.relevance.score || (a.skill.slug < b.skill.slug ? -1 : a.skill.slug > b.skill.slug ? 1 : 0));
+  const readFinal = async (authority: DiscoveryAuthority): Promise<TaskDiscoveryResult[]> => {
+    if (await authority.readActor() !== actorId) throw new AppError("Authentication is required.", "AUTHENTICATION_REQUIRED", 401);
+    const results: TaskDiscoveryResult[] = [];
+    for (const candidate of ranked) {
+      const skill = await authority.repository.getVisibleSkillBySlug(candidate.skill.slug, actorId);
+      if (!eligible(skill)) continue;
+      const release = await authority.readRelease({ slug: skill.slug, version: skill.latestVersion, actorId });
+      if (!release || release.slug !== skill.slug || release.version !== skill.latestVersion || release.lifecycleStatus !== "approved" || release.reviewStatus !== "approved" || release.securityStatus !== "passed" || !/^[a-f0-9]{64}$/i.test(release.artifact.sha256)) continue;
+      const score = relevance(skill, terms);
+      if (!score.score) continue;
+      results.push({ skill: safeMetadata(skill), release: { slug: release.slug, version: release.version, sha256: release.artifact.sha256, reviewStatus: "approved", securityStatus: "passed" }, relevance: score });
+    }
+    if (await authority.readActor() !== actorId) throw new AppError("Authentication is required.", "AUTHENTICATION_REQUIRED", 401);
+    return results;
+  };
+  // Production retains one MVCC snapshot across credentials, grants, metadata
+  // and selected exact releases. Memory fixtures describe point-in-time reads.
+  response.results = await (options.finalAuthority
+    ? options.finalAuthority({ actorId, credential: options.credential }, readFinal)
+    : readFinal(options));
+  response.results.sort((a, b) => b.relevance.score - a.relevance.score || (a.skill.slug < b.skill.slug ? -1 : a.skill.slug > b.skill.slug ? 1 : 0));
   if (response.results.length < ranked.length) response.uncertainty.push("Some matches changed or became unavailable during discovery. Run the task again for current results.");
   return response;
 }

@@ -148,7 +148,8 @@ export class PackageScanService {
   private async reconcileExhausted(): Promise<void> {
     // Keep this separate from claim locks to preserve publication's lock order.
     await this.db.execute(sql`UPDATE skill_versions v SET security_status = 'failed'
-      WHERE v.security_status = 'not-run' AND v.published_at IS NULL AND v.review_status IN ('unreviewed', 'changes-requested')
+      WHERE v.security_status = 'not-run' AND v.published_at IS NULL AND v.deleted_at IS NULL
+        AND v.lifecycle_status IN ('submitted', 'review') AND v.review_status IN ('unreviewed', 'changes-requested')
         AND EXISTS (SELECT 1 FROM jobs j WHERE j.type = 'package-scan' AND j.status = 'failed'
           AND j.failure_code = 'attempts_exhausted' AND j.payload->>'versionId' = v.id::text)`);
   }
