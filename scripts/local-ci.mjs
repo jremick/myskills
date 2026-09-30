@@ -26,7 +26,7 @@ import {
   writeSync,
 } from "node:fs";
 import { createServer } from "node:net";
-import { arch, platform, release as osRelease, tmpdir } from "node:os";
+import { arch, homedir, platform, release as osRelease, tmpdir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { secretPatterns } from "./lib/secret-patterns.mjs";
@@ -485,6 +485,9 @@ class JobContext {
       for (const name of ["h", "t", "r"]) mkdirSync(join(directory, name), { mode: 0o700 });
       this.privateEnvironment = {
         HOME: join(directory, "h"), TMPDIR: join(directory, "t"),
+        // Docker contexts/plugins must come from the same config used by preflight and cleanup,
+        // even when it was implicit under the caller's HOME. Preserve its path, never its contents.
+        DOCKER_CONFIG: resolve(process.env.DOCKER_CONFIG || join(homedir(), ".docker")),
         XDG_CONFIG_HOME: join(directory, "h", ".config"), XDG_CACHE_HOME: join(directory, "h", ".cache"),
         XDG_RUNTIME_DIR: join(directory, "r"),
       };
