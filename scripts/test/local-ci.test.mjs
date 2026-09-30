@@ -45,6 +45,12 @@ import test from "node:test";
 //   resources remain.
 // - A populated or symlinked evidence destination is accepted, so the evidence scan can delete or the
 //   manifest can export files that the run did not write.
+// Four-lane integration failures, written before the scheduler:
+// - Opt-in verify stays serial, exceeds four jobs, or starts a lane's next job before its predecessor
+//   has finished cleanup. Shared HOME, TMPDIR or browser ports let concurrent jobs interfere.
+// - A failed lane suppresses another required job or produces a passing aggregate/context.
+// - Cancellation stops only one active process, starts queued jobs, or removes the workspace early.
+// - Invalid concurrency or shared port overrides silently select an unsafe execution plan.
 
 const runId = `fixture-run-${process.pid}`;
 const rootPackage = JSON.parse(readFileSync(resolve("package.json"), "utf8"));
@@ -84,6 +90,9 @@ test("unsafe or stale inputs are rejected before any tool, container or workspac
     { name: "malformed SHA", env: { LOCAL_CI_SOURCE_SHA: "abc123" }, reason: "invalid-source-sha" },
     { name: "stale SHA", env: { LOCAL_CI_SOURCE_SHA: "0".repeat(40) }, reason: "source-sha-mismatch" },
     { name: "CodeQL without CLI", args: ["codeql"], reason: "codeql-cli-unavailable" },
+    { name: "unsupported lane count", env: { LOCAL_CI_VERIFY_LANES: "3" }, reason: "invalid-verify-lanes" },
+    { name: "parallel release", args: ["release-check"], env: { LOCAL_CI_VERIFY_LANES: "4" }, reason: "invalid-verify-lanes" },
+    { name: "shared parallel browser port", env: { LOCAL_CI_VERIFY_LANES: "4", MYSKILLS_E2E_WEB_PORT: "43100" }, reason: "parallel-port-override" },
   ];
   symlinkSync(fixture.source, join(fixture.root, "source-link"));
   for (const row of rows) {
@@ -185,7 +194,7 @@ test("verify runs every required job on both Node lines and reports gating conte
   assert.equal(run.output.includes(canary), false);
 });
 
-test("job failures are isolated, fail the gating contexts and never remove another run's container", (t) => {
+for (const lanes of ["1", "4"]) test(`job failures are isolated and fail contexts with ${lanes} lane(s) without removing another run's container`, (t) => {
   const fixture = makeFixture(t);
   const conflicting = `myskills-ci-${runId}-postgres-node22-postgres`;
   fixture.configure({
@@ -193,7 +202,7 @@ test("job failures are isolated, fail the gating contexts and never remove anoth
     omitMockedReport: ["22"],
     dockerConflicts: [conflicting],
   });
-  const run = runLocalCi(fixture, ["verify"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  const run = runLocalCi(fixture, ["verify"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha, LOCAL_CI_VERIFY_LANES: lanes } });
   assert.equal(run.status, 1, run.output);
   const { result } = run;
   assert.equal(result.status, "failed");
@@ -223,6 +232,87 @@ test("job failures are isolated, fail the gating contexts and never remove anoth
   assertExactCleanup(docker, projects, { conflicts: [conflicting] });
   assertEvidenceManifest(run.evidence, result);
   assert.equal(existsSync(fixture.runWorkspace), false);
+});
+
+test("four verify lanes overlap, preserve job order and isolate directories and browser ports", (t) => {
+  const fixture = makeFixture(t);
+  fixture.configure({ rules: [{ tool: "npm", prefix: "ci", sleepMs: 500 }] });
+  const run = runLocalCi(fixture, ["verify"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha, LOCAL_CI_VERIFY_LANES: "4" } });
+  assert.equal(run.status, 0, run.output);
+  assert.equal(run.result.complete, true);
+  assert.deepEqual(run.result.contexts, { check: "passed", "web-e2e": "passed", "postgres-integration": "passed" });
+  assert.deepEqual(run.result.jobs.map(({ id }) => id).sort(), [...verifyJobs].sort());
+  const times = Object.fromEntries(run.result.jobs.map((job) => [job.id, {
+    start: Date.parse(job.startedAt), end: Date.parse(job.finishedAt),
+  }]));
+  const first = ["web-e2e-node22", "web-e2e-node24", "postgres-node22", "postgres-node24"].map((id) => times[id]);
+  assert.ok(Math.max(...first.map(({ start }) => start)) < Math.min(...first.map(({ end }) => end)), "all four initial jobs must overlap");
+  for (const [before, after] of [["postgres-node22", "check-node22"], ["postgres-node24", "check-node24"], ["check-node24", "railway-images"]]) {
+    assert.ok(times[before].end <= times[after].start, `${after} must wait for ${before}, including cleanup`);
+  }
+  const events = Object.values(times).flatMap(({ start, end }) => [[start, 1], [end, -1]]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  let active = 0;
+  for (const [, change] of events) {
+    active += change;
+    assert.ok(active <= 4, "never run more than four jobs");
+  }
+  const calls = fixture.records().filter(({ cwd, args }) => cwd.endsWith("/source") && args[0] !== "--version" && cwd !== fixture.source);
+  const environments = new Map(calls.map(({ cwd, env }) => [cwd, env]));
+  assert.equal(environments.size, 7);
+  for (const variable of ["HOME", "TMPDIR"]) {
+    const paths = [...environments.values()].map((env) => env[variable]);
+    assert.equal(new Set(paths).size, 7, `${variable} must be private to each job`);
+    assert.ok(paths.every((path) => path && !existsSync(path)), `${variable} directories must be removed after the run`);
+  }
+  const browsers = run.result.jobs.filter(({ id }) => id.startsWith("web-e2e-"));
+  const ports = browsers.flatMap(({ ports }) => Object.values(ports));
+  assert.equal(ports.length, 6);
+  assert.equal(new Set(ports).size, 6, "all browser job ports must be distinct");
+  assertEvidenceManifest(run.evidence, run.result);
+  assert.equal(existsSync(fixture.runWorkspace), false);
+  assert.equal(existsSync(runIdReservation), false);
+});
+
+test("four-lane cancellation stops every active step before cleanup and skips queued jobs", async (t) => {
+  const fixture = makeFixture(t);
+  fixture.configure({ rules: [{ tool: "npm", prefix: "ci", sleepMs: 60_000 }] });
+  const evidence = fixture.newEvidence();
+  const child = spawn("bash", [join(fixture.source, "scripts/local-ci.sh"), "verify"], {
+    cwd: fixture.source,
+    env: fixture.env({ LOCAL_CI_EVIDENCE_DIR: evidence, LOCAL_CI_SOURCE_SHA: fixture.sha, LOCAL_CI_VERIFY_LANES: "4" }),
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout.on("data", (chunk) => { output += chunk; });
+  child.stderr.on("data", (chunk) => { output += chunk; });
+  const exited = new Promise((resolvePromise) => child.once("close", (code) => resolvePromise(code)));
+  let steps;
+  try {
+    steps = await waitFor(() => {
+      const installs = fixture.records().filter(({ tool, args }) => tool === "npm" && args.join(" ") === "ci");
+      return installs.length === 4 && installs;
+    }, 10_000);
+  } finally {
+    child.kill("SIGTERM");
+    await exited;
+  }
+  assert.equal(await exited, 143, output);
+  assert.ok(steps.every(({ pid }) => !isAlive(pid)), "all active process groups must stop");
+  const result = readJson(join(evidence, "result.json"));
+  assert.equal(result.status, "cancelled");
+  assert.deepEqual(result.contexts, { check: "cancelled", "web-e2e": "cancelled", "postgres-integration": "cancelled" });
+  for (const id of ["check-node22", "check-node24", "railway-images"]) {
+    assert.equal(result.jobs.find((job) => job.id === id).status, "not-run", `${id} must never start`);
+  }
+  assert.equal(result.cleanup.status, "complete");
+  const resources = readJson(join(evidence, "resources.json"));
+  assert.ok(resources.resources.every(({ state }) => state === "removed"));
+  for (const { env } of steps) {
+    assert.equal(existsSync(env.HOME), false);
+    assert.equal(existsSync(env.TMPDIR), false);
+  }
+  assert.equal(existsSync(fixture.runWorkspace), false);
+  assert.equal(existsSync(runIdReservation), false);
 });
 
 test("partial or unpinned runs never report the required contexts", (t) => {
@@ -850,7 +940,7 @@ async function fakeToolMain() {
   const config = JSON.parse(fs.readFileSync(path.join(root, "fake-config.json"), "utf8"));
   const key = args.join(" ");
   const env = {};
-  for (const name of ["CI", "TEST_DATABASE_URL", "MYSKILLS_E2E_COMPOSE_PROJECT", "RELEASE_REQUIRE_TAG", "RELEASE_EXPECTED_TAG", "PLAYWRIGHT_JSON_OUTPUT_FILE", "TMPDIR"]) {
+  for (const name of ["CI", "TEST_DATABASE_URL", "MYSKILLS_E2E_COMPOSE_PROJECT", "RELEASE_REQUIRE_TAG", "RELEASE_EXPECTED_TAG", "PLAYWRIGHT_JSON_OUTPUT_FILE", "HOME", "TMPDIR"]) {
     if (process.env[name] !== undefined) env[name] = process.env[name];
   }
   const canarySeen = Boolean(config.canary) && Object.values(process.env).some((value) => String(value).includes(config.canary));
