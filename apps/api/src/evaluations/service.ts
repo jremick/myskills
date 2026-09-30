@@ -27,7 +27,9 @@ export class EvaluationService {
       const suite = await tx.execute(sql`SELECT r.*, d.owner_type, d.owner_id FROM improvement_document_revisions r
         JOIN improvement_documents d ON d.id=r.document_id WHERE r.id=${input.suiteRevisionId}::uuid AND d.kind='suite' FOR SHARE OF r,d`);
       const revision = suite.rows[0];
-      if (!revision || !await canReadSuite(tx, actor.id, String(revision.owner_type), String(revision.owner_id))) throw missing();
+      if (!revision) throw missing();
+      await retainSuiteScope(tx, String(revision.owner_type), String(revision.owner_id));
+      if (!await canReadSuite(tx, actor.id, String(revision.owner_type), String(revision.owner_id))) throw missing();
       const body = normalizeImprovementEvaluationSuiteV1(revision.body);
       if (!body.assertions || improvementDocumentDigest("suite", body) !== revision.body_sha256) throw conflict();
       const existing = await tx.execute(sql`SELECT * FROM package_evaluation_runs WHERE actor_user_id=${actor.id}::uuid AND idempotency_key=${input.idempotencyKey}`);
@@ -100,8 +102,15 @@ async function retainAudience(tx: DatabaseTransaction, actorId: string, skillId:
   await tx.execute(sql`SELECT id FROM teams WHERE id IN (SELECT team_id FROM team_memberships WHERE user_id=${actorId}::uuid
     UNION SELECT team_id FROM skill_team_grants WHERE skill_id=${skillId}::uuid UNION SELECT owner_team_id FROM skills WHERE id=${skillId}::uuid) ORDER BY id FOR SHARE`);
   await tx.execute(sql`SELECT id FROM organizations WHERE id IN (SELECT organization_id FROM organization_memberships WHERE user_id=${actorId}::uuid
+    UNION SELECT organization_id FROM skill_organization_grants WHERE skill_id=${skillId}::uuid
     UNION SELECT t.organization_id FROM teams t WHERE t.id IN (SELECT team_id FROM team_memberships WHERE user_id=${actorId}::uuid
       UNION SELECT team_id FROM skill_team_grants WHERE skill_id=${skillId}::uuid UNION SELECT owner_team_id FROM skills WHERE id=${skillId}::uuid)) ORDER BY id FOR SHARE`);
+}
+async function retainSuiteScope(tx: DatabaseTransaction, type: string, id: string) {
+  if (type === "team") {
+    await tx.execute(sql`SELECT id FROM teams WHERE id=${id}::uuid FOR SHARE`);
+    await tx.execute(sql`SELECT id FROM organizations WHERE id IN (SELECT organization_id FROM teams WHERE id=${id}::uuid) FOR SHARE`);
+  } else if (type === "organization") await tx.execute(sql`SELECT id FROM organizations WHERE id=${id}::uuid FOR SHARE`);
 }
 async function canReadSuite(tx: DatabaseTransaction, actorId: string, type: string, id: string): Promise<boolean> {
   if (type === "user") return id === actorId;

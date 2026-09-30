@@ -103,9 +103,14 @@ export class PostgresDraftStore implements DraftStore {
     if (source.kind === "release") {
       // Membership/policy writers lock their aggregate first. Retain those
       // same authorities through the private copy, including allocation waits.
-      await tx.execute(sql`SELECT t.id FROM teams t WHERE t.id IN (SELECT team_id FROM team_memberships WHERE user_id=${ownerId}::uuid) ORDER BY t.id FOR SHARE`);
+      await tx.execute(sql`SELECT t.id FROM teams t WHERE t.id IN (SELECT team_id FROM team_memberships WHERE user_id=${ownerId}::uuid
+        UNION SELECT g.team_id FROM skill_team_grants g JOIN skills s ON s.id=g.skill_id WHERE s.slug=${source.slug}
+        UNION SELECT owner_team_id FROM skills WHERE slug=${source.slug}) ORDER BY t.id FOR SHARE`);
       await tx.execute(sql`SELECT o.id FROM organizations o WHERE o.id IN (SELECT organization_id FROM organization_memberships WHERE user_id=${ownerId}::uuid
-        UNION SELECT t.organization_id FROM teams t JOIN team_memberships m ON m.team_id=t.id WHERE m.user_id=${ownerId}::uuid AND t.organization_id IS NOT NULL) ORDER BY o.id FOR SHARE`);
+        UNION SELECT g.organization_id FROM skill_organization_grants g JOIN skills s ON s.id=g.skill_id WHERE s.slug=${source.slug}
+        UNION SELECT t.organization_id FROM teams t WHERE t.id IN (SELECT team_id FROM team_memberships WHERE user_id=${ownerId}::uuid
+          UNION SELECT g.team_id FROM skill_team_grants g JOIN skills s ON s.id=g.skill_id WHERE s.slug=${source.slug}
+          UNION SELECT owner_team_id FROM skills WHERE slug=${source.slug}) AND t.organization_id IS NOT NULL) ORDER BY o.id FOR SHARE`);
       const actor = await tx.execute(sql`SELECT id FROM users WHERE id=${ownerId}::uuid AND status='active' AND email_verified_at IS NOT NULL FOR SHARE`);
       if (!actor.rows.length) throw sourceUnavailable();
       // Reuse the registry's current visibility/lifecycle policy without another object read.

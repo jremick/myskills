@@ -50,7 +50,7 @@ test("server worker crash recovers durable attempt and SIGTERM drains completion
   const crashed = once(first, "exit"); first.kill("SIGKILL"); await crashed;
   assert.equal((await pool.query("SELECT status FROM jobs WHERE type='package-scan'")).rows[0].status, "running");
   await pool.query("UPDATE jobs SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE type='package-scan'");
-  const second = launch(); let errors = ""; second.stderr!.on("data", chunk => { errors = (errors + String(chunk)).slice(-4096); });
+  const second = launch(); assert.notEqual(second.pid, first.pid); let errors = ""; second.stderr!.on("data", chunk => { errors = (errors + String(chunk)).slice(-4096); });
   await waitBlocked();
   const shutdown = once(second, "exit"); second.kill("SIGTERM");
   await delay(150); assert.equal(second.exitCode, null, "shutdown must wait for blocked completion");
@@ -59,7 +59,10 @@ test("server worker crash recovers durable attempt and SIGTERM drains completion
   const detail = await submissions.getUserSubmissionDetail({ actor: { id: user.id, roles: ["author"] }, submissionId: pending.id });
   assert.deepEqual(detail!.scanRuns.map(r => r.status), ["failed", "succeeded"]);
   assert.ok(detail!.scanRuns.every(r => r.artifactSha256 === pending.artifact.sha256));
+  assert.equal(detail!.scanRuns[0]!.failureCode, "lease_expired");
+  assert.deepEqual(detail!.scanRuns.map(r => r.attempt), [1, 2]);
   assert.equal(detail!.securityStatus, "passed");
+  assert.equal((await pool.query("SELECT status FROM jobs WHERE type='package-scan'")).rows[0].status, "succeeded");
   assert.equal(errors.includes("Cannot use a pool after calling end"), false);
 });
 async function until(check: () => Promise<boolean>) {

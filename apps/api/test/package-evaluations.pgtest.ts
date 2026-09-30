@@ -85,6 +85,9 @@ test("exact-version evaluation HTTP/PG authority, replay, immutability and publi
   assert.equal(summary.json().runs[0].summary.artifactSha256,first.artifact.sha256);
   for(const canary of ["PRIVATE-CONTENT-CANARY","assertions","reviewContext","actorUserId","files","tokenHash"])assert.equal(summary.body.includes(canary),false,canary);
   assert.equal((await call("GET",`${endpoint}/summary`,"invalid-token")).statusCode,401);
+  await authStore.revokeApiToken({userId:author.id,tokenId:readTokenResponse.json().token.id});
+  assert.equal((await call("GET",`${endpoint}/summary`,readToken)).statusCode,401);
+  assert.equal((await call("GET",`${endpoint}/runs`,readToken)).statusCode,401);
 });
 async function waitForLock(pool:ReturnType<typeof createPgPool>){
   const deadline=Date.now()+5000;while(Date.now()<deadline){const r=await pool.query("SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%pg_advisory_xact_lock%' AND pid<>pg_backend_pid()");if(r.rows.length)return;await new Promise(done=>setTimeout(done,20));}assert.fail("No blocked API evaluation transaction");
