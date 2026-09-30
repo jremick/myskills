@@ -25,7 +25,9 @@ test("Skills return complete private manifests and preserve BOM, YAML fields and
   assert.deepEqual(skill.frontmatter, { name: "author-label", description: "Read café notes", license: "MIT", metadata: { count: "2", enabled: "true" } });
   assert.match(skill.uri, /\/native-test\/1\.0\.0%2Bbuild\.4\/[a-f0-9]{64}\/author-label\/SKILL.md$/);
   assert.equal(skill.resources.length, fixture.files.length);
-  assert.equal(fixture.calls.filter((call) => call.url.endsWith("/bundle?platform=codex")).length, 1);
+  const downloads = fixture.calls.filter((call) => new URL(call.url, "http://fixture").pathname.endsWith("/bundle"));
+  assert.equal(downloads.length, 1);
+  assert.equal(new URL(downloads[0]!.url, "http://fixture").searchParams.get("sha256"), fixture.release.artifact.sha256);
   for (const file of fixture.files) {
     const uri = skill.uri.replace(/SKILL.md$/, file.path.split("/").map(encodeURIComponent).join("/"));
     const resource = skill.resources.find((item) => item.uri === uri);

@@ -1,5 +1,6 @@
 import { ConfigurationProfileError, selectConfigurationProfile } from "./configuration-profile.js";
 import { browserDeviceLogin } from "./device-login.js";
+import { readBoundedResponse, decodeResponseUtf8, MAX_PACKAGE_RESPONSE_BYTES } from "./bounded-response.js";
 import { bundleRequest } from "@myskills-app/core";
 import { libraryCommandHelp, libraryCommandRequest } from "./library-command.js";
 import { registryCollaborationHelp, runRegistryCollaborationCommand } from "./registry-collaboration-commands.js";
@@ -163,6 +164,7 @@ export type FetchLike = (
   init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal; redirect?: "error" },
 ) => Promise<{
   headers?: Headers | Record<string, string>;
+  body?: ReadableStream<Uint8Array> | null;
   ok: boolean;
   status: number;
   text(): Promise<string>;
@@ -3630,12 +3632,8 @@ async function downloadVerifiedBundle(input: {
     parsed,
     runtime,
     token,
+    release.artifact,
   );
-  const byteSize = Buffer.byteLength(bundleText);
-  const sha256 = createHash("sha256").update(bundleText).digest("hex");
-  if (byteSize !== release.artifact.byteSize || sha256 !== release.artifact.sha256) {
-    throw new CliError("Downloaded bundle did not match release metadata.", 1);
-  }
 
   const files = parseBundlePayload(bundleText);
   validatePortableFilePaths(files);
@@ -5413,12 +5411,12 @@ async function apiGetWithHeaders(pathname: string, parsed: ParsedArgs, runtime: 
   };
 }
 
-async function apiGetText(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<string> {
+async function apiGetText(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token?: string, artifact?: ReleaseArtifact): Promise<string> {
   const headers: Record<string, string> = {};
   if (token) {
     headers.authorization = `Bearer ${token}`;
   }
-  const response = await apiFetch(pathname, parsed, runtime, { headers });
+  const response = await apiFetch(pathname, parsed, runtime, { headers }, artifact);
   if (!response.ok) {
     throw apiErrorFromResponse(pathname, apiBaseUrl(parsed, runtime), response.status, response.text);
   }
@@ -5482,11 +5480,13 @@ async function apiFetch(
   parsed: ParsedArgs,
   runtime: CliRuntime,
   init?: { method?: string; headers?: Record<string, string>; body?: string },
+  artifact?: ReleaseArtifact,
 ): Promise<{ headers: Record<string, string>; ok: boolean; status: number; text: string }> {
   const baseUrl = apiBaseUrl(parsed, runtime);
   let response: Awaited<ReturnType<FetchLike>>;
+  const signal = AbortSignal.timeout(/^\/v1\/library-entries\/[^/]+\/(?:checks|discoveries|previews)$/.test(pathname) ? 65_000 : 30_000);
   try {
-    response = await runtime.fetch(`${baseUrl}${pathname}`, { ...init, signal: AbortSignal.timeout(/^\/v1\/library-entries\/[^/]+\/(?:checks|discoveries|previews)$/.test(pathname) ? 65_000 : 30_000) });
+    response = await runtime.fetch(`${baseUrl}${pathname}`, { ...init, signal, redirect: "error" });
   } catch {
     throw new CliError([
       "Could not reach the MySkills API.",
@@ -5496,11 +5496,22 @@ async function apiFetch(
       "  myskills <command> --api-url https://myskills.sh/api",
     ].join("\n"), 1, "API_UNREACHABLE");
   }
+  let text: string;
+  try {
+    const bytes = await readBoundedResponse(response, response.ok && artifact ? artifact.byteSize : MAX_PACKAGE_RESPONSE_BYTES, signal);
+    if (response.ok && artifact && (bytes.length !== artifact.byteSize || createHash("sha256").update(bytes).digest("hex") !== artifact.sha256)) {
+      throw new Error("Downloaded bundle did not match release metadata.");
+    }
+    text = decodeResponseUtf8(bytes);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Invalid API response.";
+    throw new CliError(artifact && message === "API response exceeds its byte limit." ? "Downloaded bundle did not match release metadata." : message, 1);
+  }
   return {
     headers: responseHeaders(response.headers),
     ok: response.ok,
     status: response.status,
-    text: await response.text(),
+    text,
   };
 }
 
@@ -6039,7 +6050,8 @@ function releaseArtifact(response: Record<string, unknown>): { sha256: string; b
     throw new CliError("API release response is missing artifact metadata.", 1);
   }
   const record = artifact as Record<string, unknown>;
-  if (typeof record.sha256 !== "string" || typeof record.byteSize !== "number") {
+  if (typeof record.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(record.sha256)
+    || typeof record.byteSize !== "number" || !Number.isSafeInteger(record.byteSize) || record.byteSize < 1 || record.byteSize > MAX_PACKAGE_RESPONSE_BYTES) {
     throw new CliError("API release response has invalid artifact metadata.", 1);
   }
   return {

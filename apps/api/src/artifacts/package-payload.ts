@@ -28,7 +28,9 @@ export async function readArtifactPayload(input: {
     if (error instanceof ArtifactStorageIntegrityError) {
       throw new AppError("Artifact object failed integrity checks.", "ARTIFACT_METADATA_MISMATCH", 500);
     }
-    if (!hasDbArtifactPayload(input.artifact.payload)) {
+    // Legacy fallback applies only to a missing object. Access denial, timeouts
+    // and provider failures must not bypass the storage authority.
+    if (!isMissingArtifactObject(error) || !hasDbArtifactPayload(input.artifact.payload)) {
       throw new AppError("Artifact payload is unavailable.", "ARTIFACT_PAYLOAD_UNAVAILABLE", 500);
     }
     assertArtifactBodyMatchesMetadata(JSON.stringify(input.artifact.payload), input.artifact);
@@ -44,6 +46,10 @@ export async function readArtifactPayload(input: {
     }
     throw new AppError(error instanceof Error ? error.message : "Invalid artifact payload.", "INVALID_PACKAGE_PAYLOAD", 500);
   }
+}
+
+function isMissingArtifactObject(error: unknown): boolean {
+  return error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound");
 }
 
 export function parseArtifactPayload(input: unknown): ArtifactPayload {

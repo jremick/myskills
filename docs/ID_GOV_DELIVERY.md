@@ -82,3 +82,26 @@ apps/api/test/device-login-cli.e2e.test.ts` and
 The PostgreSQL journey is included in `npm run test:postgres` and must use a
 disposable test database. Local fixtures do not establish PostgreSQL, live
 provider, deployed, release or real MCP-host acceptance.
+
+## Integrated PostgreSQL proof preparation
+
+The integrated store refreshes application time after acquiring account, session
+and request locks. Grant/session expiry and MFA freshness are checked at this
+decision point. PostgreSQL transaction-start `now()` does not enforce deadlines
+that pass during a lock wait. The store's injected clock supports deterministic
+tests while production uses the current clock.
+
+`postgres-device-login-atomicity.pgtest.ts` is discovered by the existing canonical
+`test:postgres` command. It uses separate database pools and observed lock waits,
+not a memory fixture, to prepare proof for admission limits, duplicate codes,
+concurrent consent/redemption, exact scopes, replay, both revocation lock orders,
+and grant/session/MFA expiry during waits. A failure trigger after token insertion
+checks rollback of issuance, consumption, polling state and redemption audit.
+These PostgreSQL tests are prepared but not executed on Mini. The parent owns the
+canonical Windows run. Local Node 22.23.2 checks cover source builds and the memory
+API journey; they do not substitute for database execution.
+
+The CLI now rejects redirects on anonymous start/poll requests and consumes at
+most 16 KiB of response bytes with strict UTF-8 decoding. Two-origin and streamed
+negative fixtures cover credential preservation and prevent forwarding the
+redeemable device code.

@@ -33,6 +33,7 @@ import {
 } from "../db/schema.js";
 import type {
   CreateSubmissionInput,
+  ArtifactDeliveryInput,
   PublicBundle,
   PublicReleaseMetadata,
   ReleaseLifecycleAction,
@@ -1146,6 +1147,36 @@ export class PostgresSubmissionStore implements SubmissionStore {
   async getPublicRelease(input: { slug: string; version: string; actorId?: string | null }): Promise<PublicReleaseMetadata | null> {
     const row = await selectVisibleRelease(this.db, input, await getSharingSettings(this.db));
     return row ? publicRelease(row) : null;
+  }
+
+  async authorizeArtifactDelivery(input: ArtifactDeliveryInput): Promise<PublicReleaseMetadata | null> {
+    // The first SELECT acquires one MVCC snapshot for the entire decision.
+    // Revocations committed before it are visible; overlapping writes may
+    // serialize after it. No slow object read or usage UPDATE runs inside it.
+    return this.db.transaction(async (tx) => {
+      if (input.credential) {
+        const { kind, tokenHash } = input.credential;
+        const credential = kind === "session"
+          ? sql`SELECT user_id, '[]'::jsonb AS scopes FROM auth_sessions WHERE token_hash = ${tokenHash} AND revoked_at IS NULL AND expires_at > clock_timestamp()`
+          : kind === "api_token"
+            ? sql`SELECT user_id, scopes FROM api_tokens WHERE token_hash = ${tokenHash} AND revoked_at IS NULL AND expires_at > clock_timestamp()`
+            : sql`SELECT g.user_id, t.scopes FROM oauth_access_tokens t JOIN oauth_grants g ON g.id = t.grant_id
+                WHERE t.token_hash = ${tokenHash} AND t.revoked_at IS NULL AND g.revoked_at IS NULL
+                AND t.expires_at > clock_timestamp() AND g.expires_at > clock_timestamp()
+                AND g.resource = ${input.credential.resource ?? ""} AND g.client_id = ${input.credential.clientId ?? ""}`;
+        const result = await tx.execute<{ scopes: string[] }>(sql`SELECT c.scopes FROM (${credential}) c JOIN users u ON u.id = c.user_id
+          WHERE u.id = ${input.actorId} AND u.status = 'active' AND u.email_verified_at IS NOT NULL`);
+        if (!result.rows[0]) throw new AppError("Authentication is required.", "AUTHENTICATION_REQUIRED", 401);
+        if (kind !== "session" && !result.rows[0].scopes.includes("skills:read")) {
+          throw new AppError("API token scope is required.", "API_TOKEN_SCOPE_REQUIRED", 403, { scope: "skills:read" });
+        }
+      } else if (input.actorId) {
+        throw new AppError("Authentication is required.", "AUTHENTICATION_REQUIRED", 401);
+      }
+      const sharing = await getSharingSettings(tx);
+      const row = await selectVisibleRelease(tx, input, sharing);
+      return row ? publicRelease(row) : null;
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
   }
 
   async getPublicBundle(input: { slug: string; version: string; platform?: string; actorId?: string | null }): Promise<PublicBundle | null> {

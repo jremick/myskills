@@ -1,14 +1,15 @@
 import { setTimeout as delay } from "node:timers/promises";
 import type { CliRuntime } from "./cli.js";
+import { readBoundedResponse, decodeResponseUtf8 } from "./bounded-response.js";
 
 /** A first-party device handshake; anonymous requests never reuse stored auth. */
 export async function browserDeviceLogin(apiUrl: string, scopes: string[] | undefined, runtime: CliRuntime): Promise<void> {
   const api = new URL(apiUrl);
   if (api.protocol !== "https:" && !(api.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(api.hostname))) throw new Error("Browser login requires HTTPS, except on loopback.");
   async function post(path: string, body: unknown) {
-    const response = await runtime.fetch(`${apiUrl}/v1/auth/device/${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15_000) });
-    const text = await response.text();
-    if (text.length > 16_384) throw new Error("Device login response is too large.");
+    const signal = AbortSignal.timeout(15_000);
+    const response = await runtime.fetch(`${apiUrl}/v1/auth/device/${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal, redirect: "error" });
+    const text = decodeResponseUtf8(await readBoundedResponse(response, 16_384, signal));
     const result: unknown = JSON.parse(text);
     if (!result || typeof result !== "object" || Array.isArray(result)) throw new Error("Invalid device login response.");
     if (!response.ok) throw new Error(`Browser login request failed (HTTP ${response.status}).`);

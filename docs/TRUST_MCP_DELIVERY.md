@@ -42,3 +42,35 @@ stores, streamed S3 SDK response fixtures, and disposable git repositories for
 provenance. These layers do not establish PostgreSQL, MinIO deployment,
 ChatGPT/Claude host acceptance, publication or signing. Existing PostgreSQL and
 canonical Linux checks remain separate integration gates.
+
+## Integrated candidate and decision point
+
+Production delivery now uses the PostgreSQL store's read-only `REPEATABLE READ`
+transaction after the object read. Its first SELECT defines the authorization
+snapshot. Credential/account state, sharing settings, membership, organization
+policy and exact release metadata all use that snapshot. Revocations committed
+before this point deny delivery. A concurrent revocation can serialize after the
+decision. The API performs no later credential usage UPDATE or slow object read
+after this gate. The existing 15-second delivery window still bounds the result.
+This is request authorization; it cannot retract bytes already delivered.
+
+Legacy DB payload fallback is limited to missing-object errors. Storage access
+denials, timeouts, malformed bytes and provider failures fail closed. CLI requests
+reject redirects and stream bounded bytes before hashing and strict UTF-8
+decoding. Artifact metadata must declare a valid digest and a safe integer byte
+size within the existing 10 MiB object limit. Device responses have a 16 KiB limit.
+
+`postgres-artifact-delivery.pgtest.ts` is registered through `test:postgres`.
+It prepares real database tests for stale credential SELECT/usage UPDATE races,
+post-storage revocation and policy changes, and exact identity drift. The existing
+full-stack cookie export journey now checks digest/size, no-store, stale-digest
+denial and invalid supplied credentials against the canonical PostgreSQL/MinIO
+stack. These additions have not been executed locally; the parent controller owns
+canonical execution. Loopback SDK/API/MCP and provenance fixture checks passed on
+Node 22.23.2 with npm 11.12.1. They do not establish deployed or human-host proof.
+
+The existing `test:tooling` check discovers the provenance fixture.
+`release:verify` also prepares unsigned provenance from its exact source archive
+and npm lockfile after artifact verification. The dependency inventory describes
+production lockfile entries, not image contents or installed dependencies.
+Signing authority, image inspection and publication remain separate gates.

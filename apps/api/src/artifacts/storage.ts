@@ -20,6 +20,7 @@ export interface ArtifactObjectStorage {
     contentType: string;
     sha256: string;
   }): Promise<void>;
+  // Missing objects use NoSuchKey/NotFound; other failures never allow legacy fallback.
   getObject(key: string, options?: { maxBytes: number }): Promise<ArtifactObject>;
   deleteObject(key: string): Promise<void>;
   checkReady(): Promise<void>;
@@ -48,7 +49,9 @@ export class MemoryArtifactObjectStorage implements ArtifactObjectStorage {
   async getObject(key: string, options?: { maxBytes: number }): Promise<ArtifactObject> {
     const object = this.objects.get(key);
     if (!object) {
-      throw new Error("Artifact object not found.");
+      const error = new Error("Artifact object not found.");
+      error.name = "NoSuchKey";
+      throw error;
     }
     if (Buffer.byteLength(object.body) > artifactByteLimit(options?.maxBytes)) {
       throw new ArtifactStorageIntegrityError("Artifact object exceeds its byte limit.");

@@ -193,6 +193,21 @@ test("artifact payload reader fails closed when legacy DB fallback does not matc
   );
 });
 
+for (const name of ["AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch", "ServiceUnavailable", "ArtifactStorageTimeoutError"]) {
+  test(`artifact payload reader does not fall back to legacy bytes on ${name}`, async (t) => {
+    const storage = new MemoryArtifactObjectStorage();
+    const payload = { files: [{ path: "README.md", content: "legacy" }] };
+    t.mock.method(storage, "getObject", async () => {
+      const error = new Error("Synthetic provider failure.");
+      error.name = name;
+      throw error;
+    });
+    await assert.rejects(readArtifactPayload({ artifactStorage: storage,
+      artifact: artifactRecord("submissions/legacy.json", JSON.stringify(payload), { payload }),
+    }), hasAppErrorCode("ARTIFACT_PAYLOAD_UNAVAILABLE"));
+  });
+}
+
 test("artifact payload reader fails closed on object metadata mismatch even with DB payload present", async () => {
   const storage = new MemoryArtifactObjectStorage();
   const payload = { files: [{ path: "skill.json", content: "{}" }] };

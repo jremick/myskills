@@ -16,6 +16,14 @@ export interface ArtifactPayload {
   files: PackageInputFile[];
 }
 
+/** Server-only credential identity, never accepted from an HTTP request body. */
+export interface ArtifactDeliveryInput {
+  slug: string;
+  version: string;
+  actorId: string | null;
+  credential?: { kind: "session" | "api_token" | "oauth"; tokenHash: string; resource?: string; clientId?: string };
+}
+
 export interface SubmissionActor {
   id: string;
   roles: Role[];
@@ -328,6 +336,7 @@ export interface SubmissionStore {
     reason: string;
   }): Promise<void>;
   getPublicRelease(input: { slug: string; version: string; actorId?: string | null }): Promise<PublicReleaseMetadata | null>;
+  authorizeArtifactDelivery?(input: ArtifactDeliveryInput): Promise<PublicReleaseMetadata | null>;
   getPublicBundle(input: { slug: string; version: string; platform?: string; actorId?: string | null }): Promise<PublicBundle | null>;
   recordArtifactAccess(input: {
     actorId?: string | null;
