@@ -1,7 +1,10 @@
+import { ALL_APPLICATION_TOOL_NAMES, FRIENDLY_READ_TOOLS } from "./application-tool-names.js";
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { connect as connectSocket } from "node:net";
+import { parseEnv } from "node:util";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { McpServer } from "@modelcontextprotocol/server";
 import { createAiSkillsMcpHttpServer, withRequestTimeout } from "../src/http.js";
@@ -335,7 +338,7 @@ test("HTTP MCP transport executes tools with the request bearer token", async (t
     const tools = await client.listTools();
     assert.deepEqual(
       tools.tools.map((tool) => tool.name).sort(),
-      ["browse_bundles", "curate_bundle", "get_architecture_projection", "get_install_instructions", "get_skill_info", "list_architecture_patterns", "list_architectures", "search_skills"],
+      ALL_APPLICATION_TOOL_NAMES,
     );
 
     const result = await client.callTool({
@@ -405,7 +408,7 @@ test("HTTP MCP transport forwards architecture organization context end to end",
   }
 });
 
-test("HTTP MCP transport negotiates modern discovery and preserves the six tools", async (t) => {
+test("HTTP MCP transport negotiates modern discovery and preserves friendly tools alongside application actions", async (t) => {
   const server = createAiSkillsMcpHttpServer({
     fetchImpl: async (url, init) => {
       assert.equal(init?.headers?.authorization, "Bearer aiss_modern_test");
@@ -429,11 +432,8 @@ test("HTTP MCP transport negotiates modern discovery and preserves the six tools
     assert.equal(client.getServerVersion()?.name, "myskills-app");
     assert.ok(client.getDiscoverResult());
     const tools = await client.listTools();
-    assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
-      "browse_bundles", "curate_bundle", "get_architecture_projection", "get_install_instructions", "get_skill_info",
-      "list_architecture_patterns", "list_architectures", "search_skills",
-    ]);
-    assert.equal(tools.tools.filter(tool => tool.name !== "curate_bundle").every((tool) => tool.annotations?.readOnlyHint === true), true);
+    assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), ALL_APPLICATION_TOOL_NAMES);
+    assert.equal(tools.tools.filter(tool => FRIENDLY_READ_TOOLS.includes(tool.name)).every((tool) => tool.annotations?.readOnlyHint === true), true);
     const result = await client.callTool({ name: "search_skills", arguments: { query: "release" } });
     assert.equal(result.isError, undefined);
     assert.match(JSON.stringify(result), /release-notes-helper/);
@@ -528,6 +528,34 @@ test("HTTP MCP transport returns health and rejects non-POST MCP methods", async
   assert.match(await getMcp.text(), /Method not allowed/);
   const optionsMcp = await fetch(url, { method: "OPTIONS" });
   assert.equal(optionsMcp.status, 405);
+});
+
+test("production Compose MCP example reaches OAuth authentication through the configured proxy host", async (t) => {
+  const template = readFileSync(new URL("../../../.env.production.example", import.meta.url), "utf8");
+  // Enable the documented optional connector settings. nginx forwards the
+  // MCP_PROXY_TARGET authority as Host ($proxy_host), including its port.
+  const env = parseEnv(template.replace(/^# (?=(?:MCP_PROXY_TARGET|MYSKILLS_OAUTH_ISSUER|MYSKILLS_MCP_PUBLIC_URL)=)/gm, ""));
+  const proxyHost = new URL(env.MCP_PROXY_TARGET).host;
+  const server = createAiSkillsMcpHttpServer({
+    allowedHosts: env.MYSKILLS_MCP_ALLOWED_HOSTS.split(","),
+    allowedOrigins: env.MYSKILLS_MCP_ALLOWED_ORIGINS.split(","),
+    oauth: { issuer: env.MYSKILLS_OAUTH_ISSUER, resourceUrl: env.MYSKILLS_MCP_PUBLIC_URL },
+    fetchImpl: async () => { throw new Error("Anonymous requests must not reach the API."); },
+  });
+  const url = await listen(t, server);
+  const response = await postRaw(url, { host: proxyHost, "content-type": "application/json" });
+  assert.equal(response.status, 401, response.body);
+  assert.ok(response.headers["www-authenticate"]?.includes(
+    `resource_metadata="${new URL(env.MYSKILLS_MCP_PUBLIC_URL).origin}/.well-known/oauth-protected-resource/mcp"`,
+  ));
+
+  const hostileHost = await postRaw(url, {
+    host: "hostile.test",
+    "x-forwarded-host": proxyHost,
+    "content-type": "application/json",
+  });
+  assert.equal(hostileHost.status, 403);
+  assert.match(hostileHost.body, /host is not allowed/);
 });
 
 test("HTTP MCP transport rejects untrusted Host and Origin before registry calls", async (t) => {
@@ -711,13 +739,7 @@ async function slowPartialBodyClose(url: string): Promise<number> {
 }
 
 function jsonResponse(status: number, body: Record<string, unknown>): Awaited<ReturnType<FetchLike>> {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    async text() {
-      return JSON.stringify(body);
-    },
-  };
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
 function mcpSession(scopes: string[] = ["skills:read"]) {

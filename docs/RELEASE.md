@@ -1,11 +1,20 @@
 # Release Process
 
-Version: 0.1.0-beta.17
+Version: 0.1.0-beta.18
 Last updated: 2026-09-30
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
+
+## Beta.18 candidate
+
+The next candidate targets `v0.1.0-beta.18` with CLI/MCP capability parity,
+opt-in OAuth connections, dependency repairs and delivery tooling. The beta.17
+tag remains unchanged. Final-source verification, staging, real ChatGPT/Claude
+acceptance, publication and production promotion remain pending. Tracked
+Collections and Library Groups are excluded while their model choices remain
+open. See [Beta.18 release preparation](BETA18_RELEASE_DELIVERY.md).
 
 ## Current published status
 
@@ -213,7 +222,8 @@ Set `LOCAL_CI_RUN_ID`, `LOCAL_CI_EVIDENCE_DIR` and the Node toolchains as descri
 - requires the tag to equal `v<root package version>` and to point at the checked-out commit;
 - requires that commit to be an ancestor of `refs/remotes/origin/main` (or `LOCAL_CI_MAIN_REF`);
 - runs the canonical release gate with tag enforcement against disposable `postgres:17`;
-- builds the root Dockerfile `api`, `web`, and `mcp-http` targets plus the exact `Dockerfile.api` and `Dockerfile.web` used by Railway;
+- builds the root Dockerfile `api`, `web`, and `mcp-http` targets plus the exact `Dockerfile.api`, `Dockerfile.mcp` and `Dockerfile.web` used by Railway;
+- starts the Railway MCP image's default command with a non-default platform `PORT` and verifies health plus anonymous-request rejection without credentials or network access;
 - builds `Dockerfile.backup` and checks both command entrypoints without credentials or network access;
 - verifies the artifact set, checksums and metadata, rebuilds the source archive from the tagged commit, and exports the verified artifacts as evidence only.
 
@@ -235,7 +245,8 @@ Draft public release text in a file and use `--notes-file` or the GitHub UI if a
 
 ## CLI Package Publication
 
-The published GitHub CLI archive is `0.1.0-beta.17`; npm's `beta` selector
+The prepared CLI candidate is `0.1.0-beta.18`. The published GitHub CLI archive
+is `0.1.0-beta.17`; npm's `beta` selector
 remains `0.1.0-beta.16` as of 30 September 2026. The package uses
 `publishConfig.tag=beta`. `@myskills-app/skill-package` remains a private
 build-time dependency only; esbuild embeds it in the public CLI bundle.

@@ -16,7 +16,7 @@ const owner: SubmissionActor = { id: "managed-owner", roles: ["author"] };
 const maintainer: SubmissionActor = { id: "managed-maintainer", roles: ["maintainer"] };
 const ALL_SKILL_ACTIONS = ["edit", "archive", "restore", "delete"];
 
-test("managed skill detail is session-only and rejects anonymous, dead and API-token credentials without details", async (t) => {
+test("managed skill detail rejects anonymous, dead and unscoped credentials without details", async (t) => {
   const fixture = await managedFixture();
   t.after(() => fixture.app.close());
   const { app } = fixture;
@@ -36,17 +36,17 @@ test("managed skill detail is session-only and rejects anonymous, dead and API-t
   assert.equal(afterLogout.statusCode, 401);
   assert.equal(afterLogout.json().error.code, "AUTHENTICATION_REQUIRED");
 
-  // The owner's read-only token and the maintainer's every-scope token are
-  // live credentials (403 SESSION_AUTH_REQUIRED, not 401), but management
-  // stays session-only.
+  // Management is delegated only by its named scope; an ordinary read token
+  // must not discover archived or unpublished management details.
   const readToken = await createApiToken(app, fixture.sessions.owner, ["skills:read"]);
   const everyScopeToken = await createApiToken(app, fixture.sessions.maintainer, [...apiTokenScopes]);
-  for (const token of [readToken, everyScopeToken]) {
-    const response = await getDetail(app, "archived-helper", bearer(token));
-    assert.equal(response.statusCode, 403, response.body);
-    assert.equal(response.json().error.code, "SESSION_AUTH_REQUIRED");
-    assertNoSkillDetails(response.body);
-  }
+  const denied = await getDetail(app, "archived-helper", bearer(readToken));
+  assert.equal(denied.statusCode, 403, denied.body);
+  assert.equal(denied.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
+  assertNoSkillDetails(denied.body);
+  const authorized = await getDetail(app, "archived-helper", bearer(everyScopeToken));
+  assert.equal(authorized.statusCode, 200, authorized.body);
+  assert.equal(authorized.json().skill.slug, "archived-helper");
 });
 
 test("owner and privileged maintainer sessions load archived and unpublished skills that match the managed inventory", async (t) => {

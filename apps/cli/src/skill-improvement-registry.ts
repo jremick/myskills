@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, realpath } from "node:fs/promises";
 import path from "node:path";
-import { canonicalizeJson } from "@myskills-app/core";
+import { canonicalizeJson, parseSemanticVersion } from "@myskills-app/core";
 import type { PackageInputFile } from "@myskills-app/skill-package";
 import { atomicPrivateWrite, readRegularText, writeNewPackageTree } from "./install-filesystem.js";
 import { createImprovementJob, inspectImprovementRunner, readImprovementPlan, type ImprovementLifecycle, type ImprovementSuite } from "./skill-improvement.js";
@@ -167,16 +167,47 @@ export async function registryLifecycle(api: ImprovementRegistryApi, jobPath: st
   };
 }
 
-export async function shareImprovementEvidence(api: ImprovementRegistryApi, input: { jobPath: string; disclosure: string; subject: string; slug: string; version: string }) {
+interface EvidenceProposal { subject: "baseline" | "candidate"; slug: string; version: string }
+type EvidenceDisclosure = "summary" | "selected-evidence";
+
+export function parseImprovementEvidenceProposals(input: unknown): EvidenceProposal[] {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("The proposals file must contain an object with only a proposals field.");
+  const record = input as Record<string, unknown>;
+  if (Object.keys(record).some((key) => key !== "proposals")) throw new Error("The proposals file accepts only the proposals field.");
+  if (!Array.isArray(record.proposals) || record.proposals.length > 4) throw new Error("Proposals must be an array of at most 4 entries.");
+  return record.proposals.map((value: unknown) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Each proposal must contain subject, slug and version.");
+    const proposal = value as Record<string, unknown>;
+    if (Object.keys(proposal).some((key) => !["subject", "slug", "version"].includes(key))) throw new Error("Proposal fields must be subject, slug and version only.");
+    if (proposal.subject !== "baseline" && proposal.subject !== "candidate") throw new Error("Proposal subject must be baseline or candidate.");
+    if (typeof proposal.slug !== "string" || !/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(proposal.slug)) throw new Error("Proposal slug is invalid.");
+    if (typeof proposal.version !== "string" || proposal.version.length > 64 || !parseSemanticVersion(proposal.version)) throw new Error("Proposal version must be an exact semantic version.");
+    return { subject: proposal.subject, slug: proposal.slug, version: proposal.version };
+  });
+}
+
+function postImprovementEvidence(api: ImprovementRegistryApi, runId: string, reportSha256: string, disclosure: EvidenceDisclosure, proposals: EvidenceProposal[]) {
+  const request = { runId, reportSha256, disclosure, proposals };
+  return api.post(`${base}/runs/${encodeURIComponent(runId)}/evidence`, { reportSha256, disclosure, proposals, idempotencyKey: `share-${hash(request)}` });
+}
+
+export async function shareRecordedImprovementEvidence(api: ImprovementRegistryApi, input: { runId: string; disclosure: EvidenceDisclosure; proposals: EvidenceProposal[] }) {
+  const response = await api.get(`${base}/runs/${encodeURIComponent(input.runId)}`);
+  const run = response.run;
+  if (!run || typeof run !== "object" || Array.isArray(run) || !("id" in run) || run.id !== input.runId) throw new Error("Completed run identity does not match the requested run.");
+  if (!("state" in run) || run.state !== "completed") throw new Error("Evidence sharing requires a completed run.");
+  if (!("reportSha256" in run) || typeof run.reportSha256 !== "string" || !/^[0-9a-f]{64}$/.test(run.reportSha256)) throw new Error("Completed run report digest is invalid.");
+  return postImprovementEvidence(api, input.runId, run.reportSha256, input.disclosure, input.proposals);
+}
+
+export async function shareImprovementEvidence(api: ImprovementRegistryApi, input: { jobPath: string; disclosure: EvidenceDisclosure; proposals: EvidenceProposal[] }) {
   const { plan, planDigest } = await readImprovementPlan(input.jobPath);
   if (!plan.registry || plan.registry.apiUrl !== api.apiUrl) throw new Error("Evidence sharing requires the original registry endpoint and plan.");
   if (plan.registry.record.plan.resultSharing === "local-only") throw new Error("This plan is local-only; evidence sharing was not authorized.");
   if (input.disclosure !== "summary") throw new Error("This adapter shares summary evidence only. Raw findings stay local.");
-  if (!["baseline", "candidate"].includes(input.subject)) throw new Error("Evidence subject must be baseline or candidate.");
   const state = JSON.parse(await readRegularText(path.join(await realpath(input.jobPath), "registry-run.json"), 64_000));
-  if (state.planDigest !== planDigest || !state.runId || !state.reportSha256) throw new Error("No confirmed registry completion is available to share.");
-  const body = { reportSha256: state.reportSha256, disclosure: input.disclosure, proposals: [{ subject: input.subject, slug: input.slug, version: input.version }], idempotencyKey: `share-${hash({ planDigest, subject: input.subject, slug: input.slug, version: input.version })}` };
-  return api.post(`${base}/runs/${encodeURIComponent(state.runId)}/evidence`, body);
+  if (!state || state.planDigest !== planDigest || typeof state.runId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/.test(state.runId) || typeof state.reportSha256 !== "string" || !/^[0-9a-f]{64}$/.test(state.reportSha256)) throw new Error("No confirmed registry completion is available to share.");
+  return postImprovementEvidence(api, state.runId, state.reportSha256, input.disclosure, input.proposals);
 }
 
 function checkedRecord(input: unknown, id: string): RegistryPlanRecord {

@@ -1,8 +1,8 @@
 # Data Model
 
-Version: 0.1.0-beta.17
+Version: 0.1.0-beta.18
 Document revision: 0.2.0-draft
-Last updated: 2026-09-26
+Last updated: 2026-09-30
 
 Postgres is the canonical application store. This document describes the
 current branch schema and separates database foundations from routes, services,

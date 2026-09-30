@@ -1,11 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { bundleRequest } from "@myskills-app/core";
-import { RegistryApiError, type RegistryApiClient } from "./api-client.js";
+import { RegistryApiError, type RegistryApiClient, type McpSession } from "./api-client.js";
 
 export function registerBundleTools(
   server: McpServer,
   client: RegistryApiClient,
+  options: { session?: McpSession } = {},
 ) {
   const execute = async (
     action: string,
@@ -62,6 +63,11 @@ export function registerBundleTools(
   server.registerTool(
     "browse_bundles",
     {
+      scopeChallenge: ({ request }) => {
+        const args = (request.params?.arguments ?? {}) as Record<string, unknown>;
+        const scopes = ["skills:read", ...(args.action === "sources" ? ["libraries:read"] : [])];
+        return options.session?.credential.kind === "oauth" && scopes.some(scope => !options.session!.credential.scopes.includes(scope)) ? { scopes: scopes as [string, ...string[]] } : undefined;
+      },
       title: "Browse Skill Bundles",
       description:
         "Discover related skill collections, their authorized members, memberships and reviewed source selections. Does not install or adopt skills.",
@@ -89,9 +95,16 @@ export function registerBundleTools(
     async ({ action, id, ...options }) =>
       execute(action === "catalog" ? "list" : action, id, options),
   );
+
   server.registerTool(
     "curate_bundle",
     {
+      scopeChallenge: ({ request }) => {
+        const args = (request.params?.arguments ?? {}) as Record<string, unknown>;
+        const body = (args.input ?? {}) as Record<string, unknown>;
+        const scopes = ["skills:read", ...(args.action === "save" ? ["libraries:write"] : ["skills:submit"]), ...(body.kind === "source" ? ["libraries:read"] : [])];
+        return options.session?.credential.kind === "oauth" && scopes.some(scope => !options.session!.credential.scopes.includes(scope)) ? { scopes: scopes as [string, ...string[]] } : undefined;
+      },
       title: "Curate Skill Bundle",
       description:
         "Create or edit an explicitly reviewed collection, or save its reference to a library. Use edit with the current expectedRevision. Saving does not adopt, install or follow skills. Read the collection and obtain the user's intent before changes.",

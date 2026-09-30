@@ -11,10 +11,12 @@ export interface McpToolResult {
 export interface SearchSkillsInput {
   query?: string;
   limit?: number;
+  cursor?: string;
 }
 
 export interface SkillInfoInput {
   slug: string;
+  version?: string;
 }
 
 export interface InstallInstructionsInput {
@@ -55,17 +57,16 @@ export function createAiSkillsMcpHandlers(client: RegistryApiClient): AiSkillsMc
     async searchSkills(input) {
       const skills = await runSafely(async () => {
         await authenticateMcpReader(client);
-        return client.searchSkills({
-          query: input.query,
-          limit: boundedLimit(input.limit),
-        });
+        const query = { query: input.query, limit: boundedLimit(input.limit), cursor: input.cursor };
+        return client.searchSkillPage ? client.searchSkillPage(query) : { skills: await client.searchSkills(query), nextCursor: undefined };
       });
       if (isToolError(skills)) {
         return skills;
       }
       return toolJson({
-        skills: skills.map(safeSkill),
-        count: skills.length,
+        skills: skills.skills.map(safeSkill),
+        count: skills.skills.length,
+        ...(skills.nextCursor ? { nextCursor: skills.nextCursor } : {}),
       });
     },
 
@@ -74,7 +75,8 @@ export function createAiSkillsMcpHandlers(client: RegistryApiClient): AiSkillsMc
         await authenticateMcpReader(client);
         const slug = parseSlug(input.slug);
         const skill = await client.getSkill(slug);
-        const release = skill.latestVersion ? await client.getRelease(skill.slug, skill.latestVersion) : null;
+        const version = input.version ? parseVersion(input.version) : skill.latestVersion;
+        const release = version ? await client.getRelease(skill.slug, version) : null;
         return {
           skill: safeSkill(skill),
           release: release ? safeRelease(release) : null,
@@ -719,8 +721,9 @@ function isValidMcpSession(input: unknown): input is McpSession {
   const credential = (input as Record<string, unknown>).credential;
   if (!credential || typeof credential !== "object" || Array.isArray(credential)) return false;
   const value = credential as Record<string, unknown>;
-  return value.kind === "api_token"
-    && typeof value.tokenId === "string"
+  const identified = (value.kind === "api_token" && typeof value.tokenId === "string")
+    || (value.kind === "oauth" && typeof value.grantId === "string");
+  return identified
     && Array.isArray(value.scopes)
     && value.scopes.every((scope) => typeof scope === "string");
 }

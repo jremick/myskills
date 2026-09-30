@@ -1,3 +1,6 @@
+import { registerApplicationHandoffTools } from "./application-handoffs.js";
+import { registerApplicationTools } from "./application-tools.js";
+import type { McpSession } from "./api-client.js";
 import { registerBundleTools } from "./bundles.js";
 import { McpServer, ProtocolError, type ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
@@ -8,6 +11,9 @@ import { createNativeSkillsHandlers, NATIVE_RESOURCE_URI_CHARS, SKILLS_EXTENSION
 export interface AiSkillsMcpServerOptions extends RegistryApiClientOptions {
   name?: string;
   version?: string;
+  /** Verified current HTTP session, used only for incremental scope challenges. */
+  session?: McpSession;
+  trustedAppBaseUrl?: string;
 }
 
 export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}): McpServer {
@@ -17,7 +23,9 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
   });
   const client = createRegistryApiClient(options);
   const handlers = createAiSkillsMcpHandlers(client);
-  registerBundleTools(server, client);
+  registerBundleTools(server, client, { session: options.session });
+  registerApplicationTools(server, client, { session: options.session });
+  registerApplicationHandoffTools(server, { appBaseUrl: options.trustedAppBaseUrl });
   const skills = createNativeSkillsHandlers(options);
   server.server.registerCapabilities({ resources: {}, extensions: { [SKILLS_EXTENSION]: {} } });
   const requireSkills = (ctx: ServerContext) => {
@@ -54,11 +62,14 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
   server.registerTool(
     "search_skills",
     {
+      _meta: { securitySchemes: [{ type: "oauth2", scopes: ["skills:read"] }] },
+      scopeChallenge: () => options.session?.credential.kind === "oauth" && ["skills:read"].some(scope => !options.session!.credential.scopes.includes(scope)) ? { scopes: ["skills:read"] as [string, ...string[]] } : undefined,
       title: "Search Skills",
-      description: "Search approved MySkills registry entries visible to the configured API token.",
+      description: "Search approved MySkills registry entries visible to this connection; return the nextCursor for pagination.",
       inputSchema: z.object({
-        query: z.string().trim().max(120).optional(),
+        query: z.string().trim().max(14 * 1024 * 1024).optional(),
         limit: z.number().int().min(1).max(100).optional(),
+        cursor: z.string().min(1).max(2048).optional(),
       }),
       annotations: {
         readOnlyHint: true,
@@ -73,10 +84,13 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
   server.registerTool(
     "get_skill_info",
     {
+      _meta: { securitySchemes: [{ type: "oauth2", scopes: ["skills:read"] }] },
+      scopeChallenge: () => options.session?.credential.kind === "oauth" && ["skills:read"].some(scope => !options.session!.credential.scopes.includes(scope)) ? { scopes: ["skills:read"] as [string, ...string[]] } : undefined,
       title: "Get Skill Info",
       description: "Return safe skill and release metadata for one authorized registry entry.",
       inputSchema: z.object({
         slug: z.string().trim().min(1).max(120),
+        version: z.string().trim().min(1).max(80).optional(),
       }),
       annotations: {
         readOnlyHint: true,
@@ -91,6 +105,8 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
   server.registerTool(
     "get_install_instructions",
     {
+      _meta: { securitySchemes: [{ type: "oauth2", scopes: ["skills:read"] }] },
+      scopeChallenge: () => options.session?.credential.kind === "oauth" && ["skills:read"].some(scope => !options.session!.credential.scopes.includes(scope)) ? { scopes: ["skills:read"] as [string, ...string[]] } : undefined,
       title: "Get Install Instructions",
       description: "Return CLI/API export guidance for an authorized release without returning package contents.",
       inputSchema: z.object({
@@ -109,8 +125,42 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
   );
 
   server.registerTool(
+    "read_skill_file",
+    {
+      _meta: { securitySchemes: [{ type: "oauth2", scopes: ["skills:read"] }] },
+      scopeChallenge: () => options.session?.credential.kind === "oauth" && ["skills:read"].some(scope => !options.session!.credential.scopes.includes(scope)) ? { scopes: ["skills:read"] as [string, ...string[]] } : undefined,
+      title: "Read Skill File",
+      description: "Read one text file from an approved skill release you can access: SKILL.md by default, or a supporting file listed in the returned manifest. The release bundle's digest and path are verified on every call. Reading does not install, enable or execute the skill.",
+      inputSchema: z.object({
+        slug: z.string().trim().min(1).max(120),
+        version: z.string().trim().min(1).max(80).optional(),
+        path: z.string().min(1).max(1024).optional(),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async (input, ctx) => {
+      try {
+        const result = await skills.readFile(input, ctx.mcpReq.signal);
+        return { content: [{ type: "text" as const, text: JSON.stringify(result) }], structuredContent: result };
+      } catch (error) {
+        const message = error instanceof ProtocolError && error.code === -32603
+          ? "Skill delivery is temporarily unavailable."
+          : "Skill or file is unavailable for this request. Check the slug, version and path from the manifest, and that the connection has skills:read.";
+        return { isError: true, content: [{ type: "text" as const, text: message }], structuredContent: { error: message } };
+      }
+    },
+  );
+
+  server.registerTool(
     "list_architecture_patterns",
     {
+      _meta: { securitySchemes: [{ type: "oauth2", scopes: ["architectures:read"] }] },
+      scopeChallenge: () => options.session?.credential.kind === "oauth" && ["architectures:read"].some(scope => !options.session!.credential.scopes.includes(scope)) ? { scopes: ["architectures:read"] as [string, ...string[]] } : undefined,
       title: "List Architecture Patterns",
       description: "List the server-defined skill architecture patterns available to the authenticated workspace.",
       inputSchema: z.object({}),
@@ -127,6 +177,8 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
   server.registerTool(
     "list_architectures",
     {
+      _meta: { securitySchemes: [{ type: "oauth2", scopes: ["architectures:read"] }] },
+      scopeChallenge: () => options.session?.credential.kind === "oauth" && ["architectures:read"].some(scope => !options.session!.credential.scopes.includes(scope)) ? { scopes: ["architectures:read"] as [string, ...string[]] } : undefined,
       title: "List Architectures",
       description: "List skill architectures visible to the authenticated owner without returning package contents or local paths.",
       inputSchema: z.object({}),
@@ -143,6 +195,8 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
   server.registerTool(
     "get_architecture_projection",
     {
+      _meta: { securitySchemes: [{ type: "oauth2", scopes: ["architectures:read"] }] },
+      scopeChallenge: () => options.session?.credential.kind === "oauth" && ["architectures:read"].some(scope => !options.session!.credential.scopes.includes(scope)) ? { scopes: ["architectures:read"] as [string, ...string[]] } : undefined,
       title: "Get Architecture Projection",
       description: "Inspect one authorized skill architecture and its compiled topology projection without package contents, local paths, or sync writes.",
       inputSchema: z.object({

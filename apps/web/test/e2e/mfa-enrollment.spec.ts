@@ -21,6 +21,7 @@ for (const width of [1280, 390]) {
       const request = route.request();
       const path = new URL(request.url()).pathname.replace(/^\/api/, "");
       if (path === "/v1/me") return route.fulfill({ json: { user } });
+      if (request.method() === "GET" && path === "/v1/oauth/connector") return route.fulfill({ json: { connector: { enabled: false, mcpUrl: null } } });
       if (request.method() === "GET" && path === "/v1/account/github") return route.fulfill({ json: { github: { available: false, status: "disconnected", login: null, connectedAt: null, credentialSource: "anonymous" } } });
       if (path === "/v1/site") return route.fulfill({ json: { site: { landingPageEnabled: true } } });
       if (path === "/v1/branding") return route.fulfill({ json: { branding: { text: "MySkills", showText: true, logoDataUrl: null } } });

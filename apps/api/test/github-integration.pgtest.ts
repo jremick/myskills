@@ -21,6 +21,8 @@
  * G11 A streamed oversized upstream body is rejected; request time is bounded.
  * G12 A 401 during commit comparison propagates source-auth failure, persists
  *     reconnect state, and a later check propagates the credential failure.
+ * G13 PostgreSQL token readback and authentication retain every explicitly
+ *     granted scope, discard unknown stored values and never widen old grants.
  * Evidence contains outcomes only, written to a private temporary directory.
  */
 import assert from "node:assert/strict";
@@ -34,6 +36,7 @@ import { hashSessionToken } from "@myskills-app/auth";
 import { buildApp } from "../src/app.js";
 import { AuthService } from "../src/auth/service.js";
 import { PostgresAuthStore } from "../src/auth/postgres-auth-store.js";
+import { apiTokenScopes } from "../src/auth/types.js";
 import { createDb, createPgPool } from "../src/db/client.js";
 import { GithubIntegrationService } from "../src/github/service.js";
 import { PublicGithubSourceProvider } from "../src/libraries/github-source.js";
@@ -116,6 +119,23 @@ test("GitHub integration journey: sessions, OAuth, rotation, installation and st
   assert.equal((await request("GET", "/v1/account/github")).statusCode, 401);
   const apiToken = await request("POST", "/v1/auth/api-tokens", sessions.admin, { name: "GitHub boundary", scopes: ["profile:read"] });
   assert.equal(apiToken.statusCode, 201, apiToken.body);
+  const allScopes = await request("POST", "/v1/auth/api-tokens", sessions.admin, { name: "Postgres scope roundtrip", scopes: [...apiTokenScopes] });
+  assert.equal(allScopes.statusCode, 201, allScopes.body);
+  const scopeToken = allScopes.json().token;
+  assert.deepEqual(scopeToken.scopes, [...apiTokenScopes]);
+  await pool.query("UPDATE api_tokens SET scopes=$1::jsonb WHERE id=$2", [JSON.stringify([...apiTokenScopes, "unknown:scope", null, 42]), scopeToken.id]);
+  const listed = await request("GET", "/v1/auth/api-tokens", sessions.admin);
+  assert.equal(listed.statusCode, 200, listed.body);
+  assert.deepEqual(listed.json().tokens.find((token: { id: string }) => token.id === scopeToken.id)?.scopes, [...apiTokenScopes]);
+  const scopeSession = await request("GET", "/v1/mcp/session", scopeToken.token);
+  assert.equal(scopeSession.statusCode, 200, scopeSession.body);
+  assert.deepEqual(scopeSession.json().credential.scopes, [...apiTokenScopes]);
+  const oldGrant = await request("GET", "/v1/mcp/session", apiToken.json().token.token);
+  assert.equal(oldGrant.statusCode, 200, oldGrant.body);
+  assert.deepEqual(oldGrant.json().credential.scopes, ["profile:read"]);
+  const unscopedAdmin = await request("GET", "/v1/admin/github", apiToken.json().token.token);
+  assert.equal(unscopedAdmin.statusCode, 403);
+  assert.equal(unscopedAdmin.json().error.details.scope, "admin:read");
   const rejectedToken = await request("PUT", "/v1/admin/github", apiToken.json().token.token, config);
   assert.equal(rejectedToken.statusCode, 403);
   assert.equal(rejectedToken.json().error.code, "SESSION_AUTH_REQUIRED");
@@ -130,6 +150,21 @@ test("GitHub integration journey: sessions, OAuth, rotation, installation and st
   const saved = await request("PUT", "/v1/admin/github", sessions.admin, config);
   assert.equal(saved.statusCode, 200, saved.body);
   assert.ok(!saved.body.includes(clientSecret) && !saved.body.includes(privateKey));
+  // Delegated adapters preserve the real service's role/MFA checks and expose
+  // safe metadata only. Credential configuration/linking stays session-only.
+  const adminDelegate = await request("POST", "/v1/auth/api-tokens", sessions.admin, { name: "GitHub safe admin", scopes: ["admin:read", "admin:settings"] });
+  assert.equal(adminDelegate.statusCode, 201, adminDelegate.body);
+  for (const [method, url] of [["GET", "/v1/admin/github"], ["POST", "/v1/admin/github/test"]] as const) {
+    const response = await request(method, url, adminDelegate.json().token.token);
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(response.body.includes(clientSecret) || response.body.includes(privateKey), false);
+  }
+  assert.equal((await request("PUT", "/v1/admin/github", adminDelegate.json().token.token, config)).statusCode, 403);
+  const aliceDelegate = await request("POST", "/v1/auth/api-tokens", sessions.alice, { name: "GitHub account metadata", scopes: ["account:read", "account:connections:revoke"] });
+  assert.equal(aliceDelegate.statusCode, 201, aliceDelegate.body);
+  const aliceToken = aliceDelegate.json().token.token;
+  assert.equal((await request("POST", "/v1/account/github/connect", aliceToken)).statusCode, 403);
+  assert.equal((await request("GET", "/v1/admin/github", aliceToken)).statusCode, 403);
   const configBeforeAuditFailure = (await pool.query("SELECT generation,client_id FROM github_app_config")).rows[0];
   await pool.query("CREATE FUNCTION reject_github_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='admin.github.update' THEN RAISE EXCEPTION 'fixture audit unavailable'; END IF; RETURN NEW; END $$; CREATE TRIGGER github_audit_failure BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION reject_github_audit()");
   const failedSave = await request("PUT", "/v1/admin/github", sessions.admin, { ...config, clientId: "Iv1.changed" });
@@ -155,6 +190,7 @@ test("GitHub integration journey: sessions, OAuth, rotation, installation and st
   assert.equal(createHash("sha256").update(exchanges[0].code_verifier).digest("base64url"), initial.searchParams.get("code_challenge"));
   assert.notEqual((await finish(state)).headers.location, connected.headers.location);
   assert.equal((await request("GET", "/v1/account/github", sessions.alice)).json().github.login, "alice-github");
+  assert.equal((await request("GET", "/v1/account/github", aliceToken)).json().github.login, "alice-github");
   assert.equal((await request("GET", "/v1/account/github", sessions.bob)).json().github.status, "disconnected");
   assert.equal((await service.resolve(users.bob)).kind, "anonymous");
   const old = await service.resolve(users.alice);
@@ -242,6 +278,6 @@ test("GitHub integration journey: sessions, OAuth, rotation, installation and st
   await pool.query("UPDATE auth_sessions SET revoked_at=now() WHERE token_hash=$1", [hashSessionToken(sessions.alice)]);
   assert.notEqual((await finish(revoked.searchParams.get("state")!)).headers.location, connected.headers.location);
   const evidencePath = join(mkdtempSync(join(tmpdir(), "myskills-github-journey-")), "evidence.json");
-  writeFileSync(evidencePath, JSON.stringify({ outcome: "pass", covered: ["G01", "G02", "G03", "G04", "G05", "G06", "G07 stateless installation credentials", "G08 atomicity/sanitization", "G09", "G10 session revocation and account disabling during exchange", "G11 size/deadline present", "G12 source compare authentication propagation"] }, null, 2), { mode: 0o600 });
+  writeFileSync(evidencePath, JSON.stringify({ outcome: "pass", covered: ["G01", "G02", "G03", "G04", "G05", "G06", "G07 stateless installation credentials", "G08 atomicity/sanitization", "G09", "G10 session revocation and account disabling during exchange", "G11 size/deadline present", "G12 source compare authentication propagation", "G13 stored scope roundtrip and unknown-scope filtering"] }, null, 2), { mode: 0o600 });
   t.diagnostic(`Evidence: ${evidencePath}`);
 });

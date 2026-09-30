@@ -39,7 +39,7 @@ const outsider: TestUser = {
   roles: ["user"],
 };
 
-test("organization routes cover scoped membership, policy rollback, teams, and session-only writes", async (t) => {
+test("organization routes cover scoped membership, policy rollback, teams, and explicitly scoped writes", async (t) => {
   const fixture = await createFixture();
   t.after(() => fixture.app.close());
 
@@ -152,7 +152,7 @@ test("organization routes cover scoped membership, policy rollback, teams, and s
     headers: { authorization: `Bearer ${apiToken}` },
   });
   assert.equal(apiRead.statusCode, 403);
-  assert.equal(apiRead.json().error.code, "SESSION_AUTH_REQUIRED");
+  assert.equal(apiRead.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
 
   const promoted = await fixture.app.inject({
     method: "PUT",

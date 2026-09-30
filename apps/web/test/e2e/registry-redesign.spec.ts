@@ -31,6 +31,7 @@ async function fixture(page: Page, options: { role?: string; anonymous?: boolean
     const reply = (json: unknown, status = 200) => route.fulfill({ json, status });
     if (path === "/v1/auth/logout") { logoutCount++; return reply({}); }
     if (path === "/v1/me") return reply({ user });
+    if (method === "GET" && path === "/v1/oauth/connector") return reply({ connector: { enabled: false, mcpUrl: null } });
     if (path === "/v1/site") return reply({ site: { landingPageEnabled: true } });
     if (path === "/v1/skills") {
       await ready;
@@ -103,9 +104,20 @@ for (const width of [1440, 390]) test(`Skills navigation is keyboard accessible 
   const skillsLink = nav.getByRole("link", { name: "Skills", exact: true });
   await expect(skillsLink).toHaveAttribute("href", "/registry");
   if (width === 1440) await expect(skillsLink).toHaveAttribute("title", "Skills");
-  for (let step = 0; step < 40 && !await skillsLink.evaluate((link) => link === document.activeElement); step++) {
+  // Settings scopes add legitimate Tab stops. Bound a full traversal by the
+  // rendered controls, with room for native date/time input segments.
+  const focusableCount = await page.locator("a[href], button, input, select, textarea, [tabindex]").evaluateAll((elements) => elements.filter((element) =>
+    element instanceof HTMLElement && element.tabIndex >= 0 && !element.matches(":disabled") && element.getClientRects().length > 0 && getComputedStyle(element).visibility !== "hidden"
+  ).length);
+  const focusTrail: string[] = [];
+  for (let step = 0; step < focusableCount + 10 && !await skillsLink.evaluate((link) => link === document.activeElement); step++) {
     await page.keyboard.press("Tab");
+    focusTrail.push(await page.evaluate(() => {
+      const element = document.activeElement;
+      return element?.getAttribute("aria-label") ?? (element instanceof HTMLInputElement ? element.labels?.[0]?.textContent?.trim() : element?.textContent?.trim()) ?? element?.tagName ?? "none";
+    }));
   }
+  await test.info().attach("keyboard-navigation", { body: JSON.stringify({ width, focusableCount, focusTrail }, null, 2), contentType: "application/json" });
   await expect(skillsLink).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "Skills", exact: true, level: 1 })).toBeVisible();

@@ -1,3 +1,4 @@
+import { APPLICATION_SCOPES } from "@myskills-app/core";
 import { ConfirmationDialog, type ConfirmationRequest } from "@/components/ui/confirmation-dialog";
 import { MarketingLanding } from "./components/marketing/MarketingLanding.js";
 import { LandingSettings } from "./components/marketing/LandingSettings.js";
@@ -126,6 +127,8 @@ import {
 } from "./api.js";
 
 import { canQueueWorkspaceOperation } from "./components/target/workspace-target.js";
+import { ConnectAuthorizePage } from "./components/account/ConnectAuthorizePage.js";
+import { RemoteConnections } from "./components/account/RemoteConnections.js";
 
 interface RegistryAppProps {
   client?: RegistryClient;
@@ -133,7 +136,7 @@ interface RegistryAppProps {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type AuthState = "idle" | "loading" | "mfa";
-type AppView = "libraries" | "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "organizations" | "targets" | "updates" | "admin" | "review" | "submit" | "teams" | "settings" | "not-found";
+type AppView = "libraries" | "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "organizations" | "targets" | "updates" | "admin" | "review" | "submit" | "teams" | "settings" | "connect" | "not-found";
 
 interface AppLocation {
   view: AppView;
@@ -203,21 +206,42 @@ function operationKey(action: "install"): string {
   return `${action}:${random.replaceAll("-", "")}`;
 }
 
-const API_TOKEN_SCOPE_OPTIONS: Array<{ scope: ApiTokenScope; label: string }> = [
-  { scope: "profile:read", label: "Profile" },
-  { scope: "skills:read", label: "Read skills" },
-  { scope: "architectures:read", label: "Read architectures" },
-  { scope: "skills:submit", label: "Submit skills" },
-  { scope: "libraries:read", label: "Read libraries" },
-  { scope: "libraries:write", label: "Manage libraries" },
-  { scope: "review:read", label: "Review read" },
-  { scope: "review:write", label: "Review write" },
-  { scope: "targets:execute", label: "Execute target updates" },
-  { scope: "improvements:read", label: "Read improvement plans and evidence" },
-  { scope: "improvements:configure", label: "Configure improvement policies" },
-  { scope: "improvements:run", label: "Run skill improvements" },
-  { scope: "improvements:report", label: "Share and review improvement evidence" },
-];
+const API_TOKEN_SCOPE_LABELS: Record<ApiTokenScope, string> = {
+  "profile:read": "Profile",
+  "skills:read": "Read skills",
+  "architectures:read": "Read architectures",
+  "skills:submit": "Submit skills",
+  "libraries:read": "Read libraries",
+  "libraries:write": "Manage libraries",
+  "review:read": "Review read",
+  "review:write": "Review write",
+  "targets:execute": "Execute target updates",
+  "improvements:read": "Read improvement plans and evidence",
+  "improvements:configure": "Configure improvement policies",
+  "improvements:run": "Run skill improvements",
+  "improvements:report": "Share and review improvement evidence",
+  "account:connections:revoke": "Revoke own remote connections",
+  "account:read": "Read account security metadata",
+  "account:tokens:revoke": "Revoke own API keys",
+  "admin:read": "Read administration settings and audit history",
+  "admin:settings": "Manage instance settings",
+  "admin:tokens:revoke": "Revoke administered API keys",
+  "admin:users": "Manage users, roles and invitations",
+  "architectures:write": "Manage architectures",
+  "libraries:bind": "Bind libraries to architectures and targets",
+  "organizations:read": "Read organizations",
+  "organizations:write": "Manage organizations",
+  "sharing:read": "Read skill sharing settings",
+  "sharing:write": "Manage skill sharing",
+  "skills:manage": "List managed skills",
+  "submissions:read": "Read and export own submissions",
+  "targets:control": "Manage targets and schedule operations",
+  "targets:read": "Read targets and operations",
+  "teams:read": "Read teams",
+  "teams:write": "Manage teams",
+};
+const API_TOKEN_SCOPE_OPTIONS = [...APPLICATION_SCOPES, "targets:execute" as const]
+  .map((scope) => ({ scope, label: API_TOKEN_SCOPE_LABELS[scope] }));
 
 export function RegistryApp({ client }: RegistryAppProps) {
   const registryClient = useMemo(() => client ?? createRegistryClient(), [client]);
@@ -225,6 +249,9 @@ export function RegistryApp({ client }: RegistryAppProps) {
 }
 
 function RegistryContent({ client: registryClient }: { client: RegistryClient }) {
+  // Capture a remote-connection request handle from the URL fragment before
+  // the first history write, then keep it only in this tab's session storage.
+  const [pendingConnectRequest, setPendingConnectRequest] = useState<string | null>(() => capturePendingConnectRequest());
   const initialLocation = appLocationFromWindow();
   const historyIndexRef = useRef(readAppHistoryIndex(window.history.state) ?? 0);
   const currentLocationRef = useRef(initialLocation);
@@ -1046,6 +1073,33 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     pushAppHistory(browseUrl(selectedSlug, query, platform, selectedVersion));
   }
 
+  // Return to a pending remote-connection consent after sign-in. The only
+  // return target is the fixed consent path; no URL is taken from input.
+  function openAfterSignIn() {
+    if (readStoredConnectRequest()) {
+      setView("connect");
+      pushAppHistory(pathForView("connect"));
+      return;
+    }
+    openRegistry();
+  }
+
+  function signInForConnection() {
+    setMobileMenu(null);
+    setSession(null);
+    clearStoredSession();
+    setMfaPending(null);
+    setAuthState("idle");
+    setAuthMessage(null);
+    setView("login");
+    pushAppHistory("/login");
+  }
+
+  function finishConnection() {
+    clearStoredConnectRequest();
+    setPendingConnectRequest(null);
+  }
+
   async function loadMoreSkills() {
     if (!nextCursor || !registryClient.searchSkillPage || loadingMore) return;
     const requestEpoch = listEpoch.current;
@@ -1087,7 +1141,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
       setSession(nextSession);
       writeStoredSession(nextSession);
       setAuthState("idle");
-      openRegistry();
+      openAfterSignIn();
     } catch (error) {
       setAuthState("idle");
       setAuthMessage(safeAuthErrorMessage(error));
@@ -1113,7 +1167,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
       writeStoredSession(nextSession);
       setMfaPending(null);
       setAuthState("idle");
-      openRegistry();
+      openAfterSignIn();
     } catch (error) {
       setAuthState("mfa");
       setAuthMessage(safeAuthErrorMessage(error));
@@ -1138,6 +1192,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     setAuthMessage(null);
     setSession(null);
     clearStoredSession();
+    finishConnection();
     setMfaPending(null);
     setView("login");
     replaceAppHistory("/login");
@@ -1245,6 +1300,19 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
 
   if (activeView === "not-found") {
     return <NotFoundPage onHome={openLanding} onLogin={openLogin} showLandingLink={siteState?.view === view && siteState.enabled === true} />;
+  }
+
+  if (activeView === "connect") {
+    return (
+      <ConnectAuthorizePage
+        client={registryClient.oauth}
+        error={connectErrorFromLocation()}
+        handle={pendingConnectRequest ?? readStoredConnectRequest()}
+        signedIn={Boolean(session)}
+        onFinished={finishConnection}
+        onSignIn={signInForConnection}
+      />
+    );
   }
 
   const navItems = [
@@ -4799,6 +4867,7 @@ function AccountSettings({
                 <small id="api-token-expiry-help">Optional. Choose a future expiry no more than 1 year away; blank uses the 90-day default.</small>
                 {apiTokenExpiryError && <small className="field-error" id="api-token-expiry-error" role="alert">{apiTokenExpiryError}</small>}
               </label>
+              <p className="account-muted">Select only the access this client needs. Your account permissions and MFA requirements still apply.</p>
               <fieldset className="account-scopes">
                 <legend>API key scopes</legend>
                 {API_TOKEN_SCOPE_OPTIONS.map((option) => (
@@ -4830,6 +4899,8 @@ function AccountSettings({
             {accountInitialLoading ? <LoadingRows /> : <TokenList tokens={apiTokens} onRevoke={(tokenId) => void revokeAccountApiToken(tokenId)} />}
           </div>
         </section>
+
+        <RemoteConnections client={client.oauth} />
       </div>
       {confirmation && <ConfirmationDialog key={confirmation.key} request={confirmation} onClose={() => setConfirmation(null)} />}
     </main>
@@ -6152,6 +6223,7 @@ function isPublicView(view: AppView): boolean {
     || view === "verify-email"
     || view === "change-email"
     || view === "browse"
+    || view === "connect"
     || view === "not-found";
 }
 
@@ -6204,6 +6276,9 @@ function initialViewFromPath(pathname: string): AppView {
   if (pathname === "/settings") {
     return "settings";
   }
+  if (pathname === CONNECT_PATH) {
+    return "connect";
+  }
   if (pathname === "/registry" || skillSlugFromPath(pathname)) {
     return "browse";
   }
@@ -6231,6 +6306,9 @@ function pathForView(view: AppView): string {
   }
   if (view === "not-found") {
     return "/404";
+  }
+  if (view === "connect") {
+    return CONNECT_PATH;
   }
   return view === "browse" ? "/registry" : `/${view}`;
 }
@@ -6558,6 +6636,53 @@ function apiErrorCode(error: unknown): string | null {
 }
 
 const SESSION_STORAGE_KEY = "myskills-app:web-session";
+const CONNECT_PATH = "/connect/authorize";
+const CONNECT_REQUEST_STORAGE_KEY = "myskills-app:connect-request";
+const CONNECT_REQUEST_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
+/** Moves a consent handle from the fragment into tab-scoped storage and strips it from the address bar. */
+function capturePendingConnectRequest(): string | null {
+  if (window.location.pathname !== CONNECT_PATH) return readStoredConnectRequest();
+  const rawHash = window.location.hash.replace(/^#/, "");
+  if (!rawHash) return readStoredConnectRequest();
+  const handle = new URLSearchParams(rawHash).get("request");
+  window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`);
+  if (!handle || !CONNECT_REQUEST_PATTERN.test(handle)) {
+    clearStoredConnectRequest();
+    return null;
+  }
+  try {
+    window.sessionStorage.setItem(CONNECT_REQUEST_STORAGE_KEY, handle);
+  } catch {
+    // Without storage the handle still works in this page; sign-in return is best effort.
+  }
+  return handle;
+}
+
+function readStoredConnectRequest(): string | null {
+  try {
+    const handle = window.sessionStorage.getItem(CONNECT_REQUEST_STORAGE_KEY);
+    return handle && CONNECT_REQUEST_PATTERN.test(handle) ? handle : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearStoredConnectRequest(): void {
+  try {
+    window.sessionStorage.removeItem(CONNECT_REQUEST_STORAGE_KEY);
+  } catch {
+    // Nothing stored.
+  }
+}
+
+/** Only fixed, known-safe error codes from the authorization endpoint are rendered. */
+function connectErrorFromLocation(): string | null {
+  if (window.location.pathname !== CONNECT_PATH) return null;
+  const error = new URLSearchParams(window.location.search).get("error");
+  if (error === null) return null;
+  return /^[a-z_]{1,40}$/.test(error) ? error : "invalid_request";
+}
 const MAX_WEB_ARCHIVE_BYTES = 10 * 1024 * 1024;
 const ADMIN_ROLE_OPTIONS = ["owner", "admin", "maintainer", "author", "user"];
 

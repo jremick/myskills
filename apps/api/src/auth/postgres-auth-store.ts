@@ -3,6 +3,7 @@ import { getTableColumns, and, asc, desc, eq, gt, lte, isNotNull, isNull, ne, or
 import { AppError, type BrandSettings } from "@myskills-app/core";
 import { roles as authRoles, type RegistrationMode, type Role, type UserStatus } from "@myskills-app/auth";
 import { sanitizeAuditDetails } from "../audit/sanitize.js";
+import { revokeConnectorAuthority } from "../oauth/postgres-store.js";
 import { AUTH_NOTIFICATION_BATCH_SIZE, AUTH_NOTIFICATION_LEASE_MS, AUTH_NOTIFICATION_MAX_ATTEMPTS, AUTH_NOTIFICATION_RETENTION_MS, eligibleAuthNotification, type AuthNotificationClaim, type FinishAuthNotificationInput } from "./notification-outbox.js";
 import type { Database } from "../db/client.js";
 import {
@@ -63,6 +64,7 @@ import type {
   MfaTotpFactorRecord,
   ListAuditEventsInput,
 } from "./types.js";
+import { apiTokenScopes } from "./types.js";
 
 const INSTANCE_ROLE_SCOPE = {
   scopeType: "instance",
@@ -406,6 +408,7 @@ export class PostgresAuthStore implements AuthStore {
       }
       if (input.revokeCredentials) {
         const revokedAt = new Date();
+        await revokeConnectorAuthority(tx, input.userId, revokedAt);
         await tx.update(authSessions).set({ revokedAt }).where(and(
           eq(authSessions.userId, input.userId),
           isNull(authSessions.revokedAt),
@@ -496,6 +499,7 @@ export class PostgresAuthStore implements AuthStore {
       }
       if (revokeCredentials) {
         const revokedAt = new Date();
+        await revokeConnectorAuthority(tx, input.userId, revokedAt);
         await tx.update(authSessions).set({ revokedAt }).where(and(
           eq(authSessions.userId, input.userId),
           isNull(authSessions.revokedAt),
@@ -1320,6 +1324,7 @@ function parseRegistrationMode(input: unknown): RegistrationMode {
 }
 
 async function revokeCredentials(db: DbLike, userId: string, revokedAt: Date): Promise<void> {
+  await revokeConnectorAuthority(db, userId, revokedAt);
   await db
     .update(authSessions)
     .set({ revokedAt })
@@ -1469,19 +1474,7 @@ function parseApiTokenScopes(input: unknown): ApiTokenScope[] {
     return [];
   }
   return input.filter((scope): scope is ApiTokenScope => (
-    scope === "profile:read" ||
-    scope === "skills:read" ||
-    scope === "architectures:read" ||
-    scope === "skills:submit" ||
-    scope === "review:read" ||
-    scope === "review:write" ||
-    scope === "targets:execute" ||
-    scope === "improvements:read" ||
-    scope === "improvements:configure" ||
-    scope === "improvements:run" ||
-    scope === "improvements:report" ||
-    scope === "libraries:read" ||
-    scope === "libraries:write"
+    typeof scope === "string" && (apiTokenScopes as readonly string[]).includes(scope)
   ));
 }
 

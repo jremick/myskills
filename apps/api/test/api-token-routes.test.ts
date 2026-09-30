@@ -1,3 +1,4 @@
+import { APPLICATION_SCOPES } from "@myskills-app/core";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -87,7 +88,7 @@ test("session users can create, list, use, and revoke scoped API tokens", async 
   assert.equal(revoked.statusCode, 401);
 });
 
-test("API token management requires a session, not another API token", async (t) => {
+test("credential issuance stays session-only and old tokens cannot read or revoke credentials", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const app = buildTokenApp(authStore);
   t.after(() => app.close());
@@ -107,7 +108,7 @@ test("API token management requires a session, not another API token", async (t)
       headers: { authorization: `Bearer ${token.token}` },
     });
     assert.equal(response.statusCode, 403);
-    assert.equal(response.json().error.code, "SESSION_AUTH_REQUIRED");
+    assert.equal(response.json().error.code, request.method === "POST" ? "SESSION_AUTH_REQUIRED" : "API_TOKEN_SCOPE_REQUIRED");
   }
 
   const logout = await app.inject({
@@ -405,7 +406,7 @@ test("review API tokens require MFA-verified maintainer sessions at creation", a
   assert.equal(response.json().error.code, "MFA_VERIFICATION_REQUIRED");
 });
 
-test("MCP session accepts a registry or architecture read API token", async (t) => {
+test("MCP session accepts any application scope while rejecting browser sessions", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const app = buildTokenApp(authStore);
   t.after(() => app.close());
@@ -437,13 +438,13 @@ test("MCP session accepts a registry or architecture read API token", async (t) 
   assert.equal(cookieSessionDenied.statusCode, 403);
   assert.equal(cookieSessionDenied.json().error.code, "API_TOKEN_AUTH_REQUIRED");
 
-  const wrongScope = await app.inject({
+  const profileAllowed = await app.inject({
     method: "GET",
     url: "/v1/mcp/session",
     headers: { authorization: `Bearer ${profileToken.token}` },
   });
-  assert.equal(wrongScope.statusCode, 403);
-  assert.equal(wrongScope.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
+  assert.equal(profileAllowed.statusCode, 200);
+  assert.deepEqual(profileAllowed.json().credential.scopes, ["profile:read"]);
 
   const allowed = await app.inject({
     method: "GET",
@@ -503,7 +504,7 @@ test("architecture-only MCP sessions do not grant registry reads and audit safe 
   assert.ok(event);
   assert.equal(event.decision, "allow");
   assert.equal(event.details.requiredScope, "skills:read");
-  assert.deepEqual(event.details.requiredScopes, ["skills:read", "architectures:read"]);
+  assert.deepEqual(event.details.requiredScopes, APPLICATION_SCOPES.map((scope) => scope.includes("tokens") ? "[redacted]" : scope));
   const serialized = JSON.stringify(event);
   assert.equal(serialized.includes(architectureToken.token), false);
   assert.equal(serialized.includes(hashApiToken(architectureToken.token)), false);
@@ -552,7 +553,7 @@ test("native MCP operation context tightens scope and records only bounded metho
   }
   const unscoped = events.filter((event) => event.details.method === undefined);
   assert.equal(unscoped.length, 1);
-  assert.deepEqual(unscoped[0].details.requiredScopes, ["skills:read", "architectures:read"]);
+  assert.deepEqual(unscoped[0].details.requiredScopes, APPLICATION_SCOPES.map((scope) => scope.includes("tokens") ? "[redacted]" : scope));
   const serialized = JSON.stringify(events);
   for (const excluded of [arbitraryHeader, reader.token, architecture.token, session]) {
     assert.equal(serialized.includes(excluded), false);
@@ -594,7 +595,7 @@ test("MCP session writes sanitized audit events for allow and deny decisions", a
   const wrongScope = await app.inject({
     method: "GET",
     url: "/v1/mcp/session",
-    headers: { authorization: `Bearer ${profileToken.token}` },
+    headers: { authorization: `Bearer ${profileToken.token}`, "x-myskills-mcp-method": "skills/list" },
   });
   assert.equal(wrongScope.statusCode, 403);
   assert.equal(wrongScope.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
@@ -647,7 +648,9 @@ test("MCP session writes sanitized audit events for allow and deny decisions", a
   assert.equal(events.some((event) => event.decision === "deny" && event.details.credentialKind === "none"), true);
   assert.equal(events.every((event) => event.details.endpoint === "/v1/mcp/session"), true);
   assert.equal(events.every((event) => event.details.requiredScope === "skills:read"), true);
-  assert.equal(events.every((event) => event.details.requiredScopes?.join(",") === "skills:read,architectures:read"), true);
+  assert.equal(events.every((event) => event.details.method
+    ? event.details.requiredScopes?.join(",") === "skills:read"
+    : JSON.stringify(event.details.requiredScopes) === JSON.stringify(APPLICATION_SCOPES.map((scope) => scope.includes("tokens") ? "[redacted]" : scope))), true);
 
   const serialized = JSON.stringify(events);
   for (const forbidden of [

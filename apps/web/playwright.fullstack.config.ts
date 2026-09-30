@@ -11,7 +11,8 @@ export default defineConfig({
   workers: 1,
   reporter: [
     ["line"],
-    ["json", { outputFile: "test-results/fullstack-report.json" }],
+    // The harness gives each fresh-stack phase its own report.
+    ["json", { outputFile: process.env.MYSKILLS_E2E_JSON_REPORT ?? "test-results/fullstack-report.json" }],
     ...(process.env.CI ? [["html", { open: "never" }] as ["html", { open: "never" }]] : []),
   ],
   use: {

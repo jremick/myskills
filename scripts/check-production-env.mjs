@@ -27,6 +27,7 @@ validateAuthNotifications();
 validateArtifactStorage();
 validateBootstrapSecrets();
 validateMcp();
+validateRemoteMcpConnections();
 
 if (errors.length > 0) {
   console.error("Production environment check failed:");
@@ -317,6 +318,78 @@ function validateMcp() {
   for (const origin of csv("MYSKILLS_MCP_ALLOWED_ORIGINS")) {
     validateUrlValue("MYSKILLS_MCP_ALLOWED_ORIGINS", origin, { https: true });
     rejectLocalUrl("MYSKILLS_MCP_ALLOWED_ORIGINS", origin);
+  }
+}
+
+// Remote MCP connections (OAuth) are optional. When enabled, every public URL
+// must be explicit HTTPS configuration and a client registration path must exist.
+function validateRemoteMcpConnections() {
+  const hasIssuer = Boolean(stringValue("MYSKILLS_OAUTH_ISSUER"));
+  const hasPublicUrl = Boolean(stringValue("MYSKILLS_MCP_PUBLIC_URL"));
+  if (hasIssuer !== hasPublicUrl) {
+    errors.push("Set both MYSKILLS_OAUTH_ISSUER and MYSKILLS_MCP_PUBLIC_URL for remote MCP connections, or neither.");
+  }
+  if (!booleanValue("MYSKILLS_OAUTH_ENABLED")) {
+    return;
+  }
+  const issuer = requiredString("MYSKILLS_OAUTH_ISSUER");
+  if (issuer) {
+    validatePublicOrigin("MYSKILLS_OAUTH_ISSUER", issuer);
+  }
+  const consentOrigin = stringValue("MYSKILLS_OAUTH_CONSENT_ORIGIN");
+  if (consentOrigin) {
+    validatePublicOrigin("MYSKILLS_OAUTH_CONSENT_ORIGIN", consentOrigin);
+  }
+  const publicUrl = requiredString("MYSKILLS_MCP_PUBLIC_URL");
+  if (publicUrl) {
+    validateUrlValue("MYSKILLS_MCP_PUBLIC_URL", publicUrl, { https: true });
+    rejectLocalUrl("MYSKILLS_MCP_PUBLIC_URL", publicUrl);
+    try {
+      const url = new URL(publicUrl);
+      if (url.search || url.hash || url.username || url.password) {
+        errors.push("MYSKILLS_MCP_PUBLIC_URL must not contain credentials, a query or a fragment.");
+      }
+      if (!url.pathname.replace(/\/+$/, "")) {
+        errors.push("MYSKILLS_MCP_PUBLIC_URL must include the MCP endpoint path, such as /mcp.");
+      }
+    } catch {
+      // validateUrlValue already reported the malformed URL.
+    }
+  }
+  const dynamicRegistration = booleanValue("MYSKILLS_OAUTH_DYNAMIC_REGISTRATION");
+  const redirectHosts = csv("MYSKILLS_OAUTH_REDIRECT_HOSTS");
+  if (dynamicRegistration && redirectHosts.length === 0) {
+    errors.push("MYSKILLS_OAUTH_REDIRECT_HOSTS is required when dynamic client registration is enabled.");
+  }
+  if (redirectHosts.some((host) => !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(host) || host.includes(".."))) {
+    errors.push("MYSKILLS_OAUTH_REDIRECT_HOSTS must list exact hostnames without wildcards, schemes or ports.");
+  }
+  const clients = stringValue("MYSKILLS_OAUTH_CLIENTS");
+  let configuredClients = 0;
+  if (clients) {
+    try {
+      const parsed = JSON.parse(clients);
+      if (!Array.isArray(parsed)) throw new Error("not an array");
+      configuredClients = parsed.length;
+    } catch {
+      errors.push("MYSKILLS_OAUTH_CLIENTS must be a JSON array of configured clients.");
+    }
+  }
+  if (!dynamicRegistration && configuredClients === 0) {
+    errors.push("Enable MYSKILLS_OAUTH_DYNAMIC_REGISTRATION or configure MYSKILLS_OAUTH_CLIENTS so remote clients have a registration path.");
+  }
+}
+
+function validatePublicOrigin(name, value) {
+  validateUrlValue(name, value, { https: true });
+  rejectLocalUrl(name, value);
+  try {
+    const url = new URL(value);
+    if (url.pathname !== "/" || url.search || url.hash || url.username || url.password || value.includes("?") || value.includes("#")) {
+      errors.push(`${name} must be an origin without a path, query or fragment.`);
+    }
+  } catch {
+    // validateUrlValue already reported the malformed URL.
   }
 }
 

@@ -11,7 +11,8 @@ Implemented:
 - authenticated read-only skill discovery through `search_skills`
 - safe metadata for authorized skills through `get_skill_info`
 - install/export guidance through `get_install_instructions`
-- API-token-only auth check through `GET /v1/mcp/session` (accepts either `skills:read` or `architectures:read`)
+- API-token or opt-in OAuth connector auth check through `GET /v1/mcp/session` (accepts either `skills:read` or `architectures:read`)
+- verified single-file reads through `read_skill_file`
 - `skills:read` for MCP registry tools and `architectures:read` for architecture projection tools
 - native `skills/list`, `skills/get`, and verified `resources/read` delivery for extension-aware clients
 
@@ -24,7 +25,8 @@ return empty lists; native discovery uses `skills/list`.
 The stdio entrypoint uses `serveStdio` to select the protocol for each connection.
 The HTTP entrypoint uses `createMcpHandler` for modern requests and the SDK's
 request classifier to preserve legacy stateless JSON responses. Both paths expose
-the same eight tools: seven reads and one explicit bundle-curation write. Modern clients can use `server/discover`, `tools/list`,
+the same nine tools: eight reads and one explicit bundle-curation write. Remote
+OAuth connector sessions see the eight reads only. Modern clients can use `server/discover`, `tools/list`,
 and `tools/call`; the SDK supplies the required protocol envelope and server identity
 metadata. Legacy clients continue to use `initialize` and the existing tools.
 
@@ -170,14 +172,46 @@ The HTTP adapter defaults to `127.0.0.1:3002/mcp` and reads `MYSKILLS_MCP_HOST`,
 
 The HTTP boundary defaults to a bounded 120 requests per minute per socket IP, a 256 KiB request-body limit, bounded header/bucket/connection counts, and finite header/request/upstream/socket lifetimes. `MYSKILLS_MCP_TRUST_PROXY_HOPS` defaults to `0`, so `X-Forwarded-For` is ignored. Set a positive hop count only behind a known, fixed proxy chain; an incorrect value lets clients influence rate-limit identity.
 
+## Remote OAuth connectors (opt-in)
+
+Set `MYSKILLS_OAUTH_ISSUER` and `MYSKILLS_MCP_PUBLIC_URL` together (or
+neither) to run the HTTP adapter as an OAuth protected resource for hosts such
+as ChatGPT and Claude. The public URL's path must equal `MYSKILLS_MCP_PATH`.
+The adapter then serves RFC 9728 metadata at
+`/.well-known/oauth-protected-resource<path>` (and the root form), answers
+unauthenticated requests with
+`WWW-Authenticate: Bearer resource_metadata="...", scope="skills:read"`, and
+accepts a connector access token only when the API reports it was issued for
+this exact public URL. Connector sessions omit `curate_bundle`. API tokens keep
+working unchanged in either mode. Without these settings the adapter keeps its
+existing API-token-only behavior and challenge-free 401 responses.
+`MYSKILLS_MCP_RATE_LIMIT_MAX_REQUESTS` optionally changes the per-address
+limit; hosted apps share cloud egress addresses.
+
+The authorization server, consent flow and deployment runbook are described in
+[Remote MCP connections](../../docs/MCP_CONNECTIONS.md). Nothing in this mode
+proves ChatGPT or Claude acceptance.
+
+### `read_skill_file`
+
+A bounded read-only tool for hosts that use standard tools instead of native
+Skills methods. Input: `slug`, optional exact `version` (default: the latest
+approved version), optional `path` (default `SKILL.md`). It returns the file
+text, its SHA-256 and size, the release manifest (path, digest and size of
+every file) and the frontmatter name and description. Each call performs the
+same fresh session check, release authorization, bundle digest, manifest and
+portable-path verification as `resources/read`, requires `skills:read`, and
+fails without content on any mismatch. It does not install or execute skills.
+
 ## Security Rules
 
 MCP clients should authenticate with scoped API tokens, not interactive sessions. Tool handlers must enforce both the local user role and token scope through the API auth boundary.
 
 Every `/v1/mcp/session` authorization decision is recorded by the API as a sanitized `mcp.session` audit event. The event records the allow/deny decision, safe credential kind, required scope, and reason code without bearer values, token hashes, package contents, or MCP tool arguments.
 
-The six existing tools do not return package contents. Native resources use the
-API's authorized immutable bundle path with explicit integrity checks and audit.
+The original six tools do not return package contents. `read_skill_file` and
+native resources use the API's authorized immutable bundle path with explicit
+integrity checks and audit.
 Reading resources never executes code or grants host tools additional permissions.
 
 Tool inputs must not carry tokens or API base URLs. For stdio, configure `MYSKILLS_TOKEN` and `MYSKILLS_API_URL` in the MCP server process environment. For HTTP, configure only the API base URL and host/origin allowlists on the server, then send client credentials through the HTTP `Authorization` header.

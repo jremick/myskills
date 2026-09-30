@@ -2,6 +2,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { fullstackPhases } from "./lib/fullstack-phases.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const composeFile = resolve(root, "docker-compose.e2e.yml");
@@ -40,7 +41,12 @@ const generatedSecrets = [
   environment.MYSKILLS_E2E_POSTGRES_PASSWORD,
 ];
 
-let teardownStarted = false;
+// Arguments after `--` are Playwright test filters, such as a spec file or
+// --grep. Without filters, registry journeys and the remote MCP connector
+// journey each run on their own fresh disposable stack; the production login
+// limiter is unchanged, and journeys sharing this host address stay isolated.
+const phases = fullstackPhases(process.argv.slice(2));
+let stackUp = false;
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.once(signal, () => {
@@ -50,30 +56,50 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 
 try {
   await run("docker", [...composeArgs, "config", "--quiet"]);
-  await run("docker", [...composeArgs, "up", "--build", "--detach", "--wait", "--wait-timeout", "300"]);
+  // Build the CLI packages once; each phase gets fresh containers and data.
   await run("npm", ["run", "build", "-w", "@myskills-app/core", "-w", "@myskills-app/skill-package", "-w", "@jarel/myskills"]);
-  const owner = await prepareOwnerMfa();
-  environment.MYSKILLS_E2E_OWNER_RECOVERY_CODES = JSON.stringify(owner.recoveryCodes);
-  environment.MYSKILLS_ACCEPTANCE_OWNER_TOKEN = owner.sessionToken;
-  generatedSecrets.push(owner.sessionToken, ...owner.recoveryCodes);
-  await run(resolve(root, "node_modules/.bin/playwright"), [
-    "test",
-    "--config",
-    resolve(root, "apps/web/playwright.fullstack.config.ts"),
-  ]);
-} catch (error) {
-  await run("docker", [...composeArgs, "ps"], { allowFailure: true });
-  await run("docker", [...composeArgs, "logs", "--no-color", "--tail", "200"], { allowFailure: true });
-  throw error;
+  for (const phase of phases) {
+    console.log(`Full-stack phase "${phase.name}" on a fresh disposable stack.`);
+    await runPhase(phase);
+  }
 } finally {
   await teardown();
 }
 
+async function runPhase(phase) {
+  try {
+    stackUp = true;
+    await run("docker", [...composeArgs, "up", "--build", "--detach", "--wait", "--wait-timeout", "300"]);
+    // Remote MCP OAuth discovery, authorization, token and MCP paths must reach
+    // the API and MCP services through the production nginx template.
+    await run(process.execPath, [resolve(root, "scripts/check-mcp-oauth-routing.mjs"), "--origin", baseURL]);
+    const owner = await prepareOwnerMfa();
+    environment.MYSKILLS_E2E_OWNER_RECOVERY_CODES = JSON.stringify(owner.recoveryCodes);
+    environment.MYSKILLS_ACCEPTANCE_OWNER_TOKEN = owner.sessionToken;
+    generatedSecrets.push(owner.sessionToken, ...owner.recoveryCodes);
+    if (phase.jsonReport) environment.MYSKILLS_E2E_JSON_REPORT = resolve(root, "apps/web", phase.jsonReport);
+    else delete environment.MYSKILLS_E2E_JSON_REPORT;
+    await run(resolve(root, "node_modules/.bin/playwright"), [
+      "test",
+      "--config",
+      resolve(root, "apps/web/playwright.fullstack.config.ts"),
+      ...(phase.outputDir ? ["--output", resolve(root, "apps/web", phase.outputDir)] : []),
+      ...phase.playwrightArgs,
+    ]);
+  } catch (error) {
+    await run("docker", [...composeArgs, "ps"], { allowFailure: true });
+    await run("docker", [...composeArgs, "logs", "--no-color", "--tail", "200"], { allowFailure: true });
+    throw error;
+  } finally {
+    await teardown();
+  }
+}
+
 async function teardown() {
-  if (teardownStarted) {
+  if (!stackUp) {
     return;
   }
-  teardownStarted = true;
+  stackUp = false;
   await run("docker", [...composeArgs, "down", "--volumes", "--remove-orphans", "--timeout", "10"], { allowFailure: true });
 }
 

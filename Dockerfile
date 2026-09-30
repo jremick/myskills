@@ -77,7 +77,8 @@ CMD ["node", "apps/mcp/dist/http-index.js"]
 
 FROM nginx:1.31-alpine AS web
 ENV PORT=80 \
-    API_PROXY_TARGET=http://127.0.0.1:3001
+    API_PROXY_TARGET=http://127.0.0.1:3001 \
+    MCP_PROXY_TARGET=http://127.0.0.1:3002
 COPY deploy/nginx.railway.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=web-build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 80

@@ -1,3 +1,4 @@
+import { ALL_APPLICATION_TOOL_NAMES } from "./application-tool-names.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -31,7 +32,7 @@ for (const declared of [false, true]) {
       assert.deepEqual(caps?.extensions?.[SKILLS_EXTENSION], {});
       assert.ok(caps?.resources);
       assert.deepEqual((await client.listResourceTemplates()).resourceTemplates, []);
-      assert.equal((await client.listTools()).tools.length, 8);
+      assert.deepEqual((await client.listTools()).tools.map(tool => tool.name).sort(), ALL_APPLICATION_TOOL_NAMES);
       if (!declared) {
         await assert.rejects(client.request({ method: "skills/list", params: {} }, listResult), /Declare the io.modelcontextprotocol\/skills/);
         assert.equal(fixture.calls.some((call) => call.method === "skills/list"), false);

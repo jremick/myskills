@@ -101,12 +101,46 @@ services:
       S3_ALLOW_INSECURE_ENDPOINT: "true"
       SEED_OWNER_EMAIL: ${MYSKILLS_E2E_OWNER_EMAIL:?MYSKILLS_E2E_OWNER_EMAIL is required}
       SEED_OWNER_PASSWORD: ${MYSKILLS_E2E_OWNER_PASSWORD:?MYSKILLS_E2E_OWNER_PASSWORD is required}
+      # Remote MCP connections through the web proxy's single public origin.
+      # Loopback HTTP is accepted only because this stack is local.
+      MYSKILLS_OAUTH_ENABLED: "true"
+      MYSKILLS_OAUTH_ISSUER: http://127.0.0.1:${MYSKILLS_E2E_WEB_PORT:-43100}
+      MYSKILLS_OAUTH_CONSENT_ORIGIN: http://127.0.0.1:${MYSKILLS_E2E_WEB_PORT:-43100}
+      MYSKILLS_MCP_PUBLIC_URL: http://127.0.0.1:${MYSKILLS_E2E_WEB_PORT:-43100}/mcp
+      MYSKILLS_OAUTH_DYNAMIC_REGISTRATION: "true"
+      MYSKILLS_OAUTH_REDIRECT_HOSTS: client.example.test
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 3s
       timeout: 5s
       retries: 40
       start_period: 10s
+    restart: "no"
+
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: mcp-http
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      MYSKILLS_API_URL: http://api:3001
+      MYSKILLS_MCP_HOST: 0.0.0.0
+      MYSKILLS_MCP_PORT: "3002"
+      MYSKILLS_MCP_PATH: /mcp
+      # nginx forwards Host as its upstream address.
+      MYSKILLS_MCP_ALLOWED_HOSTS: mcp:3002
+      MYSKILLS_MCP_TRUST_PROXY_HOPS: "1"
+      MYSKILLS_OAUTH_ISSUER: http://127.0.0.1:${MYSKILLS_E2E_WEB_PORT:-43100}
+      MYSKILLS_MCP_PUBLIC_URL: http://127.0.0.1:${MYSKILLS_E2E_WEB_PORT:-43100}/mcp
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
     restart: "no"
 
   web:
@@ -119,8 +153,11 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      mcp:
+        condition: service_healthy
     environment:
       API_PROXY_TARGET: http://api:3001
+      MCP_PROXY_TARGET: http://mcp:3002
     ports:
       - "127.0.0.1:${MYSKILLS_E2E_WEB_PORT:-43100}:80"
     healthcheck:

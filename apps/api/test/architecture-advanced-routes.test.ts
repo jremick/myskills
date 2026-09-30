@@ -17,7 +17,7 @@ const PASSWORD = "correct horse battery staple";
 const ownerId = "advanced-routes-owner";
 const ownerEmail = "advanced-routes-owner@example.com";
 
-test("organization grant routes are session-only, manager-gated, MFA-protected, and support disabled-sharing revoke", async (t) => {
+test("organization grant routes are explicitly scoped, manager-gated, MFA-protected, and support disabled-sharing revoke", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const architectureStore = new MemoryArchitectureStore();
   const grantStore = new MemoryArchitectureOrganizationGrantStore();
@@ -87,7 +87,7 @@ test("organization grant routes are session-only, manager-gated, MFA-protected, 
     headers: { authorization: `Bearer ${apiToken}` },
   });
   assert.equal(tokenRead.statusCode, 403);
-  assert.equal(tokenRead.json().error.code, "SESSION_AUTH_REQUIRED");
+  assert.equal(tokenRead.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
 
   const withoutMfa = await app.inject({
     method: "PUT",
@@ -192,7 +192,7 @@ test("pattern migration routes enforce session/MFA boundaries, bounded DTOs, blo
     payload: previewInput,
   });
   assert.equal(tokenPreview.statusCode, 403);
-  assert.equal(tokenPreview.json().error.code, "SESSION_AUTH_REQUIRED");
+  assert.equal(tokenPreview.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
 
   const unknownField = await app.inject({
     method: "POST",

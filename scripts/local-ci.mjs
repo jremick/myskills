@@ -63,12 +63,13 @@ const runIdPattern = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
 const composeProjectMaxLength = 63;
 const webE2eTimeoutMs = 15 * 60_000;
 const alwaysStepTimeoutMs = 60_000;
+const mcpSmokeTimeoutMs = 30_000;
 const killGraceMs = 10_000;
 const maxLogBytes = 64 * 1024 * 1024;
 const maxPendingLine = 1024 * 1024;
 const codeqlSuiteLine = "\nqueries:\n  - uses: security-extended\n";
 const defaultCodeqlCategory = "/language:javascript-typescript";
-const composeServiceImages = ["api", "web", "minio", "minio-init"];
+const composeServiceImages = ["api", "web", "mcp", "minio", "minio-init"];
 // Run IDs are reserved here, independent of TMPDIR and LOCAL_CI_WORK_DIR: exclusive mkdir on the local
 // filesystem is atomic, which Docker resource names are not. It covers only a local Docker daemon.
 const runIdLockRoot = "/var/tmp/myskills-local-ci-locks";
@@ -583,9 +584,10 @@ class JobContext {
 
   async step(name, command, args, options = {}) {
     if (this.stopped || (!options.always && (this.timedOut || this.reason !== null))) return this.skip(name);
-    let timeoutMs = options.always ? alwaysStepTimeoutMs : null;
+    let timeoutMs = options.timeoutMs ?? (options.always ? alwaysStepTimeoutMs : null);
     if (!options.always && this.deadline !== null) {
-      timeoutMs = this.deadline - Date.now();
+      const remainingMs = this.deadline - Date.now();
+      timeoutMs = timeoutMs === null ? remainingMs : Math.min(timeoutMs, remainingMs);
       if (timeoutMs <= 0) {
         this.timedOut = true;
         return this.skip(name);
@@ -667,6 +669,41 @@ class JobContext {
     }
   }
 
+  async smokeMcp(image) {
+    const name = containerName(this.run.runId, this.id, "mcp-smoke");
+    const entry = this.ledger.track("container", name, this.id, "creating");
+    const created = await this.step("smoke-mcp-start", "docker", [
+      "run", "-d", "--name", name, "--label", `io.myskills.local-ci.run-id=${this.run.runId}`,
+      "--label", `io.myskills.local-ci.owner=${this.run.runIdLock.owner}`,
+      "--network", "none", "-e", "PORT=43123", "-e", "MYSKILLS_MCP_ALLOWED_HOSTS=127.0.0.1:43123", image,
+    ], { timeoutMs: mcpSmokeTimeoutMs });
+    if (this.steps.at(-1).status === "skipped") {
+      this.ledger.mark(entry, "not-created");
+      return;
+    }
+    // The daemon can create a container before its CLI is cancelled or times out.
+    // Inspect only this name and our ownership labels; retain uncertainty rather
+    // than freeing the reservation while a delayed create could still complete.
+    const format = '{"id":{{json .Id}},"runId":{{json (index .Config.Labels "io.myskills.local-ci.run-id")}},"owner":{{json (index .Config.Labels "io.myskills.local-ci.owner")}}}';
+    const inspected = docker(["container", "inspect", "--format", format, name], 10_000);
+    const identity = inspected.status === 0 ? safeJson(inspected.stdout.trim()) : null;
+    if (!identity || !/^[a-f0-9]{64}$/.test(identity.id ?? "")
+        || !["runId", "owner"].every((key) => identity[key] === null || typeof identity[key] === "string")) {
+      this.ledger.mark(entry, "remove-failed");
+      this.fail("mcp-smoke-ownership-unknown");
+      return;
+    }
+    if (identity.runId !== this.run.runId || identity.owner !== this.run.runIdLock.owner) {
+      this.ledger.mark(entry, "not-created");
+      this.fail("mcp-smoke-ownership-mismatch");
+      return;
+    }
+    entry.containerId = identity.id;
+    this.ledger.mark(entry, "created");
+    if (!created) return;
+    await this.step("smoke-mcp-health", "docker", ["exec", name, "node", "scripts/smoke-mcp-http.mjs"], { timeoutMs: mcpSmokeTimeoutMs });
+  }
+
   trackComposeProject(suffix) {
     const project = composeProjectName(this.run.runId, this.id, suffix);
     this.ledger.track("compose-project", project, this.id, "created");
@@ -702,6 +739,7 @@ const jobRunners = {
     const project = job.canRun() ? job.trackComposeProject("fullstack") : null;
     await job.step("fullstack-browser", "npm", ["run", "test:e2e:fullstack"], { extraEnv: { ...ports, MYSKILLS_E2E_COMPOSE_PROJECT: project ?? "" } });
     await collectBrowserEvidence(job, "fullstack-browser", "collect-fullstack-evidence", "fullstack-report.json", "fullstack");
+    await collectBrowserEvidence(job, "fullstack-browser", "collect-connector-evidence", "fullstack-connector-report.json", "fullstack-connector");
     exportBrowserEvidence(job);
   },
 
@@ -709,6 +747,8 @@ const jobRunners = {
     if (!await job.checkout()) return;
     const tag = (repository) => `${repository}:local-ci-${job.run.runId}`;
     await job.build("build-railway-api", ["--file", "Dockerfile.api"], tag("myskills-app-api"));
+    await job.build("build-railway-mcp", ["--file", "Dockerfile.mcp"], tag("myskills-app-mcp"));
+    await job.smokeMcp(tag("myskills-app-mcp"));
     await job.build("build-railway-web", ["--file", "Dockerfile.web", "--build-arg", "VITE_API_BASE_URL=/api"], tag("myskills-app-web"));
     await job.build("build-backup", ["--file", "Dockerfile.backup"], tag("myskills-registry-backup"));
     await job.smokeBackup(tag("myskills-registry-backup"));
@@ -739,6 +779,8 @@ const jobRunners = {
     await job.build("build-mcp-http", ["--file", "Dockerfile", "--target", "mcp-http"], image("myskills-app-mcp-http"));
     await job.build("build-web", ["--file", "Dockerfile", "--target", "web", "--build-arg", "VITE_API_BASE_URL=/api"], image("myskills-app-web"));
     await job.build("build-railway-api", ["--file", "Dockerfile.api"], image("myskills-app-railway-api"));
+    await job.build("build-railway-mcp", ["--file", "Dockerfile.mcp"], image("myskills-app-railway-mcp"));
+    await job.smokeMcp(image("myskills-app-railway-mcp"));
     await job.build("build-railway-web", ["--file", "Dockerfile.web", "--build-arg", "VITE_API_BASE_URL=/api"], image("myskills-app-railway-web"));
     await job.build("build-backup", ["--file", "Dockerfile.backup"], image("myskills-registry-backup"));
     await job.smokeBackup(image("myskills-registry-backup"));
@@ -942,7 +984,7 @@ function removeResource(entry, sink) {
       return false;
     }
   }
-  if (entry.kind === "container") return removeContainers([entry.name], sink);
+  if (entry.kind === "container") return removeContainers([entry.containerId ?? entry.name], sink);
   if (entry.kind === "image") return removeImage(entry.name, sink);
   if (entry.kind === "compose-project") {
     // Exact Compose project label match; never name prefixes or prune.
@@ -1275,8 +1317,8 @@ function git(args, cwd = sourceRoot) {
   return spawnSync("git", ["-c", "core.hooksPath=/dev/null", ...args], { cwd, encoding: "utf8", env: jobEnvironment(null) });
 }
 
-function docker(args) {
-  return spawnSync("docker", args, { encoding: "utf8", env: jobEnvironment(null), timeout: 120_000 });
+function docker(args, timeout = 120_000) {
+  return spawnSync("docker", args, { encoding: "utf8", env: jobEnvironment(null), timeout });
 }
 
 function findOnPath(name) {

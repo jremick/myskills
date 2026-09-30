@@ -1,8 +1,8 @@
 # API, MCP, And CLI
 
-Version: 0.1.0-beta.17
+Version: 0.1.0-beta.18
 Document revision: 0.2.1-draft
-Last updated: 2026-09-25
+Last updated: 2026-09-30
 
 ## Shared Rule
 

@@ -53,6 +53,12 @@ import test from "node:test";
 // - Invalid concurrency or shared port overrides silently select an unsafe execution plan.
 // - Private HOME hides Docker's implicit config, so preflight, job commands and cleanup select
 //   different contexts or daemons. Preserve the original configuration path without copying it.
+// Railway MCP delivery failures, written before the image gate:
+// - CI/release omit the standalone image, bypass its default command, ignore Railway's PORT,
+//   or pass despite a failed health/auth smoke. A name conflict must never remove another container.
+// - Docker creates the smoke container but cancellation hides the CLI success; cleanup skips it
+//   or deletes a foreign same-name container. Uncertain readback releases the name reservation.
+// - A stalled Docker create/exec outlives the inner HTTP deadline and never reaches cleanup.
 
 const runId = `fixture-run-${process.pid}`;
 const rootPackage = JSON.parse(readFileSync(resolve("package.json"), "utf8"));
@@ -173,13 +179,15 @@ test("verify runs every required job on both Node lines and reports gating conte
   assert.ok(docker.some(({ args }) => args[0] === "run" && args.includes("postgres:17-alpine")));
   const builds = docker.filter(({ args }) => args[0] === "build").map(({ args }) => args.join(" "));
   assert.ok(builds.some((build) => build.includes("--file Dockerfile.api")));
+  assert.ok(builds.some((build) => build.includes("--file Dockerfile.mcp")));
   assert.ok(builds.some((build) => build.includes("--file Dockerfile.web") && build.includes("--build-arg VITE_API_BASE_URL=/api")));
   assert.ok(builds.some((build) => build.includes("--file Dockerfile.backup")));
   assert.equal(docker.filter(({ args }) => args[0] === "run" && args.includes("--rm") && args.includes("--network") && args.includes("none")).length, 2);
+  assertMcpSmoke(docker, "myskills-app-mcp");
   assertNoPublication(records);
 
   for (const line of ["22", "24"]) {
-    for (const phase of ["mocked", "fullstack"]) {
+    for (const phase of ["mocked", "fullstack", "fullstack-connector"]) {
       const summary = JSON.parse(readFileSync(join(run.evidence, "browser-evidence", `web-e2e-node${line}`, phase, "summary.json"), "utf8"));
       assert.equal(summary.reportStatus, "available");
     }
@@ -194,6 +202,68 @@ test("verify runs every required job on both Node lines and reports gating conte
   assert.equal(existsSync(fixture.runWorkspace), false);
   assert.equal(listFiles(run.evidence).some((file) => readFileSync(join(run.evidence, file)).includes(canary)), false);
   assert.equal(run.output.includes(canary), false);
+});
+
+test("Railway MCP smoke failures fail the image job and cleanup only its created container", (t) => {
+  for (const conflict of [false, true]) {
+    const fixture = makeFixture(t);
+    const name = `myskills-ci-${runId}-railway-images-mcp-smoke`;
+    fixture.configure(conflict ? { dockerConflicts: [name] } : { rules: [{ tool: "docker", prefix: `exec ${name} `, exit: 1 }] });
+    const run = runLocalCi(fixture, ["verify", "--job", "railway-images"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+    assert.equal(run.status, 1, run.output);
+    assert.equal(run.result.jobs[0].status, "failed");
+    const docker = fixture.records().filter(({ tool }) => tool === "docker");
+    assertExactCleanup(docker, [], { conflicts: conflict ? [name] : [] });
+    assert.equal(docker.some(({ args }) => args[0] === "exec" && args[1] === name), !conflict);
+  }
+});
+
+for (const readback of ["owned", "foreign", "unavailable", "absent", "malformed"]) test(`cancelled MCP creation reconciles ${readback} ownership before cleanup`, async (t) => {
+  const fixture = makeFixture(t);
+  t.after(() => rmSync(runIdReservation, { recursive: true, force: true }));
+  const name = `myskills-ci-${runId}-railway-images-mcp-smoke`;
+  fixture.configure({ smokeReadback: readback, rules: [{ tool: "docker", prefix: `run -d --name ${name} `, sleepMs: 30_000 }] });
+  const evidence = fixture.newEvidence();
+  const child = spawn("bash", [join(fixture.source, "scripts/local-ci.sh"), "verify", "--job", "railway-images"], {
+    cwd: fixture.source,
+    env: fixture.env({ LOCAL_CI_EVIDENCE_DIR: evidence, LOCAL_CI_SOURCE_SHA: fixture.sha }),
+    stdio: "ignore",
+  });
+  const exited = new Promise((resolvePromise) => child.once("close", resolvePromise));
+  try {
+    await waitFor(() => fixture.records().some(({ tool, args }) => tool === "docker" && args[0] === "run" && args.includes(name)), 10_000);
+  } finally {
+    child.kill("SIGTERM");
+    await exited;
+  }
+  assert.equal(await exited, 143);
+  const docker = fixture.records().filter(({ tool }) => tool === "docker");
+  assert.ok(docker.some(({ args }) => args[0] === "container" && args[1] === "inspect" && args.at(-1) === name), "read back the exact container name");
+  const removed = docker.filter(({ args }) => args[0] === "rm").flatMap(({ args }) => args);
+  assert.equal(removed.includes(name), false, "never remove an ambiguous name");
+  assert.equal(removed.includes(sha256(name)), readback === "owned", "remove only the verified immutable ID");
+  const uncertain = !["owned", "foreign"].includes(readback);
+  const result = readJson(join(evidence, "result.json"));
+  assert.equal(result.cleanup.status, uncertain ? "failed" : "complete");
+  assert.equal(existsSync(runIdReservation), uncertain, "uncertain creation keeps its reservation");
+  const resources = readJson(join(evidence, "resources.json")).resources;
+  const entry = resources.find((resource) => resource.kind === "container" && resource.name === name);
+  assert.equal(entry.state, readback === "owned" ? "removed" : readback === "foreign" ? "not-created" : "remove-failed");
+});
+
+for (const phase of ["start", "health"]) test(`MCP ${phase} smoke bounds a stalled Docker command and cleans the owned container`, (t) => {
+  const fixture = makeFixture(t, { mcpSmokeTimeoutMs: 200 });
+  const name = `myskills-ci-${runId}-railway-images-mcp-smoke`;
+  fixture.configure({ rules: [{ tool: "docker", prefix: phase === "start" ? `run -d --name ${name} ` : `exec ${name} `, sleepMs: 2_000 }] });
+  const run = runLocalCi(fixture, ["verify", "--job", "railway-images"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(run.status, 1, run.output);
+  const step = run.result.jobs[0].steps.find(({ name }) => name === `smoke-mcp-${phase}`);
+  assert.equal(step.status, "timed-out");
+  assert.ok(step.durationMs < 1_500, `the bounded step took ${step.durationMs} ms`);
+  assert.equal(run.result.cleanup.status, "complete");
+  const docker = fixture.records().filter(({ tool }) => tool === "docker");
+  assert.ok(docker.some(({ args }) => args[0] === "rm" && args.includes(sha256(name))));
+  assert.equal(existsSync(runIdReservation), false);
 });
 
 for (const lanes of ["1", "4"]) test(`job failures are isolated and fail contexts with ${lanes} lane(s) without removing another run's container`, (t) => {
@@ -468,8 +538,9 @@ test("release-check verifies tagged artifacts and release images without publish
   const builds = docker.filter(({ args }) => args[0] === "build").map(({ args }) => args.join(" "));
   for (const target of ["api", "mcp-http"]) assert.ok(builds.some((build) => build.includes(`--target ${target} `)), target);
   assert.ok(builds.some((build) => build.includes("--target web ") && build.includes("--build-arg VITE_API_BASE_URL=/api")));
-  for (const file of ["Dockerfile.api", "Dockerfile.web", "Dockerfile.backup"]) assert.ok(builds.some((build) => build.includes(`--file ${file} `)), file);
+  for (const file of ["Dockerfile.api", "Dockerfile.mcp", "Dockerfile.web", "Dockerfile.backup"]) assert.ok(builds.some((build) => build.includes(`--file ${file} `)), file);
   assert.equal(docker.filter(({ args }) => args[0] === "run" && args.includes("--rm") && args.includes("none")).length, 2);
+  assertMcpSmoke(docker, "myskills-app-railway-mcp");
   assertExactCleanup(docker, [verify.env.MYSKILLS_E2E_COMPOSE_PROJECT]);
   assertNoPublication(records);
 
@@ -753,13 +824,17 @@ function snapshot(directory) {
   return Object.fromEntries(listFiles(directory).map((file) => [file, sha256(readFileSync(join(directory, file)))]));
 }
 
-function makeFixture(t, { tag = false } = {}) {
+function makeFixture(t, { tag = false, mcpSmokeTimeoutMs } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "myskills-local-ci-")));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const source = join(root, "source");
   for (const file of fixtureFiles) {
     mkdirSync(dirname(join(source, file)), { recursive: true });
     copyFileSync(resolve(file), join(source, file));
+  }
+  if (mcpSmokeTimeoutMs !== undefined) {
+    const runner = join(source, "scripts/local-ci.mjs");
+    writeFileSync(runner, readFileSync(runner, "utf8").replace(/const mcpSmokeTimeoutMs = [\d_]+;/, `const mcpSmokeTimeoutMs = ${mcpSmokeTimeoutMs};`));
   }
   chmodSync(join(source, "scripts/local-ci.sh"), 0o755);
   git(source, "init", "-q", "-b", "main");
@@ -839,11 +914,22 @@ function readJson(path) {
   }
 }
 
+function assertMcpSmoke(docker, repository) {
+  const run = docker.find(({ args }) => args[0] === "run" && args.at(-1).startsWith(`${repository}:`));
+  assert.ok(run, "smoke must start the image's default command");
+  assert.ok(run.args.includes("none") && run.args.includes("--network"));
+  assert.ok(run.args.includes("PORT=43123"), "exercise Railway's injected port");
+  assert.ok(run.args.includes("MYSKILLS_MCP_ALLOWED_HOSTS=127.0.0.1:43123"));
+  assert.equal(run.args.some((arg) => ["-p", "--publish", "--entrypoint", "--env-file"].includes(arg)), false);
+  const name = run.args[run.args.indexOf("--name") + 1];
+  assert.ok(docker.some(({ args }) => args.join(" ") === `exec ${name} node scripts/smoke-mcp-http.mjs`));
+}
+
 function assertExactCleanup(docker, projects, { conflicts = [] } = {}) {
   const attempted = docker.filter(({ args }) => args[0] === "run" && args.includes("-d")).map(({ args }) => args[args.indexOf("--name") + 1]);
   assert.ok(attempted.length > 0);
   for (const name of attempted) {
-    const removed = docker.some(({ args }) => args[0] === "rm" && args.includes("-f") && args.includes(name));
+    const removed = docker.some(({ args }) => args[0] === "rm" && args.includes("-f") && (args.includes(name) || args.includes(sha256(name))));
     assert.equal(removed, !conflicts.includes(name), `container ${name}`);
   }
   const tags = docker.filter(({ args }) => args[0] === "build").map(({ args }) => args[args.indexOf("--tag") + 1]);
@@ -853,7 +939,7 @@ function assertExactCleanup(docker, projects, { conflicts = [] } = {}) {
   }
   for (const project of projects) {
     assert.ok(docker.some(({ args }) => args[0] === "ps" && args.includes(`label=com.docker.compose.project=${project}`)), project);
-    for (const service of ["api", "web"]) {
+    for (const service of ["api", "web", "mcp"]) {
       assert.ok(docker.some(({ args }) => args[0] === "image" && args[1] === "rm" && args.includes(`${project}-${service}`)), `${project}-${service}`);
     }
   }
@@ -1007,6 +1093,7 @@ async function fakeToolMain() {
       }
       if (key === "run test:e2e:fullstack") {
         writeReport("apps/web/test-results/fullstack-report.json");
+        writeReport("apps/web/test-results/fullstack-connector-report.json");
         return 0;
       }
       if (key === "run release:verify") return real(["scripts/verify-release.mjs"]);
@@ -1033,6 +1120,16 @@ async function fakeToolMain() {
           return 125;
         }
         return print("c".repeat(64));
+      }
+      if (args[0] === "container" && args[1] === "inspect") {
+        const name = args.at(-1);
+        if (config.smokeReadback === "unavailable") return 1;
+        if (config.smokeReadback === "absent") { process.stderr.write("No such container\n"); return 1; }
+        if (config.smokeReadback === "malformed") return print("invalid JSON");
+        const records = fs.readFileSync(path.join(root, "record.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line));
+        const started = records.find((record) => record.tool === "docker" && record.args[0] === "run" && record.args.includes(name));
+        const label = (key) => started?.args.find((arg) => arg.startsWith(`${key}=`))?.slice(key.length + 1);
+        return print(JSON.stringify({ id: hash("sha256").update(name).digest("hex"), runId: label("io.myskills.local-ci.run-id"), owner: config.smokeReadback === "foreign" || (config.dockerConflicts ?? []).includes(name) ? "foreign-owner" : label("io.myskills.local-ci.owner") }));
       }
       if (args[0] === "inspect") return print("healthy");
       if (args[0] === "port") return print("127.0.0.1:55432");

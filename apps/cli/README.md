@@ -34,7 +34,7 @@ CLI tokens should be stored in the platform secret store where possible.
 
 ## Current Slice
 
-This document describes the `0.1.0-beta.17` source candidate, including named
+This document describes the `0.1.0-beta.18` source candidate, including named
 CLI configuration profiles and global/project inventory scopes. Source,
 GitHub releases, npm publication, and hosted deployment are separate states;
 see [release verification](../../docs/RELEASE.md) for their checks. Historical
@@ -76,8 +76,8 @@ myskills init <name> [--output <dir>] [--title <text>] [--summary <text>] [--lic
 myskills validate --path <file-directory-or-zip>
 myskills scan --path <file-directory-or-zip>
 myskills package --path <directory> --output <file.zip> [--json]
-myskills search [query] [--api-url <url>]
-myskills info <skill-slug> [--api-url <url>]
+myskills search [query] [--limit <1-100>] [--cursor <cursor>] [--api-url <url>]
+myskills info <skill-slug> [--version <exact-version>] [--api-url <url>]
 myskills login [--api-url <url>] [--method <password|api-key>] [--email <email>]
 myskills login --api-key [--api-url <url>]
 myskills logout [--api-url <url>] [--token <token>]
@@ -90,7 +90,7 @@ myskills config reset api-url
 myskills config list
 myskills bootstrap codex --dry-run --profile work --context <file> [--work-source-root <dir>] [--shared-source-root <dir>] --live-root <dir> --include-slug <slug> [--include-slug <slug>] --output <report.json>
 myskills submit --path <file-directory-or-zip> [--api-url <url>] [--token <token>]
-myskills review submissions [--api-url <url>] [--token <token>]
+myskills review submissions [--limit <1-100>] [--cursor <cursor>] [--api-url <url>] [--token <token>]
 myskills review bundle <submission-id> [--platform <name>] [--output <file>] [--api-url <url>] [--token <token>]
 myskills review action <submission-id> --action <approve|request-changes|reject|publish> [--artifact-sha256 <hash>] [--reason <text>] [--api-url <url>] [--token <token>]
 myskills submissions list [--api-url <url>] [--token <token>]
@@ -138,6 +138,53 @@ myskills token create --name <name> --scope <scope> [--scope <scope>]
 myskills token list
 myskills token revoke <token-id>
 ```
+
+### Registry and collaboration workflows
+
+The commands below describe the current repository source. Consult the
+[capabilities matrix](../../docs/CAPABILITY_PARITY.md) for coverage and
+verification status; an implemented command does not establish npm publication
+or hosted deployment. All these commands accept `--api-url`, `--token` and
+`--json`. The API enforces current roles, ownership, membership and MFA.
+Use `myskills login` with password/MFA for session-only operations; an API key
+does not replace the required session or MFA verification.
+
+```text
+myskills skills managed [--query <text>] [--limit <1-100>] [--cursor <cursor>]
+myskills submissions show <submission-id>
+myskills submissions export <submission-id> [--platform <name>] [--output <new-file>]
+myskills review show <submission-id>
+myskills teams revoke-invitation <team-id> <invitation-id>
+myskills teams set-role <team-id> <member-id> --role <owner|member>
+myskills teams remove-member <team-id> <member-id>
+myskills organizations list|pending-invitations
+myskills organizations show|members|invitations|policies|teams|update-policy <organization-id>
+myskills organizations create <name> [--slug <slug>]
+myskills organizations create --input <request.json>
+myskills organizations archive <organization-id>
+myskills organizations invite <organization-id> --email <email> [--role <owner|admin|member>]
+myskills organizations accept <invitation-id>
+myskills organizations set-role <organization-id> <member-id> --role <owner|admin|member>
+myskills organizations remove-member <organization-id> <member-id>
+myskills organizations append-policy|set-update-policy <organization-id> --input <request.json>
+myskills organizations activate-policy <organization-id> <revision-id>
+myskills organizations create-team <organization-id> <name> [--slug <slug>]
+myskills organizations create-team <organization-id> --input <request.json>
+myskills organizations adopt-team <organization-id> <team-id>
+```
+
+`submissions show` and `submissions export` inspect the author's submission;
+`review show` uses the review permission boundary. An export prints the JSON
+bundle unless `--output` selects a new file. Its parent directory must exist,
+and an existing destination is never overwritten.
+
+`search`, `skills managed` and `review submissions` return one page at a time.
+Use the response's `nextCursor` with `--cursor` and retain the same query and
+filters. `--json` preserves the response and pagination metadata. Inspect an
+exact release with `myskills info <slug> --version <version>`; the version must
+be a semantic version such as `1.2.3`, and the response is JSON release metadata.
+
+### Local package authoring
 
 `myskills init <name>` creates a minimal private Codex package in a new
 directory. The default output is `./<name>`; use `--output` to select another
@@ -212,11 +259,44 @@ Each bounded architecture fixture run allows at most 500 steps and 2,004 append-
 receipts: a 1,002-receipt max-step lifecycle, one full apply/verify retry, and
 two recovery/terminal receipts. Further retries require a new bounded run.
 
-The API/web control plane also supports manager-only organization architecture
-grant save/revoke and owner/team-owner derive-shell migration preview/create.
-Those operations require the server's current-revision, organization-policy,
-membership, exact-release, limit, idempotency, and MFA checks. This CLI does
-not expose a second policy implementation or write command for them.
+### Architecture and target management
+
+Create architectures, append revisions, manage organization grants and derive
+another architecture pattern through the API:
+
+```text
+myskills architectures create --input <request.json>
+myskills architectures revisions|grants <architecture-id>
+myskills architectures revise|draft-preview|set-grants|migration-preview|migrate <architecture-id> --input <request.json>
+myskills targets list
+myskills targets show|updates|operations|update-policy|revoke <target-id>
+myskills targets observations <target-id> [--limit <positive-integer>]
+myskills targets register --input <request.json>
+myskills targets consent|observe|health|schedule|set-update-policy <target-id> --input <request.json>
+myskills operations show|cancel <operation-id>
+myskills operations batch --input <request.json>
+```
+
+Review each JSON request file before passing it to `--input`. These commands
+use the API body schema and retain its revision, artifact and idempotency
+fields. For example, a consent file contains `{"decision":"grant"}` or
+`{"decision":"deny"}`. A scheduled update contains `action`, `slug`, an exact
+`version`, optional `platform`, and a caller-chosen `idempotencyKey`. Batch
+requests wrap rows in `operations`, with each row also containing `targetId`.
+
+Use `draft-preview` before `revise` and `migration-preview` before `migrate`.
+Supply the inspected `expectedCurrentRevisionId` when editing or migrating;
+target upgrade policies use `expectedRevisionNumber`. Organization policy and
+grant writes likewise retain the API's required revision fields. On a conflict,
+read the current state and review the change again. Retrying the same migration
+or scheduled operation must retain the same idempotency key and request body.
+The CLI does not generate a replacement key or refresh revision fields for you.
+
+Target management uses a login session, and protected writes require MFA.
+`targets observe` uploads the supplied observation; `architectures observe`
+generates local metadata as described above. Scheduling returns an operation
+for the enrolled companion to execute. Read its state and receipt with
+`operations show`; a queued operation is not proof that files changed.
 
 ## Published CLI And Local Builds
 
@@ -478,8 +558,9 @@ bypasses server policy. Organization policy and membership remain API-owned.
 Do not treat a successful CLI command for another scope as evidence of
 organization sharing.
 
-The CLI does not provide the separate architecture organization-grant
-replacement workflow; architecture grants remain an API/web manager control.
+Use `architectures grants` and `architectures set-grants --input <request.json>`
+for the separate architecture organization-grant replacement workflow. Supply
+the architecture ID and retain the current revision in the request body.
 The read-only `architectures preview`, `compile`, `plan`, and `dry-run`
 commands already accept `--organization-id <organization-id>` (with
 `--organization <organization-id>` retained as an input alias). The server
@@ -501,12 +582,77 @@ Common scopes:
 - `libraries:read` for library reads and for install, update, and companion runs of library-bound skills.
 - `libraries:write` for library changes.
 
+## Account and instance administration
+
+Account commands use the existing registration, session and MFA rules. Passwords,
+emailed verification/reset tokens, invitation tokens and authenticator codes are
+read from hidden prompts. New passwords require confirmation. These secrets are
+not accepted as command options.
+
+```text
+myskills account register --email <email> [--name <name>]
+myskills account verify-email-request|password-reset-request --email <email>
+myskills account verify-email|confirm-email-change
+myskills account password-reset|change-password
+myskills account change-email --email <new-email>
+myskills account mfa-status
+myskills account mfa-enroll --output <new-file> [--label <label>]
+myskills account mfa-confirm <factor-id> --output <new-file>
+myskills account mfa-disable
+myskills connections info|list
+myskills connections revoke <connection-id>
+myskills instance info|health|ready|version|capabilities|branding|site
+```
+
+`mfa-enroll` writes the authenticator setup secret to the new private JSON file
+selected by `--output`; it prints the factor ID and output path without the
+secret. Configure the authenticator, then use that factor ID with `mfa-confirm`.
+Confirmation prompts for the current code and writes recovery codes to another
+new private JSON file. Choose files in an existing directory outside the
+repository; existing destinations are refused. Save the recovery codes securely,
+then run `myskills login` and complete MFA to obtain a verified session.
+
+Administration commands retain the API's owner/admin role, MFA and last-owner
+safeguards. `admin users roles` replaces the user's role set with the repeated
+`--role` values. `admin audit` returns one page and supports its `nextCursor`.
+
+```text
+myskills admin branding get
+myskills admin branding set --input <branding.json>
+myskills admin site get
+myskills admin site set --landing-page enabled|disabled
+myskills admin registration get
+myskills admin registration set --mode closed|request|open
+myskills admin registration invite --email <email> [--name <name>]
+myskills admin providers list
+myskills admin providers set <provider-key> --input <provider.json>
+myskills admin users list
+myskills admin users action <user-id> --action approve|activate|disable|delete [--reason <text>]
+myskills admin users roles <user-id> --role <owner|admin|maintainer|author|user> [--role <role>] [--reason <text>]
+myskills admin tokens list
+myskills admin tokens revoke <token-id>
+myskills admin audit [--limit <1-100>] [--cursor <cursor>]
+```
+
+Review branding and provider JSON bodies before passing `--input`. Provider
+configuration accepts non-secret settings; configure provider credentials in the
+deployment secret store. `connections` manages the signed-in user's remote MCP
+connections. `instance` reads public instance information without credentials.
+
 ## Libraries
 
 `myskills libraries help` lists the source, import, review, tracking, subscription
 and adoption commands. Requests use the [Libraries API contract](../../docs/plans/2026-09-26-library-api-contract.md)
 and reviewed JSON files supplied with `--input`. The [Libraries guide](../../docs/LIBRARIES.md)
 contains a complete workflow and scope requirements.
+
+Filter library entries with
+`myskills libraries entries <library-id> --kind source` (or `skill`). Filter
+candidates with `myskills libraries candidates <entry-id> --state ready-for-review`;
+other states are `blocked`, `accepted`, `ignored`, `superseded` and `expired`.
+List reads accept `--limit <1-100>` and `--cursor <cursor>`; retain the filters
+when continuing a page. Library deletion requires the current revision:
+`myskills libraries remove <library-id> --revision <current-revision>`.
 
 Bind an installation to an adopted version with
 `myskills install <slug> --library-entry <entry-id>`. If the adopted release
@@ -544,6 +690,36 @@ header only; `expectedDigestVerified` reports this distinction in JSON output.
 
 Prepare local skill reviews with `myskills improve`, inspect the report, export a draft, and submit it through normal review. Registry plans pin source/reviewer versions and apply user, team or organization policy. Execution requires the exact local plan digest and explicit cloud consent. See [the feature guide](../../docs/SKILL_IMPROVEMENT.md) for commands, JSON bodies, evaluation suites and current adapter limits. The first runner is Claude Code 2.1.283 or newer. Use an exact model ID and an existing Claude sign-in. Codex improvement execution remains disabled pending its isolation gate; final release verification is recorded in the feature guide.
 
+Inspect a saved registry plan and its runs with
+`myskills improve show-plan --id <plan-id> --json`. This reads the plan without
+starting local execution. `myskills improve compatibility --release <slug>@<version>`
+supports anonymous reads of public releases and uses available credentials for
+authorized private releases.
+
+Share evidence from either a local job or an authorized completed registry run:
+
+```text
+myskills improve share --job <dir> --disclosure summary --subject baseline|candidate --release <slug>@<version>
+myskills improve share --run <run-id> --disclosure summary|selected-evidence --subject baseline|candidate --release <slug>@<version>
+myskills improve share --run <run-id> --disclosure summary --proposals-file <proposals.json>
+```
+
+`--job` retains the original registry endpoint, plan and confirmed report digest
+checks and supports summary disclosure only. `--run` reads the completed run and
+uses its recorded report digest; API tokens need `improvements:read` and
+`improvements:report`. Both forms accept a reviewed proposals file in place of
+`--subject` and `--release`:
+
+```json
+{"proposals":[{"subject":"baseline","slug":"example-skill","version":"1.0.0"}]}
+```
+
+The file accepts zero to four proposals, each with only `subject`, `slug` and an
+exact `version`. Choose exactly one of `--job` or `--run`, and one proposal input
+form. Repeating the same run, report digest, disclosure and proposals reuses the
+same evidence request identity. Evidence sharing does not run an evaluation or
+publish a skill release.
+
 ### Skill bundles
 
 Browse related skills without installing them:
@@ -566,3 +742,11 @@ Save with `myskills bundles save <bundle-id> --input save-reference.json`, where
 the file contains `libraryId` and `expectedRevision`. This saves one reference;
 it does not adopt, install or follow any skill. Use `--cursor` with list/member
 reads. Refresh from the first page if the authorized catalog changes.
+
+### GitHub connection controls
+
+Use `myskills account github status` to inspect the connected account and `myskills account github disconnect` to revoke it. Administrators can use `myskills admin github get` and `myskills admin github test` for safe configuration status and verification. These commands preserve API scope, account, role and MFA checks.
+
+`myskills account github connect` and `myskills admin github configure` return instructions for the trusted browser flow. They do not open a browser, enter credentials, grant consent or claim completion. Keep GitHub App secrets and private keys in the trusted Admin form. Inspect the safe status command after completing that flow.
+
+Use `myskills skills managed <slug>` to inspect an authorized archived or unpublished skill from the managed inventory. The public `info` command retains the public release contract.

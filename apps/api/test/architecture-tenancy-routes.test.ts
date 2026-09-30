@@ -135,7 +135,7 @@ test("team architecture routes enforce owner writes, member reads, and exact tea
     payload: { expectedCurrentRevisionId: null, spec: flatSpec(architectureId, safeSlug) },
   });
   assert.equal(tokenWrite.statusCode, 403);
-  assert.equal(tokenWrite.json().error.code, "SESSION_AUTH_REQUIRED");
+  assert.equal(tokenWrite.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
 
   const memberPreview = await app.inject({
     method: "POST",

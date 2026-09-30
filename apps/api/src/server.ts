@@ -41,6 +41,9 @@ import { GithubIntegrationService } from "./github/service.js";
 import { PostgresLibraryStore } from "./libraries/postgres-store.js";
 import { LibraryService } from "./libraries/service.js";
 import { LibrarySourceWorker } from "./libraries/worker.js";
+import { parseOAuthConfig } from "./oauth/config.js";
+import { PostgresOAuthStore } from "./oauth/postgres-store.js";
+import { OAuthService } from "./oauth/service.js";
 
 const port = Number.parseInt(process.env.PORT ?? "3001", 10);
 const host = process.env.HOST ?? "0.0.0.0";
@@ -122,10 +125,22 @@ const improvementService = new ImprovementService(improvementStore, {
   organizationService,
 });
 const notificationSink = createAuthNotificationSinkFromEnv(process.env);
+// Remote MCP connections are off unless configured; incomplete config throws here.
+const oauthConfig = parseOAuthConfig(process.env);
+const oauthService = oauthConfig
+  ? new OAuthService({ store: new PostgresOAuthStore(db), authStore, config: oauthConfig })
+  : undefined;
 const app = buildApp({
   skillRepository,
   registryInstanceId,
+  oauthService,
+  oauthLimiters: oauthService ? {
+    register: new PostgresAuthRateLimiter(pool, { maxAttempts: 20, windowMs: 60 * 60 * 1000 }),
+    authorize: new PostgresAuthRateLimiter(pool, { maxAttempts: 60, windowMs: 60_000 }),
+    token: new PostgresAuthRateLimiter(pool, { maxAttempts: 120, windowMs: 60_000 }),
+  } : undefined,
   authService: new AuthService(authStore, {
+    ...(oauthService ? { oauthAccessTokens: oauthService } : {}),
     mfaSecretKey: authSecret,
     totpIssuer: process.env.TOTP_ISSUER ?? "MySkills",
     loginLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 10, windowMs: 15 * 60 * 1000 }),
@@ -182,6 +197,12 @@ const artifactReconciliationTimer = artifactStorage
     }, 15 * 60 * 1000)
   : undefined;
 artifactReconciliationTimer?.unref();
+const oauthCleanupTimer = oauthService
+  ? setInterval(() => {
+      void oauthService.cleanup().catch(() => app.log.error("Remote MCP connection cleanup failed; it will be retried."));
+    }, 15 * 60 * 1000)
+  : undefined;
+oauthCleanupTimer?.unref();
 // Scheduled source checks use Postgres leases, so several API processes may run it.
 const librarySourceWorker = process.env.LIBRARY_SOURCE_WORKER?.trim() === "disabled"
   ? undefined
@@ -203,6 +224,9 @@ let shutdownPromise: Promise<void> | undefined;
 const shutdown = () => shutdownPromise ??= (async () => {
   if (artifactReconciliationTimer) {
     clearInterval(artifactReconciliationTimer);
+  }
+  if (oauthCleanupTimer) {
+    clearInterval(oauthCleanupTimer);
   }
   await authNotificationWorker?.stop();
   await librarySourceWorker?.stop();

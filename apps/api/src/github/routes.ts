@@ -2,6 +2,7 @@ import { AppError } from "@myskills-app/core";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AuthService } from "../auth/service.js";
 import type { GithubIntegrationService } from "./service.js";
+import { authenticateApplicationUser } from "../auth/delegated-actions.js";
 
 export function registerGithubRoutes(
   app: FastifyInstance,
@@ -11,12 +12,14 @@ export function registerGithubRoutes(
     authFailureReply: (auth: AuthService, authorization: string | undefined, reply: FastifyReply) => Promise<unknown>;
   },
 ): void {
-  async function context(request: FastifyRequest, reply: FastifyReply) {
+  async function context(request: FastifyRequest, reply: FastifyReply, trusted = false) {
     reply.header("cache-control", "no-store");
     reply.header("referrer-policy", "no-referrer");
     if (!services.authService || !services.githubService) throw new AppError("GitHub integration is not configured.", "GITHUB_NOT_CONFIGURED", 503);
     const authorization = helpers.requestAuthorization(request);
-    const actor = await services.authService.authenticateSessionAuthorizationHeader(authorization);
+    const actor = trusted
+      ? await services.authService.authenticateSessionAuthorizationHeader(authorization)
+      : await authenticateApplicationUser(services.authService, request, authorization);
     if (!actor) { await helpers.authFailureReply(services.authService, authorization, reply); return null; }
     return { actor, sessionToken: authorization!.replace(/^Bearer\s+/i, ""), github: services.githubService };
   }
@@ -25,11 +28,11 @@ export function registerGithubRoutes(
     if (ctx) return { github: await ctx.github.getAccount(ctx.actor) };
   });
   app.post("/v1/account/github/connect", async (request, reply) => {
-    const ctx = await context(request, reply);
+    const ctx = await context(request, reply, true);
     if (ctx) return ctx.github.connect(ctx.actor, ctx.sessionToken);
   });
   app.get("/v1/account/github/callback", async (request, reply) => {
-    const ctx = await context(request, reply);
+    const ctx = await context(request, reply, true);
     if (!ctx) return;
     const query = request.query as Record<string, unknown>;
     return reply.redirect(await ctx.github.callback(ctx.actor, ctx.sessionToken, {
@@ -47,7 +50,7 @@ export function registerGithubRoutes(
     if (ctx) return { github: await ctx.github.getAdmin(ctx.actor) };
   });
   app.put("/v1/admin/github", async (request, reply) => {
-    const ctx = await context(request, reply);
+    const ctx = await context(request, reply, true);
     if (ctx) return { github: await ctx.github.updateAdmin(ctx.actor, request.body) };
   });
   app.post("/v1/admin/github/test", async (request, reply) => {

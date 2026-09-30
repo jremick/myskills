@@ -7,7 +7,7 @@ import { MemoryAuthStore } from "../src/auth/memory-auth-store.js";
 import { MemorySkillRepository } from "../src/repositories/memory-skill-repository.js";
 import type { SubmissionService } from "../src/submissions/service.js";
 
-test("legacy skill visibility updates require a verified session and preserve the complete current grant set", async (t) => {
+test("legacy skill visibility updates require sharing scope and verified assurance and preserve the complete current grant set", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const skillRepository = new MemorySkillRepository([{
     slug: "private-helper",
@@ -124,7 +124,7 @@ test("legacy skill visibility updates require a verified session and preserve th
     payload: { visibility: "organization" },
   });
   assert.equal(apiTokenUpdate.statusCode, 403);
-  assert.equal(apiTokenUpdate.json().error.code, "SESSION_AUTH_REQUIRED");
+  assert.equal(apiTokenUpdate.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
 
   const mfaSession = await verifyMfaForSession(app, plainSession);
   const response = await app.inject({

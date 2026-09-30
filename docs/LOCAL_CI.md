@@ -103,7 +103,7 @@ atomically and contains:
 - `cleanup` and `artifacts`: cleanup outcome and the SHA-256 of every evidence file.
 
 Other evidence: `logs/<job>.log`, `resources.json`, `environment.json`,
-`browser-evidence/<job>/` (the reviewed summaries and screenshots from
+`browser-evidence/<job>/` (including separate `fullstack` and `fullstack-connector` summaries and the reviewed screenshots from
 `scripts/collect-browser-evidence.mjs`), `release/` (verified artifacts and
 `verification.json`) and `codeql/` (SARIF and a summary).
 
@@ -172,12 +172,12 @@ the aggregate contexts before treating activation as verified.
 | CI `check` aggregate | `contexts.check` (all seven `verify` jobs) | None. |
 | CI `Web E2E / Node 22.x`, `Web E2E / Node 24.x` (15-minute timeout): browser install, workspace build, mocked browser run, evidence collection, full-stack run, evidence collection, evidence upload | `web-e2e-node22`, `web-e2e-node24` with the same steps, conditions and 15-minute limit | Browser system libraries come from host setup. Evidence is exported to the evidence directory instead of a 7-day artifact. A job without exported evidence fails, as with `if-no-files-found: error`. |
 | CI `web-e2e` aggregate | `contexts["web-e2e"]` | None. |
-| CI `Railway images`: `Dockerfile.api`, `Dockerfile.web`, `Dockerfile.backup` and two credential-free `--network none` smoke runs | `railway-images` | Builds use `--pull` and run-scoped tags. Image IDs are recorded and the images are removed afterwards. |
+| CI `Railway images`: `Dockerfile.api`, `Dockerfile.mcp`, `Dockerfile.web`, `Dockerfile.backup`; MCP startup/health/auth and two backup smoke runs without credentials or network | `railway-images` | Builds use `--pull` and run-scoped tags. Image IDs are recorded and the images are removed afterwards. MCP starts its default command with a non-default platform `PORT`. |
 | CI `Postgres / Node 22.x`, `Postgres / Node 24.x` with a `postgres:17-alpine` service | `postgres-node22`, `postgres-node24` | Same image, credentials and health check on a random loopback port. |
 | CI `postgres-integration` aggregate | `contexts["postgres-integration"]` | None. |
 | Release `Verify tag and main ancestry` | `release-check` input validation | The runner supplies full history, the tag and a current main ref; the script does not fetch. |
 | Release `postgres:17` service, `npm ci`, browser install, `npm run release:verify` with tag enforcement | `release` job steps | Same commands and environment. |
-| Release image builds: root `Dockerfile` `api`, `mcp-http`, `web`; Railway API and web; backup image and smoke runs | `release` job `build-*` and `smoke-*` steps | Run-scoped tags; nothing is pushed. |
+| Release image builds: root `Dockerfile` `api`, `mcp-http`, `web`; Railway API, MCP and web; MCP and backup smoke runs | `release` job `build-*` and `smoke-*` steps | Run-scoped tags; nothing is pushed. |
 | Release `Upload release artifacts` | `verify-release-artifacts` step and `release/artifacts/` | Also checks that the artifact set is exact, that `SHA256SUMS` and the metadata match, and that the source archive rebuilds byte for byte from the pinned commit. |
 | CodeQL `Analyze JavaScript and TypeScript`: `.github/codeql/codeql-config.yml` with `security-extended` | `codeql` mode | Uses the repository config plus `queries: - uses: security-extended`, and fails if an excluded query still reports. The number of findings does not gate; GitHub alert state, including dismissals, stays authoritative after upload. |
 

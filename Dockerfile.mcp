@@ -1,0 +1,39 @@
+# syntax=docker/dockerfile:1
+
+ARG NODE_VERSION=22-alpine
+ARG NPM_VERSION=11.12.1
+
+FROM node:${NODE_VERSION} AS build
+ARG NPM_VERSION
+WORKDIR /app
+RUN npm install -g npm@${NPM_VERSION}
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/cli/package.json ./apps/cli/package.json
+COPY apps/mcp/package.json ./apps/mcp/package.json
+COPY apps/web/package.json ./apps/web/package.json
+COPY packages/auth/package.json ./packages/auth/package.json
+COPY packages/core/package.json ./packages/core/package.json
+COPY packages/skill-package/package.json ./packages/skill-package/package.json
+RUN npm ci
+COPY tsconfig.base.json ./
+COPY packages ./packages
+COPY apps ./apps
+RUN npm run build -w @myskills-app/core \
+  && npm run build -w @myskills-app/skill-package \
+  && npm run build -w @myskills-app/mcp
+RUN npm prune --omit=dev
+
+FROM node:${NODE_VERSION} AS mcp-http
+ENV NODE_ENV=production \
+    MYSKILLS_MCP_HOST=0.0.0.0
+WORKDIR /app
+COPY --from=build /app/package.json /app/package-lock.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages ./packages
+COPY --from=build /app/apps/mcp/package.json ./apps/mcp/package.json
+COPY --from=build /app/apps/mcp/dist ./apps/mcp/dist
+COPY scripts/smoke-mcp-http.mjs ./scripts/smoke-mcp-http.mjs
+USER node
+EXPOSE 3002
+CMD ["node", "apps/mcp/dist/http-index.js"]

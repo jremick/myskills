@@ -150,7 +150,7 @@ async function authenticate(deps: ImprovementRouteDependencies, request: Fastify
   if (!deps.authService) throw new AppError("Authentication service is not configured.", "AUTH_SERVICE_UNAVAILABLE", 503);
   const context = await deps.authService.authenticateRequest(deps.requestAuthorization(request));
   if (!context) throw new AppError("Authentication is required.", "AUTHENTICATION_REQUIRED", 401);
-  if (context.credential.kind === "api_token" && !context.credential.scopes.includes(scope)) {
+  if (context.credential.kind !== "session" && !context.credential.scopes.includes(scope)) {
     throw new AppError("API token scope is required.", "API_TOKEN_SCOPE_REQUIRED", 403, { scope });
   }
   return {
@@ -168,7 +168,7 @@ async function optionalActor(deps: ImprovementRouteDependencies, request: Fastif
   if (!deps.authService || !authorization) return null;
   const context = await deps.authService.authenticateRequest(authorization);
   if (!context) return null;
-  if (context.credential.kind === "api_token" && !context.credential.scopes.includes(scope)) {
+  if (context.credential.kind !== "session" && !context.credential.scopes.includes(scope)) {
     throw new AppError("API token scope is required.", "API_TOKEN_SCOPE_REQUIRED", 403, { scope });
   }
   return {

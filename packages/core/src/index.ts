@@ -155,3 +155,5 @@ export * from "./bundle-contracts.js";
 export * from "./bundle-request.js";
 
 export * from "./branding.js";
+
+export * from "./delegated-actions.js";

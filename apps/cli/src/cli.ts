@@ -1,6 +1,10 @@
 import { ConfigurationProfileError, selectConfigurationProfile } from "./configuration-profile.js";
 import { bundleRequest } from "@myskills-app/core";
 import { libraryCommandHelp, libraryCommandRequest } from "./library-command.js";
+import { registryCollaborationHelp, runRegistryCollaborationCommand } from "./registry-collaboration-commands.js";
+import { accountAdminHelp, runAccountAdminCommand } from "./account-admin-commands.js";
+import { architectureTargetHelp, runArchitectureTargetCommand } from "./architecture-target-commands.js";
+import type { ParityCommandContext } from "./parity-types.js";
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -256,6 +260,9 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
 }
 
 async function dispatchCli(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+    if (await runRegistryCollaborationCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
+    if (await runAccountAdminCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
+    if (await runArchitectureTargetCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
     switch (parsed.command) {
       case "":
       case "help":
@@ -346,6 +353,61 @@ async function dispatchCli(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
     }
 }
 
+function parityCommandContext(parsed: ParsedArgs, runtime: CliRuntime): ParityCommandContext {
+  const promptedSecrets = new Set<string>();
+  return {
+    async request(method, pathname, body, auth = "required") {
+      for (const key of ["token", "api-url"]) {
+        const value = initStringOption(parsed, key);
+        if (value !== undefined && !value.trim()) throw new CliError(`--${key} requires one non-empty value.`, 2, "CLI_ARGUMENTS_INVALID");
+      }
+      if (!/^\/v1\/[^#\\]+$/.test(pathname) && !["/health", "/ready", "/version.json"].includes(pathname)) {
+        throw new CliError("Invalid command endpoint.", 2, "CLI_ARGUMENTS_INVALID");
+      }
+      const token = auth === "none" ? undefined : auth === "optional" ? await tokenOption(parsed, runtime) : await requireToken(parsed, runtime);
+      try {
+        return await apiJsonRequest(pathname, parsed, runtime, {
+          method,
+          headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body !== undefined ? { "content-type": "application/json" } : {}) },
+          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        });
+      } catch (error) {
+        if (promptedSecrets.size === 0) throw error;
+        // Upstream validation and transport messages can reflect submitted
+        // credentials. Preserve diagnostics without forwarding arbitrary text.
+        const code = error instanceof CliError && ![...promptedSecrets].some((secret) => error.code.includes(secret)) ? error.code : "API_REQUEST_FAILED";
+        throw new CliError("Account request failed. Check the error code and account state before retrying.", error instanceof CliError ? error.exitCode : 1, code, error instanceof CliError ? error.status : undefined);
+      }
+    },
+    async readInput(inputPath) {
+      const info = await lstat(inputPath);
+      if (!info.isFile() || info.size > 256_000) throw new CliError("Input must be a regular JSON file of at most 256 KB.", 2, "CLI_ARGUMENTS_INVALID");
+      let input: unknown;
+      try { input = JSON.parse(await readRegularText(await realpath(inputPath), 256_000)); }
+      catch { throw new CliError("Input must contain a JSON object of at most 256 KB.", 2, "CLI_ARGUMENTS_INVALID"); }
+      if (!input || typeof input !== "object" || Array.isArray(input)) throw new CliError("Input must contain a JSON object.", 2, "CLI_ARGUMENTS_INVALID");
+      return input as Record<string, unknown>;
+    },
+    async secret(label) {
+      if (!runtime.prompt) throw new CliError("This command requires an interactive secret prompt.", 2, "INTERACTIVE_INPUT_REQUIRED");
+      const value = await runtime.prompt.secret(label);
+      if (value.trim()) promptedSecrets.add(value.trim());
+      return value;
+    },
+    output(value) {
+      const text = JSON.stringify(value, null, 2);
+      runtime.io.stdout(parsed.options.json ? text : terminalSafeText(text));
+    },
+    async writeOutput(outputPath, contents) {
+      try { await writeFile(path.resolve(outputPath), contents, { mode: 0o600, flag: "wx" }); }
+      catch (error) {
+        if (isNodeError(error) && error.code === "EEXIST") throw new CliError("The output path already exists. Choose a new file; existing files are not replaced.", 1, "OUTPUT_EXISTS");
+        throw error;
+      }
+    },
+  };
+}
+
 async function validateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const manifest = await loadSkillManifestFromPath(requiredPath(parsed));
   if (parsed.options.json) {
@@ -364,15 +426,15 @@ async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Prom
     report: ["job", "json"],
     export: ["job", "output", "json"],
     fetch: ["plan", "output", "suite", "claude-path", "api-url", "token", "json"],
-    share: ["job", "disclosure", "subject", "release", "api-url", "token", "json"],
+    share: ["job", "run", "disclosure", "subject", "release", "proposals-file", "api-url", "token", "json"],
     compatibility: ["release"], declare: ["release", "file"], "review-declaration": ["release", "revision", "file"],
     policy: ["scope", "owner", "file"], profiles: ["scope", "owner", "id", "file"], suites: ["scope", "owner", "id", "file"],
-    preview: ["file"], prepare: ["file"], status: ["run"], cancel: ["run"], evidence: ["id"], "accept-evidence": ["id", "file"],
+    preview: ["file"], prepare: ["file"], "show-plan": ["id"], status: ["run"], cancel: ["run"], evidence: ["id"], "accept-evidence": ["id", "file"],
   };
   if (parsed.args.length !== 1 || !optionsByOperation[operation]) throw new CliError("Usage: myskills improve <operation>. See myskills help for options.", 2);
   for (const name of Object.keys(parsed.options)) if (!optionsByOperation[operation].includes(name) && !["api-url", "token", "json"].includes(name)) throw new CliError(`Unsupported improve ${operation} option: --${name}`, 2);
   const { createImprovementJob, runImprovementJob, readImprovementPlan, readImprovementReport, exportImprovementCandidate } = await import("./skill-improvement.js");
-  const { fetchImprovementJob, registryLifecycle, shareImprovementEvidence } = await import("./skill-improvement-registry.js");
+  const { fetchImprovementJob, registryLifecycle, shareImprovementEvidence, shareRecordedImprovementEvidence, parseImprovementEvidenceProposals } = await import("./skill-improvement-registry.js");
   const required = (name: string) => {
     const value = optionalStringOption(parsed, name);
     if (!value) throw new CliError(`--${name} is required.`, 2);
@@ -412,15 +474,38 @@ async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Prom
         else if (!id) endpoint += `?ownerType=${encode(required("scope"))}&ownerId=${encode(required("owner"))}`;
       }
     } else if (operation === "preview" || operation === "prepare") { endpoint += `/plans${operation === "preview" ? "/preview" : ""}`; method = "POST"; }
+    else if (operation === "show-plan") {
+      const id = required("id");
+      if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(id)) throw new CliError("Invalid plan identifier.", 2, "CLI_ARGUMENTS_INVALID");
+      endpoint += `/plans/${encode(id)}`;
+    }
     else if (operation === "status" || operation === "cancel") { endpoint += `/runs/${encode(required("run"))}${operation === "cancel" ? "/cancel" : ""}`; if (operation === "cancel") method = "POST"; }
     else { endpoint += `/evidence/${encode(required("id"))}${operation === "accept-evidence" ? "/acceptances" : ""}`; if (operation === "accept-evidence") method = "POST"; }
-    const token = await requireToken(parsed, runtime);
-    result = method === "GET" ? await apiGet(endpoint, parsed, runtime, token) : method === "PUT" ? await apiPut(endpoint, body, parsed, runtime, token) : await apiPost(endpoint, body, parsed, runtime, token);
+    if (operation === "compatibility") {
+      result = await apiGet(endpoint, parsed, runtime, await tokenOption(parsed, runtime) ?? undefined);
+    } else {
+      const token = await requireToken(parsed, runtime);
+      result = method === "GET" ? await apiGet(endpoint, parsed, runtime, token) : method === "PUT" ? await apiPut(endpoint, body, parsed, runtime, token) : await apiPost(endpoint, body, parsed, runtime, token);
+    }
   } else if (operation === "fetch") {
     const suitePath = optionalStringOption(parsed, "suite");
     result = await fetchImprovementJob(await registryApi(), { planId: required("plan"), outputPath: required("output"), executable: optionalStringOption(parsed, "claude-path"), ...(suitePath ? { suite: JSON.parse(await readRegularText(await realpath(suitePath), 256_000)) } : {}) });
   } else if (operation === "share") {
-    result = await shareImprovementEvidence(await registryApi(), { jobPath: required("job"), disclosure: required("disclosure"), subject: required("subject"), ...parseReleaseTarget(required("release")) });
+    for (const key of optionsByOperation.share.filter((key) => key !== "json")) initStringOption(parsed, key);
+    const jobPath = optionalStringOption(parsed, "job");
+    const runId = optionalStringOption(parsed, "run");
+    if (Boolean(jobPath) === Boolean(runId)) throw new CliError("Choose exactly one source: --job or --run.", 2);
+    if (runId && !/^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/.test(runId)) throw new CliError("Invalid run identifier.", 2);
+    const disclosure = required("disclosure");
+    if (disclosure !== "summary" && disclosure !== "selected-evidence") throw new CliError("--disclosure must be summary or selected-evidence.", 2);
+    const proposalsFile = optionalStringOption(parsed, "proposals-file");
+    if (proposalsFile && (parsed.options.subject !== undefined || parsed.options.release !== undefined)) throw new CliError("Choose --proposals-file or --subject with --release; they cannot be combined.", 2);
+    const proposals = parseImprovementEvidenceProposals(proposalsFile
+      ? await parityCommandContext(parsed, runtime).readInput(proposalsFile)
+      : { proposals: [{ subject: required("subject"), ...parseReleaseTarget(required("release")) }] });
+    const api = await registryApi();
+    result = runId ? await shareRecordedImprovementEvidence(api, { runId, disclosure, proposals })
+      : await shareImprovementEvidence(api, { jobPath: jobPath!, disclosure, proposals });
   } else if (operation === "plan") {
     const suitePath = optionalStringOption(parsed, "suite");
     result = await createImprovementJob({
@@ -545,10 +630,31 @@ async function packageCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<
   return 0;
 }
 
+function paginationOptions(parsed: ParsedArgs): URLSearchParams {
+  const params = new URLSearchParams();
+  const limit = initStringOption(parsed, "limit");
+  const cursor = initStringOption(parsed, "cursor");
+  if (limit !== undefined) {
+    if (!/^\d+$/.test(limit) || +limit < 1 || +limit > 100) throw new CliError("--limit must be from 1 to 100.", 2, "CLI_ARGUMENTS_INVALID");
+    params.set("limit", limit);
+  }
+  if (cursor !== undefined) {
+    if (!cursor || cursor.length > 2048) throw new CliError("--cursor must be a non-empty continuation cursor.", 2, "CLI_ARGUMENTS_INVALID");
+    params.set("cursor", cursor);
+  }
+  return params;
+}
+
+function printNextCursor(response: Record<string, unknown>, runtime: CliRuntime): void {
+  if (typeof response.nextCursor === "string" && response.nextCursor) runtime.io.stdout(terminalText`next cursor: ${response.nextCursor}`);
+}
+
 async function searchCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const query = parsed.args.join(" ").trim();
+  const params = paginationOptions(parsed);
+  if (query) params.set("q", query);
   const response = await apiGet(
-    `/v1/skills${query ? `?q=${encodeURIComponent(query)}` : ""}`,
+    `/v1/skills${params.size ? `?${params}` : ""}`,
     parsed,
     runtime,
     await tokenOption(parsed, runtime) ?? undefined,
@@ -564,6 +670,7 @@ async function searchCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
         runtime.io.stdout(terminalText`${skill.slug}\t${skill.latestVersion ?? "-"}\t${skill.title}`);
       }
     }
+    printNextCursor(response, runtime);
   }
   return 0;
 }
@@ -573,14 +680,17 @@ async function infoCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<num
   if (!slug) {
     throw new CliError("Usage: myskills info <skill-slug>", 2);
   }
+  const version = initStringOption(parsed, "version");
+  if (version && !parseSemanticVersion(version)) throw new CliError("--version must be an exact semantic version.", 2, "CLI_ARGUMENTS_INVALID");
   const response = await apiGet(
-    `/v1/skills/${encodeURIComponent(slug)}`,
+    `/v1/skills/${encodeURIComponent(slug)}${version ? `/releases/${encodeURIComponent(version)}` : ""}`,
     parsed,
     runtime,
     await tokenOption(parsed, runtime) ?? undefined,
   );
-  if (parsed.options.json) {
-    runtime.io.stdout(JSON.stringify(response, null, 2));
+  if (parsed.options.json || version) {
+    const text = JSON.stringify(response, null, 2);
+    runtime.io.stdout(parsed.options.json ? text : terminalSafeText(text));
   } else {
     const skill = response.skill as {
       slug: string;
@@ -936,7 +1046,8 @@ async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
   }
   const subcommand = parsed.args[0];
   if (subcommand === "submissions") {
-    const response = await apiGet("/v1/review/submissions", parsed, runtime, token);
+    const params = paginationOptions(parsed);
+    const response = await apiGet(`/v1/review/submissions${params.size ? `?${params}` : ""}`, parsed, runtime, token);
     if (parsed.options.json) {
       runtime.io.stdout(JSON.stringify(response, null, 2));
     } else {
@@ -955,6 +1066,7 @@ async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
           runtime.io.stdout(terminalText`${submission.id}\t${submission.slug}@${submission.version}\t${submission.reviewStatus}\t${submission.securityStatus}\tfindings=${submission.findingCount}`);
         }
       }
+      printNextCursor(response, runtime);
     }
     return 0;
   }
@@ -6024,6 +6136,9 @@ function helpText(runtime: CliRuntime): string {
     `Configuration profile: ${runtime.configProfile ?? "default (legacy)"}`,
     "",
     "Commands:",
+    ...registryCollaborationHelp.map((line) => `  ${line}`),
+    ...accountAdminHelp.map((line) => `  ${line}`),
+    ...architectureTargetHelp.map((line) => `  ${line}`),
     "  libraries <action> [id] [--input <request.json>] [--json] (libraries help for actions)",
     "  version",
     "  init <name> [--output <dir>] [--title <text>] [--summary <text>] [--license <text>] [--json]",
@@ -6035,16 +6150,19 @@ function helpText(runtime: CliRuntime): string {
     "  improve report --job <dir> [--json]",
     "  improve export --job <dir> --output <new-draft-dir> [--json]",
     "  improve fetch --plan <id> --output <new-job-dir> [--suite <json>] [--claude-path <executable>] [--api-url <url>] [--json]",
-    "  improve share --job <dir> --disclosure summary --subject baseline|candidate --release <slug>@<version> [--api-url <url>] [--json]",
+    "  improve share --job <dir> --disclosure summary (--subject baseline|candidate --release <slug>@<version> | --proposals-file <json>) [--api-url <url>] [--json]",
+    "  improve share --run <id> --disclosure summary|selected-evidence (--subject baseline|candidate --release <slug>@<version> | --proposals-file <json>) [--api-url <url>] [--json]",
+    '    --proposals-file accepts {"proposals":[{"subject":"baseline|candidate","slug":"skill-slug","version":"1.0.0"}]} with 0–4 entries.',
     "  improve compatibility --release <slug>@<version> [--json]",
     "  improve declare|review-declaration --release <slug>@<version> [--revision <id>] --file <request.json> [--json]",
     "  improve policy --scope user|team|organization --owner <id> [--file <request.json>] [--json]",
     "  improve profiles|suites [--id <id> | --scope user|team|organization --owner <id>] [--file <request.json>] [--json]",
     "  improve preview|prepare --file <request.json> [--json]",
+    "  improve show-plan --id <plan-id> [--api-url <url>] [--json] (inspect saved plan and runs; no local execution)",
     "  improve status|cancel --run <id> [--json]",
     "  improve evidence|accept-evidence --id <id> [--file <request.json>] [--json]",
-    "  search [query] [--api-url <url>]",
-    "  info <skill-slug> [--api-url <url>]",
+    "  search [query] [--limit <1-100>] [--cursor <cursor>] [--api-url <url>]",
+    "  info <skill-slug> [--version <exact-version>] [--api-url <url>]",
     "  login [--api-url <url>] [--method <password|api-key>] [--email <email>]",
     "  login --api-key [--api-url <url>]",
     "  logout [--api-url <url>] [--token <token>]",
@@ -6057,7 +6175,7 @@ function helpText(runtime: CliRuntime): string {
     "  config list",
     "  bootstrap codex --dry-run --profile work --context <file> [--work-source-root <dir>] [--shared-source-root <dir>] --live-root <dir> --include-slug <slug> [--include-slug <slug>] --output <report.json>",
     "  submit --path <file-directory-or-zip> [--release-notes-file <file>] [--change-kind <fix|feature|breaking|security|maintenance>] [--requires-user-action] [--minimum-myskills-version <version>] [--minimum-adapter-contract-version <number>] [--minimum-source-version <version>] [--api-url <url>] [--token <token>]",
-    "  review submissions [--api-url <url>] [--token <token>]",
+    "  review submissions [--limit <1-100>] [--cursor <cursor>] [--api-url <url>] [--token <token>]",
     "  review bundle <submission-id> [--platform <name>] [--output <file>] [--api-url <url>] [--token <token>]",
     "  review action <submission-id> --action <approve|request-changes|reject|publish> [--artifact-sha256 <hash>] [--reason <text>] [--api-url <url>] [--token <token>]",
     "  submissions list [--api-url <url>] [--token <token>]",

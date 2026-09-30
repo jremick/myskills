@@ -27,6 +27,7 @@ async function fixture(page: Page, mfaVerified = true, mfaEnabled = true) {
       if (path === "/v1/admin/api-tokens/token-1") return reply({ token: { ...token, user, revokedAt: date } });
     }
     if (path === "/v1/me") return reply({ user });
+    if (method === "GET" && path === "/v1/oauth/connector") return reply({ connector: { enabled: false, mcpUrl: null } });
     if (method === "GET" && path === "/v1/account/github") return reply({ github: { available: false, status: "disconnected", login: null, connectedAt: null, credentialSource: "anonymous" } });
     if (method === "GET" && path === "/v1/admin/github") return reply({ github: { enabled: false, appId: "", clientId: "", installationId: null, installationEnabled: false, hasClientSecret: false, hasPrivateKey: false, callbackUrl: "https://api.example.test/v1/account/github/callback", status: "not_configured", lastCheckedAt: null, lastErrorCode: null } });
     if (path === "/v1/branding" || path === "/v1/admin/branding") return reply({ branding: { text: "MySkills", showText: true, logoDataUrl: null } });

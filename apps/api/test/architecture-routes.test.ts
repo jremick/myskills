@@ -286,7 +286,7 @@ test("architecture resources are owner-private and privileged mutations require 
   assert.equal(forbidden.json().error.code, "ARCHITECTURE_NOT_FOUND");
 });
 
-test("architecture reads accept the scoped API token while mutations remain session-only", async (t) => {
+test("architecture reads accept scoped API tokens and old read tokens cannot mutate", async (t) => {
   const authStore = new MemoryAuthStore("closed");
   const architectureStore = new MemoryArchitectureStore();
   const app = buildApp({
@@ -348,10 +348,11 @@ test("architecture reads accept the scoped API token while mutations remain sess
     method: "POST",
     url: "/v1/architectures",
     headers: { authorization: `Bearer ${readToken.token}` },
-    payload: { name: "Must remain session-only", patternId: "multi-level-router" },
+    payload: { name: "Read scope must not create", patternId: "multi-level-router" },
   });
   assert.equal(mutationWithApiToken.statusCode, 403);
-  assert.equal(mutationWithApiToken.json().error.code, "SESSION_AUTH_REQUIRED");
+  assert.equal(mutationWithApiToken.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
+  assert.equal(mutationWithApiToken.json().error.details.scope, "architectures:write");
 });
 
 test("architecture projection limiting is keyed per authenticated principal", async (t) => {

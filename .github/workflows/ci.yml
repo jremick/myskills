@@ -84,6 +84,9 @@ jobs:
       - name: Collect reviewed full-stack evidence
         if: always() && steps.fullstack-browser.outcome != 'skipped'
         run: node scripts/collect-browser-evidence.mjs apps/web/test-results/fullstack-report.json apps/web/test-results dist/browser-evidence/fullstack
+      - name: Collect reviewed MCP connector evidence
+        if: always() && steps.fullstack-browser.outcome != 'skipped'
+        run: node scripts/collect-browser-evidence.mjs apps/web/test-results/fullstack-connector-report.json apps/web/test-results dist/browser-evidence/fullstack-connector
       - name: Upload reviewed browser evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -112,6 +115,12 @@ jobs:
       - uses: actions/checkout@v7
       - name: Build Railway API image
         run: docker build --file Dockerfile.api --tag myskills-app-api:ci .
+      - name: Build and smoke Railway MCP image without credentials
+        run: |
+          docker build --file Dockerfile.mcp --tag myskills-app-mcp:ci .
+          docker run -d --name myskills-mcp-smoke --network none -e PORT=43123 -e MYSKILLS_MCP_ALLOWED_HOSTS=127.0.0.1:43123 myskills-app-mcp:ci
+          trap 'docker rm -f myskills-mcp-smoke >/dev/null' EXIT
+          docker exec myskills-mcp-smoke node scripts/smoke-mcp-http.mjs
       - name: Build Railway web image
         run: docker build --file Dockerfile.web --build-arg VITE_API_BASE_URL=/api --tag myskills-app-web:ci .
       - name: Build and smoke backup image without credentials
