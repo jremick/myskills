@@ -3,6 +3,7 @@ import { createDeviceLoginClient, type DeviceLoginClient } from "./device-login-
 import { createImprovementClient, type ImprovementClient } from "./improvement-api";
 import { createGithubClient, type GithubClient } from "./github-api.js";
 import { createLibraryClient, type LibraryClient } from "./library-api.js";
+import { createDraftClient, type DraftClient } from "./drafts-api.js";
 import { createOAuthConnectionClient, type OAuthConnectionClient } from "./oauth-api.js";
 import { MAX_BRAND_LOGO_BYTES, MAX_BRAND_TEXT_LENGTH } from "@myskills-app/core";
 import type {
@@ -811,6 +812,7 @@ export interface RegistryClient {
   oauth?: OAuthConnectionClient;
   improvements?: ImprovementClient;
   libraries?: LibraryClient;
+  drafts?: DraftClient;
   github?: GithubClient;
   bundles?: BundleClient;
   searchSkillPage?(input: RegistryPageInput): Promise<RegistryPage<PublicSkill>>;
@@ -1007,6 +1009,7 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
     oauth: createOAuthConnectionClient(root, fetchImpl, token),
     improvements: createImprovementClient(<T,>(url: string, init?: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown }) => requestJson<T>(fetchImpl, `${root}${url}`, { ...init, token })),
     libraries: createLibraryClient(root, fetchImpl, token),
+    drafts: createDraftClient(root, fetchImpl, token),
     github: createGithubClient(root, fetchImpl, token),
     bundles: createBundleClient(root, fetchImpl, token),
     async searchSkillPage(input) {

@@ -17,6 +17,7 @@ async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; 
   const user = { id: "owner-1", email: "owner@example.test", name: "Example owner", status: "active", roles: ["owner"], emailVerified: true, mfaVerified: options.mfa !== false };
   await page.addInitScript(user => localStorage.setItem("myskills-app:web-session", JSON.stringify({ user, expiresAt: "2027-09-27T00:00:00Z" })), user);
   let rows = structuredClone([pending, approved, blocked]);
+  let correctionDraft: Record<string, unknown> | null = null;
   let failReview = options.failReview === true;
   const writes: Array<{ path: string; body: Record<string, unknown> }> = [];
   const misses: string[] = [];
@@ -34,6 +35,12 @@ async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; 
     if (method === "POST") {
       const body = route.request().postDataJSON() as Record<string, unknown>;
       writes.push({ path, body });
+      // This fixture proves correction placement/focus only. Real persisted
+      // draft history and immutable artifacts are covered by author-drafts.
+      if (path === "/v1/drafts") {
+        correctionDraft = { id: "correction-draft", title: blocked.title, revision: 1, files: [{ path: "skill.json", content: JSON.stringify({ name: blocked.slug, title: blocked.title, summary: blocked.summary, version: blocked.version, visibility: "private", license: "UNLICENSED" }) }, { path: "SKILL.md", content: "# Corrected research package\n" }], source: { kind: "submission", submissionId: blocked.id, slug: blocked.slug, version: blocked.version, artifactSha256: hash }, createdAt: date, updatedAt: date, submission: null };
+        return reply({ draft: correctionDraft }, 201);
+      }
       const review = path.match(/^\/v1\/review\/submissions\/([^/]+)\/actions$/);
       if (review) {
         const row = rows.find(s => s.id === review[1])!;
@@ -53,6 +60,8 @@ async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; 
       return reply({ submissions: options.partial && !url.searchParams.has("cursor") ? rows.slice(0, 2) : rows, nextCursor: options.partial && !url.searchParams.has("cursor") ? "page-2" : null });
     }
     if (path === "/v1/submissions/mine") return reply({ submissions: rows.map(s => ({ ...s, ...(options.teamImport && s.id === "blocked" ? { owner: { type: "team", id: "engineering-team" } } : {}), reviewStatus: s.id === "blocked" ? "changes-requested" : s.reviewStatus, allowedActions: ["withdraw"] })), nextCursor: null });
+    if (path === "/v1/drafts") return reply({ drafts: correctionDraft ? [{ ...correctionDraft, fileCount: 2, textBytes: 256 }] : [] });
+    if (path === "/v1/drafts/correction-draft" && correctionDraft) return reply({ draft: correctionDraft });
     if (/^\/v1\/(review\/)?submissions\/[^/]+\/bundle$/.test(path)) return route.fulfill({ json: { files: [{ path: "SKILL.md", content: "# Reviewed exact artifact\nUse verified release evidence." }] }, headers: { "x-myskills-artifact-sha256": hash } });
     const detail = path.match(/^\/v1\/(?:review\/)?submissions\/([^/]+)$/);
     if (detail) return reply({ submission: { ...rows.find(s => s.id === detail[1]), ...(options.teamImport && detail[1] === "blocked" ? { owner: { type: "team", id: "engineering-team" } } : {}), reviewStatus: detail[1] === "blocked" ? "changes-requested" : rows.find(s => s.id === detail[1])?.reviewStatus, changeRequestReason: detail[1] === "blocked" ? "Cite the original research sources." : null, reviewHistory: [], scanRuns: scanRuns(), correction: { requiresNewVersion: true, canSubmitNewVersion: !options.teamImport } } });
@@ -159,8 +168,9 @@ test("submission feedback opens beside its context and returns focus without an 
   await expect(trigger).toBeFocused();
   await trigger.click();
   await page.getByRole("button", { name: "Choose corrected package", exact: true }).click();
-  await expect(page.locator('#package-archive')).toBeFocused();
-  expect(state.writes).toHaveLength(0);
+  await expect(page.getByLabel("Draft title", { exact: true })).toBeFocused();
+  await expect(page.getByLabel("Draft title", { exact: true })).toHaveValue("Research Brief");
+  expect(state.writes).toEqual([{ path: "/v1/drafts", body: { source: { kind: "submission", submissionId: "blocked" } } }]);
   await evidence(page, info, state.writes);
 });
 

@@ -83,6 +83,7 @@ import { SkillManagePanel } from "@/components/registry/SkillManagePanel";
 import { ManagedReleaseSelect, SkillSectionTabs, SkillVersionsPanel } from "@/components/registry/SkillSections";
 import { isPublishedRelease, parseSkillScope, parseSkillTab, safeLibraryReturn, sectionPanelId, sectionTabId, type SkillScope, type SkillTab } from "@/components/registry/skill-workspace";
 import { SubmissionEvidencePanel } from "@/components/registry/SubmissionEvidencePanel";
+import { DraftWorkspace, ForkReleaseDraft } from "@/components/authoring/DraftWorkspace";
 import { SkillImprovementPanel } from "@/components/registry/SkillImprovementPanel";
 import { BundleWorkspace } from "@/components/registry/BundleWorkspace";
 import { isBootstrapVersion, releaseVersionLabel, chipTone, findingsLabel, lifecycleLabel, reviewStatusLabel, securityStatusLabel, severityLabel, visibilityLabel } from "@/components/registry/status-display";
@@ -459,7 +460,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
 
       // The architecture guard sees every move, including moves inside the
       // section; it prompts only when the destination would discard a draft.
-      if (previous.view === "architectures") {
+      if (previous.view === "architectures" || previous.view === "submit") {
         const guard = architectureNavigationGuardRef.current;
         if (guard) {
           const action = nextHistoryIndex !== null && nextHistoryIndex < historyIndexRef.current
@@ -1688,7 +1689,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
           ) : activeView === "review" && session ? (
             <ReviewDashboard client={registryClient} onOpenSkill={openAppUrl} session={session} />
           ) : activeView === "submit" && session ? (
-            <SubmitDashboard client={registryClient} onOpenSkill={openAppUrl} session={session} />
+            <SubmitDashboard client={registryClient} onOpenSkill={openAppUrl} session={session} url={appUrl} onDraftNavigate={replaceAppHistory} onNavigationGuardChange={registerArchitectureNavigationGuard} />
           ) : activeView === "teams" && session ? (
             <TeamsDashboard client={registryClient} session={session} />
           ) : activeView === "architectures" && session ? (
@@ -2169,7 +2170,8 @@ function NotFoundPage({ onHome, onLogin, showLandingLink }: { onHome: () => void
   );
 }
 
-function SubmitDashboard({ client, onOpenSkill }: { client: RegistryClient; onOpenSkill: (url: string) => void; session: WebSession }) {
+function SubmitDashboard({ client, onOpenSkill, session, url, onDraftNavigate, onNavigationGuardChange }: { client: RegistryClient; onOpenSkill: (url: string) => void; session: WebSession; url: string; onDraftNavigate: (url: string) => void; onNavigationGuardChange: (guard: ArchitectureNavigationGuard | null) => void }) {
+  const [correctionSource, setCorrectionSource] = useState<{ submissionId: string; request: number } | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [feedbackId, setFeedbackId] = useState<string | null>(null);
   const [state, setState] = useState<LoadState>("idle");
@@ -2299,7 +2301,11 @@ function SubmitDashboard({ client, onOpenSkill }: { client: RegistryClient; onOp
     focusTarget.current = { kind: "trigger", id: submissionId };
   }
 
-  function chooseCorrection() {
+  function chooseCorrection(submissionId: string) {
+    if (client.drafts) {
+      setCorrectionSource({ submissionId, request: Date.now() });
+      return;
+    }
     setFile(null);
     setResult(null);
     setMessage({ text: "Choose the corrected archive with a new semantic version. Previous submissions remain immutable.", error: false });
@@ -2317,6 +2323,7 @@ function SubmitDashboard({ client, onOpenSkill }: { client: RegistryClient; onOp
         <h1>Submit package</h1>
       </header>
 
+      {client.drafts && <DraftWorkspace key={session.user.id} api={client.drafts} actorId={session.user.id} url={url} onNavigate={onDraftNavigate} onNavigationGuardChange={onNavigationGuardChange} correctionSource={correctionSource} onSubmitted={async (submission) => { setResult({ submission, scan: submission.scan }); await refreshSubmissions(); }} />}
       <div className="registry-surface">
         <section aria-labelledby={`${baseId}-upload`} className="submit-upload">
           <h2 id={`${baseId}-upload`}>Package archive</h2>
@@ -2493,7 +2500,7 @@ function SubmitDashboard({ client, onOpenSkill }: { client: RegistryClient; onOp
                     )}
                     {feedbackOpen && (
                       <div className="submit-feedback" id={feedbackPanelId}>
-                        <SubmissionEvidencePanel client={client} submissionId={submission.id} mode="author" focusOnOpen onClose={() => closeFeedback(submission.id)} onCorrect={chooseCorrection} />
+                        <SubmissionEvidencePanel client={client} submissionId={submission.id} mode="author" focusOnOpen onClose={() => closeFeedback(submission.id)} onCorrect={() => chooseCorrection(submission.id)} />
                         <PackageFileViewer resourceKey={`author:${submission.id}`} loadBundle={() => client.exportUserSubmission(submission.id)} />
                       </div>
                     )}
@@ -5850,6 +5857,7 @@ function SkillDetail({
               resourceKey={`${selectedSkill.slug}:${release.version}:${platform}`}
               loadBundle={() => client.getReleaseBundle!(selectedSkill.slug, release.version, platform)}
             />
+            {client.drafts && session?.user.roles.some((role) => ["author", "maintainer", "admin", "owner"].includes(role)) && <ForkReleaseDraft api={client.drafts} slug={selectedSkill.slug} version={release.version} platform={platform} />}
           </RegistryDisclosure>
         )}
 
