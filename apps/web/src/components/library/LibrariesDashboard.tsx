@@ -11,6 +11,7 @@ import { LibrarySharingReview } from "./LibrarySharingReview.js";
 import { LibraryDisclosure } from "./LibraryDisclosure.js";
 import { attestationLabel, bindingStatusLabel, candidateStateLabel, dateTime, eventLabel, healthLabel, platformLabel, refLabel, repositoryLabel, reviewStatusLabel, roleLabel, securityStatusLabel, severityLabel, shortDate, tileTone, trackingModeLabel, type Tone } from "./library-display.js";
 import { BundleReference } from "./BundleReference.js";
+import { LibrarySelections } from "./LibrarySelections.js";
 import { LibrarySkillPicker } from "./LibrarySkillPicker.js";
 import { LibraryReleasePicker, type AdoptableRelease } from "./LibraryReleasePicker.js";
 import { librariesUrl, readLibraryLocation, writeLibraryLocation, type LibraryLocation, type LibraryNavigate } from "./library-location.js";
@@ -91,6 +92,9 @@ function LibraryWorkspace({ api, client, user, onNavigate }: { api: LibraryClien
       entry: merged.library ? merged.entry : null,
       candidate: merged.library && merged.entry ? merged.candidate : null,
       filter: merged.filter,
+      view: merged.view ?? "entries",
+      collection: merged.library && merged.view === "collections" ? merged.collection : null,
+      group: merged.library && merged.view === "groups" ? merged.group : null,
     };
     locationRef.current = target;
     writeLibraryLocation(target, mode, navigateRef.current);
@@ -128,7 +132,7 @@ function LibraryWorkspace({ api, client, user, onNavigate }: { api: LibraryClien
   // list pages; it is never replaced by the first library.
   const selected = location.library ?? libraries[0]?.id ?? null;
   const shown = linked && linked.id === selected && !libraries.some((library) => library.id === linked.id) ? [...libraries, linked] : libraries;
-  const selectLibrary = (id: string | null, mode: "push" | "replace" = "push") => go({ library: id, entry: null, candidate: null, filter: "" }, mode);
+  const selectLibrary = (id: string | null, mode: "push" | "replace" = "push") => go({ library: id, entry: null, candidate: null, filter: "", view: "entries", collection: null, group: null }, mode);
   async function create() {
     setBusy(true); setCreateError(null);
     try {
@@ -157,7 +161,7 @@ function LibraryWorkspace({ api, client, user, onNavigate }: { api: LibraryClien
     <header className="library-page-header app-page-header">
       <h1>Libraries</h1>
       <div className="library-page-actions">
-        <LibraryInbox api={api} onSelect={(item) => go({ library: item.libraryId, entry: item.entryId, candidate: item.entryId ? item.candidateId : null, filter: "" }, "push")} />
+        <LibraryInbox api={api} onSelect={(item) => go({ library: item.libraryId, entry: item.entryId, candidate: item.entryId ? item.candidateId : null, filter: "", view: "entries", collection: null, group: null }, "push")} />
         {canReviewSharing && <Button type="button" size="sm" variant="outline" aria-label="Library administration" aria-expanded={adminOpen} aria-controls={adminMounted ? "library-administration" : undefined} onClick={() => { setAdminMounted(true); setAdminOpen((open) => !open); }}>
           <ShieldCheck size={16} aria-hidden="true" /><span className="library-action-text">Administration</span>
         </Button>}
@@ -209,6 +213,8 @@ function LibraryWorkspace({ api, client, user, onNavigate }: { api: LibraryClien
         entryId={location.library === selected ? location.entry : null}
         candidateId={location.library === selected ? location.candidate : null}
         filter={location.filter}
+        view={location.view ?? "entries"}
+        selectionId={location.view === "collections" ? location.collection ?? null : location.group ?? null}
         go={go}
         onLibrary={(summary) => { if (!libraries.some((library) => library.id === summary.id)) setLinked(summary); }}
         onRemoved={removed}
@@ -218,10 +224,10 @@ function LibraryWorkspace({ api, client, user, onNavigate }: { api: LibraryClien
   </main>;
 }
 
-function LibraryDetail({ api, client, libraryId, entryId, candidateId, filter, go, onLibrary, onRemoved, onShowLibraries }: {
+function LibraryDetail({ api, client, libraryId, entryId, candidateId, filter, view, selectionId, go, onLibrary, onRemoved, onShowLibraries }: {
   api: LibraryClient; client: RegistryClient; libraryId: string;
   /** Explicit selection from the URL. */
-  entryId: string | null; candidateId: string | null; filter: string;
+  entryId: string | null; candidateId: string | null; filter: string; view: "entries" | "collections" | "groups"; selectionId: string | null;
   go: Go; onLibrary: (library: LibrarySummary) => void; onRemoved: () => void; onShowLibraries: (() => void) | null;
 }) {
   const [library, setLibrary] = useState<LibrarySummary | null>(null);
@@ -322,7 +328,7 @@ function LibraryDetail({ api, client, libraryId, entryId, candidateId, filter, g
     setBusy(true); report(null);
     try { await work(); await load(); } catch (e) { report(libraryError(e)); } finally { setBusy(false); }
   }
-  const selectEntry = (entry: string | null, mode: "push" | "replace" = "push") => go({ library: libraryId, entry, candidate: null }, mode);
+  const selectEntry = (entry: string | null, mode: "push" | "replace" = "push") => go({ library: libraryId, entry, candidate: null, view: "entries", collection: null, group: null }, mode);
   async function saveSource() {
     const result = await api.addSource(libraryId, { url, ...(path.trim() ? { path: path.trim() } : {}), ...(refKind === "url" ? {} : { ref: { kind: refKind, ...(refValue.trim() ? { value: refValue.trim() } : {}) } }), clientMutationId: sourceKey.current });
     sourceKey.current = mutationId(); setUrl(""); setPath(""); setRefKind("url"); setRefValue("");
@@ -523,7 +529,10 @@ function LibraryDetail({ api, client, libraryId, entryId, candidateId, filter, g
       </div>
     </header>
     {error && <p role="alert" className="library-alert library-alert-bar">{error}</p>}
-    {entries.length > 0 || importing || pendingLink || selectedEntry ? <>
+    <nav className="library-selection-nav" aria-label="Library sections">
+      {(["entries", "collections", "groups"] as const).map((section) => <button type="button" className="library-switch" key={section} aria-current={view === section ? "true" : undefined} onClick={() => go({ library: libraryId, view: section, entry: null, candidate: null, collection: null, group: null }, "push")}>{section === "entries" ? "Entries" : section === "collections" ? "Collections" : "Groups"}</button>)}
+    </nav>
+    {view !== "entries" ? <LibrarySelections key={`${libraryId}:${view}:${selectionId ?? "list"}`} api={api} library={library} kind={view} selectedId={selectionId} onSelect={(id) => go({ library: libraryId, view, collection: view === "collections" ? id : null, group: view === "groups" ? id : null, entry: null, candidate: null }, "push")} onEntry={crossLink} onRefreshLibrary={() => load()} /> : entries.length > 0 || importing || pendingLink || selectedEntry ? <>
       <div className="library-toolbar" hidden={layout === "stack" && !importing && Boolean(selectedEntry)}>
         <div className="library-filter" hidden={importing}>
           <Search size={16} aria-hidden="true" />

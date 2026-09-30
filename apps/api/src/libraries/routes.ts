@@ -20,7 +20,7 @@ import type { ApiTokenScope } from "../auth/types.js";
 import { requireDelegatedAction } from "../auth/delegated-actions.js";
 import type { SubmissionService } from "../submissions/service.js";
 import type { MappingOverrides } from "./packaging.js";
-import { decodeCursor, type LibraryActor, type LibraryService } from "./service.js";
+import { decodeCursor, decodeSelectionMemberCursor, type LibraryActor, type LibraryService } from "./service.js";
 
 export interface LibraryRouteOptions {
   authService?: AuthService;
@@ -145,6 +145,107 @@ export function registerLibraryRoutes(app: FastifyInstance, options: LibraryRout
     return service.deleteLibrary(actor, param(request.params, "libraryId"), positiveInteger(Number(query.expectedRevision), "expectedRevision"));
   });
 
+  // ---- Collections and groups ---------------------------------------------
+
+  app.get("/v1/libraries/:libraryId/collections", async (request, reply) => {
+    const service = libraries();
+    const actor = await actorFor(request, reply, READ);
+    if (!actor) return;
+    const result = await service.listSelections(actor, param(request.params, "libraryId"), "collection", parsePage(request.query));
+    return { collections: result.selections, nextCursor: result.nextCursor };
+  });
+  app.post("/v1/libraries/:libraryId/collections", async (request, reply) => {
+    const service = libraries();
+    const actor = await actorFor(request, reply, { ...WRITE, sessionOnly: true });
+    if (!actor) return;
+    const body = objectBody(request.body);
+    const result = await service.createSelection(actor, param(request.params, "libraryId"), "collection", {
+      name: boundedText(body.name, "name", 1, 120), description: optionalText(body.description, "description", 2000) ?? "",
+      memberEntryIds: selectionMemberIds(body.memberEntryIds), clientMutationId: parseMutationId(body.clientMutationId),
+    });
+    return reply.code(result.replayed ? 200 : 201).send({ collection: result.selection, replayed: result.replayed });
+  });
+  app.get("/v1/library-collections/:collectionId", async (request, reply) => {
+    const service = libraries();
+    const actor = await actorFor(request, reply, READ);
+    if (!actor) return;
+    return { collection: await service.getSelection(actor, param(request.params, "collectionId"), "collection") };
+  });
+  app.get("/v1/library-collections/:collectionId/members", async (request, reply) => {
+    const service = libraries();
+    const actor = await actorFor(request, reply, READ);
+    if (!actor) return;
+    return service.listSelectionMembers(actor, param(request.params, "collectionId"), "collection", parseSelectionMemberPage(request.query));
+  });
+  app.patch("/v1/library-collections/:collectionId", async (request, reply) => {
+    const service = libraries();
+    const actor = await actorFor(request, reply, { ...WRITE, sessionOnly: true });
+    if (!actor) return;
+    const body = objectBody(request.body);
+    return { collection: await service.updateSelection(actor, param(request.params, "collectionId"), "collection", {
+      expectedRevision: positiveInteger(body.expectedRevision, "expectedRevision"),
+      ...(body.name !== undefined ? { name: boundedText(body.name, "name", 1, 120) } : {}),
+      ...(body.description !== undefined ? { description: optionalText(body.description, "description", 2000) ?? "" } : {}),
+      ...(body.memberEntryIds !== undefined ? { memberEntryIds: selectionMemberIds(body.memberEntryIds) } : {}),
+    }) };
+  });
+  app.delete("/v1/library-collections/:collectionId", async (request, reply) => {
+    const service = libraries();
+    const actor = await actorFor(request, reply, { ...WRITE, sessionOnly: true });
+    if (!actor) return;
+    const revision = positiveInteger(Number(queryObject(request.query).expectedRevision), "expectedRevision");
+    return { collection: await service.deleteSelection(actor, param(request.params, "collectionId"), "collection", revision) };
+  });
+
+  app.get("/v1/libraries/:libraryId/groups", async (request, reply) => {
+    const service = libraries();
+    const actor = await actorFor(request, reply, READ);
+    if (!actor) return;
+    const result = await service.listSelections(actor, param(request.params, "libraryId"), "group", parsePage(request.query));
+    return { groups: result.selections, nextCursor: result.nextCursor };
+  });
+  app.post("/v1/libraries/:libraryId/groups", async (request, reply) => {
+    const service = libraries();
+    const actor = await actorFor(request, reply, { ...WRITE, sessionOnly: true });
+    if (!actor) return;
+    const body = objectBody(request.body);
+    const result = await service.createSelection(actor, param(request.params, "libraryId"), "group", {
+      name: boundedText(body.name, "name", 1, 120), description: optionalText(body.description, "description", 2000) ?? "",
+      memberEntryIds: selectionMemberIds(body.memberEntryIds), clientMutationId: parseMutationId(body.clientMutationId),
+    });
+    return reply.code(result.replayed ? 200 : 201).send({ group: result.selection, replayed: result.replayed });
+  });
+  app.get("/v1/library-groups/:groupId", async (request, reply) => {
+    const service = libraries();
+    const actor = await actorFor(request, reply, READ);
+    if (!actor) return;
+    return { group: await service.getSelection(actor, param(request.params, "groupId"), "group") };
+  });
+  app.get("/v1/library-groups/:groupId/members", async (request, reply) => {
+    const service = libraries();
+    const actor = await actorFor(request, reply, READ);
+    if (!actor) return;
+    return service.listSelectionMembers(actor, param(request.params, "groupId"), "group", parseSelectionMemberPage(request.query));
+  });
+  app.patch("/v1/library-groups/:groupId", async (request, reply) => {
+    const service = libraries();
+    const actor = await actorFor(request, reply, { ...WRITE, sessionOnly: true });
+    if (!actor) return;
+    const body = objectBody(request.body);
+    return { group: await service.updateSelection(actor, param(request.params, "groupId"), "group", {
+      expectedRevision: positiveInteger(body.expectedRevision, "expectedRevision"),
+      ...(body.name !== undefined ? { name: boundedText(body.name, "name", 1, 120) } : {}),
+      ...(body.description !== undefined ? { description: optionalText(body.description, "description", 2000) ?? "" } : {}),
+      ...(body.memberEntryIds !== undefined ? { memberEntryIds: selectionMemberIds(body.memberEntryIds) } : {}),
+    }) };
+  });
+  app.delete("/v1/library-groups/:groupId", async (request, reply) => {
+    const service = libraries();
+    const actor = await actorFor(request, reply, { ...WRITE, sessionOnly: true });
+    if (!actor) return;
+    const revision = positiveInteger(Number(queryObject(request.query).expectedRevision), "expectedRevision");
+    return { group: await service.deleteSelection(actor, param(request.params, "groupId"), "group", revision) };
+  });
   app.get("/v1/libraries/:libraryId/entries", async (request, reply) => {
     const service = libraries();
     const actor = await actorFor(request, reply, READ);
@@ -481,6 +582,14 @@ function param(input: unknown, field: string): string {
   return value;
 }
 
+function selectionMemberIds(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > LIBRARY_LIMITS.maxSelectionMembers || new Set(value).size !== value.length
+    || value.some((id) => typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) {
+    throw new AppError("Members must be distinct readable active skill entries in this Library.", "LIBRARY_SELECTION_MEMBER_INVALID", 400);
+  }
+  return value as string[];
+}
+
 function boundedText(value: unknown, field: string, min: number, max: number): string {
   if (typeof value !== "string") throw invalid(`${field} is required.`);
   const trimmed = value.trim();
@@ -523,6 +632,12 @@ function parsePage(input: unknown): { limit: number; cursor: ReturnType<typeof d
   const limit = query.limit === undefined ? 50 : Number(query.limit);
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw invalid("limit must be an integer from 1 to 100.");
   return { limit, cursor: decodeCursor(query.cursor) };
+}
+
+function parseSelectionMemberPage(input: unknown): { limit: number; cursor: ReturnType<typeof decodeSelectionMemberCursor> } {
+  const query = queryObject(input);
+  const page = parsePage({ ...query, cursor: undefined });
+  return { limit: page.limit, cursor: decodeSelectionMemberCursor(query.cursor) };
 }
 
 function parseOwner(input: unknown): { type: "user" } | { type: "team"; id: string } {

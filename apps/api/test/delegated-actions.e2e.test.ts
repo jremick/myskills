@@ -34,7 +34,7 @@ async function fixture(t: TestContext) {
   const auth = new AuthService(store, { notificationSink: { sendEmailVerification() {}, sendPasswordReset() {}, sendRegistrationInvitation() {}, sendEmailChangeVerification() {} }, oauthAccessTokens: { verifyAccessToken: async (token) => issued.get(token) ?? null } });
   const app = buildApp({ authService: auth, skillRepository: new MemorySkillRepository([]), teamService: new TeamService(teams) });
   t.after(() => app.close());
-  const call = (method: "GET" | "POST" | "PUT" | "DELETE", url: string, token: string, payload?: Record<string, unknown>) => app.inject({ method, url, headers: { authorization: `Bearer ${token}` }, ...(payload ? { payload } : {}) });
+  const call = (method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", url: string, token: string, payload?: Record<string, unknown>) => app.inject({ method, url, headers: { authorization: `Bearer ${token}` }, ...(payload ? { payload } : {}) });
   const apiToken = async (scopes: string[], session = "synthetic-long-fixture-session-owner") => {
     const response = await call("POST", "/v1/auth/api-tokens", session, { name: "delegation fixture", scopes });
     assert.equal(response.statusCode, 201, response.body);
@@ -75,6 +75,37 @@ test("named delegated API actions retain scopes, ownership, MFA and safe audit a
   assert.equal(allowed.details.credentialKind, "api");
   assert.equal(typeof allowed.details.credentialId, "string");
   assert.equal(JSON.stringify(audits).includes(token), false);
+});
+
+// Selection domain journeys prove persistence and Library permission policy.
+// This credential-boundary test catches missing named route registration and
+// read/write scope inversion on all 12 routes before the service is invoked.
+test("collection/group delegated routes require their exact read or write scope", async (t) => {
+  const f = await fixture(t);
+  for (const issue of [f.apiToken, f.oauthToken]) {
+    const reader = await issue(["libraries:read"]);
+    const writer = await issue(["libraries:write"]);
+    for (const entity of ["collections", "groups"]) {
+      const routes = [
+        { method: "GET", url: `/v1/libraries/library-a/${entity}` },
+        { method: "GET", url: `/v1/library-${entity}/selection-a` },
+        { method: "GET", url: `/v1/library-${entity}/selection-a/members` },
+        { method: "POST", url: `/v1/libraries/library-a/${entity}`, body: { name: "Selection", memberEntryIds: [] } },
+        { method: "PATCH", url: `/v1/library-${entity}/selection-a`, body: { expectedRevision: 1, memberEntryIds: [] } },
+        { method: "DELETE", url: `/v1/library-${entity}/selection-a?expectedRevision=1` },
+      ] as const;
+      for (const route of routes) {
+        const read = route.method === "GET";
+        const denied = await f.call(route.method, route.url, read ? writer : reader, "body" in route ? route.body : undefined);
+        assert.equal(denied.statusCode, 403, `${route.method} ${route.url}: ${denied.body}`);
+        assert.equal(denied.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
+        assert.equal(denied.json().error.details.scope, read ? "libraries:read" : "libraries:write");
+        const allowed = await f.call(route.method, route.url, read ? reader : writer, "body" in route ? route.body : undefined);
+        assert.equal(allowed.statusCode, 503, allowed.body);
+        assert.equal(allowed.json().error.code, "LIBRARY_SERVICE_UNAVAILABLE", "named action reaches the service only with its scope");
+      }
+    }
+  }
 });
 
 test("OAuth raw calls enforce read scopes, live roles, bounded assurance and header-only credentials", async (t) => {

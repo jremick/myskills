@@ -15,9 +15,13 @@ real ChatGPT/Claude acceptance. The existing beta.17 tag remains unchanged.
   retained connector evidence, owned cleanup and a dedicated Railway MCP image.
 - The existing beta.17 application changes described in
   [its delivery record](BETA17_RELEASE_DELIVERY.md).
+- Personal and team Library Collections and Groups, inherited Library
+  permissions, overlapping membership, derived source tracking, and named
+  API/CLI/MCP operations. See [Libraries](LIBRARIES.md).
 
-Tracked Collections and Library Groups remain in progress pending model
-decisions and are excluded. Inventory coverage does not establish runtime
+Collections and Groups are implemented with local checks; their final
+PostgreSQL and full-stack verification remains a release gate. Inventory
+coverage does not establish runtime
 parity; partial capabilities and unverified host behavior remain explicit in
 [the capability ledger](CAPABILITY_PARITY_IMPLEMENTATION.md) and
 [connector acceptance](MCP_CONNECTIONS.md).
@@ -47,12 +51,17 @@ candidate SHA; these earlier identities do not prove that candidate passed.
 
 ## Migrations and rollback
 
-New since beta.17: `0034_oauth_connections` and `0035_oauth_assurance`. The first
+New since beta.17: `0034_oauth_connections`, `0035_oauth_assurance`, and
+`0036_library_selections`. The first
 adds six OAuth tables; the second adds nullable assurance timestamps and
 constraints to authorization codes and grants. Existing grants gain no
 assurance by backfill. The runner records complete filename basenames, sorts
 filenames and applies each missing migration transactionally under an advisory
 lock. Shared numeric prefixes do not collide; preserve both full identities.
+The Library migration adds selection and membership tables. It does not
+change existing entries, lineages, adoptions, or installations. Verify both
+new tables and the recorded migration identity after the upgrade. Include
+them in backups and retain them during an application rollback.
 
 An instance upgrading from beta.16 must also apply beta.17's
 `0034_github_integration`, `0034_team_library_ownership` and

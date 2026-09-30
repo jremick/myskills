@@ -88,6 +88,14 @@ Last updated: 2026-09-30
   milestone status lists. Earlier branch and
   beta.2 labels below are historical; they do not supersede the release tracks.
 
+Collections and Groups now have an implementation candidate for personal and
+team Libraries. Groups can overlap; Collections derive tracking from their
+members' existing source lineages. Both inherit Library permissions and have
+API, CLI and MCP operations. Local checks and rendered browser journeys pass;
+the final Windows PostgreSQL/full-stack gate, merge, release and deployment
+remain separate steps. See the [implementation plan](plans/2026-09-30-library-collections-groups.md)
+and [capability evidence](CAPABILITY_PARITY_IMPLEMENTATION.md).
+
 ## Foundation Delivery Batch
 
 This table records the 25 September foundation batch, with npm status reconciled

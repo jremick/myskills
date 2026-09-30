@@ -80,6 +80,8 @@ export const libraryAttestationKinds = ["private-self-reviewed", "instance-revie
 export const LIBRARY_LIMITS = {
   maxLibrariesPerOwner: 100,
   maxEntriesPerLibrary: 500,
+  maxSelectionsPerKindPerLibrary: 100,
+  maxSelectionMembers: 200,
   maxInventoryPaths: 10_000,
   maxPreviewPaths: 20,
   maxDiscoveredRoots: 200,
@@ -147,6 +149,40 @@ export interface LibrarySummary {
   subscription: LibrarySubscription | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Library-owned ordered sets; membership does not grant release access. */
+export interface LibraryGroupSummary {
+  id: string;
+  libraryId: string;
+  name: string;
+  description: string;
+  status: "active";
+  revision: number;
+  memberCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LibrarySelectionTrackingSummary {
+  sourceEntryIds: string[];
+  health: LibrarySourceHealth | "mixed";
+  /** Pending candidates for readable member lineages; zero for non-curators. */
+  pendingCandidateCount: number;
+  /** Oldest successful check across sources, null until every source has succeeded. */
+  lastSuccessfulCheckAt: string | null;
+  /** Earliest scheduled check across member sources. */
+  nextCheckAt: string | null;
+}
+
+export interface LibraryCollectionSummary extends LibraryGroupSummary {
+  tracking: LibrarySelectionTrackingSummary;
+}
+
+export interface LibrarySelectionMember {
+  entry: LibraryEntry;
+  /** Zero-based position among currently readable members. */
+  position: number;
 }
 
 export interface LibraryEntrySource {

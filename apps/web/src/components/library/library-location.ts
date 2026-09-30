@@ -7,6 +7,9 @@ export interface LibraryLocation {
   entry: string | null;
   candidate: string | null;
   filter: string;
+  view?: "entries" | "collections" | "groups";
+  collection?: string | null;
+  group?: string | null;
 }
 
 /** Upper bound for deliberate cursor walks. A repeated cursor also stops a walk. */
@@ -15,6 +18,9 @@ export const MAX_PAGES = 40;
 export function librariesUrl(location: Partial<LibraryLocation>): string {
   const params = new URLSearchParams();
   if (location.library) params.set("library", location.library);
+  if (location.library && location.view && location.view !== "entries") params.set("view", location.view);
+  if (location.library && location.view === "collections" && location.collection) params.set("collection", location.collection);
+  if (location.library && location.view === "groups" && location.group) params.set("group", location.group);
   if (location.library && location.entry) params.set("entry", location.entry);
   if (location.library && location.entry && location.candidate) params.set("candidate", location.candidate);
   if (location.filter?.trim()) params.set("filter", location.filter);
@@ -26,7 +32,9 @@ export function readLibraryLocation(): LibraryLocation {
   const params = new URLSearchParams(window.location.search);
   const library = params.get("library") || null;
   const entry = library ? params.get("entry") || null : null;
-  return { library, entry, candidate: entry ? params.get("candidate") || null : null, filter: params.get("filter") ?? "" };
+  const section = params.get("view");
+  const view = library && !entry && (section === "collections" || section === "groups") ? section : "entries";
+  return { library, entry, candidate: entry ? params.get("candidate") || null : null, filter: params.get("filter") ?? "", view, collection: view === "collections" ? params.get("collection") || null : null, group: view === "groups" ? params.get("group") || null : null };
 }
 
 export type LibraryNavigate = (url: string, mode: "push" | "replace") => void;
