@@ -44,13 +44,13 @@ No original MBP worktree or native thread is changed.
 | Scope | Preserved source | Current continuation state |
 | --- | --- | --- |
 | Integration | `cd93bde57496` | 426 source criterion records and 24 backlog groups retained; source reconciliation and final matrix pending. |
-| ID-GOV | `9106bc8cd953` | Integrated as `418e030`, hardened in `cf99c9b`; source review corrected, PostgreSQL execution pending. |
-| TRUST-MCP | `4d3d183833f6`, recovery `e53508453908` | Integrated as `b10fcab` and `63b496b`, hardened in `cf99c9b`; source review corrected, canonical execution pending. |
-| QUALITY | `561c045f6012` | Durable scans preserved; shared integration, PostgreSQL proof and version-aware evaluation extension pending. |
-| AUTHOR-1 | `085acf87b006` | Private drafts/imports/comparison preserved; registration and full-stack acceptance pending. |
-| ARCH-LIFE | `360243eeab86` | Persisted review plans preserved; authority review complete and bounded Codex composed-artifact contract selected; implementation pending. |
-| DISC-SITE | `2453e69c3ba4` | Deterministic discovery and independent site preserved; wiring and measured/rendered proof pending. |
-| HOST-1 | `3d01d673be27` | Isolated HOST source fixes and Linux rehearsal harness active; integration and actual install/upgrade/restore proof pending. |
+| ID-GOV | `9106bc8cd953` | Integrated as `418e030`, hardened in `cf99c9b`; independent source review complete and new atomicity/deadline PG cases passed in the failed first checkpoint. Final candidate proof pending. |
+| TRUST-MCP | `4d3d183833f6`, recovery `e53508453908` | Integrated as `b10fcab` and `63b496b`, hardened in `cf99c9b`; independent source review complete and new coherent-authorization PG cases passed in the failed first checkpoint. Final candidate proof pending. |
+| QUALITY | `561c045f6012` | Durable scans and production worker integrated through `8fafa42`; local checks passed. PG acceptance and version-aware evaluations remain pending. |
+| AUTHOR-1 | `085acf87b006` | Private drafts/imports/browser comparison integrated through `8fafa42`; local surface checks passed. PG and full-stack acceptance pending. |
+| ARCH-LIFE | `360243eeab86` | Persisted review plans integrated through `8fafa42`; bounded Codex composed-artifact execution is under implementation. Coherent PG and filesystem acceptance pending. |
+| DISC-SITE | `2453e69c3ba4` | Discovery and site integrated through `8fafa42`; fixed synthetic corpus and local desktop/mobile/keyboard checks passed. PG/canonical/deployed proof pending. |
+| HOST-1 | `3d01d673be27` | Initial source integrated through `84e6cae`; review fixes committed separately at `6a45918` with narrow checks. Independent remediation review, final integration and actual Linux rehearsal pending. |
 
 Sequence: ID/TRUST source and review corrections; sequential QUALITY, AUTHOR,
 ARCH, DISC and HOST integration; remaining no-cost evaluation and composed
@@ -63,7 +63,7 @@ PostgreSQL authority during final artifact authorization, time checks captured
 before device-login lock waits, unbounded CLI response buffering, and device
 secret forwarding through redirects. The independent remediation review accepted the source fixes. Three additional
 PostgreSQL test-fixture/coherence defects were then corrected, typechecked and
-linted; actual PostgreSQL execution is still pending. No deployed acceptance
+linted; the new PostgreSQL atomicity/deadline and coherent artifact-authority cases then passed in both Node lanes of the failed first checkpoint. No deployed acceptance
 is inferred from these reviews.
 
 Migration reservations remain `0037_author_drafts.sql`,
@@ -159,7 +159,7 @@ cases passed on Node22 and Node24. The older device journey needed a shared
 simulated clock with the store. Altered approved payloads failed earlier at the
 integrity check, bypassing the expected publication error contract. Release
 fixtures omitted the new provenance script and its lockfile dependency.
-These three failure families require corrections and a new candidate run.
+The two PostgreSQL corrections are in wave2 and the release-fixture correction is in HOST. Their combined canonical rerun remains necessary.
 Browser fixture/full-stack success does not establish live host or deployment
 acceptance. Subsequent roadmap source is outside this checkpoint.
 
@@ -193,6 +193,30 @@ API-owned intent, separate execution approval, a shared target lease and a
 bounded local whole-artifact journal. Full graph/router/profile apply, verify
 and rollback implementation remains in progress. Review-only plans never
 become execution authority.
+
+### HOST review remediation checkpoint
+
+Initial HOST recovery, version preparation and hardening are integrated as
+`6c09e24`, `6b3a352` and `84e6cae`. The independent site version is aligned to
+beta.19 in `2b27113`. HOST remediation is separately committed at
+`6a45918e28043bd5436cd15e9145acd68897019d` with a clean source tree. Its
+independent Astra remediation review and integration are pending.
+
+The fixes cover durable migration barriers before SQL, protected env parsing,
+bootstrap validation on the public shell path and unresolved interrupted
+Compose operations. Local evidence passed 82 focused cases, 35 controller
+fixtures, two latest interruption cases, lint, shell syntax and static parity.
+These overlap and use stubs; they do not prove Linux installation or restore.
+The prepared canonical rehearsal checks actual Compose interpretation,
+encrypted TOTP access, revoked-session denial and authenticated non-owner
+private-artifact denial after restore and upgrade. Runtime execution remains
+pending, including real database/object recovery and exact resource cleanup.
+
+The baseline transition uses exact c74ecd33 beta.18 application source and a
+disclosed candidate setup/bootstrap bridge because that baseline has no
+historical operator package. It cannot prove a historical package-to-package
+upgrade, arm64 runtime or the current production beta.16 migration path.
+No public image, release or deployment is inferred from this preparation.
 
 ## External decisions and gates
 
