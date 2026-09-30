@@ -21,6 +21,8 @@ const owner = z.discriminatedUnion("type", [z.object({ type: z.literal("user") }
 const scope = z.object({ type: z.enum(["user", "team", "organization"]), id }).strict();
 const role = z.enum(["owner", "admin", "member"]);
 const mutationId = id.nullable().optional();
+const selectionCreate = z.object({ name: text(120), description: z.string().max(2000).optional(), memberEntryIds: z.array(id).max(200), clientMutationId: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/).optional() }).strict();
+const selectionUpdate = z.object({ expectedRevision: expectedRevision.max(Number.MAX_SAFE_INTEGER), name: text(120).optional(), description: z.string().max(2000).optional(), memberEntryIds: z.array(id).max(200).optional().describe("Replace the complete ordered membership. An empty array removes all members.") }).strict();
 const page = { limit: z.number().int().min(1).max(100).optional(), cursor: z.string().min(1).max(2048).optional() };
 const bundle = { kind: z.enum(["curated", "source"]), name: text(120), purpose: text(2000), owner, visibility: z.enum(["public", "authenticated", "team", "private"]), memberSlugs: z.array(id).min(1).max(200), sourceEntryId: id.optional() };
 const policy = z.object({ policy: object, expectedRevisionNumber: revision, reason }).strict();
@@ -40,6 +42,10 @@ const fields: Record<string, z.ZodType> = {
   "review.submissions.decide": z.object({ action: z.enum(["approve", "request-changes", "reject", "publish"]), artifactSha256: digest.optional(), reason }).strict(),
   "libraries.create": z.object({ name: text(120), description: z.string().max(2000).optional(), owner: owner.optional(), clientMutationId: mutationId }).strict(),
   "libraries.update": z.object({ expectedRevision, name: text(120).optional(), description: z.string().max(2000).optional() }).strict(),
+  "libraries.collections.create": selectionCreate,
+  "library_collections.update": selectionUpdate,
+  "libraries.groups.create": selectionCreate,
+  "library_groups.update": selectionUpdate,
   "libraries.entries.create": z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("skill"), slug: id, clientMutationId: mutationId }).strict(),
     z.object({ kind: z.literal("source"), url: text(2000), ref: z.object({ kind: z.enum(librarySourceRefKinds), value: z.string().max(256).optional() }).strict().optional(), path: z.string().max(1024).optional(), clientMutationId: mutationId }).strict(),
@@ -118,6 +124,12 @@ const queries: Record<string, z.ZodType> = {
   "bundles.members.list": z.object({ ...page, query: z.string().max(200).optional() }).strict(),
   "libraries.list": z.object(page).strict(),
   "libraries.delete": z.object({ expectedRevision }).strict(),
+  "libraries.collections.list": z.object(page).strict(),
+  "library_collections.members.list": z.object(page).strict(),
+  "library_collections.delete": z.object({ expectedRevision: expectedRevision.max(Number.MAX_SAFE_INTEGER) }).strict(),
+  "libraries.groups.list": z.object(page).strict(),
+  "library_groups.members.list": z.object(page).strict(),
+  "library_groups.delete": z.object({ expectedRevision: expectedRevision.max(Number.MAX_SAFE_INTEGER) }).strict(),
   "libraries.entries.list": z.object({ ...page, kind: z.enum(["source", "skill"]).optional() }).strict(),
   "library_entries.candidates.list": z.object({ ...page, state: z.enum(libraryCandidateStates).optional() }).strict(),
   "library_candidates.get": z.object({ includeContent: z.boolean().optional() }).strict(),
@@ -134,7 +146,7 @@ export function applicationInputSchema(action: DelegatedAction): z.ZodObject {
   if (params.length) shape.path = z.object(Object.fromEntries(params.map((name) => [name, id]))).strict();
   if (queries[action.id]) {
     // Query is required only for deletion concurrency and explicit improvement ownership.
-    shape.query = ["libraries.delete", "improvements.profiles.list", "improvements.suites.list"].includes(action.id) ? queries[action.id] : queries[action.id].optional();
+    shape.query = ["libraries.delete", "library_collections.delete", "library_groups.delete", "improvements.profiles.list", "improvements.suites.list"].includes(action.id) ? queries[action.id] : queries[action.id].optional();
   }
   if (action.method !== "GET" && action.method !== "DELETE") {
     if (!fields[action.id]) throw new Error(`MCP application schema missing: ${action.id}`);

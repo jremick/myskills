@@ -4,10 +4,25 @@ Version: 0.1.0-beta.18
 Last updated: 2026-09-30
 
 This is the deployment runbook for the owner-controlled public beta at `myskills.sh`.
-The current beta.16 delivery is tracked in [Beta.16 Release Delivery](BETA16_RELEASE_DELIVERY.md).
+Production remains beta.16; its delivery is tracked in [Beta.16 Release Delivery](BETA16_RELEASE_DELIVERY.md).
 The historical operational beta evidence remains in [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md).
 
-## Current beta.16 deployment
+## Phase-1 beta.18 staging
+
+On 30 September 2026, `beta2-staging` API, web and MCP were deployed from
+`14970ba10a67f7372b713a3c29a17b8b72d91a24`. Matching API/web identity,
+156 compiled MCP files, the OAuth schema and six routing checks were verified.
+The web build was redeployed after final API readiness to recover from stale
+nginx upstream resolution. See [Beta.18 staging evidence](BETA18_RELEASE_DELIVERY.md#phase-1-staging-evidence)
+for exact deployments, the failed first check and successful recovery.
+
+Collections and migration `0036_library_selections` are absent from that
+staging deployment. Final-candidate staging and real ChatGPT/Claude acceptance
+remain pending. Production was not changed by this rollout.
+
+<a id="current-beta16-deployment"></a>
+
+## Current beta.16 production and prior staging
 
 On 29 September 2026, staging and production were promoted from frozen source
 `acfb7c8c7f8bc560f6fdba13cf0414033ab6d00e` in API-ready-then-web order.
@@ -15,10 +30,10 @@ Later GitHub authentication and team Library changes on main are excluded.
 
 | Environment | API deployment | Web deployment |
 | --- | --- | --- |
-| Staging | `70461dc1-e6b7-4146-9633-07bc5ccdb73f` | `88d64e2b-ad6e-403a-a38c-5998dfc4b7d1` |
+| Staging on 29 September (superseded above) | `70461dc1-e6b7-4146-9633-07bc5ccdb73f` | `88d64e2b-ad6e-403a-a38c-5998dfc4b7d1` |
 | Production | `96e7dc80-b1c4-43ad-a9c1-6d8465f55b30` | `ca6d4399-0cae-4f72-af9e-943ef43ebfc5` |
 
-All four report SUCCESS, beta.16, and the frozen source revision. Each environment
+All four reported SUCCESS, beta.16, and the frozen source revision. Each environment
 passed 21 HTTP checks. Production CLI doctor passed nine checks with the existing
 MFA-verified Keychain session. Desktop browser acceptance preserved owner/MFA
 authentication and verified inventory details, setup commands, and an existing
@@ -285,12 +300,11 @@ Do not deploy this project into any team or work Railway workspace.
 - `registry-backups`: separate private Storage Bucket for coordinated database
   and artifact recovery sets. See [Coordinated registry backups](BACKUPS.md).
 
-The optional HTTP MCP service is not part of the maintained live beta service set.
-Remote MCP connections for ChatGPT and Claude (OAuth) are an opt-in source
-feature that has not been deployed; the web template's `/mcp` and OAuth routes
-are inert until an MCP service and `MYSKILLS_OAUTH_ENABLED` are configured.
+The optional HTTP MCP service is deployed only in `beta2-staging`, built from
+`Dockerfile.mcp`, with OAuth enabled for the phase-1 revision above. Production
+remains on the beta.16 service set. Real ChatGPT/Claude acceptance is pending.
 The enablement, verification and rollback steps are in
-[Remote MCP connections](MCP_CONNECTIONS.md#railway-runbook-not-executed).
+[Remote MCP connections](MCP_CONNECTIONS.md#railway-runbook).
 Web images now read `MCP_PROXY_TARGET` (default `http://127.0.0.1:3002`); leave
 it unset until the MCP service exists, because nginx resolves it at startup.
 

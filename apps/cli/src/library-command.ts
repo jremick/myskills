@@ -11,6 +11,18 @@ const actions: Record<string, Action> = {
   edit: { method: "PATCH", route: "/libraries/:id", input: "required" },
   remove: { method: "DELETE", route: "/libraries/:id" },
   entries: { method: "GET", route: "/libraries/:id/entries" },
+  collections: { method: "GET", route: "/libraries/:id/collections" },
+  collection: { method: "GET", route: "/library-collections/:id" },
+  "collection-members": { method: "GET", route: "/library-collections/:id/members" },
+  "create-collection": { method: "POST", route: "/libraries/:id/collections", input: "required" },
+  "edit-collection": { method: "PATCH", route: "/library-collections/:id", input: "required" },
+  "remove-collection": { method: "DELETE", route: "/library-collections/:id" },
+  groups: { method: "GET", route: "/libraries/:id/groups" },
+  group: { method: "GET", route: "/library-groups/:id" },
+  "group-members": { method: "GET", route: "/library-groups/:id/members" },
+  "create-group": { method: "POST", route: "/libraries/:id/groups", input: "required" },
+  "edit-group": { method: "PATCH", route: "/library-groups/:id", input: "required" },
+  "remove-group": { method: "DELETE", route: "/library-groups/:id" },
   "add-source": { method: "POST", route: "/libraries/:id/entries", input: "required", kind: "source" },
   "add-skill": { method: "POST", route: "/libraries/:id/entries", input: "required", kind: "skill" },
   entry: { method: "GET", route: "/library-entries/:id" },
@@ -45,11 +57,14 @@ const actions: Record<string, Action> = {
 export const libraryCommandHelp = [
   "myskills libraries <action> [id] [--input <request.json>] [--json]",
   "Collect: list, create, show, edit, remove, entries, add-source, add-skill, entry, remove-entry",
+  "Collections: collections, collection, collection-members, create-collection, edit-collection, remove-collection",
+  "Groups: groups, group, group-members, create-group, edit-group, remove-group",
+  "Collection/group create takes a Library ID and body {name, description?, memberEntryIds, clientMutationId?}. Edit takes the entity ID and body {expectedRevision, name?, description?, memberEntryIds?}; memberEntryIds replaces the complete ordered membership, including an empty list. These actions do not adopt or install skills.",
   "Import: discover, preview, candidates, candidate, import, self-review, request-review, ignore",
   "Curate: adopt, adoptions, resolve, tracking, check, subscribe, unsubscribe, inbox, mark-read",
   "Targets: bindings, bind, detach. Admin: settings, set-settings, review-requests, review-bundle, elevate",
   "bind and detach require libraries:bind plus targets:control for scoped credentials; set-settings requires admin:settings. The API also enforces current user permission and MFA assurance.",
-  "List pagination: --cursor <cursor> --limit <1-100>. Remove library: --revision <current revision>.",
+  "List/member pagination: --cursor <cursor> --limit <1-100>. Remove library, collection or group: --revision <current revision>.",
   "Filter entries: --kind source|skill. Filter candidates: --state ready-for-review|blocked|accepted|ignored|superseded|expired.",
   "Filter inbox: --unread true|false.",
   "Writes with a body require a reviewed JSON file. Preserve clientMutationId when retrying creation/import.",
@@ -88,8 +103,8 @@ export function libraryCommandRequest(actionName: string, reference: string | un
     }
   }
   if (actionName === "candidate") query.set("includeContent", "true");
-  if (actionName === "remove") {
-    if (typeof options.revision !== "string" || !/^[1-9]\d*$/.test(options.revision)) throw new Error("Deleting a library requires --revision <current revision>.");
+  if (["remove", "remove-collection", "remove-group"].includes(actionName)) {
+    if (typeof options.revision !== "string" || !/^[1-9]\d*$/.test(options.revision) || !Number.isSafeInteger(Number(options.revision))) throw new Error("Deleting a library, collection or group requires --revision <current revision> as a positive safe integer.");
     query.set("expectedRevision", options.revision);
   }
   const suffix = query.size ? `?${query}` : "";

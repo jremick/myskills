@@ -16,6 +16,10 @@ import {
   type LibraryAdoption,
   type LibraryBinding,
   type LibraryCandidate,
+  type LibraryCollectionSummary,
+  type LibraryGroupSummary,
+  type LibrarySelectionMember,
+  type LibrarySelectionTrackingSummary,
   type LibraryEntry,
   type LibraryEntryResolution,
   type LibraryEventKind,
@@ -52,6 +56,7 @@ import {
   CHECK_LEASE_LOST,
   candidateEvent,
   leaseLostError,
+  selectionNotFound,
   type AdoptionRecord,
   type BindingRecord,
   type CandidateNotification,
@@ -59,6 +64,8 @@ import {
   type EntryRecord,
   type LibraryEventInput,
   type LibraryRecord,
+  type LibrarySelectionKind,
+  type SelectionRecord,
   type LineageRecord,
   type PageCursor,
   type PostgresLibraryStore,
@@ -213,6 +220,116 @@ export class LibraryService implements LibraryAdoptionConstraintSource {
     await this.writableLibrary(libraryId, actor);
     const effects = await this.store.deleteLibrary({ id: libraryId, expectedRevision, actorId: actor.id });
     return { library: { id: libraryId, status: "deleted" as const }, effects };
+  }
+
+  // ---- Library collections and groups -------------------------------------
+
+  async listSelections(actor: LibraryActor, libraryId: string, kind: LibrarySelectionKind, page: { limit: number; cursor: PageCursor | null }) {
+    const { access } = await this.readableLibrary(libraryId, actor);
+    const rows = await this.store.listSelections(libraryId, kind, page);
+    const selected = rows.slice(0, page.limit);
+    const projected = await this.projectSelections(actor, libraryId, access, selected);
+    const last = selected.at(-1);
+    return { selections: selected.map((row) => projected.get(row.id)!.summary), nextCursor: rows.length > page.limit && last ? encodeCursor({ at: last.cursorAt, id: last.id }) : null };
+  }
+
+  async getSelection(actor: LibraryActor, id: string, kind: LibrarySelectionKind) {
+    const { selection, access } = await this.readableSelection(actor, id, kind);
+    return (await this.projectSelections(actor, selection.libraryId, access, [selection])).get(selection.id)!.summary;
+  }
+
+  async listSelectionMembers(actor: LibraryActor, id: string, kind: LibrarySelectionKind, page: { limit: number; cursor: SelectionMemberCursor | null }) {
+    const { selection, access } = await this.readableSelection(actor, id, kind);
+    const projected = (await this.projectSelections(actor, selection.libraryId, access, [selection], true)).get(selection.id)!;
+    // A replacement can commit between the selection and membership reads.
+    // Recheck after projection so its rows and emitted cursor share one revision;
+    // the same read also rejects deletion or loss of Library access.
+    const current = await this.readableSelection(actor, selection.id, kind);
+    if (current.selection.revision !== selection.revision) throw new AppError("The membership changed. Restart this list.", "INVALID_PAGE_CURSOR", 400);
+    // Cursor and positions reference only visible members, never hidden row offsets.
+    const anchor = page.cursor ? projected.members.findIndex((member) => member.entry.id === page.cursor!.id) : -1;
+    if (page.cursor && (page.cursor.at !== selection.cursorAt || page.cursor.revision !== selection.revision || anchor < 0)) throw new AppError("Invalid cursor for this list.", "INVALID_PAGE_CURSOR", 400);
+    const start = anchor + 1;
+    const members = projected.members.slice(start, start + page.limit);
+    const last = members.at(-1);
+    return { members, nextCursor: projected.members.length > start + page.limit && last ? Buffer.from(JSON.stringify([selection.cursorAt, last.entry.id, selection.revision])).toString("base64url") : null };
+  }
+
+  async createSelection(actor: LibraryActor, libraryId: string, kind: LibrarySelectionKind, input: { name: string; description: string; memberEntryIds: string[]; clientMutationId: string | null }) {
+    await this.writableLibrary(libraryId, actor);
+    validateSelectionMembers(input.memberEntryIds);
+    const result = await this.store.createSelection({ libraryId, kind, ...input, actorId: actor.id, mfaVerified: actor.mfaVerified,
+      clientMutationDigest: mutationDigest({ libraryId, kind, name: input.name, description: input.description, memberEntryIds: input.memberEntryIds }) });
+    return { selection: await this.getSelection(actor, result.id, kind), replayed: result.replayed };
+  }
+
+  async updateSelection(actor: LibraryActor, id: string, kind: LibrarySelectionKind, input: { expectedRevision: number; name?: string; description?: string; memberEntryIds?: string[] }) {
+    const { selection, access } = await this.readableSelection(actor, id, kind);
+    requireWrite(access, actor);
+    if (input.memberEntryIds !== undefined) validateSelectionMembers(input.memberEntryIds);
+    await this.store.updateSelection({ id, kind, libraryId: selection.libraryId, ...input, actorId: actor.id, mfaVerified: actor.mfaVerified });
+    return this.getSelection(actor, id, kind);
+  }
+
+  async deleteSelection(actor: LibraryActor, id: string, kind: LibrarySelectionKind, expectedRevision: number) {
+    const { selection, access } = await this.readableSelection(actor, id, kind);
+    requireWrite(access, actor);
+    await this.store.deleteSelection({ id, kind, libraryId: selection.libraryId, expectedRevision, actorId: actor.id, mfaVerified: actor.mfaVerified });
+    return { id, status: "deleted" as const };
+  }
+
+  private async readableSelection(actor: LibraryActor, id: string, kind: LibrarySelectionKind) {
+    const selection = await this.store.getSelection(id, kind);
+    const library = selection ? await this.store.getLibrary(selection.libraryId) : null;
+    const access = library ? await this.libraryAccess(library, actor) : null;
+    if (!selection || !library || !access) throw selectionNotFound(kind);
+    return { selection, library, access };
+  }
+
+  /** Request-local projection: overlapping sets share release checks and source/candidate reads. */
+  private async projectSelections(actor: LibraryActor, libraryId: string, access: LibraryAccess, selections: SelectionRecord[], includeMembers = false) {
+    const rows = await this.store.selectionMembers(selections.map((selection) => selection.id));
+    const uniqueEntries = new Map(rows.map((row) => [row.entry.id, row.entry]));
+    const readable = new Map<string, EntryRecord>();
+    for (const entry of uniqueEntries.values()) if (await this.canReadSkillEntry(entry, access, actor)) readable.set(entry.id, entry);
+    const sources = new Map<string, LibraryEntry>();
+    const sourceIds = [...new Set([...readable.values()].flatMap((entry) => entry.sourceEntryId ? [entry.sourceEntryId] : []))];
+    for (const id of sourceIds) {
+      const source = await this.store.getEntry(id);
+      if (source?.kind === "source" && source.libraryId === libraryId) sources.set(id, await this.toEntry(source, actor));
+    }
+    const counts = access.canWrite && selections.some((selection) => selection.kind === "collection")
+      ? await this.store.selectionCandidateCounts(libraryId, [...readable.keys()], this.clock()) : new Map<string, number>();
+    const members = new Map<string, LibraryEntry>();
+    if (includeMembers) for (const entry of readable.values()) {
+      const projected = await this.toEntry(entry, actor);
+      if (projected.skill?.sourceEntryId && !sources.has(projected.skill.sourceEntryId)) projected.skill.sourceEntryId = null;
+      members.set(entry.id, projected);
+    }
+    const bySelection = new Map<string, EntryRecord[]>();
+    for (const row of rows) if (readable.has(row.entry.id)) {
+      const group = bySelection.get(row.selectionId) ?? [];
+      group.push(row.entry);
+      bySelection.set(row.selectionId, group);
+    }
+    const result = new Map<string, { summary: LibraryGroupSummary | LibraryCollectionSummary; members: LibrarySelectionMember[] }>();
+    for (const selection of selections) {
+      const entries = bySelection.get(selection.id) ?? [];
+      const summary: LibraryGroupSummary = { id: selection.id, libraryId, name: selection.name, description: selection.description, status: "active",
+        revision: selection.revision, memberCount: entries.length, createdAt: selection.createdAt, updatedAt: selection.updatedAt };
+      const selectedSources = [...new Set(entries.flatMap((entry) => entry.sourceEntryId && sources.has(entry.sourceEntryId) ? [entry.sourceEntryId] : []))];
+      const trackingRows = selectedSources.map((id) => sources.get(id)!.tracking!);
+      const health = new Set(trackingRows.map((tracking) => tracking.health));
+      const successful = trackingRows.flatMap((tracking) => tracking.lastSuccessfulCheckAt ? [tracking.lastSuccessfulCheckAt] : []).sort();
+      const next = trackingRows.flatMap((tracking) => tracking.nextCheckAt ? [tracking.nextCheckAt] : []).sort();
+      const tracking: LibrarySelectionTrackingSummary = { sourceEntryIds: selectedSources,
+        health: health.size === 0 ? "not-tracked" : health.size === 1 ? trackingRows[0]!.health : "mixed",
+        pendingCandidateCount: entries.reduce((count, entry) => count + (counts.get(entry.id) ?? 0), 0),
+        lastSuccessfulCheckAt: successful.length === trackingRows.length ? successful[0] ?? null : null, nextCheckAt: next[0] ?? null };
+      result.set(selection.id, { summary: selection.kind === "collection" ? { ...summary, tracking } : summary,
+        members: includeMembers ? entries.map((entry, position) => ({ entry: members.get(entry.id)!, position })) : [] });
+    }
+    return result;
   }
 
   // ---- Entries ------------------------------------------------------------
@@ -1618,12 +1735,36 @@ function toBinding(record: BindingRecord): LibraryBinding {
   };
 }
 
+function validateSelectionMembers(ids: string[]): void {
+  if (!Array.isArray(ids) || ids.length > LIBRARY_LIMITS.maxSelectionMembers || new Set(ids).size !== ids.length
+    || ids.some((id) => typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) {
+    throw new AppError("Members must be distinct readable active skill entries in this Library.", "LIBRARY_SELECTION_MEMBER_INVALID", 400);
+  }
+}
+
 function mutationDigest(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
 export function encodeCursor(cursor: PageCursor): string {
   return Buffer.from(JSON.stringify([cursor.at, cursor.id])).toString("base64url");
+}
+
+export interface SelectionMemberCursor extends PageCursor { revision: number }
+
+/** Member pages are bound to the organizational revision as well as a visible anchor. */
+export function decodeSelectionMemberCursor(input: unknown): SelectionMemberCursor | null {
+  if (input === undefined || input === null || input === "") return null;
+  try {
+    if (typeof input !== "string" || input.length > 200) throw new Error("invalid");
+    const value: unknown = JSON.parse(Buffer.from(input, "base64url").toString("utf8"));
+    if (!Array.isArray(value) || value.length !== 3 || !Number.isSafeInteger(value[2]) || value[2] < 1) throw new Error("invalid");
+    const cursor = decodeCursor(Buffer.from(JSON.stringify(value.slice(0, 2))).toString("base64url"));
+    if (!cursor) throw new Error("invalid");
+    return { ...cursor, revision: value[2] as number };
+  } catch {
+    throw new AppError("Invalid cursor for this list.", "INVALID_PAGE_CURSOR", 400);
+  }
 }
 
 export function decodeCursor(input: unknown): PageCursor | null {

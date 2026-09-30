@@ -1,8 +1,9 @@
 # Remote MCP connections (ChatGPT, Claude and other hosts)
 
-Status: opt-in source feature. It is **not deployed** to the hosted beta, and
-no ChatGPT or Claude acceptance has been performed. See
-[MCP Connections Delivery](MCP_CONNECTIONS_DELIVERY.md) for evidence and gates.
+Status: opt-in feature deployed to phase-1 Railway staging. Production remains
+beta.16; Collections are not in that staging deployment, and real ChatGPT/Claude
+acceptance is pending. See [Beta.18 staging evidence](BETA18_RELEASE_DELIVERY.md#phase-1-staging-evidence)
+and [MCP Connections Delivery](MCP_CONNECTIONS_DELIVERY.md) for evidence and gates.
 
 The UI is the baseline for authorized user outcomes. Coverage is maintained in
 **API → CLI → MCP** order in the [capability matrix](CAPABILITY_PARITY.md).
@@ -171,9 +172,14 @@ work (for example the API as issuer and a dedicated MCP host) when each host
 routes the paths above to the right service and the consent origin carries
 the MySkills session cookie.
 
-## Railway runbook (not executed)
+<a id="railway-runbook-not-executed"></a>
 
-These steps describe a future change; they were not performed. Follow
+## Railway runbook
+
+The phase-1 staging rollout was completed on 30 September 2026 at
+`14970ba10a67f7372b713a3c29a17b8b72d91a24`; see the
+[staging evidence](BETA18_RELEASE_DELIVERY.md#phase-1-staging-evidence).
+Collections staging and real provider acceptance remain pending. Follow
 [Railway Deployment](RAILWAY_DEPLOYMENT.md) and [Release](RELEASE.md) for
 staging-first promotion, backups and API-ready-then-web order.
 
@@ -197,6 +203,11 @@ staging-first promotion, backups and API-ready-then-web order.
    dynamic registration with `MYSKILLS_OAUTH_REDIRECT_HOSTS` limited to the
    provider hosts you intend to support, and/or `MYSKILLS_OAUTH_CLIENTS`.
    Run `npm run check:prod-env -- --env-file <file>` against the planned values.
+   Wait for the final API restart after enabling OAuth to become ready. Then
+   restart or redeploy web from the same source revision before the routing
+   checks. The current nginx configuration resolves `API_PROXY_TARGET` at
+   startup; an API restart can otherwise leave web pointing at the previous
+   private address.
 5. Verify routing and public URL consistency from outside the platform:
    `node scripts/check-mcp-oauth-routing.mjs --origin https://skills.example.com`.
    It must pass all six checks. Then sign in, open Settings and confirm the

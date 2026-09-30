@@ -14,6 +14,8 @@ const reviewedScreenshots = new Set([
   "author-review-feedback.png", "consumer-published-package.png", "maintainer-unpublished-history.png",
   "maintainer-archived-inventory.png", "blocked-upgrade-policy.png", "consumer-revoked-package.png",
   "persistent-library-mobile.png",
+  "collection-tracking-desktop.png", "group-mobile.png",
+  "persistent-group-mobile.png", "persistent-group-desktop.png",
   "branding-desktop.png", "branding-mobile.png",
 ]);
 

@@ -1,10 +1,12 @@
-import type { LibrarySummary, LibraryEntry, LibraryCandidate, LibraryAdoption, LibraryBinding, LibraryInboxItem, LibraryAdminSettings, LibraryEventKind, LibraryImportReleaseInput, LibrarySourceRefKind, LibraryTrackingMode, SourceDiscovery, SourceCheckResult } from "@myskills-app/core";
+import type { LibrarySummary, LibraryEntry, LibraryCandidate, LibraryAdoption, LibraryBinding, LibraryInboxItem, LibraryAdminSettings, LibraryEventKind, LibraryImportReleaseInput, LibrarySourceRefKind, LibraryTrackingMode, SourceDiscovery, SourceCheckResult, LibraryCollectionSummary, LibraryGroupSummary, LibrarySelectionMember } from "@myskills-app/core";
 import { requestJson, requestJsonWithHeaders } from "./api.js";
 
 export interface LibraryPage<T> { nextCursor: string | null; items: T[] }
 export interface LibraryPreview { id: string; candidates: LibraryCandidate[]; expiresAt: string }
 export interface LibrarySettingsResponse { settings: LibraryAdminSettings; worker?: { configured: boolean; overdueTrackCount: number; oldestOverdueCheckAt: string | null } }
 export interface SelfReviewedRelease { submissionId: string; slug: string; version: string; artifactSha256: string; selfReviewedAt: string; elevationRequestedAt: string }
+export interface LibrarySelectionInput { name: string; description?: string; memberEntryIds: string[]; clientMutationId?: string }
+export interface LibrarySelectionUpdate { expectedRevision: number; name?: string; description?: string; memberEntryIds?: string[] }
 const id = encodeURIComponent;
 
 export function createLibraryClient(root: string, fetchImpl: typeof fetch, token?: string) {
@@ -26,6 +28,18 @@ export function createLibraryClient(root: string, fetchImpl: typeof fetch, token
     update: (libraryId: string, input: { name: string; description: string; expectedRevision: number }) => send<{ library: LibrarySummary }>(`/libraries/${id(libraryId)}`, "PATCH", input),
     remove: (libraryId: string, revision: number) => send(`/libraries/${id(libraryId)}?expectedRevision=${revision}`, "DELETE"),
     entries: (libraryId: string, cursor?: string) => get<{ entries: LibraryEntry[]; nextCursor: string | null }>(`/libraries/${id(libraryId)}/entries?limit=50${cursor ? `&cursor=${id(cursor)}` : ""}`),
+    collections: (libraryId: string, cursor?: string) => get<{ collections: LibraryCollectionSummary[]; nextCursor: string | null }>(`/libraries/${id(libraryId)}/collections?limit=50${cursor ? `&cursor=${id(cursor)}` : ""}`),
+    collection: (selectionId: string) => get<{ collection: LibraryCollectionSummary }>(`/library-collections/${id(selectionId)}`),
+    createCollection: (libraryId: string, input: LibrarySelectionInput) => send<{ collection: LibraryCollectionSummary; replayed: boolean }>(`/libraries/${id(libraryId)}/collections`, "POST", input),
+    updateCollection: (selectionId: string, input: LibrarySelectionUpdate) => send<{ collection: LibraryCollectionSummary }>(`/library-collections/${id(selectionId)}`, "PATCH", input),
+    removeCollection: (selectionId: string, revision: number) => send(`/library-collections/${id(selectionId)}?expectedRevision=${revision}`, "DELETE"),
+    collectionMembers: (selectionId: string, cursor?: string) => get<{ members: LibrarySelectionMember[]; nextCursor: string | null }>(`/library-collections/${id(selectionId)}/members?limit=50${cursor ? `&cursor=${id(cursor)}` : ""}`),
+    groups: (libraryId: string, cursor?: string) => get<{ groups: LibraryGroupSummary[]; nextCursor: string | null }>(`/libraries/${id(libraryId)}/groups?limit=50${cursor ? `&cursor=${id(cursor)}` : ""}`),
+    group: (selectionId: string) => get<{ group: LibraryGroupSummary }>(`/library-groups/${id(selectionId)}`),
+    createGroup: (libraryId: string, input: LibrarySelectionInput) => send<{ group: LibraryGroupSummary; replayed: boolean }>(`/libraries/${id(libraryId)}/groups`, "POST", input),
+    updateGroup: (selectionId: string, input: LibrarySelectionUpdate) => send<{ group: LibraryGroupSummary }>(`/library-groups/${id(selectionId)}`, "PATCH", input),
+    removeGroup: (selectionId: string, revision: number) => send(`/library-groups/${id(selectionId)}?expectedRevision=${revision}`, "DELETE"),
+    groupMembers: (selectionId: string, cursor?: string) => get<{ members: LibrarySelectionMember[]; nextCursor: string | null }>(`/library-groups/${id(selectionId)}/members?limit=50${cursor ? `&cursor=${id(cursor)}` : ""}`),
     entry: (entryId: string) => get<{ entry: LibraryEntry }>(`/library-entries/${id(entryId)}`),
     addSource: (libraryId: string, input: { url: string; path?: string; ref?: { kind: LibrarySourceRefKind; value?: string }; clientMutationId: string }) => send<{ entry: LibraryEntry }>(`/libraries/${id(libraryId)}/entries`, "POST", { kind: "source", ...input }),
     addSkill: (libraryId: string, slug: string, clientMutationId: string) => send<{ entry: LibraryEntry }>(`/libraries/${id(libraryId)}/entries`, "POST", { kind: "skill", slug, clientMutationId }),
@@ -70,6 +84,12 @@ export function libraryError(error: unknown): string {
     SELF_REVIEWED_RELEASE_REQUIRES_INSTANCE_REVIEW: "Request instance review before sharing this privately reviewed release.",
     MFA_VERIFICATION_REQUIRED: "Verify MFA in your account before continuing.",
     SUBMISSION_ROLE_REQUIRED: "An author role is required to submit this import.",
+    LIBRARY_COLLECTION_NOT_FOUND: "This collection is unavailable or you no longer have access.",
+    LIBRARY_GROUP_NOT_FOUND: "This group is unavailable or you no longer have access.",
+    LIBRARY_COLLECTION_REVISION_CONFLICT: "This collection changed. Refresh and review it before retrying.",
+    LIBRARY_GROUP_REVISION_CONFLICT: "This group changed. Refresh and review it before retrying.",
+    LIBRARY_SELECTION_MEMBER_INVALID: "Some selected skills are no longer available. Refresh and choose the members again.",
+    LIBRARY_SELECTION_LIMIT_EXCEEDED: "The library allows up to 100 collections and 100 groups, with up to 200 skills in each.",
     LIBRARY_REVISION_CONFLICT: "This library changed. Refresh before retrying.",
     LIBRARY_ADOPTION_CONFLICT: "The adopted version changed. Refresh and review it before retrying.",
     PREVIEW_EXPIRED: "This preview expired. Discover the source and preview it again.",
