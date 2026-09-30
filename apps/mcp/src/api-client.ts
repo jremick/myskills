@@ -216,7 +216,7 @@ export function createRegistryApiClient(options: RegistryApiClientOptions = {}):
       return requestJson<Record<string, unknown>>(fetchImpl, token, `${baseUrl}${path}${params.size ? `?${params}` : ""}`, {
         method: action.method, body: input.body, signal,
         maxBytes: action.id.endsWith(".export") ? NATIVE_API_BUNDLE_BYTES : NATIVE_API_METADATA_BYTES,
-        ...(action.id.endsWith(".export") ? { artifactDigest: action.id.startsWith("review.") ? "required" as const : "computed" as const } : {}),
+        ...(action.id.endsWith(".export") ? { artifactDigest: action.id.startsWith("review.") || action.id === "skills.releases.export" ? "required" as const : "computed" as const } : {}),
       });
     },
     async searchSkills(input) {

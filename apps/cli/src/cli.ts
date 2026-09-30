@@ -160,7 +160,7 @@ export interface CliConfigStore {
 
 export type FetchLike = (
   input: string,
-  init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal },
+  init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal; redirect?: "error" },
 ) => Promise<{
   headers?: Headers | Record<string, string>;
   ok: boolean;
@@ -3626,7 +3626,7 @@ async function downloadVerifiedBundle(input: {
   const release = releaseMetadata(releaseResponse, { slug, version });
   const platform = selectReleasePlatform(release, input.platform);
   const bundleText = await apiGetText(
-    `/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}/bundle?platform=${encodeURIComponent(platform.name)}`,
+    `/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}/bundle?platform=${encodeURIComponent(platform.name)}&sha256=${release.artifact.sha256}`,
     parsed,
     runtime,
     token,

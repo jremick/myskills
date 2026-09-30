@@ -56,7 +56,7 @@ test("S3 artifact storage maps put and get commands without network", async () =
             ContentType: PACKAGE_CONTENT_TYPE,
             Metadata: { sha256: createHash("sha256").update(storedBody).digest("hex") },
             Body: {
-              transformToString: async () => storedBody,
+              transformToWebStream: () => new ReadableStream({ start(controller) { controller.enqueue(Buffer.from(storedBody)); controller.close(); } }),
             },
           };
         }
@@ -143,7 +143,7 @@ test("S3 PUT, GET, and DELETE abort and return within their operation deadline",
 
 test("S3 GET bounds response-body consumption after headers arrive and destroys a stalled Node stream", async () => {
   let destroyed = false;
-  let failBody!: (error: Error) => void;
+    let failBody!: (error: Error) => void;
   const storage = new S3ArtifactObjectStorage({
     bucket: "timeout-fixture",
     requestTimeoutMs: 15,
@@ -152,7 +152,7 @@ test("S3 GET bounds response-body consumption after headers arrive and destroys 
         return {
           ContentType: PACKAGE_CONTENT_TYPE,
           Body: {
-            transformToString: () => new Promise<string>((_, reject) => { failBody = reject; }),
+            transformToWebStream: () => new ReadableStream({ start(controller) { failBody = (error) => controller.error(error); } }),
             destroy(error: Error) { destroyed = true; failBody(error); },
           },
         };

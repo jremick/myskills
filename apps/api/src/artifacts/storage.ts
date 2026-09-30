@@ -1,6 +1,10 @@
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { createHash, randomUUID } from "node:crypto";
 
+export const MAX_ARTIFACT_OBJECT_BYTES = 10 * 1024 * 1024;
+
+export class ArtifactStorageIntegrityError extends Error {}
+
 export class ArtifactStorageTimeoutError extends Error {
   constructor() {
     super("Artifact storage request timed out.");
@@ -16,7 +20,7 @@ export interface ArtifactObjectStorage {
     contentType: string;
     sha256: string;
   }): Promise<void>;
-  getObject(key: string): Promise<ArtifactObject>;
+  getObject(key: string, options?: { maxBytes: number }): Promise<ArtifactObject>;
   deleteObject(key: string): Promise<void>;
   checkReady(): Promise<void>;
 }
@@ -41,10 +45,13 @@ export class MemoryArtifactObjectStorage implements ArtifactObjectStorage {
     });
   }
 
-  async getObject(key: string): Promise<ArtifactObject> {
+  async getObject(key: string, options?: { maxBytes: number }): Promise<ArtifactObject> {
     const object = this.objects.get(key);
     if (!object) {
       throw new Error("Artifact object not found.");
+    }
+    if (Buffer.byteLength(object.body) > artifactByteLimit(options?.maxBytes)) {
+      throw new ArtifactStorageIntegrityError("Artifact object exceeds its byte limit.");
     }
     return {
       body: object.body,
@@ -90,15 +97,26 @@ export class S3ArtifactObjectStorage implements ArtifactObjectStorage {
     }), { abortSignal }));
   }
 
-  async getObject(key: string): Promise<ArtifactObject> {
+  async getObject(key: string, options?: { maxBytes: number }): Promise<ArtifactObject> {
+    const maxBytes = artifactByteLimit(options?.maxBytes);
     return this.withRequestTimeout(async (abortSignal) => {
       const response = await this.options.client.send(new GetObjectCommand({
         Bucket: this.options.bucket,
         Key: key,
       }), { abortSignal });
       if (!response.Body) throw new Error("Artifact object body is empty.");
-      if (!response.ContentType) throw new Error("Artifact object content type is empty.");
       const body = response.Body;
+      const destroyBody = () => {
+        if ("destroy" in body && typeof body.destroy === "function") body.destroy();
+      };
+      if (!response.ContentType) {
+        destroyBody();
+        throw new Error("Artifact object content type is empty.");
+      }
+      if (response.ContentLength !== undefined && response.ContentLength > maxBytes) {
+        if ("destroy" in body && typeof body.destroy === "function") body.destroy();
+        throw new ArtifactStorageIntegrityError("Artifact object exceeds its byte limit.");
+      }
       if (abortSignal.aborted) {
         if ("destroy" in body && typeof body.destroy === "function") body.destroy();
         throw new ArtifactStorageTimeoutError();
@@ -109,14 +127,40 @@ export class S3ArtifactObjectStorage implements ArtifactObjectStorage {
         if ("destroy" in body && typeof body.destroy === "function") body.destroy(new ArtifactStorageTimeoutError());
       };
       abortSignal.addEventListener("abort", abortBody, { once: true });
+      let reader: ReadableStreamDefaultReader<Uint8Array>;
       try {
+        reader = body.transformToWebStream().getReader();
+      } catch (error) {
+        abortSignal.removeEventListener("abort", abortBody);
+        destroyBody();
+        throw error;
+      }
+      try {
+        const chunks: Uint8Array[] = [];
+        let byteSize = 0;
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          byteSize += chunk.value.byteLength;
+          if (byteSize > maxBytes) throw new ArtifactStorageIntegrityError("Artifact object exceeds its byte limit.");
+          chunks.push(chunk.value);
+        }
+        let text: string;
+        try {
+          text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(Buffer.concat(chunks, byteSize));
+        } catch {
+          throw new ArtifactStorageIntegrityError("Artifact object is not valid UTF-8.");
+        }
         return {
-          body: await body.transformToString(),
+          body: text,
           contentType: response.ContentType,
           sha256: response.Metadata?.sha256,
         };
       } finally {
         abortSignal.removeEventListener("abort", abortBody);
+        // Do not wait on an uncooperative upstream cancellation promise.
+        void reader.cancel().catch(() => {});
+        reader.releaseLock();
       }
     });
   }
@@ -184,6 +228,13 @@ export class S3ArtifactObjectStorage implements ArtifactObjectStorage {
     }
     this.readyUntil = Date.now() + 30_000;
   }
+}
+
+function artifactByteLimit(requested = MAX_ARTIFACT_OBJECT_BYTES): number {
+  if (!Number.isSafeInteger(requested) || requested < 1 || requested > MAX_ARTIFACT_OBJECT_BYTES) {
+    throw new ArtifactStorageIntegrityError("Artifact object byte limit is invalid.");
+  }
+  return requested;
 }
 
 export function createArtifactObjectStorageFromEnv(env: NodeJS.ProcessEnv): ArtifactObjectStorage | undefined {

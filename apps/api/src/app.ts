@@ -1,4 +1,5 @@
 import { registerBundleRoutes } from "./bundles/routes.js";
+import { readAuthorizedArtifactBundle } from "./artifacts/delivery.js";
 import type { BundleService } from "./bundles/service.js";
 import { parseChronologicalPageQuery } from "./repositories/chronological-pagination.js";
 import { parseSkillPageQuery, searchVisibleSkillPage } from "./repositories/skill-pagination.js";
@@ -960,16 +961,19 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   });
 
   app.get("/v1/skills/:slug/releases/:version/bundle", async (request, reply) => {
+    reply.header("cache-control", "no-store");
     if (!options.submissionService) {
       throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
     }
     const params = parseReleaseParams(request.params);
     const query = parseBundleQuery(request.query);
-    const user = await authenticateOptionalRegistryReader(options.authService, requestAuthorization(request));
-    const bundle = await options.submissionService.getPublicBundle({
+    const bundle = await readAuthorizedArtifactBundle({
+      authService: options.authService,
+      submissionService: options.submissionService,
+      authorization: requestAuthorization(request),
       ...params,
       platform: query.platform,
-      actorId: user?.id ?? null,
+      expectedSha256: (request.query as Record<string, unknown>).sha256,
     });
     if (!bundle) {
       return reply.code(404).send({
@@ -980,8 +984,10 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       });
     }
     return reply
+      .header("x-myskills-artifact-sha256", bundle.artifact.sha256)
+      .header("content-length", String(Buffer.byteLength(bundle.body)))
       .type(bundle.artifact.contentType)
-      .send(bundle.payload);
+      .send(bundle.body);
   });
 
   app.get("/v1/skills/:slug", async (request, reply) => {

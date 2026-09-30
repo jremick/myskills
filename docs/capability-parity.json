@@ -23,7 +23,7 @@
           "method": "GET",
           "path": "/v1/skills",
           "source": "apps/api/src/app.ts",
-          "line": 919
+          "line": 920
         }
       ],
       "api": {
@@ -127,7 +127,7 @@
           "method": "GET",
           "path": "/v1/skills/:slug",
           "source": "apps/api/src/app.ts",
-          "line": 987
+          "line": 993
         }
       ],
       "api": {
@@ -223,7 +223,7 @@
           "method": "GET",
           "path": "/v1/skills/:slug/releases",
           "source": "apps/api/src/app.ts",
-          "line": 928
+          "line": 929
         }
       ],
       "api": {
@@ -319,7 +319,7 @@
           "method": "GET",
           "path": "/v1/skills/:slug/releases/:version",
           "source": "apps/api/src/app.ts",
-          "line": 941
+          "line": 942
         }
       ],
       "api": {
@@ -423,22 +423,30 @@
           "method": "GET",
           "path": "/v1/skills/:slug/releases/:version/bundle",
           "source": "apps/api/src/app.ts",
-          "line": 962
+          "line": 963
         }
       ],
       "api": {
         "status": "A",
-        "detail": "See route inventory",
+        "detail": "Exact API-proxied bytes; optional expected SHA-256, no-store, digest/size headers, final credential/scope and release-policy checks after storage.",
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: See route inventory. Runtime parity is not implied."
+          },
+          {
+            "level": "runtime",
+            "detail": "Real API/MCP sockets with memory domain stores passed exact old/new release, stale digest prefetch denial, invalid bearer, mid-read token/account/scope/membership/policy/lifecycle changes, altered bytes and expiry. No PostgreSQL, deployed object storage or real-host proof.",
+            "source": {
+              "path": "apps/mcp/test/trust-delivery.e2e.test.ts",
+              "line": 25
+            }
           }
         ]
       },
       "cli": {
         "status": "A",
-        "detail": "export validates bundle; install also downloads",
+        "detail": "export/install bind the release metadata digest in the bundle request and verify exact downloaded digest/size.",
         "source": {
           "path": "apps/cli/src/cli.ts",
           "line": 1913,
@@ -468,7 +476,7 @@
       },
       "mcp_api_token": {
         "status": "A",
-        "detail": "skills_releases_export",
+        "detail": "skills_releases_export verifies API digest header; native Skills binds exact digest and rechecks API policy on each resource read.",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
           "line": 96
@@ -480,6 +488,14 @@
             "source": {
               "path": "apps/mcp/src/application-tools.ts",
               "line": 1
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "Real SDK HTTP native Skills with actual API and memory domain stores: mixed public/team/private releases, digest/traversal/origin/resource bounds, privileged scope denial and revocation. Generic export verifies API digest header. Native human hosts remain unverified.",
+            "source": {
+              "path": "apps/mcp/test/trust-delivery.e2e.test.ts",
+              "line": 92
             }
           }
         ]
@@ -507,7 +523,7 @@
       "delegated_action_ids": [
         "skills.releases.export"
       ],
-      "initial_authorization": "Visible resource; skills:read for token requests; active account and resource policy still apply. Exact artifact digest and lifecycle gates apply."
+      "initial_authorization": "Visible exact release; skills:read for scoped credentials; no anonymous fallback for supplied invalid credentials. Credential/scope, digest/size, visibility, platform and lifecycle rechecked after storage within a 15-second delivery window."
     },
     {
       "id": "REG-06",
@@ -519,13 +535,13 @@
           "method": "GET",
           "path": "/v1/manage/skills",
           "source": "apps/api/src/app.ts",
-          "line": 2209
+          "line": 2215
         },
         {
           "method": "GET",
           "path": "/v1/manage/skills/:slug",
           "source": "apps/api/src/app.ts",
-          "line": 2224
+          "line": 2230
         }
       ],
       "api": {
@@ -629,7 +645,7 @@
           "method": "PUT",
           "path": "/v1/skills/:slug",
           "source": "apps/api/src/app.ts",
-          "line": 1002
+          "line": 1008
         }
       ],
       "api": {
@@ -733,7 +749,7 @@
           "method": "POST",
           "path": "/v1/skills/:slug/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1059
+          "line": 1065
         }
       ],
       "api": {
@@ -829,7 +845,7 @@
           "method": "POST",
           "path": "/v1/skills/:slug/releases/:version/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1084
+          "line": 1090
         }
       ],
       "api": {
@@ -925,13 +941,13 @@
           "method": "GET",
           "path": "/v1/skills/:slug/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1110
+          "line": 1116
         },
         {
           "method": "PUT",
           "path": "/v1/skills/:slug/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1127
+          "line": 1133
         }
       ],
       "api": {
@@ -1452,7 +1468,7 @@
           "method": "POST",
           "path": "/v1/submissions",
           "source": "apps/api/src/app.ts",
-          "line": 2353
+          "line": 2359
         }
       ],
       "api": {
@@ -1548,7 +1564,7 @@
           "method": "GET",
           "path": "/v1/submissions/mine",
           "source": "apps/api/src/app.ts",
-          "line": 2277
+          "line": 2283
         }
       ],
       "api": {
@@ -1644,7 +1660,7 @@
           "method": "GET",
           "path": "/v1/submissions/:id",
           "source": "apps/api/src/app.ts",
-          "line": 2241
+          "line": 2247
         }
       ],
       "api": {
@@ -1747,7 +1763,7 @@
           "method": "GET",
           "path": "/v1/submissions/:id/bundle",
           "source": "apps/api/src/app.ts",
-          "line": 2296
+          "line": 2302
         }
       ],
       "api": {
@@ -1850,7 +1866,7 @@
           "method": "POST",
           "path": "/v1/submissions/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 2328
+          "line": 2334
         }
       ],
       "api": {
@@ -1946,7 +1962,7 @@
           "method": "GET",
           "path": "/v1/review/submissions",
           "source": "apps/api/src/app.ts",
-          "line": 2379
+          "line": 2385
         }
       ],
       "api": {
@@ -2050,7 +2066,7 @@
           "method": "GET",
           "path": "/v1/review/submissions/:id",
           "source": "apps/api/src/app.ts",
-          "line": 2258
+          "line": 2264
         }
       ],
       "api": {
@@ -2153,7 +2169,7 @@
           "method": "GET",
           "path": "/v1/review/submissions/:id/bundle",
           "source": "apps/api/src/app.ts",
-          "line": 2398
+          "line": 2404
         }
       ],
       "api": {
@@ -2249,7 +2265,7 @@
           "method": "POST",
           "path": "/v1/review/submissions/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 2433
+          "line": 2439
         }
       ],
       "api": {
@@ -5408,7 +5424,7 @@
           "method": "GET",
           "path": "/v1/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1940
+          "line": 1946
         }
       ],
       "api": {
@@ -5512,7 +5528,7 @@
           "method": "POST",
           "path": "/v1/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1954
+          "line": 1960
         }
       ],
       "api": {
@@ -5616,13 +5632,13 @@
           "method": "POST",
           "path": "/v1/teams/:id/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1997
+          "line": 2003
         },
         {
           "method": "POST",
           "path": "/v1/teams/invitations/:id/accept",
           "source": "apps/api/src/app.ts",
-          "line": 2083
+          "line": 2089
         }
       ],
       "api": {
@@ -5727,7 +5743,7 @@
           "method": "DELETE",
           "path": "/v1/teams/:teamId/invitations/:invitationId",
           "source": "apps/api/src/app.ts",
-          "line": 2019
+          "line": 2025
         }
       ],
       "api": {
@@ -5825,13 +5841,13 @@
           "method": "PUT",
           "path": "/v1/teams/:teamId/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 2041
+          "line": 2047
         },
         {
           "method": "DELETE",
           "path": "/v1/teams/:teamId/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 2062
+          "line": 2068
         }
       ],
       "api": {
@@ -5930,7 +5946,7 @@
           "method": "GET",
           "path": "/v1/teams/shared-skills",
           "source": "apps/api/src/app.ts",
-          "line": 2103
+          "line": 2109
         }
       ],
       "api": {
@@ -6026,13 +6042,13 @@
           "method": "GET",
           "path": "/v1/organizations",
           "source": "apps/api/src/app.ts",
-          "line": 1621
+          "line": 1627
         },
         {
           "method": "GET",
           "path": "/v1/organizations/:id",
           "source": "apps/api/src/app.ts",
-          "line": 1687
+          "line": 1693
         }
       ],
       "api": {
@@ -6136,13 +6152,13 @@
           "method": "POST",
           "path": "/v1/organizations",
           "source": "apps/api/src/app.ts",
-          "line": 1635
+          "line": 1641
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1878
+          "line": 1884
         }
       ],
       "api": {
@@ -6246,19 +6262,19 @@
           "method": "GET",
           "path": "/v1/organizations/:id/members",
           "source": "apps/api/src/app.ts",
-          "line": 1704
+          "line": 1710
         },
         {
           "method": "GET",
           "path": "/v1/organizations/:id/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1721
+          "line": 1727
         },
         {
           "method": "GET",
           "path": "/v1/organizations/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1655
+          "line": 1661
         }
       ],
       "api": {
@@ -6363,13 +6379,13 @@
           "method": "POST",
           "path": "/v1/organizations/:id/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1738
+          "line": 1744
         },
         {
           "method": "POST",
           "path": "/v1/organizations/invitations/:id/accept",
           "source": "apps/api/src/app.ts",
-          "line": 1669
+          "line": 1675
         }
       ],
       "api": {
@@ -6473,13 +6489,13 @@
           "method": "PUT",
           "path": "/v1/organizations/:id/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 1758
+          "line": 1764
         },
         {
           "method": "DELETE",
           "path": "/v1/organizations/:id/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 1776
+          "line": 1782
         }
       ],
       "api": {
@@ -6583,19 +6599,19 @@
           "method": "GET",
           "path": "/v1/organizations/:id/policy-revisions",
           "source": "apps/api/src/app.ts",
-          "line": 1794
+          "line": 1800
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/policy-revisions",
           "source": "apps/api/src/app.ts",
-          "line": 1837
+          "line": 1843
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/policy-revisions/:revisionId/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1856
+          "line": 1862
         }
       ],
       "api": {
@@ -6700,19 +6716,19 @@
           "method": "GET",
           "path": "/v1/organizations/:id/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1899
+          "line": 1905
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1921
+          "line": 1927
         },
         {
           "method": "PUT",
           "path": "/v1/teams/:id/organization",
           "source": "apps/api/src/app.ts",
-          "line": 1975
+          "line": 1981
         }
       ],
       "api": {
@@ -6817,13 +6833,13 @@
           "method": "GET",
           "path": "/v1/organizations/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 1811
+          "line": 1817
         },
         {
           "method": "PUT",
           "path": "/v1/organizations/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 1822
+          "line": 1828
         }
       ],
       "api": {
@@ -6927,7 +6943,7 @@
           "method": "GET",
           "path": "/v1/architecture-patterns",
           "source": "apps/api/src/app.ts",
-          "line": 383
+          "line": 384
         }
       ],
       "api": {
@@ -7023,7 +7039,7 @@
           "method": "GET",
           "path": "/v1/architectures",
           "source": "apps/api/src/app.ts",
-          "line": 387
+          "line": 388
         }
       ],
       "api": {
@@ -7119,19 +7135,19 @@
           "method": "GET",
           "path": "/v1/architectures/:id",
           "source": "apps/api/src/app.ts",
-          "line": 416
+          "line": 417
         },
         {
           "method": "GET",
           "path": "/v1/architectures/:id/revisions",
           "source": "apps/api/src/app.ts",
-          "line": 439
+          "line": 440
         },
         {
           "method": "GET",
           "path": "/v1/architectures/:id/revisions/:revisionId",
           "source": "apps/api/src/app.ts",
-          "line": 643
+          "line": 644
         }
       ],
       "api": {
@@ -7262,7 +7278,7 @@
           "method": "POST",
           "path": "/v1/architectures",
           "source": "apps/api/src/app.ts",
-          "line": 395
+          "line": 396
         }
       ],
       "api": {
@@ -7364,7 +7380,7 @@
           "method": "POST",
           "path": "/v1/architectures/:id/revisions",
           "source": "apps/api/src/app.ts",
-          "line": 449
+          "line": 450
         }
       ],
       "api": {
@@ -7493,7 +7509,7 @@
           "method": "POST",
           "path": "/v1/architectures/:id/preview",
           "source": "apps/api/src/app.ts",
-          "line": 655
+          "line": 656
         }
       ],
       "api": {
@@ -7606,7 +7622,7 @@
           "method": "POST",
           "path": "/v1/architectures/:id/draft-preview",
           "source": "apps/api/src/app.ts",
-          "line": 510
+          "line": 511
         }
       ],
       "api": {
@@ -7726,13 +7742,13 @@
           "method": "GET",
           "path": "/v1/architectures/:id/organization-grants",
           "source": "apps/api/src/app.ts",
-          "line": 587
+          "line": 588
         },
         {
           "method": "PUT",
           "path": "/v1/architectures/:id/organization-grants",
           "source": "apps/api/src/app.ts",
-          "line": 597
+          "line": 598
         }
       ],
       "api": {
@@ -7852,13 +7868,13 @@
           "method": "POST",
           "path": "/v1/architectures/:id/pattern-migrations/preview",
           "source": "apps/api/src/app.ts",
-          "line": 611
+          "line": 612
         },
         {
           "method": "POST",
           "path": "/v1/architectures/:id/pattern-migrations",
           "source": "apps/api/src/app.ts",
-          "line": 629
+          "line": 630
         }
       ],
       "api": {
@@ -7978,13 +7994,13 @@
           "method": "GET",
           "path": "/v1/architecture-targets",
           "source": "apps/api/src/app.ts",
-          "line": 718
+          "line": 719
         },
         {
           "method": "GET",
           "path": "/v1/architecture-targets/:id",
           "source": "apps/api/src/app.ts",
-          "line": 737
+          "line": 738
         }
       ],
       "api": {
@@ -8088,13 +8104,13 @@
           "method": "POST",
           "path": "/v1/architecture-targets",
           "source": "apps/api/src/app.ts",
-          "line": 726
+          "line": 727
         },
         {
           "method": "POST",
           "path": "/v1/architecture-targets/:id/consent",
           "source": "apps/api/src/app.ts",
-          "line": 748
+          "line": 749
         }
       ],
       "api": {
@@ -8198,7 +8214,7 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/observations",
           "source": "apps/api/src/app.ts",
-          "line": 763
+          "line": 764
         }
       ],
       "api": {
@@ -8301,7 +8317,7 @@
           "method": "POST",
           "path": "/v1/architecture-targets/:id/observations",
           "source": "apps/api/src/app.ts",
-          "line": 776
+          "line": 777
         }
       ],
       "api": {
@@ -8400,7 +8416,7 @@
           "method": "POST",
           "path": "/v1/architecture-targets/:id/health",
           "source": "apps/api/src/app.ts",
-          "line": 788
+          "line": 789
         }
       ],
       "api": {
@@ -8499,7 +8515,7 @@
           "method": "DELETE",
           "path": "/v1/architecture-targets/:id",
           "source": "apps/api/src/app.ts",
-          "line": 801
+          "line": 802
         }
       ],
       "api": {
@@ -8602,7 +8618,7 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/updates",
           "source": "apps/api/src/app.ts",
-          "line": 826
+          "line": 827
         }
       ],
       "api": {
@@ -8705,7 +8721,7 @@
           "method": "POST",
           "path": "/v1/architecture-targets/:id/operations",
           "source": "apps/api/src/app.ts",
-          "line": 813
+          "line": 814
         }
       ],
       "api": {
@@ -8808,7 +8824,7 @@
           "method": "POST",
           "path": "/v1/target-operations/batch",
           "source": "apps/api/src/app.ts",
-          "line": 855
+          "line": 856
         }
       ],
       "api": {
@@ -8911,13 +8927,13 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/operations",
           "source": "apps/api/src/app.ts",
-          "line": 864
+          "line": 865
         },
         {
           "method": "GET",
           "path": "/v1/target-operations/:id",
           "source": "apps/api/src/app.ts",
-          "line": 875
+          "line": 876
         }
       ],
       "api": {
@@ -9021,7 +9037,7 @@
           "method": "POST",
           "path": "/v1/target-operations/:id/cancel",
           "source": "apps/api/src/app.ts",
-          "line": 881
+          "line": 882
         }
       ],
       "api": {
@@ -9124,13 +9140,13 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 835
+          "line": 836
         },
         {
           "method": "PUT",
           "path": "/v1/architecture-targets/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 844
+          "line": 845
         }
       ],
       "api": {
@@ -9234,19 +9250,19 @@
           "method": "POST",
           "path": "/v1/target-operations/claim",
           "source": "apps/api/src/app.ts",
-          "line": 888
+          "line": 889
         },
         {
           "method": "POST",
           "path": "/v1/target-operations/:id/state",
           "source": "apps/api/src/app.ts",
-          "line": 895
+          "line": 896
         },
         {
           "method": "POST",
           "path": "/v1/target-operations/:id/receipt",
           "source": "apps/api/src/app.ts",
-          "line": 907
+          "line": 908
         }
       ],
       "api": {
@@ -10398,7 +10414,7 @@
           "method": "POST",
           "path": "/v1/auth/register",
           "source": "apps/api/src/app.ts",
-          "line": 1162
+          "line": 1168
         }
       ],
       "api": {
@@ -10497,19 +10513,19 @@
           "method": "POST",
           "path": "/v1/auth/login",
           "source": "apps/api/src/app.ts",
-          "line": 1173
+          "line": 1179
         },
         {
           "method": "POST",
           "path": "/v1/auth/mfa/verify",
           "source": "apps/api/src/app.ts",
-          "line": 1239
+          "line": 1245
         },
         {
           "method": "POST",
           "path": "/v1/auth/logout",
           "source": "apps/api/src/app.ts",
-          "line": 1251
+          "line": 1257
         },
         {
           "method": "POST",
@@ -10649,7 +10665,7 @@
           "method": "GET",
           "path": "/v1/me",
           "source": "apps/api/src/app.ts",
-          "line": 1607
+          "line": 1613
         }
       ],
       "api": {
@@ -10745,13 +10761,13 @@
           "method": "POST",
           "path": "/v1/auth/email-verification/request",
           "source": "apps/api/src/app.ts",
-          "line": 1187
+          "line": 1193
         },
         {
           "method": "POST",
           "path": "/v1/auth/email-verification/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1198
+          "line": 1204
         }
       ],
       "api": {
@@ -10850,13 +10866,13 @@
           "method": "POST",
           "path": "/v1/auth/password-reset/request",
           "source": "apps/api/src/app.ts",
-          "line": 1208
+          "line": 1214
         },
         {
           "method": "POST",
           "path": "/v1/auth/password-reset/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1219
+          "line": 1225
         }
       ],
       "api": {
@@ -10955,19 +10971,19 @@
           "method": "POST",
           "path": "/v1/auth/account/password",
           "source": "apps/api/src/app.ts",
-          "line": 1259
+          "line": 1265
         },
         {
           "method": "POST",
           "path": "/v1/auth/account/email-change",
           "source": "apps/api/src/app.ts",
-          "line": 1273
+          "line": 1279
         },
         {
           "method": "POST",
           "path": "/v1/auth/email-change/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1229
+          "line": 1235
         }
       ],
       "api": {
@@ -11066,25 +11082,25 @@
           "method": "GET",
           "path": "/v1/auth/mfa",
           "source": "apps/api/src/app.ts",
-          "line": 1288
+          "line": 1294
         },
         {
           "method": "POST",
           "path": "/v1/auth/mfa/totp/enroll",
           "source": "apps/api/src/app.ts",
-          "line": 1299
+          "line": 1305
         },
         {
           "method": "POST",
           "path": "/v1/auth/mfa/totp/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1311
+          "line": 1317
         },
         {
           "method": "DELETE",
           "path": "/v1/auth/mfa/totp",
           "source": "apps/api/src/app.ts",
-          "line": 1322
+          "line": 1328
         }
       ],
       "api": {
@@ -11203,19 +11219,19 @@
           "method": "GET",
           "path": "/v1/auth/api-tokens",
           "source": "apps/api/src/app.ts",
-          "line": 1333
+          "line": 1339
         },
         {
           "method": "POST",
           "path": "/v1/auth/api-tokens",
           "source": "apps/api/src/app.ts",
-          "line": 1344
+          "line": 1350
         },
         {
           "method": "DELETE",
           "path": "/v1/auth/api-tokens/:id",
           "source": "apps/api/src/app.ts",
-          "line": 1356
+          "line": 1362
         }
       ],
       "api": {
@@ -11452,13 +11468,13 @@
           "method": "GET",
           "path": "/v1/branding",
           "source": "apps/api/src/app.ts",
-          "line": 1368
+          "line": 1374
         },
         {
           "method": "GET",
           "path": "/v1/site",
           "source": "apps/api/src/app.ts",
-          "line": 1390
+          "line": 1396
         }
       ],
       "api": {
@@ -11561,13 +11577,13 @@
           "method": "GET",
           "path": "/v1/admin/branding",
           "source": "apps/api/src/app.ts",
-          "line": 1374
+          "line": 1380
         },
         {
           "method": "PUT",
           "path": "/v1/admin/branding",
           "source": "apps/api/src/app.ts",
-          "line": 1382
+          "line": 1388
         }
       ],
       "api": {
@@ -11670,13 +11686,13 @@
           "method": "GET",
           "path": "/v1/admin/site",
           "source": "apps/api/src/app.ts",
-          "line": 1398
+          "line": 1404
         },
         {
           "method": "PUT",
           "path": "/v1/admin/site",
           "source": "apps/api/src/app.ts",
-          "line": 1406
+          "line": 1412
         }
       ],
       "api": {
@@ -11779,19 +11795,19 @@
           "method": "GET",
           "path": "/v1/admin/registration",
           "source": "apps/api/src/app.ts",
-          "line": 1418
+          "line": 1424
         },
         {
           "method": "PUT",
           "path": "/v1/admin/registration",
           "source": "apps/api/src/app.ts",
-          "line": 1429
+          "line": 1435
         },
         {
           "method": "POST",
           "path": "/v1/admin/registration/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1445
+          "line": 1451
         }
       ],
       "api": {
@@ -11895,13 +11911,13 @@
           "method": "GET",
           "path": "/v1/admin/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1460
+          "line": 1466
         },
         {
           "method": "PUT",
           "path": "/v1/admin/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1480
+          "line": 1486
         }
       ],
       "api": {
@@ -11993,13 +12009,13 @@
           "method": "GET",
           "path": "/v1/admin/providers",
           "source": "apps/api/src/app.ts",
-          "line": 1504
+          "line": 1510
         },
         {
           "method": "PUT",
           "path": "/v1/admin/providers/:key",
           "source": "apps/api/src/app.ts",
-          "line": 1515
+          "line": 1521
         }
       ],
       "api": {
@@ -12102,13 +12118,13 @@
           "method": "GET",
           "path": "/v1/admin/users",
           "source": "apps/api/src/app.ts",
-          "line": 1531
+          "line": 1537
         },
         {
           "method": "POST",
           "path": "/v1/admin/users/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1542
+          "line": 1548
         }
       ],
       "api": {
@@ -12211,7 +12227,7 @@
           "method": "PUT",
           "path": "/v1/admin/users/:id/roles",
           "source": "apps/api/src/app.ts",
-          "line": 1558
+          "line": 1564
         }
       ],
       "api": {
@@ -12313,13 +12329,13 @@
           "method": "GET",
           "path": "/v1/admin/api-tokens",
           "source": "apps/api/src/app.ts",
-          "line": 1574
+          "line": 1580
         },
         {
           "method": "DELETE",
           "path": "/v1/admin/api-tokens/:id",
           "source": "apps/api/src/app.ts",
-          "line": 1585
+          "line": 1591
         }
       ],
       "api": {
@@ -12422,7 +12438,7 @@
           "method": "GET",
           "path": "/v1/admin/audit",
           "source": "apps/api/src/app.ts",
-          "line": 1596
+          "line": 1602
         }
       ],
       "api": {
@@ -13008,25 +13024,25 @@
           "method": "GET",
           "path": "/health",
           "source": "apps/api/src/app.ts",
-          "line": 304
+          "line": 305
         },
         {
           "method": "GET",
           "path": "/ready",
           "source": "apps/api/src/app.ts",
-          "line": 314
+          "line": 315
         },
         {
           "method": "GET",
           "path": "/version.json",
           "source": "apps/api/src/app.ts",
-          "line": 309
+          "line": 310
         },
         {
           "method": "GET",
           "path": "/v1/capabilities",
           "source": "apps/api/src/app.ts",
-          "line": 344
+          "line": 345
         }
       ],
       "api": {
@@ -13308,7 +13324,7 @@
           "method": "GET",
           "path": "/v1/mcp/session",
           "source": "apps/api/src/app.ts",
-          "line": 2119
+          "line": 2125
         }
       ],
       "api": {
