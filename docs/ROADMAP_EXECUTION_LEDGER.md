@@ -10,53 +10,68 @@ discover, govern, version, share, compose, inspect and safely update skills.
 
 ## Authority and baseline
 
-Jarel authorized implementation through new MySkills project chats using native
-GPT-6.1 Sol at xhigh, including bounded delegates, review branches, commits,
-pushes and draft PRs. Merge, publication, deployment, account changes and live
-target actions retain their explicit gates. No paid provider calls, employer
-data, billing/paywalls, new credential paths or unrequested automations.
+This is the authorized remote CLI continuation of the preserved roadmap work.
+The source is `jremick/myskills`; all eight isolated recovery snapshots matched
+the transfer manifest and started clean on 1 October 2026. Recovery commits
+preserve work and are not feature acceptance. Original source work remains
+preserved. The earlier native project threads are historical and are not active
+execution owners.
 
-The saved MySkills App project and `jremick/myskills` origin were checked.
-GitHub main was `c74ecd33ce987d24ef5ddf40a0fef98f1a50fc9b`, including explorer
-PR #126; no PRs were open. Issue #49 remains open. Beta.18 final staging was
-verified in the prior delivery closeout at source
-`1439b5a83f4d07d3316e8134127df3fbe4c4a1c6`, with reported 1,372 repository
-tests, 253 PostgreSQL tests and 171 browser journeys. These are prior-candidate
-results. They do not verify this integration branch or real ChatGPT/Claude
-acceptance. The frozen beta.18 candidate stays separate from these changes.
+The user authorized bounded implementation, independent review, commits,
+pushes and draft PRs using GPT-6.1 Sol/xhigh for implementation and GPT-6
+Astra/xhigh for hard review and coordination. Merge, release/tag creation,
+package/image publication and Railway deployment retain explicit approval
+gates. No paid model evaluations, provider/account changes, employer systems,
+economics/paywalls or recurring automation are authorized.
 
-The primary checkout's untracked `work/` is preserved. Native handoffs retained
-the managed checkout paths and restored existing work from checked backups.
-The integration checkout also has an untracked handoff `work/` copy, which must
-not be committed. The writable-cwd probe passed without escalation.
+Live readback at continuation start confirmed main at
+`c74ecd33ce987d24ef5ddf40a0fef98f1a50fc9b`, no open PRs and open issue #49.
+The existing public web version reports beta.16 at
+`acfb7c8c7f8bc560f6fdba13cf0414033ab6d00e`; public API health/readiness passed.
+This is existing production evidence, not deployment of the roadmap candidate.
+The frozen beta.18 release candidate and its prior staging checks remain
+separate from these changes.
 
-## Owners and work waves
+## Owners and execution sequence
 
-Old chat IDs were superseded by the native handoffs. Use these continuations.
+One Sol implementation worker owns shared source wiring at a time. A second child performs independent Astra review or isolated Sol HOST work.
+Only one child owns shared integration writes; the parent controls local checks. Integration owns
+source reconciliation, this ledger, exact-candidate verification and handoff.
+Local dependency installation/build/test processes are serialized. The full
+matrix runs on the maintained Windows/WSL controller behind its global lock.
+No original MBP worktree or native thread is changed.
 
-| Package | Current chat ID | Ownership | Branch and acceptance state |
-| --- | --- | --- | --- |
-| Integration | `01a0f2e1-4c05-7d92-81fd-55bba089cf49` | Ledger, requirements coverage, roadmap/business/architecture reconciliation, integration, review and verification queue | `codex/complete-myskills-roadmap`; base `c74ecd33`; candidate pending |
-| AUTHOR-1 | `01a0f2e2-1927-7dc0-ad5a-c53aa7cad841` | Private drafts/editor/history/import preview and exact submission handoff | Candidate/PR/checks pending |
-| HOST-1 | `01a0f2e2-8051-7a73-a372-83fe94d10c0c` | Images/Compose bundle, protected setup/status/diagnostics, upgrade/recovery and CI tooling | `codex/build-myskills-selfhosting-delivery`; candidate pending |
-| ID-GOV | `01a0f2e2-a47f-7d03-a31e-e8c585fa012e` | Device browser login, governance/recovery and provider trust decisions | `codex/build-myskills-identity-and-governance`; candidate pending |
-| QUALITY | `01a0f2e2-ff67-7fd0-afc4-abf289144795` | Durable scans, version-aware eval/reviewer/release evidence | Branch readback pending; candidate pending |
-| ARCH-LIFE | `01a0f2e3-2992-7d11-ab7b-54fa386405a7` | Exact-revision plans/history, fencing and composed lifecycle | Review-only plan slice underway; full execution residual explicit |
-| TRUST-MCP | `01a0f2e3-5155-7cc1-9acf-a2ebe26df5b1` | Artifact integrity/current authorization, MCP conformance/audit and provenance | Direct API delivery hardening underway; candidate pending |
-| DISC-SITE | `01a0f2e3-7d80-7ea0-b505-e32de6a60382` | Deterministic task discovery and independent product/docs site | Candidate pending; no model calls or site publication |
+| Scope | Preserved source | Current continuation state |
+| --- | --- | --- |
+| Integration | `cd93bde57496` | 426 source criterion records and 24 backlog groups retained; source reconciliation and final matrix pending. |
+| ID-GOV | `9106bc8cd953` | Integrated as `418e030`, hardened in `cf99c9b`; source review corrected, PostgreSQL execution pending. |
+| TRUST-MCP | `4d3d183833f6`, recovery `e53508453908` | Integrated as `b10fcab` and `63b496b`, hardened in `cf99c9b`; source review corrected, canonical execution pending. |
+| QUALITY | `561c045f6012` | Durable scans preserved; shared integration, PostgreSQL proof and version-aware evaluation extension pending. |
+| AUTHOR-1 | `085acf87b006` | Private drafts/imports/comparison preserved; registration and full-stack acceptance pending. |
+| ARCH-LIFE | `360243eeab86` | Persisted review plans preserved; authority review complete and bounded Codex composed-artifact contract selected; implementation pending. |
+| DISC-SITE | `2453e69c3ba4` | Deterministic discovery and independent site preserved; wiring and measured/rendered proof pending. |
+| HOST-1 | `3d01d673be27` | Isolated HOST source fixes and Linux rehearsal harness active; integration and actual install/upgrade/restore proof pending. |
 
-Wave 1 develops owned modules, failure scenarios and independent checks.
-Shared wiring slots follow ready candidates, with one active owner. ID is
-currently active; TRUST → QUALITY → ARCH → AUTHOR → DISC follow. HOST owns
-the separate release/CI tooling slot. Wave 2 completes eval/review/client/site
-workflows and operations rehearsals. Wave 3 combines reviewed commits and runs
-the exact revision matrix, independent review and release readiness checks.
-Launching a chat or passing one slice does not complete its package.
+Sequence: ID/TRUST source and review corrections; sequential QUALITY, AUTHOR,
+ARCH, DISC and HOST integration; remaining no-cost evaluation and composed
+architecture delivery; full exact-candidate verification and independent
+review; draft PR and explicit release/deployment handoff. Source, fixture,
+PostgreSQL, browser, real-host and deployed evidence remain distinct.
 
-Migration reservations: `0037_author_drafts.sql`, `0038_device_login.sql`,
-`0039_package_scan_jobs.sql`, `0040_architecture_plan_history.sql` if needed,
-and `0041_artifact_delivery.sql` if needed. Use existing persistence when it
-suffices. Released migrations remain append-only.
+The first independent ID/TRUST source review found four material gaps: stale
+PostgreSQL authority during final artifact authorization, time checks captured
+before device-login lock waits, unbounded CLI response buffering, and device
+secret forwarding through redirects. The independent remediation review accepted the source fixes. Three additional
+PostgreSQL test-fixture/coherence defects were then corrected, typechecked and
+linted; actual PostgreSQL execution is still pending. No deployed acceptance
+is inferred from these reviews.
+
+Migration reservations remain `0037_author_drafts.sql`,
+`0038_device_login.sql`, `0039_package_scan_jobs.sql`,
+`0040_architecture_plan_history.sql`. The artifact fix needed no new migration.
+Allocate any additional composed-artifact/evaluation migration after checking
+the combined sequence. Reuse existing persistence where it suffices; released migrations
+remain append-only.
 
 ## Finite backlog
 
@@ -119,9 +134,14 @@ Linux/amd64, Docker/Compose/Buildx, agent and Node22/24 npm11.12.1 checks.
 
 Test-first TRUST-MCP checks reproduced baseline artifact retrieval after
 in-flight token/account/team/lifecycle revocation and altered bytes, plus
-unbounded or invalid UTF-8 object responses. The owned fix and independent
-review are underway. These are controlled source/runtime fixture findings;
-no deployed exploit or completed remediation is claimed.
+unbounded or invalid UTF-8 object responses. The fixes are committed in `cf99c9b` and independently source-reviewed.
+Supported local checks passed: 38 focused ID/TRUST checks, 46 CLI/install/device/
+stream checks, and 138 existing CLI/MCP contract checks. These suites overlap.
+Source builds, web typecheck, lint, privacy, secret scan and parity also passed.
+An additional API regression batch passed 52 of 53; the missing denied-platform
+audit event was fixed and its focused regression passed. The whole 53-case batch
+was not repeated. Canonical PostgreSQL, MinIO and browser execution remains
+pending. These are controlled source/runtime fixture findings, not deployed proof.
 
 ## External decisions and gates
 
