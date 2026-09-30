@@ -1,0 +1,10 @@
+.task-discovery { margin: 0 0 1rem; border-block: 1px solid var(--border, #d0d7de); padding-block: .8rem; }
+.task-discovery summary { cursor: pointer; font-weight: 600; padding-block: .4rem; }
+.task-discovery form { display: grid; gap: .6rem; padding-block: 1rem; }
+.task-discovery textarea { width: 100%; min-height: 6rem; border: 1px solid var(--border, #d0d7de); border-radius: .4rem; padding: .7rem; color: inherit; background: var(--surface, white); font: inherit; resize: vertical; }
+.task-discovery button { justify-self: start; }
+.task-discovery p { margin-block: .6rem; overflow-wrap: anywhere; }
+.task-discovery ul { padding-inline-start: 1.2rem; }
+.task-discovery li { padding-block: .5rem; }
+.task-discovery code { display: block; overflow-wrap: anywhere; font-size: .75rem; }
+.task-discovery summary:focus-visible, .task-discovery textarea:focus-visible { outline: 3px solid #0b7066; outline-offset: 3px; }

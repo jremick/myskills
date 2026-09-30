@@ -1,0 +1,17 @@
+{
+  "name": "@myskills-app/site",
+  "version": "0.1.0-beta.18",
+  "license": "Apache-2.0",
+  "private": true,
+  "description": "Independent static MySkills product and documentation website.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs && node scripts/serve.mjs",
+    "preview": "node scripts/serve.mjs",
+    "test:e2e": "node ../../node_modules/@playwright/test/cli.js test -c playwright.config.mjs"
+  },
+  "engines": {
+    "node": ">=22.13 <23 || >=24 <25"
+  }
+}
