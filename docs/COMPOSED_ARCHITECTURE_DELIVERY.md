@@ -33,6 +33,14 @@ baseline. The fixed approval/lease window is 600 seconds. The existing target
 lease table, ordinary-operation mutual exclusion and monotonic fence are shared.
 Expired or lost claims cannot continue promoting bytes. No lease renewal is added.
 
+The approval stores a compact immutable intent digest, which covers both staged
+tree and baseline within the existing SQL metadata bounds. Checkpoints, receipts
+and receipt replay require the authenticated forward approver. Explicit rollback
+records its own actor, holder and new fence; that actor may differ from the forward
+approver. Organization policy digests bind receiving authority rather than unrelated
+personal-owner privileges. Current target and organization maintenance windows,
+credential expiry and MFA are checked after desired and baseline release lock waits.
+
 ## Guided protocol
 
 | API operation | Outcome |
@@ -80,6 +88,12 @@ is guidance. Package bytes retain their original relative layout beneath the
 private workspace `.myskills-app/architectures/<hash>/active/` tree. Context,
 staging, journals, prior trees and quarantine stay outside discovery.
 
+Enrollment and execution reject workspace roots inside Codex or Claude project
+discovery trees and roots overlapping another enrolled managed workspace. Validation
+uses canonical ancestry and a bounded directory-only search for local bindings
+(10,000 directories, depth 64); an unprovable isolation boundary is refused before
+staging or approval. Disjoint workspace roots remain supported.
+
 The companion holds the same whole install-root lock as ordinary installation.
 It pins workspace/discovery device and inode plus existing registry provenance.
 It refuses unmanaged namespace collisions, altered owned bytes, path traversal,
@@ -92,6 +106,11 @@ package text, prompts, credentials or absolute workspace paths.
 
 Multiple directory moves are not atomic. Durable per-path intent records exact
 partial states before each move; replay validates both named and relocated bytes.
+Transaction and recovery directory chains are synced through the workspace root.
+Nested staging directories are synced before approval. After a rename, the
+destination parent is synced before the source parent, so source removal cannot
+be committed before its recovery or promoted name. Directory-sync failures retain
+partial state and prevent further destructive moves or a success receipt.
 A success receipt follows complete aggregate readback, manifest persistence and
 current authority. Interrupted apply/receipt and explicit rollback can resume
 under a still-valid claim or a newly approved rollback fence. Read/failed-check
@@ -103,8 +122,8 @@ trust boundary; this does not provide a sandbox against that OS principal.
 
 | Criterion | Source and acceptance binding | Outstanding acceptance |
 | --- | --- | --- |
-| ARCH-02 | Existing exact-review route/CLI/MCP/browser tests plus current credential checks in `plan-service.ts`/`postgres-store.ts`; `postgres-architecture-plan-authority.pgtest.ts` adds actual API lock-wait revocation/no-write controls. | Canonical PostgreSQL execution and independent review of this candidate. |
-| ARCH-03 | `architecture-artifact.test.ts` covers all topologies. API tests cover separate approval, current fences and no repeated downloads. CLI e2e tests install/verify/update/rollback two enrolled multilevel byte fixtures with mixed pins/profile denials, disable/removal, interruptions, drift/link/collision and forbidden rollback. | Canonical shared-lease/SQL constraint/object-backed PG tests; maintained fullstack `operational-journey.spec.ts` invokes the required real MinIO composed exact-byte journey and records its named check. HOST railway-images rehearsal also requires a named composed MinIO byte/permission-denial/no-intent receipt and checks persisted intent after restore. Actual host recognition/consent stays separate. |
+| ARCH-02 | Existing exact-review routes and current credential checks; `postgres-architecture-plan-authority.pgtest.ts` observes actual target/writer locks and a successful first approval write before rollback. Real organization history/grant cases live in `postgres-architecture-artifact.pgtest.ts`. | Windows-owned PostgreSQL execution and independent correction review. |
+| ARCH-03 | Core topology projection; API compact approval, actor and maintenance-window regressions; CLI two disjoint byte fixtures, actual router disable, unrelated-path preservation, directory-sync ordering/failures and overlapping-root refusal. Current-schema PG cases add approval readback, shared leases, distinct rollback actor, baseline-only credential expiry waits and actual window closing. | All added PG cases are prepared for Windows execution. Maintained fullstack and HOST MinIO journeys remain required. HOST backup setup uses owned DNS/TLS identity and bounded phase/operation diagnostics; the historical static-IP/default-IPAM cause is unconfirmed until Linux retry. Actual host recognition/consent stays separate. |
 | ARCH-04 | Existing graph editor/migration source remains. `ArchitectureArtifactHandoff` and browser/MCP transport tests bind selected saved review to intent and exact pins, then display trusted-companion commands and receipt limitations. | Full canonical browser/runtime and actual connected-host acceptance; byte fixtures alone do not complete the full architecture lifecycle thesis. |
 
 `docs/capability-parity.json` records stable ARC-11 coverage and evidence levels.

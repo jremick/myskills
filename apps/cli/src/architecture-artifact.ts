@@ -2,7 +2,8 @@ import { lstat, readdir, realpath, rename } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { artifactHash, artifactNamespace, assertArchitectureArtifactIntent, identifyArtifactFiles, renderArchitectureArtifact, type ArchitectureArtifactIntent, type ArtifactFile, type ArtifactFileIdentity, type ArchitectureSyncRun } from "@myskills-app/core";
-import { assertInstallRootLocked, assertRegularDirectory, atomicPrivateWrite, ensureSafeDirectory, errorCode, readRegularText, validatePortableFilePaths, writeNewPackageTree } from "./install-filesystem.js";
+import { assertInstallRootLocked, assertRegularDirectory, atomicPrivateWrite, errorCode, readRegularText, validatePortableFilePaths, writeNewPackageTree } from "./install-filesystem.js";
+import { durableArtifactDirectory, syncArtifactDirectory, syncArtifactTree, assertIsolatedArtifactWorkspace, type ArtifactDurabilityObserver } from "./architecture-artifact-filesystem.js";
 import { validateCodexSkill } from "./codex-workspace.js";
 
 interface RootIdentity { digest:string; dev:string; ino:string; discoveryDev:string; discoveryIno:string }
@@ -14,6 +15,7 @@ export interface ArtifactCompanionContext {
   workspace:string; lockRoot:string; targetId:string; generation:number; targetIdentityDigest:string; provenanceDigest:string;
   request(method:"GET"|"POST",route:string,body?:unknown):Promise<Record<string,unknown>>;
   download(pkg:ArchitectureArtifactIntent["projection"]["packages"][number]):Promise<ArtifactFile[]>;
+  durability?: ArtifactDurabilityObserver;
   fault?(point:ArtifactFaultPoint):void|Promise<void>;
 }
 const base=(intent:ArchitectureArtifactIntent)=>`.myskills-app/architectures/${artifactNamespace(intent.projection.architectureId)}`;
@@ -29,7 +31,7 @@ function assertBound(intent:ArchitectureArtifactIntent,context:ArtifactCompanion
 }
 async function identity(workspace:string):Promise<RootIdentity>{await assertRegularDirectory(workspace);const entry=await lstat(workspace);if(await realpath(workspace)!==workspace)throw new Error("Workspace root was substituted.");const discovery=await lstat(path.join(workspace,".agents/skills"));if(!discovery.isDirectory()||discovery.isSymbolicLink())throw new Error("Discovery root is not a regular directory.");return {digest:artifactHash(workspace),dev:String(entry.dev),ino:String(entry.ino),discoveryDev:String(discovery.dev),discoveryIno:String(discovery.ino)};}
 async function assertRoot(context:ArtifactCompanionContext,pinned:RootIdentity):Promise<void>{exactKeys(pinned,["digest","dev","ino","discoveryDev","discoveryIno"]);if(artifactHash(await identity(context.workspace))!==artifactHash(pinned))throw new Error("Workspace root identity changed. Retain recovery copies.");await assertRegularDirectory(context.lockRoot);if(await realpath(context.lockRoot)!==context.lockRoot)throw new Error("Discovery root was substituted.");}
-async function writeJournal(context:ArtifactCompanionContext,journal:Journal){await assertRoot(context,journal.rootIdentity);await atomicPrivateWrite(context.workspace,absolute(context.workspace,journalPath(journal.runId,journal.intent)),JSON.stringify(journal)+"\n");await syncDirectory(path.dirname(absolute(context.workspace,journalPath(journal.runId,journal.intent))));}
+async function writeJournal(context:ArtifactCompanionContext,journal:Journal){await assertRoot(context,journal.rootIdentity);await durableArtifactDirectory(context.workspace,path.dirname(absolute(context.workspace,journalPath(journal.runId,journal.intent))),context.durability);await atomicPrivateWrite(context.workspace,absolute(context.workspace,journalPath(journal.runId,journal.intent)),JSON.stringify(journal)+"\n");await syncArtifactDirectory(path.dirname(absolute(context.workspace,journalPath(journal.runId,journal.intent))));}
 async function exists(file:string):Promise<boolean>{try{await lstat(file);return true;}catch(error){if(errorCode(error)==="ENOENT")return false;throw error;}}
 /** Exact bounded readback; no recovery or restoration is performed. */
 async function readTree(workspace:string,relative:string):Promise<ArtifactFile[]>{
@@ -52,6 +54,7 @@ async function assertBaseline(context:ArtifactCompanionContext,intent:Architectu
   return manifest;
 }
 export async function prepareLocalArchitectureArtifact(context:ArtifactCompanionContext,runId:string):Promise<{runId:string;intentDigest:string;treeDigest:string;baselineDigest:string;prepared:true}> {
+  await assertIsolatedArtifactWorkspace(context.workspace);
   const remote=await context.request("GET",url(runId));const intent=remote.intent as ArchitectureArtifactIntent;assertBound(intent,context);
   const pinned=await identity(context.workspace);const baseline=await assertBaseline(context,intent);
   const location=transaction(runId,intent);const journalFile=absolute(context.workspace,journalPath(runId,intent));
@@ -60,7 +63,9 @@ export async function prepareLocalArchitectureArtifact(context:ArtifactCompanion
   for(const pkg of intent.projection.packages){const files=await context.download(pkg);validateCodexSkill(files,pkg.slug);validatePortableFilePaths(files);packages.set(pkg.refId,files);}
   const files=renderArchitectureArtifact(intent.projection,packages);validatePortableFilePaths(files);
   if(artifactHash(identifyArtifactFiles(files))!==intent.treeDigest)throw new Error("Downloaded materialized tree differs from API-owned intent.");
+  await durableArtifactDirectory(context.workspace,absolute(context.workspace,location),context.durability);
   await writeNewPackageTree(context.workspace,absolute(context.workspace,`${location}/stage`),files);
+  await syncArtifactTree(context.workspace,absolute(context.workspace,`${location}/stage`),context.durability);
   const moves=[...new Set([...intent.placements,...intent.removals])].map(owned=>({path:owned,old:baseline?.intent.files.filter(f=>f.path.startsWith(owned+"/"))??[],next:intent.files.filter(f=>f.path.startsWith(owned+"/")),phase:"pending" as const}));
   const journal:Journal={schemaVersion:1,runId,intent,rootIdentity:pinned,provenanceDigest:context.provenanceDigest,baseline,holderId:`artifact-${randomUUID()}`,fence:null,state:"prepared",moves};
   await writeJournal(context,journal);await context.fault?.("staged");return prepared(runId,intent);
@@ -82,14 +87,17 @@ async function readJournal(context:ArtifactCompanionContext,runId:string,intent:
 }
 async function verifyStaging(context:ArtifactCompanionContext,journal:Journal){for(const move of journal.moves)if(move.next.length){const relative=`${transaction(journal.runId,journal.intent)}/stage/${move.path}`;const actual=await readTree(context.workspace,relative);const normalized=actual.map(f=>({...f,path:f.path.slice(`${transaction(journal.runId,journal.intent)}/stage/`.length)}));if(artifactHash(identities(normalized))!==artifactHash(move.next))throw new Error("Whole-artifact staging drifted.");}}
 async function fence(context:ArtifactCompanionContext,journal:Journal){await assertRoot(context,journal.rootIdentity);if(journal.fence===null)throw new Error("Artifact has no claimed lease.");const response=await context.request("POST",url(journal.runId,"checkpoint"),{holderId:journal.holderId,fencingToken:journal.fence});const lease=response.lease as {expiresAt?:string};if(!lease.expiresAt||Date.parse(lease.expiresAt)<=Date.now())throw new Error("Artifact lease expired before local promotion.");}
-async function moveDirectory(context:ArtifactCompanionContext,from:string,to:string){await assertRegularDirectory(absolute(context.workspace,from));await ensureSafeDirectory(context.workspace,path.dirname(absolute(context.workspace,to)));if(await exists(absolute(context.workspace,to)))throw new Error("Composed move destination already exists.");await rename(absolute(context.workspace,from),absolute(context.workspace,to));await syncDirectory(path.dirname(absolute(context.workspace,from)));await syncDirectory(path.dirname(absolute(context.workspace,to)));}
-async function syncDirectory(directory:string){const {open}=await import("node:fs/promises");const handle=await open(directory,"r");try{await handle.sync();}finally{await handle.close();}}
+async function moveDirectory(context:ArtifactCompanionContext,from:string,to:string){await assertRegularDirectory(absolute(context.workspace,from));await durableArtifactDirectory(context.workspace,path.dirname(absolute(context.workspace,to)),context.durability);if(await exists(absolute(context.workspace,to)))throw new Error("Composed move destination already exists.");await rename(absolute(context.workspace,from),absolute(context.workspace,to));// Persist the reachable recovery/promoted name before committing source removal.
+await syncArtifactDirectory(path.dirname(absolute(context.workspace,to)),context.durability);await syncArtifactDirectory(path.dirname(absolute(context.workspace,from)),context.durability);}
 export async function applyLocalArchitectureArtifact(context:ArtifactCompanionContext,runId:string):Promise<Record<string,unknown>>{
+  await assertIsolatedArtifactWorkspace(context.workspace);
   const remote=await context.request("GET",url(runId));const intent=remote.intent as ArchitectureArtifactIntent;assertBound(intent,context);let journal=await readJournal(context,runId,intent);
   if(journal.state==="manifest"&&(remote.run as ArchitectureSyncRun).state==="succeeded")return verifyLocalArchitectureArtifact(context,runId);
   if(journal.state==="receipted")return verifyLocalArchitectureArtifact(context,runId);
   if(journal.state==="prepared"){
     await verifyStaging(context,journal);await assertBaseline(context,intent);
+    await syncArtifactTree(context.workspace,absolute(context.workspace,`${transaction(runId,intent)}/stage`),context.durability);
+    await durableArtifactDirectory(context.workspace,absolute(context.workspace,transaction(runId,intent)),context.durability);
     // Approval is requested only after exact complete local staging/baseline readback.
     await context.request("POST",url(runId,"approve"),{expectedIntentDigest:artifactHash(intent),treeDigest:intent.treeDigest,baselineDigest:intent.baselineDigest});
     const claim=await context.request("POST",url(runId,"claim"),{holderId:journal.holderId,expectedIntentDigest:artifactHash(intent)});
@@ -121,7 +129,7 @@ export async function applyLocalArchitectureArtifact(context:ArtifactCompanionCo
   await fence(context,journal);await verifyAggregate(context,intent);
   const manifest:Manifest={schemaVersion:1,runId,intent,rootIdentity:journal.rootIdentity,provenanceDigest:context.provenanceDigest};
   const existing=await readManifest(context,intent);if(existing&&existing.runId!==intent.baselineRunId&&existing.runId!==runId)throw new Error("Ownership manifest changed during operation.");
-  await atomicPrivateWrite(context.workspace,absolute(context.workspace,manifestPath(intent)),JSON.stringify(manifest)+"\n");await syncDirectory(path.dirname(absolute(context.workspace,manifestPath(intent))));journal.state="manifest";await writeJournal(context,journal);await context.fault?.("manifest");
+  await atomicPrivateWrite(context.workspace,absolute(context.workspace,manifestPath(intent)),JSON.stringify(manifest)+"\n");await syncArtifactDirectory(path.dirname(absolute(context.workspace,manifestPath(intent))));journal.state="manifest";await writeJournal(context,journal);await context.fault?.("manifest");
   await fence(context,journal);await verifyAggregate(context,intent);
   const result=await context.request("POST",url(runId,"receipt"),{holderId:journal.holderId,fencingToken:journal.fence,treeDigest:intent.treeDigest});
   await context.fault?.("receipt");journal.state="receipted";await writeJournal(context,journal);return {...result,treeDigest:intent.treeDigest,filesystemVerified:true,runtimeRecognized:false};
@@ -129,6 +137,7 @@ export async function applyLocalArchitectureArtifact(context:ArtifactCompanionCo
 async function matchRelocated(context:ArtifactCompanionContext,location:string,owned:string,expected:ArtifactFileIdentity[]){const files=await readTree(context.workspace,location);const normalized=files.map(f=>({...f,path:owned+f.path.slice(location.length)}));if(artifactHash(identities(normalized))!==artifactHash(expected))throw new Error("Private staging/recovery bytes changed.");}
 async function verifyAggregate(context:ArtifactCompanionContext,intent:ArchitectureArtifactIntent){const files:ArtifactFile[]=[];for(const owned of intent.placements){await matchTree(context,owned,intent.files.filter(f=>f.path.startsWith(owned+"/")));files.push(...await readTree(context.workspace,owned));}for(const removed of intent.removals)await matchTree(context,removed,[]);if(artifactHash(identities(files))!==intent.treeDigest)throw new Error("Aggregate architecture readback failed.");}
 export async function verifyLocalArchitectureArtifact(context:ArtifactCompanionContext,runId:string):Promise<Record<string,unknown>>{
+  await assertIsolatedArtifactWorkspace(context.workspace);
   const remote=await context.request("GET",url(runId));const intent=remote.intent as ArchitectureArtifactIntent;assertBound(intent,context);const journal=await readJournal(context,runId,intent);
   if(journal.state==="manifest"){
     const run=remote.run as ArchitectureSyncRun;
@@ -141,6 +150,7 @@ export async function verifyLocalArchitectureArtifact(context:ArtifactCompanionC
   return {runId,treeDigest:intent.treeDigest,filesystemVerified:true,receiptVerified:true,runtimeRecognized:false};
 }
 export async function rollbackLocalArchitectureArtifact(context:ArtifactCompanionContext,runId:string):Promise<Record<string,unknown>>{
+  await assertIsolatedArtifactWorkspace(context.workspace);
   const remote=await context.request("GET",url(runId));const intent=remote.intent as ArchitectureArtifactIntent;assertBound(intent,context);const journal=await readJournal(context,runId,intent);
   if(journal.state==="rolled_back"||journal.state==="rollback"&&(remote.run as ArchitectureSyncRun).state==="rolled_back"){
     if(journal.baseline)await verifyAggregate(context,journal.baseline.intent);else for(const move of journal.moves)await matchTree(context,move.path,[]);
@@ -165,7 +175,7 @@ export async function rollbackLocalArchitectureArtifact(context:ArtifactCompanio
     // Retain an explicit empty ownership manifest instead of deleting unrelated state.
     const {rm}=await import("node:fs/promises");const named=absolute(context.workspace,manifestPath(intent));const existing=await readManifest(context,intent);if(existing&&existing.runId!==runId)throw new Error("Rollback cannot remove another manifest.");if(await exists(named))await rm(named);
   }
-  await syncDirectory(path.dirname(absolute(context.workspace,manifestPath(intent))));await fence(context,journal);
+  await syncArtifactDirectory(path.dirname(absolute(context.workspace,manifestPath(intent))));await fence(context,journal);
   const treeDigest=journal.baseline?.intent.treeDigest??artifactHash([]);
   const result=await context.request("POST",url(runId,"receipt"),{holderId:journal.holderId,fencingToken:journal.fence,treeDigest});await context.fault?.("receipt");journal.state="rolled_back";await writeJournal(context,journal);return {...result,treeDigest,filesystemVerified:true,runtimeRecognized:false};
 }

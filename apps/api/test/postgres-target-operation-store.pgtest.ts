@@ -466,7 +466,7 @@ test("companion and architecture sync share a target mutex and monotonic fences 
   for (const boundary of ["acquireLease", "claimApply"] as const) await t.test(boundary, async (sub) => {
     const { pool, db } = await fixture(sub);
     const runId = randomUUID();
-    await insertSyncRun(pool, runId, boundary === "claimApply" ? architectureSyncPlanDigest([]) : hash);
+    await insertSyncRun(pool, runId, architectureSyncPlanDigest([]));
     const sync = new PostgresArchitectureSyncStore(db);
     if (boundary === "claimApply") await syncService(sync).approve({ actor: owner, runId });
     const acquire = async (input: Parameters<PostgresArchitectureSyncStore["acquireLease"]>[0]) => {

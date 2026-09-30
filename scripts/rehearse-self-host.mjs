@@ -4,13 +4,14 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { chmodSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { arch, platform } from "node:os";
 import { join, resolve } from "node:path";
 import { createSelfHostBundle } from "./lib/self-host-release.mjs";
 import { hostBaselineCommit, resolveHostBaseline } from "./lib/self-host-baseline.mjs";
 import { hostDocker, saveHostLedger } from "./lib/host-rehearsal-resources.mjs";
+import { prepareHostBackupService, assertHostCommandSucceeded } from "./lib/host-backup-service.mjs";
 import { rehearseComposeClientInterruption, rehearseComposeInterruption } from "./lib/host-compose-interruption.mjs";
 
 const baseline = hostBaselineCommit;
@@ -33,7 +34,7 @@ const privateEnv = (path, values) => {
 };
 function call(command, args, { cwd = root, env = process.env, timeout = 600_000, ok = true } = {}) {
   const result = spawnSync(command, args, { cwd, env, encoding: "utf8", timeout, maxBuffer: 4 * 1024 * 1024 });
-  if (ok && result.status !== 0) throw new Error("bounded-command-failed");
+  if (ok) assertHostCommandSucceeded(command, args, result);
   return result;
 }
 function reserve(kind, name) {
@@ -50,7 +51,7 @@ function docker(args, options) {
   if (["run", "compose"].includes(args[0])) {
     const { ok = true, ...settings } = options ?? {};
     const result = hostDocker(ledgerPath, executable, args, { cwd: root, env: process.env, encoding: "utf8", timeout: 600_000, maxBuffer: 4 * 1024 * 1024, ...settings });
-    if (ok && result.status !== 0) throw new Error("bounded-command-failed");
+    if (ok) assertHostCommandSucceeded("docker", args, result);
     return result;
   }
   return call(executable, args, options);
@@ -202,27 +203,22 @@ try {
     receipt.composeInterruption.client = rehearseComposeClientInterruption({ directory: proof, owner, project: clientProject, executable, image: `myskills-app-api:local-ci-${runId}` });
     mark("compose-project", clientProject);
   });
-  const minioImage = build("minio", root, ["--file", join(root, "Dockerfile.minio"), "--label", `org.opencontainers.image.revision=${candidate}`,
-    "--label", `org.opencontainers.image.version=${source.version}`]);
-  const network = `${owner}-backup-network`; reserve("network", network);
-  docker(["network", "create", "--label", `io.myskills.host-rehearsal=${owner}`, network]); mark("network", network);
-  const net = JSON.parse(docker(["network", "inspect", network]).stdout)[0];
-  const gateway = net.IPAM.Config[0].Gateway; assert.match(gateway, /^(\d{1,3}\.){3}\d{1,3}$/);
-  const backupIP = gateway.replace(/\.\d+$/, ".10");
-  const certs = join(proof, "certs"); mkdirSync(certs, { mode: 0o700 });
-  call("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-keyout", join(certs, "private.key"),
-    "-out", join(certs, "public.crt"), "-subj", "/CN=MySkills disposable backup", "-addext", `subjectAltName=IP:${backupIP}`]);
-  chmodSync(join(certs, "private.key"), 0o600);
-  const backupUser = `fixture${randomBytes(6).toString("hex")}`; const backupPassword = `${randomBytes(32).toString("hex")}$HOST_INTERPOLATION_PROBE$$`;
-  // Docker --env-file is deliberately unquoted here; operator configuration uses
-  // its parsed path and Compose's quoting semantics instead.
-  writeFileSync(join(proof, "backup-minio.env"), `MINIO_ROOT_USER=${backupUser}\nMINIO_ROOT_PASSWORD=${backupPassword}\n`, { mode: 0o600 });
-  runService("backup", ["--network", network, "--ip", backupIP, "--env-file", join(proof, "backup-minio.env"),
-    "--mount", `type=bind,source=${certs},target=/certs,readonly`], minioImage, ["server", "/data", "--certs-dir", "/certs"]);
+  const backupUser = `fixture${randomBytes(6).toString("hex")}`;
+  const backupPassword = `${randomBytes(32).toString("hex")}$HOST_INTERPOLATION_PROBE$$`;
+  let minioImage;
+  const backupService = await measured("backup-service", async () => {
+    minioImage = build("minio", root, ["--file", join(root, "Dockerfile.minio"), "--label", `org.opencontainers.image.revision=${candidate}`,
+      "--label", `org.opencontainers.image.version=${source.version}`]);
+    return prepareHostBackupService({ proof, owner, image: minioImage, user: backupUser, password: backupPassword,
+      reserve, mark, docker, call, runService });
+  });
+  const { network } = backupService;
   // Trust is scoped to this immutable fixture image; HTTPS validation remains on.
-  writeFileSync(join(proof, "Dockerfile.trust"), `FROM myskills-ops:local-ci-${runId}\nCOPY --chmod=0444 certs/public.crt /fixture-ca.pem\nENV NODE_EXTRA_CA_CERTS=/fixture-ca.pem\n`);
-  const opsImage = build("ops-trust", proof, ["--file", join(proof, "Dockerfile.trust"), "--label", `org.opencontainers.image.revision=${candidate}`,
-    "--label", `org.opencontainers.image.version=${source.version}`]);
+  const opsImage = await measured("backup-trust", async () => {
+    writeFileSync(join(proof, "Dockerfile.trust"), `FROM myskills-ops:local-ci-${runId}\nCOPY --chmod=0444 certs/public.crt /fixture-ca.pem\nENV NODE_EXTRA_CA_CERTS=/fixture-ca.pem\n`);
+    return build("ops-trust", proof, ["--file", join(proof, "Dockerfile.trust"), "--label", `org.opencontainers.image.revision=${candidate}`,
+      "--label", `org.opencontainers.image.version=${source.version}`]);
+  });
   receipt.fixtureTrust = "OPS image adds only a disposable CA; application images are reused unchanged.";
   const images = {};
   await measured("image-receipts-and-bundle", async () => {
@@ -232,13 +228,13 @@ try {
   const inputFile = join(proof, "images.json"); jsonFile(inputFile, { schemaVersion: 1, source, images });
   const bundle = join(proof, "candidate"); createSelfHostBundle({ root, inputFile, outputDir: bundle });
   const bucket = `${owner}-backups`;
-  const backupBase = { MYSKILLS_RECOVERY_BACKUP_S3_ENDPOINT: `https://${backupIP}:9000`, MYSKILLS_RECOVERY_BACKUP_S3_REGION: "local",
+  const backupBase = { MYSKILLS_RECOVERY_BACKUP_S3_ENDPOINT: backupService.endpoint, MYSKILLS_RECOVERY_BACKUP_S3_REGION: "local",
     MYSKILLS_RECOVERY_BACKUP_S3_BUCKET: bucket, MYSKILLS_RECOVERY_BACKUP_S3_ACCESS_KEY_ID: backupUser, MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY: backupPassword,
     MYSKILLS_RECOVERY_BACKUP_S3_FORCE_PATH_STYLE: "true" };
   // The fixture creates only this run's empty backup bucket, then exercises the
   // real runRegistryBackup publish/readback/completion-marker path.
   const admin = join(proof, "backup-admin.json"); jsonFile(admin, { ...backupBase });
-  driver(opsImage, ["bucket"], "backup-admin.json");
+  await measured("backup-bucket", async () => driver(opsImage, ["bucket"], "backup-admin.json"));
   await measured("fresh-install-and-recovery", async () => {
     const installStarted = Date.now();
     const config = join(proof, "fresh-config"); const project = `${owner}-fresh`; reserve("compose-project", project); mark("compose-project", project, "reserved");
@@ -362,10 +358,13 @@ try {
   receipt.boundaries = ["No production data, public publication, deployment, public TLS/email delivery or arm64 runtime proof.",
     "Legacy c74ecd33 predates the operator bundle. Its migration/runtime transition uses candidate setup/bootstrap tooling and exact baseline app images.",
     "A historical baseline operator bundle is required to claim the complete package-to-package upgrade command."];
-} catch {
+} catch (error) {
+  if (error.hostFailure) receipt.failure = error.hostFailure;
+  else receipt.failure = { operation: "fixture.assertion", reason: "bounded-check-failed" };
+  receipt.phases[phase] = { ...receipt.phases[phase], status: "failed" };
   receipt.failedPhase = phase; receipt.guidance = "Inspect canonical sanitized step status and child resource ledger; raw provider output and credentials are withheld.";
   process.exitCode = 1;
 } finally {
   jsonFile(outputPath, receipt);
-  console.log(JSON.stringify({ kind: receipt.kind, status: receipt.status, failedPhase: receipt.failedPhase ?? null }));
+  console.log(JSON.stringify({ kind: receipt.kind, status: receipt.status, failedPhase: receipt.failedPhase ?? null, failure: receipt.failure ?? null }));
 }
