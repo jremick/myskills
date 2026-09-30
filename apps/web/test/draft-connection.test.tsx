@@ -10,7 +10,7 @@ const head: AuthorDraft = { id: "draft-id", title: "Private title canary", revis
   files: [{ path: "SKILL.md", content: "Private content canary" }], source: null, submission: null, createdAt: "2026-10-01", updatedAt: "2026-10-01" };
 const props = { actorId: "same-actor", url: "/submit?draft=draft-id", onNavigate() {}, onNavigationGuardChange() {}, correctionSource: null, async onSubmitted() {} };
 function client(registryIdentity: string, get: DraftClient["get"]): DraftClient {
-  return { registryIdentity, list: async () => ({ drafts: [] }), get, history: async () => ({ revisions: [{ ...head, title: "Private history canary", fileCount: 1, textBytes: 22 }] }) } as DraftClient;
+  return { registryIdentity, list: async () => ({ drafts: [] }), get, history: async () => ({ revisions: [{ ...head, title: "Private history canary", fileCount: 1, textBytes: 22 }] }) } as unknown as DraftClient;
 }
 for (const boundary of ["client", "credential", "registry"] as const) test(`draft private state and old responses are cleared across ${boundary} replacement for same actor`, async () => {
   const first = client("https://first.example", async () => ({ draft: head }));

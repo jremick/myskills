@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { PoolClient } from "pg";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:net";
@@ -13,15 +14,15 @@ import { PostgresSubmissionStore } from "../src/submissions/postgres-submission-
 import { SubmissionService } from "../src/submissions/service.js";
 
 /** Canonical PG fixture launches the actual production API process, not reconstructed services. */
-test("server worker crash recovers durable attempt and SIGTERM drains completion before pool shutdown", { timeout: 90_000 }, async t => {
+test("server worker crash recovers durable attempt and SIGTERM drains completion before pool shutdown", { timeout: 90_000, skip: process.platform === "win32" ? "POSIX signal crash/restart and graceful drain require canonical Linux/PostgreSQL." : false }, async t => {
   const url = process.env.TEST_DATABASE_URL!;
   assert.match(new URL(url).pathname, /(^|[_/-])(test|ci)([_-]|$)/i);
   const pool = createPgPool(url);
-  let gate: Awaited<ReturnType<typeof pool.connect>> | undefined;
+  const cleanup: { gate?: PoolClient } = {};
   const processes: ChildProcess[] = [];
   t.after(async () => {
     for (const child of processes) if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
-    if (gate) { await gate.query("SELECT pg_advisory_unlock_all()"); gate.release(); }
+    if (cleanup.gate) { await cleanup.gate.query("SELECT pg_advisory_unlock_all()"); cleanup.gate.release(); }
     await pool.end();
   });
   await pool.query("DROP SCHEMA public CASCADE"); await pool.query("CREATE SCHEMA public"); await runMigrations(pool);
@@ -32,7 +33,7 @@ test("server worker crash recovers durable attempt and SIGTERM drains completion
   await pool.query("INSERT INTO role_assignments(user_id,role) VALUES($1,'author') ON CONFLICT DO NOTHING",[user.id]);
   const submissions = new SubmissionService(new PostgresSubmissionStore(db, { backgroundScans: true }));
   const manifest = parseSkillManifest({ name: "process-worker", title: "Worker", summary: "Real process fixture", version: "1.0.0", license: "MIT", visibility: "public", platforms: [{ name: "codex", install_target: "codex-skill" }] });
-  gate = await pool.connect();
+  const gate = await pool.connect(); cleanup.gate = gate;
   const gateId = 724211;
   await pool.query(`CREATE FUNCTION pause_process_scan() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
     IF NEW.status='succeeded' THEN PERFORM pg_advisory_xact_lock(${gateId}); END IF; RETURN NEW; END; $$`);

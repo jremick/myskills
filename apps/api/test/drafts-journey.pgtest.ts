@@ -305,8 +305,7 @@ test("private draft route journey preserves history, isolation and atomic submis
 
   await t.test("external team fork retains parent organization policy and status through insertion", async () => {
     const orgs = new PostgresOrganizationStore(db);
-    const policy = structuredClone(defaultOrganizationPolicyV1);
-    policy.teams.requireOrganizationMembershipForTeamMembers = false;
+    const policy = { ...structuredClone(defaultOrganizationPolicyV1), teams: { ...defaultOrganizationPolicyV1.teams, requireOrganizationMembershipForTeamMembers: false } };
     const org = await orgs.createOrganization({ name: "External team organization", slug: "external-org", createdByUserId: users.alice,
       creatorEmail: "alice@draft.example", creatorName: "alice", policy, policySha256: organizationPolicyDigest(policy), reason: "Fixture" });
     const team = randomUUID();
@@ -329,7 +328,7 @@ test("private draft route journey preserves history, isolation and atomic submis
         await gate.query("SELECT pg_advisory_lock($1)", [gateId]);
         const fork = call("POST", "/v1/drafts", bob, { source: { kind: "release", slug: "external-team-source", version: "1.0.0" } });
         await waitForLocks(pool, "INSERT INTO author_drafts", 1);
-        const strict = structuredClone(policy); strict.teams.requireOrganizationMembershipForTeamMembers = true;
+        const strict = { ...structuredClone(policy), teams: { ...policy.teams, requireOrganizationMembershipForTeamMembers: true } };
         const mutation = writer === "policy"
           ? orgs.appendPolicyRevision({ organizationId: org.organization.id, policy: strict, policySha256: organizationPolicyDigest(strict), reason: "Require organization membership", createdByUserId: users.alice })
           : orgs.archiveOrganization({ organizationId: org.organization.id, actorUserId: users.alice });

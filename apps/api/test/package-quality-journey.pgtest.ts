@@ -175,7 +175,8 @@ test("durable quality journey: held bytes, retries, restart, stale workers, corr
     await assert.rejects(submissions.performReviewAction({ actor: reviewer, submissionId: admitted.id, action: boundary, ...(boundary === "approve" ? { artifactSha256: sha } : {}) }), deny("PACKAGE_SCAN_REQUIRED"));
     const state = (await submissions.getReviewSubmissionDetail({ actor: reviewer, submissionId: admitted.id }))!;
     assert.equal(state.reviewStatus, boundary === "publish" ? "approved" : "unreviewed");
-    assert.equal(state.publishedAt, null);
+    assert.equal(state.lifecycleStatus, boundary === "publish" ? "review" : "submitted");
+    assert.equal((await pool.query("SELECT published_at FROM skill_versions WHERE id=$1", [admitted.id])).rows[0].published_at, null);
     const corrected = await submissions.createSubmission({ actor, ...packageInput(boundary === "approve" ? "0.2.3" : "0.2.4") });
     await scans.runOnce(25);
     await submissions.performReviewAction({ actor: reviewer, submissionId: corrected.id, action: "approve", artifactSha256: corrected.artifact.sha256 });

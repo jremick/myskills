@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseSkillManifest, type PackageInputFile } from "@myskills-app/skill-package";
 import { AppError } from "@myskills-app/core";
+import { runMigrations } from "../src/db/migrate.js";
 import { createDb, createPgPool } from "../src/db/client.js";
 import {
   skillTeamGrants,
@@ -414,9 +415,15 @@ test("approval artifact hash migration backfills legacy approved unpublished row
   );
   assert.equal(backfilled.rows[0].approved_artifact_sha256, artifactSha256);
 
-  // The store uses the current schema projection. Add the later release
-  // metadata columns after proving the isolated 0012 backfill behavior.
-  await applyMigration(pool, "0021_skill_release_metadata");
+  // Preserve the real legacy rows and migrate forward before using today's
+  // store. Record only migrations already applied by the isolated backfill
+  // fixture, then let the production migrator establish the 0039 boundary.
+  await pool.query("CREATE TABLE schema_migrations(id text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
+  for (const file of readdirSync(migrationsDir).filter(file => file.endsWith(".sql") && file <= "0012_approval_artifact_hash.sql").sort()) {
+    await pool.query("INSERT INTO schema_migrations(id) VALUES($1)", [file.replace(/\.sql$/, "")]);
+  }
+  await runMigrations(pool);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM legacy_package_scan_allowances")).rows[0].n, 1);
 
   const db = createDb(pool);
   const maintainer = await insertUser(db, "legacy-maintainer@example.com", "Legacy Maintainer");
