@@ -1,11 +1,37 @@
 # Release Process
 
 Version: 0.1.0-beta.17
-Last updated: 2026-09-29
+Last updated: 2026-09-30
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
+
+## Current published status
+
+Readback on 30 September 2026: GitHub beta.17 is published from
+`9c0511e90a4c0b2fe7c54c4e5f11a1b320e8db7b`. npm `beta` remains
+`0.1.0-beta.16`; `latest` and `alpha` remain `0.1.0-alpha.3`.
+The [hosted version endpoint](https://myskills.sh/version.json) reports beta.16
+at `acfb7c8c7f8bc560f6fdba13cf0414033ab6d00e`. Other instances need independent
+readback. Historical records below describe the state at each release; they
+do not establish the current deployed version.
+
+## Beta.17 release record
+
+Tag `v0.1.0-beta.17` points to
+`9c0511e90a4c0b2fe7c54c4e5f11a1b320e8db7b`. The GitHub prerelease was published
+on 29 September 2026 with source metadata, source and CLI archives, and their
+checksum files. Required Node 22/24 CI, CodeQL and tagged canonical verification
+passed on that source. The release includes the unified Skills workspace,
+Library navigation and source tracking, GitHub integration, and full-page
+architecture Workbench.
+
+npm publication was excluded and no hosted beta.17 delivery is claimed.
+Deploying instances must upgrade API and web together and apply the forward
+migrations listed in [Beta.17 release delivery](BETA17_RELEASE_DELIVERY.md).
+That record separates live publication readback from the existing beta.16
+hosted deployment and work still in progress.
 
 ## Beta.16 release record
 
@@ -208,9 +234,13 @@ git push origin "v${VERSION}"
 
 Draft public release text in a file and use `--notes-file` or the GitHub UI if a later approval authorizes a GitHub Release. Do not place shell snippets, env names, or backticks in an inline `gh release create --notes` argument.
 
-## CLI Package Candidate
+## CLI Package Publication
 
-The candidate repository and GitHub archive version is `0.1.0-beta.17`, with `publishConfig.tag=beta`. `@myskills-app/skill-package` remains a private build-time dependency only; esbuild embeds it in the public CLI bundle. GitHub publication does not change the published npm version.
+The published GitHub CLI archive is `0.1.0-beta.17`; npm's `beta` selector
+remains `0.1.0-beta.16` as of 30 September 2026. The package uses
+`publishConfig.tag=beta`. `@myskills-app/skill-package` remains a private
+build-time dependency only; esbuild embeds it in the public CLI bundle.
+GitHub publication does not change the published npm version.
 
 The canonical gate proves:
 
