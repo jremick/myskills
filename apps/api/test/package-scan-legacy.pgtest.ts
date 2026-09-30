@@ -26,7 +26,16 @@ test("only genuinely pre-binding migrated scans receive the explicit legacy allo
   await pool.query("INSERT INTO skill_platform_variants(skill_version_id,name,install_target,status) VALUES($1,'codex','codex-skill','supported')",[version]);
   await runMigrations(pool);
   assert.deepEqual((await pool.query("SELECT scan_run_id FROM legacy_package_scan_allowances")).rows.map(r=>r.scan_run_id),[scan]);
+  assert.equal((await pool.query("SELECT artifact_sha256 FROM legacy_package_scan_allowances WHERE scan_run_id=$1",[scan])).rows[0].artifact_sha256,sha);
   const service=new SubmissionService(new PostgresSubmissionStore(createDb(pool)));
+  // Even an explicit legacy exception cannot follow post-migration consistent
+  // payload/metadata drift. It freezes the migration-time artifact identity.
+  const changed=structuredClone(files);changed[0]!.content+="Changed B";
+  const changedBody=JSON.stringify({files:changed});const changedSha=createHash("sha256").update(changedBody).digest("hex");
+  await pool.query("UPDATE skill_artifacts SET payload=$2::jsonb,sha256=$3,byte_size=$4 WHERE skill_version_id=$1",[version,changedBody,changedSha,Buffer.byteLength(changedBody)]);
+  await assert.rejects(service.performReviewAction({actor:{id:actor,roles:["maintainer"],mfaVerified:true},submissionId:version,action:"approve",artifactSha256:changedSha}),error=>Boolean(error && typeof error==='object' && 'code' in error && error.code==='PACKAGE_SCAN_REQUIRED'));
+  assert.equal((await pool.query("SELECT review_status FROM skill_versions WHERE id=$1",[version])).rows[0].review_status,"unreviewed");
+  await pool.query("UPDATE skill_artifacts SET payload=$2::jsonb,sha256=$3,byte_size=$4 WHERE skill_version_id=$1",[version,body,sha,Buffer.byteLength(body)]);
   await service.performReviewAction({actor:{id:actor,roles:["maintainer"],mfaVerified:true},submissionId:version,action:"approve",artifactSha256:sha});
   await service.performReviewAction({actor:{id:actor,roles:["maintainer"],mfaVerified:true},submissionId:version,action:"publish"});
   await assert.rejects(pool.query("UPDATE scan_runs SET status='failed' WHERE id=$1",[scan]),/immutable/);

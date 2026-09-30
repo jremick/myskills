@@ -1,14 +1,17 @@
 -- Explicit legacy exception: only unbound synchronous scans that existed before 0039.
+-- The exception freezes migration-time artifact metadata; it cannot follow later byte drift.
 -- Raw fresh-schema fixtures have no historical migration journal and admit no exceptions.
 CREATE TABLE legacy_package_scan_allowances (
-  scan_run_id uuid PRIMARY KEY REFERENCES scan_runs(id) ON DELETE RESTRICT
+  scan_run_id uuid PRIMARY KEY REFERENCES scan_runs(id) ON DELETE RESTRICT,
+  artifact_sha256 text NOT NULL CHECK (artifact_sha256 ~ '^[0-9a-f]{64}$')
 );
 DO $$
 BEGIN
   IF to_regclass('public.schema_migrations') IS NOT NULL THEN
-    INSERT INTO legacy_package_scan_allowances(scan_run_id)
-    SELECT id FROM scan_runs WHERE artifact_sha256 IS NULL AND job_id IS NULL AND status='succeeded'
-      AND created_at < (SELECT applied_at FROM schema_migrations WHERE id='0039_package_scan_jobs');
+    INSERT INTO legacy_package_scan_allowances(scan_run_id,artifact_sha256)
+    SELECT r.id,a.sha256 FROM scan_runs r JOIN skill_artifacts a ON a.skill_version_id=r.skill_version_id
+    WHERE r.artifact_sha256 IS NULL AND r.job_id IS NULL AND r.status='succeeded'
+      AND r.created_at < (SELECT applied_at FROM schema_migrations WHERE id='0039_package_scan_jobs');
   END IF;
 END;
 $$;

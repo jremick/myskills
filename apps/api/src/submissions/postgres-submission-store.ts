@@ -1566,7 +1566,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
   private async requireApplicableScan(tx: DbLike, versionId: string, digest: string): Promise<void> {
     const result = await tx.execute(sql`SELECT id FROM scan_runs WHERE skill_version_id=${versionId}::uuid AND status='succeeded'
       AND (artifact_sha256=${digest} OR (artifact_sha256 IS NULL AND job_id IS NULL
-        AND id IN (SELECT scan_run_id FROM legacy_package_scan_allowances)))
+        AND id IN (SELECT l.scan_run_id FROM legacy_package_scan_allowances l WHERE l.artifact_sha256=${digest})))
       AND NOT EXISTS (SELECT 1 FROM scan_findings WHERE scan_run_id=scan_runs.id AND severity IN ('warning','blocking'))
       ORDER BY created_at DESC, id DESC LIMIT 1`);
     // Only scans predating the binding migration may use the legacy exception.
