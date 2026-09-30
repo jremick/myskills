@@ -17,7 +17,7 @@ test("restore driver requires real TOTP plus recovery, authenticated non-owner d
     const bytes = Buffer.from("disposable private package bytes");
     const source = { version: "0.1.0-beta.19", commit: "a".repeat(40) };
     const file = join(root, "proof.json"), script = join(root, "fixture.mjs"), preload = join(root, "fetch.mjs"), trace = join(root, "trace.json");
-    const evaluation = { slug: "host-fresh", version: "1.0.0", record: { id: "eval", versionId: "submission", suiteRevisionId: "suite", createdAt: "2026-10-01T00:00:00.000Z", summary: { artifactSha256: "a".repeat(64), suiteSha256: "b".repeat(64), runner: { id: "package-static", version: "1" }, provenance: "api-owned", status: "skipped", totals: { pass: 3, fail: 0, warning: 0, skipped: 1, incompatible: 0 } } } };
+    const evaluation = { slug: "host-fresh", version: "1.0.0", record: { id: "eval", versionId: "submission", createdAt: "2026-10-01T00:00:00.000Z", summary: { artifactSha256: "a".repeat(64), runner: { id: "package-static", version: "1" }, provenance: "api-owned", status: "skipped", totals: { pass: 3, fail: 0, warning: 0, skipped: 1, incompatible: 0 } } } };
     const auth = pathToFileURL(resolve("packages/auth/dist/index.js")).href;
     writeFileSync(script, readFileSync(resolve("scripts/lib/self-host-fixture.mjs"), "utf8").replaceAll("/app/packages/auth/dist/index.js", auth));
     writeFileSync(file, JSON.stringify({ api: "http://fixture.invalid", expectedSource: source,

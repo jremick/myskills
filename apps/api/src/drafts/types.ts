@@ -47,6 +47,6 @@ export interface DraftStore {
   history(ownerId: string, draftId: string): Promise<DraftSummary[] | null>;
   create(input: { actor: SubmissionActor; ownerId: string; title: string; files: PackageInputFile[]; source: DraftSource | null; authorizeSource?: (tx: DatabaseTransaction) => Promise<void> }): Promise<Draft>;
   save(input: DraftSaveInput & { actor: SubmissionActor; ownerId: string; draftId: string }): Promise<Draft>;
-  submissionBinding(input: { ownerId: string; draftId: string; expectedRevision: number; digest: string; slug: string; version: string }): SubmissionImportBinding;
+  submissionBinding(input: { actor: SubmissionActor; ownerId: string; draftId: string; expectedRevision: number; digest: string; slug: string; version: string }): SubmissionImportBinding;
   authorizeSource(tx: DatabaseTransaction, ownerId: string, source: DraftSource): Promise<void>;
 }

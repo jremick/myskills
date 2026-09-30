@@ -96,7 +96,7 @@ export class DraftService {
       const submission = await this.submissions.createSubmission({
         actor, files: draft.files, manifest, release: input.release,
         importBinding: this.store.submissionBinding({
-          ownerId: actor.id, draftId, expectedRevision: input.expectedRevision,
+          actor, ownerId: actor.id, draftId, expectedRevision: input.expectedRevision,
           digest: artifactPayloadSha256(canonicalArtifactPayload(draft.files)), slug: manifest.name, version: manifest.version,
         }),
       });

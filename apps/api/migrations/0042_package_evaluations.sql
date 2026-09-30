@@ -27,6 +27,7 @@ CREATE TABLE package_evaluation_runs (
   suite_sha256 text NOT NULL CHECK (suite_sha256 ~ '^[0-9a-f]{64}$'),
   actor_user_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   idempotency_key text NOT NULL CHECK (idempotency_key ~ '^[A-Za-z0-9._:-]{8,128}$'),
+  disclosure text NOT NULL DEFAULT 'private' CHECK (disclosure IN ('private','public-summary')),
   request_sha256 text NOT NULL CHECK (request_sha256 ~ '^[0-9a-f]{64}$'),
   result jsonb NOT NULL CHECK ((jsonb_typeof(result)='object' AND pg_column_size(result)<=65536
     AND result->>'schemaVersion'='1' AND result->>'provenance'='api-owned'

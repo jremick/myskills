@@ -17,10 +17,12 @@ test("evaluation HTTP contracts reject invented authority and unusable credentia
   const root="/v1/evaluations/releases/fixture/1.0.0";const body={artifactSha256:"a".repeat(64),suiteRevisionId:"11111111-1111-4111-8111-111111111111",platform:"codex",idempotencyKey:"contract-evaluation"};
   const response=await app.inject({method:"POST",url:`${root}/runs`,headers:{authorization:`Bearer ${token}`},payload:body});assert.equal(response.statusCode,201,response.body);
   const captured=calls[0] as {actor:{credential:{tokenHash:string}};input:unknown};assert.equal(captured.actor.credential.tokenHash.length,64);assert.deepEqual(captured.input,{slug:"fixture",version:"1.0.0",...body});
+  const opted = await app.inject({method:"POST",url:`${root}/runs`,headers:{authorization:`Bearer ${token}`},payload:{...body,disclosure:"public-summary"}});
+  assert.equal(opted.statusCode,201); assert.equal((calls[1] as {input:{disclosure:string}}).input.disclosure,"public-summary");
   const count=calls.length;
   for(const url of [`${root}/runs`,`${root}/summary`]){const denial=await app.inject({method:"GET",url,headers:{authorization:"Bearer revoked-or-invalid"}});assert.equal(denial.statusCode,401);}
   assert.equal(calls.length,count);
-  for(const invalid of [{...body,provenance:"api-owned"},{...body,result:{status:"pass"}},{...body,runner:{id:"trusted"}},{...body,artifactSha256:"bad"}])assert.equal((await app.inject({method:"POST",url:`${root}/runs`,headers:{authorization:`Bearer ${token}`},payload:invalid})).statusCode,400);
+  for(const invalid of [{...body,provenance:"api-owned"},{...body,result:{status:"pass"}},{...body,runner:{id:"trusted"}},{...body,artifactSha256:"bad"},{...body,disclosure:"automatic"}])assert.equal((await app.inject({method:"POST",url:`${root}/runs`,headers:{authorization:`Bearer ${token}`},payload:invalid})).statusCode,400);
   assert.equal((await app.inject({method:"GET",url:`${root}/summary`})).statusCode,200);
   assert.equal((await app.inject({method:"GET",url:`${root}/runs`})).statusCode,401);
 });

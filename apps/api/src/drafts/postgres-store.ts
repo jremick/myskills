@@ -75,6 +75,7 @@ export class PostgresDraftStore implements DraftStore {
     return {
       beforeVersionInsert: async (tx: DatabaseTransaction) => {
         await lockHead(tx, input);
+        await assertActionAuthority(tx, input.actor, ["skills:submit"], "author");
         const result = await tx.execute(sql`SELECT package_digest, submission_id FROM author_draft_revisions
           WHERE draft_id=${input.draftId}::uuid AND revision=${input.expectedRevision} FOR UPDATE`);
         const row = result.rows[0];
@@ -86,6 +87,7 @@ export class PostgresDraftStore implements DraftStore {
         await tx.execute(sql`UPDATE author_draft_revisions SET submission_id=${context.versionId}::uuid,
           submission_slug=${input.slug}, submission_version=${input.version}, submission_artifact_sha256=${context.artifactSha256}
           WHERE draft_id=${input.draftId}::uuid AND revision=${input.expectedRevision}`);
+        await assertActionAuthority(tx, input.actor, ["skills:submit"], "author");
       },
     };
   }

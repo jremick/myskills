@@ -22,7 +22,7 @@ export function registerEvaluationRoutes(app: FastifyInstance, deps: { evaluatio
     return parsed.data;
   };
   app.post("/v1/evaluations/releases/:slug/:version/runs", { bodyLimit: 4096 }, async (request, reply) => {
-    const body = z.object({ artifactSha256: z.string().regex(/^[a-f0-9]{64}$/), suiteRevisionId: z.string().uuid(), platform: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/), idempotencyKey: z.string().regex(/^[A-Za-z0-9._:-]{8,128}$/) }).strict().safeParse(request.body);
+    const body = z.object({ artifactSha256: z.string().regex(/^[a-f0-9]{64}$/), suiteRevisionId: z.string().uuid(), platform: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/), idempotencyKey: z.string().regex(/^[A-Za-z0-9._:-]{8,128}$/), disclosure: z.enum(["private", "public-summary"]).optional() }).strict().safeParse(request.body);
     if (!body.success) throw new AppError("Invalid evaluation request.", "INVALID_EVALUATION_REQUEST", 400);
     const user = await actor(request, "improvements:run");
     const result = await service().create(user!, { ...params(request), ...body.data });

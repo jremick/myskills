@@ -164,14 +164,15 @@ if (mode === "seed-nonowner") {
     const { suite } = await api("/v1/improvements/suites", { owner: { type: "user", id: data.ownerId }, suite: defaultPackageEvaluationSuite() }, { status: 201 });
     const current = submission.submission;
     const slug = current.slug, version = current.version;
+    await api(`/v1/review/submissions/${data.submissionId}/actions`, { action: "approve", artifactSha256: current.artifact.sha256 });
+    await api(`/v1/review/submissions/${data.submissionId}/actions`, { action: "publish", artifactSha256: current.artifact.sha256 });
+    await api(`/v1/skills/${slug}/sharing`, { visibility: "public", userEmails: [], teamIds: [], organizationIds: [] }, { method: "PUT" });
     const { run } = await api(`/v1/evaluations/releases/${slug}/${version}/runs`, {
-      artifactSha256: current.artifact.sha256, suiteRevisionId: suite.latest.id, platform: "codex", idempotencyKey: `host-${data.fixtureName}-evaluation`,
+      artifactSha256: current.artifact.sha256, suiteRevisionId: suite.latest.id, platform: "codex", idempotencyKey: `host-${data.fixtureName}-evaluation`, disclosure: "public-summary",
     }, { status: 201 });
     assert.equal(run.versionId, data.submissionId); assert.equal(run.result.artifactSha256, current.artifact.sha256);
     assert.equal(run.result.suiteSha256, suite.latest.bodySha256); assert.equal(run.result.provenance, "api-owned");
     assert.equal(run.result.runner.id, "package-static"); assert.equal(run.result.runner.version, "1"); assert.equal(run.result.totals.skipped, 1);
-    await api(`/v1/review/submissions/${data.submissionId}/actions`, { action: "approve", artifactSha256: current.artifact.sha256 });
-    await api(`/v1/review/submissions/${data.submissionId}/actions`, { action: "publish", artifactSha256: current.artifact.sha256 });
     const { runs } = await api(`/v1/evaluations/releases/${slug}/${version}/summary`);
     const summary = runs.find(value => value.id === run.id); assert.ok(summary); assert.equal(summary.summary.assertions, undefined);
     // Bounded summary only; no raw result, package content or findings exported.

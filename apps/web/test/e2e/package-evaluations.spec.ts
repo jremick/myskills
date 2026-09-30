@@ -22,7 +22,7 @@ async function fixture(page:Page,reviewer:boolean){
     if(path==="/v1/review/submissions")return reply({submissions:[submission],nextCursor:null});
     if(path==="/v1/review/submissions/submission")return reply({submission:{...submission,reviewHistory:[],scanRuns:[{id:"scan",status:"succeeded",createdAt:run.createdAt,startedAt:run.createdAt,completedAt:run.createdAt,artifactSha256:result.artifactSha256,runnerVersion:"package-scan-v1",attempt:1,failureCode:null,findings:scanPackageFiles(files).findings}],changeRequestReason:null}});
     if(path==="/v1/evaluations/releases/evaluation-fixture/1.0.0/runs")return reply({runs:[run]});
-    if(path==="/v1/evaluations/releases/evaluation-fixture/1.0.0/summary")return reply({runs:[{id:run.id,versionId:run.versionId,suiteRevisionId:run.suiteRevisionId,createdAt:run.createdAt,summary:packageEvaluationSummary(result)}]});
+    if(path==="/v1/evaluations/releases/evaluation-fixture/1.0.0/summary")return reply({runs:[{id:run.id,versionId:run.versionId,createdAt:run.createdAt,summary:packageEvaluationSummary(result)}]});
     const release={...submission,lifecycleStatus:"approved",reviewStatus:"approved",publishedAt:"2026-10-01T01:00:00Z",allowedActions:[]};
     const skill={slug:manifest.name,title:manifest.title,summary:manifest.summary,visibility:"public",latestVersion:"1.0.0",lifecycleStatus:"approved",reviewStatus:"approved",securityStatus:"passed",platforms,tags:[],access:{canManageSharing:false,reasons:["public"]}};
     if(path==="/v1/skills")return reply({skills:[skill],nextCursor:null});
@@ -48,6 +48,6 @@ for(const width of [1280,390])test(`reviewer static evidence exposes exact bindi
 test("public approved release shows bounded summary and no assertion details",async({page},info)=>{
   await fixture(page,false);await page.goto("/skills/evaluation-fixture?version=1.0.0");
   const evidence=page.getByRole("region",{name:"Package evaluation evidence"});await expect(evidence.getByText(/Pass 3/)).toBeVisible();
-  await expect(evidence.getByText(result.artifactSha256,{exact:true})).toBeVisible();await expect(evidence).not.toContainText("behavior: skipped");await expect(evidence).not.toContainText("PRIVATE-PACKAGE-CANARY");
+  await expect(evidence.getByText(result.artifactSha256,{exact:true})).toBeVisible();await expect(evidence).not.toContainText("behavior: skipped");await expect(evidence).not.toContainText("PRIVATE-PACKAGE-CANARY");await expect(evidence).not.toContainText(run.suiteRevisionId);await expect(evidence).not.toContainText(result.suiteSha256);
   await page.screenshot({path:info.outputPath("public-evaluation-summary.png"),fullPage:true});
 });

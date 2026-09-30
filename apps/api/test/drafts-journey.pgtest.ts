@@ -400,6 +400,62 @@ test("private draft route journey preserves history, isolation and atomic submis
     }
   });
 
+  await t.test("draft submit denies stale authority after both head and allocation waits without version job or receipt", async () => {
+    let sequence = 0;
+    const authStore = new PostgresAuthStore(db);
+    for (const barrier of ["head", "allocation"] as const) for (const kind of ["session", "api_token"] as const) {
+      for (const failure of ["revocation", "expiry", "scope", "role", "valid"] as const) {
+        if (kind === "session" && failure === "scope") continue;
+        const session = await login("alice");
+        const issued = kind === "api_token" ? ok(await call("POST", "/v1/auth/api-tokens", session, { name: "Submit authority", scopes: ["skills:submit"] }), 201).token : null;
+        const credential = issued?.token ?? session;
+        const slug = `submit-authority-${++sequence}`;
+        const files = packageFiles(slug, "1.0.0");
+        const draft = ok(await call("POST", "/v1/drafts", session, { title: "Submit authority", files }), 201).draft;
+        let expiry = 0;
+        if (failure === "expiry") expiry = new Date((await pool.query(`UPDATE ${kind === "session" ? "auth_sessions" : "api_tokens"} SET expires_at=clock_timestamp()+interval '1500 milliseconds' WHERE token_hash=$1 RETURNING expires_at`, [hashSessionToken(credential)])).rows[0].expires_at).getTime();
+        const locker = await pool.connect(); await locker.query("BEGIN");
+        if (barrier === "head") await locker.query("SELECT id FROM author_drafts WHERE id=$1 FOR UPDATE", [draft.id]);
+        else await locker.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`submission:${slug}`]);
+        const pending = call("POST", `/v1/drafts/${draft.id}/submit`, credential, { expectedRevision: 1 });
+        try {
+          await waitForLocks(pool, barrier === "head" ? "FROM author_drafts" : "pg_advisory_xact_lock", 1);
+          if (failure === "revocation") {
+            if (issued) await authStore.revokeApiToken({ userId: users.alice, tokenId: issued.id });
+            else await authStore.revokeSessionByTokenHash(hashSessionToken(session));
+          } else if (failure === "expiry") await new Promise(done => setTimeout(done, Math.max(0, expiry - Date.now()) + 30));
+          else if (failure === "scope") await pool.query("UPDATE api_tokens SET scopes='[]'::jsonb WHERE token_hash=$1", [hashSessionToken(credential)]);
+          else if (failure === "role") await pool.query("DELETE FROM role_assignments WHERE user_id=$1 AND role='author'", [users.alice]);
+        } finally { await locker.query("COMMIT"); locker.release(); }
+        const response = await pending;
+        if (failure === "valid") ok(response, 202);
+        else denied(response, failure === "scope" || failure === "role" ? 403 : 401, failure === "scope" ? "API_TOKEN_SCOPE_REQUIRED" : failure === "role" ? "SUBMISSION_ROLE_REQUIRED" : "AUTHENTICATION_REQUIRED");
+        if (failure === "role") await pool.query("INSERT INTO role_assignments(user_id,role) VALUES($1,'author')", [users.alice]);
+        const versions = (await pool.query("SELECT count(*)::int AS n FROM skill_versions v JOIN skills s ON s.id=v.skill_id WHERE s.slug=$1", [slug])).rows[0].n;
+        const jobs = (await pool.query("SELECT count(*)::int AS n FROM package_scan_jobs j JOIN skill_versions v ON v.id=j.skill_version_id JOIN skills s ON s.id=v.skill_id WHERE s.slug=$1", [slug])).rows[0].n;
+        const receipt = (await pool.query("SELECT submission_id FROM author_draft_revisions WHERE draft_id=$1 AND revision=1", [draft.id])).rows[0].submission_id;
+        assert.equal(versions, failure === "valid" ? 1 : 0); assert.equal(jobs, failure === "valid" ? 1 : 0); assert.equal(Boolean(receipt), failure === "valid");
+        evidence.push({ check: "submit-current-authority", barrier, kind, failure, versions, jobs, receiptPresent: Boolean(receipt) });
+      }
+    }
+    for (const barrier of ["head", "allocation"] as const) {
+      await pool.query("UPDATE auth_sessions SET mfa_verified_at=clock_timestamp() WHERE token_hash=$1", [hashSessionToken(reviewer)]);
+      const slug = `submit-assurance-${barrier}`;
+      const draft = ok(await call("POST", "/v1/drafts", reviewer, { title: "Assurance", files: packageFiles(slug, "1.0.0") }), 201).draft;
+      const locker = await pool.connect(); await locker.query("BEGIN");
+      if (barrier === "head") await locker.query("SELECT id FROM author_drafts WHERE id=$1 FOR UPDATE", [draft.id]);
+      else await locker.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`submission:${slug}`]);
+      const pending = call("POST", `/v1/drafts/${draft.id}/submit`, reviewer, { expectedRevision: 1 });
+      try {
+        await waitForLocks(pool, barrier === "head" ? "FROM author_drafts" : "pg_advisory_xact_lock", 1);
+        await pool.query("UPDATE auth_sessions SET mfa_verified_at=NULL WHERE token_hash=$1", [hashSessionToken(reviewer)]);
+      } finally { await locker.query("COMMIT"); locker.release(); }
+      denied(await pending, 403, "MFA_VERIFICATION_REQUIRED");
+      assert.equal((await pool.query("SELECT count(*)::int AS n FROM skill_versions v JOIN skills s ON s.id=v.skill_id WHERE s.slug=$1", [slug])).rows[0].n, 0);
+      assert.equal((await pool.query("SELECT submission_id FROM author_draft_revisions WHERE draft_id=$1", [draft.id])).rows[0].submission_id, null);
+    }
+  });
+
   await t.test("history and author limits refuse without pruning", async () => {
     const files = packageFiles("limits-workflow", "1.0.0");
     const created = ok(await call("POST", "/v1/drafts", bob, { title: "History", files }), 201).draft;

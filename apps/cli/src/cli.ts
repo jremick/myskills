@@ -1,3 +1,4 @@
+import { releaseComparisonHelp, runReleaseComparisonCommand } from "./release-comparison-commands.js";
 import { evaluationHelp, runEvaluationCommand } from "./evaluation-commands.js";
 import { prepareLocalArchitectureArtifact, applyLocalArchitectureArtifact, verifyLocalArchitectureArtifact, rollbackLocalArchitectureArtifact, type ArtifactFaultPoint } from "./architecture-artifact.js";
 import { artifactHash, type ArchitectureArtifactIntent } from "@myskills-app/core";
@@ -271,6 +272,7 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
 
 async function dispatchCli(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
     if (parsed.command === "architecture-artifacts") return architectureArtifactCommand(parsed, runtime);
+    if (await runReleaseComparisonCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
     if (await runEvaluationCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
     if (await runAuthorDraftCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
     if (await runArchitecturePlanCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
@@ -6283,6 +6285,7 @@ function helpText(runtime: CliRuntime): string {
     "  rollback <skill-slug> [--dir <install-root>]",
     "  companion run-once --workspace <absolute-dir> --holder <id> [--api-url <url>] [--token <token>] (token scopes: skills:read, targets:execute; add libraries:read for library-bound skills)",
     ...evaluationHelp,
+    ...releaseComparisonHelp,
     "  architecture-artifacts create <target-id> --input <request.json>; prepare|apply|verify|rollback|show <run-id> --workspace <absolute-dir>",
     "    Stage before execution approval. Aggregate byte/receipt proof does not establish provider recognition.",
     "  codex enroll --workspace <absolute-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>] [--api-url <url>]",

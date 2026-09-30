@@ -17,7 +17,7 @@ function Evidence({api,slug,version,publicSummary=false}:{api:EvaluationClient;s
       if(!value)return null;
       return <article key={run.id}><strong>{value.status}</strong> · {value.provenance} · {value.target.platform}
         <p>Pass {value.totals.pass} · Fail {value.totals.fail} · Warning {value.totals.warning} · Skipped {value.totals.skipped} · Incompatible {value.totals.incompatible}</p>
-        <p>Artifact <code className="scan-evidence-digest">{value.artifactSha256}</code></p><p>Suite revision <code>{run.suiteRevisionId}</code> · <code className="scan-evidence-digest">{value.suiteSha256}</code></p>
+        <p>Artifact <code className="scan-evidence-digest">{value.artifactSha256}</code></p>{!publicSummary && run.result && <p>Suite revision <code>{run.suiteRevisionId}</code> · <code className="scan-evidence-digest">{run.result.suiteSha256}</code></p>}
         <p>Runner {value.runner.id}/{value.runner.version} · Scope {value.target.context}</p>
         {!publicSummary && run.result && <ul>{run.result.assertions.map(assertion=><li key={assertion.id}>{assertion.id}: {assertion.outcome} · {assertion.scope} · {assertion.code}</li>)}</ul>}
       </article>;

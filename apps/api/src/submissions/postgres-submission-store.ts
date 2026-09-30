@@ -1273,6 +1273,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
         || prepared.manifest.visibility !== "private" || row.visibility !== "private") {
         throw new AppError("Package manifest does not match the reviewed submission.", "PACKAGE_MANIFEST_MISMATCH", 422);
       }
+      await this.requireApplicableScan(tx, input.submissionId, currentArtifact.sha256);
       await this.options.publicationGuard?.assertReleasePublishable(tx, {
         releaseId: input.submissionId,
         artifactSha256: input.artifactSha256,
@@ -1417,6 +1418,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
         || !currentArtifact || !sameReviewArtifact(currentArtifact, prepared.artifact) || !row.artifactPayloadMatches) {
         throw new AppError("Review artifact hash does not match the self-reviewed artifact.", "ARTIFACT_HASH_MISMATCH", 409);
       }
+      await this.requireApplicableScan(tx, input.submissionId, currentArtifact.sha256);
       await tx.execute(sql`
         INSERT INTO skill_version_review_attestations (skill_version_id, kind, artifact_sha256, actor_user_id, reason)
         VALUES (${input.submissionId}::uuid, 'instance-elevation', ${input.artifactSha256}, ${input.actorId}::uuid, ${input.reason ?? ""})

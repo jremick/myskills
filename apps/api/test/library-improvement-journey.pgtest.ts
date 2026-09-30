@@ -142,6 +142,7 @@ test("library import self-review honours release declarations like maintainer pu
     files: {
       "LICENSE": "MIT License\n\nCopyright (c) 2026 Acme\n\nPermission is granted to use, copy and modify this software.\n",
       "skills/incident-brief/SKILL.md": "---\nname: incident-brief\ndescription: Summarize incidents for the on-call handover.\n---\n\n# Incident brief\n\nList the impact, the owner and the next step.\n",
+      "skills/scan-drift/SKILL.md": "---\nname: scan-drift\ndescription: Exercise exact scan consumption.\n---\n\n# Scan A\n",
       "skills/release-notes/SKILL.md": "---\nname: release-notes\ndescription: Draft short release notes from merged changes.\n---\n\n# Release notes\n\nGroup changes by user impact.\n",
     },
   });
@@ -218,7 +219,7 @@ test("library import self-review honours release declarations like maintainer pu
   const discovery = journal.check("setup", "discovery", await call("POST", `/v1/library-entries/${entry.id}/discoveries`, owner), 200).body.discovery;
   const preview = journal.check("setup", "preview", await call("POST", `/v1/library-entries/${entry.id}/previews`, owner, {
     snapshotId: discovery.snapshot.id,
-    paths: ["skills/incident-brief", "skills/release-notes"],
+    paths: ["skills/incident-brief", "skills/release-notes", "skills/scan-drift"],
   }), 200).body.preview;
   const candidates = new Map<string, Json>(preview.candidates.map((candidate: Json) => [candidate.sourcePath, candidate]));
   const importCandidate = async (path: string, clientMutationId: string): Promise<Imported> => {
@@ -235,6 +236,7 @@ test("library import self-review honours release declarations like maintainer pu
   };
   const gated = await importCandidate("skills/incident-brief", "li-import-gated-1");
   const mismatched = await importCandidate("skills/release-notes", "li-import-mismatched-1");
+  const drifted = await importCandidate("skills/scan-drift", "li-import-scan-drift");
   assert.notEqual(OTHER_BYTES, mismatched.digest);
 
   // ---- Readbacks shared by the scenarios.
@@ -381,7 +383,42 @@ test("library import self-review honours release declarations like maintainer pu
   assert.deepEqual(finalCompat.manage.pendingRevisions, []);
   journal.note("L06", "bindings", { declarationRevision: 2, attestationRevision: 3, artifactSha256: gated.digest });
 
-  assert.deepEqual(journal.ids().filter((id) => id !== "setup").sort(), ["L01", "L02", "L03", "L04", "L05", "L06", "L07"]);
+  await t.test("real Library self-review and elevation consume the exact scan; a separately imported correction succeeds", async () => {
+    const initial = (await pool.query("SELECT payload,sha256 FROM skill_artifacts WHERE skill_version_id=$1", [drifted.submissionId])).rows[0];
+    assert.equal(initial.sha256, drifted.digest);
+    assert.equal((await pool.query("SELECT count(*)::int AS n FROM scan_runs WHERE skill_version_id=$1 AND status='succeeded' AND artifact_sha256=$2", [drifted.submissionId, drifted.digest])).rows[0].n, 1);
+    const payload = structuredClone(initial.payload);
+    const skill = payload.files.find((file: {path:string}) => file.path === "SKILL.md");
+    assert.ok(skill); skill.content += "\nConsistent content B after scan A.\n";
+    const bytes = JSON.stringify(payload), changedDigest = createHash("sha256").update(bytes).digest("hex");
+    await pool.query("UPDATE skill_artifacts SET payload=$2::jsonb,sha256=$3,byte_size=$4 WHERE skill_version_id=$1", [drifted.submissionId, bytes, changedDigest, Buffer.byteLength(bytes)]);
+    const before = await releaseState(drifted.submissionId);
+    const denied = await call("POST", `/v1/library-candidates/${drifted.candidateId}/self-review`, owner, { artifactSha256: changedDigest });
+    assert.equal(denied.status, 422, JSON.stringify(denied.body)); assert.equal(denied.body.error.code, "PACKAGE_SCAN_REQUIRED");
+    assert.deepEqual(await releaseState(drifted.submissionId), before);
+    // Model the source defect's historically admitted self-review of B. All identity fields
+    // agree on B, but the only immutable scan remains A. This isolates elevation's consumer.
+    await pool.query("UPDATE skill_versions SET review_status='approved',lifecycle_status='approved',approved_artifact_sha256=$2,published_at=clock_timestamp() WHERE id=$1", [drifted.submissionId, changedDigest]);
+    await pool.query("INSERT INTO skill_version_review_attestations(skill_version_id,kind,artifact_sha256,actor_user_id) VALUES($1,'private-self-review',$2,$3)", [drifted.submissionId, changedDigest, users.owner.id]);
+    assert.equal((await call("POST", `/v1/library-candidates/${drifted.candidateId}/instance-review-requests`, owner)).status, 200);
+    const elevationBefore = await releaseState(drifted.submissionId);
+    const elevated = await call("POST", `/v1/review/self-reviewed-releases/${drifted.submissionId}/elevate`, maintainer, { artifactSha256: changedDigest });
+    assert.equal(elevated.status, 422, JSON.stringify(elevated.body)); assert.equal(elevated.body.error.code, "PACKAGE_SCAN_REQUIRED");
+    assert.deepEqual(await releaseState(drifted.submissionId), elevationBefore);
+    github.commit(REPO, { files: { "skills/scan-drift/SKILL.md": "---\nname: scan-drift\ndescription: Exercise exact scan consumption.\n---\n\n# Corrected separately submitted and scanned revision\n" } });
+    const freshDiscovery = await call("POST", `/v1/library-entries/${entry.id}/discoveries`, owner); assert.equal(freshDiscovery.status, 200);
+    const freshPreview = await call("POST", `/v1/library-entries/${entry.id}/previews`, owner, { snapshotId: freshDiscovery.body.discovery.snapshot.id, paths: ["skills/scan-drift"] }); assert.equal(freshPreview.status, 200);
+    const candidate = freshPreview.body.preview.candidates[0];
+    const freshImport = await call("POST", `/v1/library-candidates/${candidate.id}/import`, owner, { expectedPackageDigest: candidate.packageDigest, release: { classification: "unclassified" }, clientMutationId: "li-import-scan-correction" }); assert.equal(freshImport.status, 202, JSON.stringify(freshImport.body));
+    assert.notEqual(freshImport.body.submission.id, drifted.submissionId);
+    assert.equal((await call("POST", `/v1/library-candidates/${candidate.id}/self-review`, owner, { artifactSha256: candidate.packageDigest })).status, 200);
+    assert.equal((await call("POST", `/v1/library-candidates/${candidate.id}/instance-review-requests`, owner)).status, 200);
+    const correctedElevation = await call("POST", `/v1/review/self-reviewed-releases/${freshImport.body.submission.id}/elevate`, maintainer, { artifactSha256: candidate.packageDigest }); assert.equal(correctedElevation.status, 200, JSON.stringify(correctedElevation.body));
+    assert.equal((await releaseState(freshImport.body.submission.id)).attestations, 2);
+    journal.note("scan-consumption", "consistent A-to-B denial and new correction", { scannedDigest: drifted.digest, driftDigest: changedDigest, correctedDigest: candidate.packageDigest, selfReviewDenial: denied.status, elevationDenial: elevated.status, correctedElevation: correctedElevation.status });
+  });
+
+  assert.deepEqual(journal.ids().filter((id) => id !== "setup").sort(), ["L01", "L02", "L03", "L04", "L05", "L06", "L07", "scan-consumption"]);
   t.diagnostic(`library improvement evidence: ${journal.write()}`);
 });
 

@@ -36,8 +36,8 @@ export function normalizePackageEvaluationAssertions(input: unknown): PackageEva
 export function packageEvaluationAssertionsDigest(assertions: PackageEvaluationAssertion[]) { return improvementDigest(normalizePackageEvaluationAssertions(assertions)); }
 export function packageEvaluationRubricDigest() { return improvementDigest({ schemaVersion: 1, runner: "package-static/1", outcomes: packageEvaluationOutcomes }); }
 /** Allow-list projection; callers cannot publish paths, task text, prompts or findings. */
-export function packageEvaluationSummary(result: PackageEvaluationResult): Omit<PackageEvaluationResult, "assertions"> {
-  return { schemaVersion: 1, artifactSha256: result.artifactSha256, suiteSha256: result.suiteSha256,
+export function packageEvaluationSummary(result: PackageEvaluationResult): Omit<PackageEvaluationResult, "assertions" | "suiteSha256"> {
+  return { schemaVersion: 1, artifactSha256: result.artifactSha256,
     target: { platform: result.target.platform, context: result.target.context }, runner: { id: result.runner.id, version: result.runner.version },
     provenance: result.provenance, status: result.status, totals: { pass: result.totals.pass, fail: result.totals.fail, warning: result.totals.warning, skipped: result.totals.skipped, incompatible: result.totals.incompatible } };
 }
