@@ -87,6 +87,17 @@ jobs:
       - name: Collect reviewed MCP connector evidence
         if: always() && steps.fullstack-browser.outcome != 'skipped'
         run: node scripts/collect-browser-evidence.mjs apps/web/test-results/fullstack-connector-report.json apps/web/test-results dist/browser-evidence/fullstack-connector
+      - name: Build product and documentation site
+        run: npm run build -w @myskills-app/site
+      - name: Run desktop, mobile and keyboard site journeys
+        id: product-site-browser
+        run: npm run test:e2e -w @myskills-app/site -- --reporter=line,json
+        env:
+          MYSKILLS_SITE_TEST_PORT: '4188'
+          PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/site-report.json
+      - name: Collect reviewed product-site evidence
+        if: always() && steps.product-site-browser.outcome != 'skipped'
+        run: node scripts/collect-browser-evidence.mjs apps/site/test-results/site-report.json apps/site/test-results dist/browser-evidence/product-site
       - name: Upload reviewed browser evidence
         if: always()
         uses: actions/upload-artifact@v7

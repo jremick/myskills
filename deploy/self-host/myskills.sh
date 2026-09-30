@@ -100,21 +100,44 @@ cfg() {
   if [ -n "$target_env" ]; then set -- "$@" --target-env-file /restore.env; fi
   # Setup prompts retain a TTY; all other calls remain noninteractive.
   tty_args=
+  network_args=
+  if [ "$mode" = recovery-execute ]; then network_args="--network host"; fi
   if [ "$mode" = setup ] && [ -z "$answers_file" ]; then tty_args=-it; fi
   if [ -n "$target_bundle" ] && [ -n "$target_env" ]; then die 'target bundle and restore config cannot be combined.'; fi
   if [ -n "$target_bundle" ]; then
-    docker_call run --rm ${tty_args:+$tty_args} --read-only --tmpfs /tmp --user "$(id -u):$(id -g)" --mount "type=bind,source=$bundle,target=/bundle,readonly" --mount "type=bind,source=$config_dir,target=/config" --mount "type=bind,source=$target_bundle,target=/target,readonly" "$ops_image" node /app/deploy/self-host/configure.mjs "$@" 2>/dev/null
+    docker_call run --rm ${network_args:+$network_args} ${tty_args:+$tty_args} --read-only --tmpfs /tmp --user "$(id -u):$(id -g)" --mount "type=bind,source=$bundle,target=/bundle,readonly" --mount "type=bind,source=$config_dir,target=/config" --mount "type=bind,source=$target_bundle,target=/target,readonly" "$ops_image" node /app/deploy/self-host/configure.mjs "$@" 2>/dev/null
   elif [ -n "$answers_file" ]; then
-    docker_call run --rm ${tty_args:+$tty_args} --read-only --tmpfs /tmp --user "$(id -u):$(id -g)" --mount "type=bind,source=$bundle,target=/bundle,readonly" --mount "type=bind,source=$config_dir,target=/config" --mount "type=bind,source=$answers_file,target=/answers.json,readonly" "$ops_image" node /app/deploy/self-host/configure.mjs "$@" 2>/dev/null
+    docker_call run --rm ${network_args:+$network_args} ${tty_args:+$tty_args} --read-only --tmpfs /tmp --user "$(id -u):$(id -g)" --mount "type=bind,source=$bundle,target=/bundle,readonly" --mount "type=bind,source=$config_dir,target=/config" --mount "type=bind,source=$answers_file,target=/answers.json,readonly" "$ops_image" node /app/deploy/self-host/configure.mjs "$@" 2>/dev/null
   elif [ -n "$target_env" ]; then
-    docker_call run --rm ${tty_args:+$tty_args} --read-only --tmpfs /tmp --user "$(id -u):$(id -g)" --mount "type=bind,source=$bundle,target=/bundle,readonly" --mount "type=bind,source=$config_dir,target=/config" --mount "type=bind,source=$target_env,target=/restore.env,readonly" "$ops_image" node /app/deploy/self-host/configure.mjs "$@" 2>/dev/null
+    docker_call run --rm ${network_args:+$network_args} ${tty_args:+$tty_args} --read-only --tmpfs /tmp --user "$(id -u):$(id -g)" --mount "type=bind,source=$bundle,target=/bundle,readonly" --mount "type=bind,source=$config_dir,target=/config" --mount "type=bind,source=$target_env,target=/restore.env,readonly" "$ops_image" node /app/deploy/self-host/configure.mjs "$@" 2>/dev/null
   else
-    docker_call run --rm ${tty_args:+$tty_args} --read-only --tmpfs /tmp --user "$(id -u):$(id -g)" --mount "type=bind,source=$bundle,target=/bundle,readonly" --mount "type=bind,source=$config_dir,target=/config" "$ops_image" node /app/deploy/self-host/configure.mjs "$@" 2>/dev/null
+    docker_call run --rm ${network_args:+$network_args} ${tty_args:+$tty_args} --read-only --tmpfs /tmp --user "$(id -u):$(id -g)" --mount "type=bind,source=$bundle,target=/bundle,readonly" --mount "type=bind,source=$config_dir,target=/config" "$ops_image" node /app/deploy/self-host/configure.mjs "$@" 2>/dev/null
   fi
 }
 
+lock_owned=false; upgrade_owned=false; phase=validate; report_file=; observations_file=
+cleanup() {
+  code=$?
+  if [ "$lock_owned" = true ]; then
+    if [ "$upgrade_owned" = true ] && [ "$code" -ne 0 ]; then cfg receipt --status failed --phase "$phase" >/dev/null 2>&1 || printf '%s\n' 'Upgrade failed; receipt write could not be confirmed. Preserve the protected config and completed backup.' >&2; fi
+    rmdir -- "$config_dir/operation.lock" || printf '%s\n' 'Operation lock remains; inspect it before another mutation.' >&2
+  fi
+  [ -z "$report_file" ] || rm -f -- "$report_file"
+  [ -z "$observations_file" ] || rm -f -- "$observations_file"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# One lock fences every operation that can start writers or change managed state.
+case "$command:$action" in
+  setup:|up:|bootstrap:|upgrade:|backup:config|backup:execute|recover:execute)
+    mkdir -m 700 -- "$config_dir/operation.lock" 2>/dev/null || die 'another operation holds the lock; a stale lock requires operator inspection.'
+    lock_owned=true ;;
+esac
+
 if [ "$command" = setup ]; then cfg setup || die 'setup rejected; use protected inputs, HTTPS, explicit SMTP/Resend and a fresh mode-0700 directory. Existing credentials are never overwritten.'; exit 0; fi
-metadata=$(cfg metadata) || die 'protected configuration or bundle validation failed.'
+metadata=$(cfg metadata) || die 'protected configuration or active bundle validation failed; use the exact target bundle after forward migration.'
 project=$(printf '%s\n' "$metadata" | sed -n 1p)
 mcp=$(printf '%s\n' "$metadata" | sed -n 2p)
 printf '%s\n' "$project" | LC_ALL=C grep -Eq '^[a-z][a-z0-9-]{0,48}$' || die 'invalid protected Compose project name.'
@@ -131,7 +154,11 @@ backup_run() {
   fresh_report
   backup_result=0
   compose --profile operations run --rm --no-deps ops node scripts/run-registry-backup.mjs "$1" >"$report_file" 2>/dev/null || backup_result=$?
-  cfg backup-report --report-file "/config/$(basename "$report_file")" || backup_result=1
+  if [ "$upgrade_owned" = true ]; then
+    cfg backup-report --report-file "/config/$(basename "$report_file")" --attach-upgrade-receipt true || backup_result=1
+  else
+    cfg backup-report --report-file "/config/$(basename "$report_file")" || backup_result=1
+  fi
   rm -f -- "$report_file"; report_file=
   [ "$backup_result" -eq 0 ] || die 'coordinated backup did not complete successfully; no migration should proceed.'
 }
@@ -150,23 +177,11 @@ check_running_images() {
     [ "$actual" = "$expected" ] || die 'running image differs from the source bundle; resolve drift before upgrading.'
   done
 }
-lock_owned=false; phase=validate; report_file=; observations_file=
-cleanup() {
-  code=$?
-  if [ "$lock_owned" = true ]; then
-    if [ "$code" -ne 0 ]; then cfg receipt --status failed --phase "$phase" >/dev/null 2>&1 || printf '%s\n' 'Upgrade failed; receipt write could not be confirmed. Preserve the protected config and completed backup.' >&2; fi
-    rmdir -- "$config_dir/upgrade.lock" || printf '%s\n' 'Upgrade lock remains; inspect it before another upgrade.' >&2
-  fi
-  [ -z "$report_file" ] || rm -f -- "$report_file"
-  [ -z "$observations_file" ] || rm -f -- "$observations_file"
-}
-trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
 
 case "$command" in
   preflight) docker_call compose version >/dev/null 2>&1 || die 'Docker Compose v2 is unavailable.'; cfg validate ;;
   up)
+    cfg startup-check || die 'forward migration requires the exact target bundle for startup; preserve the barrier and use isolated recovery if needed.'
     quiet_compose pull postgres minio minio-init migrate api web
     quiet_compose up -d --wait postgres minio
     quiet_compose run --rm --no-deps minio-init
@@ -174,8 +189,10 @@ case "$command" in
     quiet_compose up -d --wait --no-deps api
     if [ "$mcp" = true ]; then quiet_compose --profile mcp pull mcp-http; quiet_compose --profile mcp up -d --wait --no-deps mcp-http; fi
     quiet_compose up -d --wait --no-deps web
+    cfg resume-active
     printf '%s\n' 'Compose startup completed with service health checks. Verify HTTPS, email, owner/MFA and real client workflows before reporting a live deployment.' ;;
   bootstrap)
+    cfg startup-check || die 'forward migration requires the exact target bundle for startup; preserve the barrier and use isolated recovery if needed.'
     # The API command itself enforces fresh-only, atomic and credential-preserving retries.
     quiet_compose --profile bootstrap run --rm --no-deps bootstrap
     printf '%s\n' 'Fresh-only owner bootstrap command completed. Verify owner sign-in and MFA through HTTPS.' ;;
@@ -201,10 +218,10 @@ case "$command" in
     else cfg status --observations-file "/config/$(basename "$observations_file")" --backup-state "$backup_state"; fi
     if [ "$json" != true ]; then printf '%s\n' 'This receipt records source, observed images/health and backup freshness. It does not prove publisher authenticity, restored authentication or public HTTPS behavior.'; fi ;;
   upgrade)
+    cfg startup-check || die 'forward migration requires the exact target bundle for startup; preserve the barrier and use isolated recovery if needed.'
     cfg upgrade-check
     check_running_images
-    mkdir -m 700 -- "$config_dir/upgrade.lock" 2>/dev/null || die 'another upgrade holds the lock; a stale lock requires operator inspection.'
-    lock_owned=true
+    upgrade_owned=true
     cfg receipt --status in-progress --phase validate
     compose_dir=$target_bundle; phase=pull-target; cfg receipt --status in-progress --phase "$phase"
     quiet_compose pull postgres minio minio-init migrate api web
@@ -213,6 +230,7 @@ case "$command" in
     compose_dir=$bundle; quiet_compose --profile mcp stop api web mcp-http
     phase=backup-current; cfg receipt --status in-progress --phase "$phase"; backup_identity; backup_run --execute
     phase=migrate-target; cfg receipt --status in-progress --phase "$phase"; compose_dir=$target_bundle
+    cfg migration-barrier
     quiet_compose run --rm --no-deps migrate
     phase=ready-api; cfg receipt --status in-progress --phase "$phase"; quiet_compose up -d --wait --no-deps api
     if [ "$mcp" = true ]; then quiet_compose --profile mcp up -d --wait --no-deps mcp-http; fi
@@ -229,12 +247,9 @@ case "$command" in
       [ "$(uname -s)" = Linux ] || die 'recovery execution requires Linux host networking; use recover plan and a separate Linux recovery host.'
       [ -n "$target_env" ] || die 'explicit recovery requires a protected target environment file.'
       cfg recovery-check --run-id "$run_id"
-      fresh_report
-      result=0
-      docker_call run --rm --network host --user "$(id -u):$(id -g)" --env-file "$config_dir/backup.env" --env-file "$target_env" \
-        --mount "type=bind,source=$config_dir,target=/config" -e MYSKILLS_RECOVERY_OUTPUT_PARENT=/config "$ops_image" node scripts/restore-registry-backup.mjs --execute "$run_id" >"$report_file" 2>/dev/null || result=$?
-      # Restore may create private evidence; raw output and private paths are not exported.
-      [ "$result" -eq 0 ] || die 'guarded restore failed; preserve protected recovery evidence and inspect the recovery runbook.'
+      # Execute the same parsed values as preflight. Docker --env-file does not
+      # interpret the quoting accepted by the protected configuration parser.
+      cfg recovery-execute --run-id "$run_id" || die 'guarded restore failed; preserve protected recovery evidence and inspect the recovery runbook.'
       printf '%s\n' 'Guarded isolated restore completed. Verify protected evidence and owner/MFA/revocation/auth behavior before switching traffic.'
     fi ;;
 esac

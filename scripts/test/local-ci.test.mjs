@@ -66,11 +66,14 @@ const releaseTag = `v${rootPackage.version}`;
 const verifyJobs = ["check-node22", "check-node24", "web-e2e-node22", "web-e2e-node24", "postgres-node22", "postgres-node24", "railway-images"];
 const fixtureFiles = [
   "package.json",
+  "package-lock.json",
+  ...(existsSync(resolve("scripts/create-trust-provenance.mjs")) ? ["scripts/create-trust-provenance.mjs"] : []),
   ".gitignore",
   ".github/codeql/codeql-config.yml",
   "scripts/local-ci.sh",
   "scripts/local-ci.mjs",
   "scripts/lib/secret-patterns.mjs",
+  "scripts/lib/host-rehearsal-resources.mjs",
   "scripts/collect-browser-evidence.mjs",
   "scripts/create-release-artifacts.mjs",
   "scripts/verify-release.mjs",
@@ -80,6 +83,25 @@ const mockedBrowser = "run test:e2e -w @myskills-app/web -- --reporter=line,json
 // The gate is defined for Linux/amd64 hosts; elsewhere a complete pinned run must stay non-gating.
 const hostBlockers = process.platform === "linux" && process.arch === "x64" ? [] : ["unsupported-host-platform"];
 const runIdReservation = join("/var/tmp/myskills-local-ci-locks", runId);
+
+test("HOST rehearsal remains inside railway-images and fails that canonical job when its subprocess fails", (t) => {
+  const fixture = makeFixture(t); fixture.configure({ rules: [{ tool: "host-rehearsal", prefix: "", exit: 1 }] });
+  const run = runLocalCi(fixture, ["verify", "--job", "railway-images"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(run.status, 1, run.output);
+  assert.equal(run.result.jobs[0].id, "railway-images"); assert.equal(run.result.jobs[0].status, "failed");
+  assert.ok(run.result.jobs[0].steps.some((step) => step.name === "host-rehearsal" && step.status === "failed"));
+});
+
+test("product-site build and browser proof run in existing browser jobs; missing site reports fail", (t) => {
+  const fixture = makeFixture(t); fixture.configure({ omitSiteReport: ["22"] });
+  const run = runLocalCi(fixture, ["verify", "--job", "web-e2e-node22"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(run.status, 1, run.output);
+  const records = fixture.records().filter((record) => record.tool === "npm");
+  assert.ok(records.some((record) => record.args.join(" ") === "run build -w @myskills-app/site"));
+  const browser = records.find((record) => record.args.join(" ") === "run test:e2e -w @myskills-app/site -- --reporter=line,json");
+  assert.match(browser.env.MYSKILLS_SITE_TEST_PORT, /^\d+$/);
+  assert.equal(run.result.jobs[0].status, "failed");
+});
 
 test("unsafe or stale inputs are rejected before any tool, container or workspace is used", (t) => {
   const fixture = makeFixture(t);
@@ -352,8 +374,8 @@ test("four verify lanes overlap, preserve job order and isolate directories and 
   }
   const browsers = run.result.jobs.filter(({ id }) => id.startsWith("web-e2e-"));
   const ports = browsers.flatMap(({ ports }) => Object.values(ports));
-  assert.equal(ports.length, 6);
-  assert.equal(new Set(ports).size, 6, "all browser job ports must be distinct");
+  assert.equal(ports.length, 8);
+  assert.equal(new Set(ports).size, 8, "all browser job ports must be distinct");
   assertEvidenceManifest(run.evidence, run.result);
   assert.equal(existsSync(fixture.runWorkspace), false);
   assert.equal(existsSync(runIdReservation), false);
@@ -850,6 +872,11 @@ function makeFixture(t, { tag = false, mcpSmokeTimeoutMs } = {}) {
     const runner = join(source, "scripts/local-ci.mjs");
     writeFileSync(runner, readFileSync(runner, "utf8").replace(/const mcpSmokeTimeoutMs = [\d_]+;/, `const mcpSmokeTimeoutMs = ${mcpSmokeTimeoutMs};`));
   }
+  // Controller tests fake only the expensive HOST subprocess. The actual HOST
+  // fixture and cleanup module have their own tests; this verifies gating/wiring.
+  writeFileSync(join(source, "scripts/rehearse-self-host.mjs"), `import {writeFileSync} from 'node:fs';import {spawnSync} from 'node:child_process';const r=spawnSync(${JSON.stringify(process.execPath)},[${JSON.stringify(join(root,"tools/fake-tool.mjs"))},'host-rehearsal'],{env:{...process.env,FAKE_TOOL_ROOT:${JSON.stringify(root)}}});if(r.status!==0)process.exit(r.status??1);writeFileSync(process.argv[4],JSON.stringify({status:'passed',sourceCommit:process.argv[5],restore:{restoredApplicationRuntime:'tested',exactPackageBytes:'passed'},upgrade:{forwardMigrations:'passed'}}));`);
+  mkdirSync(join(source, "apps/site"), { recursive: true });
+  writeFileSync(join(source, "apps/site/package.json"), JSON.stringify({ name: "@myskills-app/site", version: rootPackage.version, private: true }));
   chmodSync(join(source, "scripts/local-ci.sh"), 0o755);
   git(source, "init", "-q", "-b", "main");
   git(source, "add", "-A");
@@ -1067,7 +1094,7 @@ async function fakeToolMain() {
   const config = JSON.parse(fs.readFileSync(path.join(root, "fake-config.json"), "utf8"));
   const key = args.join(" ");
   const env = {};
-  for (const name of ["CI", "TEST_DATABASE_URL", "MYSKILLS_E2E_COMPOSE_PROJECT", "RELEASE_REQUIRE_TAG", "RELEASE_EXPECTED_TAG", "PLAYWRIGHT_JSON_OUTPUT_FILE", "HOME", "TMPDIR", "DOCKER_CONFIG", "DOCKER_CONTEXT"]) {
+  for (const name of ["CI", "TEST_DATABASE_URL", "MYSKILLS_E2E_COMPOSE_PROJECT", "RELEASE_REQUIRE_TAG", "RELEASE_EXPECTED_TAG", "PLAYWRIGHT_JSON_OUTPUT_FILE", "HOME", "TMPDIR", "DOCKER_CONFIG", "DOCKER_CONTEXT", "MYSKILLS_SITE_TEST_PORT"]) {
     if (process.env[name] !== undefined) env[name] = process.env[name];
   }
   const canarySeen = Boolean(config.canary) && Object.values(process.env).some((value) => String(value).includes(config.canary));
@@ -1103,6 +1130,10 @@ async function fakeToolMain() {
       if (key === "--version") return print((config.npmVersion ?? {})[line] ?? "11.12.1");
       if (key === "run test:e2e -w @myskills-app/web -- --reporter=line,json") {
         if (!(config.omitMockedReport ?? []).includes(line)) writeReport("apps/web/test-results/mocked-report.json");
+        return 0;
+      }
+      if (key === "run test:e2e -w @myskills-app/site -- --reporter=line,json") {
+        if (!(config.omitSiteReport ?? []).includes(line)) writeReport("apps/site/test-results/site-report.json");
         return 0;
       }
       if (key === "run test:e2e:fullstack") {

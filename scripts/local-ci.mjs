@@ -30,6 +30,7 @@ import { arch, homedir, platform, release as osRelease, tmpdir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { secretPatterns } from "./lib/secret-patterns.mjs";
+import { cleanupHostLedger } from "./lib/host-rehearsal-resources.mjs";
 
 const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const jobCatalog = {
@@ -50,7 +51,7 @@ const verifyLanes = [
   ["postgres-node22", "check-node22"],
   ["postgres-node24", "check-node24", "railway-images"],
 ];
-const browserPortNames = ["MYSKILLS_E2E_PORT", "MYSKILLS_E2E_WEB_PORT", "MYSKILLS_E2E_MAILPIT_PORT"];
+const browserPortNames = ["MYSKILLS_E2E_PORT", "MYSKILLS_E2E_WEB_PORT", "MYSKILLS_E2E_MAILPIT_PORT", "MYSKILLS_SITE_TEST_PORT"];
 const usage = `Usage: scripts/local-ci.sh <verify|release-check|codeql> [--job <id>]...
 
 Jobs:
@@ -208,7 +209,7 @@ function prepareRun(options, runId, evidence) {
   }
   if (laneCount === "4" && options.jobs.filter((id) => id.startsWith("web-e2e-")).length > 1
     && browserPortNames.some((name) => process.env[name] !== undefined)) {
-    throw new Rejection("parallel-port-override", "Parallel browser jobs need automatic distinct ports; unset MYSKILLS_E2E_PORT, MYSKILLS_E2E_WEB_PORT and MYSKILLS_E2E_MAILPIT_PORT.");
+    throw new Rejection("parallel-port-override", "Parallel browser jobs need automatic distinct ports; unset MYSKILLS_E2E_PORT, MYSKILLS_E2E_WEB_PORT, MYSKILLS_E2E_MAILPIT_PORT and MYSKILLS_SITE_TEST_PORT.");
   }
   const top = git(["rev-parse", "--show-toplevel"]);
   if (top.status !== 0 || realpathSync(top.stdout.trim()) !== realpathSync(sourceRoot)) {
@@ -646,7 +647,9 @@ class JobContext {
 
   async build(name, args, tag) {
     const entry = this.ledger.track("image", tag, this.id, "creating");
-    const built = await this.step(name, "docker", ["build", "--pull", ...args, "--tag", tag, "."]);
+    const version = JSON.parse(readFileSync(join(this.clone, "package.json"), "utf8")).version;
+    const built = await this.step(name, "docker", ["build", "--pull", "--build-arg", `MYSKILLS_BUILD_REVISION=${this.run.head}`,
+      "--label", `org.opencontainers.image.revision=${this.run.head}`, "--label", `org.opencontainers.image.version=${version}`, ...args, "--tag", tag, "."]);
     this.ledger.mark(entry, this.steps.at(-1).status === "skipped" ? "not-created" : "created");
     if (built) {
       this.details.images ??= {};
@@ -705,6 +708,23 @@ class JobContext {
     await this.step("smoke-mcp-health", "docker", ["exec", name, "node", "scripts/smoke-mcp-http.mjs"], { timeoutMs: mcpSmokeTimeoutMs });
   }
 
+  async hostRehearsal() {
+    if (!this.canRun()) return this.skip("host-rehearsal");
+    const directory = mkdtempSync(join(tmpdir(), "myskills-host-proof-"));
+    this.ledger.track("job-directory", directory, this.id, "created");
+    const childLedger = join(this.run.evidence, "host-resources.json");
+    writeJsonAtomic(childLedger, { schemaVersion: 1, owner: `hc-${randomBytes(8).toString("hex")}`, sequence: 0, resources: [] });
+    this.ledger.track("host-ledger", childLedger, this.id, "created");
+    const receiptPath = join(this.run.evidence, "host-rehearsal.json");
+    await this.step("host-rehearsal", "node", ["scripts/rehearse-self-host.mjs", directory, childLedger, receiptPath, this.run.head, this.run.runId],
+      { timeoutMs: 25 * 60_000 });
+    const receipt = existsSync(receiptPath) ? safeJson(readFileSync(receiptPath, "utf8")) : null;
+    this.details.hostRehearsal = receipt;
+    if (this.ran("host-rehearsal") && (receipt?.status !== "passed" || receipt.sourceCommit !== this.run.head
+      || receipt.restore?.restoredApplicationRuntime !== "tested" || receipt.restore?.exactPackageBytes !== "passed"
+      || receipt.upgrade?.forwardMigrations !== "passed")) this.fail("host-rehearsal-evidence-missing");
+  }
+
   trackComposeProject(suffix) {
     const project = composeProjectName(this.run.runId, this.id, suffix);
     this.ledger.track("compose-project", project, this.id, "created");
@@ -741,6 +761,17 @@ const jobRunners = {
     await job.step("fullstack-browser", "npm", ["run", "test:e2e:fullstack"], { extraEnv: { ...ports, MYSKILLS_E2E_COMPOSE_PROJECT: project ?? "" } });
     await collectBrowserEvidence(job, "fullstack-browser", "collect-fullstack-evidence", "fullstack-report.json", "fullstack");
     await collectBrowserEvidence(job, "fullstack-browser", "collect-connector-evidence", "fullstack-connector-report.json", "fullstack-connector");
+    // beta.19's canonical browser contract includes the separate product site.
+    // Missing source is an explicit failed gate, never a silently skipped proof.
+    if (!existsSync(join(job.clone, "apps/site/package.json"))) job.fail("required-site-workspace-missing");
+    await job.step("build-product-site", "npm", ["run", "build", "-w", "@myskills-app/site"]);
+    await job.step("product-site-browser", "npm", ["run", "test:e2e", "-w", "@myskills-app/site", "--", "--reporter=line,json"], {
+      extraEnv: { ...ports, PLAYWRIGHT_JSON_OUTPUT_FILE: "test-results/site-report.json" },
+    });
+    if (job.ran("product-site-browser")) {
+      await job.step("collect-product-site-evidence", "node", ["scripts/collect-browser-evidence.mjs", "apps/site/test-results/site-report.json",
+        "apps/site/test-results", "dist/browser-evidence/product-site"], { always: true });
+    }
     exportBrowserEvidence(job);
   },
 
@@ -755,6 +786,7 @@ const jobRunners = {
     await job.smokeBackup(tag("myskills-registry-backup"));
     await job.build("build-ops", ["--file", "Dockerfile.ops"], tag("myskills-ops"));
     await job.smokeBackup(tag("myskills-ops"), "ops");
+    await job.hostRehearsal();
   },
 
   async release(job) {
@@ -980,6 +1012,13 @@ class ResourceLedger {
 }
 
 function removeResource(entry, sink) {
+  if (entry.kind === "host-ledger") {
+    try {
+      const failures = cleanupHostLedger(entry.name);
+      for (const failure of failures) sink.note(failure);
+      return failures.length === 0;
+    } catch { sink.note("host child cleanup could not be verified"); return false; }
+  }
   if (entry.kind === "job-directory") {
     try {
       rmSync(entry.name, { recursive: true, force: true });

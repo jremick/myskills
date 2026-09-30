@@ -166,3 +166,9 @@ notification delivery and the first clock-triggered run at 16:00 UTC on
 5 September remain unobserved. Seven-day retention is tested policy, not seven
 days of collected history. Historical `AUTH_SECRET` retention in an independent
 approved secret store remains unverified.
+
+## Self-Host Operator Recovery
+
+The [operator package](SELF_HOST_OPERATOR.md) serializes mutating commands with one operation lock. An upgrade attaches its completed backup ID before migrations and retains a target-required migration barrier after failure. Recovery validates and executes the same parsed protected env values over Linux host networking. It never rewrites the source deployment in place.
+
+`railway-images` prepares an internal Linux/amd64 fixture, runs the maintained backup/restore scripts, then boots the recovered API and checks original identity, login/MFA, permissions and exact artifact bytes. Read the actual canonical `host-rehearsal.json` before claiming runtime-tested recovery. The lower-level restore report remains `not-tested` even when the separate harness later proves runtime. The fixture's same-host TLS bucket does not establish external storage durability or a production RTO. The measured fixture timings cannot be used as hosted performance claims.

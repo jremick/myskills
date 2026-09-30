@@ -66,7 +66,8 @@ async function collectScreenshots(directory) {
   for (const entry of entries) {
     const source = join(directory, entry.name);
     if (entry.isDirectory()) await collectScreenshots(source);
-    if (!entry.isFile() || !reviewedScreenshots.has(entry.name)) continue;
+    const siteScreenshot = /^\d{4}-\d{2}-\d{2}-utc-local-(home|setup|docs|examples|downloads|security)-(viewport|full)\.png$/.test(entry.name);
+    if (!entry.isFile() || !reviewedScreenshots.has(entry.name) && !siteScreenshot) continue;
     const destination = join("screenshots", relative(resolve(resultsPath), source));
     await mkdir(dirname(join(output, destination)), { recursive: true });
     await copyFile(source, join(output, destination));

@@ -207,3 +207,11 @@ Wait for fresh `local-ci/check`, `local-ci/web-e2e` and `local-ci/postgres-integ
 current pull request head, and for the code-scanning rule to accept its CodeQL analysis. Updating
 either the head or its base invalidates evidence for the earlier merge source. Fork contributions
 require maintainer review before their code runs on a trusted worker.
+
+## HOST And Product-Site Rehearsals
+
+`railway-images` now includes the bounded [HOST fixture](SELF_HOST_OPERATOR.md#canonical-rehearsal-and-evidence). It reuses candidate API/web/MCP/OPS images with source labels and exact build revision, and exports `host-rehearsal.json` plus the exact-name child `host-resources.json`. It does not add an eighth job or change the controller lock/configuration. A failed or missing runtime receipt, timeout, signal or incomplete cleanup fails the existing job. Parent dispatch remains `local-ci submit --app myskills --job verify --commit <exact-sha>`.
+
+Both existing `web-e2e-node22` and `web-e2e-node24` jobs also build `@myskills-app/site`, run desktop/mobile/keyboard journeys after Chromium installation, and collect sanitized summaries and reviewed dated screenshots below `browser-evidence/<job>/product-site`. `MYSKILLS_SITE_TEST_PORT` is allocated with the other loopback ports and cannot be shared in four-lane mode. A missing site workspace or browser report is an explicit failed gate. The isolated HOST source clone does not supply the site implementation; integrated canonical verification must include DISC's workspace.
+
+Release synthetic fixtures copy a matching npm v3 lockfile and the real `create-trust-provenance.mjs` dependency when the current verifier requires it. The verifier and artifact-tampering assertions remain real. Controller stub tests do not establish actual website rendering, image runtime, install, upgrade or restored application behavior.

@@ -3,7 +3,7 @@
 
 The UI is the baseline for user outcomes. Maintain and deliver coverage in this order: **API → CLI → MCP**. Complete CLI work before MCP work; implement shared API prerequisites first.
 
-The inventory contains **134 capability groups and 236 API operations**. It classifies 54 CLI command spellings, 210 MCP tools and 5 native MCP handlers. Availability is not proof of equivalent behavior.
+The inventory contains **135 capability groups and 236 API operations**. It classifies 54 CLI command spellings, 210 MCP tools and 5 native MCP handlers. Availability is not proof of equivalent behavior.
 
 Canonical record: [capability-parity.json](capability-parity.json). Last reviewed: 2026-10-01. Evidence: **source inventory with scoped contract/runtime evidence; real-host acceptance unverified; deployment evidence recorded separately**. Implementation and verification ledger: [CAPABILITY_PARITY_IMPLEMENTATION.md](CAPABILITY_PARITY_IMPLEMENTATION.md).
 
@@ -242,6 +242,12 @@ Every surface cell has an evidence record in the JSON: source, contract test, ru
 | --- | --- | --- | --- | --- | --- | --- |
 | **SITE-01** Independent static product and documentation site | [A — Independent static product and documentation site](../apps/site/src/content.mjs#L1) | [N — Static independent publication artifact; no registry state or agent operation](../apps/site/README.md#L1) | [N — Static independent publication artifact; no registry state or agent operation](../apps/site/README.md#L1) | [N — Static independent publication artifact; no registry state or agent operation](../apps/site/README.md#L1) | [N — Static independent publication artifact; no registry state or agent operation](../apps/site/README.md#L1) | [G01](#g01) |
 
+### Self-host operations
+
+| Capability | UI baseline | API | CLI | MCP token | MCP OAuth | Gap |
+| --- | --- | --- | --- | --- | --- | --- |
+| **HOST-01** Install, upgrade and recover a protected self-host instance | M — No browser operator administration surface is implemented. | N — Standalone checksummed operator package owns host mutations; no application api operation is exposed. | N — Standalone checksummed operator package owns host mutations; no application cli operation is exposed. | N — Standalone checksummed operator package owns host mutations; no application mcp_api_token operation is exposed. | N — Standalone checksummed operator package owns host mutations; no application mcp_oauth operation is exposed. | [G10](#g10) |
+
 ## Permission and credential boundaries
 
 | Boundary | Current source behavior | Required proof / remaining limit |
@@ -335,3 +341,4 @@ The required repository check fails for unclassified/removed API routes, CLI com
 - No production deployment or real ChatGPT/Claude host acceptance in this audit.
 - All registered business API routes are mapped, including dynamically registered profile/suite routes and OAuth scope routes.
 - MCP request body ceiling is 14 MiB plus a 64 KiB JSON-RPC envelope; metadata responses are bounded to 512 KiB and exports to 10 MiB. These transport limits are not domain or real-host acceptance proof.
+- HOST-01 records standalone operator source and local contract tests. Fresh install, exact c74ecd33-to-candidate database/runtime upgrade and full-app restore require actual canonical host-rehearsal.json; no new Linux runtime result, external backup durability, public image, deployed behavior or arm64 proof has been recorded here.

@@ -14277,6 +14277,125 @@
       "authorization": "Public-safe static source and dated examples only. No effectiveness, activation, trust, host recognition or live deployment claim.",
       "gap": "G01",
       "delegated_action_ids": []
+    },
+    {
+      "id": "HOST-01",
+      "domain": "Self-host operations",
+      "capability": "Install, upgrade and recover a protected self-host instance",
+      "category": "operations",
+      "api_operations": [],
+      "authorization": "Explicit operator host control, protected owned files, immutable source/image receipts, operation lock, forward-only migration consent and fresh isolated restore destinations. This is a standalone operator package, not an application API mutation.",
+      "gap": "G10",
+      "ui": {
+        "status": "M",
+        "detail": "No browser operator administration surface is implemented.",
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Operator helper and canonical Linux/amd64 rehearsal source are present. No public image or deployment proof; c74ecd33 predates the operator bundle, so its upgrade proof uses exact baseline apps and a candidate tooling bridge.",
+            "source": {
+              "path": "docs/SELF_HOST_OPERATOR.md",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Local operator stub regressions passed for serialization, migration barriers, parsed recovery values and attached upgrade backup ID. These checks are not installation, migration or restored-runtime evidence.",
+            "source": {
+              "path": "scripts/test/self-host-operator.test.mjs",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "api": {
+        "status": "N",
+        "detail": "Standalone checksummed operator package owns host mutations; no application api operation is exposed.",
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Operator helper and canonical Linux/amd64 rehearsal source are present. No public image or deployment proof; c74ecd33 predates the operator bundle, so its upgrade proof uses exact baseline apps and a candidate tooling bridge.",
+            "source": {
+              "path": "docs/SELF_HOST_OPERATOR.md",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Local operator stub regressions passed for serialization, migration barriers, parsed recovery values and attached upgrade backup ID. These checks are not installation, migration or restored-runtime evidence.",
+            "source": {
+              "path": "scripts/test/self-host-operator.test.mjs",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "cli": {
+        "status": "N",
+        "detail": "Standalone checksummed operator package owns host mutations; no application cli operation is exposed.",
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Operator helper and canonical Linux/amd64 rehearsal source are present. No public image or deployment proof; c74ecd33 predates the operator bundle, so its upgrade proof uses exact baseline apps and a candidate tooling bridge.",
+            "source": {
+              "path": "docs/SELF_HOST_OPERATOR.md",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Local operator stub regressions passed for serialization, migration barriers, parsed recovery values and attached upgrade backup ID. These checks are not installation, migration or restored-runtime evidence.",
+            "source": {
+              "path": "scripts/test/self-host-operator.test.mjs",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_api_token": {
+        "status": "N",
+        "detail": "Standalone checksummed operator package owns host mutations; no application mcp_api_token operation is exposed.",
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Operator helper and canonical Linux/amd64 rehearsal source are present. No public image or deployment proof; c74ecd33 predates the operator bundle, so its upgrade proof uses exact baseline apps and a candidate tooling bridge.",
+            "source": {
+              "path": "docs/SELF_HOST_OPERATOR.md",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Local operator stub regressions passed for serialization, migration barriers, parsed recovery values and attached upgrade backup ID. These checks are not installation, migration or restored-runtime evidence.",
+            "source": {
+              "path": "scripts/test/self-host-operator.test.mjs",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "N",
+        "detail": "Standalone checksummed operator package owns host mutations; no application mcp_oauth operation is exposed.",
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Operator helper and canonical Linux/amd64 rehearsal source are present. No public image or deployment proof; c74ecd33 predates the operator bundle, so its upgrade proof uses exact baseline apps and a candidate tooling bridge.",
+            "source": {
+              "path": "docs/SELF_HOST_OPERATOR.md",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Local operator stub regressions passed for serialization, migration barriers, parsed recovery values and attached upgrade backup ID. These checks are not installation, migration or restored-runtime evidence.",
+            "source": {
+              "path": "scripts/test/self-host-operator.test.mjs",
+              "line": 1
+            }
+          }
+        ]
+      }
     }
   ],
   "negative_evidence": {
@@ -14289,7 +14408,8 @@
     "A status does not certify permission parity across credential kinds.",
     "No production deployment or real ChatGPT/Claude host acceptance in this audit.",
     "All registered business API routes are mapped, including dynamically registered profile/suite routes and OAuth scope routes.",
-    "MCP request body ceiling is 14 MiB plus a 64 KiB JSON-RPC envelope; metadata responses are bounded to 512 KiB and exports to 10 MiB. These transport limits are not domain or real-host acceptance proof."
+    "MCP request body ceiling is 14 MiB plus a 64 KiB JSON-RPC envelope; metadata responses are bounded to 512 KiB and exports to 10 MiB. These transport limits are not domain or real-host acceptance proof.",
+    "HOST-01 records standalone operator source and local contract tests. Fresh install, exact c74ecd33-to-candidate database/runtime upgrade and full-app restore require actual canonical host-rehearsal.json; no new Linux runtime result, external backup durability, public image, deployed behavior or arm64 proof has been recorded here."
   ],
   "mcp_tool_inventory": [
     {

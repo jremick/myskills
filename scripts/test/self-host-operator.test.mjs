@@ -53,6 +53,20 @@ test("bundle integrity and digest metadata fail before Docker", (t) => {
   assert.notEqual(run.status, 0); assert.equal(existsSync(join(f.config, "runtime.env")), false);
 });
 
+test("checksum-valid evidence with wrong image or source identity is refused", (t) => {
+  for (const field of ["imageRef", "source"]) {
+    const f = fixture(t); const path = join(f.bundle, "api-amd64.json"); const proof = JSON.parse(readFileSync(path));
+    if (field === "imageRef") proof.imageRef = `registry.operator.test/wrong@sha256:${digest}`;
+    else proof.labels["org.opencontainers.image.revision"] = "f".repeat(40);
+    const bytes = JSON.stringify(proof); writeFileSync(path, bytes);
+    const manifestPath = join(f.bundle, "release-manifest.json"); const manifest = JSON.parse(readFileSync(manifestPath));
+    manifest.images.api.platforms[0].manifestEvidence.sha256 = createHash("sha256").update(bytes).digest("hex");
+    writeFileSync(manifestPath, JSON.stringify(manifest)); sums(f);
+    const run = execute(f, ["setup", "--answers-file", f.answers]); assert.notEqual(run.status, 0);
+    assert.equal(existsSync(join(f.config, "runtime.env")), false);
+  }
+});
+
 test("setup creates separate protected credentials, validates inputs and never clobbers", (t) => {
   const f = fixture(t); const run = execute(f, ["setup", "--answers-file", f.answers]);
   assert.equal(run.status, 0, run.output); assert.doesNotMatch(run.output, new RegExp(canary));
@@ -123,8 +137,85 @@ test("upgrade requires forward consent, pulls before quiescence, backs up before
   const receipt = JSON.parse(readFileSync(join(f.config, "upgrade-receipt.json")));
   assert.equal(receipt.status, "failed"); assert.equal(receipt.phase, "migrate-target"); assert.equal(receipt.forwardOnly, true);
   assert.doesNotMatch(JSON.stringify(receipt), new RegExp(canary));
-  assert.equal(existsSync(join(f.config, "upgrade.lock")), false);
+  assert.equal(existsSync(join(f.config, "operation.lock")), false);
   assert.match(receipt.backupRunId, /2026-10-01T00-00-00.000Z_/);
+});
+
+test("one operation lock fences writer startup, setup, backup, restore and upgrades", (t) => {
+  const f = configured(t); backup(f); const target = targetBundle(f, "0.1.0-beta.19");
+  mkdirSync(join(f.config, "operation.lock"), { mode: 0o700 });
+  for (const command of [["up"], ["bootstrap"], ["setup", "--answers-file", f.answers], ["backup", "config"], ["backup", "execute"],
+    ["upgrade", target, "--accept-forward-migrations"], ["recover", "execute", "2026-10-01T00-00-00.000Z_" + "e".repeat(16), "--target-env-file", f.answers]]) {
+    const run = execute(f, command); assert.notEqual(run.status, 0); assert.match(run.output, /operation holds the lock/);
+    assert.equal(composeCalls(f).length, 0);
+    assert.equal(existsSync(join(f.config, "operation.lock")), true, "a refused child must not remove another operation's lock");
+  }
+});
+
+test("failed target startup leaves a durable barrier and permits only the exact target retry", (t) => {
+  const f = configured(t); backup(f); const target = targetBundle(f, "0.1.0-beta.19");
+  writeFileSync(f.failure, "ready-api");
+  assert.notEqual(execute(f, ["upgrade", target, "--accept-forward-migrations"]).status, 0);
+  const barrier = JSON.parse(readFileSync(join(f.config, "migration-barrier.json")));
+  assert.equal(barrier.source.source.commit, commit); assert.equal(barrier.target.source.commit, "d".repeat(40));
+  assert.equal(JSON.parse(readFileSync(join(f.config, "state.json"))).source.commit, "d".repeat(40));
+  rmSync(f.failure); rmSync(f.log);
+  for (const command of [["up"], ["bootstrap"]]) {
+    const denied = execute(f, command); assert.notEqual(denied.status, 0); assert.match(denied.output, /exact target bundle/);
+    assert.equal(composeCalls(f).length, 0);
+  }
+  const retry = spawnSync("sh", [join(target, "myskills.sh"), "up", "--config-dir", f.config], { env: { PATH: `${f.bin}:${process.env.PATH}` }, encoding: "utf8" });
+  assert.equal(retry.status, 0, retry.stdout + retry.stderr);
+});
+
+test("a later upgrade interrupted between barrier and state writes remains exact-target retryable", (t) => {
+  const f = configured(t); backup(f); const target = targetBundle(f, "0.1.0-beta.19");
+  const source = JSON.parse(readFileSync(join(f.config, "state.json")));
+  writeFileSync(join(f.config, "migration-barrier.json"), JSON.stringify({ schemaVersion: 1,
+    source: { ...source, source: { version: "0.1.0-beta.17", commit: "b".repeat(40) } }, target: source }), { mode: 0o600 });
+  writeFileSync(f.failure, "ready-api");
+  assert.notEqual(execute(f, ["upgrade", target, "--accept-forward-migrations"]).status, 0);
+  // A stopped process after the new barrier write still has its previous state.
+  writeFileSync(join(f.config, "state.json"), JSON.stringify(source), { mode: 0o600 });
+  rmSync(f.failure); rmSync(f.log);
+  assert.notEqual(execute(f, ["up"]).status, 0);
+  assert.equal(composeCalls(f).length, 0);
+  const retry = spawnSync("sh", [join(target, "myskills.sh"), "up", "--config-dir", f.config], { env: { PATH: `${f.bin}:${process.env.PATH}` }, encoding: "utf8" });
+  assert.equal(retry.status, 0, retry.stdout + retry.stderr);
+  assert.equal(JSON.parse(readFileSync(join(f.config, "state.json"))).source.commit, "d".repeat(40));
+  const receipt = JSON.parse(readFileSync(join(f.config, "upgrade-receipt.json")));
+  assert.equal(receipt.status, "passed"); assert.ok(receipt.backupRunId);
+});
+
+test("standalone backup cannot attach to an unrelated upgrade receipt; pre-migration failure leaves no barrier", (t) => {
+  const f = configured(t); backup(f); const target = targetBundle(f, "0.1.0-beta.19");
+  writeFileSync(f.failure, "pull"); assert.notEqual(execute(f, ["upgrade", target, "--accept-forward-migrations"]).status, 0);
+  assert.equal(existsSync(join(f.config, "migration-barrier.json")), false);
+  const before = readFileSync(join(f.config, "upgrade-receipt.json"), "utf8");
+  rmSync(f.failure); assert.equal(execute(f, ["backup", "execute"]).status, 0);
+  assert.equal(readFileSync(join(f.config, "upgrade-receipt.json"), "utf8"), before);
+  assert.equal(existsSync(join(f.config, "operation.lock")), false);
+});
+
+test("partial setup preserves existing protected files and cleans its operation lock", (t) => {
+  const f = fixture(t); mkdirSync(f.config, { mode: 0o700 });
+  writeFileSync(join(f.config, "bootstrap.env"), "existing-fixture", { mode: 0o600 });
+  assert.notEqual(execute(f, ["setup", "--answers-file", f.answers]).status, 0);
+  assert.equal(readFileSync(join(f.config, "bootstrap.env"), "utf8"), "existing-fixture");
+  assert.equal(existsSync(join(f.config, "runtime.env")), false); assert.equal(existsSync(join(f.config, "operation.lock")), false);
+});
+
+test("stale backup and source image drift fail before target migration", (t) => {
+  const f = configured(t); backup(f); const target = targetBundle(f, "0.1.0-beta.19");
+  writeFileSync(f.failure, "image-drift");
+  assert.notEqual(execute(f, ["upgrade", target, "--accept-forward-migrations"]).status, 0);
+  assert.equal(composeCalls(f).some((call) => call.includes("stop api")), false);
+  rmSync(f.log); writeFileSync(f.failure, "stale-backup");
+  const status = execute(f, ["status", "--json"]); assert.equal(status.status, 0); assert.equal(JSON.parse(status.stdout).backup.state, "stale");
+  rmSync(f.log);
+  assert.notEqual(execute(f, ["upgrade", target, "--accept-forward-migrations"]).status, 0);
+  assert.equal(composeCalls(f).some((call) => call.includes("run --rm --no-deps migrate")), false);
+  assert.equal(existsSync(join(f.config, "migration-barrier.json")), false);
 });
 
 test("status JSON reports only observed source, digest health and backup freshness", (t) => {
@@ -145,24 +236,80 @@ test("recovery plan stays read-only and execute is explicit Linux-only guarded r
   assert.equal(f.records().some((record) => record.args.includes("--network") && record.args.includes("host")), false);
 });
 
+test("recovery executes exactly the quoted values validated by preflight using explicit host networking", (t) => {
+  const f = configured(t); backup(f);
+  writeFileSync(join(f.bin, "uname"), "#!/bin/sh\ncase \"$1\" in -s) echo Linux ;; *) echo x86_64 ;; esac\n", { mode: 0o755 });
+  const backupPath = join(f.config, "backup.env");
+  writeFileSync(backupPath, readFileSync(backupPath, "utf8").split("\n").filter(Boolean).map((line) => {
+    const i = line.indexOf("="); return `${line.slice(0,i)}='${line.slice(i+1)}'`;
+  }).join("\n") + "\n");
+  const target = join(f.root, "restore.env");
+  writeFileSync(target, "MYSKILLS_RECOVERY_DESTINATION_POSTGRES_URL='postgres://fixture:password$kept@127.0.0.1:5432/fixture_test'\nMYSKILLS_RECOVERY_DESTINATION_S3_ENDPOINT='http://127.0.0.1:9900'\nMYSKILLS_RECOVERY_DESTINATION_S3_BUCKET='restore-fixture'\nMYSKILLS_RECOVERY_DESTINATION_S3_ACCESS_KEY_ID='restore-user'\nMYSKILLS_RECOVERY_DESTINATION_S3_SECRET_ACCESS_KEY='private$key'\n", { mode: 0o600 });
+  const id = "2026-10-01T00-00-00.000Z_" + "e".repeat(16);
+  const run = execute(f, ["recover", "execute", id, "--target-env-file", target]); assert.equal(run.status, 0, run.output);
+  const observed = JSON.parse(readFileSync(join(f.root, "recovery-child.json")));
+  assert.equal(observed.MYSKILLS_RECOVERY_DESTINATION_S3_SECRET_ACCESS_KEY, "private$key");
+  assert.equal(observed.MYSKILLS_RECOVERY_DESTINATION_POSTGRES_URL, "postgres://fixture:password$kept@127.0.0.1:5432/fixture_test");
+  assert.equal(observed.MYSKILLS_BACKUP_INSTANCE_ID, "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
+  const invocation = f.records().find((r) => r.args.includes("recovery-execute"));
+  assert.ok(invocation.args.includes("--network") && invocation.args.includes("host"));
+  assert.equal(invocation.args.includes("--env-file"), false);
+  assert.doesNotMatch(run.output, /password\$kept|private\$key/);
+  assert.equal(existsSync(join(f.config, "operation.lock")), false);
+});
+
+test("unsafe restore destinations fail before the guarded restore child receives configuration", (t) => {
+  for (const invalid of ["database", "storage", "source-bucket"]) {
+    const f = configured(t); backup(f);
+    writeFileSync(join(f.bin, "uname"), "#!/bin/sh\ncase \"$1\" in -s) echo Linux ;; *) echo x86_64 ;; esac\n", { mode: 0o755 });
+    const sourceBucket = readFileSync(join(f.config, "runtime.env"), "utf8").match(/^S3_BUCKET='([^']+)'/m)[1];
+    const target = join(f.root, "restore.env");
+    writeFileSync(target, [
+      `MYSKILLS_RECOVERY_DESTINATION_POSTGRES_URL=postgres://fixture:fixture@${invalid === "database" ? "remote.operator.test" : "127.0.0.1"}/fixture_test`,
+      `MYSKILLS_RECOVERY_DESTINATION_S3_ENDPOINT=${invalid === "storage" ? "https://remote.operator.test" : "http://127.0.0.1:9900"}`,
+      `MYSKILLS_RECOVERY_DESTINATION_S3_BUCKET=${invalid === "source-bucket" ? sourceBucket : "restore-fixture"}`,
+      "MYSKILLS_RECOVERY_DESTINATION_S3_ACCESS_KEY_ID=fixture-user", "MYSKILLS_RECOVERY_DESTINATION_S3_SECRET_ACCESS_KEY=fixture-only-secret", "",
+    ].join("\n"), { mode: 0o600 });
+    const run = execute(f, ["recover", "execute", "2026-10-01T00-00-00.000Z_" + "e".repeat(16), "--target-env-file", target]);
+    assert.notEqual(run.status, 0);
+    assert.equal(existsSync(join(f.root, "recovery-child.json")), false);
+    assert.equal(f.records().some((record) => record.args.includes("recovery-execute")), false);
+    assert.equal(existsSync(join(f.config, "operation.lock")), false);
+    assert.doesNotMatch(run.output, /fixture-only-secret|remote\.operator\.test/);
+  }
+});
+
 function fixture(t) {
   const dir = mkdtempSync(join(tmpdir(), "myskills-operator-test-")); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const f = { root: dir, bundle: join(dir, "bundle"), config: join(dir, "private"), bin: join(dir, "bin"), answers: join(dir, "answers.json"), log: join(dir, "docker.jsonl"), failure: join(dir, "failure") };
   mkdirSync(f.bundle); mkdirSync(f.bin); makeBundle(f.bundle, version); writeFileSync(f.answers, JSON.stringify(answers), { mode: 0o600 });
-  writeFileSync(join(f.bin, "docker"), `#!${process.execPath}\nimport {appendFileSync,existsSync,readFileSync} from 'node:fs';import {spawnSync} from 'node:child_process';\nconst args=process.argv.slice(2);appendFileSync(${JSON.stringify(f.log)},JSON.stringify({args})+'\\n');\nif(args[0]==='run' && args.includes('/app/deploy/self-host/configure.mjs')){let cmd=args.slice(args.indexOf('/app/deploy/self-host/configure.mjs')+1);const mounts=[];for(let i=0;i<args.length;i++)if(args[i]==='--mount') {const fields=Object.fromEntries(args[i+1].split(',').map(v=>v.split('=')));mounts.push(fields);}cmd=cmd.map(v=>{for(const m of mounts)if(v===m.target||v.startsWith(m.target+'/'))return m.source+v.slice(m.target.length);return v;});const result=spawnSync(process.execPath,[${JSON.stringify(join(root, "deploy/self-host/configure.mjs"))},...cmd],{stdio:'inherit',env:process.env});process.exit(result.status??1);}\nconst fail=existsSync(${JSON.stringify(f.failure)})?readFileSync(${JSON.stringify(f.failure)},'utf8'):'';if(fail && args.some(a=>a===fail) && (fail!=='migrate'||args.includes('run'))){console.error('provider-canary DATABASE_URL=secret');process.exit(1);}\nconst ids={api:'111111111111',web:'222222222222',minio:'333333333333',postgres:'444444444444','mcp-http':'555555555555'};if(args.includes('ps')) {if(args.includes('-q'))console.log(ids[args.at(-1)]);else console.log('myskills-fixture api running');}if(args[0]==='inspect'){let service=Object.keys(ids).find(k=>ids[k]===args.at(-1));if(service==='mcp-http')service='mcp';console.log('registry.operator.test/myskills/'+service+'@sha256:${digest}'+(args.includes('{{.Config.Image}}')?'':' healthy'));}if(args.includes('scripts/run-registry-backup.mjs'))console.log(JSON.stringify({schemaVersion:1,passed:true,reason:'current',runId:'2026-10-01T00-00-00.000Z_${"e".repeat(16)}',capturedAt:new Date().toISOString()}));if(args.includes('exec'))console.log('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee');if(args[0]==='context')console.log('unix:///var/run/docker.sock');if(args[0]==='info')console.log('linux/amd64');\n`, { mode: 0o755 });
+  const preload = join(dir, "child-preload.mjs");
+  writeFileSync(preload, `import cp from 'node:child_process';import {syncBuiltinESMExports} from 'node:module';import {writeFileSync} from 'node:fs';const original=cp.spawnSync;cp.spawnSync=(command,args,options)=>{if(args?.[0]?.endsWith('/restore-registry-backup.mjs')){writeFileSync(${JSON.stringify(join(dir,"recovery-child.json"))},JSON.stringify(options.env),{mode:384});return {status:0,stdout:JSON.stringify({passed:true,runId:args[2]})+'\\n',stderr:''};}return original(command,args,options);};syncBuiltinESMExports();`);
+  writeFileSync(join(f.bin, "docker"), `#!${process.execPath}\nimport {appendFileSync,existsSync,readFileSync} from 'node:fs';import {spawnSync} from 'node:child_process';\nconst args=process.argv.slice(2);appendFileSync(${JSON.stringify(f.log)},JSON.stringify({args})+'\\n');\nif(args[0]==='run' && args.includes('/app/deploy/self-host/configure.mjs')){let cmd=args.slice(args.indexOf('/app/deploy/self-host/configure.mjs')+1);const mounts=[];for(let i=0;i<args.length;i++)if(args[i]==='--mount') {const fields=Object.fromEntries(args[i+1].split(',').map(v=>v.split('=')));mounts.push(fields);}cmd=cmd.map(v=>{for(const m of mounts)if(v===m.target||v.startsWith(m.target+'/'))return m.source+v.slice(m.target.length);return v;});const result=spawnSync(process.execPath,["--import",${JSON.stringify(preload)},${JSON.stringify(join(root, "deploy/self-host/configure.mjs"))},...cmd],{stdio:'inherit',env:process.env});process.exit(result.status??1);}\nconst fail=existsSync(${JSON.stringify(f.failure)})?readFileSync(${JSON.stringify(f.failure)},'utf8'):'';if(fail && (fail==='ready-api'?args.includes('up')&&args.includes('api'):args.some(a=>a===fail) && (fail!=='migrate'||args.includes('run')))){console.error('provider-canary DATABASE_URL=secret');process.exit(1);}\nconst ids={api:'111111111111',web:'222222222222',minio:'333333333333',postgres:'444444444444','mcp-http':'555555555555'};if(args.includes('ps')) {if(args.includes('-q'))console.log(ids[args.at(-1)]);else console.log('myskills-fixture api running');}if(args[0]==='inspect'){let service=Object.keys(ids).find(k=>ids[k]===args.at(-1));if(service==='mcp-http')service='mcp';console.log('registry.operator.test/myskills/'+service+'@sha256:'+(fail==='image-drift'?'f'.repeat(64):'${digest}')+(args.includes('{{.Config.Image}}')?'':' healthy'));}if(args.includes('scripts/run-registry-backup.mjs'))console.log(JSON.stringify({schemaVersion:1,passed:fail!=='stale-backup',reason:fail==='stale-backup'?'stale':'current',runId:'2026-10-01T00-00-00.000Z_${"e".repeat(16)}',capturedAt:new Date().toISOString()}));if(args.includes('exec'))console.log('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee');if(args[0]==='context')console.log('unix:///var/run/docker.sock');if(args[0]==='info')console.log('linux/amd64');\n`, { mode: 0o755 });
   f.records = () => existsSync(f.log) ? readFileSync(f.log, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
   return f;
 }
 function makeBundle(dir, bundleVersion) {
   for (const name of ["myskills.sh", ".env.example", ".env.bootstrap.example"]) copyFileSync(join(root, "deploy/self-host", name), join(dir, name));
   writeFileSync(join(dir, "compose.yml"), "services: {}\n"); writeFileSync(join(dir, "release.env"), releaseEnv(bundleVersion));
-  const evidenceDigest = createHash("sha256").update("{}\n").digest("hex");
-  const images = Object.fromEntries(["api", "web", "mcp", "ops", "minio", "postgres"].map((name) => [name, { ref: `registry.operator.test/myskills/${name}@sha256:${digest}`, platforms: [{ platform: "linux/amd64", digest: `sha256:${digest}`, manifestEvidence: { file: "evidence.json", sha256: evidenceDigest }, runtimeEvidence: null }, { platform: "linux/arm64", digest: `sha256:${digest}`, manifestEvidence: { file: "evidence.json", sha256: evidenceDigest }, runtimeEvidence: null }] }]));
-  writeFileSync(join(dir, "release-manifest.json"), JSON.stringify({ schemaVersion: 1, source: { commit: bundleVersion === version ? commit : "d".repeat(40), version: bundleVersion }, images }));
-  writeFileSync(join(dir, "evidence.json"), "{}\n"); sums({ bundle: dir });
+  const source = { commit: bundleVersion === version ? commit : "d".repeat(40), version: bundleVersion };
+  const images = Object.fromEntries(["api", "web", "mcp", "ops", "minio", "postgres"].map((name) => {
+    const ref = `registry.operator.test/myskills/${name}@sha256:${digest}`;
+    const platforms = ["linux/amd64", "linux/arm64"].map((platform) => {
+      const file = `${name}-${platform.split("/")[1]}.json`;
+      const proof = { schemaVersion: 1, imageRef: ref, platformDigest: `sha256:${digest}`, platform, kind: "oci-manifest", status: "passed",
+        ...(name === "postgres" ? { upstreamVersion: "17-alpine" } : { labels: { "org.opencontainers.image.revision": source.commit, "org.opencontainers.image.version": source.version } }) };
+      const bytes = JSON.stringify(proof) + "\n"; writeFileSync(join(dir, file), bytes);
+      return { platform, digest: `sha256:${digest}`, manifestEvidence: { file, sha256: createHash("sha256").update(bytes).digest("hex") }, runtimeEvidence: null };
+    });
+    return [name, { ref, platforms }];
+  }));
+  writeFileSync(join(dir, "release-manifest.json"), JSON.stringify({ schemaVersion: 1, source, images }));
+  sums({ bundle: dir });
 }
+
 function releaseEnv(v = version) { return ["api", "web", "mcp", "ops", "minio", "postgres"].map((name) => `MYSKILLS_${name.toUpperCase()}_IMAGE=registry.operator.test/myskills/${name}@sha256:${digest}`).join("\n") + `\nMYSKILLS_SOURCE_COMMIT=${v === version ? commit : "d".repeat(40)}\nMYSKILLS_VERSION=${v}\n`; }
-function sums(f) { const names = ["myskills.sh", ".env.example", ".env.bootstrap.example", "compose.yml", "release.env", "release-manifest.json", "evidence.json"].sort(); writeFileSync(join(f.bundle, "SHA256SUMS"), names.map((name) => `${createHash("sha256").update(readFileSync(join(f.bundle, name))).digest("hex")}  ${name}\n`).join("")); }
+function sums(f) { const names = ["myskills.sh", ".env.example", ".env.bootstrap.example", "compose.yml", "release.env", "release-manifest.json", ...["api", "web", "mcp", "ops", "minio", "postgres"].flatMap((name) => ["amd64", "arm64"].map((cpu) => `${name}-${cpu}.json`))].sort(); writeFileSync(join(f.bundle, "SHA256SUMS"), names.map((name) => `${createHash("sha256").update(readFileSync(join(f.bundle, name))).digest("hex")}  ${name}\n`).join("")); }
 function execute(f, args) { const run = spawnSync("sh", [join(f.bundle, "myskills.sh"), ...args, "--config-dir", f.config], { env: { ...process.env, PATH: `${f.bin}:${process.env.PATH}`, FAKE_DOCKER_LOG: f.log, FAKE_DOCKER_FAILURE: f.failure }, encoding: "utf8" }); return { ...run, output: `${run.stdout ?? ""}${run.stderr ?? ""}` }; }
 function configured(t) { const f = fixture(t); const run = execute(f, ["setup", "--answers-file", f.answers]); assert.equal(run.status, 0, run.output); rmSync(f.log); return f; }
 function composeCalls(f) { return f.records().filter((record) => record.args[0] === "compose").map((record) => record.args.slice(record.args.indexOf(join(f.config, "runtime.env")) + 1).join(" ")); }

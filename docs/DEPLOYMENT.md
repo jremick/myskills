@@ -11,6 +11,8 @@ MySkills is a Node/Postgres application with object storage for package artifact
 - `postgres`: system of record.
 - S3-compatible object storage: managed S3/R2/etc. or the single-host MinIO service in the example Compose file.
 
+The source also provides a [self-host operator package](SELF_HOST_OPERATOR.md) that consumes independently verified digest-pinned images. Its canonical fixture is part of the existing `railway-images` job. Public image availability, external backup durability, arm64 runtime and deployed HTTPS/email remain separate proof gates.
+
 ## Local Docker Dependencies
 
 For development, use the root `docker-compose.yml` only for dependencies. The normal migrate, seed, API, web, and MCP dev scripts load the root `.env` automatically:

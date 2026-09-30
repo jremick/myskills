@@ -32,15 +32,36 @@ async function main() {
     console.log("Container-only configuration helper. Use the checksummed release bundle's myskills.sh."); return;
   }
   const args = options(process.argv.slice(2));
-  if (!["setup", "validate", "metadata", "status", "bootstrap-check", "backup-config", "backup-report", "upgrade-check", "receipt", "record-active", "recovery-check", "recovery-execute"].includes(args.command)) fail("unknown configuration command.");
+  if (!["setup", "validate", "metadata", "startup-check", "resume-active", "migration-barrier", "status", "bootstrap-check", "backup-config", "backup-report", "upgrade-check", "receipt", "record-active", "recovery-check", "recovery-execute"].includes(args.command)) fail("unknown configuration command.");
   if (!isAbsolute(args.bundle ?? "") || !isAbsolute(args["config-dir"] ?? "")) fail("bundle and config directory must be absolute.");
   const bundle = verifyBundle(args.bundle, args.platform); const configDir = args["config-dir"];
   protectedDirectory(configDir);
   if (args.command === "setup") return setup(configDir, bundle, args["answers-file"]);
   const runtime = readEnv(join(configDir, "runtime.env"), runtimeKeys);
   validateRuntime(runtime); const state = readJson(join(configDir, "state.json"), true);
-  if (state.schemaVersion !== 1 || state.source?.commit !== bundle.source.commit || state.source?.version !== bundle.source.version
-    || imageNames.some((name) => state.images?.[name] !== bundle.images[name].ref)) fail("active release differs from this bundle; use the active release helper.");
+  const barrierPath = join(configDir, "migration-barrier.json");
+  const barrier = existsSync(barrierPath) ? readJson(barrierPath, true) : null;
+  if (barrier && (barrier.schemaVersion !== 1 || !sameState(barrier.source, state) && !sameState(barrier.target, state))) fail("migration barrier does not match managed state; preserve it and inspect recovery guidance.");
+  // A target retry can finish startup after migration while state still names the
+  // source. Only the exact target's source AND immutable images can pass.
+  const targetRetry = barrier && sameState(barrier.target, activeState(bundle)) && sameState(barrier.source, state);
+  const sourceCoordinator = barrier && sameState(barrier.source, activeState(bundle)) && sameState(barrier.target, state)
+    && ["receipt", "record-active", "backup-report"].includes(args.command) && existsSync(join(configDir, "operation.lock"));
+  if (!sameState(state, activeState(bundle)) && !targetRetry && !sourceCoordinator) fail("active release differs from this bundle; use the active release helper.");
+  if (args.command === "startup-check") {
+    if (barrier && !sameState(barrier.target, activeState(bundle))) fail("forward migration has started; only the exact target bundle can start applications. Use the target helper or isolated recovery.");
+    return;
+  }
+  if (args.command === "resume-active") {
+    if (barrier) {
+      if (!sameState(barrier.target, activeState(bundle)) || !existsSync(join(configDir, "operation.lock"))) fail("startup can record only the exact migration target while holding its operation lock.");
+      atomicJson(join(configDir, "state.json"), activeState(bundle));
+      const receiptPath = join(configDir, "upgrade-receipt.json");
+      const receipt = readJson(receiptPath, true);
+      atomicJson(receiptPath, { ...receipt, status: "passed", phase: "resumed-startup", updatedAt: new Date().toISOString() });
+    }
+    return;
+  }
   if (args.command === "metadata") { console.log(`${runtime.MYSKILLS_COMPOSE_PROJECT}\n${runtime.MYSKILLS_ENABLE_MCP}\n${bundle.source.commit}\n${bundle.source.version}`); return; }
   if (args.command === "status") {
     const observations = safeFile(args["observations-file"], true).trim().split("\n"); const images = {};
@@ -67,8 +88,10 @@ async function main() {
     const report = readJson(args["report-file"], true); if (typeof report.passed !== "boolean") fail("backup result is missing a completion result.");
     if (report.runId && !runIdPattern.test(report.runId)) fail("backup result has an invalid run ID.");
     const safe = { passed: report.passed, ...(report.runId ? { runId: report.runId } : {}), ...(typeof report.fresh === "boolean" ? { fresh: report.fresh } : {}) };
-    if (args["attach-upgrade-receipt"] === "true" && existsSync(join(configDir, "upgrade.lock")) && report.passed && report.runId) {
-      const receipt = readJson(join(configDir, "upgrade-receipt.json"), true); receipt.backupRunId = report.runId;
+    if (args["attach-upgrade-receipt"] === "true" && existsSync(join(configDir, "operation.lock")) && report.passed && report.runId) {
+      const receipt = readJson(join(configDir, "upgrade-receipt.json"), true);
+      if (receipt.status !== "in-progress" || receipt.phase !== "backup-current") fail("backup cannot attach to an unrelated upgrade receipt.");
+      receipt.backupRunId = report.runId;
       atomicJson(join(configDir, "upgrade-receipt.json"), receipt);
     }
     console.log(JSON.stringify(safe)); if (!report.passed) process.exitCode = 1; return;
@@ -85,7 +108,8 @@ async function main() {
     if (args.command === "recovery-check") { console.log("Restore configuration passed. The recovery tool will independently refuse non-empty destinations."); return; }
     const script = resolve(dirname(fileURLToPath(import.meta.url)), "../../scripts/restore-registry-backup.mjs");
     const result = spawnSync(process.execPath, [script, "--execute", args["run-id"]], { env: { ...backup, ...target, PATH: process.env.PATH,
-      MYSKILLS_RECOVERY_OUTPUT_PARENT: configDir }, encoding: "utf8", timeout: 1_801_000, maxBuffer: 1024 * 1024 });
+      MYSKILLS_RECOVERY_OUTPUT_PARENT: configDir,
+      ...(process.env.NODE_EXTRA_CA_CERTS ? { NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS } : {}) }, encoding: "utf8", timeout: 1_801_000, maxBuffer: 1024 * 1024 });
     let report; try { report = JSON.parse(result.stdout?.split("\n")[0]); } catch { /* A missing receipt remains a failure. */ }
     if (result.status !== 0 || report?.passed !== true || report.runId !== args["run-id"]) fail("guarded restore failed; preserve protected recovery evidence and inspect the recovery runbook.");
     console.log(JSON.stringify({ passed: true, runId: report.runId })); return;
@@ -97,6 +121,17 @@ async function main() {
     if (compareVersions(target.source.version, bundle.source.version) <= 0 || target.source.commit === bundle.source.commit) fail("target must be a newer release with a different source commit; downgrade and same-release replacement are refused.");
     if (target.images.postgres.ref !== bundle.images.postgres.ref || target.images.minio.ref !== bundle.images.minio.ref) fail("storage image changes require a separate reviewed storage upgrade.");
     console.log("Target integrity, forward version, platform and storage compatibility checks passed."); return;
+  }
+  if (args.command === "migration-barrier") {
+    const receipt = readJson(join(configDir, "upgrade-receipt.json"), true);
+    if (!existsSync(join(configDir, "operation.lock")) || receipt.status !== "in-progress" || receipt.phase !== "migrate-target"
+      || receipt.target?.commit !== target.source.commit || !runIdPattern.test(receipt.backupRunId ?? "")) fail("migration requires an operation lock and completed upgrade backup receipt.");
+    // Record the barrier first so a crash between writes remains retryable,
+    // including a second upgrade that replaces an earlier barrier. Then fence
+    // older helpers that know only state.json before any target SQL can commit.
+    atomicJson(barrierPath, { schemaVersion: 1, source: activeState(bundle), target: activeState(target), backupRunId: receipt.backupRunId, startedAt: new Date().toISOString() });
+    atomicJson(join(configDir, "state.json"), activeState(target));
+    return;
   }
   if (args.command === "record-active") {
     atomicJson(join(configDir, "state.json"), activeState(target)); console.log("Active bundle recorded. Continue with that bundle's helper."); return;
@@ -157,6 +192,15 @@ function verifyBundle(path, platform) {
       if (!["linux/amd64", "linux/arm64"].includes(item.platform) || !/^sha256:[a-f0-9]{64}$/.test(item.digest ?? "")) fail("image platform metadata is invalid.");
       for (const evidence of [item.manifestEvidence, ...(item.runtimeEvidence ? [item.runtimeEvidence] : [])]) {
         if (!evidence || checksums.get(evidence.file) !== evidence.sha256) fail("image evidence must refer to checksum-verified bundle files.");
+        const proof = readJson(join(path, evidence.file));
+        const kind = evidence === item.manifestEvidence ? "oci-manifest" : "container-runtime";
+        if (proof.schemaVersion !== 1 || proof.status !== "passed" || proof.kind !== kind || proof.imageRef !== image.ref
+          || proof.platformDigest !== item.digest || proof.platform !== item.platform) fail("image evidence identity, platform or result differs from the release.");
+        if (kind === "oci-manifest") {
+          if (name === "postgres" ? proof.upstreamVersion !== "17-alpine"
+            : proof.labels?.["org.opencontainers.image.revision"] !== manifest.source.commit || proof.labels?.["org.opencontainers.image.version"] !== manifest.source.version) fail("image evidence source labels differ from the release.");
+        } else if (!["native", "emulated"].includes(proof.executionMode) || !["linux/amd64", "linux/arm64"].includes(proof.hostPlatform)
+          || (proof.executionMode === "native") !== (proof.hostPlatform === item.platform)) fail("image runtime evidence must distinguish native and emulated execution.");
       }
     }
     if (platform && !image.platforms.some((item) => item.platform === platform)) fail("release does not contain images for the operator Docker platform.");
@@ -168,6 +212,10 @@ function compareVersions(a, b) { const first = versionParts(a); const second = v
 function url(value, protocols) { let parsed; try { parsed = new URL(value); } catch { fail("a required URL is invalid."); } if (!protocols.includes(parsed.protocol) || !parsed.hostname || parsed.username && !parsed.protocol.startsWith("postgres") || parsed.hash || parsed.search) fail("a URL has unsupported protocol, credentials, query or fragment."); return parsed; }
 function loopback(host) { return ["127.0.0.1", "localhost", "[::1]"].includes(host); }
 function validTimestamp(value) { return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value; }
+function sameState(a, b) {
+  return a?.schemaVersion === 1 && b?.schemaVersion === 1 && a.source?.commit === b.source?.commit && a.source?.version === b.source?.version
+    && imageNames.every((name) => a.images?.[name] === b.images?.[name]);
+}
 function activeState(bundle) { return { schemaVersion: 1, source: bundle.source, images: Object.fromEntries(imageNames.map((name) => [name, bundle.images[name].ref])) }; }
 function envBytes(values) { return Object.entries(values).map(([key, value]) => { if (typeof value !== "string" || /['\\\r\n\0]/.test(value)) fail("values must be strings without newline, backslash or single quote."); return `${key}='${value}'\n`; }).join(""); }
 function atomicJson(path, value) {
