@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { runComposedArchitectureAcceptance } from "./composed-architecture-acceptance.mjs";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -164,6 +165,7 @@ export async function runOperationalAcceptance({ env = process.env, callbacks = 
     const next = await submit("0.2.0", false, "fix");
     const nextArtifact = await publish(next);
     await verifyCodexWorkspace(initialArtifact, intermediateArtifact, nextArtifact);
+    await runComposedArchitectureAcceptance({api,cli,actor:actors.reviewer,workspace,slug,releases:[initialArtifact,nextArtifact],onEnrolled:id=>enrolledTargets.push(id),check});
     await cli(["update", slug, "--dry-run", "--dir", installRoot], actors.consumer);
     await assertInstalled(installRoot, "0.1.1", initialArtifact);
     await cli(["update", slug, "--dir", installRoot], actors.consumer);

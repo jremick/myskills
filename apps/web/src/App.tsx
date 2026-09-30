@@ -1,3 +1,4 @@
+import { RecoveryGuidancePanel } from "./components/operations/RecoveryGuidancePanel.js";
 import { APPLICATION_SCOPES } from "@myskills-app/core";
 import { DeviceAuthorizePage } from "./components/DeviceAuthorizePage.js";
 import { ConfirmationDialog, type ConfirmationRequest } from "@/components/ui/confirmation-dialog";
@@ -3549,7 +3550,7 @@ function TeamSkillSection({ empty, skills, title }: { empty: string; skills: Pub
   );
 }
 
-type AdminTab = "people" | "instance" | "github" | "branding" | "keys" | "providers" | "audit";
+type AdminTab = "people" | "instance" | "github" | "branding" | "keys" | "providers" | "audit" | "recovery";
 const ADMIN_TABS: ReadonlyArray<{ id: AdminTab; label: string }> = [
   { id: "people", label: "People" },
   { id: "instance", label: "Instance" },
@@ -3558,6 +3559,7 @@ const ADMIN_TABS: ReadonlyArray<{ id: AdminTab; label: string }> = [
   { id: "keys", label: "API keys" },
   { id: "providers", label: "Sign-in providers" },
   { id: "audit", label: "Audit" },
+  { id: "recovery", label: "Recovery" },
 ];
 
 function AdminConsole({ client, session }: { client: RegistryClient; session: WebSession }) {
@@ -4185,6 +4187,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
           )}
         </section>
 
+        <section {...panelProps("recovery")}><RecoveryGuidancePanel key={`${session.user.id}:${session.user.roles.join(",")}`} isAdministrator={isAdminUser(session.user)}/></section>
         <section {...panelProps("audit")}>
           <div className="account-panel-head">
             <div><h2>Audit</h2><p>{auditEvents.length} loaded</p></div>

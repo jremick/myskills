@@ -1059,6 +1059,7 @@ export const skillUpgradePolicyRevisions = pgTable("skill_upgrade_policy_revisio
 ]);
 
 export const skillArchitectureSyncRuns = pgTable("skill_architecture_sync_runs", {
+  artifactIntent: jsonb("artifact_intent").$type<import("@myskills-app/core").ArchitectureArtifactIntent>(),
   id: uuid("id").primaryKey().defaultRandom(),
   schemaVersion: integer("schema_version").notNull().default(1),
   architectureId: uuid("architecture_id").notNull(),

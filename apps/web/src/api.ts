@@ -1,3 +1,4 @@
+import { createArchitectureArtifactClient, type ArchitectureArtifactClient } from "./architecture-artifact-client.js";
 import { createArchitecturePlanClient, type ArchitecturePlanClient } from "./architecture-plan-client.js";
 import type { TaskDiscoveryInput, TaskDiscoveryResponse } from "@myskills-app/core";
 import { createBundleClient, type BundleClient } from "./bundle-api.js";
@@ -808,7 +809,7 @@ export interface UserSubmissionDetail extends UserSubmissionSummary, SubmissionE
 }
 export interface ReviewSubmissionDetail extends ReviewSubmissionSummary, SubmissionEvidence {}
 
-export interface RegistryClient extends Partial<ArchitecturePlanClient> {
+export interface RegistryClient extends Partial<ArchitecturePlanClient>, Partial<ArchitectureArtifactClient> {
   discoverTask?(input: TaskDiscoveryInput, token?: string): Promise<TaskDiscoveryResponse>;
   deviceLogin?: DeviceLoginClient;
   /** Remote MCP connection consent and management. */
@@ -1014,6 +1015,7 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
     libraries: createLibraryClient(root, fetchImpl, token),
     drafts: createDraftClient(root, fetchImpl, token),
     github: createGithubClient(root, fetchImpl, token),
+    ...createArchitectureArtifactClient((method, pathname, body) => requestJson(fetchImpl, `${root}${pathname}`, { method, ...(body === undefined ? {} : { body }), token })),
     ...createArchitecturePlanClient((method, pathname, body, overrideToken) => requestJson(fetchImpl, `${root}${pathname}`, { method, ...(body === undefined ? {} : { body }), token: overrideToken ?? token })),
     discoverTask: (input, overrideToken) => requestJson(fetchImpl, `${root}/v1/skills/discover`, { method: "POST", body: input, token: overrideToken ?? token }),
     bundles: createBundleClient(root, fetchImpl, token),

@@ -1,7 +1,9 @@
+import { isApprovedArtifactRollbackTransition } from "./artifact-service.js";
 import { assertExecutableSyncRun } from "./purpose.js";
 import { randomUUID } from "node:crypto";
 import {
   AppError,
+  artifactHash, assertArchitectureArtifactIntent, type ArchitectureArtifactIntent,
   architectureSyncControlLimits,
   assertValidArchitectureSyncLease,
   assertValidArchitectureSyncReceipt,
@@ -92,6 +94,16 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
         busy: current?.active === true && Date.parse(current.lease.expiresAt) > Date.parse(now),
       };
     });
+  }
+
+  private readonly artifactIntents = new Map<string, ArchitectureArtifactIntent>();
+  async getArtifactIntent(runId: string): Promise<ArchitectureArtifactIntent | null> { return structuredClone(this.artifactIntents.get(runId) ?? null); }
+  async setArtifactIntent(runId: string, intent: ArchitectureArtifactIntent): Promise<void> {
+    assertArchitectureArtifactIntent(intent);
+    const run = await this.getRun(runId);
+    const previous = this.artifactIntents.get(runId);
+    if (run?.metadata?.source !== "architecture-artifact" || run.metadata.artifactDigest !== artifactHash(intent) || previous && artifactHash(previous)!==artifactHash(intent)) throw new AppError("Artifact intent is immutable and bound to its run.","ARCHITECTURE_ARTIFACT_INTENT_CONFLICT",409);
+    this.artifactIntents.set(runId, structuredClone(intent));
   }
 
   async createRun(input: ArchitectureSyncCreateRunStoreInput): Promise<ArchitectureSyncCreateRunStoreResult> {
@@ -347,7 +359,7 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
     const existing = this.runs.get(run.identity.runId);
     if (!existing) throw new AppError("Sync run was not found.", "ARCHITECTURE_SYNC_RUN_NOT_FOUND", 404);
     this.assertImmutableRunFields(existing, run);
-    const runTransitionAllowed = existing.state === run.state
+    const runTransitionAllowed = isApprovedArtifactRollbackTransition(existing, run) || existing.state === run.state
       || (options.recoveryTransition
         ? isValidArchitectureSyncRecoveryTransition({
           from: existing.state,

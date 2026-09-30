@@ -11,7 +11,7 @@ type BrowserActor = {
 test.describe.configure({ retries: 0 });
 
 test("author feedback, immutable publication, upgrade policy, real CLI install/update/rollback, and revocation", async ({ page }, testInfo) => {
-  test.setTimeout(process.env.MYSKILLS_ACCEPTANCE_ENVIRONMENT === "staging" ? 600_000 : 180_000);
+  test.setTimeout(process.env.MYSKILLS_ACCEPTANCE_ENVIRONMENT === "staging" ? 600_000 : 300_000);
   const browserErrors: string[] = [];
   page.on("pageerror", (error) => browserErrors.push(error.name));
   const report = await runOperationalAcceptance({

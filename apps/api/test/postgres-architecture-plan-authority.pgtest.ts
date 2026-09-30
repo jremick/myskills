@@ -1,3 +1,7 @@
+import { hashSessionToken } from "@myskills-app/auth";
+import { buildApp } from "../src/app.js";
+import { AuthService } from "../src/auth/service.js";
+import { PostgresAuthStore } from "../src/auth/postgres-auth-store.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
@@ -28,9 +32,10 @@ test("Postgres exact-revision review retains authority, rejects prior changes an
   await pool.query("CREATE SCHEMA public");
   await runMigrations(pool);
   const db = createDb(pool);
-  const actor = { id: randomUUID(), mfaVerified: true };
+  const actor = { id: randomUUID(), mfaVerified: true, artifactCredential:{kind:"session" as const,hash:hashSessionToken("pg-plan-session")} };
   await pool.query("INSERT INTO users(id,email,normalized_email,name,status,email_verified_at) VALUES($1,'plan@example.test','plan@example.test','Plan','active',now())", [actor.id]);
   const digest = "a".repeat(64);
+  await pool.query("INSERT INTO auth_sessions(user_id,token_hash,expires_at,mfa_verified_at) VALUES($1,$2,clock_timestamp()+interval '1 hour',clock_timestamp())",[actor.id,actor.artifactCredential.hash]);
   const skillId = randomUUID(), versionId = randomUUID();
   await pool.query("INSERT INTO skills(id,slug,title,summary,visibility,lifecycle_status,owner_user_id) VALUES($1,'review-plan','Review plan','Synthetic exact review','public','approved',$2)", [skillId, actor.id]);
   await pool.query("INSERT INTO skill_versions(id,skill_id,version,lifecycle_status,review_status,security_status,approved_artifact_sha256,published_at) VALUES($1,$2,'1.0.0','approved','approved','passed',$3,now())", [versionId, skillId, digest]);
@@ -49,6 +54,15 @@ test("Postgres exact-revision review retains authority, rejects prior changes an
   const dependencies = { architectureStore: architectures, targetStore: targets, releaseDependencies: { skillRepository: new PostgresSkillRepository(db), submissionService: new SubmissionService(new PostgresSubmissionStore(db)) } };
   const service = new ArchitecturePlanService(store, dependencies);
   const request = { revisionId: revision.id, expectedTargetGeneration: target.generation, expectedObservationId: observation.id!, expectedObservationDigest: observation.observedDigest, idempotencyKey: "initial-review" };
+  const app=buildApp({authService:new AuthService(new PostgresAuthStore(db)),architectureStore:architectures,architectureTargetService:targetService,skillRepository:dependencies.releaseDependencies.skillRepository,submissionService:dependencies.releaseDependencies.submissionService,architecturePlanService:service});t.after(()=>app.close());
+  for(const action of ["create","approve"]){
+    const drafted=action==="approve"?await service.createPlan(actor,target.id,{...request,idempotencyKey:"credential-approve"}):null;
+    const blocker=await pool.connect();await blocker.query("BEGIN");await blocker.query("SELECT id FROM skill_architecture_targets WHERE id=$1 FOR UPDATE",[target.id]);
+    const pending=app.inject({method:"POST",url:drafted?`/v1/architecture-plans/${drafted.run.identity.runId}/approve`:`/v1/architecture-targets/${target.id}/plans`,headers:{authorization:"Bearer pg-plan-session"},payload:drafted?{expectedReviewDigest:String(drafted.run.metadata!.reviewDigest)}:{...request,idempotencyKey:"credential-create"}});
+    try{await waitForLock(pool,"%skill_architecture_targets%",true);await pool.query("UPDATE auth_sessions SET revoked_at=clock_timestamp() WHERE token_hash=$1",[actor.artifactCredential.hash]);await blocker.query("COMMIT");const response=await pending;assert.equal(response.statusCode,403,response.body);
+      if(drafted)assert.deepEqual(await store.getRun(drafted.run.identity.runId),drafted.run);else assert.equal((await store.listRuns({targetId:target.id})).some(run=>run.metadata?.source==="architecture-plan"),false);
+    }finally{await blocker.query("ROLLBACK");blocker.release();await pool.query("UPDATE auth_sessions SET revoked_at=NULL WHERE token_hash=$1",[actor.artifactCredential.hash]);}
+  }
   const initial = await service.createPlan(actor, target.id, request);
   assert.equal(initial.run.metadata?.reviewOnly, true);
   const approval = await service.approvePlan(actor, initial.run.identity.runId, { expectedReviewDigest: String(initial.run.metadata?.reviewDigest) });

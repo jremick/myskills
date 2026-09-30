@@ -106,3 +106,16 @@ if(a[0]==='ps')console.log('aaaaaaaaaaaa');if(a[1]==='inspect')console.log(JSON.
   assert.deepEqual(cleanupHostLedger(f.ledger, f.docker), ["host-compose-project-cleanup"]);
   assert.ok(readFileSync(f.records, "utf8").trim().split("\n").map(JSON.parse).every(({ a }) => !a.includes("rm")));
 });
+
+test("expected nonzero helper retains owned terminal evidence and completes controller cleanup", (t) => {
+  for (const ownership of [owner, "foreign"]) {
+    const f = fixture(t);
+    writeFileSync(f.docker, `#!${process.execPath}\nimport {appendFileSync} from 'node:fs'; const a=process.argv.slice(2); appendFileSync(${JSON.stringify(f.records)},JSON.stringify(a)+'\\n'); if(a[0]==='run')process.exit(7); if(a[1]==='inspect')console.log(JSON.stringify([{Config:{Labels:{'io.myskills.host-rehearsal':${JSON.stringify(ownership)}}},State:{Status:'exited',ExitCode:7}}]));\n`);
+    const result = hostDocker(f.ledger, f.docker, ["run", "--rm", "fixture-image", "invalid-input"], { encoding: "utf8" });
+    assert.equal(result.status, 7);
+    assert.equal(JSON.parse(readFileSync(f.records, "utf8").split("\n")[0]).includes("--rm"), false);
+    const cleanup = cleanupHostLedger(f.ledger, f.docker);
+    assert.deepEqual(cleanup, ownership === owner ? [] : ["host-container-cleanup"]);
+    assert.equal(JSON.parse(readFileSync(f.ledger)).cleanup, ownership === owner ? "complete" : "failed");
+  }
+});

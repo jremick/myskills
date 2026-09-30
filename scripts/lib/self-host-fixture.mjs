@@ -2,7 +2,7 @@
 // Fixture credentials, tokens, MFA seeds and package contents stay in /proof.
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -151,7 +151,78 @@ if (mode === "seed-nonowner") {
   data.persistedFeedback = { securityStatus: submission.submission?.securityStatus ?? null, scanCount: scans.length };
   // Added draft routes are exercised only when present in the exact integrated
   // source; current baseline has no draft or eval creation surface.
+  if (mode === "composed-storage") data.composedProof = await composedStorageProof(api, token, data);
+  else if (data.composedProof) {
+    const persisted = await api(`/v1/architecture-artifacts/${data.composedProof.runId}`);
+    assert.equal(persisted.intent.treeDigest, data.composedProof.treeDigest);
+    assert.equal(persisted.run.state, "succeeded");
+  }
   data.persistedBoundaries = { draft: data.draftId ? "tested" : "not-available-on-source", evaluation: "not-exercised", architecture: "tested", submission: "tested", scanFeedback: "read" };
   save();
 }
 console.log(JSON.stringify({ passed: true, fixture: mode }));
+
+
+async function composedStorageProof(api, token, data) {
+  const core = await import("/app/packages/core/dist/index.js");
+  const { hashSessionToken } = await import("/app/packages/auth/dist/index.js");
+  const { createDb, createPgPool } = await import("/app/apps/api/dist/db/client.js");
+  const { PostgresArchitectureSyncStore } = await import("/app/apps/api/dist/architecture-sync/postgres-store.js");
+  const { ArchitectureArtifactService } = await import("/app/apps/api/dist/architecture-sync/artifact-service.js");
+  const { PostgresArchitectureStore } = await import("/app/apps/api/dist/architectures/postgres-store.js");
+  const { PostgresArchitectureTargetStore } = await import("/app/apps/api/dist/targets/postgres-target-store.js");
+  const { PostgresSkillRepository } = await import("/app/apps/api/dist/repositories/postgres-skill-repository.js");
+  const { PostgresSubmissionStore } = await import("/app/apps/api/dist/submissions/postgres-submission-store.js");
+  const { SubmissionService } = await import("/app/apps/api/dist/submissions/service.js");
+  const { S3ArtifactObjectStorage } = await import("/app/apps/api/dist/artifacts/storage.js");
+  const { S3Client } = require("/app/node_modules/@aws-sdk/client-s3");
+  const database = new URL(process.env.DATABASE_URL);
+  assert.equal(database.hostname, "postgres"); assert.equal(database.pathname, "/myskills"); assert.equal(data.fixtureName, "fresh");
+  const pool = createPgPool(database.href), db = createDb(pool);
+  const forbiddenClient = new S3Client({ endpoint: "http://minio:9000", region: "local", forcePathStyle: true, maxAttempts: 1,
+    credentials: { accessKeyId: "fixture-denied-key", secretAccessKey: "fixture-denied-secret" } });
+  try {
+    const pins = [];
+    for (const [index, version] of [[0, "2.0.0"], [1, "1.0.0"]]) {
+      const slug = `composed-${data.fixtureName}-${index}`;
+      const manifest = { name: slug, title: slug, summary: "Disposable composed MinIO proof", version, license: "Apache-2.0", visibility: "public", platforms: [{ name: "codex", install_target: "codex-skill", status: "supported" }], tags: [] };
+      const { submission } = await api("/v1/submissions", { manifest, files: [{ path: "skill.json", content: JSON.stringify(manifest) }, { path: "SKILL.md", content: `---\nname: ${slug}\ndescription: Synthetic object-backed proof\n---\nExact ${version} instructions.\n` }, { path: "references/bytes.txt", content: `Exact asset ${version}\n` }] }, { status: 202 });
+      const until = Date.now() + 60_000; let current;
+      do { current = (await api(`/v1/submissions/${submission.id}`)).submission; if (current.securityStatus === "passed") break; await new Promise(resolve => setTimeout(resolve, 250)); } while (Date.now() < until);
+      assert.equal(current.securityStatus, "passed");
+      await api(`/v1/review/submissions/${submission.id}/actions`, { action: "approve", artifactSha256: submission.artifact.sha256 });
+      await api(`/v1/review/submissions/${submission.id}/actions`, { action: "publish" });
+      pins.push({ id: slug, slug, version, digest: submission.artifact.sha256, packageVisibility: "public", domainId: "proof" });
+    }
+    const { architecture } = await api("/v1/architectures", { name: "Composed MinIO source proof", patternId: "multi-level-router", description: "Explicit disposable fixture" }, { status: 201 });
+    const spec = core.createMultiLevelRouterArchitecture({ id: architecture.id, name: architecture.name, skills: pins, profile: { id: "fixture", subject: { type: "user", id: data.ownerId } }, environment: { id: "fixture-workspace", kind: "personal" } });
+    const { revision } = await api(`/v1/architectures/${architecture.id}/revisions`, { expectedCurrentRevisionId: null, message: "Exact object-backed topology", spec }, { status: 201 });
+    const { target: registered } = await api("/v1/architecture-targets", { name: "Explicit disposable object-store workspace", architectureId: architecture.id, profileId: "fixture", environmentId: "fixture-workspace", adapter: { kind: "codex-workspace", version: "1.0.0", contractVersion: 2 }, capabilities: { "inventory.read": true, "health.read": true, "plan.read": true, apply: true, rollback: true, "sync.write": true } }, { status: 201 });
+    const { target } = await api(`/v1/architecture-targets/${registered.id}/consent`, { decision: "grant" });
+    const { observation } = await api(`/v1/architecture-targets/${target.id}/observations`, { schemaVersion: 1, id: crypto.randomUUID(), targetId: target.id, targetGeneration: target.generation, adapterDigest: core.architectureTargetAdapterDigest(target.adapter), capabilitiesDigest: core.architectureTargetCapabilitiesDigest(target.capabilities, 2), observedAt: new Date().toISOString(), skills: [], configFindings: [], promptAwareness: { detected: false, count: 0, redacted: true } }, { status: 201 });
+    const { run: review } = await api(`/v1/architecture-targets/${target.id}/plans`, { revisionId: revision.id, expectedTargetGeneration: target.generation, expectedObservationId: observation.id, expectedObservationDigest: observation.observedDigest, idempotencyKey: "minio-review" }, { status: 201 });
+    await api(`/v1/architecture-plans/${review.identity.runId}/approve`, { expectedReviewDigest: review.metadata.reviewDigest });
+    const dependencies = { architectureStore: new PostgresArchitectureStore(db), targetStore: new PostgresArchitectureTargetStore(db), releaseDependencies: { skillRepository: new PostgresSkillRepository(db), submissionService: new SubmissionService(new PostgresSubmissionStore(db)) } };
+    const deniedNames=[];
+    const forbiddenStorage=new S3ArtifactObjectStorage({bucket:"myskills",client:forbiddenClient,requestTimeoutMs:5000});const readForbidden=forbiddenStorage.getObject.bind(forbiddenStorage);
+    forbiddenStorage.getObject=async(...args)=>{try{return await readForbidden(...args);}catch(error){deniedNames.push(error.name);throw error;}};
+    const forbidden = new ArchitectureArtifactService(new PostgresArchitectureSyncStore(db, { artifactStorage: forbiddenStorage }), dependencies);
+    let denied = false;
+    try { await forbidden.prepare({ id: data.ownerId, mfaVerified: true, artifactCredential: { kind: "session", hash: hashSessionToken(token) } }, target.id, { reviewRunId: review.identity.runId, baselineRunId: null, idempotencyKey: "minio-denied" }); }
+    catch { assert.ok(deniedNames.some(name=>/AccessDenied|InvalidAccessKeyId|SignatureDoesNotMatch/.test(name)), "actual MinIO credential refusal observed"); denied = true; }
+    assert.equal(denied, true, "real MinIO permission failure must reject materialization");
+    const deniedRows = await pool.query("SELECT count(*) FROM skill_architecture_sync_runs WHERE target_id=$1 AND artifact_intent IS NOT NULL", [target.id]); assert.equal(Number(deniedRows.rows[0].count), 0);
+    const candidate = await api(`/v1/architecture-targets/${target.id}/artifacts`, { reviewRunId: review.identity.runId, baselineRunId: null, idempotencyKey: "minio-valid" }, { status: 201 });
+    const payloads = new Map();
+    for (const pin of pins) {
+      const bytes = await api(`/v1/skills/${pin.slug}/releases/${pin.version}/bundle?platform=codex`, undefined, { raw: true }); assert.equal(hash(bytes), pin.digest); payloads.set(pin.id, JSON.parse(bytes.toString()).files);
+    }
+    const files = core.renderArchitectureArtifact(candidate.intent.projection, payloads); assert.deepEqual(core.identifyArtifactFiles(files), candidate.intent.files);
+    const root = "/proof/composed-storage-workspace"; mkdirSync(root, { mode: 0o700 });
+    for (const file of files) { const { dirname, join } = await import("node:path"); const location = join(root, file.path); mkdirSync(dirname(location), { recursive: true, mode: 0o700 }); writeFileSync(location, file.content, { mode: 0o600 }); assert.equal(hash(readFileSync(location)), candidate.intent.files.find(entry => entry.path === file.path).digest); }
+    await api(`/v1/architecture-artifacts/${candidate.run.identity.runId}/approve`, { expectedIntentDigest: candidate.intentDigest, treeDigest: candidate.intent.treeDigest, baselineDigest: candidate.intent.baselineDigest });
+    const claim = await api(`/v1/architecture-artifacts/${candidate.run.identity.runId}/claim`, { holderId: "minio-fixture-holder", expectedIntentDigest: candidate.intentDigest }); assert.equal(claim.decision, "claimed");
+    const receipt = await api(`/v1/architecture-artifacts/${candidate.run.identity.runId}/receipt`, { holderId: claim.run.lease.holderId, fencingToken: claim.run.lease.fencingToken, treeDigest: candidate.intent.treeDigest }); assert.equal(receipt.run.state, "succeeded");
+    return { status: "passed", runId: candidate.run.identity.runId, treeDigest: candidate.intent.treeDigest, exactObjectBytes: "passed", deniedStorageNoIntent: "passed", localBytes: "fixture-readback", runtimeRecognized: false };
+  } finally { forbiddenClient.destroy(); await pool.end(); }
+}

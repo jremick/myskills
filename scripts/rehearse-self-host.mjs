@@ -259,6 +259,15 @@ try {
     seedNonowner(images.api.ref, config, project, dataFile);
     driver(images.api.ref, ["create"], dataFile);
     const data = JSON.parse(readFileSync(join(proof, dataFile)));
+    const composedDatabase = runtime.DATABASE_URL;
+    const composedEnv = join(proof, "fresh-composed-db.env"); assert.ok(!/[\r\n$]/.test(composedDatabase));
+    writeFileSync(composedEnv, `DATABASE_URL=${composedDatabase}\n`, { mode: 0o600 });
+    jsonFile(join(proof, "fresh-composed.json"), { ...data, api: "http://api:3001", web: null });
+    driver(images.api.ref, ["composed-storage"], "fresh-composed.json", true, { network: `${project}_default`, envFile: composedEnv });
+    const composedData = JSON.parse(readFileSync(join(proof, "fresh-composed.json")));
+    receipt.composedArtifact = composedData.composedProof;
+    Object.assign(data, composedData, { api: data.api, web: data.web }); jsonFile(join(proof, dataFile), data);
+
     receipt.freshInstallDurationMs = Date.now() - installStarted;
     receipt.freshInstall = { operatorPackage: "tested", ownerBootstrapRetries: "credential-preserving", sourceCommit: candidate,
       matchingApiWebIdentity: "passed", login: "passed", mfa: "passed", unauthorizedPackage: "denied", authProof: data.authProof, persisted: data.persistedBoundaries };

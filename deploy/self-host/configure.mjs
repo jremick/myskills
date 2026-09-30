@@ -32,7 +32,7 @@ async function main() {
     console.log("Container-only configuration helper. Use the checksummed release bundle's myskills.sh."); return;
   }
   const args = options(process.argv.slice(2));
-  if (!["setup", "validate", "metadata", "startup-check", "resume-active", "migration-barrier", "status", "bootstrap-check", "backup-config", "backup-report", "upgrade-check", "receipt", "record-active", "recovery-check", "recovery-execute"].includes(args.command)) fail("unknown configuration command.");
+  if (!["setup", "validate", "metadata", "startup-check", "startup-fence", "resume-active", "migration-barrier", "status", "bootstrap-check", "backup-config", "backup-report", "upgrade-check", "receipt", "record-active", "recovery-check", "recovery-execute"].includes(args.command)) fail("unknown configuration command.");
   if (!isAbsolute(args.bundle ?? "") || !isAbsolute(args["config-dir"] ?? "")) fail("bundle and config directory must be absolute.");
   const bundle = verifyBundle(args.bundle, args.platform); const configDir = args["config-dir"];
   protectedDirectory(configDir);
@@ -50,6 +50,14 @@ async function main() {
   if (!sameState(state, activeState(bundle)) && !targetRetry && !sourceCoordinator) fail("active release differs from this bundle; use the active release helper.");
   if (args.command === "startup-check") {
     if (barrier && !sameState(barrier.target, activeState(bundle))) fail("forward migration has started; only the exact target bundle can start applications. Use the target helper or isolated recovery.");
+    return;
+  }
+  if (args.command === "startup-fence") {
+    if (barrier) {
+      if (!sameState(barrier.target, activeState(bundle)) || !existsSync(join(configDir, "operation.lock"))) fail("retry migration requires the exact target and operation lock.");
+      atomicJson(barrierPath, barrier);
+      atomicJson(join(configDir, "state.json"), activeState(bundle));
+    }
     return;
   }
   if (args.command === "resume-active") {

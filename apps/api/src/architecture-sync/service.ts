@@ -262,7 +262,7 @@ export class ArchitectureSyncService {
   async apply(input: ArchitectureSyncApplyInput): Promise<ArchitectureSyncRun> {
     const actor = normalizeActor(input.actor);
     let run = await this.requireRun(input.runId);
-    assertExecutableSyncRun(run);
+    assertFixturePurpose(run);
     this.assertExpectedPlanDigest(run, input.expectedPlanDigest);
     this.assertMutationCapabilitiesFailClosed(run);
     if (run.state === "succeeded") return this.finalizeTerminalRun(run, actor.userId, "apply", "run.succeeded");
@@ -380,7 +380,7 @@ export class ArchitectureSyncService {
   async recover(input: ArchitectureSyncRecoveryInput): Promise<{ run: ArchitectureSyncRun; recovery: ArchitectureSyncRecoveryResult }> {
     const actor = normalizeActor(input.actor);
     const run = await this.requireRun(input.runId);
-    assertExecutableSyncRun(run);
+    assertFixturePurpose(run);
     if (!isInterruptedRunState(run.state)) {
       const replay = this.replayRecovery(run, input.condition);
       if (replay) return replay;
@@ -475,7 +475,7 @@ export class ArchitectureSyncService {
   async rollback(input: ArchitectureSyncRollbackInput): Promise<ArchitectureSyncRun> {
     const actor = normalizeActor(input.actor);
     let run = await this.requireRun(input.runId);
-    assertExecutableSyncRun(run);
+    assertFixturePurpose(run);
     if (run.state === "rolled_back") return this.finalizeTerminalRun(run, actor.userId, "rollback", "rollback.succeeded");
     if (run.state === "rollback_failed") return this.finalizeTerminalRun(run, actor.userId, "rollback", "rollback.failed", "failed", "deny");
     if (run.state !== "rollback_required" && run.state !== "rolling_back") {
@@ -1001,4 +1001,9 @@ function cryptoRandomId(): string {
   if (typeof globalThis.crypto?.getRandomValues === "function") globalThis.crypto.getRandomValues(bytes);
   else return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
   return [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function assertFixturePurpose(run: ArchitectureSyncRun): void {
+  assertExecutableSyncRun(run);
+  if (run.metadata?.source === "architecture-artifact") throw new AppError("Composed artifacts require the trusted companion protocol.", "ARCHITECTURE_ARTIFACT_COMPANION_REQUIRED", 409);
 }

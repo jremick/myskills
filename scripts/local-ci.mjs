@@ -721,6 +721,7 @@ class JobContext {
     const receipt = existsSync(receiptPath) ? safeJson(readFileSync(receiptPath, "utf8")) : null;
     this.details.hostRehearsal = receipt;
     if (this.ran("host-rehearsal") && (receipt?.status !== "passed" || receipt.sourceCommit !== this.run.head
+      || receipt.composedArtifact?.status !== "passed" || receipt.composedArtifact?.exactObjectBytes !== "passed" || receipt.composedArtifact?.deniedStorageNoIntent !== "passed"
       || receipt.restore?.restoredApplicationRuntime !== "tested" || receipt.restore?.exactPackageBytes !== "passed"
       || receipt.upgrade?.forwardMigrations !== "passed" || receipt.composeInterruption?.cleanup !== "complete"
       || receipt.composeInterruption.client?.actualComposeClient !== "interrupted-in-health-wait"
@@ -814,6 +815,19 @@ const jobRunners = {
         MYSKILLS_E2E_COMPOSE_PROJECT: project ?? "",
       },
     });
+    // Provenance rejects corrupt bytes before the later controller verifier.
+    // Preserve that earlier failure and classify produced artifacts by exact
+    // readback, without running any skipped build or accepting missing output.
+    if (job.reason === "step-failed" && job.steps.at(-1)?.name === "release-verify" && job.steps.at(-1)?.status === "failed") {
+      const verification = verifyReleaseArtifacts(job.clone, job.run, tag);
+      if (verification.files && !verification.ok) {
+        const target = join(job.run.evidence, "release"); mkdirSync(target, { recursive: true });
+        writeJsonAtomic(join(target, "verification.json"), verification.record);
+        job.steps.push({ name: "verify-release-artifacts", status: "failed" });
+        job.reason = "artifact-verification-failed";
+      }
+    }
+    if (!job.canRun()) return; // Failed provenance creates no later resource reservations.
     const image = (repository) => `${repository}:local-ci-${job.run.runId}`;
     await job.build("build-api", ["--file", "Dockerfile", "--target", "api"], image("myskills-app-api"));
     await job.build("build-mcp-http", ["--file", "Dockerfile", "--target", "mcp-http"], image("myskills-app-mcp-http"));
