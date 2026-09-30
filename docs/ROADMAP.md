@@ -1,8 +1,8 @@
 # Roadmap
 
 Version: 0.1.0-beta.17
-Document revision: 0.3.8
-Last updated: 2026-09-28
+Document revision: 0.3.9
+Last updated: 2026-09-30
 
 ## Release Tracks
 
@@ -15,16 +15,15 @@ Last updated: 2026-09-28
   hosted API/web deployed after dedicated staging acceptance. It delivers
   deterministic authoring archives, authorized native MCP Skills delivery,
   release-history navigation, and reviewed registry and self-hosting repairs.
-  At that checkpoint npm publication awaited passkey authentication; the current
-  `beta` selector now resolves to beta.8. Native host activation and guided setup remain later
+  At that checkpoint npm publication awaited passkey authentication; npm delivery
+  followed in beta.8. Native host activation and guided setup remain later
   roadmap slices. See [Beta.7 Release Delivery](BETA7_RELEASE_DELIVERY.md).
-- **Hosted release record**: beta.12 at `d8775d6b07e2de06b7af4cbdc6bee1a33455902d` is the verified maintenance deployment recorded on 28 September 2026. See [Railway Deployment](RAILWAY_DEPLOYMENT.md#current-maintenance-deployment) for the current evidence and rollback pair, and [Beta.12 Release Delivery](BETA12_RELEASE_DELIVERY.md) for the original release. Confirm subsequent runtime state by live readback; newer commits on main do not establish deployment.
 - **Libraries and skill improvement (`v0.1.0-beta.8`)**: GitHub prerelease,
   hosted API/web and npm publication are complete. Libraries phases 1A–1C cover public GitHub imports, provenance, private self-review
   under an administrator policy, source checks, subscriptions, team curation and
   adoption constraints. Skill improvement adds declared model/app/environment
   targets, governed reviewer selection, local Claude Code runs and evaluation evidence.
-  The npm `beta` selector resolves to beta.8; `latest` and `alpha` are unchanged.
+  This release established npm beta.8; later publication advanced that selector.
   See the [combined release evidence](BETA8_RELEASE_DELIVERY.md),
   [Libraries specification](plans/2026-09-26-library-feature-spec.md) and
   [build evidence](plans/2026-09-26-library-build-evidence.md).
@@ -37,14 +36,48 @@ Last updated: 2026-09-28
   synchronization failure; its immutable tag remains, but it was not published
   as a GitHub release or promoted to production. See [Beta.11](BETA11_RELEASE_DELIVERY.md)
   and [Beta.12](BETA12_RELEASE_DELIVERY.md) delivery records. npm publication was
-  excluded from these later releases: `beta` remains beta.8, and their newer
+  excluded from beta.9 through beta.12: `beta` remained beta.8, and their newer
   CLI archives are GitHub release assets.
+- **Authenticator enrollment (`v0.1.0-beta.13`)**: local QR rendering, manual
+  fallbacks, privacy checks and automated enrollment verification shipped on
+  GitHub and the hosted application. Physical scans in 1Password, Google
+  Authenticator and Microsoft Authenticator remain tracked in
+  [issue #49](https://github.com/jremick/myskills/issues/49). See
+  [Beta.13 Release Delivery](BETA13_RELEASE_DELIVERY.md).
+- **Instance branding (`v0.1.0-beta.14` and `v0.1.0-beta.15`)**: logo and brand-text
+  controls, followed by saved browser-title and favicon branding, shipped on
+  GitHub and the hosted application. See [Beta.14](BETA14_RELEASE_DELIVERY.md)
+  and [Beta.15](BETA15_RELEASE_DELIVERY.md) delivery records.
+- **Configuration profiles and scope (`v0.1.0-beta.16`)**: separate CLI profiles,
+  read-only Codex/Claude inventories, scope ownership and exclusions, explicit
+  legacy-root acknowledgment and browser onboarding shipped on GitHub, npm and
+  the hosted application. Managed Codex workspaces remain the supported
+  installation/update writer. See [Beta.16 Release Delivery](BETA16_RELEASE_DELIVERY.md).
+- **Skills workspace (`v0.1.0-beta.17`)**: the unified Skills workspace, Library
+  skill/release pickers and source links, team-owned Library sourcing, GitHub
+  authentication/retry scheduling, and full-page architecture Workbench are
+  published in the GitHub prerelease. This is source publication, not a hosted
+  beta.17 deployment claim. See [Beta.17 Release Delivery](BETA17_RELEASE_DELIVERY.md).
+- **Current publication and hosted snapshot (30 September 2026)**: GitHub has
+  beta.17 at `9c0511e90a4c0b2fe7c54c4e5f11a1b320e8db7b`; npm `beta` resolves to
+  `0.1.0-beta.16`, with `latest` and `alpha` at `0.1.0-alpha.3`. The public
+  [hosted version endpoint](https://myskills.sh/version.json) reports beta.16 at
+  `acfb7c8c7f8bc560f6fdba13cf0414033ab6d00e`, consistent with the recorded API/web
+  pair in [Beta.16 Release Delivery](BETA16_RELEASE_DELIVERY.md). Other instances
+  require their own live readback. Source publication does not update them.
+- **Portable local CI**: [PR #120](https://github.com/jremick/myskills/pull/120)
+  merged the local verification, release and CodeQL runner;
+  [PR #121](https://github.com/jremick/myskills/pull/121) merged the automatic-run
+  Compose-name repair. These are post-beta.17 source changes. See [Local CI](LOCAL_CI.md).
 - **Business-safe production release**: harden the beta into an operator-ready release with stronger audit, background scanning, skill evals, provider lifecycle, artifact delivery, trusted publishing, deploy/ops guidance, and upgrade policy. See [BUSINESS_SAFE_RELEASE_GOAL.md](BUSINESS_SAFE_RELEASE_GOAL.md).
 
 ## Current Focus
 
-- Reconcile the merged foundation batch below, then prioritize review findings
-  and the remaining backlog before assigning later release scope, owners, or dates.
+- Complete the 30 September closeout work now in progress: dependency repairs,
+  CLI/MCP capability parity and real ChatGPT/Claude acceptance, tracked
+  Collections and Group membership, local-CI parallel execution, and release
+  and repository reconciliation. These changes are not part of the beta.17
+  delivery record; verification and publication remain separate gates.
 - Make first use easier: native MCP skill delivery, better authoring and imports,
   optional task-aware recommendations, and simpler self-hosting and deployment.
 - Preserve the API/Postgres registry, immutable reviewed releases, authorization,
@@ -152,6 +185,8 @@ Current status:
 Done:
 
 - Core API/schema slice, session auth, email verification/reset/invitation/email-change tokens, TOTP MFA, recovery codes, local roles, scoped API tokens, browser account management, admin API-token monitoring/revocation, and sanitized audit listing.
+- Queued authentication email delivery through the encrypted outbox and API
+  notification worker, with claim leases, retries, expiry and recipient checks.
 - Public search/detail endpoints, authenticated package intake, archive extraction defenses, scan evidence, artifact storage, maintainer review, publication, release lifecycle controls, release metadata, authorized bundle delivery, and user-owned submitted-skill export/withdrawal.
 - Web workflows for public browsing, package submission, author withdrawal, maintainer review, publication, lifecycle controls, registration/user/provider/role administration, and audit review.
 - Read-only MCP stdio and stateless Streamable HTTP discovery servers.
@@ -163,7 +198,6 @@ Done:
 
 Remaining:
 
-- Queued email delivery.
 - Browser/device login for CLI auth.
 - Authoritative per-tool MCP audit events.
 - Provider login/linking and external identity lifecycle.
@@ -238,11 +272,12 @@ Acceptance:
 - A new user can login, search, install, list, update, and rollback.
 - An author can create, validate, scan, package, and submit a draft.
 
-Current status: `init`, validation, scanning, submission, and the user install
-lifecycle are implemented. The source candidate adds deterministic `package`
-archive creation under [AUTHOR-1](#authoring-and-imports-author-1). The complete
-create/package/submit/review/publish fixture passed on Windows-hosted Linux.
-Source implementation does not establish a published CLI release.
+Current status: `init`, validation, scanning, submission, the user install
+lifecycle, and deterministic `package` archive creation under
+[AUTHOR-1](#authoring-and-imports-author-1) are implemented and included in the
+published npm beta.16 CLI. The complete create/package/submit/review/publish
+fixture passed on Windows-hosted Linux. Beta.17 includes a matching GitHub CLI
+archive; npm remains beta.16. CLI/MCP capability-parity work is in progress.
 
 ## Milestone 5: Web App MVP
 
@@ -276,10 +311,16 @@ Done:
 - User API-key management.
 - Owner/admin console workflows for registration, user status actions, role updates, API-key monitoring/revocation, provider metadata/mappings, and audit review.
 - Supplied My Skills logo and favicon kit wired into the web app.
+- The four-wave application redesign shipped in beta.12, followed by local MFA
+  QR enrollment in beta.13 and saved instance/tab branding in beta.14/beta.15.
+- Unified Skills browsing/management, Library entry selection and a full-page
+  architecture Workbench are included in the beta.17 GitHub release. See the
+  release tracks above for the distinct hosted deployment state.
 
 Remaining:
 
-- Broader color, typography, surface, and component refresh from the identity guidelines.
+- Responsive and accessibility acceptance for the Collections, Groups and
+  CLI/MCP onboarding work now in progress.
 - Private draft management.
 - Version-history comparison and usability polish.
 - Guided operator backup/restore workflows and recovery verification beyond the existing scripts and runbooks; a browser administration surface is not yet implemented.
@@ -657,7 +698,7 @@ Delivery sequence:
 1. Completed in [PR #79](https://github.com/jremick/myskills/pull/79): the SDK v2.1
    adapter supports legacy clients and protocol `2026-07-28` while preserving HTTP
    authorization and limits.
-2. Implemented in the source candidate: bounded Skills handlers and verified
+2. Released in beta.7: bounded Skills handlers and verified
    resources over the existing authorized bundle API, with required client
    extension negotiation and unchanged legacy metadata tools.
 3. Verified in Windows-hosted Linux: official SEP-2640 scenario checks with a
@@ -685,13 +726,14 @@ preserving the existing submission and review process.
 
 Delivered foundation: [PR #78](https://github.com/jremick/myskills/pull/78) adds
 local `myskills init` for a private Codex package with safe destination checks.
-The source candidate adds `myskills package --path <directory> --output <file.zip>`.
+Released in beta.7 and included in npm from beta.8:
+`myskills package --path <directory> --output <file.zip>`.
 It validates and scans one held snapshot, preserves exact UTF-8 text bytes,
 creates deterministic ZIP entries, and reports the archive SHA-256, byte size,
 warnings, and a separate submit command. The destination must be new and outside
 the source tree. Neither command contacts the registry or bypasses review.
-The integrated authoring and submission fixture passed; CLI publication,
-browser drafts and imports remain separate steps.
+The integrated authoring and submission fixture passed, and CLI publication is
+complete. Browser drafts and imports remain separate steps.
 
 Planned scope:
 
