@@ -2,6 +2,14 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
+## 0.1.0-beta.19 - roadmap candidate
+
+Target release: `v0.1.0-beta.19`.
+
+- Prepare the next roadmap source candidate and its forward-only self-host verification harness. Canonical Linux verification, independent review and runtime receipts remain required.
+
+This is source preparation. No tag, package publication, public image availability or deployment is claimed. The beta.18 release candidate and its historical evidence remain separate.
+
 ## 0.1.0-beta.18 - candidate
 
 Target release: `v0.1.0-beta.18`.

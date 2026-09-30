@@ -1,6 +1,6 @@
 # Release Process
 
-Version: 0.1.0-beta.18
+Version: 0.1.0-beta.19
 Last updated: 2026-09-30
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
