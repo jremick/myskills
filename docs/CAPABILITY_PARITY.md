@@ -5,13 +5,13 @@ The UI is the baseline for user outcomes. Maintain and deliver coverage in this 
 
 The inventory contains **129 capability groups and 218 API operations**. It classifies 51 CLI command spellings, 195 MCP tools and 5 native MCP handlers. Availability is not proof of equivalent behavior.
 
-Canonical record: [capability-parity.json](capability-parity.json). Last reviewed: 2026-09-30. Evidence: **source inventory with scoped local contract/runtime evidence; real-host and deployment acceptance unverified**. Implementation and verification ledger: [CAPABILITY_PARITY_IMPLEMENTATION.md](CAPABILITY_PARITY_IMPLEMENTATION.md).
+Canonical record: [capability-parity.json](capability-parity.json). Last reviewed: 2026-09-30. Evidence: **source inventory with scoped contract/runtime evidence; real-host acceptance unverified; deployment evidence recorded separately**. Implementation and verification ledger: [CAPABILITY_PARITY_IMPLEMENTATION.md](CAPABILITY_PARITY_IMPLEMENTATION.md).
 
 ## Baseline and meaning of parity
 
 The product target is the same authorized application outcomes across UI, API, CLI and MCP. Remote ChatGPT and Claude connections are included. A read-only connector is an implementation stage, not the final capability boundary.
 
-- Initial audit base: `3ab55b5da86bef5e3f6864657445b9f0ba38288d`, including the preserved MCP OAuth connector. GitHub main checked at `8468ae9f`; the integration reconciles GitHub controls, managed detail, local workspace commands and the current full-stack harness. This is a source baseline, not deployment proof.
+- Initial audit base: `3ab55b5da86bef5e3f6864657445b9f0ba38288d`, including the preserved MCP OAuth connector. The initial integration checked main at `8468ae9f`. Collections PR #124 landed at `6905bf690cd0b9108fc74a392f51909c9726aeb2` with the same tree as tested merge `c2bd1e71d7bb6118f79ad1f07f28ae6d022a27e6`. The final Node 22/24 matrix and CodeQL passed; [retained verification and separate phase-1 staging evidence](BETA18_RELEASE_DELIVERY.md) record their proof limits.
 - Current cell provenance is recorded individually. Existing connector test evidence is in [MCP delivery evidence](MCP_CONNECTIONS_DELIVERY.md). Static inventory checks do not replace cross-surface scenarios or real host acceptance.
 
 The API and its domain services remain the state and authorization authority. Adapters must not create a second ACL or a more permissive mutation path.
@@ -262,7 +262,7 @@ These groups describe remaining work. A group can contain completed and open cel
 **G02 — Read coverage and parameter verification.** Named MCP reads now cover release history, exact metadata, architecture documents/revisions, previews and exports. Friendly search supports cursor pagination and exact-release info. CLI pagination/read filters are tested. Continue comparing fields, filters, cursors, safe output and exact artifacts; static registration does not prove complete response equivalence.
 
 <a id="g03"></a>
-**G03 — Libraries and bundle curation.** Named MCP tools now cover the 25 library groups and bundle writes under explicit scopes. CLI filters have scoped journey/transport evidence. UI library editing/adoption history and some filters remain gaps. The full browse-to-adoption/subscription/target-binding journey needs capability-specific runtime and host evidence.
+**G03 — Libraries and bundle curation.** Named MCP tools now cover the 29 Library capability groups and bundle writes under explicit scopes. CLI filters have scoped journey/transport evidence. UI library editing/adoption history and some filters remain gaps. The full browse-to-adoption/subscription/target-binding journey needs capability-specific runtime and host evidence. Collections/Groups now have PostgreSQL and persistent browser evidence; their CLI/MCP fixtures prove adapter contracts, not complete adapter-to-PostgreSQL parity.
 
 <a id="g04"></a>
 **G04 — Authoring, publishing and lifecycle.** Named MCP actions now expose managed inventory, submission inspection/export, review, publish/withdraw, metadata, lifecycle and sharing. CLI paths have scoped runtime evidence; MCP schema/export checks include reviewed artifact digest validation. Preserve exact inspected identity and separate approve/publish decisions; source coverage alone does not establish every lifecycle workflow.

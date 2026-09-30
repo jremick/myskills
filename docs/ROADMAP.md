@@ -73,11 +73,11 @@ Last updated: 2026-09-30
 
 ## Current Focus
 
-- Complete the 30 September closeout work now in progress: dependency repairs,
-  CLI/MCP capability parity and real ChatGPT/Claude acceptance, tracked
-  Collections and Group membership, local-CI parallel execution, and release
-  and repository reconciliation. These changes are not part of the beta.17
-  delivery record; verification and publication remain separate gates.
+- Complete beta.18 delivery after the merged dependency, CLI/MCP, Collections
+  and Groups, and local-CI changes: stage the final revision, perform real
+  ChatGPT/Claude acceptance, and finish release and publication gates. Phase-1
+  staging and final Collections source verification are recorded in the
+  [beta.18 delivery record](BETA18_RELEASE_DELIVERY.md).
 - Make first use easier: native MCP skill delivery, better authoring and imports,
   optional task-aware recommendations, and simpler self-hosting and deployment.
 - Preserve the API/Postgres registry, immutable reviewed releases, authorization,
@@ -88,12 +88,12 @@ Last updated: 2026-09-30
   milestone status lists. Earlier branch and
   beta.2 labels below are historical; they do not supersede the release tracks.
 
-Collections and Groups now have an implementation candidate for personal and
-team Libraries. Groups can overlap; Collections derive tracking from their
-members' existing source lineages. Both inherit Library permissions and have
-API, CLI and MCP operations. Local checks and rendered browser journeys pass;
-the final Windows PostgreSQL/full-stack gate, merge, release and deployment
-remain separate steps. See the [implementation plan](plans/2026-09-30-library-collections-groups.md)
+Collections and Groups merged in PR #124 for personal and team Libraries.
+Groups can overlap; Collections derive tracking from their members' existing
+source lineages. Both inherit Library permissions and have API, CLI and MCP
+operations. The final Node 22/24 repository, PostgreSQL, browser, image and
+CodeQL gates passed on the merged source tree. Staging this revision, release,
+publication and production deployment remain separate steps. See the [implementation plan](plans/2026-09-30-library-collections-groups.md)
 and [capability evidence](CAPABILITY_PARITY_IMPLEMENTATION.md).
 
 ## Foundation Delivery Batch
@@ -327,8 +327,9 @@ Done:
 
 Remaining:
 
-- Responsive and accessibility acceptance for the Collections, Groups and
-  CLI/MCP onboarding work now in progress.
+- Deployed responsive and accessibility acceptance for Collections, Groups
+  and CLI/MCP onboarding; mocked Collections/Groups responsive and keyboard
+  journeys already pass.
 - Private draft management.
 - Version-history comparison and usability polish.
 - Guided operator backup/restore workflows and recovery verification beyond the existing scripts and runbooks; a browser administration surface is not yet implemented.

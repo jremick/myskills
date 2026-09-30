@@ -1,6 +1,6 @@
 # Library Collections and Groups
 
-Status: implemented; local checks passed; final Windows PostgreSQL and full-stack verification pending.
+Status: merged in PR #124; final Node 22/24 repository, PostgreSQL, browser, image and CodeQL gates passed. Staging and release remain pending.
 
 ## Outcome and boundaries
 
@@ -45,6 +45,24 @@ Backend owns core contracts, Library service/store/routes, migration and API/Pos
 Write meaningful journey coverage before implementation. Prove the multi-source/overlapping-group workflow, independent Library pins, permission loss, stale writes, retries and no unintended adoption with real Postgres. Prove rendered create/edit/delete, Collection tracking, group overlap and error recovery with browser tests. Run the repository gate and capability gate under the declared runtime. Obtain canonical Postgres, browser and CodeQL evidence for the final candidate through the existing Windows controller; keep sanitized repeatable artifacts. Static inventory coverage does not establish real ChatGPT or Claude acceptance.
 
 Stop when the approved workflows and required checks pass. Escalate only a material scope change or missing authority. Hosted deployment and physical authenticator acceptance remain outside this feature change.
+
+## Completed verification
+
+[PR #124](https://github.com/jremick/myskills/pull/124) merged as
+`6905bf690cd0b9108fc74a392f51909c9726aeb2`. Candidate head
+`a486f60fae00b449359ac83034ac056efff53d94`, tested merge
+`c2bd1e71d7bb6118f79ad1f07f28ae6d022a27e6`, and the landed commit share tree
+`9e647634a7e28d6b63c7b324664ce9d9ee6f4219`.
+
+The Windows matrix passed all seven jobs. Each Node runtime passed 1,372
+repository tests, 253 PostgreSQL tests, nine full-stack browser journeys,
+one isolated connector journey, and 160 mocked browser journeys with one skip.
+The Collections/Groups PostgreSQL receipts prove multiple sources, independent
+pins, privacy, concurrent revisions and quotas, and membership read races.
+The persistent browser journey passed without retries on both runtimes.
+CodeQL also passed. See [the delivery evidence](../BETA18_RELEASE_DELIVERY.md#collections-and-groups-verification)
+for run IDs, retained artifacts and proof limits. CLI/MCP fixtures remain
+adapter-contract evidence; real provider acceptance is a separate gate.
 
 ## Rollback and operational readiness
 

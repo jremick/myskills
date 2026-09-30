@@ -20,9 +20,13 @@ are listed in the implementation ledger. The MCP suite passed 97 tests before fi
 by a build and two targeted checks. It covers a real OAuth SDK/API write
 journey and separate transport-contract fixtures; it does not exhaustively
 prove all 168 named actions. Eight handoff tests cover 27 guidance actions.
-Web consent has mocked browser/component evidence. The final repository,
-PostgreSQL and full-stack results will be recorded separately. Real
-ChatGPT/Claude acceptance and deployment remain unverified.
+Web consent has mocked browser/component evidence. Phase-1 repository,
+PostgreSQL, full-stack, merge and Railway staging evidence is recorded in
+[Beta.18 release preparation](BETA18_RELEASE_DELIVERY.md#phase-1-staging-evidence).
+The final Collections candidate passed the Node 22/24 repository, PostgreSQL,
+browser, image and CodeQL gates and merged in PR #124. See its
+[verification record](BETA18_RELEASE_DELIVERY.md#collections-and-groups-verification).
+Collections staging and real ChatGPT/Claude acceptance remain pending.
 
 The sections below preserve the **initial read-only connector build** and its
 historical test results. Their two-scope policy and tool counts describe that
@@ -195,8 +199,9 @@ its script, an exception to the requested test-first workflow.
 
 ## Remaining gates
 
-- Deployment has not been executed. Follow the prepared
-  [runbook](MCP_CONNECTIONS.md#railway-runbook-not-executed) through staging.
+- Phase-1 staging and final Collections source verification are recorded above.
+  The Collections revision still needs staging deployment and acceptance. Follow the
+  [runbook](MCP_CONNECTIONS.md#railway-runbook) before production promotion.
 - Provider acceptance requires a publicly reachable HTTPS deployment. Claude
   connectors are brokered from Anthropic's cloud, so a local or private
   endpoint cannot pass.
