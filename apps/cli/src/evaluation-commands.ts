@@ -21,15 +21,17 @@ export async function runEvaluationCommand(input: ParityCommandInput, context: P
       files=await readPackageFilesFromPath(args[0]!);
     }
     catch { throw new Error("Package input could not be read safely. Use a bounded directory or ZIP archive with regular text files."); }
-    const suite = input.options.suite === undefined ? defaultPackageEvaluationSuite() : normalizeImprovementEvaluationSuiteV1(await context.readInput(option(input,"suite")));
+    const suite = input.options.suite === undefined ? defaultPackageEvaluationSuite() : normalizeImprovementEvaluationSuiteV1(await readInput(context,option(input,"suite")));
     context.output({ run: evaluatePackageFiles({files,suite,target:{platform:input.options.platform,context:"local"},provenance:"self-reported"}), notice: "Static local evidence is self-reported. Provider behavior is unconfigured. Nothing was uploaded; this result cannot approve or publish a version." });
     return true;
   }
   if (!action || action === "help") { context.output({usage:evaluationHelp}); return true; }
   if (!["run","list","summary"].includes(action) || args.length!==2 || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(args[0]!) || args[1]!.length>64 || !/^[0-9A-Za-z.+-]+$/.test(args[1]!)) throw new Error("Invalid evaluation command.");
   const root=`/v1/evaluations/releases/${encodeURIComponent(args[0]!)}/${encodeURIComponent(args[1]!)}`;
-  if (action === "run") context.output(await context.request("POST",`${root}/runs`,await context.readInput(option(input,"input"))));
+  if (action === "run") context.output(await context.request("POST",`${root}/runs`,await readInput(context,option(input,"input"))));
   else context.output(await context.request("GET",`${root}/${action === "list" ? "runs" : "summary"}`,undefined,action === "summary" ? "optional" : "required"));
   return true;
 }
 function option(input: ParityCommandInput,key:string):string { const value=input.options[key]; if(typeof value!=="string" || !value) throw new Error(`--${key} requires a file.`); return value; }
+
+async function readInput(context:ParityCommandContext,path:string) { try { return await context.readInput(path); } catch { throw new Error("Evaluation input must be a bounded valid JSON object."); } }

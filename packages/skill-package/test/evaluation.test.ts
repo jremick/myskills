@@ -32,7 +32,7 @@ test("failure, warning and incompatible stay distinct; regression compares exact
 });
 test("suite revision cannot substitute content or rubric hashes or execute arbitrary assertions", () => {
   const suite=defaultPackageEvaluationSuite();
-  for (const invalid of [{...suite,caseCount:1},{...suite,contentSha256:"a".repeat(64)},{...suite,rubricSha256:"b".repeat(64)}, {...suite,assertions:[{id:"run",kind:"shell",command:"arbitrary"}]}]) assert.throws(()=>normalizeImprovementEvaluationSuiteV1(invalid));
+  for (const invalid of [{...suite,graders:["model"]},{...suite,graders:["deterministic","human"]},{...suite,caseCount:1},{...suite,contentSha256:"a".repeat(64)},{...suite,rubricSha256:"b".repeat(64)}, {...suite,assertions:[{id:"run",kind:"shell",command:"arbitrary"}]}]) assert.throws(()=>normalizeImprovementEvaluationSuiteV1(invalid));
   const legacy={...suite}; delete legacy.assertions;
   assert.throws(()=>evaluatePackageFiles({files,suite:legacy,target:{platform:"codex",context:"local"},provenance:"self-reported"}),/no package-static assertions/);
 });

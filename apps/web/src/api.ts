@@ -1,3 +1,4 @@
+import { createEvaluationClient, type EvaluationClient } from "./evaluations-api.js";
 import { createArchitectureArtifactClient, type ArchitectureArtifactClient } from "./architecture-artifact-client.js";
 import { createArchitecturePlanClient, type ArchitecturePlanClient } from "./architecture-plan-client.js";
 import type { TaskDiscoveryInput, TaskDiscoveryResponse } from "@myskills-app/core";
@@ -815,6 +816,7 @@ export interface RegistryClient extends Partial<ArchitecturePlanClient>, Partial
   /** Remote MCP connection consent and management. */
   oauth?: OAuthConnectionClient;
   improvements?: ImprovementClient;
+  evaluations?: EvaluationClient;
   libraries?: LibraryClient;
   drafts?: DraftClient;
   github?: GithubClient;
@@ -1009,6 +1011,7 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
   const root = baseUrl.replace(/\/+$/, "");
   const cookieSessionHeaders = { "x-myskills-session-response": "cookie" };
   return {
+    evaluations: createEvaluationClient(root, fetchImpl, token),
     deviceLogin: createDeviceLoginClient(root, fetchImpl, token),
     oauth: createOAuthConnectionClient(root, fetchImpl, token),
     improvements: createImprovementClient(<T,>(url: string, init?: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown }) => requestJson<T>(fetchImpl, `${root}${url}`, { ...init, token })),

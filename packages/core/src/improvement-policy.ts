@@ -253,6 +253,8 @@ export function normalizeImprovementEvaluationSuiteV1(input: unknown): Improveme
   const holdoutCaseCount = integerField(record.holdoutCaseCount ?? 0, "suite holdoutCaseCount", 0, 1_000);
   if (protectedCaseCount + holdoutCaseCount > caseCount) fail("suite protected and holdout cases cannot exceed caseCount.");
   const assertions = record.assertions === undefined ? undefined : normalizePackageEvaluationAssertions(record.assertions);
+  const graders = uniqueEnumArray(record.graders, "suite graders", improvementGraders, 3, { minItems: 1 });
+  if (assertions && (graders.length !== 1 || graders[0] !== "deterministic")) fail("Static suites require only the deterministic grader; provider graders are unconfigured.");
   if (assertions && (assertions.length !== caseCount || record.contentSha256 !== packageEvaluationAssertionsDigest(assertions)
     || record.rubricSha256 !== packageEvaluationRubricDigest() || (record.repetitions ?? 1) !== 1)) fail("Static suite counts, digests and repetition must match its assertions and runner.");
   return {
@@ -264,7 +266,7 @@ export function normalizeImprovementEvaluationSuiteV1(input: unknown): Improveme
     caseCount,
     protectedCaseCount,
     holdoutCaseCount,
-    graders: uniqueEnumArray(record.graders, "suite graders", improvementGraders, 3, { minItems: 1 }),
+    graders,
     repetitions: integerField(record.repetitions ?? 1, "suite repetitions", 1, 10),
   };
 }

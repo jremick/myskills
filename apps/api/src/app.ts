@@ -78,6 +78,8 @@ import type { ArchitectureRecord, ArchitectureStore } from "./architectures/type
 import type { ArchitectureTargetService } from "./targets/service.js";
 import type { TargetSkillOperationService } from "./target-operations/service.js";
 import type { SkillUpgradePolicyService } from "./upgrade-policies/service.js";
+import { registerEvaluationRoutes } from "./evaluations/routes.js";
+import type { EvaluationService } from "./evaluations/service.js";
 import type { ImprovementService } from "./improvements/service.js";
 import { registerImprovementRoutes } from "./improvements/routes.js";
 import type {
@@ -147,6 +149,7 @@ export interface BuildAppOptions {
   targetSkillOperationService?: TargetSkillOperationService;
   skillUpgradePolicyService?: SkillUpgradePolicyService;
   improvementService?: ImprovementService;
+  evaluationService?: EvaluationService;
   architectureOrganizationGrantService?: ArchitectureOrganizationGrantService;
   architecturePatternMigrationService?: ArchitecturePatternMigrationService;
   /** Postgres-backed libraries, source imports and tracking. Routes answer 503 when absent. */
@@ -388,6 +391,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         architectureOrganizationGrants: phase2ArchitectureReady && Boolean(options.authService && options.architectureOrganizationGrantService),
         architecturePatternMigrations: phase2ArchitectureReady && Boolean(options.authService && options.architecturePatternMigrationService),
         // Opt-in key: absent unless configured, so existing capability consumers see an unchanged shape.
+        ...(options.evaluationService ? { evaluations: Boolean(options.authService) } : {}),
         ...(options.improvementService ? { improvements: Boolean(options.authService) } : {}),
         // Present only when configured; clients treat an absent flag as false.
         ...(options.libraryService ? {
@@ -2485,6 +2489,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     authenticate: (request, reply) => authenticateArchitecturePlanActor(options, request, reply),
   });
 
+  registerEvaluationRoutes(app, { authService: options.authService, evaluationService: options.evaluationService, requestAuthorization });
   registerImprovementRoutes(app, {
     authService: options.authService,
     improvementService: options.improvementService,

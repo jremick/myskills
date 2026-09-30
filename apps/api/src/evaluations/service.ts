@@ -45,7 +45,7 @@ export class EvaluationService {
       if (result.artifactSha256 !== input.artifactSha256 || result.suiteSha256 !== revision.body_sha256) throw conflict();
       const reviewContext = { reviewStatus: String(version.review_status), lifecycleStatus: String(version.lifecycle_status), context };
       // Recheck expiry after artifact IO/evaluation, with retained role/scope locks.
-      await assertActionAuthority(tx, actor, ["improvements:run"], "read");
+      await assertActionAuthority(tx, actor, ["improvements:run"], version.reviewerAccess ? "review" : "read");
       const inserted = await tx.execute(sql`INSERT INTO package_evaluation_runs
         (id,skill_version_id,artifact_sha256,suite_revision_id,suite_sha256,actor_user_id,idempotency_key,request_sha256,result,review_context)
         VALUES (${randomUUID()}::uuid,${version.id}::uuid,${input.artifactSha256},${input.suiteRevisionId}::uuid,${result.suiteSha256},${actor.id}::uuid,
@@ -53,7 +53,7 @@ export class EvaluationService {
       await tx.execute(sql`INSERT INTO audit_events(actor_user_id,action,decision,resource_type,resource_id,details)
         VALUES (${actor.id}::uuid,'evaluation.complete','allow','package_evaluation',${inserted.rows[0]!.id}::uuid,
         ${JSON.stringify({ artifactSha256: result.artifactSha256, suiteSha256: result.suiteSha256, status: result.status, totals: result.totals })}::jsonb)`);
-      await assertActionAuthority(tx, actor, ["improvements:run"], "read");
+      await assertActionAuthority(tx, actor, ["improvements:run"], version.reviewerAccess ? "review" : "read");
       return { run: record(inserted.rows[0]!), created: true };
     });
   }
@@ -63,13 +63,13 @@ export class EvaluationService {
       const current = await this.authorizeVersion(tx, actor, slug, version, false, publicSummary);
       const result = await tx.execute(sql`SELECT * FROM package_evaluation_runs WHERE skill_version_id=${current.id}::uuid AND artifact_sha256=${current.sha256}
         ORDER BY created_at DESC,id DESC LIMIT 20`);
-      if (actor) await assertActionAuthority(tx, actor, ["improvements:read"], "read");
+      if (actor) await assertActionAuthority(tx, actor, ["improvements:read"], current.reviewerAccess ? "review" : "read");
       const runs = result.rows.map(record);
       return publicSummary ? runs.map(run => ({ id: run.id, versionId: run.versionId, suiteRevisionId: run.suiteRevisionId, createdAt: run.createdAt, summary: packageEvaluationSummary(run.result) })) : runs;
     });
   }
 
-  private async authorizeVersion(tx: DatabaseTransaction, actor: SubmissionActor | null, slug: string, version: string, write: boolean, publicOnly = false) {
+  private async authorizeVersion(tx: DatabaseTransaction, actor: SubmissionActor | null, slug: string, version: string, write: boolean, publicOnly = false): Promise<Record<string, unknown> & { reviewerAccess: boolean }> {
     await tx.execute(sql`LOCK TABLE instance_settings IN SHARE MODE`);
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`submission:${slug}`},0))`);
     const result = await tx.execute(sql`SELECT v.*,a.sha256,a.storage_key,a.byte_size,a.content_type,a.payload FROM skills s JOIN skill_versions v ON v.skill_id=s.id
@@ -82,16 +82,18 @@ export class EvaluationService {
     }
     const authority = new PostgresSubmissionStore(tx as unknown as Database);
     const release = await authority.getPublicRelease({ slug, version, actorId: actor?.id ?? null });
+    let reviewerAccess = false;
     if (publicOnly) { if (!release || row.review_status !== "approved" || !row.published_at) throw missing(); }
     else if (!release) {
       if (!actor) throw missing();
       const roles = await tx.execute(sql`SELECT role FROM role_assignments WHERE user_id=${actor.id}::uuid AND scope_type='instance'
         AND scope_id='00000000-0000-0000-0000-000000000000'::uuid`);
       const reviewer = roles.rows.some(r => ["owner","admin","maintainer"].includes(String(r.role)));
+      reviewerAccess = reviewer;
       if (reviewer) await assertActionAuthority(tx, actor, [write ? "improvements:run" : "improvements:read"], "review");
-      else if (!await authority.getUserSubmissionDetail({ actor, submissionId: String(row.id) })) throw missing();
+      else if (!await authority.getUserSubmissionDetail({ userId: actor.id, submissionId: String(row.id) })) throw missing();
     }
-    return row;
+    return { ...row, reviewerAccess };
   }
 }
 function record(row: Record<string, unknown>): EvaluationRecord {

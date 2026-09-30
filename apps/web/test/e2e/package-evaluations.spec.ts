@@ -1,10 +1,11 @@
 import { expect,test,type Page } from "@playwright/test";
-import { defaultPackageEvaluationSuite,evaluatePackageFiles } from "@myskills-app/skill-package";
+import { defaultPackageEvaluationSuite,evaluatePackageFiles,scanPackageFiles } from "@myskills-app/skill-package";
 import { packageEvaluationSummary } from "@myskills-app/core";
 // Browser wiring/layout proof only. Deterministic outcomes are computed locally;
 // canonical API+PG fixtures separately prove authority and durable persistence.
 const manifest={name:"evaluation-fixture",title:"Evaluation Fixture",summary:"Inspect exact static evidence.",version:"1.0.0",license:"MIT",visibility:"public",platforms:[{name:"codex",install_target:"codex-skill",status:"supported"}]};
-const result=evaluatePackageFiles({files:[{path:"skill.json",content:JSON.stringify(manifest)},{path:"SKILL.md",content:"# PRIVATE-PACKAGE-CANARY"}],suite:defaultPackageEvaluationSuite(),target:{platform:"codex",context:"submission"},provenance:"api-owned"});
+const files=[{path:"skill.json",content:JSON.stringify(manifest)},{path:"SKILL.md",content:"# PRIVATE-PACKAGE-CANARY"}];
+const result=evaluatePackageFiles({files,suite:defaultPackageEvaluationSuite(),target:{platform:"codex",context:"submission"},provenance:"api-owned"});
 const artifact={sha256:result.artifactSha256,byteSize:500,contentType:"application/json"};
 const platforms=[{name:"codex",installTarget:"codex-skill",status:"supported"}];
 const submission={id:"submission",slug:manifest.name,title:manifest.title,summary:manifest.summary,version:"1.0.0",visibility:"public",lifecycleStatus:"submitted",reviewStatus:"unreviewed",securityStatus:"passed",artifact,platforms,createdAt:"2026-10-01T00:00:00Z",publishedAt:null,approvedArtifactSha256:null,findingCount:0,allowedActions:["approve","request-changes","reject"]};
@@ -19,7 +20,7 @@ async function fixture(page:Page,reviewer:boolean){
     if(path==="/v1/site")return reply({site:{landingPageEnabled:true}});
     if(path==="/v1/branding")return reply({branding:{text:"MySkills",showText:true,logoDataUrl:null}});
     if(path==="/v1/review/submissions")return reply({submissions:[submission],nextCursor:null});
-    if(path==="/v1/review/submissions/submission")return reply({submission:{...submission,reviewHistory:[],scanRuns:[],changeRequestReason:null}});
+    if(path==="/v1/review/submissions/submission")return reply({submission:{...submission,reviewHistory:[],scanRuns:[{id:"scan",status:"succeeded",createdAt:run.createdAt,startedAt:run.createdAt,completedAt:run.createdAt,artifactSha256:result.artifactSha256,runnerVersion:"package-scan-v1",attempt:1,failureCode:null,findings:scanPackageFiles(files).findings}],changeRequestReason:null}});
     if(path==="/v1/evaluations/releases/evaluation-fixture/1.0.0/runs")return reply({runs:[run]});
     if(path==="/v1/evaluations/releases/evaluation-fixture/1.0.0/summary")return reply({runs:[{id:run.id,versionId:run.versionId,suiteRevisionId:run.suiteRevisionId,createdAt:run.createdAt,summary:packageEvaluationSummary(result)}]});
     const release={...submission,lifecycleStatus:"approved",reviewStatus:"approved",publishedAt:"2026-10-01T01:00:00Z",allowedActions:[]};
@@ -39,6 +40,7 @@ for(const width of [1280,390])test(`reviewer static evidence exposes exact bindi
   await page.getByLabel("Review queue",{exact:true}).getByRole("button",{name:/Evaluation Fixture/}).click();
   const evidence=page.getByRole("region",{name:"Package evaluation evidence"});
   await expect(evidence.getByText(/behavior: skipped/)).toBeVisible();await expect(evidence.getByText(result.artifactSha256,{exact:true})).toBeVisible();
+  await expect(page.getByText("No findings were recorded for this completed scan.")).toBeVisible();
   await expect(evidence.getByText(/Pass 3/)).toBeVisible();await expect(evidence).not.toContainText("PRIVATE-PACKAGE-CANARY");
   expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
   await page.screenshot({path:info.outputPath(`reviewer-evaluation-${width}.png`),fullPage:true});
