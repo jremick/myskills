@@ -143,16 +143,68 @@ audit event was fixed and its focused regression passed. The whole 53-case batch
 was not repeated. Canonical PostgreSQL, MinIO and browser execution remains
 pending. These are controlled source/runtime fixture findings, not deployed proof.
 
+
+### First ID/TRUST canonical checkpoint
+
+`myskills-roadmap-idtrust-20261001` tested source
+`35ae5060f69267e5249645566307b7c27d4ae24c`, tree
+`05caef628f834d64b5b83bc7a6a90d60a26a6559`, through all seven jobs.
+It **failed**. Both browser jobs and Railway images passed. Both PostgreSQL
+jobs and both check jobs failed. Cleanup completed with no leftovers. The
+controller verified collection of 92 files; export SHA-256:
+`5fdfded7e19308d6490db0ca438225a5f3fffc5070b0ac0e40b0c265d7787447`.
+
+The new PostgreSQL device atomicity/deadline and artifact authorization snapshot
+cases passed on Node22 and Node24. The older device journey needed a shared
+simulated clock with the store. Altered approved payloads failed earlier at the
+integrity check, bypassing the expected publication error contract. Release
+fixtures omitted the new provenance script and its lockfile dependency.
+These three failure families require corrections and a new candidate run.
+Browser fixture/full-stack success does not establish live host or deployment
+acceptance. Subsequent roadmap source is outside this checkpoint.
+
+### Preserved roadmap integration checkpoint
+
+The QUALITY, AUTHOR, architecture review-plan and discovery/site recovery
+sources are integrated through `8fafa42e24169629f3666440c9c90138d4354079`.
+Corrective commits separate API authority/durable evidence (`9a6d203`), browser
+state (`acf42d9`), product-thesis copy (`5082efe`) and shared API/CLI/MCP/web
+registration (`8fafa42`). The two ID/TRUST PostgreSQL regression fixes are
+included; their canonical rerun remains pending.
+
+Supported local evidence passed: 21 focused API/CLI/MCP cases, 143 web
+DOM/API tests, 140 core tests, 25 affected application browser cases and 12
+independent-site desktop/mobile/keyboard cases. These counts are not additive
+coverage measures. Combined source build, web and prepared PostgreSQL test
+source typechecks, lint and generated parity also passed. Static parity reports
+134 groups, 236 API operations, 54 CLI commands, 210 MCP tools and five native
+handlers. Actual new PostgreSQL queue/draft/discovery/review-plan concurrency
+and restart execution still needs canonical verification. Independent source
+review of this exact checkpoint is pending.
+
+The parent inspected updated desktop/mobile site screenshots. The site now
+leads with composed skill sets, versioned architectures, profiles/environments
+and desired-versus-observed review. The fixed discovery corpus compares
+lexical-v1 with ordinary substring search and includes no-match and local
+latency observations; it establishes neither model benefit nor activation.
+
+The composed execution decision is `codex-workspace-architecture/v1`: exact
+API-owned intent, separate execution approval, a shared target lease and a
+bounded local whole-artifact journal. Full graph/router/profile apply, verify
+and rollback implementation remains in progress. Review-only plans never
+become execution authority.
+
 ## External decisions and gates
 
 1. Signed-in personal staging/ChatGPT/Claude consent, first load and revocation.
    No password, MFA code or private account data in chat or public records.
 2. Physical issue #49 QR scans in the named authenticator apps.
 3. Runtime IdP issuer, claim/linking/recovery policy and authorized config target.
-4. Router/profile executor/artifact semantics are an implementation contract
-   decision. Another provider is a separate adapter choice; two Codex instances
-   need no second provider. Nominated target consent/recovery limits block live
-   acceptance only. Per-skill fixtures do not complete the graph implementation.
+4. The composed executor contract has been selected above; source implementation
+   and exact verification remain necessary. Another provider is a separate
+   adapter choice; two Codex instances need no second provider. Nominated target
+   consent/recovery limits block live acceptance only. Per-skill fixtures do not
+   complete the graph implementation.
 5. REC provider, cost/request limits and data-egress after no-cost evidence.
 6. Signing/distribution choice and precise merge/release/publish/deploy approval
    after review-ready candidates. Personal/work target must be explicit.
