@@ -56,3 +56,16 @@ test("authorized same-credential recovery remains available across client recons
   const other={...api,registryIdentity:"https://two.example"};view.rerender(<DraftWorkspace {...props} api={other}/>);
   await view.findByDisplayValue("Private content canary");assert.equal(view.queryByRole("region",{name:"Unsaved edit recovery"}),null);
 });
+
+test("credential identity rotation cannot reuse an equal session epoch or its private recovery", async () => {
+  const api={...client("https://registry.example",async()=>({draft:head})),credentialIdentity:"first-credential"};
+  const view=render(<DraftWorkspace {...props} api={api} credentialEpoch="equal-session-expiry"/>);
+  await view.findByDisplayValue("Private content canary");
+  fireEvent.click(view.getByRole("button",{name:/history/i}));await view.findByText(/Private history canary/);
+  fireEvent.change(view.getByRole("textbox",{name:"File contents"}),{target:{value:"Private recovery canary"}});
+  api.credentialIdentity="second-credential";
+  api.get=async()=>({draft:{...head,files:[{path:"SKILL.md",content:"New authorized content"}]}});
+  view.rerender(<DraftWorkspace {...props} api={api} credentialEpoch="equal-session-expiry"/>);
+  assert.equal(view.queryByDisplayValue("Private recovery canary"),null);assert.equal(view.queryByText(/Private history canary/),null);
+  await view.findByDisplayValue("New authorized content");assert.equal(view.queryByRole("region",{name:"Unsaved edit recovery"}),null);
+});

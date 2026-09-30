@@ -117,7 +117,9 @@ organizations even for external team members. The draft UI remounts on connectio
 identity changes, invalidates old requests, and isolates tab recovery by registry
 and a stable credential epoch plus actor/draft identity. Client replacement still
 clears current private state immediately; recovery is available only within the
-same credential and registry scope.
+same credential and registry scope. When both a session epoch and credential
+identity are available, both participate; equal session expiry cannot reuse
+a different credential's private recovery.
 
 Approval and publication require successful evidence for the exact current
 artifact digest. New synchronous intake scans carry a digest and runner, insert findings before terminalization, and use the same completed-evidence immutability fences as background scans. The
@@ -151,7 +153,7 @@ It reuses the existing suite revision identity, digest, scopes and authorization
 contracts. It cannot grant scan approval or publication authority.
 
 Local Node22 evidence: 34 focused evaluator/route/CLI/MCP/worker/policy tests,
-52 related submission/review/improvement/HOST contract tests, and 7 draft/evidence
+52 related submission/review/improvement/HOST contract tests, and 8 draft/evidence
 DOM tests pass. Full MCP HTTP/native/stdio/connector coverage passes 117/117
 after retaining strict full tool equality and adding the existing friendly
 `discover_skills` registration to the expected catalog. Shared core/package/CLI

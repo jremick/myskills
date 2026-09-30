@@ -18,7 +18,7 @@ export function DraftWorkspace(props: Omit<Parameters<typeof DraftWorkspaceState
   if (!connections.has(props.api)) connections.set(props.api, ++nextConnection);
   const epoch = connections.get(props.api)!;
   const registry = props.api.registryIdentity ?? window.location.origin;
-  const credential = props.credentialEpoch ?? props.api.credentialIdentity ?? String(epoch);
+  const credential = JSON.stringify([props.credentialEpoch ?? null, props.api.credentialIdentity ?? (props.credentialEpoch ? null : String(epoch))]);
   const scope = `${registry}:${credential}`;
   return <DraftWorkspaceState key={`${props.actorId}:${registry}:${epoch}:${credential}`} {...props} recoveryScope={scope} />;
 }
