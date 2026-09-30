@@ -64,6 +64,7 @@ import type {
   MfaTotpFactorRecord,
   ListAuditEventsInput,
 } from "./types.js";
+import { apiTokenScopes } from "./types.js";
 
 const INSTANCE_ROLE_SCOPE = {
   scopeType: "instance",
@@ -1473,19 +1474,7 @@ function parseApiTokenScopes(input: unknown): ApiTokenScope[] {
     return [];
   }
   return input.filter((scope): scope is ApiTokenScope => (
-    scope === "profile:read" ||
-    scope === "skills:read" ||
-    scope === "architectures:read" ||
-    scope === "skills:submit" ||
-    scope === "review:read" ||
-    scope === "review:write" ||
-    scope === "targets:execute" ||
-    scope === "improvements:read" ||
-    scope === "improvements:configure" ||
-    scope === "improvements:run" ||
-    scope === "improvements:report" ||
-    scope === "libraries:read" ||
-    scope === "libraries:write"
+    typeof scope === "string" && (apiTokenScopes as readonly string[]).includes(scope)
   ));
 }
 
