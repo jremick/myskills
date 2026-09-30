@@ -655,13 +655,14 @@ class JobContext {
     return built;
   }
 
-  async smokeBackup(image) {
-    for (const [name, script] of [["smoke-backup-run", "run-registry-backup.mjs"], ["smoke-backup-restore", "restore-registry-backup.mjs"]]) {
+  async smokeBackup(image, prefix = "backup") {
+    for (const [name, script] of [[`smoke-${prefix}-run`, "run-registry-backup.mjs"], [`smoke-${prefix}-restore`, "restore-registry-backup.mjs"],
+      ...(prefix === "ops" ? [["smoke-ops-configure", "deploy/self-host/configure.mjs"]] : [])]) {
       const container = containerName(this.run.runId, this.id, name);
       const entry = this.ledger.track("container", container, this.id, "creating");
       await this.step(name, "docker", [
         "run", "--rm", "--name", container, "--label", `io.myskills.local-ci.run-id=${this.run.runId}`,
-        "--network", "none", image, "node", `scripts/${script}`, "--help",
+        "--network", "none", image, "node", script.startsWith("deploy/") ? script : `scripts/${script}`, "--help",
       ]);
       // --rm removes the container when the CLI exits normally; only an interrupted run needs cleanup.
       const last = this.steps.at(-1);
@@ -752,6 +753,8 @@ const jobRunners = {
     await job.build("build-railway-web", ["--file", "Dockerfile.web", "--build-arg", "VITE_API_BASE_URL=/api"], tag("myskills-app-web"));
     await job.build("build-backup", ["--file", "Dockerfile.backup"], tag("myskills-registry-backup"));
     await job.smokeBackup(tag("myskills-registry-backup"));
+    await job.build("build-ops", ["--file", "Dockerfile.ops"], tag("myskills-ops"));
+    await job.smokeBackup(tag("myskills-ops"), "ops");
   },
 
   async release(job) {
@@ -784,6 +787,8 @@ const jobRunners = {
     await job.build("build-railway-web", ["--file", "Dockerfile.web", "--build-arg", "VITE_API_BASE_URL=/api"], image("myskills-app-railway-web"));
     await job.build("build-backup", ["--file", "Dockerfile.backup"], image("myskills-registry-backup"));
     await job.smokeBackup(image("myskills-registry-backup"));
+    await job.build("build-ops", ["--file", "Dockerfile.ops"], image("myskills-ops"));
+    await job.smokeBackup(image("myskills-ops"), "ops");
     if (!job.canRun()) return job.skip("verify-release-artifacts");
     const verification = verifyReleaseArtifacts(job.clone, job.run, tag);
     const target = join(job.run.evidence, "release");

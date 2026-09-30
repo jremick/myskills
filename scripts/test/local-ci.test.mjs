@@ -182,7 +182,8 @@ test("verify runs every required job on both Node lines and reports gating conte
   assert.ok(builds.some((build) => build.includes("--file Dockerfile.mcp")));
   assert.ok(builds.some((build) => build.includes("--file Dockerfile.web") && build.includes("--build-arg VITE_API_BASE_URL=/api")));
   assert.ok(builds.some((build) => build.includes("--file Dockerfile.backup")));
-  assert.equal(docker.filter(({ args }) => args[0] === "run" && args.includes("--rm") && args.includes("--network") && args.includes("none")).length, 2);
+  assert.ok(builds.some((build) => build.includes("--file Dockerfile.ops")));
+  assert.equal(docker.filter(({ args }) => args[0] === "run" && args.includes("--rm") && args.includes("--network") && args.includes("none")).length, 5);
   assertMcpSmoke(docker, "myskills-app-mcp");
   assertNoPublication(records);
 
@@ -216,6 +217,19 @@ test("Railway MCP smoke failures fail the image job and cleanup only its created
     assertExactCleanup(docker, [], { conflicts: conflict ? [name] : [] });
     assert.equal(docker.some(({ args }) => args[0] === "exec" && args[1] === name), !conflict);
   }
+});
+
+// HOST-1 failure case: a broken packaged operator entrypoint must fail the
+// image gate, even when the API/MCP/backup images built successfully.
+test("operator image smoke failure fails the gate with exact cleanup and no publication", (t) => {
+  const fixture = makeFixture(t);
+  const name = `myskills-ci-${runId}-railway-images-smoke-ops-configure`;
+  fixture.configure({ rules: [{ tool: "docker", prefix: `run --rm --name ${name} `, exit: 1 }] });
+  const run = runLocalCi(fixture, ["verify", "--job", "railway-images"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(run.status, 1, run.output);
+  assert.equal(run.result.jobs[0].steps.find(({ name }) => name === "smoke-ops-configure").status, "failed");
+  assertExactCleanup(fixture.records().filter(({ tool }) => tool === "docker"), []);
+  assertNoPublication(fixture.records());
 });
 
 for (const readback of ["owned", "foreign", "unavailable", "absent", "malformed"]) test(`cancelled MCP creation reconciles ${readback} ownership before cleanup`, async (t) => {
@@ -538,8 +552,8 @@ test("release-check verifies tagged artifacts and release images without publish
   const builds = docker.filter(({ args }) => args[0] === "build").map(({ args }) => args.join(" "));
   for (const target of ["api", "mcp-http"]) assert.ok(builds.some((build) => build.includes(`--target ${target} `)), target);
   assert.ok(builds.some((build) => build.includes("--target web ") && build.includes("--build-arg VITE_API_BASE_URL=/api")));
-  for (const file of ["Dockerfile.api", "Dockerfile.mcp", "Dockerfile.web", "Dockerfile.backup"]) assert.ok(builds.some((build) => build.includes(`--file ${file} `)), file);
-  assert.equal(docker.filter(({ args }) => args[0] === "run" && args.includes("--rm") && args.includes("none")).length, 2);
+  for (const file of ["Dockerfile.api", "Dockerfile.mcp", "Dockerfile.web", "Dockerfile.backup", "Dockerfile.ops"]) assert.ok(builds.some((build) => build.includes(`--file ${file} `)), file);
+  assert.equal(docker.filter(({ args }) => args[0] === "run" && args.includes("--rm") && args.includes("none")).length, 5);
   assertMcpSmoke(docker, "myskills-app-railway-mcp");
   assertExactCleanup(docker, [verify.env.MYSKILLS_E2E_COMPOSE_PROJECT]);
   assertNoPublication(records);

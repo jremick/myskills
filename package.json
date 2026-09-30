@@ -29,6 +29,8 @@
     "release:artifacts": "node scripts/create-release-artifacts.mjs",
     "release:verify": "node scripts/verify-release.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
+    "self-host:build": "node scripts/build-self-host-images.mjs",
+    "self-host:bundle": "node scripts/create-self-host-bundle.mjs",
     "smoke:cli-package": "node scripts/smoke-cli-package.mjs",
     "start:api": "npm run start -w @myskills-app/api",
     "start:mcp:http": "npm run start:http -w @myskills-app/mcp",

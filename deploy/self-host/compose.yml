@@ -1,0 +1,195 @@
+# Run with release.env followed by the operator's protected runtime.env.
+# Release references are immutable. The operator host needs Docker Compose only.
+services:
+  postgres:
+    image: ${MYSKILLS_POSTGRES_IMAGE:?set MYSKILLS_POSTGRES_IMAGE from release.env}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    image: ${MYSKILLS_MINIO_IMAGE:?set MYSKILLS_MINIO_IMAGE from release.env}
+    command: ["server", "/data", "--console-address", ":9001"]
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  minio-init:
+    image: ${MYSKILLS_MINIO_IMAGE:?set MYSKILLS_MINIO_IMAGE from release.env}
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mc alias set -- local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "local/$$S3_BUCKET"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
+
+  migrate:
+    image: ${MYSKILLS_API_IMAGE:?set MYSKILLS_API_IMAGE from release.env}
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+    command: ["node", "apps/api/dist/db/migrate.js"]
+
+  bootstrap:
+    image: ${MYSKILLS_API_IMAGE:?set MYSKILLS_API_IMAGE from release.env}
+    profiles: ["bootstrap"]
+    restart: "no"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - path: ${MYSKILLS_BOOTSTRAP_ENV_FILE:-./bootstrap.env}
+        required: false
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+    command: ["node", "apps/api/dist/db/bootstrap-owner.js"]
+
+  api:
+    image: ${MYSKILLS_API_IMAGE:?set MYSKILLS_API_IMAGE from release.env}
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET}
+      TOTP_ISSUER: ${TOTP_ISSUER:-MySkills}
+      APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
+      API_BASE_URL: ${API_BASE_URL:-}
+      ALLOWED_WEB_ORIGINS: ${ALLOWED_WEB_ORIGINS:?set ALLOWED_WEB_ORIGINS}
+      TRUST_PROXY: ${TRUST_PROXY:?set TRUST_PROXY}
+      AUTH_NOTIFICATION_MODE: ${AUTH_NOTIFICATION_MODE:-smtp}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM: ${RESEND_FROM:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-true}
+      SMTP_TLS_REJECT_UNAUTHORIZED: ${SMTP_TLS_REJECT_UNAUTHORIZED:-true}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      ARTIFACT_STORAGE_MODE: s3
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: ${S3_REGION:-local}
+      S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
+      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+      S3_FORCE_PATH_STYLE: "true"
+      S3_ALLOW_INSECURE_ENDPOINT: "true"
+      MYSKILLS_OAUTH_ENABLED: ${MYSKILLS_OAUTH_ENABLED:-false}
+      MYSKILLS_OAUTH_ISSUER: ${MYSKILLS_OAUTH_ISSUER:-}
+      MYSKILLS_OAUTH_CONSENT_ORIGIN: ${MYSKILLS_OAUTH_CONSENT_ORIGIN:-}
+      MYSKILLS_MCP_PUBLIC_URL: ${MYSKILLS_MCP_PUBLIC_URL:-}
+      MYSKILLS_OAUTH_DYNAMIC_REGISTRATION: ${MYSKILLS_OAUTH_DYNAMIC_REGISTRATION:-false}
+      MYSKILLS_OAUTH_REDIRECT_HOSTS: ${MYSKILLS_OAUTH_REDIRECT_HOSTS:-}
+      MYSKILLS_OAUTH_CLIENTS: ${MYSKILLS_OAUTH_CLIENTS:-}
+    command: ["node", "apps/api/dist/server.js"]
+    expose:
+      - "3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/ready').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  web:
+    image: ${MYSKILLS_WEB_IMAGE:?set MYSKILLS_WEB_IMAGE from release.env}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_PROXY_TARGET: http://api:3001
+      MCP_PROXY_TARGET: ${MCP_PROXY_TARGET:-http://127.0.0.1:3002}
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  mcp-http:
+    image: ${MYSKILLS_MCP_IMAGE:?set MYSKILLS_MCP_IMAGE from release.env}
+    profiles: ["mcp"]
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      MYSKILLS_API_URL: http://api:3001
+      MYSKILLS_MCP_HOST: 0.0.0.0
+      MYSKILLS_MCP_PORT: 3002
+      MYSKILLS_MCP_PATH: ${MYSKILLS_MCP_PATH:-/mcp}
+      MYSKILLS_MCP_ALLOWED_HOSTS: ${MYSKILLS_MCP_ALLOWED_HOSTS:-mcp-http:3002}
+      MYSKILLS_MCP_ALLOWED_ORIGINS: ${MYSKILLS_MCP_ALLOWED_ORIGINS:-}
+      MYSKILLS_MCP_TRUST_PROXY_HOPS: ${MYSKILLS_MCP_TRUST_PROXY_HOPS:-0}
+      MYSKILLS_OAUTH_ISSUER: ${MYSKILLS_OAUTH_ISSUER:-}
+      MYSKILLS_MCP_PUBLIC_URL: ${MYSKILLS_MCP_PUBLIC_URL:-}
+    expose:
+      - "3002"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  ops:
+    image: ${MYSKILLS_OPS_IMAGE:?set MYSKILLS_OPS_IMAGE from release.env}
+    profiles: ["operations"]
+    restart: "no"
+    network_mode: "service:minio"
+    env_file:
+      - path: ${MYSKILLS_BACKUP_ENV_FILE:-./backup.env}
+        required: false
+    environment:
+      MYSKILLS_RECOVERY_SOURCE_DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      MYSKILLS_RECOVERY_SOURCE_S3_ENDPOINT: http://127.0.0.1:9000
+      MYSKILLS_RECOVERY_SOURCE_S3_REGION: ${S3_REGION:-local}
+      MYSKILLS_RECOVERY_SOURCE_S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
+      MYSKILLS_RECOVERY_SOURCE_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+      MYSKILLS_RECOVERY_SOURCE_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+      MYSKILLS_RECOVERY_SOURCE_S3_FORCE_PATH_STYLE: "true"
+    volumes:
+      - ${MYSKILLS_CONFIG_DIR:-.}:/config
+    command: ["node", "deploy/self-host/configure.mjs", "--help"]
+
+volumes:
+  postgres-data:
+  minio-data:

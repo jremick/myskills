@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1
+# Container-only setup and recovery tools. This image never starts the API.
+FROM node:24.19.0-alpine3.23 AS dependencies
+WORKDIR /app
+RUN npm install -g npm@11.12.1
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/cli/package.json ./apps/cli/package.json
+COPY apps/mcp/package.json ./apps/mcp/package.json
+COPY apps/web/package.json ./apps/web/package.json
+COPY packages/auth/package.json ./packages/auth/package.json
+COPY packages/core/package.json ./packages/core/package.json
+COPY packages/skill-package/package.json ./packages/skill-package/package.json
+RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+
+FROM node:24.19.0-alpine3.23 AS ops
+RUN apk add --no-cache postgresql18-client=18.6-r0 \
+  && pg_dump --version \
+  && pg_restore --version
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY scripts/check-production-env.mjs ./scripts/
+COPY scripts/lib/registry-recovery.mjs scripts/lib/registry-backup.mjs ./scripts/lib/
+COPY scripts/run-registry-backup.mjs scripts/restore-registry-backup.mjs scripts/rehearse-registry-recovery.mjs ./scripts/
+COPY deploy/self-host/configure.mjs ./deploy/self-host/
+USER node
+CMD ["node", "deploy/self-host/configure.mjs", "--help"]
