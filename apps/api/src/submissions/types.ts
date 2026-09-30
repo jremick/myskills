@@ -28,6 +28,8 @@ export interface SubmissionActor {
   id: string;
   roles: Role[];
   mfaVerified?: boolean;
+  /** Trusted credential provenance supplied by authenticated routes only. */
+  credential?: ArtifactDeliveryInput["credential"];
 }
 
 export interface CreateSubmissionInput {

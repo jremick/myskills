@@ -60,7 +60,7 @@ export class DraftService {
     assertFiles(files);
     const heldSource = source;
     return this.store.create({
-      ownerId: actor.id, title, files, source,
+      actor, ownerId: actor.id, title, files, source,
       ...(heldSource ? { authorizeSource: (tx) => this.store.authorizeSource(tx, actor.id, heldSource) } : {}),
     });
   }
@@ -70,7 +70,7 @@ export class DraftService {
     assertRevision(input.expectedRevision);
     assertTitle(input.title);
     assertFiles(input.files);
-    return this.store.save({ ...input, ownerId: actor.id, draftId });
+    return this.store.save({ ...input, actor, ownerId: actor.id, draftId });
   }
 
   preview(actor: SubmissionActor, files: PackageInputFile[]): DraftPreview {

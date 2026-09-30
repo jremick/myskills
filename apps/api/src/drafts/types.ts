@@ -1,3 +1,4 @@
+import type { SubmissionActor } from "../submissions/types.js";
 import type { SkillReleaseMetadata } from "@myskills-app/core";
 import type { PackageInputFile, ScanFinding, SkillManifest } from "@myskills-app/skill-package";
 import type { SubmissionImportBinding } from "../submissions/types.js";
@@ -44,8 +45,8 @@ export interface DraftStore {
   list(ownerId: string): Promise<DraftSummary[]>;
   get(ownerId: string, draftId: string, revision?: number): Promise<Draft | null>;
   history(ownerId: string, draftId: string): Promise<DraftSummary[] | null>;
-  create(input: { ownerId: string; title: string; files: PackageInputFile[]; source: DraftSource | null; authorizeSource?: (tx: DatabaseTransaction) => Promise<void> }): Promise<Draft>;
-  save(input: DraftSaveInput & { ownerId: string; draftId: string }): Promise<Draft>;
+  create(input: { actor: SubmissionActor; ownerId: string; title: string; files: PackageInputFile[]; source: DraftSource | null; authorizeSource?: (tx: DatabaseTransaction) => Promise<void> }): Promise<Draft>;
+  save(input: DraftSaveInput & { actor: SubmissionActor; ownerId: string; draftId: string }): Promise<Draft>;
   submissionBinding(input: { ownerId: string; draftId: string; expectedRevision: number; digest: string; slug: string; version: string }): SubmissionImportBinding;
   authorizeSource(tx: DatabaseTransaction, ownerId: string, source: DraftSource): Promise<void>;
 }

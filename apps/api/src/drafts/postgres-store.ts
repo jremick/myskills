@@ -1,3 +1,4 @@
+import { assertActionAuthority } from "../auth/postgres-action-authority.js";
 import { sql } from "drizzle-orm";
 import { AppError } from "@myskills-app/core";
 import { validatePackageFiles } from "@myskills-app/skill-package";
@@ -5,7 +6,7 @@ import type { Database, DatabaseTransaction } from "../db/client.js";
 import { canonicalArtifactPayload } from "../submissions/service.js";
 import { artifactPayloadSha256 } from "../submissions/artifact-hash.js";
 import { PostgresSubmissionStore } from "../submissions/postgres-submission-store.js";
-import type { Draft, DraftSaveInput, DraftSource, DraftStore, DraftSummary } from "./types.js";
+import type { Draft, DraftSource, DraftStore, DraftSummary } from "./types.js";
 
 type Row = Record<string, unknown>;
 const SUMMARY = sql`d.id, d.source, d.created_at AS draft_created_at, d.updated_at,
@@ -42,6 +43,8 @@ export class PostgresDraftStore implements DraftStore {
   async create(input: Parameters<DraftStore["create"]>[0]): Promise<Draft> {
     const id = await this.db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`author-drafts:${input.ownerId}`}, 0))`);
+      const scopes = ["skills:submit" as const, ...(input.source ? [input.source.kind === "release" ? "skills:read" as const : "submissions:read" as const] : [])];
+      await assertActionAuthority(tx, input.actor, scopes, "author");
       await input.authorizeSource?.(tx);
       const count = await tx.execute(sql`SELECT count(*)::int AS n FROM author_drafts WHERE owner_user_id=${input.ownerId}::uuid`);
       if (Number(count.rows[0]?.n) >= 100) throw new AppError("An author can retain at most 100 drafts.", "DRAFT_LIMIT", 409);
@@ -49,18 +52,21 @@ export class PostgresDraftStore implements DraftStore {
         VALUES (${input.ownerId}::uuid, ${input.source === null ? null : JSON.stringify(input.source)}::jsonb) RETURNING id`);
       const draftId = String(created.rows[0]?.id);
       await insertRevision(tx, draftId, 1, input.title, input.files);
+      await assertActionAuthority(tx, input.actor, scopes, "author");
       return draftId;
     });
     return (await this.get(input.ownerId, id))!;
   }
 
-  async save(input: DraftSaveInput & { ownerId: string; draftId: string }): Promise<Draft> {
+  async save(input: Parameters<DraftStore["save"]>[0]): Promise<Draft> {
     await this.db.transaction(async (tx) => {
       await lockHead(tx, input);
+      await assertActionAuthority(tx, input.actor, ["skills:submit"], "author");
       if (input.expectedRevision >= 100) throw new AppError("A draft can retain at most 100 saved revisions.", "DRAFT_HISTORY_LIMIT", 409);
       await insertRevision(tx, input.draftId, input.expectedRevision + 1, input.title, input.files);
       await tx.execute(sql`UPDATE author_drafts SET current_revision=current_revision+1, updated_at=now()
         WHERE id=${input.draftId}::uuid`);
+      await assertActionAuthority(tx, input.actor, ["skills:submit"], "author");
     });
     return (await this.get(input.ownerId, input.draftId, input.expectedRevision + 1))!;
   }
@@ -98,7 +104,8 @@ export class PostgresDraftStore implements DraftStore {
       // Membership/policy writers lock their aggregate first. Retain those
       // same authorities through the private copy, including allocation waits.
       await tx.execute(sql`SELECT t.id FROM teams t WHERE t.id IN (SELECT team_id FROM team_memberships WHERE user_id=${ownerId}::uuid) ORDER BY t.id FOR SHARE`);
-      await tx.execute(sql`SELECT o.id FROM organizations o WHERE o.id IN (SELECT organization_id FROM organization_memberships WHERE user_id=${ownerId}::uuid) ORDER BY o.id FOR SHARE`);
+      await tx.execute(sql`SELECT o.id FROM organizations o WHERE o.id IN (SELECT organization_id FROM organization_memberships WHERE user_id=${ownerId}::uuid
+        UNION SELECT t.organization_id FROM teams t JOIN team_memberships m ON m.team_id=t.id WHERE m.user_id=${ownerId}::uuid AND t.organization_id IS NOT NULL) ORDER BY o.id FOR SHARE`);
       const actor = await tx.execute(sql`SELECT id FROM users WHERE id=${ownerId}::uuid AND status='active' AND email_verified_at IS NOT NULL FOR SHARE`);
       if (!actor.rows.length) throw sourceUnavailable();
       // Reuse the registry's current visibility/lifecycle policy without another object read.
