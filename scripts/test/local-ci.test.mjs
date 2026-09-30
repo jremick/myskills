@@ -51,6 +51,8 @@ import test from "node:test";
 // - A failed lane suppresses another required job or produces a passing aggregate/context.
 // - Cancellation stops only one active process, starts queued jobs, or removes the workspace early.
 // - Invalid concurrency or shared port overrides silently select an unsafe execution plan.
+// - Private HOME hides Docker's implicit config, so preflight, job commands and cleanup select
+//   different contexts or daemons. Preserve the original configuration path without copying it.
 
 const runId = `fixture-run-${process.pid}`;
 const rootPackage = JSON.parse(readFileSync(resolve("package.json"), "utf8"));
@@ -313,6 +315,31 @@ test("four-lane cancellation stops every active step before cleanup and skips qu
   }
   assert.equal(existsSync(fixture.runWorkspace), false);
   assert.equal(existsSync(runIdReservation), false);
+});
+
+test("parallel jobs preserve Docker context configuration from the original home through cleanup", (t) => {
+  const fixture = makeFixture(t);
+  const home = join(fixture.root, "caller-home");
+  const dockerConfig = join(home, ".docker");
+  mkdirSync(dockerConfig, { recursive: true });
+  const contents = JSON.stringify({ currentContext: "fixture-local", contexts: ["fixture-local"] });
+  writeFileSync(join(dockerConfig, "config.json"), contents);
+  for (const env of [{}, { DOCKER_CONTEXT: "fixture-local" }, { DOCKER_CONFIG: dockerConfig }]) {
+    fixture.configure({ requiredDockerContext: "fixture-local" });
+    const run = runLocalCi(fixture, ["verify", "--job", "postgres-node22"], {
+      env: { HOME: home, LOCAL_CI_SOURCE_SHA: fixture.sha, LOCAL_CI_VERIFY_LANES: "4", ...env },
+    });
+    assert.equal(run.status, 0, run.output);
+    assert.equal(run.result.cleanup.status, "complete");
+    assert.equal(run.result.gating, false, "the partial selection stays non-gating");
+    const docker = fixture.records().filter(({ tool }) => tool === "docker");
+    assert.ok(docker.some(({ args }) => args[0] === "context"));
+    assert.ok(docker.some(({ args }) => args[0] === "run"));
+    assert.ok(docker.some(({ args }) => args[0] === "rm"));
+    assert.ok(docker.every(({ env }) => (env.DOCKER_CONFIG ?? join(env.HOME, ".docker")) === dockerConfig));
+    assert.ok(docker.some(({ args, env }) => args[0] === "run" && env.HOME !== home), "job HOME remains private");
+    assert.equal(readFileSync(join(dockerConfig, "config.json"), "utf8"), contents, "caller configuration is unchanged");
+  }
 });
 
 test("partial or unpinned runs never report the required contexts", (t) => {
@@ -940,7 +967,7 @@ async function fakeToolMain() {
   const config = JSON.parse(fs.readFileSync(path.join(root, "fake-config.json"), "utf8"));
   const key = args.join(" ");
   const env = {};
-  for (const name of ["CI", "TEST_DATABASE_URL", "MYSKILLS_E2E_COMPOSE_PROJECT", "RELEASE_REQUIRE_TAG", "RELEASE_EXPECTED_TAG", "PLAYWRIGHT_JSON_OUTPUT_FILE", "HOME", "TMPDIR"]) {
+  for (const name of ["CI", "TEST_DATABASE_URL", "MYSKILLS_E2E_COMPOSE_PROJECT", "RELEASE_REQUIRE_TAG", "RELEASE_EXPECTED_TAG", "PLAYWRIGHT_JSON_OUTPUT_FILE", "HOME", "TMPDIR", "DOCKER_CONFIG", "DOCKER_CONTEXT"]) {
     if (process.env[name] !== undefined) env[name] = process.env[name];
   }
   const canarySeen = Boolean(config.canary) && Object.values(process.env).some((value) => String(value).includes(config.canary));
@@ -948,6 +975,21 @@ async function fakeToolMain() {
     ? spawnTool("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim()
     : undefined;
   fs.appendFileSync(path.join(root, "record.jsonl"), `${JSON.stringify({ tool, args, line, cwd: process.cwd(), pid: process.pid, env, canarySeen, head })}\n`);
+
+  if (tool === "docker" && config.requiredDockerContext) {
+    let dockerConfig;
+    try {
+      dockerConfig = JSON.parse(fs.readFileSync(path.join(process.env.DOCKER_CONFIG ?? path.join(process.env.HOME, ".docker"), "config.json"), "utf8"));
+    } catch {
+      process.stderr.write("Docker context configuration unavailable in this HOME.\n");
+      process.exit(125);
+    }
+    const selected = process.env.DOCKER_CONTEXT ?? dockerConfig.currentContext;
+    if (selected !== config.requiredDockerContext || !dockerConfig.contexts.includes(selected)) {
+      process.stderr.write("Docker context unavailable.\n");
+      process.exit(125);
+    }
+  }
 
   const rule = (config.rules ?? []).find((candidate) => candidate.tool === tool
     && (!candidate.line || candidate.line === line) && key.startsWith(candidate.prefix));

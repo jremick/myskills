@@ -127,8 +127,10 @@ name prefixes. Shared npm, Playwright and Docker build caches are kept.
 Four-lane jobs also receive separate `HOME`, `TMPDIR` and XDG directories in exclusively created,
 ledger-recorded directories below the runner's temporary directory. Use a short runner `TMPDIR`
 because some test tools create Unix sockets there. These private directories are removed with
-their job's resources. Explicit npm, Playwright and Docker configuration/cache paths remain
-available through the environment allowlist. Browser ports are selected once per job and are
+their job's resources. Explicit npm and Playwright cache paths remain available through the
+environment allowlist. Docker uses the caller's original configuration directory, resolved to an
+absolute path even when it was implicit under `HOME`, so preflight, jobs and cleanup select the
+same context. Its contents are not copied. Browser ports are selected once per job and are
 never reused by another job in that run; unrelated host processes can still claim a free port
 before a browser starts, which fails the affected gate.
 
