@@ -179,7 +179,7 @@ test("verify runs every required job on both Node lines and reports gating conte
   assertNoPublication(records);
 
   for (const line of ["22", "24"]) {
-    for (const phase of ["mocked", "fullstack"]) {
+    for (const phase of ["mocked", "fullstack", "fullstack-connector"]) {
       const summary = JSON.parse(readFileSync(join(run.evidence, "browser-evidence", `web-e2e-node${line}`, phase, "summary.json"), "utf8"));
       assert.equal(summary.reportStatus, "available");
     }
@@ -853,7 +853,7 @@ function assertExactCleanup(docker, projects, { conflicts = [] } = {}) {
   }
   for (const project of projects) {
     assert.ok(docker.some(({ args }) => args[0] === "ps" && args.includes(`label=com.docker.compose.project=${project}`)), project);
-    for (const service of ["api", "web"]) {
+    for (const service of ["api", "web", "mcp"]) {
       assert.ok(docker.some(({ args }) => args[0] === "image" && args[1] === "rm" && args.includes(`${project}-${service}`)), `${project}-${service}`);
     }
   }
@@ -1007,6 +1007,7 @@ async function fakeToolMain() {
       }
       if (key === "run test:e2e:fullstack") {
         writeReport("apps/web/test-results/fullstack-report.json");
+        writeReport("apps/web/test-results/fullstack-connector-report.json");
         return 0;
       }
       if (key === "run release:verify") return real(["scripts/verify-release.mjs"]);

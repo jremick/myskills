@@ -103,7 +103,7 @@ atomically and contains:
 - `cleanup` and `artifacts`: cleanup outcome and the SHA-256 of every evidence file.
 
 Other evidence: `logs/<job>.log`, `resources.json`, `environment.json`,
-`browser-evidence/<job>/` (the reviewed summaries and screenshots from
+`browser-evidence/<job>/` (including separate `fullstack` and `fullstack-connector` summaries and the reviewed screenshots from
 `scripts/collect-browser-evidence.mjs`), `release/` (verified artifacts and
 `verification.json`) and `codeql/` (SARIF and a summary).
 

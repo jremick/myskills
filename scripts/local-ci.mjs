@@ -68,7 +68,7 @@ const maxLogBytes = 64 * 1024 * 1024;
 const maxPendingLine = 1024 * 1024;
 const codeqlSuiteLine = "\nqueries:\n  - uses: security-extended\n";
 const defaultCodeqlCategory = "/language:javascript-typescript";
-const composeServiceImages = ["api", "web", "minio", "minio-init"];
+const composeServiceImages = ["api", "web", "mcp", "minio", "minio-init"];
 // Run IDs are reserved here, independent of TMPDIR and LOCAL_CI_WORK_DIR: exclusive mkdir on the local
 // filesystem is atomic, which Docker resource names are not. It covers only a local Docker daemon.
 const runIdLockRoot = "/var/tmp/myskills-local-ci-locks";
@@ -702,6 +702,7 @@ const jobRunners = {
     const project = job.canRun() ? job.trackComposeProject("fullstack") : null;
     await job.step("fullstack-browser", "npm", ["run", "test:e2e:fullstack"], { extraEnv: { ...ports, MYSKILLS_E2E_COMPOSE_PROJECT: project ?? "" } });
     await collectBrowserEvidence(job, "fullstack-browser", "collect-fullstack-evidence", "fullstack-report.json", "fullstack");
+    await collectBrowserEvidence(job, "fullstack-browser", "collect-connector-evidence", "fullstack-connector-report.json", "fullstack-connector");
     exportBrowserEvidence(job);
   },
 

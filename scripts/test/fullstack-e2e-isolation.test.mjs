@@ -21,7 +21,7 @@ test("full-stack E2E redacts generated credentials and uses the supplied Compose
   const fixture = fakeDocker(t);
   const project = "myskills-ci-fixture-web-e2e-node22";
   const result = runFullstack(fixture, { MYSKILLS_E2E_COMPOSE_PROJECT: project });
-  assert.notEqual(result.status, 0, "the fake Compose config step fails, so the run must fail");
+  assert.notEqual(result.status, 0, "the fake Compose up step fails, so the run must fail");
 
   const records = fixture.records();
   assert.ok(records.length >= 3, "config, diagnostics and teardown should all reach Docker");
@@ -45,7 +45,19 @@ test("full-stack E2E rejects an unsafe Compose project name before invoking Dock
   assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, /touch pwned/);
 });
 
-function fakeDocker(t) {
+test("full-stack E2E preflight failure creates no stack and still redacts credentials", (t) => {
+  const fixture = fakeDocker(t, "config");
+  const result = runFullstack(fixture, { MYSKILLS_E2E_COMPOSE_PROJECT: "myskills-ci-preflight-failure" });
+  assert.notEqual(result.status, 0);
+  const records = fixture.records();
+  assert.equal(records.length, 1);
+  assert.ok(records[0].args.includes("config"));
+  const output = `${result.stdout}\n${result.stderr}`;
+  for (const name of credentialNames) assert.equal(output.includes(records[0].env[name]), false);
+  assert.match(output, /\[redacted\]/);
+});
+
+function fakeDocker(t, failedStep = "up") {
   const root = mkdtempSync(join(tmpdir(), "myskills-fullstack-isolation-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const bin = join(root, "bin");
@@ -62,9 +74,10 @@ for (const name of names) {
   process.stdout.write(name + " startup banner: " + process.env[name] + "\\n");
   process.stderr.write("diagnostic " + process.env[name] + "\\n");
 }
-process.exit(args.includes("config") ? 1 : 0);
+process.exit(args.includes(${JSON.stringify(failedStep)}) ? 1 : 0);
 `);
   writeFileSync(join(bin, "docker"), `#!/bin/sh\nexec '${process.execPath}' '${script}' "$@"\n`, { mode: 0o755 });
+  writeFileSync(join(bin, "npm"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   return {
     bin,
     records: () => existsSync(recordPath)
