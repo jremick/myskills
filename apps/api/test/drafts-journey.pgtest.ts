@@ -1,4 +1,4 @@
-import { AppError } from "@myskills-app/core";
+import { AppError, defaultOrganizationPolicyV1, organizationPolicyDigest } from "@myskills-app/core";
 /**
  * Written before AUTHOR-1 production code, 2026-10-01.
  * Independent boundary: real HTTP auth + real Postgres draft and registry writes.
@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { generateTotpCode, hashPassword } from "@myskills-app/auth";
+import { generateTotpCode, hashPassword, hashSessionToken } from "@myskills-app/auth";
 import { encodePackageArchive } from "@myskills-app/skill-package";
 import { buildApp } from "../src/app.js";
 import { AuthService } from "../src/auth/service.js";
@@ -26,6 +26,7 @@ import type { ArtifactObjectStorage } from "../src/artifacts/storage.js";
 import { createDb, createPgPool } from "../src/db/client.js";
 import { PackageScanService } from "../src/package-quality/scan-service.js";
 import { DraftService } from "../src/drafts/service.js";
+import { PostgresOrganizationStore } from "../src/organizations/postgres-organization-store.js";
 import { PostgresDraftStore } from "../src/drafts/postgres-store.js";
 import { PostgresSkillRepository } from "../src/repositories/postgres-skill-repository.js";
 import { SubmissionService } from "../src/submissions/service.js";
@@ -300,6 +301,103 @@ test("private draft route journey preserves history, isolation and atomic submis
     await corrupt();
     await assert.rejects(localDrafts.create({ id: users.bob, roles: ["author"] }, { source: { kind: "release", slug: "database-source", version: "1.0.0" } }), (error: unknown) => error instanceof AppError && error.code === "ARTIFACT_METADATA_MISMATCH");
     assert.equal((await pool.query("SELECT count(*)::int AS n FROM author_drafts")).rows[0].n, before);
+  });
+
+  await t.test("external team fork retains parent organization policy and status through insertion", async () => {
+    const orgs = new PostgresOrganizationStore(db);
+    const policy = { ...structuredClone(defaultOrganizationPolicyV1), teams: { ...defaultOrganizationPolicyV1.teams, requireOrganizationMembershipForTeamMembers: false } };
+    const org = await orgs.createOrganization({ name: "External team organization", slug: "external-org", createdByUserId: users.alice,
+      creatorEmail: "alice@draft.example", creatorName: "alice", policy, policySha256: organizationPolicyDigest(policy), reason: "Fixture" });
+    const team = randomUUID();
+    await pool.query("INSERT INTO teams(id,name,slug,created_by_user_id,organization_id) VALUES($1,'External team','external-team',$2,$3)", [team,users.alice,org.organization.id]);
+    await pool.query("INSERT INTO team_memberships(team_id,user_id,role) VALUES($1,$2,'member')", [team,users.bob]);
+    const files = packageFiles("external-team-source", "1.0.0", "team");
+    const submitted = await submissions.createSubmission({ actor: { id: users.alice, roles: ["author"] }, manifest: JSON.parse(files[0]!.content), files });
+    await scans.runOnce(25);
+    const reviewerActor = { id: users.reviewer, roles: ["maintainer" as const], mfaVerified: true };
+    await submissions.performReviewAction({ actor: reviewerActor, submissionId: submitted.id, action: "approve", artifactSha256: submitted.artifact.sha256 });
+    await submissions.performReviewAction({ actor: reviewerActor, submissionId: submitted.id, action: "publish" });
+    await pool.query("INSERT INTO skill_team_grants(skill_id,team_id) SELECT id,$1 FROM skills WHERE slug='external-team-source'", [team]);
+    const gate = await pool.connect();
+    const gateId = 724210;
+    await pool.query(`CREATE FUNCTION pause_external_draft() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF NEW.owner_user_id='${users.bob}'::uuid THEN PERFORM pg_advisory_xact_lock(${gateId}); END IF; RETURN NEW; END; $$`);
+    await pool.query("CREATE TRIGGER pause_external_draft BEFORE INSERT ON author_drafts FOR EACH ROW EXECUTE FUNCTION pause_external_draft()");
+    try {
+      for (const writer of ["policy", "status"] as const) {
+        await gate.query("SELECT pg_advisory_lock($1)", [gateId]);
+        const fork = call("POST", "/v1/drafts", bob, { source: { kind: "release", slug: "external-team-source", version: "1.0.0" } });
+        await waitForLocks(pool, "INSERT INTO author_drafts", 1);
+        const strict = { ...structuredClone(policy), teams: { ...policy.teams, requireOrganizationMembershipForTeamMembers: true } };
+        const mutation = writer === "policy"
+          ? orgs.appendPolicyRevision({ organizationId: org.organization.id, policy: strict, policySha256: organizationPolicyDigest(strict), reason: "Require organization membership", createdByUserId: users.alice })
+          : orgs.archiveOrganization({ organizationId: org.organization.id, actorUserId: users.alice });
+        await waitForLocks(pool, "organizations", 1);
+        await gate.query("SELECT pg_advisory_unlock($1)", [gateId]);
+        ok(await fork, 201); await mutation;
+        const before = (await pool.query("SELECT count(*)::int AS n FROM author_drafts WHERE owner_user_id=$1", [users.bob])).rows[0].n;
+        denied(await call("POST", "/v1/drafts", bob, { source: { kind: "release", slug: "external-team-source", version: "1.0.0" } }), 404, "DRAFT_SOURCE_NOT_FOUND");
+        assert.equal((await pool.query("SELECT count(*)::int AS n FROM author_drafts WHERE owner_user_id=$1", [users.bob])).rows[0].n,before);
+        if (writer === "policy") await orgs.activatePolicyRevision({ organizationId: org.organization.id, revisionId: org.policyRevision.id, actorUserId: users.alice });
+      }
+    } finally {
+      await gate.query("SELECT pg_advisory_unlock_all()"); gate.release();
+      await pool.query("DROP TRIGGER pause_external_draft ON author_drafts"); await pool.query("DROP FUNCTION pause_external_draft()");
+    }
+  });
+
+  await t.test("blocked draft create/save retain current session and token authority", async () => {
+    const authStore = new PostgresAuthStore(db);
+    for (const operation of ["create", "save"] as const) for (const kind of ["session", "api_token"] as const) {
+      for (const failure of ["revocation", "expiry", "valid"] as const) {
+        const session = await login("alice");
+        const issued = kind === "api_token" ? ok(await call("POST", "/v1/auth/api-tokens", session, { name: "Blocked writer", scopes: ["skills:submit"] }), 201).token : null;
+        const credential = issued?.token ?? session;
+        const files = packageFiles("blocked-draft", "1.0.0");
+        const initial = operation === "save" ? ok(await call("POST", "/v1/drafts", session, { title: "Initial", files }), 201).draft : null;
+        const before = (await pool.query("SELECT count(*)::int AS n FROM author_drafts WHERE owner_user_id=$1", [users.alice])).rows[0].n;
+        const locker = await pool.connect();
+        await locker.query("BEGIN");
+        if (initial) await locker.query("SELECT id FROM author_drafts WHERE id=$1 FOR UPDATE", [initial.id]);
+        else await locker.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`author-drafts:${users.alice}`]);
+        const pending = initial ? call("PUT", `/v1/drafts/${initial.id}`, credential, { expectedRevision: 1, title: "Changed", files })
+          : call("POST", "/v1/drafts", credential, { title: "Changed", files });
+        try {
+          await waitForLocks(pool, initial ? "FROM author_drafts" : "pg_advisory_xact_lock", 1);
+          if (failure === "revocation") {
+            if (issued) await authStore.revokeApiToken({ userId: users.alice, tokenId: issued.id });
+            else await authStore.revokeSessionByTokenHash(hashSessionToken(session));
+          } else if (failure === "expiry") {
+            await pool.query(`UPDATE ${kind === "session" ? "auth_sessions" : "api_tokens"} SET expires_at=clock_timestamp()-interval '1 second' WHERE token_hash=$1`, [hashSessionToken(credential)]);
+          }
+        } finally { await locker.query("COMMIT"); locker.release(); }
+        const response = await pending;
+        if (failure === "valid") ok(response, initial ? 200 : 201);
+        else denied(response, 401, "AUTHENTICATION_REQUIRED");
+        if (initial) assert.equal(ok(await call("GET", `/v1/drafts/${initial.id}`, alice)).draft.revision, failure === "valid" ? 2 : 1);
+        else assert.equal((await pool.query("SELECT count(*)::int AS n FROM author_drafts WHERE owner_user_id=$1", [users.alice])).rows[0].n, before + (failure === "valid" ? 1 : 0));
+      }
+    }
+  });
+
+  await t.test("blocked draft writes use current scopes, roles and credential MFA provenance", async () => {
+    const files=packageFiles("current-authority", "1.0.0");
+    for(const failure of ["scope", "role", "assurance"] as const) {
+      const credential=failure==="assurance" ? reviewer : ok(await call("POST","/v1/auth/api-tokens",alice,{name:"Current writer",scopes:["skills:submit"]}),201).token.token as string;
+      const ownerId=failure==="assurance" ? users.reviewer : users.alice;
+      const before=(await pool.query("SELECT count(*)::int AS n FROM author_drafts WHERE owner_user_id=$1",[ownerId])).rows[0].n;
+      const locker=await pool.connect();await locker.query("BEGIN");await locker.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`author-drafts:${ownerId}`]);
+      const pending=call("POST","/v1/drafts",credential,{title:"Current authority",files});
+      try {
+        await waitForLocks(pool,"pg_advisory_xact_lock",1);
+        if(failure==="scope")await pool.query("UPDATE api_tokens SET scopes='[]'::jsonb WHERE token_hash=$1",[hashSessionToken(credential)]);
+        else if(failure==="role")await pool.query("DELETE FROM role_assignments WHERE user_id=$1 AND role='author'",[ownerId]);
+        else await pool.query("UPDATE auth_sessions SET mfa_verified_at=NULL WHERE token_hash=$1",[hashSessionToken(credential)]);
+      } finally {await locker.query("COMMIT");locker.release();}
+      denied(await pending,403,failure==="scope"?"API_TOKEN_SCOPE_REQUIRED":failure==="role"?"SUBMISSION_ROLE_REQUIRED":"MFA_VERIFICATION_REQUIRED");
+      assert.equal((await pool.query("SELECT count(*)::int AS n FROM author_drafts WHERE owner_user_id=$1",[ownerId])).rows[0].n,before);
+      if(failure==="role")await pool.query("INSERT INTO role_assignments(user_id,role) VALUES($1,'author')",[ownerId]);
+    }
   });
 
   await t.test("history and author limits refuse without pruning", async () => {

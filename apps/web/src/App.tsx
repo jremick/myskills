@@ -1,3 +1,4 @@
+import { PackageEvaluationEvidence } from "@/components/registry/PackageEvaluationEvidence";
 import { RecoveryGuidancePanel } from "./components/operations/RecoveryGuidancePanel.js";
 import { APPLICATION_SCOPES } from "@myskills-app/core";
 import { DeviceAuthorizePage } from "./components/DeviceAuthorizePage.js";
@@ -1465,6 +1466,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
             />
           )}
         </SkillReleaseCard>
+        {readyRelease && registryClient.evaluations && <PackageEvaluationEvidence api={registryClient.evaluations} slug={readyRelease.slug} version={readyRelease.version} publicSummary />}
         {managedRecord && managedVersion && !isPublishedRelease(managedVersion) && (
           <p className="registry-callout registry-section-callout" data-tone="amber" role="status">
             <CircleAlert size={16} aria-hidden="true" />
@@ -2331,7 +2333,7 @@ function SubmitDashboard({ client, onOpenSkill, session, url, onDraftNavigate, o
         <h1>Submit package</h1>
       </header>
 
-      {client.drafts && <DraftWorkspace key={session.user.id} api={client.drafts} actorId={session.user.id} url={url} onNavigate={onDraftNavigate} onNavigationGuardChange={onNavigationGuardChange} correctionSource={correctionSource} onSubmitted={async () => { setResult(null); await refreshSubmissions(); }} />}
+      {client.drafts && <DraftWorkspace key={session.user.id} api={client.drafts} actorId={session.user.id} credentialEpoch={session.expiresAt} url={url} onNavigate={onDraftNavigate} onNavigationGuardChange={onNavigationGuardChange} correctionSource={correctionSource} onSubmitted={async () => { setResult(null); await refreshSubmissions(); }} />}
       <div className="registry-surface">
         <section aria-labelledby={`${baseId}-upload`} className="submit-upload">
           <h2 id={`${baseId}-upload`}>Package archive</h2>

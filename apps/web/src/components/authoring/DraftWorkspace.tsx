@@ -7,12 +7,24 @@ import type { AuthorDraft, DraftClient, DraftFile, DraftPreview, DraftSourceInpu
 const MAX_TEXT = 1_048_576;
 const MAX_FILES = 500;
 const MAX_ZIP = 10_485_760;
-type Recovery = { actorId: string; draftId: string; baseRevision: number; title: string; files: DraftFile[] };
+type Recovery = { registry: string; actorId: string; draftId: string; baseRevision: number; title: string; files: DraftFile[] };
 type HeldFile = DraftFile & { included: boolean; error?: string };
 type Notice = { text: string; error?: boolean };
 
-export function DraftWorkspace({ api, actorId, url, onNavigate, onNavigationGuardChange, correctionSource, onSubmitted }: {
-  api: DraftClient; actorId: string; url: string; onNavigate: (url: string) => void;
+const connections = new WeakMap<DraftClient, number>();
+let nextConnection = 0;
+/** A render-time remount clears private state before the new client can respond. */
+export function DraftWorkspace(props: Omit<Parameters<typeof DraftWorkspaceState>[0], "recoveryScope"> & { credentialEpoch?: string }) {
+  if (!connections.has(props.api)) connections.set(props.api, ++nextConnection);
+  const epoch = connections.get(props.api)!;
+  const registry = props.api.registryIdentity ?? window.location.origin;
+  const credential = JSON.stringify([props.credentialEpoch ?? null, props.api.credentialIdentity ?? (props.credentialEpoch ? null : String(epoch))]);
+  const scope = `${registry}:${credential}`;
+  return <DraftWorkspaceState key={`${props.actorId}:${registry}:${epoch}:${credential}`} {...props} recoveryScope={scope} />;
+}
+
+function DraftWorkspaceState({ api, actorId, recoveryScope, url, onNavigate, onNavigationGuardChange, correctionSource, onSubmitted }: {
+  api: DraftClient; actorId: string; recoveryScope: string; url: string; onNavigate: (url: string) => void;
   onNavigationGuardChange: (guard: ArchitectureNavigationGuard | null) => void;
   correctionSource: { submissionId: string; request: number } | null;
   onSubmitted: (submission: DraftSubmission) => Promise<void>;
@@ -76,7 +88,7 @@ export function DraftWorkspace({ api, actorId, url, onNavigate, onNavigationGuar
   useEffect(() => { void refreshList(); }, [refreshList]);
 
   function forgetRecovery(draftId: string) {
-    try { sessionStorage.removeItem(storageKey(actorId, draftId)); } catch { /* Saving on the server remains authoritative. */ }
+    try { sessionStorage.removeItem(storageKey(recoveryScope, actorId, draftId)); } catch { /* Saving on the server remains authoritative. */ }
     setRecovery(null);
   }
 
@@ -86,7 +98,7 @@ export function DraftWorkspace({ api, actorId, url, onNavigate, onNavigationGuar
     setSelectedPath((previous) => draft.files.some((file) => file.path === previous) ? previous : draft.files[0]?.path ?? "");
     setValidation(null); setReceipt(null); setConflict(null); setHistory(null); setComparison(null);
     setHeld([]); setImportPreview(null); setFolderRoot(null); setRemoveRoot(false);
-    setRecovery(checkRecovery ? readRecovery(actorId, draft.id) : null);
+    setRecovery(checkRecovery ? readRecovery(recoveryScope, actorId, draft.id) : null);
     setCreating(false);
   }
 
@@ -106,12 +118,12 @@ export function DraftWorkspace({ api, actorId, url, onNavigate, onNavigationGuar
 
   useEffect(() => {
     if (!dirty || !head) return;
-    const item: Recovery = { actorId, draftId: head.id, baseRevision: head.revision, title, files };
-    try { sessionStorage.setItem(storageKey(actorId, head.id), JSON.stringify(item)); }
+    const item: Recovery = { registry: recoveryScope, actorId, draftId: head.id, baseRevision: head.revision, title, files };
+    try { sessionStorage.setItem(storageKey(recoveryScope, actorId, head.id), JSON.stringify(item)); }
     catch {
       if (!storageWarningShown.current) { setNotice({ text: "This tab cannot store recovery data. Save your draft before leaving.", error: true }); storageWarningShown.current = true; }
     }
-  }, [actorId, dirty, files, head, title]);
+  }, [actorId, recoveryScope, dirty, files, head, title]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -408,13 +420,13 @@ function pathProblem(path: string, files: DraftFile[]): string | null {
   if (files.some((file) => file.path.toLocaleLowerCase("en-US") === path.toLocaleLowerCase("en-US"))) return "A file with this path already exists. Choose a distinct portable path.";
   return null;
 }
-function storageKey(actorId: string, draftId: string) { return `myskills:draft-recovery:${actorId}:${draftId}`; }
-function readRecovery(actorId: string, draftId: string): Recovery | null {
+function storageKey(registry: string, actorId: string, draftId: string) { return `myskills:draft-recovery:${encodeURIComponent(registry)}:${actorId}:${draftId}`; }
+function readRecovery(recoveryScope: string, actorId: string, draftId: string): Recovery | null {
   try {
-    const raw = sessionStorage.getItem(storageKey(actorId, draftId));
+    const raw = sessionStorage.getItem(storageKey(recoveryScope, actorId, draftId));
     if (!raw || raw.length > MAX_TEXT * 6) return null;
     const value = JSON.parse(raw) as Recovery;
-    if (value.actorId !== actorId || value.draftId !== draftId || !Number.isSafeInteger(value.baseRevision) || value.baseRevision < 1 || typeof value.title !== "string" || value.title.length > 120 || !Array.isArray(value.files) || value.files.length > MAX_FILES || value.files.some((file) => !file || typeof file.path !== "string" || typeof file.content !== "string")) return null;
+    if (value.registry !== recoveryScope || value.actorId !== actorId || value.draftId !== draftId || !Number.isSafeInteger(value.baseRevision) || value.baseRevision < 1 || typeof value.title !== "string" || value.title.length > 120 || !Array.isArray(value.files) || value.files.length > MAX_FILES || value.files.some((file) => !file || typeof file.path !== "string" || typeof file.content !== "string")) return null;
     return value;
   } catch { return null; }
 }

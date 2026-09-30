@@ -139,13 +139,13 @@ if (mode === "seed-nonowner") {
   let submission = await api(`/v1/submissions/${data.submissionId}`);
   if (mode === "create") {
     const until = Date.now() + 60_000;
-    while (Date.now() < until && (!submission.submission.feedback?.scanRuns?.length
-      || submission.submission.feedback.scanRuns.some((run) => !run.completedAt))) {
+    while (Date.now() < until && (!(submission.submission.scanRuns ?? submission.submission.feedback?.scanRuns)?.length
+      || (submission.submission.scanRuns ?? submission.submission.feedback.scanRuns).some((run) => !run.completedAt))) {
       await new Promise((done) => setTimeout(done, 500)); submission = await api(`/v1/submissions/${data.submissionId}`);
     }
-    assert.ok(submission.submission.feedback?.scanRuns?.length, "fixture requires durable scan evidence");
+    assert.ok((submission.submission.scanRuns ?? submission.submission.feedback?.scanRuns)?.length, "fixture requires durable scan evidence");
   }
-  const scans = submission.submission.feedback?.scanRuns ?? [];
+  const scans = submission.submission.scanRuns ?? submission.submission.feedback?.scanRuns ?? [];
   if (mode === "create") data.originalScanCount = scans.length;
   else assert.ok(scans.length >= data.originalScanCount, "original scan rows must survive the transition");
   data.persistedFeedback = { securityStatus: submission.submission?.securityStatus ?? null, scanCount: scans.length };
@@ -157,7 +157,37 @@ if (mode === "seed-nonowner") {
     assert.equal(persisted.intent.treeDigest, data.composedProof.treeDigest);
     assert.equal(persisted.run.state, "succeeded");
   }
-  data.persistedBoundaries = { draft: data.draftId ? "tested" : "not-available-on-source", evaluation: "not-exercised", architecture: "tested", submission: "tested", scanFeedback: "read" };
+  // Only real API-created records count. A legacy baseline cannot prove an
+  // evaluation survived restore when the capability did not exist at backup.
+  if (mode === "create" && capability.capabilities?.evaluations) {
+    const { defaultPackageEvaluationSuite } = await import("/app/packages/skill-package/dist/index.js");
+    const { suite } = await api("/v1/improvements/suites", { owner: { type: "user", id: data.ownerId }, suite: defaultPackageEvaluationSuite() }, { status: 201 });
+    const current = submission.submission;
+    const slug = current.slug, version = current.version;
+    const { run } = await api(`/v1/evaluations/releases/${slug}/${version}/runs`, {
+      artifactSha256: current.artifact.sha256, suiteRevisionId: suite.latest.id, platform: "codex", idempotencyKey: `host-${data.fixtureName}-evaluation`,
+    }, { status: 201 });
+    assert.equal(run.versionId, data.submissionId); assert.equal(run.result.artifactSha256, current.artifact.sha256);
+    assert.equal(run.result.suiteSha256, suite.latest.bodySha256); assert.equal(run.result.provenance, "api-owned");
+    assert.equal(run.result.runner.id, "package-static"); assert.equal(run.result.runner.version, "1"); assert.equal(run.result.totals.skipped, 1);
+    await api(`/v1/review/submissions/${data.submissionId}/actions`, { action: "approve", artifactSha256: current.artifact.sha256 });
+    await api(`/v1/review/submissions/${data.submissionId}/actions`, { action: "publish", artifactSha256: current.artifact.sha256 });
+    const { runs } = await api(`/v1/evaluations/releases/${slug}/${version}/summary`);
+    const summary = runs.find(value => value.id === run.id); assert.ok(summary); assert.equal(summary.summary.assertions, undefined);
+    // Bounded summary only; no raw result, package content or findings exported.
+    data.evaluationProof = { slug, version, record: summary };
+  } else if (data.evaluationProof) {
+    assert.equal(capability.capabilities?.evaluations, true);
+    const { slug, version, record } = data.evaluationProof;
+    const { runs } = await api(`/v1/evaluations/releases/${slug}/${version}/summary`);
+    assert.deepEqual(runs.find(value => value.id === record.id), record, "exact evaluation bindings and summary must survive restore");
+    const { runs: details } = await api(`/v1/evaluations/releases/${slug}/${version}/runs`);
+    const restored = details.find(value => value.id === record.id); assert.ok(restored);
+    assert.equal(restored.versionId, record.versionId); assert.equal(restored.result.artifactSha256, record.summary.artifactSha256);
+    assert.equal(restored.suiteRevisionId, record.suiteRevisionId); assert.equal(restored.result.suiteSha256, record.summary.suiteSha256);
+    assert.deepEqual(restored.result.totals, record.summary.totals);
+  }
+  data.persistedBoundaries = { draft: data.draftId ? "tested" : "not-available-on-source", evaluation: data.evaluationProof ? (mode === "create" ? "created-before-backup" : "restored-exact-summary") : "not-exercised", architecture: "tested", submission: "tested", scanFeedback: "read" };
   save();
 }
 console.log(JSON.stringify({ passed: true, fixture: mode }));

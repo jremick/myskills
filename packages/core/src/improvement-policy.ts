@@ -1,3 +1,4 @@
+import { normalizePackageEvaluationAssertions, packageEvaluationAssertionsDigest, packageEvaluationRubricDigest, type PackageEvaluationAssertion } from "./package-evaluation.js";
 import {
   improvementObjectives,
   improvementNetworkModes,
@@ -229,6 +230,8 @@ export function normalizeImprovementTargetProfileV1(input: unknown): Improvement
 }
 
 export interface ImprovementEvaluationSuiteV1 {
+  /** Optional for legacy provider suites; package-static requires explicit assertions. */
+  assertions?: PackageEvaluationAssertion[];
   schemaVersion: 1;
   name: string;
   contentSha256: string;
@@ -242,14 +245,20 @@ export interface ImprovementEvaluationSuiteV1 {
 
 export function normalizeImprovementEvaluationSuiteV1(input: unknown): ImprovementEvaluationSuiteV1 {
   const record = objectInput(input, "suite", [
-    "schemaVersion", "name", "contentSha256", "rubricSha256", "caseCount", "protectedCaseCount", "holdoutCaseCount", "graders", "repetitions",
+    "schemaVersion", "name", "contentSha256", "rubricSha256", "caseCount", "protectedCaseCount", "holdoutCaseCount", "graders", "repetitions", "assertions",
   ]);
   schemaVersionOne(record.schemaVersion, "suite");
   const caseCount = integerField(record.caseCount, "suite caseCount", 1, 1_000);
   const protectedCaseCount = integerField(record.protectedCaseCount ?? 0, "suite protectedCaseCount", 0, 1_000);
   const holdoutCaseCount = integerField(record.holdoutCaseCount ?? 0, "suite holdoutCaseCount", 0, 1_000);
   if (protectedCaseCount + holdoutCaseCount > caseCount) fail("suite protected and holdout cases cannot exceed caseCount.");
+  const assertions = record.assertions === undefined ? undefined : normalizePackageEvaluationAssertions(record.assertions);
+  const graders = uniqueEnumArray(record.graders, "suite graders", improvementGraders, 3, { minItems: 1 });
+  if (assertions && (graders.length !== 1 || graders[0] !== "deterministic")) fail("Static suites require only the deterministic grader; provider graders are unconfigured.");
+  if (assertions && (assertions.length !== caseCount || record.contentSha256 !== packageEvaluationAssertionsDigest(assertions)
+    || record.rubricSha256 !== packageEvaluationRubricDigest() || (record.repetitions ?? 1) !== 1)) fail("Static suite counts, digests and repetition must match its assertions and runner.");
   return {
+    ...(assertions ? { assertions } : {}),
     schemaVersion: 1,
     name: safeText(record.name, "suite name", 80),
     contentSha256: sha256Field(record.contentSha256, "suite contentSha256"),
@@ -257,7 +266,7 @@ export function normalizeImprovementEvaluationSuiteV1(input: unknown): Improveme
     caseCount,
     protectedCaseCount,
     holdoutCaseCount,
-    graders: uniqueEnumArray(record.graders, "suite graders", improvementGraders, 3, { minItems: 1 }),
+    graders,
     repetitions: integerField(record.repetitions ?? 1, "suite repetitions", 1, 10),
   };
 }

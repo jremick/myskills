@@ -44,6 +44,7 @@ import { TargetSkillOperationService } from "./target-operations/service.js";
 import { PostgresSkillUpgradePolicyStore } from "./upgrade-policies/postgres-store.js";
 import { SkillUpgradePolicyService } from "./upgrade-policies/service.js";
 import { PostgresImprovementStore } from "./improvements/postgres-store.js";
+import { EvaluationService } from "./evaluations/service.js";
 import { ImprovementService } from "./improvements/service.js";
 import { PublicGithubSourceProvider } from "./libraries/github-source.js";
 import { PostgresSourceCooldownStore } from "./libraries/source-cooldown.js";
@@ -180,6 +181,7 @@ const app = buildApp({
   targetSkillOperationService,
   skillUpgradePolicyService,
   improvementService,
+  evaluationService: new EvaluationService(db, { artifactStorage }),
   libraryService,
   githubService,
   bundleService,

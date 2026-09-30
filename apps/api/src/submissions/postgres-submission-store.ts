@@ -64,7 +64,7 @@ import type {
 import { assertNoVisibilityMetadataUpdate } from "./types.js";
 import { artifactPayloadSha256 } from "./artifact-hash.js";
 import { reviewHistoryActions, submissionReviewHistory } from "./feedback.js";
-import { enqueuePackageScan } from "../package-quality/scan-jobs.js";
+import { enqueuePackageScan, PACKAGE_SCAN_RUNNER_VERSION } from "../package-quality/scan-jobs.js";
 
 /**
  * Optional precondition owned by another domain. It runs inside the publication transaction after
@@ -252,9 +252,10 @@ export class PostgresSubmissionStore implements SubmissionStore {
       const now = new Date();
       const [scanRun] = await tx.insert(scanRuns).values({
         skillVersionId: version.id,
-        status: "succeeded",
+        status: "running",
+        artifactSha256: input.artifact.sha256,
+        runnerVersion: PACKAGE_SCAN_RUNNER_VERSION,
         startedAt: now,
-        completedAt: now,
       }).returning();
 
       if (!scanRun) {
@@ -270,6 +271,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
           path: finding.path ?? null,
         })));
       }
+      await tx.update(scanRuns).set({ status: "succeeded", completedAt: now }).where(eq(scanRuns.id, scanRun.id));
       }
 
       await tx.insert(auditEvents).values({
@@ -1557,7 +1559,18 @@ export class PostgresSubmissionStore implements SubmissionStore {
       }, tx);
       throw new AppError("Submission artifact metadata is required before approval.", "PACKAGE_ARTIFACT_REQUIRED", 422);
     }
+    await this.requireApplicableScan(tx, input.submissionId, artifact.sha256);
     return artifact;
+  }
+
+  private async requireApplicableScan(tx: DbLike, versionId: string, digest: string): Promise<void> {
+    const result = await tx.execute(sql`SELECT id FROM scan_runs WHERE skill_version_id=${versionId}::uuid AND status='succeeded'
+      AND (artifact_sha256=${digest} OR (artifact_sha256 IS NULL AND job_id IS NULL
+        AND id IN (SELECT l.scan_run_id FROM legacy_package_scan_allowances l WHERE l.artifact_sha256=${digest})))
+      AND NOT EXISTS (SELECT 1 FROM scan_findings WHERE scan_run_id=scan_runs.id AND severity IN ('warning','blocking'))
+      ORDER BY created_at DESC, id DESC LIMIT 1`);
+    // Only scans predating the binding migration may use the legacy exception.
+    if (!result.rows.length) throw new AppError("A succeeded scan of the current artifact is required.", "PACKAGE_SCAN_REQUIRED", 422);
   }
 
   private async requirePublishableArtifact(
@@ -1628,6 +1641,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
       }, tx);
       throw new AppError("Submission artifact metadata is required before publication.", "PACKAGE_ARTIFACT_REQUIRED", 422);
     }
+    await this.requireApplicableScan(tx, input.submissionId, artifact.sha256);
     if (!row.approvedArtifactSha256) {
       await this.insertReviewAudit("release.publish", "deny", input.actorId, input.submissionId, {
         slug: row.slug,

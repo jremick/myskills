@@ -162,12 +162,12 @@ async function authenticate(deps: ImprovementRouteDependencies, request: Fastify
   };
 }
 
-/** Anonymous reads are allowed; a presented but unusable credential reads anonymously, matching registry reads. */
+/** Anonymous reads are allowed; a presented unusable credential fails closed. */
 async function optionalActor(deps: ImprovementRouteDependencies, request: FastifyRequest, scope: ApiTokenScope): Promise<ImprovementActor | null> {
   const authorization = deps.requestAuthorization(request);
-  if (!deps.authService || !authorization) return null;
-  const context = await deps.authService.authenticateRequest(authorization);
-  if (!context) return null;
+  if (!authorization) return null;
+  const context = await deps.authService?.authenticateRequest(authorization);
+  if (!context) throw new AppError("Authentication is required.", "AUTHENTICATION_REQUIRED", 401);
   if (context.credential.kind !== "session" && !context.credential.scopes.includes(scope)) {
     throw new AppError("API token scope is required.", "API_TOKEN_SCOPE_REQUIRED", 403, { scope });
   }

@@ -1,4 +1,5 @@
 import { assertIsolatedArtifactWorkspace, type ArtifactDurabilityObserver } from "./architecture-artifact-filesystem.js";
+import { evaluationHelp, runEvaluationCommand } from "./evaluation-commands.js";
 import { prepareLocalArchitectureArtifact, applyLocalArchitectureArtifact, verifyLocalArchitectureArtifact, rollbackLocalArchitectureArtifact, type ArtifactFaultPoint } from "./architecture-artifact.js";
 import { artifactHash, type ArchitectureArtifactIntent } from "@myskills-app/core";
 import { ConfigurationProfileError, selectConfigurationProfile } from "./configuration-profile.js";
@@ -273,6 +274,7 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
 
 async function dispatchCli(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
     if (parsed.command === "architecture-artifacts") return architectureArtifactCommand(parsed, runtime);
+    if (await runEvaluationCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
     if (await runAuthorDraftCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
     if (await runArchitecturePlanCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
     if (parsed.command === "discover") {
@@ -5614,6 +5616,7 @@ function apiErrorFromBody(pathname: string, baseUrl: string, status: number, bod
   const code = typeof error?.code === "string" && /^[A-Za-z0-9_.:-]{1,80}$/.test(error.code)
     ? error.code
     : "API_REQUEST_FAILED";
+  if (pathname.startsWith("/v1/evaluations")) return new CliError("Evaluation request failed. Check permission, exact artifact digest and suite revision.", 1, ["AUTHENTICATION_REQUIRED", "API_TOKEN_SCOPE_REQUIRED", "MFA_VERIFICATION_REQUIRED", "EVALUATION_BINDING_CONFLICT", "INVALID_EVALUATION_REQUEST", "EVALUATION_SUITE_UNSUPPORTED", "EVALUATION_SERVICE_UNAVAILABLE"].includes(code) ? code : "API_REQUEST_FAILED", status);
   if (pathname.startsWith("/v1/drafts")) return new CliError("Draft request failed. Check permission, revision and validated package input.", 1, authorDraftApiErrorCodes.has(code) ? code : "API_REQUEST_FAILED", status);
   return new CliError(safeApiErrorMessage(pathname, message, status), 1, code, status);
 }
@@ -6282,6 +6285,7 @@ function helpText(runtime: CliRuntime): string {
     "  update [skill-slug] [--version <version>] [--platform <platform>] [--include-prerelease] [--dry-run] [--accept-user-action] [--dir <install-root>]",
     "  rollback <skill-slug> [--dir <install-root>]",
     "  companion run-once --workspace <absolute-dir> --holder <id> [--api-url <url>] [--token <token>] (token scopes: skills:read, targets:execute; add libraries:read for library-bound skills)",
+    ...evaluationHelp,
     "  architecture-artifacts create <target-id> --input <request.json>; prepare|apply|verify|rollback|show <run-id> --workspace <absolute-dir>",
     "    Stage before execution approval. Aggregate byte/receipt proof does not establish provider recognition.",
     "  codex enroll --workspace <absolute-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>] [--api-url <url>]",

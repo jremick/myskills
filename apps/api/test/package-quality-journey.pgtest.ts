@@ -3,6 +3,7 @@
  * Real Postgres claims, submission/review authority, storage integrity and restart evidence.
  */
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
@@ -157,6 +158,46 @@ test("durable quality journey: held bytes, retries, restart, stale workers, corr
   assert.equal(await scans.claimNext(), null);
   await assert.rejects(submissions.performReviewAction({ actor: reviewer, submissionId: failing.id, action: "approve", artifactSha256: failing.artifact.sha256 }), deny("PACKAGE_SCAN_NOT_PASSED"));
   await assert.rejects(submissions.performReviewAction({ actor: reviewer, submissionId: failing.id, action: "publish" }), deny("PACKAGE_SCAN_NOT_PASSED"));
+
+  // Consistent A-to-B payload and metadata drift must not consume successful A evidence.
+  for (const boundary of ["approve", "publish"] as const) {
+    const input = packageInput(boundary === "approve" ? "0.2.1" : "0.2.2");
+    const admitted = await submissions.createSubmission({ actor, ...input });
+    await scans.runOnce(25);
+    if (boundary === "publish") await submissions.performReviewAction({ actor: reviewer, submissionId: admitted.id, action: "approve", artifactSha256: admitted.artifact.sha256 });
+    const payload = structuredClone(admitted.artifact.payload);
+    payload.files.find(f => f.path === "SKILL.md")!.content += "Consistent correction B.\n";
+    const body = JSON.stringify(payload);
+    const sha = createHash("sha256").update(body).digest("hex");
+    await pool.query("UPDATE skill_artifacts SET payload=$2::jsonb,sha256=$3,byte_size=$4 WHERE skill_version_id=$1", [admitted.id, body, sha, Buffer.byteLength(body)]);
+    // Model a consistent approval binding drift too: publication must still require a scan of B.
+    if (boundary === "publish") await pool.query("UPDATE skill_versions SET approved_artifact_sha256=$2 WHERE id=$1", [admitted.id, sha]);
+    await assert.rejects(submissions.performReviewAction({ actor: reviewer, submissionId: admitted.id, action: boundary, ...(boundary === "approve" ? { artifactSha256: sha } : {}) }), deny("PACKAGE_SCAN_REQUIRED"));
+    const state = (await submissions.getReviewSubmissionDetail({ actor: reviewer, submissionId: admitted.id }))!;
+    assert.equal(state.reviewStatus, boundary === "publish" ? "approved" : "unreviewed");
+    assert.equal(state.lifecycleStatus, boundary === "publish" ? "review" : "submitted");
+    assert.equal((await pool.query("SELECT published_at FROM skill_versions WHERE id=$1", [admitted.id])).rows[0].published_at, null);
+    const corrected = await submissions.createSubmission({ actor, ...packageInput(boundary === "approve" ? "0.2.3" : "0.2.4") });
+    await scans.runOnce(25);
+    await submissions.performReviewAction({ actor: reviewer, submissionId: corrected.id, action: "approve", artifactSha256: corrected.artifact.sha256 });
+    await submissions.performReviewAction({ actor: reviewer, submissionId: corrected.id, action: "publish" });
+  }
+  // Findings are immutable for update, deletion, and reassignment in both directions.
+  const findingInput = packageInput("0.2.5");
+  findingInput.files.push({ path: "warning.md", content: '{"postinstall":"example"}' });
+  const findingVersion = await submissions.createSubmission({ actor, ...findingInput });
+  await scans.runOnce(25);
+  const terminalFinding = (await pool.query("SELECT f.id,f.scan_run_id FROM scan_findings f JOIN scan_runs r ON r.id=f.scan_run_id WHERE r.skill_version_id=$1", [findingVersion.id])).rows[0];
+  assert.ok(terminalFinding);
+  await assert.rejects(pool.query("UPDATE scan_findings SET message='changed' WHERE id=$1", [terminalFinding.id]), /immutable/);
+  await assert.rejects(pool.query("DELETE FROM scan_findings WHERE id=$1", [terminalFinding.id]), /immutable/);
+  await assert.rejects(pool.query("UPDATE scan_findings SET scan_run_id=$2 WHERE id=$1", [terminalFinding.id,replacement.scanRunId]), /immutable/);
+  const queuedForFinding = await submissions.createSubmission({ actor, ...packageInput("0.2.6") });
+  const queuedScan = (await pool.query("SELECT id FROM scan_runs WHERE skill_version_id=$1", [queuedForFinding.id])).rows[0].id;
+  const mutableFinding = (await pool.query("INSERT INTO scan_findings(scan_run_id,category,severity,message) VALUES($1,'install-hook','warning','queued') RETURNING id", [queuedScan])).rows[0].id;
+  await assert.rejects(pool.query("UPDATE scan_findings SET scan_run_id=$2 WHERE id=$1", [mutableFinding,terminalFinding.scan_run_id]), /immutable/);
+  await pool.query("DELETE FROM scan_findings WHERE id=$1", [mutableFinding]);
+  await scans.runOnce(25);
 
   // A stored artifact drift is terminal, never scanned under the old digest.
   const tampered = await submissions.createSubmission({ actor, ...packageInput("0.3.0") });

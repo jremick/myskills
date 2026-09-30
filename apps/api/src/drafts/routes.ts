@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { AppError, parseSemanticVersion, parseSkillReleaseMetadata } from "@myskills-app/core";
 import { MAX_PACKAGE_ARCHIVE_BYTES, MAX_PACKAGE_FILES, readPackageFilesFromZipBuffer, type PackageInputFile } from "@myskills-app/skill-package";
+import { actionCredential } from "../auth/postgres-action-authority.js";
 import type { AuthContext, AuthService } from "../auth/service.js";
 import type { ApiTokenScope } from "../auth/types.js";
 import type { SubmissionActor } from "../submissions/types.js";
@@ -29,7 +30,7 @@ export function registerDraftRoutes(app: FastifyInstance, options: DraftRouteOpt
     if (!context) { await helpers.authFailureReply(options.authService, authorization, reply); return null; }
     for (const scope of [write ? "skills:submit" as const : "submissions:read" as const, ...extraScopes]) helpers.requireScope(context, scope);
     if (write && helpers.requiresMfaForRole(context) && !context.user.mfaVerified) throw new AppError("MFA verification is required.", "MFA_VERIFICATION_REQUIRED", 403);
-    return { id: context.user.id, roles: context.user.roles, mfaVerified: context.user.mfaVerified };
+    return { id: context.user.id, roles: context.user.roles, mfaVerified: context.user.mfaVerified, credential: actionCredential(context, authorization!) };
   };
 
   app.get("/v1/drafts", async (request, reply) => {

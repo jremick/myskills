@@ -159,4 +159,5 @@ export * from "./branding.js";
 export * from "./delegated-actions.js";
 export * from "./task-discovery.js";
 
+export * from "./package-evaluation.js";
 export * from "./architecture-artifact.js";

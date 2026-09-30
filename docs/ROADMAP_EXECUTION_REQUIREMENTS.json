@@ -3479,14 +3479,30 @@
       "owners": [
         "QUALITY"
       ],
-      "state": "pending_exact_criterion_evidence",
-      "evidence": [],
+      "state": "source_and_local_contract_evidence_canonical_acceptance_pending",
+      "evidence": [
+        {
+          "level": "source",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Exact QUALITY-02 implementation and verification boundaries."
+        },
+        {
+          "level": "executed_local_fixture",
+          "path": "packages/skill-package/test/evaluation.test.ts",
+          "detail": "Bounded suite assertion definitions, exact suite/rubric digests, regression file pins and behavior skips pass locally."
+        },
+        {
+          "level": "acceptance_pending",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Actual provider behavior remains unconfigured."
+        }
+      ],
       "backlog_ids": [
         "QUALITY-02"
       ],
       "accountable_owner": "QUALITY",
       "acceptance_plan": {
-        "state": "planned_not_run",
+        "state": "local_static_contracts_pass_canonical_runtime_pending",
         "backlog_workflows": [
           {
             "backlog_id": "QUALITY-02",
@@ -3507,14 +3523,30 @@
       "owners": [
         "QUALITY"
       ],
-      "state": "pending_exact_criterion_evidence",
-      "evidence": [],
+      "state": "source_and_local_contract_evidence_canonical_acceptance_pending",
+      "evidence": [
+        {
+          "level": "source",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Exact QUALITY-02 implementation and verification boundaries."
+        },
+        {
+          "level": "compiled_pending_canonical",
+          "path": "apps/api/test/package-evaluations.pgtest.ts",
+          "detail": "Source and strictly compiled PG fixture bind exact version/artifact, suite revision/digest, target/context and runner; concurrent replay and immutable rows are asserted."
+        },
+        {
+          "level": "acceptance_pending",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Canonical PostgreSQL execution pending."
+        }
+      ],
       "backlog_ids": [
         "QUALITY-02"
       ],
       "accountable_owner": "QUALITY",
       "acceptance_plan": {
-        "state": "planned_not_run",
+        "state": "local_static_contracts_pass_canonical_runtime_pending",
         "backlog_workflows": [
           {
             "backlog_id": "QUALITY-02",
@@ -3535,14 +3567,30 @@
       "owners": [
         "QUALITY"
       ],
-      "state": "pending_exact_criterion_evidence",
-      "evidence": [],
+      "state": "source_and_local_contract_evidence_canonical_acceptance_pending",
+      "evidence": [
+        {
+          "level": "source",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Exact QUALITY-02 implementation and verification boundaries."
+        },
+        {
+          "level": "executed_local_fixture",
+          "path": "apps/web/test/e2e/package-evaluations.spec.ts",
+          "detail": "Installed Chrome reviewer desktop/mobile renders scoped assertions, exact digests and distinct counts."
+        },
+        {
+          "level": "acceptance_pending",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Route fixtures establish wiring/layout; canonical authorized PG-backed reviewer journey pending."
+        }
+      ],
       "backlog_ids": [
         "QUALITY-02"
       ],
       "accountable_owner": "QUALITY",
       "acceptance_plan": {
-        "state": "planned_not_run",
+        "state": "local_static_contracts_pass_canonical_runtime_pending",
         "backlog_workflows": [
           {
             "backlog_id": "QUALITY-02",
@@ -3563,14 +3611,30 @@
       "owners": [
         "QUALITY"
       ],
-      "state": "pending_exact_criterion_evidence",
-      "evidence": [],
+      "state": "source_and_local_contract_evidence_canonical_acceptance_pending",
+      "evidence": [
+        {
+          "level": "source",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Exact QUALITY-02 implementation and verification boundaries."
+        },
+        {
+          "level": "executed_local_fixture",
+          "path": "apps/web/test/e2e/package-evaluations.spec.ts",
+          "detail": "Installed Chrome approved published release renders bounded totals/status/bindings and omits assertion details/private canary."
+        },
+        {
+          "level": "acceptance_pending",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Public permission and persistence require canonical PG fixture execution."
+        }
+      ],
       "backlog_ids": [
         "QUALITY-02"
       ],
       "accountable_owner": "QUALITY",
       "acceptance_plan": {
-        "state": "planned_not_run",
+        "state": "local_static_contracts_pass_canonical_runtime_pending",
         "backlog_workflows": [
           {
             "backlog_id": "QUALITY-02",
@@ -3591,14 +3655,30 @@
       "owners": [
         "QUALITY"
       ],
-      "state": "pending_exact_criterion_evidence",
-      "evidence": [],
+      "state": "source_and_local_contract_evidence_canonical_acceptance_pending",
+      "evidence": [
+        {
+          "level": "source",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Exact QUALITY-02 implementation and verification boundaries."
+        },
+        {
+          "level": "executed_local_fixture",
+          "path": "apps/cli/test/evaluation-commands.test.ts",
+          "detail": "Actual safe directory/ZIP evaluation and CLI dispatch human/JSON results pass; paths/content omitted, self-reported provenance, provider skipped and no upload."
+        },
+        {
+          "level": "acceptance_pending",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Real target installation/model behavior is outside these static assertions."
+        }
+      ],
       "backlog_ids": [
         "QUALITY-02"
       ],
       "accountable_owner": "QUALITY",
       "acceptance_plan": {
-        "state": "planned_not_run",
+        "state": "local_static_contracts_pass_canonical_runtime_pending",
         "backlog_workflows": [
           {
             "backlog_id": "QUALITY-02",
@@ -3619,14 +3699,30 @@
       "owners": [
         "QUALITY"
       ],
-      "state": "pending_exact_criterion_evidence",
-      "evidence": [],
+      "state": "source_and_local_contract_evidence_canonical_acceptance_pending",
+      "evidence": [
+        {
+          "level": "source",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Exact QUALITY-02 implementation and verification boundaries."
+        },
+        {
+          "level": "executed_local_fixture",
+          "path": "apps/api/test/evaluation-routes.test.ts",
+          "detail": "Real HTTP route contract rejects invalid credentials and submitted results/provenance/runner and preserves exact evaluator request."
+        },
+        {
+          "level": "acceptance_pending",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Domain implementation is replaced in this contract fixture; canonical PG authority/persistence pending."
+        }
+      ],
       "backlog_ids": [
         "QUALITY-02"
       ],
       "accountable_owner": "QUALITY",
       "acceptance_plan": {
-        "state": "planned_not_run",
+        "state": "local_static_contracts_pass_canonical_runtime_pending",
         "backlog_workflows": [
           {
             "backlog_id": "QUALITY-02",
@@ -3647,14 +3743,30 @@
       "owners": [
         "QUALITY"
       ],
-      "state": "pending_exact_criterion_evidence",
-      "evidence": [],
+      "state": "source_and_local_contract_evidence_canonical_acceptance_pending",
+      "evidence": [
+        {
+          "level": "source",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Exact QUALITY-02 implementation and verification boundaries."
+        },
+        {
+          "level": "compiled_pending_canonical",
+          "path": "apps/api/test/package-evaluations.pgtest.ts",
+          "detail": "Source/compiled real PG HTTP fixture asserts completed-run immutability, changed/cross-artifact refusal and corrected-version new record."
+        },
+        {
+          "level": "acceptance_pending",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Canonical PostgreSQL execution pending; no previous approved result is updated."
+        }
+      ],
       "backlog_ids": [
         "QUALITY-02"
       ],
       "accountable_owner": "QUALITY",
       "acceptance_plan": {
-        "state": "planned_not_run",
+        "state": "local_static_contracts_pass_canonical_runtime_pending",
         "backlog_workflows": [
           {
             "backlog_id": "QUALITY-02",
@@ -3675,14 +3787,30 @@
       "owners": [
         "QUALITY"
       ],
-      "state": "pending_exact_criterion_evidence",
-      "evidence": [],
+      "state": "source_and_local_contract_evidence_canonical_acceptance_pending",
+      "evidence": [
+        {
+          "level": "source",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Exact QUALITY-02 implementation and verification boundaries."
+        },
+        {
+          "level": "executed_local_fixture",
+          "path": "packages/skill-package/test/evaluation.test.ts",
+          "detail": "Executed deterministic assertions preserve pass/fail/warning/skipped/incompatible counts and fixed codes; provider behavior is explicitly skipped."
+        },
+        {
+          "level": "acceptance_pending",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "No provider effectiveness or cost/benefit claim."
+        }
+      ],
       "backlog_ids": [
         "QUALITY-02"
       ],
       "accountable_owner": "QUALITY",
       "acceptance_plan": {
-        "state": "planned_not_run",
+        "state": "local_static_contracts_pass_canonical_runtime_pending",
         "backlog_workflows": [
           {
             "backlog_id": "QUALITY-02",
@@ -3703,14 +3831,30 @@
       "owners": [
         "QUALITY"
       ],
-      "state": "pending_exact_criterion_evidence",
-      "evidence": [],
+      "state": "source_and_local_contract_evidence_canonical_acceptance_pending",
+      "evidence": [
+        {
+          "level": "source",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Exact QUALITY-02 implementation and verification boundaries."
+        },
+        {
+          "level": "executed_local_fixture",
+          "path": "apps/web/test/e2e/package-evaluations.spec.ts",
+          "detail": "Reviewer UI exposes exact scan evidence and static evaluation evidence in the existing decision workflow; artifact inspection and scan approval gates remain mandatory."
+        },
+        {
+          "level": "acceptance_pending",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Fixture UI proof only; canonical PG scan drift/approval/publication tests pending."
+        }
+      ],
       "backlog_ids": [
         "QUALITY-02"
       ],
       "accountable_owner": "QUALITY",
       "acceptance_plan": {
-        "state": "planned_not_run",
+        "state": "local_static_contracts_pass_canonical_runtime_pending",
         "backlog_workflows": [
           {
             "backlog_id": "QUALITY-02",
@@ -3731,14 +3875,30 @@
       "owners": [
         "QUALITY"
       ],
-      "state": "pending_exact_criterion_evidence",
-      "evidence": [],
+      "state": "source_and_local_contract_evidence_canonical_acceptance_pending",
+      "evidence": [
+        {
+          "level": "source",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Exact QUALITY-02 implementation and verification boundaries."
+        },
+        {
+          "level": "executed_local_fixture",
+          "path": "apps/web/test/evaluation-evidence.test.tsx",
+          "detail": "Executed component tests omit assertion/private text from summary and invalidate denied/stale private responses without public fallback."
+        },
+        {
+          "level": "acceptance_pending",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Canonical PG published-release authority and real signed-in host acceptance pending."
+        }
+      ],
       "backlog_ids": [
         "QUALITY-02"
       ],
       "accountable_owner": "QUALITY",
       "acceptance_plan": {
-        "state": "planned_not_run",
+        "state": "local_static_contracts_pass_canonical_runtime_pending",
         "backlog_workflows": [
           {
             "backlog_id": "QUALITY-02",
@@ -6031,7 +6191,13 @@
         "QUALITY"
       ],
       "state": "pending_exact_criterion_evidence",
-      "evidence": [],
+      "evidence": [
+        {
+          "level": "source",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Bounded QUALITY-02 static implementation and local fixture evidence. Canonical PG/restore acceptance pending; behavior needs provider execution and remains unconfigured. This broader production criterion is incomplete."
+        }
+      ],
       "backlog_ids": [
         "QUALITY-02"
       ],
@@ -8410,7 +8576,13 @@
         "QUALITY"
       ],
       "state": "pending_exact_criterion_evidence",
-      "evidence": [],
+      "evidence": [
+        {
+          "level": "source",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Bounded QUALITY-02 static implementation and local fixture evidence. Canonical PG/restore acceptance pending; behavior needs provider execution and remains unconfigured. This broader production criterion is incomplete."
+        }
+      ],
       "backlog_ids": [
         "QUALITY-02"
       ],
@@ -8719,7 +8891,13 @@
         "QUALITY"
       ],
       "state": "pending_exact_criterion_evidence",
-      "evidence": [],
+      "evidence": [
+        {
+          "level": "source",
+          "path": "docs/QUALITY_DELIVERY.md",
+          "detail": "Bounded QUALITY-02 static implementation and local fixture evidence. Canonical PG/restore acceptance pending; behavior needs provider execution and remains unconfigured. This broader production criterion is incomplete."
+        }
+      ],
       "backlog_ids": [
         "QUALITY-02"
       ],

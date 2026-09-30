@@ -106,6 +106,7 @@ const fields: Record<string, z.ZodType> = {
   "target_operations.batch.schedule": z.object({ operations: z.array(z.object({ targetId: id, ...operation }).strict()).min(1).max(100) }).strict(),
   "target_operations.cancel": empty,
   "targets.update_policy.set": policy,
+  "evaluations.run": z.object({ artifactSha256: digest, suiteRevisionId: z.string().uuid(), platform: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/), idempotencyKey: z.string().regex(/^[A-Za-z0-9._:-]{8,128}$/) }).strict(),
   "improvements.declarations.append": z.object({ declaration: object, expectedRevisionNumber: revision, reason: improvementReason }).strict(),
   "improvements.declarations.review": z.object({ decision: z.enum(["approve", "reject"]), artifactSha256: digest, declarationSha256: digest, reason: improvementReason }).strict(),
   "improvements.policy.set": policy.extend({ reason: improvementReason }),

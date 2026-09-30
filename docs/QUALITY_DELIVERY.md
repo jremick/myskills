@@ -1,6 +1,6 @@
 # Package Quality Delivery
 
-Status: source implementation and review in progress. Postgres verification pending. No deployment or release evidence.
+Status: deterministic evaluation implementation and local contract/browser proof complete; independent review and canonical Postgres/restore acceptance pending. No deployment or release evidence.
 
 ## First slice: durable scans
 
@@ -53,11 +53,138 @@ Independent native reviewers inspected queue correctness and migration/security 
 
 ## Remaining QUALITY work
 
-Version-aware deterministic eval suites and runs must bind exact release/artifact, runner, and target. Reuse improvement suite/run contracts; keep fail, warning, skipped, and incompatible distinct. Provider or paid execution remains disabled without explicit configuration and budget. Reviewer evidence and public-safe summaries follow the API authority. Milestones 3/6/9 remain incomplete until their runtime acceptance is proved.
+Version-aware static evaluations are implemented below. Canonical PostgreSQL, matching full-stack browser and real backup/restore acceptance remain pending. Provider execution is unconfigured; behavior assertions are skipped. Milestones 3/6/9 remain incomplete until their runtime acceptance is proved.
 
 ## Wave2 integration source state
 
 Shared API production registration, CLI/MCP dispatch and browser entry paths are integrated on the roadmap candidate. Historical leaf-check receipts above remain historical and are not whole-candidate acceptance. Current Node22 source/narrow checks and parent canonical PostgreSQL/browser/image results are recorded in the wave2 build report.
-Production uses backgroundScans and the durable worker starts after listen and stops before pool shutdown. Evidence DTOs retain digest, runner, attempt and failure code with legacy nulls. Completed-evidence trigger locking serializes concurrent finding insertion with scan completion. Version-aware eval expansion remains assigned to the next bounded worker.
+Production uses backgroundScans and the durable worker starts after listen and stops before pool shutdown. Evidence DTOs retain digest, runner, attempt and failure code with legacy nulls. Completed-evidence trigger locking serializes concurrent finding insertion with scan completion. At that checkpoint, version-aware eval expansion was assigned to QUALITY-02;
+the implementation and current proof are recorded below.
 
 Wave2 local proof: the21-test narrow integration selection includes worker batch deduplication and shutdown drain; the25-test Chromium selection covers actual pending wording and digest/attempt/failure display. Combined source build, web typecheck, lint and parity are checked in the wave2 report. The Postgres journey now also holds a real worker terminal write before commit and requires a concurrent late finding insertion to wait, then fail without changing completed evidence. This test is prepared for canonical CI and remains locally unexecuted.
+
+## QUALITY-02 exact-version static evaluations
+
+The API evaluates held, verified artifact bytes. It reuses `improvement_documents`
+(kind `suite`) and immutable `improvement_document_revisions`; it does not add a
+suite registry. Suites can include bounded static assertions with exact content
+and rubric digests. Static suites require only the deterministic grader and one
+repetition; provider grading cannot be labelled completed by a static run. Legacy provider suites remain readable, but cannot be used
+as static suites without an explicit revision containing assertions.
+
+Migration `0042_package_evaluations` adds completed, append-only evaluation
+records. Each record binds the immutable version ID, artifact digest, existing
+suite revision ID/document digest, platform and submission/release context,
+runner `package-static/1`, actor and idempotency key. The review/lifecycle context
+is captured by the server under the version locks. Concurrent identical writes
+return one record; changed replay bindings conflict. Database triggers reject
+updates, deletion and cross-artifact or cross-suite insertion. New suite revisions
+and corrected skill versions create new evidence. Completed records are retained.
+
+Assertions cover safe package structure/manifest and entrypoint presence
+(installability), declared supported platforms (compatibility), the existing
+admission risk scanner (safety), and exact protected file hashes (regression).
+These are static checks, not successful installation on a real target or measured
+model effectiveness. Behavior assertions always return `skipped` with
+`provider_unconfigured`. Pass, fail, warning, skipped and incompatible counts
+remain distinct. No package hooks, commands, scripts or providers execute.
+
+Existing `improvements:run` and `improvements:read` scopes apply. The API retains
+current account/credential/scope/role authority through completion, derives MFA
+from the current credential for reviewer access to unpublished records, and uses
+current registry permissions for evidence reads. Presented invalid credentials
+fail closed, including on anonymous-capable summary routes. Private details do
+not fall back to public summaries after denial. Static evaluation is advisory;
+scan approval/publication gates remain mandatory.
+
+CLI `evals local <directory-or-zip> --platform <name> [--suite <json>]` uses the
+existing bounded snapshot/archive reader. JSON/human output is labelled
+`self-reported`, contains no local path or package text, and never uploads.
+`evals run <slug> <version> --input <json>` explicitly requests the authenticated
+API evaluator. Existing improvement suite create/append commands manage suite
+identities. A local report cannot approve or publish a version. MCP delegates the
+same fixed API routes and scopes. Reviewer views show current authorized
+assertions. Approved, published releases expose a bounded allow-list summary:
+IDs/digests, runner, target, status and totals, without paths, findings, prompts,
+raw task text or account data.
+
+### Review remediation and legacy boundaries
+
+Draft create/save now carry credential provenance past allocation/head waits,
+retain current account and credential locks, and recheck scopes, role, expiry
+and actual credential MFA before commit. Release forks retain teams' parent
+organizations even for external team members. The draft UI remounts on connection
+identity changes, invalidates old requests, and isolates tab recovery by registry
+and a stable credential epoch plus actor/draft identity. Client replacement still
+clears current private state immediately; recovery is available only within the
+same credential and registry scope. When both a session epoch and credential
+identity are available, both participate; equal session expiry cannot reuse
+a different credential's private recovery.
+
+Approval and publication require successful evidence for the exact current
+artifact digest. New synchronous intake scans carry a digest and runner, insert findings before terminalization, and use the same completed-evidence immutability fences as background scans. The
+explicit immutable `legacy_package_scan_allowances` migration captures only
+unbound synchronous scans predating migration0039's recorded application time.
+Each exception freezes the migration-time artifact digest. Later consistent
+payload/metadata drift cannot consume it. This is explicit legacy compatibility,
+not proof that historical scan bytes were bound. Fresh schemas without that
+historical journal admit no legacy exceptions. Later
+null digests cannot enter the allowance or approve a version. Historical evidence
+is retained without inventing retrospective digest provenance.
+
+Canonical PG fixtures now include blocked draft create/save credential
+revocation/expiry and valid controls, real parent-organization policy/archive
+writers, consistent A-to-B metadata/payload drift at approval and publication,
+completed finding update/delete/reassignment and insertion rejection, and an
+actual production API process crash/restart/SIGTERM drain. They remain prepared,
+not locally executed. Mini PostgreSQL/Docker and real Linux restore are outside
+this worker's execution scope. Local source checks and final exact commits will
+be recorded in `reports/quality-evals-build.md` after the architecture handoff.
+
+
+### Integrated local evidence and canonical handoff (2026-10-01)
+
+The quality branch consumes exact architecture dependency
+`48839644f135ead76d97aeca1b1cb1be2aa09a26` through merge `fc16cd7`.
+Migration 0041 remains architecture-owned; this change adds 0042 only.
+The completed static-run table is separate from the existing mutable improvement
+execution ledger because no provider job, proposals or acceptance lifecycle occurs.
+It reuses the existing suite revision identity, digest, scopes and authorization
+contracts. It cannot grant scan approval or publication authority.
+
+Local Node22 evidence: 34 focused evaluator/route/CLI/MCP/worker/policy tests,
+52 related submission/review/improvement/HOST contract tests, and 8 draft/evidence
+DOM tests pass. Full MCP HTTP/native/stdio/connector coverage passes 117/117
+after retaining strict full tool equality and adding the existing friendly
+`discover_skills` registration to the expected catalog. Shared core/package/CLI
+coverage passes 219 tests, with two Linux filesystem cases skipped on macOS.
+Installed Chrome passes reviewer desktop/mobile and public
+summary wiring (3/3); screenshots were inspected. These browser and HTTP transport
+fixtures do not prove PostgreSQL state, actual restoration or provider behavior.
+
+Canonical `test:postgres` includes `package-evaluations.pgtest.ts`,
+`drafts-journey.pgtest.ts`, `package-quality-journey.pgtest.ts`,
+`package-scan-legacy.pgtest.ts` and `package-worker-process.pgtest.ts`. These files and the legacy registry backfill fixture
+strictly compile locally. They cover concurrent replay, immutable bindings,
+current credentials/scopes/roles/assurance after waits, real external-team parent
+policy/status writers, consistent A-to-B scan drift, terminal finding mutations,
+and actual production server crash/restart plus graceful shutdown. They require
+the parent's disposable real PostgreSQL gate; they were not run on Mini. The
+process signal fixture skips Windows explicitly and requires Linux/PostgreSQL
+for POSIX crash and graceful shutdown proof.
+
+The existing HOST fixture creates an exact-version API evaluation and approved
+private-release bounded summary before backup when the capability exists. It
+checks the same record, version/artifact/suite/runner/target/status/totals through
+the restored API, without exporting detailed assertions or findings. Genuine
+baseline absence remains `not-exercised`; adding a record after restoration is
+not restoration proof. The local stub test checks driver refusals only. The
+parent must execute the actual Linux rehearsal. Current-source top-level scan
+feedback and the older nested feedback shape are both read by this fixture.
+
+The 426-criterion inventory is retained. Only exact Milestone 6 criteria receive
+local/source evidence; broad production, security and migration acceptance is
+not promoted. Site build/test wiring is already in integrated CI/local-CI source
+and remains unchanged. Rollback can pause evaluation traffic by omitting service
+registration while retaining immutable records and migrations. Never delete
+completed evidence or weaken scan bindings to restore traffic.

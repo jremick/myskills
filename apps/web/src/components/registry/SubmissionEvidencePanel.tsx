@@ -1,3 +1,4 @@
+import { PackageEvaluationEvidence } from "./PackageEvaluationEvidence.js";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { safeReviewErrorMessage, type RegistryClient, type ReviewSubmissionDetail, type UserSubmissionDetail } from "../../api.js";
@@ -61,6 +62,7 @@ export function SubmissionEvidencePanel({ client, submissionId, mode, onCorrect,
       {correction && ["changes-requested", "rejected"].includes(detail.reviewStatus) && <div className="control-plane-section submission-correction"><h4>Submit a corrected version</h4>{teamOwned ? <><p>Review the corrected upstream source in Libraries, then submit a new candidate. Submitting requires an author role. The previous artifact and review history remain unchanged.</p><a href="/libraries">Open Libraries</a></> : <><p>Update the package locally, give it a new semantic version in its manifest, and upload the new archive. The previous artifact and review history remain unchanged.</p>{correction.canSubmitNewVersion && onCorrect ? <Button type="button" size="sm" onClick={onCorrect}>Choose corrected package</Button> : <p>Author permission is required to submit the correction. Ask the instance administrator if your access has changed.</p>}</>}</div>}
       <h4>Review history</h4>
       {detail.reviewHistory.length === 0 ? <p>No review decisions have been recorded.</p> : <ol>{detail.reviewHistory.map((event, index) => <li key={`${event.createdAt}:${event.action}:${index}`}><strong>{reviewEventLabel(event.action)}</strong> · <time dateTime={event.createdAt}>{displayDate(event.createdAt)}</time><p>{event.reason || "No reason was supplied."}</p></li>)}</ol>}
+      {client.evaluations && <PackageEvaluationEvidence api={client.evaluations} slug={detail.slug} version={detail.version} />}
       <h4>Scan history</h4>
       {detail.scanRuns.length === 0 ? <p>No scan evidence has been recorded.</p> : detail.scanRuns.map((run) => <ScanRunEvidence key={run.id} run={run} />)}
     </>}

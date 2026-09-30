@@ -1,3 +1,4 @@
+import { sha256Hex } from "@myskills-app/core";
 import { requestJson, type SubmissionScanFinding } from "./api.js";
 
 export interface DraftFile { path: string; content: string }
@@ -27,7 +28,10 @@ export function createDraftClient(root: string, fetchImpl: typeof fetch, token?:
   const get = <T>(path: string) => requestJson<T>(fetchImpl, `${root}/v1/drafts${path}`, { token });
   const send = <T>(path: string, method: "POST" | "PUT", body: unknown) => requestJson<T>(fetchImpl, `${root}/v1/drafts${path}`, { method, body, token });
   const id = encodeURIComponent;
+  const registry = new URL(root, window.location.origin);
   return {
+    registryIdentity: `${registry.origin}${registry.pathname.replace(/\/$/, "")}`,
+    credentialIdentity: token ? sha256Hex(token) : undefined,
     list: () => get<{ drafts: DraftSummary[] }>(""),
     create: (input: { title: string; files: DraftFile[] } | { title?: string; source: DraftSourceInput }) => send<{ draft: AuthorDraft }>("", "POST", input),
     get: (draftId: string) => get<{ draft: AuthorDraft }>(`/${id(draftId)}`),
@@ -39,4 +43,4 @@ export function createDraftClient(root: string, fetchImpl: typeof fetch, token?:
     submit: (draftId: string, expectedRevision: number, release?: DraftReleaseInput) => send<{ draft: AuthorDraft; submission: DraftSubmission }>(`/${id(draftId)}/submit`, "POST", { expectedRevision, ...(release ? { release } : {}) }),
   };
 }
-export type DraftClient = ReturnType<typeof createDraftClient>;
+export type DraftClient = Omit<ReturnType<typeof createDraftClient>, "registryIdentity" | "credentialIdentity"> & { registryIdentity?: string; credentialIdentity?: string };
