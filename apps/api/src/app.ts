@@ -16,6 +16,8 @@ import {
 import type { ApiTokenScope } from "./auth/types.js";
 import { authenticateApplicationUser, requestDelegatedAction, requireDelegatedAction, requireConditionalDelegatedPolicy } from "./auth/delegated-actions.js";
 import { MemoryAuthRateLimiter, type AuthRateLimiter } from "./auth/rate-limit.js";
+import { registerDeviceLoginRoutes } from "./auth/device-login/routes.js";
+import type { DeviceLoginService } from "./auth/device-login/service.js";
 import type {
   AuthContext,
   AuthService,
@@ -120,6 +122,8 @@ export interface BuildAppOptions {
   skillRepository: SkillRepository;
   registryInstanceId?: string;
   authService?: AuthService;
+  deviceLoginService?: DeviceLoginService;
+  deviceLoginLimiter?: AuthRateLimiter;
   submissionService?: SubmissionService;
   teamService?: TeamService;
   organizationService?: OrganizationService;
@@ -1146,6 +1150,13 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         ...input,
       }),
     };
+  });
+
+  registerDeviceLoginRoutes(app, {
+    service: options.deviceLoginService,
+    authService: options.authService,
+    limiter: options.deviceLoginLimiter,
+    authorization: requestAuthorization,
   });
 
   app.post("/v1/auth/register", async (request, reply) => {

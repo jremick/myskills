@@ -1,4 +1,5 @@
 import { ConfigurationProfileError, selectConfigurationProfile } from "./configuration-profile.js";
+import { browserDeviceLogin } from "./device-login.js";
 import { bundleRequest } from "@myskills-app/core";
 import { libraryCommandHelp, libraryCommandRequest } from "./library-command.js";
 import { registryCollaborationHelp, runRegistryCollaborationCommand } from "./registry-collaboration-commands.js";
@@ -84,7 +85,7 @@ const DEFAULT_API_URL = "http://localhost:3001";
 const SCOPE_TARGET_LIST_LIMIT = 500;
 const CLI_VERSION = process.env.MYSKILLS_CLI_VERSION ?? "0.0.0-dev";
 const CLI_VISIBILITY_SCOPES = ["public", "authenticated", "organization", "team", "private", "explicit-users"] as const;
-const LOGIN_AUTH_METHODS = ["password", "api-key"] as const;
+const LOGIN_AUTH_METHODS = ["password", "api-key", "browser"] as const;
 const OBSERVED_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const OBSERVED_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 const OBSERVED_VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
@@ -717,6 +718,11 @@ async function loginCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
   const apiUrl = await loginApiUrl(parsed, runtime);
   parsed.options["api-url"] = apiUrl;
   const method = await loginAuthMethod(parsed, runtime);
+  if (method === "browser") {
+    try { await browserDeviceLogin(apiUrl, optionalStringOption(parsed, "scopes")?.split(",").map((scope) => scope.trim()), runtime); }
+    catch (error) { throw new CliError(error instanceof Error ? error.message : "Browser login failed.", 1); }
+    return 0;
+  }
   if (method === "api-key") {
     return await loginWithApiKey(parsed, runtime, apiUrl, tokenStore);
   }
@@ -5922,7 +5928,7 @@ async function loginAuthMethod(parsed: ParsedArgs, runtime: CliRuntime): Promise
   if (optionalStringOption(parsed, "email") || !runtime.prompt) {
     return "password";
   }
-  const input = await promptOptionalText(runtime, "Authentication method [password] (password/api-key): ");
+  const input = await promptOptionalText(runtime, "Authentication method [password] (password/api-key/browser): ");
   return input ? parseLoginAuthMethod(input) : "password";
 }
 
@@ -5935,7 +5941,7 @@ function parseLoginAuthMethod(input: string): LoginAuthMethod {
     return "api-key";
   }
   if (normalized === "browser" || normalized === "web") {
-    throw new CliError("Browser login is not available in this CLI/API version yet. Choose password or api-key.", 2);
+    return "browser";
   }
   throw new CliError(`Authentication method must be one of: ${LOGIN_AUTH_METHODS.join(", ")}.`, 2);
 }
@@ -6163,7 +6169,8 @@ function helpText(runtime: CliRuntime): string {
     "  improve evidence|accept-evidence --id <id> [--file <request.json>] [--json]",
     "  search [query] [--limit <1-100>] [--cursor <cursor>] [--api-url <url>]",
     "  info <skill-slug> [--version <exact-version>] [--api-url <url>]",
-    "  login [--api-url <url>] [--method <password|api-key>] [--email <email>]",
+    "  login [--api-url <url>] [--method <password|api-key|browser>] [--email <email>]",
+    "  login --method browser [--scopes profile:read,skills:read] (trusted browser consent)",
     "  login --api-key [--api-url <url>]",
     "  logout [--api-url <url>] [--token <token>]",
     "  whoami [--api-url <url>] [--token <token>]",

@@ -42,6 +42,7 @@ export const APPLICATION_HANDOFF_ACTIONS: readonly HandoffAction[] = [
   ]),
   browser("account.login", "ACC-02", "/login", [
     "Sign in directly to the trusted MySkills page, or run myskills login in your terminal. Enter the password and any MFA or recovery code only there.",
+    "For CLI browser login, run myskills login --method browser with the required --scopes in your terminal. Open the configured /auth/device page, enter the terminal's code and review the exact permissions before approving. Keep the device code and issued token outside chat. The instance must enable browser login.",
     "To connect an AI host, resume that host's OAuth authorization and approve the actual requested scopes in MySkills. A browser sign-in does not by itself connect the host.",
   ]),
   browser("account.mfa.verify", "ACC-02", "/login", [

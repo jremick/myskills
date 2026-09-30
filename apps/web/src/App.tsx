@@ -1,4 +1,5 @@
 import { APPLICATION_SCOPES } from "@myskills-app/core";
+import { DeviceAuthorizePage } from "./components/DeviceAuthorizePage.js";
 import { ConfirmationDialog, type ConfirmationRequest } from "@/components/ui/confirmation-dialog";
 import { MarketingLanding } from "./components/marketing/MarketingLanding.js";
 import { LandingSettings } from "./components/marketing/LandingSettings.js";
@@ -136,7 +137,7 @@ interface RegistryAppProps {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type AuthState = "idle" | "loading" | "mfa";
-type AppView = "libraries" | "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "organizations" | "targets" | "updates" | "admin" | "review" | "submit" | "teams" | "settings" | "connect" | "not-found";
+type AppView = "libraries" | "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "organizations" | "targets" | "updates" | "admin" | "review" | "submit" | "teams" | "settings" | "connect" | "device" | "not-found";
 
 interface AppLocation {
   view: AppView;
@@ -1076,6 +1077,12 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   // Return to a pending remote-connection consent after sign-in. The only
   // return target is the fixed consent path; no URL is taken from input.
   function openAfterSignIn() {
+    if (readDeviceLoginReturn()) {
+      try { sessionStorage.removeItem("myskills:device-login-return"); } catch { /* Private browsing can disable storage. */ }
+      setView("device");
+      pushAppHistory("/auth/device");
+      return;
+    }
     if (readStoredConnectRequest()) {
       setView("connect");
       pushAppHistory(pathForView("connect"));
@@ -1281,6 +1288,13 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
         onLogin={openLogin}
       />
     );
+  }
+
+  if (activeView === "device") {
+    return <DeviceAuthorizePage client={registryClient.deviceLogin} signedIn={Boolean(session)} onSignIn={() => {
+      try { sessionStorage.setItem("myskills:device-login-return", "1"); } catch { /* The user can reopen /auth/device after signing in. */ }
+      openLogin();
+    }} />;
   }
 
   if (activeView === "login") {
@@ -6224,10 +6238,12 @@ function isPublicView(view: AppView): boolean {
     || view === "change-email"
     || view === "browse"
     || view === "connect"
+    || view === "device"
     || view === "not-found";
 }
 
 function initialViewFromPath(pathname: string): AppView {
+  if (pathname === "/auth/device") return "device";
   if (pathname === "/libraries") return "libraries";
   // Legacy Manage skills page: now the Can manage scope of Skills.
   if (pathname === "/manage/skills") return "browse";
@@ -6286,6 +6302,7 @@ function initialViewFromPath(pathname: string): AppView {
 }
 
 function pathForView(view: AppView): string {
+  if (view === "device") return "/auth/device";
   if (view === "landing") {
     return "/";
   }
@@ -6743,4 +6760,8 @@ function writeStoredSession(session: WebSession): void {
 
 function clearStoredSession(): void {
   window.localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+function readDeviceLoginReturn(): boolean {
+  try { return sessionStorage.getItem("myskills:device-login-return") === "1"; } catch { return false; }
 }

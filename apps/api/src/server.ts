@@ -8,6 +8,8 @@ import { createAuthNotificationSinkFromEnv } from "./auth/notification.js";
 import { AuthNotificationWorker } from "./auth/notification-outbox.js";
 import { AuthService } from "./auth/service.js";
 import { PostgresAuthStore } from "./auth/postgres-auth-store.js";
+import { DeviceLoginService } from "./auth/device-login/service.js";
+import { PostgresDeviceLoginStore } from "./auth/device-login/postgres-store.js";
 import { PostgresSkillRepository } from "./repositories/postgres-skill-repository.js";
 import { buildApp } from "./app.js";
 import { SubmissionService } from "./submissions/service.js";
@@ -131,6 +133,9 @@ const oauthService = oauthConfig
   ? new OAuthService({ store: new PostgresOAuthStore(db), authStore, config: oauthConfig })
   : undefined;
 const app = buildApp({
+  deviceLoginService: process.env.MYSKILLS_DEVICE_VERIFICATION_URL
+    ? new DeviceLoginService(new PostgresDeviceLoginStore(db), { verificationUri: process.env.MYSKILLS_DEVICE_VERIFICATION_URL }) : undefined,
+  deviceLoginLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 20, windowMs: 60_000 }),
   skillRepository,
   registryInstanceId,
   oauthService,

@@ -1,4 +1,5 @@
 import { createBundleClient, type BundleClient } from "./bundle-api.js";
+import { createDeviceLoginClient, type DeviceLoginClient } from "./device-login-api.js";
 import { createImprovementClient, type ImprovementClient } from "./improvement-api";
 import { createGithubClient, type GithubClient } from "./github-api.js";
 import { createLibraryClient, type LibraryClient } from "./library-api.js";
@@ -805,6 +806,7 @@ export interface UserSubmissionDetail extends UserSubmissionSummary, SubmissionE
 export interface ReviewSubmissionDetail extends ReviewSubmissionSummary, SubmissionEvidence {}
 
 export interface RegistryClient {
+  deviceLogin?: DeviceLoginClient;
   /** Remote MCP connection consent and management. */
   oauth?: OAuthConnectionClient;
   improvements?: ImprovementClient;
@@ -1001,6 +1003,7 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
   const root = baseUrl.replace(/\/+$/, "");
   const cookieSessionHeaders = { "x-myskills-session-response": "cookie" };
   return {
+    deviceLogin: createDeviceLoginClient(root, fetchImpl, token),
     oauth: createOAuthConnectionClient(root, fetchImpl, token),
     improvements: createImprovementClient(<T,>(url: string, init?: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown }) => requestJson<T>(fetchImpl, `${root}${url}`, { ...init, token })),
     libraries: createLibraryClient(root, fetchImpl, token),
