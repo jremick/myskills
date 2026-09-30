@@ -34,7 +34,7 @@ separate from these changes.
 
 ## Owners and execution sequence
 
-One Sol implementation worker owns shared source wiring at a time. A second child performs independent Astra review or isolated Sol HOST work.
+One Sol implementation worker owns shared source wiring at a time. A second child performs independent Astra review or bounded isolated Sol source work.
 Only one child owns shared integration writes; the parent controls local checks. Integration owns
 source reconciliation, this ledger, exact-candidate verification and handoff.
 Local dependency installation/build/test processes are serialized. The full
@@ -48,9 +48,9 @@ No original MBP worktree or native thread is changed.
 | TRUST-MCP | `4d3d183833f6`, recovery `e53508453908` | Integrated as `b10fcab` and `63b496b`, hardened in `cf99c9b`; independent source review complete and new coherent-authorization PG cases passed in the failed first checkpoint. Final candidate proof pending. |
 | QUALITY | `561c045f6012` | Durable scans and production worker integrated through `8fafa42`; local checks passed. PG acceptance and version-aware evaluations remain pending. |
 | AUTHOR-1 | `085acf87b006` | Private drafts/imports/browser comparison integrated through `8fafa42`; local surface checks passed. PG and full-stack acceptance pending. |
-| ARCH-LIFE | `360243eeab86` | Persisted review plans integrated through `8fafa42`; bounded Codex composed-artifact execution is under implementation. Coherent PG and filesystem acceptance pending. |
+| ARCH-LIFE | `360243eeab86` | Composed artifact API/CLI/MCP/browser delivery committed `48839644`; two enrolled local workspace journeys and interruption cases pass. Independent review and actual PG/MinIO acceptance pending. |
 | DISC-SITE | `2453e69c3ba4` | Discovery and site integrated through `8fafa42`; fixed synthetic corpus and local desktop/mobile/keyboard checks passed. PG/canonical/deployed proof pending. |
-| HOST-1 | `3d01d673be27` | Initial source integrated through `84e6cae`; review fixes committed separately at `6a45918` with narrow checks. Independent remediation review, final integration and actual Linux rehearsal pending. |
+| HOST-1 | `3d01d673be27` | Review fixes `6a45918` integrated as `d6c4694`; two independent follow-ups corrected in `48839644`. Combined narrow/controller fixtures pass; independent correction review and actual Linux rehearsal pending. |
 
 Sequence: ID/TRUST source and review corrections; sequential QUALITY, AUTHOR,
 ARCH, DISC and HOST integration; remaining no-cost evaluation and composed
@@ -68,9 +68,10 @@ is inferred from these reviews.
 
 Migration reservations remain `0037_author_drafts.sql`,
 `0038_device_login.sql`, `0039_package_scan_jobs.sql`,
-`0040_architecture_plan_history.sql`. The artifact fix needed no new migration.
-Allocate any additional composed-artifact/evaluation migration after checking
-the combined sequence. Reuse existing persistence where it suffices; released migrations
+`0040_architecture_plan_history.sql`, and composed delivery
+`0041_composed_architecture_artifact.sql`. Isolated QUALITY reserves
+`0042_package_evaluations.sql`. The earlier TRUST artifact fix needed no new
+migration. Check the combined sequence before allocating another migration. Reuse existing persistence where it suffices; released migrations
 remain append-only.
 
 ## Finite backlog
@@ -98,7 +99,7 @@ binds source criteria to document sections and lines. The source remains
 | MCP-02 | Native host discovery/first load and real ChatGPT/Claude OAuth acceptance | TRUST + Integration | Harness implementable; signed-in personal sessions and actual host behavior remain external acceptance. |
 | ARCH-01 | Immutable nested topology, profiles/environments, digests, governance/sharing, editor/history/pattern migration and derived projections | ARCH | Foundations/explorer present. Reconcile stale branch language and prove exact-reference/denial behavior. |
 | ARCH-02 | Persisted desired-versus-observed plans/history, fencing, approvals and recovery evidence | ARCH | Implementable review-only journal reuse; bind exact revision, observation, target generation/consent/capabilities and current policy/releases. |
-| ARCH-03 | Full composed apply/verify/rollback across routers, leaves and targets | ARCH + Integration | Companion supports per-skill install/update/rollback, not router/profile orchestration. Keep deterministic design and remaining implementation explicit; pilot absence blocks live proof. |
+| ARCH-03 | Full composed apply/verify/rollback across routers, leaves and targets | ARCH + Integration | `48839644` implements bounded whole-artifact orchestration with immutable API intent, separate execution approval, shared lease and local journal. Two enrolled workspace fixtures and interrupted transitions pass; independent review, PG/MinIO and live consent/recognition remain distinct pending proof. |
 | ARCH-04 | Two supported tool instances, placement/conflicts/enable/disable/relocate and broader adapters | ARCH | Two explicit isolated Codex workspaces can satisfy the two-instance criterion. Implement and verify their placement/isolation/lifecycle first; live consent remains external. Another provider contract is a separate downstream adapter choice. |
 | ARCH-05 | Durable derived diagrams/versioned layout and optional usage telemetry | ARCH | Downstream choices explicit; exports remain accessible. Telemetry off/opt-in needs event/retention/export/delete policy. |
 | HOST-01 | Versioned images/Compose, fresh usable deployment, setup and diagnostics | HOST | Implementable candidate bundle/helper; fresh Linux/amd64 gate and explicit arm64 build/runtime evidence or reviewed support limit. Record emulation separately. Exact source/image identity and public availability required before support claims; publishing gated. |
@@ -274,3 +275,41 @@ review of the final corrections and explicit external release/deployment gates.
 
 Continue independent implementation while gates remain open. Do not imply
 all-roadmap completion or silently remove the long-horizon architecture scope.
+
+### Composed architecture and HOST checkpoint
+
+Source `48839644f135ead76d97aeca1b1cb1be2aa09a26`, tree
+`d9af5df32eaea024dc438d33ed375f241f36c9a0`, is committed cleanly. It adds
+`codex-workspace-architecture/v1`: immutable exact graph/profile/environment
+intent, separate execution approval, shared target leases, bounded local
+staging and a whole-artifact journal. Review-only plans stay non-executable.
+The browser and MCP prepare or inspect intent and hand execution to the
+enrolled companion. OAuth cannot authorize host execution.
+
+Local checks passed: 19 focused API/core/CLI cases including two explicitly
+enrolled workspaces and 39 interruption scenarios; the final API rerun 4/4;
+expanded MCP token/OAuth fixture 1/1; corrected handoff browser cases 3/3;
+HOST narrow fixtures 85/85; controller fixtures 36/36. Counts overlap and do
+not measure requirement completion. The parent inspected desktop/mobile
+handoff and recovery screenshots. Builds, PostgreSQL test-source typecheck,
+scoped lint, generated parity, beta.19 package smoke, structure, privacy and
+secret checks passed. A sandbox npm-cache failure passed on a bounded
+task-local retry; shared cache permissions and configuration were unchanged.
+
+The actual PostgreSQL, MinIO and Linux install/upgrade/restore journeys are
+prepared and required by canonical gates. They are not established by those
+local results. The maintained Windows run
+`myskills-roadmap-composed-20261001` accepted this exact source at
+`2026-09-30T21:12:31.972749Z` and is running. Its source manifest digest is
+`8f70403ce77cc7455668077117dea32904df97f5c2e9affd1a33dd5bdae58c64`.
+Results and collection remain pending. This checkpoint excludes later
+QUALITY evaluation/remediation source and cannot gate the final roadmap.
+
+Independent Astra/xhigh review is running on an isolated clean clone of
+`48839644`, including the two HOST remediation follow-ups. The completed
+Sol/xhigh architecture worker has exited. After live idle-process verification,
+QUALITY received this exact dependency and the sole local heavy-process slot
+for isolated integration and checks. No push, merge, release, publication or
+deployment has occurred. All 426 original criterion identities and source
+descriptors, and all 24 groups, remain preserved; final evidence reconciliation
+is still required.
