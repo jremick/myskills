@@ -14479,6 +14479,14 @@
               "line": 1
             },
             "detail": "Correction regressions prepared for current-schema approval roundtrip, real equivalent organization actors, distinct explicit rollback actor, baseline-only credential expiry waits, actual window closing and receiving-grant history denial. Added PostgreSQL cases are unexecuted; Windows owns runtime proof."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/api/test/architecture-artifact-service.test.ts",
+              "line": 1
+            },
+            "detail": "Node22 combined-source regression checks compact immutable approval, unchanged organization/target windows at all five execution boundaries, and caller binding on checkpoints, receipts and replay. The 34-case combined API/CLI route receipt passes. Memory-coordinator proof does not establish actual PostgreSQL serialization or post-lock time."
           }
         ]
       },
@@ -14503,12 +14511,12 @@
             "detail": "Node22 actual CLI/API fixture installs, verifies, updates and rolls back two explicitly enrolled multilevel trees with mixed exact versions and distinct profile denials. All 39 durable journal fault scenarios, removal, forbidden rollback, collision/link/drift and root/baseline refusal pass. This is local filesystem evidence."
           },
           {
-            "level": "source",
+            "level": "contract",
             "source": {
               "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
               "line": 1
             },
-            "detail": "Correction cases add directory-sync ordering and failure fences, actual router disable, unrelated-path preservation and discovery-contained/overlapping root refusal before staging/approval. Local correction checks pending; historical byte fixtures do not establish power-loss or host recognition proof."
+            "detail": "Node22 combined-source five-case CLI receipt passes disjoint workspace bytes and unrelated-path preservation, directory-sync ordering/failure/retry fences, discovery-contained/overlapping root refusal, late denied renewal quarantine and explicitly authorized historical rollback. Pre-merge router-disable/removal and interrupted-move cases also passed. These are filesystem/API fixtures; power-loss survival and host recognition remain unverified."
           }
         ]
       },
