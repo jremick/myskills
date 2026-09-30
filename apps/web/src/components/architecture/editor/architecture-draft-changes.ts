@@ -376,8 +376,8 @@ export function describeArchitectureDraftChanges(
     });
   }
 
-  // Exposure, per draft profile and node. A missing binding is disabled, so
-  // new nodes and profiles report only bindings that actually expose them.
+  // Exposure, per profile, node and normalized environment scope. A missing
+  // rule differs from an explicit deny because another rule can supply exposure.
   const baseEnvironmentNames = new Map([...baseEnvironments.values()].map((environment) => [environment.id, environment.name] as const));
   const draftEnvironmentNames = new Map([...draftEnvironments.values()].map((environment) => [environment.id, environment.name] as const));
   for (const profile of draftProfiles.values()) {
@@ -386,23 +386,28 @@ export function describeArchitectureDraftChanges(
     for (const id of draftOrder) {
       const node = draftNodes.get(id);
       if (!node) continue;
-      const previous = previousBindings.get(id);
-      const next = nextBindings.get(id);
-      if (sameExposure(previous, next)) {
-        if (previous && next && !sameJson(previous.metadata, next.metadata)) addOther("binding metadata");
-        continue;
+      const previousScopes = previousBindings.get(id);
+      const nextScopes = nextBindings.get(id);
+      const scopes = new Set([...(previousScopes?.keys() ?? []), ...(nextScopes?.keys() ?? [])]);
+      for (const scope of [...scopes].sort()) {
+        const previous = previousScopes?.get(scope);
+        const next = nextScopes?.get(scope);
+        if (sameExposure(previous, next)) {
+          if (previous && next && !sameJson(previous.metadata, next.metadata)) addOther("binding metadata");
+          continue;
+        }
+        const before = exposureLabel(previous, baseEnvironmentNames, draftEnvironmentNames);
+        const after = exposureLabel(next, draftEnvironmentNames, baseEnvironmentNames);
+        changes.push({
+          id: `exposure:${JSON.stringify([profile.id, id, scope])}`,
+          kind: "exposure",
+          subject: node.label,
+          before,
+          after,
+          nodeId: id,
+          summary: `Exposure for ${quote(node.label)} in ${quote(profile.name)}: ${before} → ${after}`,
+        });
       }
-      const before = exposureLabel(previous, baseEnvironmentNames, draftEnvironmentNames);
-      const after = exposureLabel(next, draftEnvironmentNames, baseEnvironmentNames);
-      changes.push({
-        id: `exposure:${profile.id}:${id}`,
-        kind: "exposure",
-        subject: node.label,
-        before,
-        after,
-        nodeId: id,
-        summary: `Exposure for ${quote(node.label)} in ${quote(profile.name)}: ${before} → ${after}`,
-      });
     }
   }
 
@@ -549,20 +554,24 @@ function releaseLabel(release: ReleaseDescriptor | null, other: ReleaseDescripto
   return sameSlug ? `${version}${digest}` : `${release.slug}@${version}${digest}`;
 }
 
-function bindingMap(bindings: readonly ArchitectureProfileBinding[]): Map<string, ArchitectureProfileBinding> {
-  const result = new Map<string, ArchitectureProfileBinding>();
+function bindingMap(bindings: readonly ArchitectureProfileBinding[]): Map<string, Map<string, ArchitectureProfileBinding>> {
+  const result = new Map<string, Map<string, ArchitectureProfileBinding>>();
   for (const binding of bindings) {
-    if (!result.has(binding.nodeId)) result.set(binding.nodeId, binding);
+    const scopes = result.get(binding.nodeId) ?? new Map<string, ArchitectureProfileBinding>();
+    const key = environmentScopeKey(binding);
+    if (!scopes.has(key)) scopes.set(key, binding);
+    result.set(binding.nodeId, scopes);
   }
   return result;
 }
 
 function environmentScopeKey(binding: ArchitectureProfileBinding | undefined): string {
   const ids = binding?.environmentIds;
-  return ids === undefined ? "*" : [...ids].sort().join("\u0000");
+  return ids === undefined ? "*" : [...new Set(ids)].sort().join("\u0000");
 }
 
 function sameExposure(left: ArchitectureProfileBinding | undefined, right: ArchitectureProfileBinding | undefined): boolean {
+  if (!left || !right) return left === right;
   const leftEnabled = left?.enabled ?? false;
   const rightEnabled = right?.enabled ?? false;
   return leftEnabled === rightEnabled
@@ -575,6 +584,7 @@ function exposureLabel(
   names: ReadonlyMap<string, string>,
   fallbackNames: ReadonlyMap<string, string>,
 ): string {
+  if (!binding) return "No explicit rule";
   const enabled = binding?.enabled ?? false;
   const mode = enabled ? binding?.runtimeExposure ?? "disabled" : "disabled";
   const modeLabel = `${mode.charAt(0).toUpperCase()}${mode.slice(1)}`;

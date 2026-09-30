@@ -139,6 +139,7 @@ export function ArchitectureExplorer({
   const search = useMemo(() => searchArchitectureExplorer(model, query, filter), [filter, model, query]);
 
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
+  const mainRef = useRef<HTMLDivElement>(null);
   const listScrollRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -164,13 +165,6 @@ export function ArchitectureExplorer({
     }
   }, [onSelectNode, selectionControlled]);
 
-  const setView = useCallback((next: ArchitectureExplorerView) => {
-    setSheetOpen(false);
-    if (next === view) return;
-    if (viewProp === undefined) setInternalView(next);
-    onViewChange?.(next);
-  }, [onViewChange, view, viewProp]);
-
   const closeSheet = useCallback(() => {
     // Return focus only when it was in the sheet (or lost), never away from
     // a control the user moved to meanwhile.
@@ -180,6 +174,13 @@ export function ArchitectureExplorer({
       || Boolean(inspectorRef.current?.contains(active));
     setSheetOpen(false);
   }, []);
+
+  const setView = useCallback((next: ArchitectureExplorerView) => {
+    closeSheet();
+    if (next === view) return;
+    if (viewProp === undefined) setInternalView(next);
+    onViewChange?.(next);
+  }, [closeSheet, onViewChange, view, viewProp]);
 
   const toggleNode = useCallback((id: string) => {
     setExpandedIds((current) => {
@@ -252,12 +253,22 @@ export function ArchitectureExplorer({
       return;
     }
     if (!sheetVisible && pendingReturnFocus.current) {
-      pendingReturnFocus.current = false;
-      const opener = openerRef.current;
-      const target = opener?.isConnected ? opener : selectedId ? rowRefs.current.get(selectedId) ?? null : null;
-      target?.focus({ preventScroll: true });
+      // A view change unmounts the opener. Let the destination render, then
+      // focus its selected node without stealing focus from another control.
+      const frame = requestAnimationFrame(() => {
+        pendingReturnFocus.current = false;
+        const active = document.activeElement;
+        if (active && active !== document.body && !inspectorRef.current?.contains(active)) return;
+        const opener = openerRef.current;
+        const mapNode = selectedId && view === "map"
+          ? [...(mainRef.current?.querySelectorAll<HTMLElement>(".react-flow__node") ?? [])].find((element) => element.dataset.id === selectedId)
+          : null;
+        const target = opener?.isConnected ? opener : mapNode ?? (selectedId ? rowRefs.current.get(selectedId) : null);
+        (target ?? searchRef.current)?.focus({ preventScroll: true });
+      });
+      return () => cancelAnimationFrame(frame);
     }
-  }, [selectedId, sheetVisible]);
+  }, [selectedId, sheetVisible, view]);
 
   useEffect(() => {
     if (!pendingHeadingFocus.current) return;
@@ -381,7 +392,7 @@ export function ArchitectureExplorer({
       </div>
 
       <div className="architecture-explorer-body">
-        <div className="architecture-explorer-main">
+        <div className="architecture-explorer-main" ref={mainRef}>
           {noMatches ? (
             <div className="architecture-explorer-pane architecture-explorer-empty">
               <SearchX size={20} aria-hidden="true" />

@@ -7192,8 +7192,17 @@
             "detail": "2026-09-30 local Chromium with mocked API responses: List/map selection, ancestor search and skill-only counts exercised with 82/500-node fixtures; restricted organization projection and responsive widths also passed. This is browser proof, not a live API, PostgreSQL, provider-host or deployment claim.",
             "source": {
               "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
-              "line": 1609,
+              "line": 1628,
               "anchor": "test(\"the 500-node library opens collapsed, counts only skills, finds deep matches with their ancestors and keeps one selection across List and Map\", async ({ page }, info) => {"
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "2026-09-30 local Chromium with mocked API responses: keyboard Focus branch and Show in list close the 320/390-pixel details sheet and focus the selected node in the destination view; explicit Escape focus return and Workbench handoff remain covered.",
+            "source": {
+              "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
+              "line": 1179,
+              "anchor": "for (const width of [1024, 390, 320]) test(`the Structure explorer and Workbench stay usable without horizontal overflow at ${width}`, async ({ page }, info) => {"
             }
           }
         ]
@@ -7416,8 +7425,17 @@
             "detail": "2026-09-30 local Chromium with mocked API responses: Named rename/add/remove/move changes survive failed and conflicting saves; a flat four-entry journey verifies named exposure changes and the saved projection. This is browser proof, not a live API, PostgreSQL, provider-host or deployment claim.",
             "source": {
               "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
-              "line": 1759,
+              "line": 1784,
               "anchor": "test(\"a flat four-entry architecture keeps independent skills and names an exposure change through save\", async ({ page }, info) => {"
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "2026-09-30 local Chromium with mocked API responses: removing the environment of a later rule for the same node names the removed and resulting scopes, preserves its wildcard rule, and saves the reviewed bindings with the revision token. Absent rules are distinguished from explicit deny rules.",
+            "source": {
+              "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
+              "line": 1846,
+              "anchor": "test(\"scoped exposure rules remain named when a later binding loses its environment\", async ({ page }, info) => {"
             }
           }
         ]

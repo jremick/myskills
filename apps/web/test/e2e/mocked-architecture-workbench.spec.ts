@@ -1205,6 +1205,25 @@ for (const width of [1024, 390, 320]) test(`the Structure explorer and Workbench
     await expect(productSelect).toBeFocused();
     await productSelect.click();
     await expect(close).toBeVisible();
+
+    // View actions replace the opener, so focus follows the selected node
+    // into the destination view instead of falling back to the document.
+    const focusBranch = ui.focusBranch(page);
+    await focusBranch.focus();
+    await page.keyboard.press("Enter");
+    await expect(close).toBeHidden();
+    const mapNode = ui.map(page).locator('.react-flow__node[data-id="product"]');
+    await expect(mapNode).toBeFocused();
+    await mapNode.press("Enter");
+    await expect(close).toBeVisible();
+    const showInList = ui.inspector(page).getByRole("button", { name: "Show in list", exact: true });
+    await showInList.focus();
+    await page.keyboard.press("Enter");
+    await expect(close).toBeHidden();
+    await expect(productSelect).toBeFocused();
+    await expect(productSelect).toHaveAttribute("aria-current", "true");
+    await productSelect.click();
+    await expect(close).toBeVisible();
   }
   expect(await noHorizontalOverflow(page)).toBe(true);
   await page.screenshot({ path: info.outputPath(`structure-${width}.png`) });
@@ -1607,6 +1626,9 @@ test("a Back or Forward move during a slow detail reload keeps the destination e
 // the 12-level depth limit. Browsing must stay readable, count only skills,
 // keep search context at full depth and never write a revision or layout.
 test("the 500-node library opens collapsed, counts only skills, finds deep matches with their ancestors and keeps one selection across List and Map", async ({ page }, info) => {
+  // This limit-size journey traverses every node, searches the deepest path,
+  // switches map/list views and captures evidence under the parallel CI load.
+  test.setTimeout(60_000);
   const state = await installWorkbenchMock(page.context());
   addScaleLibrary(state);
   const spec = scaleLibrarySpec(owner.id);
@@ -1817,4 +1839,44 @@ test("a flat four-entry architecture keeps independent skills and names an expos
   await chooseExposure(page, "Exposed only");
   await expect.poll(() => visibleNodeIds(page)).toEqual(["flat-alpha"]);
   expect(await noHorizontalOverflow(page)).toBe(true);
+});
+
+// Removing an environment changes a later rule for the same node. The
+// wildcard rule must not hide that change from the review or saved payload.
+test("scoped exposure rules remain named when a later binding loses its environment", async ({ page }, info) => {
+  const state = await installWorkbenchMock(page.context());
+  const dialogs = trackDialogs(page);
+  dialogs.policy = "accept";
+  const id = "arch-scoped-exposure";
+  const name = "Scoped operations library";
+  const spec = smallSpec(id, name, { type: "user", id: owner.id }, "personal");
+  spec.environments.push({ id: "ops-cloud", name: "Operations cloud", kind: "personal", profileId: "default" });
+  spec.profiles[0]!.bindings.push({ nodeId: "ops-01", enabled: false, runtimeExposure: "disabled", environmentIds: ["ops-cloud"] });
+  const revisions = [revisionFor(id, 1, "Scoped baseline", spec)];
+  state.records.set(id, { summary: summaryFor(id, name, "Wildcard and environment rules.", "owner", revisions), revisions });
+  state.listOrder.unshift(id);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/architectures/${id}/workbench`);
+  await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
+  await page.getByRole("tab", { name: "Profiles & environments" }).click();
+  await page.getByLabel("Active architecture environment").selectOption("ops-cloud");
+  await page.getByRole("button", { name: "Remove environment", exact: true }).click();
+  const changes = ui.draftChanges(page);
+  await showAllDraftChanges(page);
+  await expect(changes).toContainText("Removed environment “Operations cloud”");
+  await expect(changes).toContainText("Exposure for “Operations skill 01” in “Personal”: Disabled · Operations cloud → No explicit rule");
+  await expect(changes).toContainText("Exposure for “Operations skill 01” in “Personal”: No explicit rule → Disabled · no environments");
+  await expect(changes).toHaveAttribute("data-count", "3");
+  await page.screenshot({ path: info.outputPath("scoped-exposure-review.png"), fullPage: true });
+  await page.getByRole("button", { name: "Save revision", exact: true }).click();
+  await expect(page.getByText("Revision 2 saved.", { exact: true })).toBeVisible();
+  await expect(changes).toHaveAttribute("data-count", "0");
+  expect(state.revisionCreates).toHaveLength(1);
+  expect(state.revisionCreates[0]).toMatchObject({ architectureId: id, expectedCurrentRevisionId: `${id}-revision-1` });
+  const saved = state.records.get(id)!.revisions.at(-1)!.spec;
+  expect(saved.environments.map((environment) => environment.id)).toEqual(["ops-laptop"]);
+  expect(saved.profiles[0]!.bindings.filter((binding) => binding.nodeId === "ops-01")).toEqual([
+    { nodeId: "ops-01", enabled: true, runtimeExposure: "leaf" },
+    { nodeId: "ops-01", enabled: false, runtimeExposure: "disabled", environmentIds: [] },
+  ]);
 });
