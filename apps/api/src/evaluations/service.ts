@@ -96,7 +96,7 @@ export class EvaluationService {
 }
 function record(row: Record<string, unknown>): EvaluationRecord {
   return { id: String(row.id), versionId: String(row.skill_version_id), suiteRevisionId: String(row.suite_revision_id),
-    createdAt: new Date(String(row.created_at)).toISOString(), reviewContext: row.review_context as EvaluationRecord["reviewContext"], result: row.result as PackageEvaluationResult };
+    createdAt: (row.created_at instanceof Date ? row.created_at : new Date(String(row.created_at))).toISOString(), reviewContext: row.review_context as EvaluationRecord["reviewContext"], result: row.result as PackageEvaluationResult };
 }
 async function retainAudience(tx: DatabaseTransaction, actorId: string, skillId: string) {
   await tx.execute(sql`SELECT id FROM teams WHERE id IN (SELECT team_id FROM team_memberships WHERE user_id=${actorId}::uuid

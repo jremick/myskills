@@ -27,7 +27,7 @@ export async function assertActionAuthority(tx: DatabaseTransaction, actor: Subm
         AND g.resource=${identity.resource ?? ""} AND g.client_id=${identity.clientId ?? ""} FOR SHARE OF t,g`;
   const credentials = await tx.execute(record);
   const c = credentials.rows[0];
-  if (!c || c.revoked_at || new Date(String(c.expires_at)).getTime() <= Date.now()) throw unauthenticated();
+  if (!c || c.revoked_at || !Number.isFinite(timestamp(c.expires_at)) || timestamp(c.expires_at) <= Date.now()) throw unauthenticated();
   if (kind !== "session") for (const scope of scopes) {
     if (!(c.scopes as string[]).includes(scope)) throw new AppError("API token scope is required.", "API_TOKEN_SCOPE_REQUIRED", 403, { scope });
   }
@@ -38,12 +38,14 @@ export async function assertActionAuthority(tx: DatabaseTransaction, actor: Subm
   if (action === "review" && !elevated) throw new AppError("Review permissions are required.", "REVIEW_ROLE_REQUIRED", 403);
   // Existing author action contract requires MFA for elevated roles only.
   if (action !== "read" && elevated) {
-    const verifiedAt = c.mfa_verified_at ? new Date(String(c.mfa_verified_at)).getTime() : NaN;
-    const expiry = c.assurance_expires_at ? new Date(String(c.assurance_expires_at)).getTime() : NaN;
+    const verifiedAt = c.mfa_verified_at ? timestamp(c.mfa_verified_at) : NaN;
+    const expiry = c.assurance_expires_at ? timestamp(c.assurance_expires_at) : NaN;
     if (!Number.isFinite(verifiedAt) || verifiedAt > Date.now() || (kind === "oauth" && (!Number.isFinite(expiry) || expiry <= Date.now() || expiry > verifiedAt + 900_000))) {
       throw new AppError("MFA verification is required.", "MFA_VERIFICATION_REQUIRED", 403);
     }
   }
-  if (new Date(String(c.expires_at)).getTime() <= Date.now()) throw unauthenticated();
+  if (timestamp(c.expires_at) <= Date.now()) throw unauthenticated();
 }
 function unauthenticated() { return new AppError("Authentication is required.", "AUTHENTICATION_REQUIRED", 401); }
+
+function timestamp(value: unknown): number { return value instanceof Date ? value.getTime() : new Date(String(value)).getTime(); }

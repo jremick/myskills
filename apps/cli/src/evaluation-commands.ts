@@ -1,3 +1,4 @@
+import { lstat } from "node:fs/promises";
 import { normalizeImprovementEvaluationSuiteV1 } from "@myskills-app/core";
 import { defaultPackageEvaluationSuite, evaluatePackageFiles, readPackageFilesFromPath } from "@myskills-app/skill-package";
 import type { ParityCommandContext, ParityCommandInput } from "./parity-types.js";
@@ -14,7 +15,11 @@ export async function runEvaluationCommand(input: ParityCommandInput, context: P
   if (action === "local") {
     if (args.length!==1 || typeof input.options.platform!=="string") throw new Error("Local eval requires one package path and --platform.");
     let files;
-    try { files=await readPackageFilesFromPath(args[0]!); }
+    try {
+      const kind=await lstat(args[0]!);
+      if (!kind.isDirectory() && !(kind.isFile() && args[0]!.toLowerCase().endsWith(".zip"))) throw new Error("Unsupported input kind.");
+      files=await readPackageFilesFromPath(args[0]!);
+    }
     catch { throw new Error("Package input could not be read safely. Use a bounded directory or ZIP archive with regular text files."); }
     const suite = input.options.suite === undefined ? defaultPackageEvaluationSuite() : normalizeImprovementEvaluationSuiteV1(await context.readInput(option(input,"suite")));
     context.output({ run: evaluatePackageFiles({files,suite,target:{platform:input.options.platform,context:"local"},provenance:"self-reported"}), notice: "Static local evidence is self-reported. Provider behavior is unconfigured. Nothing was uploaded; this result cannot approve or publish a version." });

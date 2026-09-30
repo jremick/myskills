@@ -29,6 +29,8 @@ test("only genuinely pre-binding migrated scans receive the explicit legacy allo
   const service=new SubmissionService(new PostgresSubmissionStore(createDb(pool)));
   await service.performReviewAction({actor:{id:actor,roles:["maintainer"],mfaVerified:true},submissionId:version,action:"approve",artifactSha256:sha});
   await service.performReviewAction({actor:{id:actor,roles:["maintainer"],mfaVerified:true},submissionId:version,action:"publish"});
+  await assert.rejects(pool.query("UPDATE scan_runs SET status='failed' WHERE id=$1",[scan]),/immutable/);
+  await assert.rejects(pool.query("INSERT INTO scan_findings(scan_run_id,category,severity,message) VALUES($1,'install-hook','warning','late')",[scan]),/immutable/);
   const fresh=(await pool.query("INSERT INTO scan_runs(skill_version_id,status,started_at,completed_at) VALUES($1,'succeeded',now(),now()) RETURNING id",[version])).rows[0].id;
   await assert.rejects(pool.query("INSERT INTO legacy_package_scan_allowances(scan_run_id) VALUES($1)",[fresh]),/immutable/);
   const current=(await pool.query("INSERT INTO skill_versions(skill_id,version,security_status,lifecycle_status) VALUES($1,'1.0.1','passed','review') RETURNING id",[skill])).rows[0].id;

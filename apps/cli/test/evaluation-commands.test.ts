@@ -20,6 +20,7 @@ test("local evaluation safely reads directories/archives and never uploads", asy
   assert.equal(first.run.provenance,"self-reported"); assert.equal(first.run.totals.skipped,1);
   assert.equal(JSON.stringify(output).includes(directory),false);
   await assert.rejects(runEvaluationCommand({command:"evals",args:["local",pkg],options:{platform:"codex",upload:true}},context),/Unknown/);
+  await assert.rejects(runEvaluationCommand({command:"evals",args:["local",join(pkg,"skill.json")],options:{platform:"codex"}},context),/could not be read safely/);
 });
 test("authenticated evaluation adapters preserve exact request and denial without fallback", async()=> {
   const requests: unknown[]=[];const body={suiteRevisionId:"revision",artifactSha256:"a".repeat(64),platform:"codex",idempotencyKey:"eval-replay"};
