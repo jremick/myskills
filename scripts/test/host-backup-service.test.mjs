@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { assertHostCommandSucceeded, hostCommandFailure, prepareHostBackupService } from "../lib/host-backup-service.mjs";
+import { assertHostCommandSucceeded, hostCommandFailure, prepareHostBackupService, observeHostPublication } from "../lib/host-backup-service.mjs";
 import { hostDocker, saveHostLedger } from "../lib/host-rehearsal-resources.mjs";
 
 function fixture(t, fail = false) {
@@ -452,3 +452,42 @@ test("backup inspect parsing and repeated network identity have fixed stages and
     });
   }
 });
+
+test("live failure observer is finite, private, identity checked and cannot recover acceptance or consume cleanup reservations", async t => {
+  for (const scenario of ["observed", "foreign", "overflow", "deadline", "changed", "throws"]) await t.test(scenario, t => {
+    const f = fixture(t); f.containerRow.NetworkSettings.Ports["9000/tcp"] = [];
+    const directory = mkdtempSync(join(tmpdir(), "host-observer-")); t.after(() => rmSync(directory, { recursive: true, force: true }));
+    writeFileSync(join(directory, "ready.json"), JSON.stringify({ schemaVersion: 1, candidate: "d".repeat(40), runId: "fixture-owned-run", nonce: "e".repeat(32), expiresAtMs: 20000 }), { mode: 0o600 });
+    let time = 1000, waits = 0, calls = 0;
+    const docker = f.docker;
+    f.publicationObserver = context => {
+      calls++; if (scenario === "throws") throw new Error("fixture-password");
+      return observeHostPublication({ ...context, candidate: "d".repeat(40), runId: "fixture-owned-run" }, { directory, maximumMs: 3500, now: () => time, wait: ms => {
+        waits++; time += ms;
+        if (scenario === "deadline") return;
+        const request = JSON.parse(readFileSync(join(directory, "request.json")));
+        assert.deepEqual(Object.keys(request).sort(), ["schemaVersion", "candidate", "runId", "nonce", "token", "owner", "containerId", "networkId", "endpointId", "gateway", "address", "deadlineMs"].sort());
+        const value = { ...request, category: "observed", bridgeAddress: "present", forwarding: "present", listener: "absent", secret: "fixture-password" };
+        if (scenario === "foreign") value.containerId = "d".repeat(64);
+        if (scenario === "changed") f.containerRow.Config.Labels["io.myskills.host-rehearsal"] = "foreign";
+        writeFileSync(join(directory, `${request.token}.json`), scenario === "overflow" ? "x".repeat(2049) : JSON.stringify(value), { mode: 0o600 });
+      } });
+    };
+    let bounded = 0;
+    f.docker = (args, options) => { if (options?.timeout <= 3000) { bounded++; assert.equal(options.maxBuffer, 128 * 1024); } return docker(args, options); };
+    let failure;
+    assert.throws(() => prepareHostBackupService(f), error => {
+      assert.equal(error.message, "HOST_BACKUP_NETWORK_INVALID"); failure = error.hostFailure;
+      assert.equal(failure.reason, "published-port-shape-invalid"); assert.equal(failure.stage, "container-readback");
+      assert.equal(failure.containerStatus, "running"); assert.equal(failure.containerExitCode, 0); return true;
+    });
+    assert.equal(calls, 1); assert.ok(waits <= 10); assert.ok(bounded <= 1);
+    assert.equal(failure.livePublication.category, { observed: "observed", foreign: "observer-identity-rejected", overflow: "observer-output-invalid",
+      deadline: "observer-deadline", changed: "identity-changed", throws: "capture-failed" }[scenario]);
+    assert.doesNotMatch(JSON.stringify(failure), /fixture-password|172\.28|hc-|foreign/);
+    const ledger = JSON.parse(readFileSync(f.ledgerPath));
+    assert.equal(ledger.resources.find(row => row.kind === "network").state, "created");
+    assert.equal(ledger.resources.find(row => row.kind === "container").state, "created");
+  });
+});
+

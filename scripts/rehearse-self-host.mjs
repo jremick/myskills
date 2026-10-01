@@ -11,7 +11,7 @@ import { join, resolve } from "node:path";
 import { createSelfHostBundle } from "./lib/self-host-release.mjs";
 import { hostBaselineCommit, resolveHostBaseline } from "./lib/self-host-baseline.mjs";
 import { hostDocker, saveHostLedger } from "./lib/host-rehearsal-resources.mjs";
-import { prepareHostBackupService, assertHostCommandSucceeded } from "./lib/host-backup-service.mjs";
+import { prepareHostBackupService, assertHostCommandSucceeded, observeHostPublication } from "./lib/host-backup-service.mjs";
 import { captureHostDockerIdentity } from "./lib/host-backup-diagnostics.mjs";
 import { inspectHostPlatformImage, pushHostPlatformImage, verifyHostPlatformManifest, fetchHostPlatformManifest } from "./lib/host-platform-receipt.mjs";
 import { rehearseComposeClientInterruption, rehearseComposeInterruption } from "./lib/host-compose-interruption.mjs";
@@ -207,7 +207,7 @@ try {
     minioImage = build("minio", root, ["--file", join(root, "Dockerfile.minio"), "--label", `org.opencontainers.image.revision=${candidate}`,
       "--label", `org.opencontainers.image.version=${source.version}`]);
     return prepareHostBackupService({ proof, owner, image: minioImage, user: backupUser, password: backupPassword,
-      reserve, mark, docker, call, runService });
+      reserve, mark, docker, call, runService, publicationObserver: context => observeHostPublication({ ...context, candidate, runId }) });
   });
   const { network } = backupService;
   // Trust is scoped to this immutable fixture image; HTTPS validation remains on.

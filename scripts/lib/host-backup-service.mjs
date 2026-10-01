@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, writeFileSync, constants, openSync, closeSync, fstatSync, readSync, lstatSync, renameSync, unlinkSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { isIP } from "node:net";
 import { join } from "node:path";
 
@@ -139,7 +140,7 @@ function bindingConsistency(docker, network, owner, selected, id, initial) {
 }
 
 /** One TLS-valid gateway endpoint serves the host driver, bridge and recovery. */
-export function prepareHostBackupService({ proof, owner, image, user, password, reserve, mark, docker, call, runService }) {
+export function prepareHostBackupService({ proof, owner, image, user, password, reserve, mark, docker, call, runService, publicationObserver }) {
   assert.match(owner, /^hc-[a-f0-9]{16}$/);
   assert.ok([user, password].every(value => typeof value === "string" && !/[\r\n\0]/.test(value)));
   const network = `${owner}-backup-network`;
@@ -175,6 +176,10 @@ export function prepareHostBackupService({ proof, owner, image, user, password, 
   const failBinding = (reason, metadata) => {
     try { invalidBackupNetwork(stage, reason, container, metadata); }
     catch (primary) {
+      if (publicationObserver) {
+        try { primary.hostFailure.livePublication = publicationObserver({ docker, network, owner, selected, id, container }); }
+        catch { primary.hostFailure.livePublication = { category: "capture-failed" }; }
+      }
       try { primary.hostFailure.bindingConsistency = bindingConsistency(docker, network, owner, selected, id, container); }
       catch { primary.hostFailure.bindingConsistency = { category: "capture-failed" }; }
       throw primary; // Even a now-valid second observation cannot recover acceptance.
@@ -187,6 +192,66 @@ export function prepareHostBackupService({ proof, owner, image, user, password, 
   if (current.networkId !== selected.networkId) return invalidBackupNetwork("network-recheck", "network-id-changed");
   if (current.gateway !== selected.gateway) return invalidBackupNetwork("network-recheck", "network-gateway-changed");
   return { network, gateway: selected.gateway, port: Number(ports[0].HostPort), endpoint: `https://${selected.gateway}:${ports[0].HostPort}` };
+}
+
+// Internal fixture handoff only. An already prepared observer gets one live
+// window before the original failure reaches ledger cleanup. Never acceptance.
+export const hostPublicationDirectory = "/tmp/myskills-host-publication-once";
+export function privateHostObservation(path, maximum = 2048) {
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try {
+    const before = fstatSync(fd);
+    if (!before.isFile() || before.uid !== process.getuid() || (before.mode & 0o777) !== 0o600 || before.size > maximum) throw new Error("private-observation-invalid");
+    const buffer = Buffer.alloc(maximum + 1); const size = readSync(fd, buffer, 0, buffer.length, 0); const after = fstatSync(fd);
+    if (size !== before.size || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) throw new Error("private-observation-transition");
+    return JSON.parse(buffer.subarray(0, size).toString());
+  } finally { closeSync(fd); }
+}
+export function observeHostPublication({ docker, network, owner, selected, id, container, candidate, runId },
+  { directory = hostPublicationDirectory, maximumMs = 15000, now = Date.now, wait = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms) } = {}) {
+  const until = now() + Math.min(15000, maximumMs); let requestPath;
+  try {
+    const dir = lstatSync(directory);
+    if (!dir.isDirectory() || dir.isSymbolicLink() || dir.uid !== process.getuid() || (dir.mode & 0o777) !== 0o700) return { category: "observer-not-private" };
+    const ready = privateHostObservation(join(directory, "ready.json"));
+    if (!/^[a-f0-9]{40}$/.test(candidate ?? "") || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(runId ?? "")
+      || ready.candidate !== candidate || ready.runId !== runId || ready.schemaVersion !== 1 || !/^[a-f0-9]{32}$/.test(ready.nonce) || !Number.isSafeInteger(ready.expiresAtMs)
+      || ready.expiresAtMs <= now() || ready.expiresAtMs > now() + 7200000) return { category: "observer-not-ready" };
+    const endpoint = container.NetworkSettings?.Networks?.[network];
+    if (!/^hc-[a-f0-9]{16}$/.test(owner) || !/^[a-f0-9]{64}$/.test(id) || container.Id !== id
+      || container.Config?.Labels?.["io.myskills.host-rehearsal"] !== owner || container.Config?.Labels?.["io.myskills.host-rehearsal.role"] !== "backup"
+      || !/^[a-f0-9]{64}$/.test(endpoint?.EndpointID ?? "") || endpoint.NetworkID !== selected.networkId
+      || endpoint.Gateway !== selected.gateway || isIP(endpoint.IPAddress) !== 4 || endpoint.IPAddress === selected.gateway
+      || ipv4Number(endpoint.IPAddress) >>> (32 - Number(selected.subnet.split("/")[1])) !== ipv4Number(selected.gateway) >>> (32 - Number(selected.subnet.split("/")[1]))
+      || container.State?.Status !== "running" || container.State.Running !== true || container.State.Paused !== false || container.State.Restarting !== false) return { category: "identity-rejected" };
+    const token = randomBytes(16).toString("hex"); requestPath = join(directory, "request.json");
+    // No Env, mounts, credentials, names or source data. Addresses stay private.
+    const request = { schemaVersion: 1, candidate, runId, nonce: ready.nonce, token, owner, containerId: id, networkId: selected.networkId,
+      endpointId: endpoint.EndpointID, gateway: selected.gateway, address: endpoint.IPAddress, deadlineMs: until - 3000 };
+    const temporary = join(directory, `${token}.tmp`);
+    writeFileSync(temporary, JSON.stringify(request), { flag: "wx", mode: 0o600 }); renameSync(temporary, requestPath);
+    let result;
+    while (now() < until - 3000) {
+      try { result = privateHostObservation(join(directory, `${token}.json`)); break; }
+      catch (error) { if (error.code !== "ENOENT") return { category: "observer-output-invalid" }; }
+      wait(Math.min(50, Math.max(1, until - 3000 - now())));
+    }
+    if (!result) return { category: "observer-deadline" };
+    if (result.candidate !== candidate || result.runId !== runId || result.token !== token || result.nonce !== ready.nonce || result.containerId !== id || result.networkId !== selected.networkId
+      || result.endpointId !== endpoint.EndpointID) return { category: "observer-identity-rejected" };
+    const categories = ["observed", "unavailable", "namespace-changed", "output-invalid", "command-failed"];
+    if (!categories.includes(result.category) || !["bridgeAddress", "forwarding", "listener"].every(key => ["present", "absent", "unavailable"].includes(result[key]))) return { category: "observer-output-invalid" };
+    if (now() >= until) return { category: "observer-deadline" };
+    const current = inspection(docker(["container", "inspect", id], { timeout: Math.min(3000, until - now()), maxBuffer: 128 * 1024 }), "publication-diagnostic");
+    const actual = current.NetworkSettings?.Networks?.[network];
+    if (current.Id !== id || current.Config?.Labels?.["io.myskills.host-rehearsal"] !== owner || current.Config?.Labels?.["io.myskills.host-rehearsal.role"] !== "backup"
+      || current.State?.Status !== "running" || current.State.Running !== true || current.State.Paused !== false || current.State.Restarting !== false
+      || ["NetworkID", "EndpointID", "IPAddress", "Gateway"].some(key => actual?.[key] !== endpoint[key])
+      || current.RestartCount !== container.RestartCount || current.State.StartedAt !== container.State.StartedAt) return { category: "identity-changed" };
+    return { category: result.category, bridgeAddress: result.bridgeAddress, forwarding: result.forwarding, listener: result.listener,
+      identityStable: true, acceptanceRecovered: false };
+  } catch (error) { return { category: error.code === "ENOENT" ? "observer-not-armed" : "capture-failed" }; }
+  finally { if (requestPath) { try { unlinkSync(requestPath); } catch { /* observer files are private, never fixture resources */ } } }
 }
 
 /** Only fixed operation names and process status leave the fixture boundary. */
