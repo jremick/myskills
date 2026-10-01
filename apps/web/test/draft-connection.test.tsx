@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { DraftWorkspace } from "../src/components/authoring/DraftWorkspace.js";
-import type { AuthorDraft, DraftClient } from "../src/drafts-api.js";
+import type { AuthorDraft, DraftClient, DraftSubmission } from "../src/drafts-api.js";
 
 Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: window.sessionStorage });
 afterEach(() => { cleanup(); sessionStorage.clear(); });
@@ -12,6 +12,35 @@ const props = { actorId: "same-actor", url: "/submit?draft=draft-id", onNavigate
 function client(registryIdentity: string, get: DraftClient["get"]): DraftClient {
   return { registryIdentity, list: async () => ({ drafts: [] }), get, history: async () => ({ revisions: [{ ...head, title: "Private history canary", fileCount: 1, textBytes: 22 }] }) } as unknown as DraftClient;
 }
+
+test("draft submission action status and receipt heading remain distinct while saved history is compared", async () => {
+  const saved = { ...head, revision: 2, files: [{ path: "SKILL.md", content: "Current saved content" }] };
+  const submission: DraftSubmission = { id: "submission-id", slug: "helper", version: "0.1.1", artifactSha256: "a".repeat(64),
+    reviewStatus: "unreviewed", securityStatus: "pending", scan: { status: "queued", findings: [], findingCount: 0 } };
+  const api = { ...client("https://registry.example", async () => ({ draft: saved })),
+    async submit(id: string, revision: number) {
+      assert.equal(id, head.id); assert.equal(revision, 2);
+      return { draft: { ...saved, submission }, submission };
+    },
+    async revision(id: string, revision: number) {
+      assert.equal(id, head.id); assert.equal(revision, 1);
+      return { draft: head };
+    },
+  };
+  const view = render(<DraftWorkspace {...props} api={api} />);
+  await view.findByDisplayValue("Current saved content");
+  fireEvent.click(view.getByRole("button", { name: "Submit saved revision" }));
+  const heading = await view.findByRole("heading", { name: "Submitted helper@0.1.1" });
+  assert.equal(view.getAllByText(/Submitted .*0\.1\.1/).length, 2, "unscoped submission text deliberately matches both status and summary");
+  const statuses = view.container.querySelectorAll(".author-status[role='status']");
+  assert.equal(statuses.length, 1); assert.equal(statuses[0]!.textContent, "Submitted helper@0.1.1.");
+  assert.equal(heading.closest(".draft-receipt")?.getAttribute("role"), "status");
+  const history = await view.findByRole("region", { name: "Saved draft history" });
+  fireEvent.change(within(history).getByLabelText("Compare saved revision", { exact: true }), { target: { value: "1" } });
+  await within(history).findByText("1 changed files", { exact: true });
+  assert.equal(within(history).getByRole("button", { name: "Restore as new revision" }).textContent, "Restore as new revision");
+});
+
 for (const boundary of ["client", "credential", "registry"] as const) test(`draft private state and old responses are cleared across ${boundary} replacement for same actor`, async () => {
   const first = client("https://first.example", async () => ({ draft: head }));
   const view = render(<DraftWorkspace {...props} api={first} />);

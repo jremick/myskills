@@ -541,9 +541,48 @@ handles. All 47 bounded-reader controls pass, including unchanged leaf/symlink
 behavior and explicit root/nested GET/HEAD. Scoped lint passes. Initial loopback
 EPERM and behavioral failures remain recorded separately from passing receipts.
 
-Parent-owned Windows verification/CodeQL at immutable PR merge `935d3ebe`
-continues independently; it cannot prove this later correction. The resulting
+At the preview checkpoint, parent-owned Windows verification/CodeQL at immutable
+PR merge `935d3ebe` was running independently; it cannot prove this correction. The resulting
 source still needs immutable review and exact updated-PR runtime/CodeQL proof.
 No criterion state, gap or completion flag changes. Exact source identity,
 preservation checks and receipts belong in `PREVIEW_DIRECTORY_FIX_CHECKPOINT.json`
 and `preview-directory-fix.md` in the absolute root reports directory.
+
+### PR133 private-draft status assertion followup — 1 October 2026
+
+Parent's bounded Windows935d diagnostic records both browser lanes passing the
+previous feedback point, then failing private-draft resubmission because broad
+submitted text matches the action status and receipt heading. Full collection
+was pending at assignment. This is an observed test-selector failure; it does
+not establish a product defect or a full operational pass.
+
+The separate correction asserts the exact action-status text and named receipt
+heading. Inspection of the remaining draft journey also scopes changed-file
+text to saved history and the restore result to its action status. The existing
+stale-edit, recovery, correction, immutable export/snapshot and foreign-denial
+assertions remain. A rendered production-component DOM control proves the two
+submitted-text matches and distinct status/heading/history selections. All seven
+focused draft DOM controls, scoped lint and web typecheck pass. Initial new-test
+type errors and one wrong-cwd alias failure remain preserved in receipts.
+No local browser or full matrix ran. Parent owns exact updated-source runtime
+verification, review, CodeQL and all external actions; no completion flag changes.
+
+### PR133 final HIST revocation assertion followup — 1 October 2026
+
+Parent records Windows935d verification finished failed at 06:31:17 UTC with
+cleanup complete and collection/hash verification still pending at assignment.
+Both PG lanes record 312/314: the reviewed-manifest publication correction passes,
+then HIST expects 401 from its final private metadata read and receives 404;
+the parent aggregate supplies the second failure. Browser resubmission and HOST
+published-port evidence remain separate failures with separate source ownership.
+
+The metadata route uses optional registry authentication and hides an inaccessible
+private release with exact 404/RELEASE_NOT_FOUND. Artifact bundle delivery instead
+rejects a revoked supplied credential with exact 401/AUTHENTICATION_REQUIRED.
+The HIST fixture now expects the source-backed 404 at read five after both valid
+metadata/bundle pairs, then checks both exact denied bodies contain only generic
+errors. No production authentication, visibility or release code changes.
+The matching local HTTP comparison control passes, including live revocation,
+no final comparison output and the strict 401 bundle denial. Both affected API
+fixtures pass lint and strict compilation; PostgreSQL execution remains unrun
+locally and requires the next parent-owned exact Windows gate.

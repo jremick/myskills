@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { hashSessionToken } from "@myskills-app/auth";
-import { parseSkillManifest } from "@myskills-app/skill-package";
+import { compareAuthorizedReleases, parseSkillManifest } from "@myskills-app/skill-package";
 import { discoveryFixture } from "./fixtures/task-discovery.js";
 
 // Comparison requires two independent authorized exact-version reads. Reviewer
@@ -31,6 +31,21 @@ test("release comparison reads exact private versions through current API author
     assert.equal((await f.app.inject({ url })).statusCode, 404);
     assert.equal((await f.app.inject({ url: url.replace(artifact.sha256, "f".repeat(64)), headers: { authorization: `Bearer ${token}` } })).statusCode, 409);
   }
-  await f.authStore.revokeSessionByTokenHash(hashSessionToken(token));
-  assert.equal((await f.app.inject({ url: `/v1/skills/hidden-review/releases/1.0.0/bundle?sha256=${first.artifact.sha256}`, headers: { authorization: `Bearer ${token}` } })).statusCode, 401);
+  let reads = 0;
+  await assert.rejects(compareAuthorizedReleases({
+    base: { slug: "hidden-review", version: "1.0.0", artifactSha256: first.artifact.sha256 },
+    target: { slug: "hidden-review", version: "2.0.0", artifactSha256: second.artifact.sha256 },
+  }, async (kind, pin) => {
+    if (++reads === 5) await f.authStore.revokeSessionByTokenHash(hashSessionToken(token));
+    const response = await f.app.inject({ url: `/v1/skills/${pin.slug}/releases/${pin.version}${kind === "bundle" ? `/bundle?sha256=${pin.artifactSha256}` : ""}`, headers: { authorization: `Bearer ${token}` } });
+    if (response.statusCode !== 200) throw new Error(`Current API denial ${response.statusCode}`);
+    return response.json() as Record<string, unknown>;
+  }), /Current API denial 404/);
+  assert.equal(reads, 5, "revocation rejects the final metadata read after both authorized metadata/bundle pairs");
+  const metadata = await f.app.inject({ url: "/v1/skills/hidden-review/releases/1.0.0", headers: { authorization: `Bearer ${token}` } });
+  assert.equal(metadata.statusCode, 404);
+  assert.deepEqual(metadata.json(), { error: { code: "RELEASE_NOT_FOUND", message: "Release not found." } });
+  const bundle = await f.app.inject({ url: `/v1/skills/hidden-review/releases/1.0.0/bundle?sha256=${first.artifact.sha256}`, headers: { authorization: `Bearer ${token}` } });
+  assert.equal(bundle.statusCode, 401);
+  assert.deepEqual(bundle.json(), { error: { code: "AUTHENTICATION_REQUIRED", message: "Authentication is required." } }, "revoked supplied credentials must not expose private bundle bytes");
 });
