@@ -266,16 +266,22 @@ export function observeHostPublication({ docker, network, owner, selected, id, c
       } catch { /* fixed unavailable category; primary failure remains */ }
     }
     if (now() >= until) return { category: "observer-deadline" };
-    const checked = docker(["container", "inspect", id], { timeout: Math.min(1500, until - now()), maxBuffer: 128 * 1024, killSignal: "SIGKILL" });
-    if (checked.error || checked.signal || checked.status !== undefined && checked.status !== 0 || typeof checked.stdout !== "string" || Buffer.byteLength(checked.stdout) > 128 * 1024) return { category: "capture-failed" };
-    const current = inspection(checked, "publication-diagnostic");
+    const snapshot = { bridgeAddress: result.bridgeAddress, forwarding: result.forwarding, listener: result.listener,
+      ubuntuTls: result.ubuntuTls, backendTls: result.backendTls, adapterTermination: result.adapterTermination, dockerPort, acceptanceRecovered: false };
+    const unverified = readbackFailure => ({ ...snapshot, category: "post-identity-unverified", readbackFailure, identityStable: false });
+    let current;
+    try {
+      const checked = docker(["container", "inspect", id], { ok: false, timeout: Math.min(1500, until - now()), maxBuffer: 128 * 1024, killSignal: "SIGKILL" });
+      if (checked.error || checked.signal || checked.status !== undefined && checked.status !== 0) return unverified(checked.error?.code === "ETIMEDOUT" ? "timeout" : "command-failed");
+      if (typeof checked.stdout !== "string" || Buffer.byteLength(checked.stdout) > 128 * 1024) return unverified("output-invalid");
+      try { current = inspection(checked, "publication-diagnostic"); } catch { return unverified("output-invalid"); }
+    } catch { return unverified("readback-threw"); }
     const actual = current.NetworkSettings?.Networks?.[network];
     if (current.Id !== id || current.Config?.Labels?.["io.myskills.host-rehearsal"] !== owner || current.Config?.Labels?.["io.myskills.host-rehearsal.role"] !== "backup"
       || current.State?.Status !== "running" || current.State.Running !== true || current.State.Paused !== false || current.State.Restarting !== false
       || ["NetworkID", "EndpointID", "IPAddress", "Gateway"].some(key => actual?.[key] !== endpoint[key])
       || current.RestartCount !== container.RestartCount || current.State.StartedAt !== container.State.StartedAt) return { category: "identity-changed" };
-    return { category: result.category, bridgeAddress: result.bridgeAddress, forwarding: result.forwarding, listener: result.listener,
-      identityStable: true, ubuntuTls: result.ubuntuTls, backendTls: result.backendTls, adapterTermination: result.adapterTermination, dockerPort, acceptanceRecovered: false };
+    return { ...snapshot, category: result.category, identityStable: true };
   } catch (error) { return { category: error.code === "ENOENT" ? "observer-not-armed" : "capture-failed" }; }
   finally { if (requestPath) { try { unlinkSync(requestPath); } catch { /* observer files are private, never fixture resources */ } } }
 }

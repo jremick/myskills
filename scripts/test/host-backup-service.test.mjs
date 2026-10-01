@@ -454,7 +454,7 @@ test("backup inspect parsing and repeated network identity have fixed stages and
 });
 
 test("live failure observer is finite, private, identity checked and cannot recover acceptance or consume cleanup reservations", async t => {
-  for (const scenario of ["observed", "foreign", "overflow", "deadline", "changed", "throws"]) await t.test(scenario, t => {
+  for (const scenario of ["observed", "foreign", "overflow", "deadline", "changed", "throws", "inspect-timeout", "inspect-throws", "inspect-nonzero", "inspect-malformed"]) await t.test(scenario, t => {
     const f = fixture(t); f.containerRow.NetworkSettings.Ports["9000/tcp"] = [];
     const directory = mkdtempSync(join(tmpdir(), "host-observer-")); t.after(() => rmSync(directory, { recursive: true, force: true }));
     writeFileSync(join(directory, "ready.json"), JSON.stringify({ schemaVersion: 1, candidate: "d".repeat(40), runId: "fixture-owned-run", nonce: "e".repeat(32), expiresAtMs: 20000 }), { mode: 0o600 });
@@ -474,7 +474,18 @@ test("live failure observer is finite, private, identity checked and cannot reco
       } });
     };
     let bounded = 0;
-    f.docker = (args, options) => { if (options?.timeout <= 3000) { bounded++; assert.equal(options.killSignal, "SIGKILL"); assert.ok([2048, 128 * 1024].includes(options.maxBuffer)); } return docker(args, options); };
+    f.docker = (args, options) => {
+      if (options?.timeout <= 3000) { bounded++; assert.equal(options.killSignal, "SIGKILL"); assert.ok([2048, 128 * 1024].includes(options.maxBuffer)); }
+      if (args[0] === "port") return { status: 0, stdout: "" };
+      if (args[0] === "container" && args[1] === "inspect" && options?.timeout <= 1500) {
+        assert.equal(options.ok, false);
+        if (scenario === "inspect-timeout") return { error: { code: "ETIMEDOUT" }, status: null, stdout: "fixture-password" };
+        if (scenario === "inspect-throws") throw new Error("fixture-password");
+        if (scenario === "inspect-nonzero") return { status: 1, stdout: "fixture-password" };
+        if (scenario === "inspect-malformed") return { status: 0, stdout: "fixture-password" };
+      }
+      return docker(args, options);
+    };
     let failure;
     assert.throws(() => prepareHostBackupService(f), error => {
       assert.equal(error.message, "HOST_BACKUP_NETWORK_INVALID"); failure = error.hostFailure;
@@ -483,7 +494,14 @@ test("live failure observer is finite, private, identity checked and cannot reco
     });
     assert.equal(calls, 1); assert.ok(waits <= 10); assert.ok(bounded <= 2);
     assert.equal(failure.livePublication.category, { observed: "observed", foreign: "observer-identity-rejected", overflow: "observer-output-invalid",
-      deadline: "observer-deadline", changed: "identity-changed", throws: "capture-failed" }[scenario]);
+      deadline: "observer-deadline", changed: "identity-changed", throws: "capture-failed", "inspect-timeout": "post-identity-unverified",
+      "inspect-throws": "post-identity-unverified", "inspect-nonzero": "post-identity-unverified", "inspect-malformed": "post-identity-unverified" }[scenario]);
+    if (scenario.startsWith("inspect-")) {
+      assert.deepEqual(failure.livePublication, { category: "post-identity-unverified", identityStable: false,
+        readbackFailure: { "inspect-timeout": "timeout", "inspect-throws": "readback-threw", "inspect-nonzero": "command-failed", "inspect-malformed": "output-invalid" }[scenario],
+        bridgeAddress: "present", forwarding: "present", listener: "absent", ubuntuTls: "ready", backendTls: "unavailable",
+        adapterTermination: "confirmed", dockerPort: "empty", acceptanceRecovered: false });
+    }
     assert.doesNotMatch(JSON.stringify(failure), /fixture-password|172\.28|hc-|foreign/);
     const ledger = JSON.parse(readFileSync(f.ledgerPath));
     assert.equal(ledger.resources.find(row => row.kind === "network").state, "created");
