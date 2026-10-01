@@ -853,3 +853,47 @@ material release gates. The authorized scope ends after this current release,
 its necessary corrections, authorized existing deployments and final checks.
 Stop all project workers then. Do not start another phase or release; retain the
 approved recovery backup, whose deletion requires separate authorization.
+
+
+### Current canonical result and bounded HOST observation — 1 October 2026
+
+Exact application `dea50079ed09d1ace7605382ba3c64bc5ff4e7af`, PR merge
+`d77338bc52a7fbc539923c71165d60e1f6bd6cad`, completed canonical verification
+at 10:01 UTC. All six Node 22/24 general, Postgres and browser jobs passed;
+Postgres passed 314/314 in each lane. Browser proof includes 193 mocked cases,
+one existing skip, 10 full-stack cases and 12 site cases per lane. Five images
+and their smokes passed. HOST alone failed before installation and restoration:
+its correct publication request and stable owned endpoint still yielded empty
+runtime bindings twice. The 192-file collection and all cleanup layers were
+verified. These component passes do not establish release readiness.
+
+Matching CodeQL completed successfully at 10:02 UTC. Its eight-file collection,
+processed SARIF and [GitHub security gate](https://github.com/jremick/myskills/runs/110319135072)
+were verified. Zero PR alerts remain open; the five authorized false-positive
+dispositions remain unchanged. A new source revision requires matching checks.
+
+Reviewed HOST source `ff211a25`, `89a3579` and final correction `d393064` adds
+one bounded, failure-only observation before the original exception and owned
+cleanup. Exact candidate, run, container, network and endpoint identities bind
+the private handshake. The prepared supervisor adapter reads only the owned
+bridge address, matching forwarding and listener. An independently observed
+port may receive one certificate-verified readiness request; it never supplies
+HOST acceptance. Output remains fixed categories, with no environment, private
+key, arbitrary provider error or response-body export. Backend TLS remains
+unavailable in the established route. Observation is limited to 15 seconds,
+followed by at most two 10-second consistency reads with forced termination.
+
+Independent reviews identified and corrected process termination and conditional
+TLS gaps. Local process/TLS/guard controls and the final 25 consistency controls
+passed. Actual supervisor route evidence separately confirms the adapter's
+owned three-process termination in 7.18 seconds, before its 18-second natural
+exit, with all three absent afterward. This proves the bounded diagnostic route,
+not publication, install/upgrade/restore or deployed acceptance. The next exact
+canonical run must have its observer armed before HOST and preserve the original
+HOST result and verified cleanup. No daemon maintenance, guard relaxation or
+acceptance fallback is authorized by these changes.
+
+The current release and approved existing deployments remain the terminal scope.
+Target recovery and actual health/browser acceptance remain separate gates. The
+426 criterion contracts and 24 groups remain inventory, with no completion-state
+promotion from this diagnostic work.
