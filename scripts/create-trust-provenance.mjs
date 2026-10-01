@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 
 // This is a deterministic inventory and signing input, never a signed attestation.
 try { main(); } catch (error) {
@@ -61,7 +61,7 @@ function main() {
     if (digest.length !== (sri[1] === "sha512" ? 64 : 32) || digest.toString("base64") !== sri[2]) throw new Error("Production dependency integrity is invalid.");
     return {
       type: "library", "bom-ref": `npm:${path}@${item.version}`, name, version: item.version,
-      purl: `pkg:npm/${name.replace("@", "%40")}@${item.version}`,
+      purl: `pkg:npm/${name.replaceAll("@", "%40")}@${item.version}`,
       ...(item.inBundle === true ? {} : { hashes: [{ alg: sri[1] === "sha512" ? "SHA-512" : "SHA-256", content: digest.toString("hex") }] }),
       properties: [{ name: "myskills:lockfile-path", value: path }, ...(item.inBundle === true ? [
         { name: "myskills:bundled-in", value: `npm:${ownerPath}@${owner.version}` },
@@ -137,9 +137,19 @@ function safeDirectory(root, path, mustExist = true) {
 }
 
 function boundedFile(path) {
-  const stat = lstatSync(path);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 128 * 1024 * 1024) throw new Error("Provenance input must be a bounded plain file.");
-  return readFileSync(path);
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try {
+    const info = fstatSync(fd);
+    if (!info.isFile() || info.size > 128 * 1024 * 1024) throw new Error("Provenance input must be a bounded plain file.");
+    safeDirectory(process.cwd(), dirname(path));
+    const named = lstatSync(path);
+    if (!named.isFile() || named.dev !== info.dev || named.ino !== info.ino) throw new Error("Provenance input changed while opening.");
+    const bytes = Buffer.alloc(info.size + 1);
+    let length = 0, count;
+    while (length < bytes.length && (count = readSync(fd, bytes, length, bytes.length - length, length)) !== 0) length += count;
+    if (length !== info.size || fstatSync(fd).size !== info.size) throw new Error("Provenance input size changed while reading.");
+    return bytes.subarray(0, length);
+  } finally { closeSync(fd); }
 }
 function serialize(value) { return `${JSON.stringify(value, null, 2)}\n`; }
 function hash(bytes) { return createHash("sha256").update(bytes).digest("hex"); }

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
@@ -22,6 +22,7 @@ test("provenance CLI: deterministic production SBOM, exact source/artifacts and 
   const lock = { name: "fixture", version: "1.0.0", lockfileVersion: 3, packages: {
     "": { name: "fixture", version: "1.0.0", dependencies: { "prod-example": "1.2.3" } },
     "node_modules/prod-example": { version: "1.2.3", resolved: "https://registry.npmjs.org/prod-example/-/prod-example-1.2.3.tgz", integrity: `sha512-${Buffer.alloc(64, 1).toString("base64")}`, license: "MIT" },
+    "node_modules/@scope/prod-example": { version: "3.2.1", resolved: "https://registry.npmjs.org/@scope/prod-example/-/prod-example-3.2.1.tgz", integrity: `sha256-${Buffer.alloc(32, 2).toString("base64")}` },
     "node_modules/dev-example": { version: "2.0.0", dev: true },
   } };
   writeFileSync(resolve(root, "package-lock.json"), JSON.stringify(lock));
@@ -30,7 +31,7 @@ test("provenance CLI: deterministic production SBOM, exact source/artifacts and 
   const sha = git("rev-parse", "HEAD");
   mkdirSync(resolve(root, "dist/release"), { recursive: true });
   git("archive", "--format=tar", "--prefix=fixture-1.0.0/", "-o", resolve(root, "dist/release/source.tar"), "HEAD");
-  const archive = readFileSync(resolve(root, "dist/release/source.tar"));
+  let archive = readFileSync(resolve(root, "dist/release/source.tar"));
   const artifact = { file: "source.tar", byteSize: archive.length, sha256: hash(archive) };
   writeFileSync(resolve(root, "dist/release/release-metadata.json"), JSON.stringify({ name: "fixture", version: "1.0.0", commitSha: sha, dirty: false, artifacts: [artifact] }));
   const image = `api=ghcr.io/example/fixture@sha256:${"1".repeat(64)}`;
@@ -39,9 +40,13 @@ test("provenance CLI: deterministic production SBOM, exact source/artifacts and 
   for (const file of ["sbom.cdx.json", "provenance.json", "signing-preparation.json", "SHA256SUMS"]) assert.equal(readFileSync(resolve(root, "dist/provenance-a", file), "utf8"), readFileSync(resolve(root, "dist/provenance-b", file), "utf8"));
   const sbom = JSON.parse(readFileSync(resolve(root, "dist/provenance-a/sbom.cdx.json")));
   assert.equal(sbom.bomFormat, "CycloneDX");
-  assert.equal(sbom.components.length, 1);
-  assert.equal(sbom.components[0].name, "prod-example");
-  assert.equal(sbom.components[0].hashes[0].alg, "SHA-512");
+  assert.equal(sbom.components.length, 2);
+  const unscoped = sbom.components.find(component => component.name === "prod-example");
+  const scoped = sbom.components.find(component => component.name === "@scope/prod-example");
+  assert.equal(unscoped.hashes[0].alg, "SHA-512");
+  assert.equal(unscoped.purl, "pkg:npm/prod-example@1.2.3");
+  assert.equal(scoped.purl, "pkg:npm/%40scope/prod-example@3.2.1");
+  assert.equal(scoped.hashes[0].alg, "SHA-256");
   const provenance = JSON.parse(readFileSync(resolve(root, "dist/provenance-a/provenance.json")));
   assert.equal(provenance.source.commitSha, sha);
   assert.deepEqual(provenance.release.artifacts, [artifact]);
@@ -53,6 +58,24 @@ test("provenance CLI: deterministic production SBOM, exact source/artifacts and 
     assert.equal(bad.status, 1);
     assert.equal(bad.stderr.includes("user:secret"), false);
   }
+  const scopedLock = lock.packages["node_modules/@scope/prod-example"];
+  const refresh = () => {
+    writeFileSync(resolve(root, "package-lock.json"), JSON.stringify(lock));
+    git("add", "package-lock.json"); git("commit", "-qm", "Synthetic package-name control");
+    git("archive", "--format=tar", "--prefix=fixture-1.0.0/", "-o", resolve(root, "dist/release/source.tar"), "HEAD");
+    archive = readFileSync(resolve(root, "dist/release/source.tar"));
+    artifact.byteSize = archive.length; artifact.sha256 = hash(archive);
+    writeFileSync(resolve(root, "dist/release/release-metadata.json"), JSON.stringify({ name: "fixture", version: "1.0.0", commitSha: git("rev-parse", "HEAD"), dirty: false, artifacts: [artifact] }));
+  };
+  for (const [index, name] of ["@@scope/prod-example", "@scope/prod@example", "@scope//prod-example", "prod@example", "@Scope/prod-example"].entries()) {
+    scopedLock.name = name; refresh();
+    const out = `dist/invalid-name-${index}`, result = run(out);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Production dependency identity is invalid/);
+    assert.equal(existsSync(resolve(root, out)), false);
+  }
+  delete scopedLock.name; refresh();
+  assert.equal(run("dist/valid-restored").status, 0);
   writeFileSync(resolve(root, "dist/release/source.tar"), "changed bytes");
   assert.equal(run("dist/bad-artifact").status, 1);
   writeFileSync(resolve(root, "dist/release/source.tar"), archive);

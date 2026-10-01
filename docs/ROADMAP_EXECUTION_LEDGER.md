@@ -484,3 +484,43 @@ runtime or real browser/PG acceptance. All 426 IDs, 24 groups, fixed fingerprint
 and zero completed criteria remain. Exact correction SHA/tree and final bounded
 check receipts belong in `PR133_BROWSER_CHECKPOINT.json` and
 `pr133-browser-correction.md` in the absolute root reports directory.
+
+### PR133 descriptor-bound source correction — 1 October 2026
+
+The local continuation preserves browser04d1 and HOSTd1d4925 through exact parent
+integration `c59362532bb9fd6a7d9b5fb02cdab29d06a03951`. HOST adds bounded failed-guard
+instrumentation only. The actual published-port cause remains unresolved;
+endpoint reachability and complete install/upgrade/restore acceptance are open.
+Its 100 local helper/resource controls and lint do not supply Docker proof.
+
+Site preview, self-host release inputs and provenance artifacts now validate
+regular-file type and size on the descriptor that supplies the bytes. Reads
+consume at most the initial size plus one sentinel byte and reject size changes.
+Descriptors close on validation/stat/read errors. No-follow/nonblocking opens,
+plain ancestry checks and descriptor/path identity checks reject unsupported
+objects and substitution before reading. Release retains its one MiB cap;
+provenance retains 128 MiB. Preview assets have a 16 MiB cap, with root/directory
+indexes, GET/HEAD and existing headers retained. These controls do not claim an
+atomic snapshot against arbitrary concurrent writes to an already open inode;
+release/provenance digest and exact-source checks remain mandatory.
+
+Scoped npm names explicitly encode every `@` with the unchanged accepted name
+grammar and valid purl output. Deterministic local controls cover replacement,
+symlink ancestry, FIFO/directory rejection, oversize/growth/shrink, short reads,
+stat/read failure and descriptor closure. Existing release/provenance contracts
+retain exact Git/archive/digest identities and exclusive output. No dependency,
+CLI hash function, private HOST fixture, query policy or alert disposition changed.
+Independent frozen-c593 review accepts the prior fixes and classifies alerts
+84/85/87/88/92 as defensible false positives. That classification supplies no
+GitHub dismissal or security acceptance. The descriptor/encoding delta needs
+its own immutable review.
+
+The collected old1839 matrix remains failed with completed cleanup. CodeQL
+execution succeeded; GitHub security acceptance FAILED with nine live open
+alerts at that source. The four assigned source concerns are corrected locally;
+updated-source CodeQL, independent review and the full canonical matrix remain
+parent-owned proof. HOST is not accepted. All 426 identities, 24 groups, fixed
+fingerprint, zero completed criteria, current statuses and remaining gaps stay
+intact. Exact clean commit/tree and bounded receipts belong in
+`CODEQL_SOURCE_FIX_CHECKPOINT.json` and `pr133-codeql-source-correction.md`
+in the absolute root reports directory. This worker performs no external write.

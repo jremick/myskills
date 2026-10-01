@@ -125,3 +125,22 @@ the specific request to push fixes and update existing draft PR133 for verificat
 That approval is limited to PR133; this worker performs only local source/checks
 and own commits. Parent owns external actions; merge/release/publication/deploy
 still require their separate approval.
+
+The CodeQL source continuation preserves browser04d1 and HOSTd1d4925 through
+parent integrationc593. HOST is bounded instrumentation; the published-port
+cause and actual Linux install/upgrade/restore remain unresolved. Preview,
+release and provenance readers now validate and read the same regular-file
+descriptor, bound reads to initial size plus one byte, reject growth/shrink and
+close on errors. No-follow/nonblocking opens, plain ancestry and opened/named
+identity checks retain path guards. Caps are 16 MiB preview, one MiB release and
+128 MiB provenance. Directory-index/GET/HEAD, exact-source/digest checks and
+exclusive output remain. This is not an atomic in-place-write snapshot claim.
+Scoped-name `@` encoding is complete with unchanged grammar and valid output.
+Deterministic syscall-boundary fixtures prove replacement, symlink, size,
+non-regular-file, failure/closure and valid-output behavior. Exact updated-source
+CodeQL/review/matrix proof is still required; old1839 execution success does not
+change its GitHubFAILED/nine-open-alert record. Independent c593 review classifies
+the two CLI hash and three private fixture alerts as defensible false positives;
+their GitHub disposition still requires authority. Those source files are unchanged. No criterion
+status/gap or completed count is promoted; the separate source checkpoint records
+the coherent commit/tree and local receipts.

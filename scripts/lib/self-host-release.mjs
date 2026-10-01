@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, parse, relative, resolve, sep } from "node:path";
 
 export const imageNames = ["api", "web", "mcp", "ops", "minio", "postgres"];
@@ -26,9 +26,21 @@ function shape(value, required, optional = []) {
 }
 
 function readSmallFile(file) {
-  check(lstatSync(file).isFile(), "Release input must be a regular file, not a symlink.");
-  check(lstatSync(file).size <= 1024 * 1024, "Release input exceeds the one MiB limit.");
-  return readFileSync(file);
+  const fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try {
+    const info = fstatSync(fd);
+    check(info.isFile(), "Release input must be a regular file, not a symlink.");
+    check(info.size <= 1024 * 1024, "Release input exceeds the one MiB limit.");
+    noSymlinkAncestors(file);
+    const named = lstatSync(file);
+    check(named.isFile() && named.dev === info.dev && named.ino === info.ino, "Release input changed while opening.");
+    // Read one extra byte to detect growth without ever consuming an unbounded file.
+    const bytes = Buffer.alloc(info.size + 1);
+    let length = 0, count;
+    while (length < bytes.length && (count = readSync(fd, bytes, length, bytes.length - length, length)) !== 0) length += count;
+    check(length === info.size && fstatSync(fd).size === info.size, "Release input size changed while reading.");
+    return bytes.subarray(0, length);
+  } finally { closeSync(fd); }
 }
 
 function json(bytes) {
