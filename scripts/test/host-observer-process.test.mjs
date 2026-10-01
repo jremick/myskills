@@ -1,11 +1,55 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, lstatSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { createServer } from "node:https";
 import { observerCommand, observerTls } from "../lib/host-observer-process.mjs";
+import { hostPublicationDirectory } from "../lib/host-backup-service.mjs";
+
+test("actual observer cooperatively cancels waiting admission and reaps its active detached adapter within eleven seconds", { timeout: 15000 }, async () => {
+  const directory = hostPublicationDirectory;
+  // The exact CLI owns this fixed private handoff. Never use or clean an existing directory.
+  assert.equal(existsSync(directory), false);
+  for (const active of [false, true]) {
+    const root = mkdtempSync(join(tmpdir(), "host-observer-cancel-")); let observer; let adapterPid; let owned = false;
+    const adapter = { script: `exec node -e 'require("node:fs").writeFileSync("adapter.pid",String(process.pid));process.on("SIGTERM",()=>{});setInterval(()=>{},1000)'`,
+      backendStopProtocol: "timeout7-kill025-process-group", terminationProbeSha256: "e".repeat(64) };
+    const path = join(root, "adapter.json"); writeFileSync(path, JSON.stringify(adapter), { mode: 0o600 });
+    const digest = createHash("sha256").update(adapter.script).digest("hex"), candidate = "d".repeat(40), runId = "owned-cancellation-control";
+    const wait = async predicate => { const until = Date.now() + 2500; while (!predicate()) {
+      assert.ok(Date.now() < until, "owned fixture handshake deadline"); await new Promise(done => setTimeout(done, 10)); } };
+    try {
+      observer = spawn(process.execPath, [new URL("../observe-host-publication-once.mjs", import.meta.url).pathname, path, digest, candidate, runId],
+        { cwd: root, detached: true, env: { PATH: `${dirname(process.execPath)}:/usr/bin:/bin` }, stdio: ["ignore", "pipe", "pipe"] });
+      const completion = new Promise(resolve => observer.once("close", (code, signal) => resolve({ code, signal })));
+      let output = ""; for (const pipe of [observer.stdout, observer.stderr]) pipe.on("data", bytes => { output += bytes; assert.ok(output.length <= 2048); });
+      await wait(() => existsSync(join(directory, "ready.json")));
+      const ready = JSON.parse(readFileSync(join(directory, "ready.json"))); owned = ready.candidate === candidate && ready.runId === runId;
+      assert.equal(owned, true); assert.equal(lstatSync(directory).mode & 0o777, 0o700);
+      const request = { candidate, runId, nonce: ready.nonce, token: "a".repeat(32), owner: "hc-0123456789abcdef",
+        containerId: "a".repeat(64), networkId: "b".repeat(64), endpointId: "c".repeat(64), gateway: "172.28.0.1", address: "172.28.0.2", deadlineMs: Date.now() + 12000 };
+      if (active) { writeFileSync(join(directory, "request.json"), JSON.stringify(request), { mode: 0o600 });
+        await wait(() => existsSync(join(root, "adapter.pid"))); adapterPid = Number(readFileSync(join(root, "adapter.pid"))); }
+      const cancelledAt = Date.now(); process.kill(-observer.pid, "SIGTERM");
+      if (!active) writeFileSync(join(directory, "request.json"), JSON.stringify(request), { mode: 0o600 });
+      const forced = setTimeout(() => process.kill(-observer.pid, "SIGKILL"), 11000);
+      let result; try { result = await completion; } finally { clearTimeout(forced); }
+      assert.deepEqual(result, { code: 0, signal: null }); assert.ok(Date.now() - cancelledAt < 11000);
+      assert.match(output, /observer-cancelled/); assert.doesNotMatch(output, /172\.28|adapter\.pid/);
+      assert.match(output, active ? /"adapterTermination":"confirmed"/ : /"adapterTermination":"not-started"/);
+      assert.throws(() => process.kill(-observer.pid, 0), { code: "ESRCH" });
+      if (active) assert.throws(() => process.kill(-adapterPid, 0), { code: "ESRCH" });
+      else assert.equal(existsSync(join(root, "adapter.pid")), false);
+      assert.equal(existsSync(join(directory, "ready.json")), false);
+    } finally {
+      for (const pid of [observer?.pid, adapterPid].filter(Boolean)) { try { process.kill(-pid, "SIGKILL"); } catch { /* only owned fixture groups */ } }
+      if (owned) rmSync(directory, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
 
 for (const mode of ["timeout", "overflow", "ignored-term", "descendant"]) test(`real observer process ${mode} is forcibly bounded`, { timeout: 3000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "host-observer-process-")); const childFile = join(root, "child.json");
