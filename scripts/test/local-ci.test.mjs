@@ -74,6 +74,7 @@ const fixtureFiles = [
   "scripts/local-ci.mjs",
   "scripts/lib/secret-patterns.mjs",
   "scripts/lib/host-rehearsal-resources.mjs",
+  "scripts/lib/host-backup-diagnostics.mjs",
   "scripts/collect-browser-evidence.mjs",
   "scripts/create-release-artifacts.mjs",
   "scripts/verify-release.mjs",
