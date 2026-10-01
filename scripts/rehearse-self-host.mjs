@@ -167,20 +167,21 @@ function composeProtectedInputs(bundle, config, project, backup = false) {
   const runtime = parsedEnv(runtimePath), bootstrap = parsedEnv(bootstrapPath);
   const configuration = () => JSON.parse(compose(bundle, config, project, ["--profile", "bootstrap", "--profile", "operations", "config", "--format", "json"]).stdout);
   const model = configuration();
-  assert.equal(model.services.api.environment.SMTP_PASSWORD, runtime.SMTP_PASSWORD);
-  assert.equal(model.services.bootstrap.environment.SEED_OWNER_PASSWORD, bootstrap.SEED_OWNER_PASSWORD);
+  // Compose config JSON doubles literal dollars for subsequent interpolation.
+  assert.equal(model.services.api.environment.SMTP_PASSWORD, runtime.SMTP_PASSWORD.replaceAll("$", () => "$$"));
+  assert.equal(model.services.bootstrap.environment.SEED_OWNER_PASSWORD, bootstrap.SEED_OWNER_PASSWORD.replaceAll("$", () => "$$"));
   if (backup) {
     const bytes = readFileSync(backupPath, "utf8"), values = parsedEnv(backupPath);
-    assert.equal(model.services.ops.environment.MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY, values.MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY);
+    assert.equal(model.services.ops.environment.MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY, values.MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY.replaceAll("$", () => "$$"));
     try {
       writeFileSync(backupPath, bytes.replace(/^MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY=.*$/m, () => `MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY=${values.MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY}`));
-      assert.notEqual(configuration().services.ops.environment.MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY, values.MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY);
+      assert.notEqual(configuration().services.ops.environment.MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY, values.MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY.replaceAll("$", () => "$$"));
       assert.notEqual(operator(bundle, config, ["backup", "config"], false).status, 0);
     } finally { writeFileSync(backupPath, bytes); }
   } else {
     try {
       writeFileSync(runtimePath, runtimeBytes.replace(/^SMTP_PASSWORD=.*$/m, () => `SMTP_PASSWORD=${runtime.SMTP_PASSWORD}`));
-      assert.notEqual(configuration().services.api.environment.SMTP_PASSWORD, runtime.SMTP_PASSWORD);
+      assert.notEqual(configuration().services.api.environment.SMTP_PASSWORD, runtime.SMTP_PASSWORD.replaceAll("$", () => "$$"));
       assert.notEqual(operator(bundle, config, ["preflight"], false).status, 0);
     } finally { writeFileSync(runtimePath, runtimeBytes); }
     try {
