@@ -312,3 +312,12 @@ recorded in root reports `ARCHITECTURE_FIXTURE_CLOCK_SOURCE_CHECKPOINT.json`
 and `ARCHITECTURE_FIXTURE_CLOCK_CHECKPOINT.json`. Old4dea PG/browser passes do
 not verify the new source. Independent review and exact canonical acceptance
 remain parent-owned; criterion identities, states, gaps and complete0 remain.
+
+The matching `4e86831c13` CodeQL scan and subsequent five individually reviewed
+false-positive dispositions now pass the security gate for old head `4dea4b69`.
+Only alerts 84, 85, 87, 88 and 92 changed; zero open PR alerts remain on that scan.
+No query or security policy changed. Parent Astra accepted fixture source
+`96987767` and final evidence reconciliation `18f1db76`. The next exact candidate
+still needs its own full runtime matrix and security readback. HOST and recovery
+failures remain blocking. Finish only this release and its authorized existing
+deployments, then stop all project workers; no next roadmap phase is authorized.

@@ -832,3 +832,24 @@ boundary; no HOST guard, source or auxiliary recovery artifact changes here.
 Parent owns independent review, integration and exact corrected-candidate runtime
 acceptance. All426 identities,24 groups, fixed fingerprint,2,372 references,
 137 parity groups, states, gaps and complete0 remain. Scope is the current release.
+
+### Current security gate and terminal scope — 1 October 2026
+
+Matching scan `myskills-codeql-4e86831c13-1` completed successfully at 09:07 UTC.
+Seven relevant source files and the five reported traces were revalidated against
+independent review. Under explicit maintainer authorization, only alerts 84, 85,
+87, 88 and 92 were dismissed as false positives. Readback confirmed all five
+dispositions, zero open PR alerts, no other alert-state changes, and
+[CodeQL success](https://github.com/jremick/myskills/runs/110298738377).
+No query, rule, exclusion or security policy changed. This supersedes the earlier
+pending-disposition state for exact head `4dea4b69`; the fixture correction still
+requires a matching new scan and full canonical runtime verification.
+
+Parent Astra independently accepted fixture source `96987767` and verified the
+final `18f1db76` documentation reconciliation: 12 receipt hashes, five source
+hashes, unchanged executable bytes and hash-only binding refreshes. This is
+source acceptance, not a passing full matrix. HOST and target recovery remain
+material release gates. The authorized scope ends after this current release,
+its necessary corrections, authorized existing deployments and final checks.
+Stop all project workers then. Do not start another phase or release; retain the
+approved recovery backup, whose deletion requires separate authorization.
