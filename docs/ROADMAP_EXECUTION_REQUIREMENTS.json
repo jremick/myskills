@@ -8483,6 +8483,12 @@
             "execution": "local_node22_working_source_pass",
             "command": "npm run test:e2e -w @myskills-app/web -- release-comparison.spec.ts",
             "receipt": "final-focused-browser.log (all 6 published-comparison browser cases passed)"
+          },
+          {
+            "path": "apps/api/test/package-evaluations.pgtest.ts",
+            "line": 202,
+            "execution": "prepared_not_run_on_final_commit",
+            "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           }
         ],
         "remaining_gap": "Local Node22 shared/API/CLI and MCP HTTP comparison contracts pass. Canonical PG/fullstack and current browser comparison acceptance remain pending. Two published readable releases only; review candidate diff is a separate requirement."
@@ -8785,7 +8791,7 @@
         "checks": [
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 26,
+            "line": 202,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           },
@@ -9207,7 +9213,7 @@
         "checks": [
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 26,
+            "line": 202,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           },
@@ -13149,7 +13155,7 @@
         "checks": [
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 26,
+            "line": 202,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           },
@@ -15023,7 +15029,7 @@
         "checks": [
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 180,
+            "line": 202,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           },
@@ -21174,7 +21180,7 @@
         "checks": [
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 26,
+            "line": 202,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           },
@@ -24027,7 +24033,7 @@
         "checks": [
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 26,
+            "line": 202,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           },

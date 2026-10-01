@@ -14160,6 +14160,14 @@
               "path": "apps/api/test/release-comparison-access.e2e.test.ts",
               "line": 1
             }
+          },
+          {
+            "level": "source",
+            "detail": "Named real-PG fixture prepared and strictly compiled for two published releases, byte identities, private/management denial, wrong digest/foreign identity and credential revocation after both metadata/bundle pairs. SQL is unrun locally and is not acceptance.",
+            "source": {
+              "path": "apps/api/test/package-evaluations.pgtest.ts",
+              "line": 202
+            }
           }
         ]
       },
@@ -14199,7 +14207,15 @@
           },
           {
             "level": "contract",
-            "detail": "Eight local Chromium fixture journeys passed: exact digest/full-text comparison, identity/byte mismatch, lost visibility, delayed selection, logout and unpublished management denial.",
+            "detail": "Prior historical local fixture receipt: Eight local Chromium fixture journeys passed: exact digest/full-text comparison, identity/byte mismatch, lost visibility, delayed selection, logout and unpublished management denial. This is not final exact-commit canonical acceptance.",
+            "source": {
+              "path": "apps/web/test/e2e/release-comparison.spec.ts",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Final local Node22 Chromium affected run passed all six current published-comparison fixture cases alongside three affected author/review cases. Mocked API browser proof; canonical fullstack remains pending.",
             "source": {
               "path": "apps/web/test/e2e/release-comparison.spec.ts",
               "line": 1

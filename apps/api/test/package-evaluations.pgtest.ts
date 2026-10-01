@@ -7,7 +7,7 @@ import { OrganizationService } from "../src/organizations/service.js";
 import { PostgresOrganizationStore } from "../src/organizations/postgres-organization-store.js";
 import { randomUUID } from "node:crypto";
 import { hashPassword,hashSessionToken } from "@myskills-app/auth";
-import { compareAuthorizedReviewCandidate,defaultPackageEvaluationSuite,parseSkillManifest } from "@myskills-app/skill-package";
+import { compareAuthorizedReleases,compareAuthorizedReviewCandidate,defaultPackageEvaluationSuite,parseSkillManifest } from "@myskills-app/skill-package";
 import { createDb,createPgPool } from "../src/db/client.js";
 import { runMigrations } from "../src/db/migrate.js";
 import { PostgresAuthStore } from "../src/auth/postgres-auth-store.js";
@@ -197,6 +197,34 @@ test("exact-version evaluation HTTP/PG authority, replay, immutability and publi
     await assert.rejects(compareAuthorizedReviewCandidate(comparisonInput, read(outsiderToken)), /Current API denial 404/, "review authority must not broaden baseline readability");
     assert.equal((await pool.query("SELECT review_status FROM skill_versions WHERE id=$1", [next.id])).rows[0].review_status, "pending");
     await pool.query("UPDATE skills SET visibility='public' WHERE slug=$1", [manifest.name]);
+  });
+
+  await t.test("HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads", async () => {
+    await submissions.performReviewAction({ actor: reviewer, submissionId: next.id, action: "approve", artifactSha256: next.artifact.sha256 });
+    await submissions.performReviewAction({ actor: reviewer, submissionId: next.id, action: "publish" });
+    const pins = { base: { slug: manifest.name, version: manifest.version, artifactSha256: first.artifact.sha256 }, target: { slug: nextManifest.name, version: nextManifest.version, artifactSha256: next.artifact.sha256 } };
+    const read = (token?: string) => async (kind: "release" | "bundle", pin: typeof pins.base) => {
+      const response = await call("GET", `/v1/skills/${pin.slug}/releases/${pin.version}${kind === "bundle" ? `/bundle?sha256=${pin.artifactSha256}` : ""}`, token);
+      if (response.statusCode !== 200) throw new Error(`Current API denial ${response.statusCode}`);
+      return response.json() as Record<string, unknown>;
+    };
+    const compared = await compareAuthorizedReleases(pins, read());
+    assert.equal(compared.totals.modified, 2);
+    assert.equal(compared.base.byteSize, first.artifact.byteSize);
+    assert.equal(compared.target.byteSize, next.artifact.byteSize);
+    await pool.query("UPDATE skills SET visibility='private' WHERE slug=$1", [manifest.name]);
+    await assert.rejects(compareAuthorizedReleases(pins, read()), /Current API denial 404/);
+    await assert.rejects(compareAuthorizedReleases(pins, read(outsiderToken)), /Current API denial 404/, "management/reviewer role cannot substitute for published-release readability");
+    await assert.rejects(compareAuthorizedReleases({ ...pins, target: { ...pins.target, artifactSha256: "f".repeat(64) } }, read(authorToken)));
+    const foreign = await call("GET", "/v1/skills/evaluation-team-release/releases/1.0.0", authorToken);
+    assert.equal(foreign.statusCode, 200, foreign.body);
+    await assert.rejects(compareAuthorizedReleases(pins, async (kind, pin) => kind === "release" && pin.version === pins.base.version ? foreign.json() : read(authorToken)(kind, pin)), /matching identities/);
+    let reads = 0;
+    await assert.rejects(compareAuthorizedReleases(pins, async (kind, pin) => {
+      if (++reads === 5) await authStore.revokeSessionByTokenHash(hashSessionToken(authorToken));
+      return read(authorToken)(kind, pin);
+    }), /Current API denial 401/);
+    assert.equal(reads, 5, "revocation happens after both authorized metadata/bundle pairs, before final output");
   });
 
 });
