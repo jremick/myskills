@@ -66,7 +66,7 @@ async function restoreReady() {
   try {
     while (Date.now() < until) {
       try {
-        const { rows } = await pool.query("SELECT current_user AS username, current_setting('port') AS port, inet_server_addr()::text AS address");
+        const { rows } = await pool.query("SELECT current_user AS username, current_setting('port') AS port, host(inet_server_addr()) AS address");
         assert.deepEqual(rows, [{ username: database.username, port: data.ports.postgres, address: "127.0.0.1" }]);
         const health = await fetch(new URL("/minio/health/ready", storage), { redirect: "error", signal: AbortSignal.timeout(1500) }); await health.body?.cancel();
         if (health.status === 200) {
