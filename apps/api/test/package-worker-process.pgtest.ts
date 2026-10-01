@@ -16,12 +16,15 @@ import { readApiStartupFailure } from "../src/startup-diagnostic.js";
 
 /** Canonical PG fixture launches the actual production API process, not reconstructed services. */
 test("server worker crash recovers durable attempt and SIGTERM drains completion before pool shutdown", { timeout: 90_000, skip: process.platform === "win32" ? "POSIX signal crash/restart and graceful drain require canonical Linux/PostgreSQL." : false }, async t => {
+  const stage = (name: string) => { process.stdout.write(`package_worker_process_stage=${name}\n`); };
+  stage("setup");
   const url = process.env.TEST_DATABASE_URL!;
   assert.match(new URL(url).pathname, /(^|[_/-])(test|ci)([_-]|$)/i);
   const pool = createPgPool(url);
   const cleanup: { gate?: PoolClient } = {};
   const processes: ChildProcess[] = [];
   t.after(async () => {
+    stage("cleanup");
     for (const child of processes) if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
     if (cleanup.gate) { await cleanup.gate.query("SELECT pg_advisory_unlock_all()"); cleanup.gate.release(); }
     await pool.end();
@@ -66,25 +69,48 @@ test("server worker crash recovers durable attempt and SIGTERM drains completion
       const category = /ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND/.test(state.stderr) ? "module" : /Registry instance identity/.test(state.stderr) ? "registry_identity" : /EADDRINUSE/.test(state.stderr) ? "port" : state.startupError ? "spawn" : "unclassified";
       assert.fail(`Actual scan worker boundary not reached: ${JSON.stringify({ category: startup?.category ?? category, startup, exitCode: child.exitCode, signalCode: child.signalCode, jobs, scans })}`);
     };
+    stage(`${processes.indexOf(child) === 0 ? "first" : "replacement"}_health`);
     await until(async () => {
       if (state.startupError || child.exitCode !== null || child.signalCode !== null) await fail();
       try { return (await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(500) })).ok; } catch { return false; }
     }, fail);
+    stage(`${processes.indexOf(child) === 0 ? "first" : "replacement"}_completion_gate`);
+    let backendPid = 0;
     await until(async () => {
       if (state.startupError || child.exitCode !== null || child.signalCode !== null) await fail();
-      return Number((await pool.query("SELECT count(*)::int AS n FROM pg_stat_activity a WHERE a.application_name=$1 AND a.wait_event_type='Lock' AND a.query LIKE '%UPDATE scan_runs%' AND $2=ANY(pg_blocking_pids(a.pid))", [state.name, gatePid])).rows[0].n) === 1;
+      const rows = (await pool.query("SELECT a.pid FROM pg_stat_activity a WHERE a.application_name=$1 AND a.wait_event_type='Lock' AND a.query LIKE '%UPDATE scan_runs%' AND $2=ANY(pg_blocking_pids(a.pid))", [state.name, gatePid])).rows;
+      if (rows.length !== 1) return false;
+      backendPid = Number(rows[0].pid); return true;
     }, fail);
+    return backendPid;
   };
-  const first = launch(); await waitBlocked(first);
-  const crashed = once(first, "exit"); first.kill("SIGKILL"); await crashed;
+  const first = launch(); const firstBackend = await waitBlocked(first);
+  stage("crash");
+  const crashed = once(first, "exit"); first.kill("SIGKILL");
+  assert.deepEqual(await crashed, [null, "SIGKILL"], "the actual API child must die before releasing the test gate");
+  // PostgreSQL can detect a disconnected client only at its next socket I/O.
+  // Let the abandoned statement leave the test gate, then prove its transaction
+  // rolled back before touching the job row it held. No backend is cancelled.
+  stage("crashed_backend_disconnect");
+  await gate.query("SELECT pg_advisory_unlock($1)", [gateId]);
+  await until(async () => !(await pool.query("SELECT 1 FROM pg_stat_activity WHERE pid=$1 AND application_name=$2", [firstBackend, observed.get(first)!.name])).rows.length,
+    async () => assert.fail("Killed API child's exact completion backend did not disconnect after test gate release"));
   assert.equal((await pool.query("SELECT status FROM jobs WHERE type='package-scan'")).rows[0].status, "running");
+  assert.equal((await pool.query("SELECT status FROM scan_runs WHERE skill_version_id=$1", [pending.id])).rows[0].status, "running", "abandoned completion must roll back before lease recovery");
+  await gate.query("SELECT pg_advisory_lock($1)", [gateId]);
+  stage("expire_crashed_lease");
   await pool.query("UPDATE jobs SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE type='package-scan'");
   const second = launch(); assert.notEqual(second.pid, first.pid);
   await waitBlocked(second);
+  stage("graceful_drain_held");
   const shutdown = once(second, "exit"); second.kill("SIGTERM");
   await delay(150); assert.equal(second.exitCode, null, "shutdown must wait for blocked completion");
   await gate.query("SELECT pg_advisory_unlock($1)", [gateId]);
+  stage("graceful_drain_released");
+  await until(async () => second.exitCode !== null || second.signalCode !== null,
+    async () => assert.fail("Replacement API process did not exit after releasing its completion gate"));
   const [code] = await shutdown; assert.equal(code, 0, "actual production process must finish graceful drain");
+  stage("durable_final_state");
   const detail = await submissions.getUserSubmissionDetail({ actor: { id: user.id, roles: ["author"] }, submissionId: pending.id });
   assert.deepEqual(detail!.scanRuns.map(r => r.status), ["failed", "succeeded"]);
   assert.ok(detail!.scanRuns.every(r => r.artifactSha256 === pending.artifact.sha256));

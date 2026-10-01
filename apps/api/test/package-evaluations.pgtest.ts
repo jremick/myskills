@@ -183,6 +183,9 @@ test("exact-version evaluation HTTP/PG authority, replay, immutability and publi
       await pool.query("INSERT INTO role_assignments(user_id,role) VALUES($1,'maintainer') ON CONFLICT DO NOTHING", [user.id]);
       await pool.query("UPDATE auth_sessions SET mfa_verified_at=clock_timestamp() WHERE token_hash=$1", [hashSessionToken(token)]);
     }
+    const reviewState = async () => (await pool.query("SELECT review_status,lifecycle_status,approved_artifact_sha256,published_at FROM skill_versions WHERE id=$1", [next.id])).rows[0];
+    const beforeReview = await reviewState();
+    assert.deepEqual(beforeReview, { review_status: "unreviewed", lifecycle_status: "submitted", approved_artifact_sha256: null, published_at: null });
     const comparisonInput = { base: { slug: manifest.name, version: manifest.version, artifactSha256: first.artifact.sha256 }, target: { slug: nextManifest.name, version: nextManifest.version, artifactSha256: next.artifact.sha256, submissionId: next.id } };
     const read = (token: string) => async (kind: string, pin: { slug: string; version: string; artifactSha256: string; submissionId?: string }) => {
       const review = kind === "review" || kind === "review-bundle";
@@ -193,11 +196,15 @@ test("exact-version evaluation HTTP/PG authority, replay, immutability and publi
     const compared = await compareAuthorizedReviewCandidate(comparisonInput, read(authorToken));
     assert.equal(compared.context, "review-candidate"); assert.equal(compared.totals.modified, 2);
     await assert.rejects(compareAuthorizedReviewCandidate({ ...comparisonInput, target: { ...comparisonInput.target, artifactSha256: "f".repeat(64) } }, read(authorToken)));
-    await pool.query("UPDATE skills SET visibility='private' WHERE slug=$1", [manifest.name]);
-    assert.equal((await call("GET", `/v1/review/submissions/${next.id}/bundle`, outsiderToken)).statusCode, 200, "reviewer may inspect candidate");
-    await assert.rejects(compareAuthorizedReviewCandidate(comparisonInput, read(outsiderToken)), /Current API denial 404/, "review authority must not broaden baseline readability");
-    assert.equal((await pool.query("SELECT review_status FROM skill_versions WHERE id=$1", [next.id])).rows[0].review_status, "pending");
-    await pool.query("UPDATE skills SET visibility='public' WHERE slug=$1", [manifest.name]);
+    const visibility = (await pool.query("SELECT visibility FROM skills WHERE slug=$1", [manifest.name])).rows[0].visibility;
+    try {
+      await pool.query("UPDATE skills SET visibility='private' WHERE slug=$1", [manifest.name]);
+      assert.equal((await call("GET", `/v1/review/submissions/${next.id}/bundle`, outsiderToken)).statusCode, 200, "reviewer may inspect candidate");
+      await assert.rejects(compareAuthorizedReviewCandidate(comparisonInput, read(outsiderToken)), /Current API denial 404/, "review authority must not broaden baseline readability");
+      assert.deepEqual(await reviewState(), beforeReview, "comparison must not approve or publish the candidate");
+    } finally {
+      await pool.query("UPDATE skills SET visibility=$2 WHERE slug=$1", [manifest.name, visibility]);
+    }
   });
 
   await t.test("HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads", async () => {

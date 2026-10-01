@@ -2602,8 +2602,8 @@
         },
         {
           "path": "apps/api/test/package-worker-process.pgtest.ts",
-          "line": 66,
-          "sha256": "3738aec6d6830cca71c51d11a7eb59855ed90761b125b1c8b7dcceca793caa80",
+          "line": 69,
+          "sha256": "1ee6765bd1cfa43bff32026b1ffcde7fc2fbb375b6be83de62b48f660c4f8bc8",
           "anchor": "const category = /ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND/.test(state.stderr) ? \"module\" : /Registry instance identity/.test(state.stderr) ? \"registry_identity\" : /EADDRINUSE/.test(state.stderr) ? \"port\" : state.startupErr",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-worker-process.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3764,7 +3764,7 @@
         {
           "path": "apps/api/test/package-worker-process.pgtest.ts",
           "line": 18,
-          "sha256": "3738aec6d6830cca71c51d11a7eb59855ed90761b125b1c8b7dcceca793caa80",
+          "sha256": "1ee6765bd1cfa43bff32026b1ffcde7fc2fbb375b6be83de62b48f660c4f8bc8",
           "anchor": "test(\"server worker crash recovers durable attempt and SIGTERM drains completion before pool shutdown\", { timeout: 90_000, skip: process.platform === \"win32\" ? \"POSIX signal crash/restart and graceful drain require canon",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-worker-process.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3886,8 +3886,8 @@
         },
         {
           "path": "apps/api/test/package-worker-process.pgtest.ts",
-          "line": 66,
-          "sha256": "3738aec6d6830cca71c51d11a7eb59855ed90761b125b1c8b7dcceca793caa80",
+          "line": 69,
+          "sha256": "1ee6765bd1cfa43bff32026b1ffcde7fc2fbb375b6be83de62b48f660c4f8bc8",
           "anchor": "const category = /ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND/.test(state.stderr) ? \"module\" : /Registry instance identity/.test(state.stderr) ? \"registry_identity\" : /EADDRINUSE/.test(state.stderr) ? \"port\" : state.startupErr",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-worker-process.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5344,8 +5344,8 @@
         },
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 203,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "line": 210,
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "await t.test(\"HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5481,7 +5481,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5565,8 +5565,8 @@
       "checks": [
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 203,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "line": 210,
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "await t.test(\"HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5719,7 +5719,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 176,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "for(const canary of [\"PRIVATE-CONTENT-CANARY\",\"PRIVATE-ORG-\",\"assertions\",\"suiteRevisionId\",\"suiteSha256\",document.latest.bodySha256,\"reviewContext\",\"actorUserId\",\"files\",\"tokenHash\"])assert.equal(summary.body.includes(c",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5849,8 +5849,8 @@
       "checks": [
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 203,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "line": 210,
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "await t.test(\"HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5935,7 +5935,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -6020,7 +6020,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -6173,7 +6173,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -8374,8 +8374,8 @@
       "checks": [
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 203,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "line": 210,
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "await t.test(\"HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -8429,7 +8429,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -8779,7 +8779,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -9417,8 +9417,8 @@
         },
         {
           "path": "apps/api/test/package-worker-process.pgtest.ts",
-          "line": 66,
-          "sha256": "3738aec6d6830cca71c51d11a7eb59855ed90761b125b1c8b7dcceca793caa80",
+          "line": 69,
+          "sha256": "1ee6765bd1cfa43bff32026b1ffcde7fc2fbb375b6be83de62b48f660c4f8bc8",
           "anchor": "const category = /ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND/.test(state.stderr) ? \"module\" : /Registry instance identity/.test(state.stderr) ? \"registry_identity\" : /EADDRINUSE/.test(state.stderr) ? \"port\" : state.startupErr",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-worker-process.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -9466,8 +9466,8 @@
       "checks": [
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 203,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "line": 210,
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "await t.test(\"HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -9887,7 +9887,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -9935,7 +9935,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 181,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "await t.test(\"pre-approval comparison uses real reviewer authority without bypassing baseline release visibility\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -13561,8 +13561,8 @@
       "checks": [
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 203,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "line": 210,
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "await t.test(\"HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -13668,7 +13668,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -14088,8 +14088,8 @@
         },
         {
           "path": "apps/api/test/package-worker-process.pgtest.ts",
-          "line": 66,
-          "sha256": "3738aec6d6830cca71c51d11a7eb59855ed90761b125b1c8b7dcceca793caa80",
+          "line": 69,
+          "sha256": "1ee6765bd1cfa43bff32026b1ffcde7fc2fbb375b6be83de62b48f660c4f8bc8",
           "anchor": "const category = /ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND/.test(state.stderr) ? \"module\" : /Registry instance identity/.test(state.stderr) ? \"registry_identity\" : /EADDRINUSE/.test(state.stderr) ? \"port\" : state.startupErr",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-worker-process.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -14138,7 +14138,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -14340,7 +14340,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 181,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "await t.test(\"pre-approval comparison uses real reviewer authority without bypassing baseline release visibility\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -15409,8 +15409,8 @@
       "checks": [
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 203,
-          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
+          "line": 210,
+          "sha256": "8ada571b19ba1072a5d2b2c8e803284584f196e57851c03b68fd3b650e6b1c8a",
           "anchor": "await t.test(\"HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
