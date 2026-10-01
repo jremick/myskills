@@ -142,6 +142,7 @@ if (["host-ports", "api-ready", "restore-ready"].includes(mode)) {
     data.mfaSecret = enrollment.enrollment.secret;
     const enrolledAt = Date.now(); data.enrolledTotpCounter = Math.floor(enrolledAt / 30_000);
     const confirmed = await api("/v1/auth/mfa/totp/confirm", { factorId: enrollment.enrollment.factorId, code: generateTotpCode(data.mfaSecret, { now: enrolledAt }) });
+    data.lastUsedTotpCounter = data.enrolledTotpCounter;
     data.recoveryCodes = confirmed.mfa.recoveryCodes;
     session = await api("/v1/auth/login", credentials, { anonymous: true });
   }
@@ -149,11 +150,13 @@ if (["host-ports", "api-ready", "restore-ready"].includes(mode)) {
   // Recovery codes exercise a separate path. A restored runtime must also
   // decrypt the original encrypted TOTP factor and accept a fresh real code.
   if (mode !== "create") {
+    const lastUsedCounter = Math.max(data.enrolledTotpCounter, data.lastUsedTotpCounter ?? data.enrolledTotpCounter);
     const until = Date.now() + 35_000;
-    while (Math.floor(Date.now() / 30_000) <= data.enrolledTotpCounter && Date.now() < until) await new Promise((done) => setTimeout(done, 250));
-    assert.ok(Math.floor(Date.now() / 30_000) > data.enrolledTotpCounter);
-    const totp = await api("/v1/auth/mfa/verify", { challengeToken: session.challengeToken, code: generateTotpCode(data.mfaSecret) }, { anonymous: true });
+    while (Math.floor(Date.now() / 30_000) <= lastUsedCounter && Date.now() < until) await new Promise((done) => setTimeout(done, 250));
+    const generatedAt = Date.now(); assert.ok(Math.floor(generatedAt / 30_000) > lastUsedCounter);
+    const totp = await api("/v1/auth/mfa/verify", { challengeToken: session.challengeToken, code: generateTotpCode(data.mfaSecret, { now: generatedAt }) }, { anonymous: true });
     assert.equal(totp.user.id, data.ownerId); assert.equal(totp.user.mfaVerified, true); assert.ok(totp.token);
+    data.lastUsedTotpCounter = Math.floor(generatedAt / 30_000);
     session = await api("/v1/auth/login", credentials, { anonymous: true });
     assert.ok(session.challengeToken);
   }
