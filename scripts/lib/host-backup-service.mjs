@@ -198,7 +198,7 @@ export function prepareHostBackupService({ proof, owner, image, user, password, 
 // window before the original failure reaches ledger cleanup. Never acceptance.
 export const hostPublicationDirectory = "/tmp/myskills-host-publication-once";
 export function privateHostObservation(path, maximum = 2048) {
-  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600);
   try {
     const before = fstatSync(fd);
     if (!before.isFile() || before.uid !== process.getuid() || (before.mode & 0o777) !== 0o600 || before.size > maximum) throw new Error("private-observation-invalid");

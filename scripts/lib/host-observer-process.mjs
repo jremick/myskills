@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { setTimeout as pause } from "node:timers/promises";
 import { request } from "node:https";
 import { isIP } from "node:net";
+import { createSecureContext } from "node:tls";
 
 export async function observerCommand(command, args, { input = "", maximumMs = 8000, maximumBytes = 2048 } = {}) {
   const until = Date.now() + Math.min(8000, maximumMs); const chunks = []; let size = 0; let category = "completed";
@@ -34,12 +35,14 @@ export function observerTls({ gateway, port, publicCertificate, maximumMs = 2000
   if (isIP(gateway) !== 4 || !/^[1-9][0-9]{0,4}$/.test(port ?? "") || Number(port) > 65535
     || typeof publicCertificate !== "string" || Buffer.byteLength(publicCertificate) > 8192
     || !/^-----BEGIN CERTIFICATE-----\r?\n[\s\S]+\r?\n-----END CERTIFICATE-----\r?\n?$/.test(publicCertificate)) return Promise.resolve("unavailable");
+  let secureContext;
+  try { secureContext = createSecureContext({ ca: publicCertificate }); } catch { return Promise.resolve("unavailable"); }
   return new Promise(resolve => {
     let settled = false; let client;
     const done = category => { if (settled) return; settled = true; clearTimeout(timer); client?.destroy(); resolve(category); };
     const timer = setTimeout(() => done("deadline"), Math.max(1, Math.min(2000, maximumMs)));
     try {
-      client = request({ hostname: gateway, port: Number(port), path: "/minio/health/ready", method: "GET", ca: publicCertificate,
+      client = request({ hostname: gateway, port: Number(port), path: "/minio/health/ready", method: "GET", secureContext,
         rejectUnauthorized: true, agent: false }, response => { const category = response.statusCode === 200 ? "ready" : "not-ready"; response.destroy(); done(category); });
       client.once("error", error => done(["ERR_TLS_CERT_ALTNAME_INVALID", "DEPTH_ZERO_SELF_SIGNED_CERT", "UNABLE_TO_VERIFY_LEAF_SIGNATURE", "CERT_HAS_EXPIRED"].includes(error.code) ? "tls-rejected" : "unreachable"));
       client.end();

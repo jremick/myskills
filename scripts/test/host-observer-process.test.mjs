@@ -10,11 +10,11 @@ import { observerCommand, observerTls } from "../lib/host-observer-process.mjs";
 for (const mode of ["timeout", "overflow", "ignored-term", "descendant"]) test(`real observer process ${mode} is forcibly bounded`, { timeout: 3000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), "host-observer-process-")); const childFile = join(root, "child.json");
   const code = mode === "descendant"
-    ? `const c=require('node:child_process').spawn(process.execPath,['-e',"process.on('SIGTERM',()=>{});setInterval(()=>{},1000)"],{stdio:'inherit'});c.on('spawn',()=>{require('node:fs').writeFileSync(${JSON.stringify(childFile)},JSON.stringify({pid:c.pid}));setTimeout(()=>process.exit(0),30)});`
+    ? `const c=require('node:child_process').spawn(process.execPath,['-e',"process.on('SIGTERM',()=>{});setInterval(()=>{},1000)"],{stdio:'inherit'});c.on('spawn',()=>{require('node:fs').writeFileSync(process.argv[1],JSON.stringify({pid:c.pid}));setTimeout(()=>process.exit(0),30)});`
     : `process.on('SIGTERM',()=>{});${mode === "overflow" ? "process.stdout.write('SECRET'.repeat(10000));" : ""}setInterval(()=>{},1000);`;
   const start = Date.now();
   try {
-    const result = await observerCommand(process.execPath, ["-e", code], { maximumMs: 1500, maximumBytes: 2048 });
+    const result = await observerCommand(process.execPath, ["-e", code, childFile], { maximumMs: 1500, maximumBytes: 2048 });
     assert.ok(Date.now() - start < 2000); assert.equal(result.groupTerminationConfirmed, true);
     assert.equal(result.category, mode === "overflow" ? "output-invalid" : mode === "descendant" ? "completed" : "deadline");
     assert.doesNotMatch(JSON.stringify(result), /SECRET/);

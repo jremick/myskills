@@ -1793,7 +1793,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 284,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -1880,7 +1880,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 284,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -2227,7 +2227,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 284,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -5392,7 +5392,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 284,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -8298,7 +8298,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 284,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -8843,7 +8843,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 284,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -9810,7 +9810,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 147,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "reserve(\"network\", network);"
         },
         {
@@ -10088,7 +10088,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 143,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "export function prepareHostBackupService({ proof, owner, image, user, password, reserve, mark, docker, call, runService, publicationObserver }) {"
         },
         {
@@ -11620,7 +11620,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 284,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -11707,7 +11707,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 284,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -11794,7 +11794,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 157,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "chmodSync(join(certs, \"private.key\"), 0o600);"
         },
         {
@@ -11881,7 +11881,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 155,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "call(\"openssl\", [\"req\", \"-x509\", \"-newkey\", \"rsa:2048\", \"-nodes\", \"-days\", \"1\", \"-keyout\", join(certs, \"private.key\"),"
         },
         {
@@ -11968,7 +11968,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 157,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "chmodSync(join(certs, \"private.key\"), 0o600);"
         },
         {
@@ -12055,7 +12055,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 143,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "export function prepareHostBackupService({ proof, owner, image, user, password, reserve, mark, docker, call, runService, publicationObserver }) {"
         },
         {
@@ -12142,7 +12142,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 155,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "call(\"openssl\", [\"req\", \"-x509\", \"-newkey\", \"rsa:2048\", \"-nodes\", \"-days\", \"1\", \"-keyout\", join(certs, \"private.key\"),"
         },
         {
@@ -13350,7 +13350,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 284,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -15032,7 +15032,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 284,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -15333,7 +15333,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 147,
-          "sha256": "dfa0bbd4cf23d0d52e8b2e13e40b29d4ab600561b7054fedeee948e98157762b",
+          "sha256": "f9f6ba36d92b4ba882a0f88fe9e34068b53901c1f1f300b78cb906598eb13f8d",
           "anchor": "reserve(\"network\", network);"
         },
         {
