@@ -1,20 +1,31 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, lstatSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, lstatSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { createServer } from "node:https";
 import { observerCommand, observerTls } from "../lib/host-observer-process.mjs";
-import { hostPublicationDirectory } from "../lib/host-backup-service.mjs";
+
+function isolatedObserver(root) {
+  const directory = join(root, "handoff");
+  mkdirSync(join(root, "lib"), { mode: 0o700 });
+  // Run the entrypoint, backend and process helper unchanged. Only the private
+  // handoff path is local to this fixture; its reader remains production code.
+  for (const path of ["observe-host-publication-once.mjs", "host-publication-backend.sh", "lib/host-observer-process.mjs"]) {
+    copyFileSync(new URL(`../${path}`, import.meta.url), join(root, path));
+  }
+  writeFileSync(join(root, "lib/host-backup-service.mjs"),
+    `export { privateHostObservation } from ${JSON.stringify(new URL("../lib/host-backup-service.mjs", import.meta.url).href)};\nexport const hostPublicationDirectory = ${JSON.stringify(directory)};\n`,
+    { mode: 0o600 });
+  return { directory, entrypoint: join(root, "observe-host-publication-once.mjs") };
+}
 
 test("actual observer cooperatively cancels waiting admission and reaps its active detached adapter within eleven seconds", { timeout: 15000 }, async () => {
-  const directory = hostPublicationDirectory;
-  // The exact CLI owns this fixed private handoff. Never use or clean an existing directory.
-  assert.equal(existsSync(directory), false);
   for (const active of [false, true]) {
     const root = mkdtempSync(join(tmpdir(), "host-observer-cancel-")); let observer; let adapterPid; let owned = false;
+    const { directory, entrypoint } = isolatedObserver(root);
     const adapter = { script: `exec node -e 'require("node:fs").writeFileSync("adapter.pid",String(process.pid));process.on("SIGTERM",()=>{});setInterval(()=>{},1000)'`,
       backendStopProtocol: "timeout7-kill025-process-group", terminationProbeSha256: "e".repeat(64) };
     const path = join(root, "adapter.json"); writeFileSync(path, JSON.stringify(adapter), { mode: 0o600 });
@@ -22,7 +33,7 @@ test("actual observer cooperatively cancels waiting admission and reaps its acti
     const wait = async predicate => { const until = Date.now() + 2500; while (!predicate()) {
       assert.ok(Date.now() < until, "owned fixture handshake deadline"); await new Promise(done => setTimeout(done, 10)); } };
     try {
-      observer = spawn(process.execPath, [new URL("../observe-host-publication-once.mjs", import.meta.url).pathname, path, digest, candidate, runId],
+      observer = spawn(process.execPath, [entrypoint, path, digest, candidate, runId],
         { cwd: root, detached: true, env: { PATH: `${dirname(process.execPath)}:/usr/bin:/bin` }, stdio: ["ignore", "pipe", "pipe"] });
       const completion = new Promise(resolve => observer.once("close", (code, signal) => resolve({ code, signal })));
       let output = ""; for (const pipe of [observer.stdout, observer.stderr]) pipe.on("data", bytes => { output += bytes; assert.ok(output.length <= 2048); });
@@ -30,12 +41,17 @@ test("actual observer cooperatively cancels waiting admission and reaps its acti
       const ready = JSON.parse(readFileSync(join(directory, "ready.json"))); owned = ready.candidate === candidate && ready.runId === runId;
       assert.equal(owned, true); assert.equal(lstatSync(directory).mode & 0o777, 0o700);
       const request = { candidate, runId, nonce: ready.nonce, token: "a".repeat(32), owner: "hc-0123456789abcdef",
-        containerId: "a".repeat(64), networkId: "b".repeat(64), endpointId: "c".repeat(64), gateway: "172.28.0.1", address: "172.28.0.2", deadlineMs: Date.now() + 12000 };
+        containerId: "a".repeat(64), networkId: "b".repeat(64), endpointId: "c".repeat(64), gateway: "172.28.0.1", publicationAddress: "127.0.0.1", address: "172.28.0.2", deadlineMs: Date.now() + 12000 };
       if (active) { writeFileSync(join(directory, "request.json"), JSON.stringify(request), { mode: 0o600 });
         await wait(() => existsSync(join(root, "adapter.pid"))); adapterPid = Number(readFileSync(join(root, "adapter.pid"))); }
       const cancelledAt = Date.now(); process.kill(-observer.pid, "SIGTERM");
       if (active) { await new Promise(done => setTimeout(done, 25)); process.kill(-observer.pid, "SIGTERM"); }
-      if (!active) writeFileSync(join(directory, "request.json"), JSON.stringify(request), { mode: 0o600 });
+      if (!active) {
+        // Signal delivery is asynchronous. Publish the late request only after
+        // the observer has reported that cancellation closed waiting admission.
+        await wait(() => /observer-cancelled/.test(output));
+        writeFileSync(join(directory, "request.json"), JSON.stringify(request), { mode: 0o600 });
+      }
       const forced = setTimeout(() => process.kill(-observer.pid, "SIGKILL"), 11000);
       let result; try { result = await completion; } finally { clearTimeout(forced); }
       assert.deepEqual(result, { code: 0, signal: null }); assert.ok(Date.now() - cancelledAt < 11000);

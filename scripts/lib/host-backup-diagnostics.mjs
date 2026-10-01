@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, openSync, readSync, realpathSync } from "node:fs";
 import { isIP } from "node:net";
 import { isAbsolute } from "node:path";
+import { hostBackupStartCommand } from "./host-backup-service.mjs";
 
 // Identity is measured through one descriptor, with a finite byte budget. No
 // private path, environment, Docker configuration or raw command output leaves.
@@ -56,14 +57,14 @@ export function backupInvocationReceipt(args, contract, owner, name) {
     || typeof contract.image !== "string" || !contract.image || contract.image.length > 256
     || ![contract.envFile, contract.certs].every(value => typeof value === "string" && isAbsolute(value))) return { category: "contract-invalid" };
   const expected = ["run", "--name", name, "--label", `io.myskills.host-rehearsal=${owner}`, "-d", "--label", "io.myskills.host-rehearsal.role=backup",
-    "--network", contract.network, "--publish", `${contract.gateway}::9000`, "--env-file", contract.envFile,
-    "--mount", `type=bind,source=${contract.certs},target=/certs,readonly`, contract.image, "server", "/data", "--certs-dir", "/certs"];
+    "--network", contract.network, "--publish", "127.0.0.1::9000", "--env-file", contract.envFile,
+    "--mount", `type=bind,source=${contract.certs},target=/certs,readonly`, "--entrypoint", "/bin/sh", contract.image, "-ec", hostBackupStartCommand];
   const same = (start, end) => args.slice(start, end).every((value, index) => value === expected[start + index]) && args.slice(start, end).length === end - start;
   const publishCount = args.filter(value => typeof value === "string" && (value === "--publish" || value === "-p" || value.startsWith("--publish=") || /^-p.+/.test(value))).length;
   const vectorMatches = args.length === expected.length && same(0, expected.length);
   return { category: vectorMatches ? "matched" : "mismatch", vectorMatches,
     ownershipMatches: same(0, 8) && typeof name === "string" && name.startsWith(`${owner}-op-`) && /^[1-9][0-9]*$/.test(name.slice(`${owner}-op-`.length)),
     networkMatches: same(8, 10), publishCount: Math.min(publishCount, 8), publishMatches: publishCount === 1 && same(10, 12),
-    envFileMatches: same(12, 14), mountMatches: same(14, 16), imagePositionMatches: same(16, 17) && args.length === expected.length,
-    tailMatches: same(17, expected.length) && args.length === expected.length };
+    envFileMatches: same(12, 14), mountMatches: same(14, 16), entrypointMatches: same(16, 18), imagePositionMatches: same(18, 19) && args.length === expected.length,
+    tailMatches: same(19, expected.length) && args.length === expected.length };
 }

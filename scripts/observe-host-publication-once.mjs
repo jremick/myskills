@@ -31,6 +31,7 @@ try {
   if (cancelled) throw new Error("cancelled");
   if (!request || request.candidate !== candidate || request.runId !== runId || request.nonce !== nonce || !/^[a-f0-9]{32}$/.test(request.token) || !/^hc-[a-f0-9]{16}$/.test(request.owner)
     || ![request.containerId, request.networkId, request.endpointId].every(value => /^[a-f0-9]{64}$/.test(value))
+    || request.publicationAddress !== "127.0.0.1"
     || ![request.gateway, request.address].every(value => /^(?:\d{1,3}\.){3}\d{1,3}$/.test(value))
     || !Number.isSafeInteger(request.deadlineMs) || request.deadlineMs <= Date.now()) throw new Error("request");
   token = request.token;
@@ -49,7 +50,7 @@ try {
         Object.assign(observation, Object.fromEntries(["category", "bridgeAddress", "forwarding", "listener"].map(key => [key, value[key]])));
         if (value.category === "observed" && value.forwarding === "present" && /^[1-9][0-9]{0,4}$/.test(value.observedPort ?? "") && Number(value.observedPort) <= 65535) {
           observation.observedPort = value.observedPort;
-          observation.ubuntuTls = await observerTls({ gateway: request.gateway, port: value.observedPort, publicCertificate: request.publicCertificate,
+          observation.ubuntuTls = await observerTls({ gateway: request.publicationAddress, port: value.observedPort, publicCertificate: request.publicCertificate,
             maximumMs: Math.min(2000, request.deadlineMs - Date.now()) });
         }
       }

@@ -53,24 +53,30 @@ On failure the fixture atomically writes one private request, waits at most
 the exact owned container again. The post-inspection and optional one
 `docker port <owned-id> 9000/tcp` comparison use forced SIGKILL timeouts;
 comparison exports only empty/matches-observed/other/unavailable. The backend reads the actual bridge address,
-the single NAT rule targeting that owned IPv4/TCP9000 and its corresponding
-listener. It bounds each command to 2 seconds and raw intermediate output to
-32KiB. Only present/absent/unavailable leave the backend. The existing API
+the single NAT rule from the fixed `127.0.0.1` publication address to that
+owned IPv4/TCP9000 and its corresponding loopback listener. The private request
+separates `gateway` from `publicationAddress`; any publication address other than
+`127.0.0.1` is rejected. The adapter still receives gateway and container address,
+and the backend uses the same fixed loopback publication contract. It bounds
+each command to 2 seconds and raw intermediate output to 32KiB. Only present/absent/unavailable leave the backend. The existing API
 binding/continuity receipt remains alongside this observation. The timing bound
-is 15 seconds for observation, followed by up to two 10-second consistency
-reads, each with forced SIGKILL, before normal cleanup.
+includes up to 10 seconds to prepare the fixture certificate and open its startup
+gate when the owned endpoint is valid, then 15 seconds for observation, followed
+by up to two 10-second consistency reads, each with forced SIGKILL, before normal cleanup.
 
 A matching NAT rule supplies a private observed port, not proof of working
 publication. The observer uses that port and only the fixture public CA for one
-native Ubuntu HTTPS GET to `/minio/health/ready`, with no proxy, redirect, retry
+native Ubuntu loopback HTTPS GET to `/minio/health/ready`, with no proxy, redirect, retry
 or response-body export and a two-second deadline. That finishes before the
 handoff response. Backend TLS is explicitly unavailable: no CA-capable client
 has been proved there, and no installation is part of this work.
 
 API bindings empty plus an exact rule and Ubuntu CA-verified health success
 narrows the API/reporting boundary. A matching rule without verified health is
-only forwarding evidence. No matching rule on the verified bridge narrows the
-publication boundary; listener absence alone is inconclusive. Keep the original
-failure in every case. No independently observed port substitutes for HOST
+only forwarding evidence. No matching rule establishes only absence in the
+verified Linux Engine namespace.
+Docker Desktop may forward published ports through its native host backend,
+which this observer does not inspect. Listener absence alone is inconclusive.
+Keep the original failure in every case. No independently observed port substitutes for HOST
 acceptance. The controller still owns full verification and cleanup; this
 observer never removes Docker objects.

@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
+import { request as httpsRequest } from "node:https";
 import { arch, platform } from "node:os";
 import { join, resolve } from "node:path";
 import { createSelfHostBundle } from "./lib/self-host-release.mjs";
@@ -80,6 +81,24 @@ async function ready(url) {
     await new Promise((done) => setTimeout(done, 500));
   }
   throw new Error("readiness-deadline");
+}
+// Native Ubuntu must use the published loopback endpoint and this fixture CA.
+async function readyBackupPublication(url, ca) {
+  const until = Date.now() + 30_000;
+  while (Date.now() < until) {
+    const ready = await new Promise(done => {
+      let settled = false;
+      const finish = value => { if (!settled) { settled = true; clearTimeout(timer); done(value); } };
+      const request = httpsRequest(new URL("/minio/health/ready", url), { ca, rejectUnauthorized: true, agent: false }, response => {
+        response.destroy(); finish(response.statusCode === 200);
+      });
+      const timer = setTimeout(() => { request.destroy(); finish(false); }, Math.min(2000, until - Date.now()));
+      request.once("error", () => finish(false)); request.end();
+    });
+    if (ready) return;
+    await new Promise(done => setTimeout(done, Math.min(250, Math.max(0, until - Date.now()))));
+  }
+  throw new Error("backup-publication-readiness-deadline");
 }
 function inspect(image, role, check) {
   return inspectHostPlatformImage(docker, image, role, check);
@@ -210,6 +229,7 @@ try {
       reserve, mark, docker, call, runService, publicationObserver: context => observeHostPublication({ ...context, candidate, runId }) });
   });
   const { network } = backupService;
+  await measured("backup-publication-tls", async () => readyBackupPublication(backupService.hostEndpoint, readFileSync(join(proof, "certs/public.crt"))));
   // Trust is scoped to this immutable fixture image; HTTPS validation remains on.
   const opsImage = await measured("backup-trust", async () => {
     writeFileSync(join(proof, "Dockerfile.trust"), `FROM myskills-ops:local-ci-${runId}\nCOPY --chmod=0444 certs/public.crt /fixture-ca.pem\nENV NODE_EXTRA_CA_CERTS=/fixture-ca.pem\n`);
@@ -225,6 +245,9 @@ try {
   const inputFile = join(proof, "images.json"); jsonFile(inputFile, { schemaVersion: 1, source, images });
   const bundle = join(proof, "candidate"); createSelfHostBundle({ root, inputFile, outputDir: bundle });
   const bucket = `${owner}-backups`;
+  // Bucket admin and recovery run with Docker host networking. Coordinated OPS
+  // shares source MinIO networking, attached to this same owned backup bridge.
+  // Both use its direct IP; published host loopback is a different namespace.
   const backupBase = { MYSKILLS_RECOVERY_BACKUP_S3_ENDPOINT: backupService.endpoint, MYSKILLS_RECOVERY_BACKUP_S3_REGION: "local",
     MYSKILLS_RECOVERY_BACKUP_S3_BUCKET: bucket, MYSKILLS_RECOVERY_BACKUP_S3_ACCESS_KEY_ID: backupUser, MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY: backupPassword,
     MYSKILLS_RECOVERY_BACKUP_S3_FORCE_PATH_STYLE: "true" };

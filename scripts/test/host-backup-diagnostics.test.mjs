@@ -9,6 +9,7 @@ import { cleanupHostLedger, hostDocker, saveHostLedger } from "../lib/host-rehea
 import { assertHostCommandSucceeded } from "../lib/host-backup-service.mjs";
 
 const owner = "hc-0123456789abcdef";
+const hostBackupStartCommand = 'attempts=0; while [ ! -f /certs/ready ]; do [ "$attempts" -lt 300 ] || exit 1; attempts=$((attempts + 1)); sleep 0.1; done; if [ ! -s /certs/private.key ] || [ ! -s /certs/public.crt ]; then exit 1; fi; exec /usr/local/bin/minio server /data --certs-dir /certs';
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), "host-dispatch-private-")); t.after(() => rmSync(root, { recursive: true, force: true }));
   const executable = join(root, "docker"), ledger = join(root, "ledger.json"), dispatched = join(root, "dispatch.json");
@@ -16,8 +17,8 @@ function fixture(t) {
     envFile: join(root, "private.env"), certs: join(root, "private-certs") };
   writeFileSync(contract.envFile, "SYNTHETIC_HOST_CONTROL=true\n", { mode: 0o600 });
   const args = ["run", "--rm", "--rm=true", "-d", "--label", "io.myskills.host-rehearsal.role=backup", "--network", contract.network,
-    "--publish", `${contract.gateway}::9000`, "--env-file", contract.envFile, "--mount", `type=bind,source=${contract.certs},target=/certs,readonly`,
-    contract.image, "server", "/data", "--certs-dir", "/certs"];
+    "--publish", "127.0.0.1::9000", "--env-file", contract.envFile, "--mount", `type=bind,source=${contract.certs},target=/certs,readonly`,
+    "--entrypoint", "/bin/sh", contract.image, "-ec", hostBackupStartCommand];
   saveHostLedger(ledger, { schemaVersion: 1, owner, sequence: 0, resources: [] });
   writeFileSync(executable, `#!${process.execPath}
 const fs=require('node:fs'),a=process.argv.slice(2);
@@ -46,6 +47,7 @@ test("receipt detects each contract mismatch without changing dispatch, parsing 
     ["duplicate publication", args => { args.splice(args.indexOf("--publish"), 0, "--publish", "secret.invalid::9000"); }, "publishMatches"],
     ["image position", args => { args.splice(args.indexOf("fixture-minio"), 0, "--env", "PASSWORD=secret-password"); }, "imagePositionMatches"],
     ["mount", args => { args[args.indexOf("--mount") + 1] = "type=bind,source=/secret/path,target=/certs"; }, "mountMatches"],
+    ["entrypoint", args => { args[args.indexOf("--entrypoint") + 1] = "/secret/path"; }, "entrypointMatches"],
     ["tail", args => { args[args.length - 1] = "/secret/path"; }, "tailMatches"],
     ["role", args => { args[args.indexOf("--label") + 1] = "io.myskills.host-rehearsal.role=driver"; }, "ownershipMatches"],
   ];

@@ -134,7 +134,7 @@
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 621
+            "line": 632
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -264,7 +264,7 @@
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 621
+            "line": 632
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -329,7 +329,7 @@
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 621
+            "line": 632
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -394,7 +394,7 @@
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 674
+            "line": 685
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -459,7 +459,7 @@
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 125
+            "line": 136
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -524,7 +524,7 @@
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 74
+            "line": 82
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -589,7 +589,7 @@
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 74
+            "line": 82
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -654,7 +654,7 @@
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 74
+            "line": 82
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -719,7 +719,7 @@
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 74
+            "line": 82
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -784,7 +784,7 @@
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 100
+            "line": 111
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -849,7 +849,7 @@
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 74
+            "line": 82
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -914,7 +914,7 @@
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 400
+            "line": 411
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -975,11 +975,11 @@
         "sources": [
           {
             "path": "docs/ROADMAP.md",
-            "line": 61
+            "line": 69
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 100
+            "line": 111
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -1040,11 +1040,11 @@
         "sources": [
           {
             "path": "docs/ROADMAP.md",
-            "line": 68
+            "line": 76
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 535
+            "line": 546
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -1964,11 +1964,11 @@
         "sources": [
           {
             "path": "docs/ROADMAP.md",
-            "line": 165
+            "line": 176
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 159
+            "line": 170
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -2930,7 +2930,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 290
+            "line": 324
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -2946,13 +2946,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 35,
+            "line": 36,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 49,
+            "line": 50,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -3031,7 +3031,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 290
+            "line": 324
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -3047,13 +3047,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 256,
+            "line": 279,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 283,
+            "line": 288,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -3603,7 +3603,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 290
+            "line": 324
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -3619,13 +3619,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 256,
+            "line": 279,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 283,
+            "line": 288,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -3789,7 +3789,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 35,
+            "line": 36,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -4323,11 +4323,11 @@
         "sources": [
           {
             "path": "docs/ROADMAP.md",
-            "line": 220
+            "line": 231
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 621
+            "line": 632
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -8150,7 +8150,7 @@
         "sources": [
           {
             "path": "docs/ROADMAP.md",
-            "line": 323
+            "line": 334
           },
           {
             "path": "docs/ROADMAP.md",
@@ -8222,11 +8222,11 @@
         "sources": [
           {
             "path": "docs/ROADMAP.md",
-            "line": 325
+            "line": 336
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 400
+            "line": 411
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -8557,7 +8557,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 290
+            "line": 324
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -8573,13 +8573,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 290,
+            "line": 313,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 49,
+            "line": 50,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -10388,7 +10388,7 @@
         "sources": [
           {
             "path": "docs/ROADMAP.md",
-            "line": 391
+            "line": 402
           },
           {
             "path": "apps/mcp/src/server.ts",
@@ -10478,7 +10478,7 @@
         "sources": [
           {
             "path": "docs/ROADMAP.md",
-            "line": 392
+            "line": 403
           },
           {
             "path": "apps/mcp/src/server.ts",
@@ -13060,7 +13060,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 290
+            "line": 324
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -13076,13 +13076,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 35,
+            "line": 36,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 283,
+            "line": 288,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -13297,7 +13297,7 @@
         "sources": [
           {
             "path": "docs/RELEASE.md",
-            "line": 309
+            "line": 324
           },
           {
             "path": "docs/SECURITY_MODEL.md",
@@ -13693,7 +13693,7 @@
         "sources": [
           {
             "path": "docs/ROADMAP.md",
-            "line": 600
+            "line": 611
           },
           {
             "path": "docs/ROADMAP.md",
@@ -13765,7 +13765,7 @@
         "sources": [
           {
             "path": "docs/ROADMAP.md",
-            "line": 606
+            "line": 617
           },
           {
             "path": "docs/ROADMAP.md",
@@ -13942,7 +13942,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 290
+            "line": 324
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -13958,13 +13958,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 141,
+            "line": 160,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 283,
+            "line": 288,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -14344,7 +14344,7 @@
         "sources": [
           {
             "path": "docs/RELEASE.md",
-            "line": 33
+            "line": 48
           },
           {
             "path": "docs/SECURITY_MODEL.md",
@@ -14422,7 +14422,7 @@
         "sources": [
           {
             "path": "docs/ROADMAP.md",
-            "line": 614
+            "line": 625
           },
           {
             "path": "docs/ROADMAP.md",
@@ -14496,7 +14496,7 @@
         "sources": [
           {
             "path": "docs/ROADMAP.md",
-            "line": 615
+            "line": 626
           },
           {
             "path": "docs/ROADMAP.md",
@@ -14570,7 +14570,7 @@
         "sources": [
           {
             "path": "docs/ROADMAP.md",
-            "line": 616
+            "line": 627
           },
           {
             "path": "docs/ROADMAP.md",
@@ -14644,11 +14644,11 @@
         "sources": [
           {
             "path": "docs/ROADMAP.md",
-            "line": 617
+            "line": 628
           },
           {
             "path": "docs/ROADMAP.md",
-            "line": 535
+            "line": 546
           },
           {
             "path": "docs/BETA18_RELEASE_DELIVERY.md",
@@ -14718,7 +14718,7 @@
         "sources": [
           {
             "path": "docs/RELEASE.md",
-            "line": 301
+            "line": 316
           },
           {
             "path": "docs/SECURITY_MODEL.md",
@@ -14798,7 +14798,7 @@
         "sources": [
           {
             "path": "docs/RELEASE.md",
-            "line": 301
+            "line": 316
           },
           {
             "path": "docs/SECURITY_MODEL.md",
@@ -15408,7 +15408,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 35,
+            "line": 36,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -15461,7 +15461,7 @@
         "sources": [
           {
             "path": "docs/RELEASE.md",
-            "line": 69
+            "line": 84
           },
           {
             "path": "docs/SECURITY_MODEL.md",
@@ -15575,7 +15575,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 147
+            "line": 149
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -15591,13 +15591,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 256,
+            "line": 279,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 49,
+            "line": 50,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -15879,7 +15879,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 141,
+            "line": 160,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -15930,7 +15930,7 @@
         "sources": [
           {
             "path": "docs/ROADMAP.md",
-            "line": 654
+            "line": 665
           },
           {
             "path": "docs/ROADMAP.md",
@@ -16015,7 +16015,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 143
+            "line": 145
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -16031,13 +16031,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 290,
+            "line": 313,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 49,
+            "line": 50,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18531,7 +18531,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 290
+            "line": 324
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18547,13 +18547,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 35,
+            "line": 36,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 49,
+            "line": 50,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18644,7 +18644,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 290
+            "line": 324
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18660,13 +18660,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 141,
+            "line": 160,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 49,
+            "line": 50,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18757,7 +18757,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 157
+            "line": 190
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18773,13 +18773,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 35,
+            "line": 36,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 73,
+            "line": 77,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18870,7 +18870,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 155
+            "line": 187
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18886,13 +18886,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 290,
+            "line": 313,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 49,
+            "line": 50,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18983,7 +18983,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 157
+            "line": 190
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18999,13 +18999,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 141,
+            "line": 160,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 49,
+            "line": 50,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -19096,7 +19096,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 143
+            "line": 145
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -19112,13 +19112,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 35,
+            "line": 36,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 49,
+            "line": 50,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -19209,7 +19209,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 155
+            "line": 187
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -19225,13 +19225,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 290,
+            "line": 313,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 49,
+            "line": 50,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -20867,7 +20867,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 290
+            "line": 324
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -20883,13 +20883,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 256,
+            "line": 279,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 49,
+            "line": 50,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -21491,7 +21491,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 35,
+            "line": 36,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -23097,7 +23097,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 35,
+            "line": 36,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -23168,7 +23168,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 35,
+            "line": 36,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -23369,7 +23369,7 @@
         "sources": [
           {
             "path": "docs/RELEASE.md",
-            "line": 33
+            "line": 48
           },
           {
             "path": "docs/SECURITY_MODEL.md",
@@ -23472,7 +23472,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 290
+            "line": 324
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -23488,13 +23488,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 35,
+            "line": 36,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 49,
+            "line": 50,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -23926,7 +23926,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 147
+            "line": 149
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -23942,13 +23942,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 256,
+            "line": 279,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 49,
+            "line": 50,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -24192,7 +24192,7 @@
         "sources": [
           {
             "path": "docs/RELEASE.md",
-            "line": 49
+            "line": 64
           },
           {
             "path": "docs/SECURITY_MODEL.md",
@@ -29929,7 +29929,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 141,
+            "line": 160,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }

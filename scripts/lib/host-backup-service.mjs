@@ -12,6 +12,8 @@ const metadataShape = value => value === undefined ? "missing" : value === null 
 const metadataMapCount = value => isRecord(value) ? Math.min(Object.keys(value).length, 8) : null;
 const gatewayModeOption = "com.docker.network.bridge.gateway_mode_ipv4";
 const inhibitIPv4Option = "com.docker.network.bridge.inhibit_ipv4";
+const publicationAddress = "127.0.0.1";
+export const hostBackupStartCommand = 'attempts=0; while [ ! -f /certs/ready ]; do [ "$attempts" -lt 300 ] || exit 1; attempts=$((attempts + 1)); sleep 0.1; done; if [ ! -s /certs/private.key ] || [ ! -s /certs/public.crt ]; then exit 1; fi; exec /usr/local/bin/minio server /data --certs-dir /certs';
 function portMetadata(container, network, gateway) {
   const exposed = container.Config?.ExposedPorts, requested = container.HostConfig?.PortBindings, runtime = container.NetworkSettings?.Ports;
   const bindings = runtime?.["9000/tcp"], mode = container.HostConfig?.NetworkMode;
@@ -31,7 +33,7 @@ function portMetadata(container, network, gateway) {
     requestedMapShape: metadataShape(requested), requestedPortCount: metadataMapCount(requested), requestedBindingsShape: metadataShape(requested?.["9000/tcp"]),
     requestedBindingCount: Array.isArray(requested?.["9000/tcp"]) ? Math.min(requested["9000/tcp"].length, 8) : null,
     requestedObjectCount: requestedRows.filter(isRecord).length,
-    requestedGatewayMatchCount: requestedRows.filter(row => isRecord(row) && row.HostIp === gateway).length,
+    requestedPublicationMatchCount: requestedRows.filter(row => isRecord(row) && row.HostIp === publicationAddress).length,
     requestedHostPortCategory: !Array.isArray(request) ? "unavailable" : request.length === 0 ? "no-rows" : request.length !== 1 ? "multiple-rows"
       : !isRecord(request[0]) ? "invalid-row" : hostPort === "" ? "expected-empty" : hostPort === undefined ? "missing" : validPort(hostPort) ? "assigned" : "invalid",
     publishAllPortsCategory: container.HostConfig?.PublishAllPorts === false ? "disabled" : container.HostConfig?.PublishAllPorts === true ? "enabled"
@@ -41,7 +43,7 @@ function portMetadata(container, network, gateway) {
     runtimeMapShape: metadataShape(runtime), runtimePortCount: metadataMapCount(runtime), runtimeBindingsShape: metadataShape(bindings),
     runtimeBindingCount: Array.isArray(bindings) ? Math.min(bindings.length, 8) : null,
     runtimeObjectCount: rows.filter(isRecord).length,
-    runtimeGatewayMatchCount: rows.filter(row => isRecord(row) && row.HostIp === gateway).length,
+    runtimePublicationMatchCount: rows.filter(row => isRecord(row) && row.HostIp === publicationAddress).length,
     runtimeValidPortCount: rows.filter(row => isRecord(row) && validPort(row.HostPort)).length };
 }
 function invalidBackupNetwork(stage, reason, container, metadata) {
@@ -139,26 +141,23 @@ function bindingConsistency(docker, network, owner, selected, id, initial) {
   return evidence;
 }
 
-/** One TLS-valid gateway endpoint serves the host driver, bridge and recovery. */
+/** Separate loopback publication and owned direct-IP TLS serve their actual namespaces. */
 export function prepareHostBackupService({ proof, owner, image, user, password, reserve, mark, docker, call, runService, publicationObserver }) {
   assert.match(owner, /^hc-[a-f0-9]{16}$/);
   assert.ok([user, password].every(value => typeof value === "string" && !/[\r\n\0]/.test(value)));
   const network = `${owner}-backup-network`;
   reserve("network", network);
   // Own these publication prerequisites rather than relying on daemon defaults.
-  // The daemon still assigns IPAM and the real port, bound only to this gateway.
+  // The daemon assigns IPAM and the port. Desktop publication uses host loopback.
   docker(["network", "create", "--driver", "bridge", "--internal=false", "--ipv4=true",
     "--opt", `${gatewayModeOption}=nat`, "--opt", `${inhibitIPv4Option}=false`, "--label", `io.myskills.host-rehearsal=${owner}`, network]);
   mark("network", network);
   const selected = ownedGateway(docker(["network", "inspect", network]), network, owner, "initial-network");
   const certs = join(proof, "certs"); mkdirSync(certs, { mode: 0o700 });
-  call("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-keyout", join(certs, "private.key"),
-    "-out", join(certs, "public.crt"), "-subj", "/CN=MySkills disposable backup", "-addext", `subjectAltName=IP:${selected.gateway}`]);
-  chmodSync(join(certs, "private.key"), 0o600);
   // Docker's env-file preserves literal dollars; never export these values in diagnostics.
   writeFileSync(join(proof, "backup-minio.env"), `MINIO_ROOT_USER=${user}\nMINIO_ROOT_PASSWORD=${password}\n`, { mode: 0o600 });
-  const id = runService("backup", ["--network", network, "--publish", `${selected.gateway}::9000`, "--env-file", join(proof, "backup-minio.env"),
-    "--mount", `type=bind,source=${certs},target=/certs,readonly`], image, ["server", "/data", "--certs-dir", "/certs"],
+  const id = runService("backup", ["--network", network, "--publish", `${publicationAddress}::9000`, "--env-file", join(proof, "backup-minio.env"),
+    "--mount", `type=bind,source=${certs},target=/certs,readonly`, "--entrypoint", "/bin/sh"], image, ["-ec", hostBackupStartCommand],
     { owner, network, gateway: selected.gateway, image, envFile: join(proof, "backup-minio.env"), certs });
   if (!/^[a-f0-9]{64}$/.test(id ?? "")) return invalidBackupNetwork("container-create", "container-id-invalid");
   // Read back the exact daemon-assigned port and owner; never infer an endpoint.
@@ -173,11 +172,35 @@ export function prepareHostBackupService({ proof, owner, image, user, password, 
   if (container.State.Running !== true || container.State.Paused !== false || container.State.Restarting !== false) return invalidBackupNetwork(stage, "container-state-inconsistent", container);
   if (container.NetworkSettings?.Networks?.[network]?.NetworkID !== selected.networkId) return invalidBackupNetwork(stage, "container-network-mismatch", container);
   const ports = container?.NetworkSettings?.Ports?.["9000/tcp"];
+  const directEndpoint = () => {
+    const networks = container.NetworkSettings?.Networks, endpoint = networks?.[network];
+    const address = endpoint?.IPAddress, prefix = Number(selected.subnet.split("/")[1]);
+    const block = 2 ** (32 - prefix), start = Math.floor(ipv4Number(selected.gateway) / block) * block;
+    if (!isRecord(networks) || Object.keys(networks).length !== 1 || container.HostConfig?.NetworkMode !== network
+      || endpoint?.Gateway !== selected.gateway || !/^[a-f0-9]{64}$/.test(endpoint?.EndpointID ?? "")
+      || typeof address !== "string" || isIP(address) !== 4 || address === selected.gateway
+      || ipv4Number(address) <= start || ipv4Number(address) >= start + block - 1) return invalidBackupNetwork(stage, "container-endpoint-invalid", container);
+    return address;
+  };
+  const certificate = () => {
+    const address = directEndpoint();
+    call("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-keyout", join(certs, "private.key"),
+      "-out", join(certs, "public.crt"), "-subj", "/CN=MySkills disposable backup", "-addext", `subjectAltName=IP:${publicationAddress},IP:${address}`],
+      { timeout: 10_000, maxBuffer: 16 * 1024, killSignal: "SIGKILL" });
+    chmodSync(join(certs, "private.key"), 0o600);
+    return address;
+  };
+  const release = () => {
+    const temporary = join(certs, "ready.tmp"); writeFileSync(temporary, "ready\n", { flag: "wx", mode: 0o600 }); renameSync(temporary, join(certs, "ready"));
+  };
   const failBinding = (reason, metadata) => {
     try { invalidBackupNetwork(stage, reason, container, metadata); }
     catch (primary) {
       if (publicationObserver) {
-        try { primary.hostFailure.livePublication = publicationObserver({ docker, network, owner, selected, id, container, publicCertificate: hostPublicCertificate(join(certs, "public.crt")) }); }
+        // A valid owned endpoint can start TLS for failure-only observation. The
+        // original publication rejection remains authoritative even if TLS works.
+        try { certificate(); release(); } catch { /* observation may remain unavailable */ }
+        try { primary.hostFailure.livePublication = publicationObserver({ docker, network, owner, selected, id, container, publicationAddress, publicCertificate: hostPublicCertificate(join(certs, "public.crt")) }); }
         catch { primary.hostFailure.livePublication = { category: "capture-failed" }; }
       }
       try { primary.hostFailure.bindingConsistency = bindingConsistency(docker, network, owner, selected, id, container); }
@@ -186,12 +209,23 @@ export function prepareHostBackupService({ proof, owner, image, user, password, 
     }
   };
   if (!Array.isArray(ports) || ports.length !== 1 || !isRecord(ports[0])) return failBinding("published-port-shape-invalid", portMetadata(container, network, selected.gateway));
-  if (ports[0].HostIp !== selected.gateway) return failBinding("published-port-address-mismatch");
+  if (ports[0].HostIp !== publicationAddress) return failBinding("published-port-address-mismatch");
   if (!validPort(ports[0].HostPort)) return failBinding("published-port-number-invalid");
+  const address = certificate();
   const current = ownedGateway(docker(["network", "inspect", network]), network, owner, "network-recheck");
   if (current.networkId !== selected.networkId) return invalidBackupNetwork("network-recheck", "network-id-changed");
   if (current.gateway !== selected.gateway) return invalidBackupNetwork("network-recheck", "network-gateway-changed");
-  return { network, gateway: selected.gateway, port: Number(ports[0].HostPort), endpoint: `https://${selected.gateway}:${ports[0].HostPort}` };
+  const checked = inspection(docker(["container", "inspect", id], { timeout: 10_000, maxBuffer: 128 * 1024, killSignal: "SIGKILL" }), "container-recheck");
+  const endpoint = container.NetworkSettings.Networks[network], actual = checked.NetworkSettings?.Networks?.[network];
+  if (checked.Id !== id || checked.Config?.Labels?.["io.myskills.host-rehearsal"] !== owner || checked.Config?.Labels?.["io.myskills.host-rehearsal.role"] !== "backup"
+    || checked.State?.Status !== "running" || checked.State.Running !== true || checked.State.Paused !== false || checked.State.Restarting !== false
+    || checked.RestartCount !== container.RestartCount || checked.State.StartedAt !== container.State.StartedAt
+    || !isRecord(checked.NetworkSettings?.Networks) || Object.keys(checked.NetworkSettings.Networks).length !== 1
+    || ["NetworkID", "EndpointID", "IPAddress", "Gateway"].some(key => actual?.[key] !== endpoint[key])
+    || JSON.stringify(checked.NetworkSettings?.Ports?.["9000/tcp"]) !== JSON.stringify(ports)) return invalidBackupNetwork("container-recheck", "container-identity-changed", checked);
+  release();
+  return { network, gateway: selected.gateway, address, publicationAddress, port: Number(ports[0].HostPort),
+    endpoint: `https://${address}:9000`, hostEndpoint: `https://${publicationAddress}:${ports[0].HostPort}` };
 }
 
 // Internal fixture handoff only. An already prepared observer gets one live
@@ -217,7 +251,7 @@ function hostPublicCertificate(path) {
     return value;
   } finally { closeSync(fd); }
 }
-export function observeHostPublication({ docker, network, owner, selected, id, container, candidate, runId, publicCertificate },
+export function observeHostPublication({ docker, network, owner, selected, id, container, candidate, runId, publicCertificate, publicationAddress },
   { directory = hostPublicationDirectory, maximumMs = 15000, now = Date.now, wait = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms) } = {}) {
   const until = now() + Math.min(15000, maximumMs); let requestPath;
   try {
@@ -228,7 +262,7 @@ export function observeHostPublication({ docker, network, owner, selected, id, c
       || ready.candidate !== candidate || ready.runId !== runId || ready.schemaVersion !== 1 || !/^[a-f0-9]{32}$/.test(ready.nonce) || !Number.isSafeInteger(ready.expiresAtMs)
       || ready.expiresAtMs <= now() || ready.expiresAtMs > now() + 7200000) return { category: "observer-not-ready" };
     const endpoint = container.NetworkSettings?.Networks?.[network];
-    if (!/^hc-[a-f0-9]{16}$/.test(owner) || !/^[a-f0-9]{64}$/.test(id) || container.Id !== id
+    if (publicationAddress !== "127.0.0.1" || !/^hc-[a-f0-9]{16}$/.test(owner) || !/^[a-f0-9]{64}$/.test(id) || container.Id !== id
       || container.Config?.Labels?.["io.myskills.host-rehearsal"] !== owner || container.Config?.Labels?.["io.myskills.host-rehearsal.role"] !== "backup"
       || !/^[a-f0-9]{64}$/.test(endpoint?.EndpointID ?? "") || endpoint.NetworkID !== selected.networkId
       || endpoint.Gateway !== selected.gateway || isIP(endpoint.IPAddress) !== 4 || endpoint.IPAddress === selected.gateway
@@ -237,7 +271,7 @@ export function observeHostPublication({ docker, network, owner, selected, id, c
     const token = randomBytes(16).toString("hex"); requestPath = join(directory, "request.json");
     // No Env, mounts, credentials, names or source data. Addresses stay private.
     const request = { schemaVersion: 1, candidate, runId, nonce: ready.nonce, token, owner, containerId: id, networkId: selected.networkId,
-      endpointId: endpoint.EndpointID, gateway: selected.gateway, address: endpoint.IPAddress, publicCertificate, deadlineMs: until - 3000 };
+      endpointId: endpoint.EndpointID, gateway: selected.gateway, publicationAddress, address: endpoint.IPAddress, publicCertificate, deadlineMs: until - 3000 };
     const temporary = join(directory, `${token}.tmp`);
     writeFileSync(temporary, JSON.stringify(request), { flag: "wx", mode: 0o600 }); renameSync(temporary, requestPath);
     let result;
@@ -261,7 +295,7 @@ export function observeHostPublication({ docker, network, owner, selected, id, c
       if (!published.error && !published.signal && published.status === 0 && typeof published.stdout === "string" && Buffer.byteLength(published.stdout) <= 2048) {
         const output = published.stdout.trim();
         dockerPort = !output ? "empty" : /^[1-9][0-9]{0,4}$/.test(result.observedPort ?? "") && Number(result.observedPort) <= 65535
-          && output === `${selected.gateway}:${result.observedPort}` ? "matches-observed" : "other";
+          && output === `${publicationAddress}:${result.observedPort}` ? "matches-observed" : "other";
       }
       } catch { /* fixed unavailable category; primary failure remains */ }
     }
