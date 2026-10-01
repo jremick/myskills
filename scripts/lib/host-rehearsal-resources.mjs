@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { backupInvocationReceipt } from "./host-backup-diagnostics.mjs";
 
 // The controller owns the parent directory. This exact-name child ledger covers
 // transient operator containers as well as the resources planned by the fixture.
@@ -8,7 +9,7 @@ export function saveHostLedger(path, value) {
   renameSync(`${path}.tmp`, path);
 }
 
-export function hostDocker(path, executable, args, options = { stdio: "inherit" }) {
+export function hostDocker(path, executable, args, options = { stdio: "inherit" }, backupDiagnostic) {
   const ledger = JSON.parse(readFileSync(path, "utf8"));
   if (ledger.schemaVersion !== 1 || !/^hc-[a-f0-9]{16}$/.test(ledger.owner) || !Array.isArray(ledger.resources)
     || ledger.resources.length >= 512 || !Number.isSafeInteger(ledger.sequence) || ledger.sequence < 0) throw new Error("host-ledger-invalid");
@@ -38,6 +39,11 @@ export function hostDocker(path, executable, args, options = { stdio: "inherit" 
       resource.state = "creating";
       saveHostLedger(path, ledger); // Persist the outstanding request BEFORE dispatch.
     }
+  }
+  if (backupDiagnostic) {
+    // Observe only this explicitly selected backup invocation, after ownership
+    // insertion and --rm removal. Receipt failure cannot change dispatch.
+    try { backupDiagnostic.record(backupInvocationReceipt(args, backupDiagnostic.contract, ledger.owner, name)); } catch { /* diagnostic only */ }
   }
   const result = spawnSync(executable, args, options);
   // Retain direct helpers until exact owned terminal state can be inspected.

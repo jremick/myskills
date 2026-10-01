@@ -12,6 +12,7 @@ import { createSelfHostBundle } from "./lib/self-host-release.mjs";
 import { hostBaselineCommit, resolveHostBaseline } from "./lib/self-host-baseline.mjs";
 import { hostDocker, saveHostLedger } from "./lib/host-rehearsal-resources.mjs";
 import { prepareHostBackupService, assertHostCommandSucceeded } from "./lib/host-backup-service.mjs";
+import { captureHostDockerIdentity } from "./lib/host-backup-diagnostics.mjs";
 import { inspectHostPlatformImage, pushHostPlatformImage, verifyHostPlatformManifest, fetchHostPlatformManifest } from "./lib/host-platform-receipt.mjs";
 import { rehearseComposeClientInterruption, rehearseComposeInterruption } from "./lib/host-compose-interruption.mjs";
 
@@ -26,15 +27,16 @@ const receipt = { schemaVersion: 1, kind: "myskills-host-rehearsal", status: "fa
   arm64: "unverified", operatorUpgradeFromBaseline: "not-tested-no-baseline-operator-bundle", phases: {}, images: {} };
 let phase = "preconditions";
 let sequence = 0;
-const executable = spawnSync("sh", ["-c", "command -v docker"], { encoding: "utf8" }).stdout.trim();
+const executable = (spawnSync("sh", ["-c", "command -v docker"], { encoding: "utf8", timeout: 10_000, maxBuffer: 4096 }).stdout ?? "").trim();
+receipt.dockerIdentity = captureHostDockerIdentity(executable);
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const jsonFile = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
 const privateEnv = (path, values) => {
   assert.ok(Object.values(values).every((value) => typeof value === "string" && !/['\\\n\r\0]/.test(value)));
   writeFileSync(path, Object.entries(values).map(([key, value]) => `${key}='${value}'\n`).join(""), { mode: 0o600 });
 };
-function call(command, args, { cwd = root, env = process.env, timeout = 600_000, ok = true } = {}) {
-  const result = spawnSync(command, args, { cwd, env, encoding: "utf8", timeout, maxBuffer: 4 * 1024 * 1024 });
+function call(command, args, { cwd = root, env = process.env, timeout = 600_000, maxBuffer = 4 * 1024 * 1024, ok = true } = {}) {
+  const result = spawnSync(command, args, { cwd, env, encoding: "utf8", timeout, maxBuffer });
   if (ok) assertHostCommandSucceeded(command, args, result);
   return result;
 }
@@ -48,17 +50,19 @@ function mark(kind, name, state = "created") {
   resources.resources.find((item) => item.kind === kind && item.name === name).state = state;
   saveHostLedger(ledgerPath, resources);
 }
-function docker(args, options) {
+function docker(args, options, backupDiagnostic) {
   if (["run", "compose"].includes(args[0])) {
     const { ok = true, ...settings } = options ?? {};
-    const result = hostDocker(ledgerPath, executable, args, { cwd: root, env: process.env, encoding: "utf8", timeout: 600_000, maxBuffer: 4 * 1024 * 1024, ...settings });
+    const result = hostDocker(ledgerPath, executable, args, { cwd: root, env: process.env, encoding: "utf8", timeout: 600_000, maxBuffer: 4 * 1024 * 1024, ...settings }, backupDiagnostic);
     if (ok) assertHostCommandSucceeded("docker", args, result);
     return result;
   }
   return call(executable, args, options);
 }
-function runService(suffix, args, image, tail = []) {
-  const id = docker(["run", "-d", "--label", `io.myskills.host-rehearsal.role=${suffix}`, ...args, image, ...tail]).stdout.trim();
+function runService(suffix, args, image, tail = [], contract) {
+  if (contract && suffix === "backup") receipt.backupInvocation = { category: "capture-unavailable" };
+  const diagnostic = contract && suffix === "backup" ? { contract, record: value => { receipt.backupInvocation = value; } } : undefined;
+  const id = docker(["run", "-d", "--label", `io.myskills.host-rehearsal.role=${suffix}`, ...args, image, ...tail], undefined, diagnostic).stdout.trim();
   assert.match(id, /^[a-f0-9]{64}$/); return id;
 }
 async function measured(name, fn) {

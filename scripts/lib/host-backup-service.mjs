@@ -18,14 +18,25 @@ function portMetadata(container, network, gateway) {
   // Fixed fields and capped counts only. No map keys, addresses, Env or values
   // leave this boundary, even when the daemon returns an unexpected shape.
   const rows = Array.isArray(bindings) ? bindings.slice(0, 8) : [];
+  const request = requested?.["9000/tcp"], requestedRows = Array.isArray(request) ? request.slice(0, 8) : [];
+  const hostPort = requestedRows[0]?.HostPort;
   return { networkModeCategory: mode === network ? "owned-bridge" : mode === undefined ? "missing" : ["host", "none", "bridge", "default"].includes(mode) ? mode : "other",
     networkAttachmentCount: metadataMapCount(container.NetworkSettings?.Networks),
     endpointIPv4AddressShape: metadataShape(endpoint?.IPAddress),
     endpointIPv4AddressValid: typeof endpoint?.IPAddress === "string" && isIP(endpoint.IPAddress) === 4,
     endpointGatewayMatchesOwned: endpoint?.Gateway === gateway,
+    endpointIDValid: typeof endpoint?.EndpointID === "string" && /^[a-f0-9]{64}$/.test(endpoint.EndpointID),
     exposedMapShape: metadataShape(exposed), exposedPortCount: metadataMapCount(exposed), exposedPortShape: metadataShape(exposed?.["9000/tcp"]),
     requestedMapShape: metadataShape(requested), requestedPortCount: metadataMapCount(requested), requestedBindingsShape: metadataShape(requested?.["9000/tcp"]),
     requestedBindingCount: Array.isArray(requested?.["9000/tcp"]) ? Math.min(requested["9000/tcp"].length, 8) : null,
+    requestedObjectCount: requestedRows.filter(isRecord).length,
+    requestedGatewayMatchCount: requestedRows.filter(row => isRecord(row) && row.HostIp === gateway).length,
+    requestedHostPortCategory: !Array.isArray(request) ? "unavailable" : request.length === 0 ? "no-rows" : request.length !== 1 ? "multiple-rows"
+      : !isRecord(request[0]) ? "invalid-row" : hostPort === "" ? "expected-empty" : hostPort === undefined ? "missing" : validPort(hostPort) ? "assigned" : "invalid",
+    publishAllPortsCategory: container.HostConfig?.PublishAllPorts === false ? "disabled" : container.HostConfig?.PublishAllPorts === true ? "enabled"
+      : container.HostConfig?.PublishAllPorts === undefined ? "missing" : "invalid",
+    restartCount: Number.isSafeInteger(container.RestartCount) && container.RestartCount >= 0 ? Math.min(container.RestartCount, 255) : null,
+    restartCountCapped: Number.isSafeInteger(container.RestartCount) && container.RestartCount > 255,
     runtimeMapShape: metadataShape(runtime), runtimePortCount: metadataMapCount(runtime), runtimeBindingsShape: metadataShape(bindings),
     runtimeBindingCount: Array.isArray(bindings) ? Math.min(bindings.length, 8) : null,
     runtimeObjectCount: rows.filter(isRecord).length,
@@ -76,7 +87,55 @@ function ownedGateway(response, network, owner, stage) {
   if (parts.length !== 2 || isIP(parts[0]) !== 4 || !Number.isInteger(prefix) || prefix < 1 || prefix > 30 || /^(0|127|169\.254|22[4-9]|2[3-5]\d)\./.test(gateway)) return invalidBackupNetwork(stage, "network-gateway-invalid");
   const block = 2 ** (32 - prefix), start = Math.floor(ipv4Number(parts[0]) / block) * block, address = ipv4Number(gateway);
   if (address <= start || address >= start + block - 1) return invalidBackupNetwork(stage, "network-gateway-invalid");
-  return { gateway, networkId: row.Id };
+  return { gateway, networkId: row.Id, subnet };
+}
+
+// Exactly two additional reads on binding failure. They do not retry launch or
+// supply acceptance. Validate identity before exporting even fixed metadata.
+function bindingConsistency(docker, network, owner, selected, id, initial) {
+  const options = { timeout: 10_000, maxBuffer: 128 * 1024 };
+  const read = args => {
+    const response = docker(args, options);
+    if (response?.error || response?.signal || response?.status !== undefined && response.status !== 0) throw new Error("diagnostic-command-failed");
+    if (typeof response?.stdout !== "string" || Buffer.byteLength(response.stdout) > options.maxBuffer) throw new Error("diagnostic-output-invalid");
+    return inspection(response, "binding-diagnostic");
+  };
+  const category = error => error?.hostFailure?.reason === "inspect-json-invalid" ? "json-invalid"
+    : error?.hostFailure?.reason === "inspect-shape-invalid" ? "shape-invalid" : error?.message === "diagnostic-output-invalid" ? "output-invalid" : "readback-failed";
+  const evidence = {};
+  try {
+    const row = read(["network", "inspect", selected.networkId]);
+    if (row.Id !== selected.networkId || row.Name !== network || row.Labels?.["io.myskills.host-rehearsal"] !== owner) evidence.network = { category: "identity-mismatch" };
+    else {
+      let current;
+      try { current = ownedGateway({ stdout: JSON.stringify([row]) }, network, owner, "binding-diagnostic"); } catch { /* fixed contract result */ }
+      const members = row.Containers, member = isRecord(members) ? members[id] : undefined;
+      const endpoint = initial.NetworkSettings?.Networks?.[network];
+      evidence.network = { category: "observed", contractMatches: Boolean(current && current.gateway === selected.gateway && current.subnet === selected.subnet),
+        membershipCount: metadataMapCount(members), exactMembership: isRecord(members) && Object.keys(members).length === 1 && isRecord(member),
+        memberEndpointIDValid: typeof member?.EndpointID === "string" && /^[a-f0-9]{64}$/.test(member.EndpointID),
+        memberEndpointMatchesInitial: typeof endpoint?.EndpointID === "string" && /^[a-f0-9]{64}$/.test(endpoint.EndpointID) && member?.EndpointID === endpoint.EndpointID };
+    }
+  } catch (error) { evidence.network = { category: category(error) }; }
+  try {
+    const row = read(["container", "inspect", id]);
+    if (row.Id !== id || row.Config?.Labels?.["io.myskills.host-rehearsal"] !== owner || row.Config?.Labels?.["io.myskills.host-rehearsal.role"] !== "backup") evidence.container = { category: "identity-mismatch" };
+    else {
+      const endpoint = initial.NetworkSettings?.Networks?.[network], current = row.NetworkSettings?.Networks?.[network];
+      const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+      evidence.container = { category: "observed", portMetadata: portMetadata(row, network, selected.gateway),
+        containerStatus: containerStatuses.includes(row.State?.Status) ? row.State.Status : "unknown", containerExitCode: safeExitCode(row.State?.ExitCode),
+        runningStateMatchesContract: row.State?.Status === "running" && safeExitCode(row.State?.ExitCode) !== null
+          && row.State?.Running === true && row.State?.Paused === false && row.State?.Restarting === false,
+        exactNetworkAttachment: isRecord(row.NetworkSettings?.Networks) && Object.keys(row.NetworkSettings.Networks).length === 1 && current?.NetworkID === selected.networkId,
+        endpointUnchanged: Boolean(endpoint && current && ["NetworkID", "EndpointID", "IPAddress", "Gateway"].every(key => equal(endpoint[key], current[key]))),
+        stateUnchanged: equal(initial.RestartCount, row.RestartCount) && ["Status", "Running", "Paused", "Restarting", "OOMKilled", "Dead", "ExitCode", "StartedAt", "FinishedAt"].every(key => equal(initial.State?.[key], row.State?.[key])),
+        requestUnchanged: equal(initial.HostConfig?.PortBindings?.["9000/tcp"], row.HostConfig?.PortBindings?.["9000/tcp"])
+          && equal(initial.HostConfig?.PublishAllPorts, row.HostConfig?.PublishAllPorts) && equal(initial.HostConfig?.NetworkMode, row.HostConfig?.NetworkMode),
+        bindingsUnchanged: equal(initial.NetworkSettings?.Ports?.["9000/tcp"], row.NetworkSettings?.Ports?.["9000/tcp"]) };
+    }
+  } catch (error) { evidence.container = { category: category(error) }; }
+  return evidence;
 }
 
 /** One TLS-valid gateway endpoint serves the host driver, bridge and recovery. */
@@ -98,7 +157,8 @@ export function prepareHostBackupService({ proof, owner, image, user, password, 
   // Docker's env-file preserves literal dollars; never export these values in diagnostics.
   writeFileSync(join(proof, "backup-minio.env"), `MINIO_ROOT_USER=${user}\nMINIO_ROOT_PASSWORD=${password}\n`, { mode: 0o600 });
   const id = runService("backup", ["--network", network, "--publish", `${selected.gateway}::9000`, "--env-file", join(proof, "backup-minio.env"),
-    "--mount", `type=bind,source=${certs},target=/certs,readonly`], image, ["server", "/data", "--certs-dir", "/certs"]);
+    "--mount", `type=bind,source=${certs},target=/certs,readonly`], image, ["server", "/data", "--certs-dir", "/certs"],
+    { owner, network, gateway: selected.gateway, image, envFile: join(proof, "backup-minio.env"), certs });
   if (!/^[a-f0-9]{64}$/.test(id ?? "")) return invalidBackupNetwork("container-create", "container-id-invalid");
   // Read back the exact daemon-assigned port and owner; never infer an endpoint.
   const stage = "container-readback";
@@ -112,9 +172,17 @@ export function prepareHostBackupService({ proof, owner, image, user, password, 
   if (container.State.Running !== true || container.State.Paused !== false || container.State.Restarting !== false) return invalidBackupNetwork(stage, "container-state-inconsistent", container);
   if (container.NetworkSettings?.Networks?.[network]?.NetworkID !== selected.networkId) return invalidBackupNetwork(stage, "container-network-mismatch", container);
   const ports = container?.NetworkSettings?.Ports?.["9000/tcp"];
-  if (!Array.isArray(ports) || ports.length !== 1 || !isRecord(ports[0])) return invalidBackupNetwork(stage, "published-port-shape-invalid", container, portMetadata(container, network, selected.gateway));
-  if (ports[0].HostIp !== selected.gateway) return invalidBackupNetwork(stage, "published-port-address-mismatch", container);
-  if (!validPort(ports[0].HostPort)) return invalidBackupNetwork(stage, "published-port-number-invalid", container);
+  const failBinding = (reason, metadata) => {
+    try { invalidBackupNetwork(stage, reason, container, metadata); }
+    catch (primary) {
+      try { primary.hostFailure.bindingConsistency = bindingConsistency(docker, network, owner, selected, id, container); }
+      catch { primary.hostFailure.bindingConsistency = { category: "capture-failed" }; }
+      throw primary; // Even a now-valid second observation cannot recover acceptance.
+    }
+  };
+  if (!Array.isArray(ports) || ports.length !== 1 || !isRecord(ports[0])) return failBinding("published-port-shape-invalid", portMetadata(container, network, selected.gateway));
+  if (ports[0].HostIp !== selected.gateway) return failBinding("published-port-address-mismatch");
+  if (!validPort(ports[0].HostPort)) return failBinding("published-port-number-invalid");
   const current = ownedGateway(docker(["network", "inspect", network]), network, owner, "network-recheck");
   if (current.networkId !== selected.networkId) return invalidBackupNetwork("network-recheck", "network-id-changed");
   if (current.gateway !== selected.gateway) return invalidBackupNetwork("network-recheck", "network-gateway-changed");
