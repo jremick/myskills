@@ -1815,7 +1815,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 36,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -1902,7 +1902,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 321,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "const composedEnv = join(proof, \"fresh-composed-db.env\"); assert.ok(!/[\\r\\n$]/.test(composedDatabase));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -2249,7 +2249,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 321,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "const composedEnv = join(proof, \"fresh-composed-db.env\"); assert.ok(!/[\\r\\n$]/.test(composedDatabase));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -2357,7 +2357,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 36,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -5414,7 +5414,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 369,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "const dirs = readdirSync(config).filter((name) => /^myskills-recovery-/.test(name)); assert.equal(dirs.length, 1);",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8320,7 +8320,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 36,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8865,7 +8865,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 201,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(!/[\\r\\n$]/.test(database));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9718,7 +9718,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 36,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9832,7 +9832,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 321,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "const composedEnv = join(proof, \"fresh-composed-db.env\"); assert.ok(!/[\\r\\n$]/.test(composedDatabase));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -10004,7 +10004,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 201,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(!/[\\r\\n$]/.test(database));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -10110,7 +10110,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 369,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "const dirs = readdirSync(config).filter((name) => /^myskills-recovery-/.test(name)); assert.equal(dirs.length, 1);",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -11642,7 +11642,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 36,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -11729,7 +11729,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 201,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(!/[\\r\\n$]/.test(database));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -11816,7 +11816,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 36,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -11903,7 +11903,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 369,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "const dirs = readdirSync(config).filter((name) => /^myskills-recovery-/.test(name)); assert.equal(dirs.length, 1);",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -11990,7 +11990,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 201,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(!/[\\r\\n$]/.test(database));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -12077,7 +12077,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 36,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -12164,7 +12164,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 369,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "const dirs = readdirSync(config).filter((name) => /^myskills-recovery-/.test(name)); assert.equal(dirs.length, 1);",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -13372,7 +13372,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 321,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "const composedEnv = join(proof, \"fresh-composed-db.env\"); assert.ok(!/[\\r\\n$]/.test(composedDatabase));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -13775,7 +13775,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 36,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14813,7 +14813,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 36,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14858,7 +14858,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 36,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -15054,7 +15054,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 36,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -15355,7 +15355,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 321,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "const composedEnv = join(proof, \"fresh-composed-db.env\"); assert.ok(!/[\\r\\n$]/.test(composedDatabase));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -19235,7 +19235,7 @@
         {
           "path": "scripts/rehearse-self-host.mjs",
           "line": 201,
-          "sha256": "2d2000f22f65315478e485bdbe244b0950c0209e8125bf0c642e0f516a287580",
+          "sha256": "39869f976263630d422489417c7a655aae677a1016b6423dbdf16c980640c59b",
           "anchor": "assert.ok(!/[\\r\\n$]/.test(database));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"

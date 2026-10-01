@@ -346,7 +346,7 @@ try {
     // the selected-platform receipt on Docker's containerd image store.
     const pgContainer = runService("restore-postgres", ["--network", "host", "-e", `POSTGRES_USER=${pgUser}`, "-e", `POSTGRES_PASSWORD=${pgPassword}`,
       "-e", "POSTGRES_DB=myskills_test", "--tmpfs", "/var/lib/postgresql/data"], images.postgres.ref, pgCommand);
-    const s3Container = runService("restore-minio", ["--network", "host", "--env-file", join(proof, "backup-minio.env")], minioImage, minioCommand);
+    const s3Container = runService("restore-minio", ["--network", "host", "--env-file", join(proof, "backup-minio.env")], images.minio.ref, minioCommand);
     const destination = { MYSKILLS_RECOVERY_DESTINATION_POSTGRES_URL: `postgres://${pgUser}:${pgPassword}@127.0.0.1:${ports.postgres}/myskills_test`,
       MYSKILLS_RECOVERY_DESTINATION_S3_ENDPOINT: `http://127.0.0.1:${ports.minio}`, MYSKILLS_RECOVERY_DESTINATION_S3_REGION: "local",
       MYSKILLS_RECOVERY_DESTINATION_S3_BUCKET: `${owner}-restore-request`, MYSKILLS_RECOVERY_DESTINATION_S3_ACCESS_KEY_ID: backupUser,
