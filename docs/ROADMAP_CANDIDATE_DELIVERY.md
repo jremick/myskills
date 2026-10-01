@@ -225,3 +225,35 @@ does not prove the corrected candidate. Parent owns Windows acceptance and final
 collection. `BROWSER_VIEWPORT_CHECKPOINT.json` and `browser-viewport-fix.md`
 record exact source and proof limits. Criterion identity, states, gaps and
 complete0 remain unchanged; HOST source is preserved.
+
+The same verified fb4 collection contains 90 artifacts, export
+`34216eae6dc9637e4242e37e00e57814157b5eb37a633d1dd0cd3d0f0d35976a`, and
+all 962 source entries match the old 13f4 tree. Both general and PG 314/314 lanes
+pass, while browsers and images/HOST fail; GitHub whole-run contexts stay failed.
+Both cleanup layers complete. HOST reports an owned running backup container
+with an IPv4 endpoint/gateway match, one request/exposure and empty actual
+bindings. The explicit network contract did not resolve this failure; root cause
+is unproven and install/upgrade/backup/restore acceptance remains absent.
+
+Source checkpoint `59729ae23f3a25f54713c9d8c6888a4844c7b0ce`, based on
+accepted browser checkpoint `d8cd93f`, adds bounded diagnostic evidence. The
+selected executable supplies separate client/server identities and a bounded
+descriptor digest. A backup-only receipt validates final argv after wrapper
+transformations against the owned caller's explicit contract. Requested-binding,
+publish-all, restart and endpoint-ID observations remain sanitized. On binding
+failure, exactly one owned-network and one owned-container consistency readback
+compare contract/membership, endpoint, state, request and runtime bindings;
+each is limited to 10 seconds/128KiB. The original failure always remains primary,
+including later successful bindings or failed diagnostic commands. Launch,
+acceptance, TLS, ownership, reservations and cleanup stay unchanged.
+
+All 190 focused source controls and scoped lint pass. They prove diagnostic and
+failure-preservation behavior with doubles, not actual HOST acceptance. Parent
+owns exact integrated canonical verification, collection and independent review.
+Correct/stable actual argv/request/identity/network/endpoint/state with continued
+empty bindings isolates daemon publication/reporting infrastructure; stop
+speculative repository fixes. A concrete dispatch/request/transition defect
+requires its smallest evidence-based correction. The ledger records the detailed
+limits; root reports `HOST_DISPATCH_CHECKPOINT.json` and
+`host-dispatch-evidence.json` bind final source and checks. Criterion identities,
+2,372 references, 137 groups, states, gaps and complete 0 remain unchanged.

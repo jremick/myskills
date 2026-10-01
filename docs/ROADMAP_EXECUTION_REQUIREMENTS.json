@@ -2930,7 +2930,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 125
+            "line": 193
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -2946,13 +2946,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 33,
+            "line": 35,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 47,
+            "line": 49,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -3031,7 +3031,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 125
+            "line": 193
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -3047,13 +3047,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 252,
+            "line": 256,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 271,
+            "line": 283,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -3603,7 +3603,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 125
+            "line": 193
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -3619,13 +3619,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 252,
+            "line": 256,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 271,
+            "line": 283,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -3789,7 +3789,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 33,
+            "line": 35,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -8557,7 +8557,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 125
+            "line": 193
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -8573,13 +8573,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 286,
+            "line": 290,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 47,
+            "line": 49,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -13060,7 +13060,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 125
+            "line": 193
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -13076,13 +13076,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 33,
+            "line": 35,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 271,
+            "line": 283,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -13942,7 +13942,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 125
+            "line": 193
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -13958,13 +13958,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 137,
+            "line": 141,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 271,
+            "line": 283,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -15408,7 +15408,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 33,
+            "line": 35,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -15575,7 +15575,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 87
+            "line": 146
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -15591,13 +15591,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 252,
+            "line": 256,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 47,
+            "line": 49,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -15879,7 +15879,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 137,
+            "line": 141,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -16015,7 +16015,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 83
+            "line": 142
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -16031,13 +16031,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 286,
+            "line": 290,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 47,
+            "line": 49,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18531,7 +18531,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 125
+            "line": 193
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18547,13 +18547,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 33,
+            "line": 35,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 47,
+            "line": 49,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18644,7 +18644,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 125
+            "line": 193
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18660,13 +18660,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 137,
+            "line": 141,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 47,
+            "line": 49,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18757,7 +18757,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 97
+            "line": 156
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18773,13 +18773,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 33,
+            "line": 35,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 68,
+            "line": 73,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18870,7 +18870,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 95
+            "line": 154
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18886,13 +18886,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 286,
+            "line": 290,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 47,
+            "line": 49,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18983,7 +18983,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 97
+            "line": 156
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18999,13 +18999,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 137,
+            "line": 141,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 47,
+            "line": 49,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -19096,7 +19096,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 83
+            "line": 142
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -19112,13 +19112,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 33,
+            "line": 35,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 47,
+            "line": 49,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -19209,7 +19209,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 95
+            "line": 154
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -19225,13 +19225,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 286,
+            "line": 290,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 47,
+            "line": 49,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -20867,7 +20867,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 125
+            "line": 193
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -20883,13 +20883,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 252,
+            "line": 256,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 47,
+            "line": 49,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -21491,7 +21491,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 33,
+            "line": 35,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -23097,7 +23097,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 33,
+            "line": 35,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -23168,7 +23168,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 33,
+            "line": 35,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -23472,7 +23472,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 125
+            "line": 193
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -23488,13 +23488,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 33,
+            "line": 35,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 47,
+            "line": 49,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -23926,7 +23926,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 87
+            "line": 146
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -23942,13 +23942,13 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 252,
+            "line": 256,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 47,
+            "line": 49,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -29929,7 +29929,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 137,
+            "line": 141,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }

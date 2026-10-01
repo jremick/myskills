@@ -680,3 +680,60 @@ and `browser-viewport-fix.md` in the root reports directory. All426 criterion
 identities,24 groups, fixed fingerprint, statuses, remaining gaps and complete0
 are preserved. HOST helper/tests/rehearsal caller and other accepted sources
 remain outside this correction. No local Docker, PG, browser or full matrix ran.
+
+### PR133 fb4 HOST dispatch diagnostic — 1 October 2026
+
+The verified parent collection for merge
+`fb4aa6e668273965d657f56894dc97e684308c39`, head
+`13f4d6cee38f5aeb81fb68735cbed7104a16b4a4`, tree
+`44d21e855029bdbb0e0c3f2662be3779d56e2354`, contains 90 artifacts, export
+`34216eae6dc9637e4242e37e00e57814157b5eb37a633d1dd0cd3d0f0d35976a`.
+Both general checks pass and both PostgreSQL lanes pass 314/314. Browser and
+images/HOST jobs fail; whole-run GitHub contexts remain failed. All 962 source
+entries match that tree. Inner and controller cleanup complete. The owned,
+running backup container has one requested binding and exposed port, a valid
+IPv4 endpoint and gateway match, but its actual binding array is empty. This
+disproves the prior network-option correction as sufficient. Root cause remains
+unproven; install, upgrade, backup and restore acceptance are not reached.
+
+Source checkpoint `59729ae23f3a25f54713c9d8c6888a4844c7b0ce` preserves the
+accepted `d8cd93f` browser correction and adds diagnostic evidence only. The same
+selected Docker executable supplies separate allowlisted client/server versions,
+Git commits, API versions and OS/architecture. Its resolved regular file is
+hashed through one descriptor, with no-follow/nonblocking open, before/after
+metadata checks, 64 KiB chunks and a 128 MiB ceiling. Version capture is one call,
+limited to 10 seconds and 16 KiB. Failures remain fixed categories; raw paths,
+configuration, environment and provider output are excluded.
+
+Only the owned backup caller passes an explicit invocation contract. Immediately
+before dispatch, after ownership insertion and removal of automatic removal,
+the receipt compares the final vector with exact ownership, network, one gateway
+publication, environment-file/mount shape, image position and command tail.
+It exports booleans, capped counts and fixed categories. Requested rows add
+object/gateway counts, empty-port and publish-all categories, a restart count
+capped at 255 and endpoint-ID validity. These observations do not supply runtime
+binding acceptance.
+
+On an existing actual-binding failure, one exact-ID owned-network readback and
+one exact-ID owned-container readback compare network contract/membership,
+endpoint, state, request and binding continuity. Each call is limited to 10
+seconds and 128 KiB. Identity checks precede metadata export. There is no delay,
+retry, launch change or recovery; even a populated second observation or failed
+diagnostic call throws the original primary failure. Existing ownership, role,
+state, actual binding/address/port, TLS and final network-recheck guards remain.
+
+All 190 focused fake-executable/helper controls and scoped lint pass, including
+actual caller forwarding, wrapper transformations, malformed requests, secret
+exclusion, two-call bounds, transition detection, original-failure retention and
+unchanged cleanup. This is local source proof only. No Docker, PG, browser or
+full matrix ran. Exact integrated canonical verification/collection and
+independent Astra review remain parent-owned. `HOST_DISPATCH_CHECKPOINT.json`
+and `host-dispatch-evidence.json` in root reports record final source and checks.
+
+If actual final argv/request/identity/network/endpoint/state are correct and
+stable while bindings stay empty, isolate the daemon publication/reporting
+boundary and stop speculative repository fixes. These receipts cannot distinguish
+missing kernel publication from inconsistent daemon metadata. A demonstrated
+request/dispatch/transition defect requires the smallest evidence-based correction.
+All 426 criterion identities, 24 groups, fixed fingerprint, 2,372 references,
+137 capability groups, states, gaps and complete 0 are preserved.

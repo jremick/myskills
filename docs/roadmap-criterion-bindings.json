@@ -656,7 +656,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -919,7 +919,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -959,7 +959,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 11,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "## Authority and baseline"
         },
         {
@@ -999,7 +999,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 327,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "## Final candidate reconciliation"
         },
         {
@@ -1039,7 +1039,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 265,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "## External decisions and gates"
         },
         {
@@ -1079,7 +1079,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 204,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "### HOST review remediation checkpoint"
         },
         {
@@ -1119,7 +1119,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -1159,7 +1159,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -1792,8 +1792,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 125,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 193,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -1814,16 +1814,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 33,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 35,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 47,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 49,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -1879,8 +1879,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 125,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 193,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -1901,16 +1901,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 252,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 256,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "const composedEnv = join(proof, \"fresh-composed-db.env\"); assert.ok(!/[\\r\\n$]/.test(composedDatabase));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 271,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 283,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup readback rejects each container identity, attachment and published-port failure safely\", async t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -2226,8 +2226,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 125,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 193,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -2248,16 +2248,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 252,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 256,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "const composedEnv = join(proof, \"fresh-composed-db.env\"); assert.ok(!/[\\r\\n$]/.test(composedDatabase));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 271,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 283,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup readback rejects each container identity, attachment and published-port failure safely\", async t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -2356,8 +2356,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 33,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 35,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -5391,8 +5391,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 125,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 193,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -5413,16 +5413,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 286,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 290,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "const dirs = readdirSync(config).filter((name) => /^myskills-recovery-/.test(name)); assert.equal(dirs.length, 1);",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 47,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 49,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -8297,8 +8297,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 125,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 193,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -8319,16 +8319,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 33,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 35,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 271,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 283,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup readback rejects each container identity, attachment and published-port failure safely\", async t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -8367,7 +8367,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 7,
-          "sha256": "9ef3dfad0a2c4c99f9c7512ecb78f1b4745e2f0747a8617d43fc92cda584b9f1",
+          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
           "anchor": "## Current delivery"
         }
       ],
@@ -8421,7 +8421,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 1,
-          "sha256": "9ef3dfad0a2c4c99f9c7512ecb78f1b4745e2f0747a8617d43fc92cda584b9f1",
+          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
           "anchor": "# Roadmap candidate delivery"
         }
       ],
@@ -8771,7 +8771,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 7,
-          "sha256": "9ef3dfad0a2c4c99f9c7512ecb78f1b4745e2f0747a8617d43fc92cda584b9f1",
+          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
           "anchor": "## Current delivery"
         }
       ],
@@ -8842,8 +8842,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 125,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 193,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -8864,16 +8864,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 137,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 141,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(!/[\\r\\n$]/.test(database));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 271,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 283,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup readback rejects each container identity, attachment and published-port failure safely\", async t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -9717,8 +9717,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 33,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 35,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9809,8 +9809,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 87,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 146,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "reserve(\"network\", network);"
         },
         {
@@ -9831,16 +9831,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 252,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 256,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "const composedEnv = join(proof, \"fresh-composed-db.env\"); assert.ok(!/[\\r\\n$]/.test(composedDatabase));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 47,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 49,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -9879,7 +9879,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 25,
-          "sha256": "9ef3dfad0a2c4c99f9c7512ecb78f1b4745e2f0747a8617d43fc92cda584b9f1",
+          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
           "anchor": "## Architecture review follow-through"
         }
       ],
@@ -10003,8 +10003,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 137,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 141,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(!/[\\r\\n$]/.test(database));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -10087,8 +10087,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 83,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 142,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "export function prepareHostBackupService({ proof, owner, image, user, password, reserve, mark, docker, call, runService }) {"
         },
         {
@@ -10109,16 +10109,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 286,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 290,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "const dirs = readdirSync(config).filter((name) => /^myskills-recovery-/.test(name)); assert.equal(dirs.length, 1);",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 47,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 49,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11619,8 +11619,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 125,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 193,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -11641,16 +11641,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 33,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 35,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 47,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 49,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11706,8 +11706,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 125,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 193,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -11728,16 +11728,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 137,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 141,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(!/[\\r\\n$]/.test(database));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 47,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 49,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11793,8 +11793,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 97,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 156,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "chmodSync(join(certs, \"private.key\"), 0o600);"
         },
         {
@@ -11815,16 +11815,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 33,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 35,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 68,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 73,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup launch rejection retains the uncertain owned create and exports only bounded operation diagnostics\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11880,8 +11880,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 95,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 154,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "call(\"openssl\", [\"req\", \"-x509\", \"-newkey\", \"rsa:2048\", \"-nodes\", \"-days\", \"1\", \"-keyout\", join(certs, \"private.key\"),"
         },
         {
@@ -11902,16 +11902,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 286,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 290,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "const dirs = readdirSync(config).filter((name) => /^myskills-recovery-/.test(name)); assert.equal(dirs.length, 1);",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 47,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 49,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11967,8 +11967,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 97,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 156,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "chmodSync(join(certs, \"private.key\"), 0o600);"
         },
         {
@@ -11989,16 +11989,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 137,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 141,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(!/[\\r\\n$]/.test(database));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 47,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 49,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -12054,8 +12054,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 83,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 142,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "export function prepareHostBackupService({ proof, owner, image, user, password, reserve, mark, docker, call, runService }) {"
         },
         {
@@ -12076,16 +12076,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 33,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 35,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 47,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 49,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -12141,8 +12141,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 95,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 154,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "call(\"openssl\", [\"req\", \"-x509\", \"-newkey\", \"rsa:2048\", \"-nodes\", \"-days\", \"1\", \"-keyout\", join(certs, \"private.key\"),"
         },
         {
@@ -12163,16 +12163,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 286,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 290,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "const dirs = readdirSync(config).filter((name) => /^myskills-recovery-/.test(name)); assert.equal(dirs.length, 1);",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 47,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 49,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -12199,7 +12199,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 265,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "## External decisions and gates"
         },
         {
@@ -12870,7 +12870,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 118,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "## Integration and verification records"
         },
         {
@@ -13280,7 +13280,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -13349,8 +13349,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 125,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 193,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -13371,16 +13371,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 252,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 256,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "const composedEnv = join(proof, \"fresh-composed-db.env\"); assert.ok(!/[\\r\\n$]/.test(composedDatabase));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 47,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 49,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -13660,7 +13660,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 25,
-          "sha256": "9ef3dfad0a2c4c99f9c7512ecb78f1b4745e2f0747a8617d43fc92cda584b9f1",
+          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
           "anchor": "## Architecture review follow-through"
         }
       ],
@@ -13774,8 +13774,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 33,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 35,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14812,8 +14812,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 33,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 35,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14857,8 +14857,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 33,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 35,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -15031,8 +15031,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 125,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 193,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -15053,16 +15053,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 33,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 35,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 47,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 49,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -15332,8 +15332,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 87,
-          "sha256": "0eb525009d2a344b7f7c806278077194a6ba8b1e7513c6a10b20405d63e90a4d",
+          "line": 146,
+          "sha256": "2884141ee2be211eb6c18ca268cd3e124b5b55ff0356331f88b62cef87074525",
           "anchor": "reserve(\"network\", network);"
         },
         {
@@ -15354,16 +15354,16 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 252,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 256,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "const composedEnv = join(proof, \"fresh-composed-db.env\"); assert.ok(!/[\\r\\n$]/.test(composedDatabase));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 47,
-          "sha256": "4272826190027820352ba720b2f155449b820d3b1063f871396af7ef37be70aa",
+          "line": 49,
+          "sha256": "4911a06aeed8f53bb6f267fe8c2be50104663bcfc6a6bb099e93ce14307da2fd",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -15402,7 +15402,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 1,
-          "sha256": "9ef3dfad0a2c4c99f9c7512ecb78f1b4745e2f0747a8617d43fc92cda584b9f1",
+          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
           "anchor": "# Roadmap candidate delivery"
         }
       ],
@@ -15444,7 +15444,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 1,
-          "sha256": "9ef3dfad0a2c4c99f9c7512ecb78f1b4745e2f0747a8617d43fc92cda584b9f1",
+          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
           "anchor": "# Roadmap candidate delivery"
         },
         {
@@ -16168,7 +16168,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 118,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "## Integration and verification records"
         },
         {
@@ -16208,7 +16208,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16248,7 +16248,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 11,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "## Authority and baseline"
         },
         {
@@ -16288,7 +16288,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16406,7 +16406,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16446,7 +16446,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16486,7 +16486,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -17152,7 +17152,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -17192,7 +17192,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18483,7 +18483,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18523,7 +18523,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18887,7 +18887,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 49,
-          "sha256": "9ef3dfad0a2c4c99f9c7512ecb78f1b4745e2f0747a8617d43fc92cda584b9f1",
+          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
           "anchor": "## Schema and compatibility"
         }
       ],
@@ -18920,7 +18920,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18960,7 +18960,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -19234,8 +19234,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 137,
-          "sha256": "ed1a15370a880d115d7e4211779580cb93d668e8cad4fe5b201bab5e93f66475",
+          "line": 141,
+          "sha256": "f4bdfc2ac564738b9167d8bb9ca18bcfe74d03bd6a300d71682348b0614f4657",
           "anchor": "assert.ok(!/[\\r\\n$]/.test(database));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -19252,7 +19252,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 11,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "## Authority and baseline"
         },
         {
@@ -19440,7 +19440,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 173,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "### Preserved roadmap integration checkpoint"
         },
         {
@@ -19480,7 +19480,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 173,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "### Preserved roadmap integration checkpoint"
         },
         {
@@ -19690,7 +19690,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 173,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "### Preserved roadmap integration checkpoint"
         },
         {
@@ -19818,7 +19818,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -19858,7 +19858,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "c5d9533c3bcd5cd23e803043a8097404703719901a5a24dd60de4549d92725e5",
+          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
           "anchor": "# Roadmap execution ledger"
         },
         {
