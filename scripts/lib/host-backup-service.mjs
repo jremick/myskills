@@ -14,11 +14,15 @@ const inhibitIPv4Option = "com.docker.network.bridge.inhibit_ipv4";
 function portMetadata(container, network, gateway) {
   const exposed = container.Config?.ExposedPorts, requested = container.HostConfig?.PortBindings, runtime = container.NetworkSettings?.Ports;
   const bindings = runtime?.["9000/tcp"], mode = container.HostConfig?.NetworkMode;
+  const endpoint = container.NetworkSettings?.Networks?.[network];
   // Fixed fields and capped counts only. No map keys, addresses, Env or values
   // leave this boundary, even when the daemon returns an unexpected shape.
   const rows = Array.isArray(bindings) ? bindings.slice(0, 8) : [];
   return { networkModeCategory: mode === network ? "owned-bridge" : mode === undefined ? "missing" : ["host", "none", "bridge", "default"].includes(mode) ? mode : "other",
     networkAttachmentCount: metadataMapCount(container.NetworkSettings?.Networks),
+    endpointIPv4AddressShape: metadataShape(endpoint?.IPAddress),
+    endpointIPv4AddressValid: typeof endpoint?.IPAddress === "string" && isIP(endpoint.IPAddress) === 4,
+    endpointGatewayMatchesOwned: endpoint?.Gateway === gateway,
     exposedMapShape: metadataShape(exposed), exposedPortCount: metadataMapCount(exposed), exposedPortShape: metadataShape(exposed?.["9000/tcp"]),
     requestedMapShape: metadataShape(requested), requestedPortCount: metadataMapCount(requested), requestedBindingsShape: metadataShape(requested?.["9000/tcp"]),
     requestedBindingCount: Array.isArray(requested?.["9000/tcp"]) ? Math.min(requested["9000/tcp"].length, 8) : null,

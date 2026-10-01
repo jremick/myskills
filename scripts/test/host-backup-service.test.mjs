@@ -87,11 +87,12 @@ function expectFailure(f, stage, reason, state) {
     const { portMetadata, ...identity } = failure;
     assert.deepEqual(identity, { operation: "docker.network.backup-endpoint", stage, reason, ...state });
     if (reason === "published-port-shape-invalid") {
-      assert.deepEqual(Object.keys(portMetadata), ["networkModeCategory", "networkAttachmentCount", "exposedMapShape", "exposedPortCount", "exposedPortShape", "requestedMapShape", "requestedPortCount", "requestedBindingsShape", "requestedBindingCount",
+      assert.deepEqual(Object.keys(portMetadata), ["networkModeCategory", "networkAttachmentCount", "endpointIPv4AddressShape", "endpointIPv4AddressValid", "endpointGatewayMatchesOwned", "exposedMapShape", "exposedPortCount", "exposedPortShape", "requestedMapShape", "requestedPortCount", "requestedBindingsShape", "requestedBindingCount",
         "runtimeMapShape", "runtimePortCount", "runtimeBindingsShape", "runtimeBindingCount", "runtimeObjectCount", "runtimeGatewayMatchCount", "runtimeValidPortCount"]);
       for (const [key, value] of Object.entries(portMetadata)) {
         if (key === "networkModeCategory") assert.ok(["owned-bridge", "missing", "host", "none", "bridge", "default", "other"].includes(value));
         else if (key.endsWith("Shape")) assert.ok(["missing", "null", "array", "object", "scalar"].includes(value));
+        else if (key === "endpointIPv4AddressValid" || key === "endpointGatewayMatchesOwned") assert.equal(typeof value, "boolean");
         else assert.ok(value === null || Number.isInteger(value) && value >= 0 && value <= 8);
       }
     } else assert.equal(portMetadata, undefined);
@@ -104,6 +105,7 @@ function expectFailure(f, stage, reason, state) {
 
 test("backup shape diagnostics separate CLI exposure/request from runtime mappings using only fixed shapes and capped counts", async t => {
   const expected = { networkModeCategory: "owned-bridge", networkAttachmentCount: 1,
+    endpointIPv4AddressShape: "scalar", endpointIPv4AddressValid: true, endpointGatewayMatchesOwned: true,
     exposedMapShape: "object", exposedPortCount: 1, exposedPortShape: "object", requestedMapShape: "object", requestedPortCount: 1, requestedBindingsShape: "array", requestedBindingCount: 1,
     runtimeMapShape: "object", runtimePortCount: 1, runtimeBindingsShape: "missing", runtimeBindingCount: null, runtimeObjectCount: 0, runtimeGatewayMatchCount: 0, runtimeValidPortCount: 0 };
   const cases = [
@@ -143,6 +145,42 @@ test("backup shape diagnostics separate CLI exposure/request from runtime mappin
     assert.doesNotMatch(JSON.stringify(failure), /172\.28|34567|9000|MINIO_ROOT|HostIp|HostPort|Env/);
     assert.equal(f.commands.filter(args => args[0] === "container" && args[1] === "inspect").length, 1);
     assert.equal(f.commands.filter(args => args[0] === "network" && args[1] === "inspect").length, 1);
+  });
+});
+
+test("empty runtime bindings report only owned endpoint IPv4 shape, validity and gateway match without changing failure guards", async t => {
+  const cases = [
+    ["valid IPv4", () => {}, "scalar", true, true],
+    ["missing address", endpoint => { delete endpoint.IPAddress; }, "missing", false, true],
+    ["null address", endpoint => { endpoint.IPAddress = null; }, "null", false, true],
+    ["empty address", endpoint => { endpoint.IPAddress = ""; }, "scalar", false, true],
+    ["malformed address", endpoint => { endpoint.IPAddress = "private-provider-output fixture-password https://secret.invalid"; }, "scalar", false, true],
+    ["IPv6 address", endpoint => { endpoint.IPAddress = "fd00:1234::2"; }, "scalar", false, true],
+    ["numeric address", endpoint => { endpoint.IPAddress = 1234; }, "scalar", false, true],
+    ["array address", endpoint => { endpoint.IPAddress = ["private-provider-output"]; }, "array", false, true],
+    ["object address", endpoint => { endpoint.IPAddress = { secret: "fixture-password" }; }, "object", false, true],
+    ["missing gateway", endpoint => { delete endpoint.Gateway; }, "scalar", true, false],
+    ["foreign gateway", endpoint => { endpoint.Gateway = "192.168.1.1"; }, "scalar", true, false],
+    ["malformed gateway", endpoint => { endpoint.Gateway = { private: "fixture-password" }; }, "scalar", true, false],
+  ];
+  for (const [name, change, shape, valid, matches] of cases) await t.test(name, t => {
+    const f = fixture(t), endpoint = f.containerRow.NetworkSettings.Networks[f.networkRow.Name]; change(endpoint);
+    f.containerRow.NetworkSettings.Ports["9000/tcp"] = [];
+    f.containerRow.NetworkSettings.Networks["private-provider-output"] = { IPAddress: "172.28.0.3", Gateway: f.networkRow.IPAM.Config[0].Gateway };
+    f.containerRow.Config.Env = ["MINIO_ROOT_PASSWORD=fixture-password"];
+    const failure = expectFailure(f, "container-readback", "published-port-shape-invalid", { containerStatus: "running", containerExitCode: 0 });
+    assert.equal(failure.portMetadata.endpointIPv4AddressShape, shape);
+    assert.equal(failure.portMetadata.endpointIPv4AddressValid, valid);
+    assert.equal(failure.portMetadata.endpointGatewayMatchesOwned, matches);
+    assert.equal(failure.portMetadata.runtimeBindingCount, 0);
+    assert.doesNotMatch(JSON.stringify(failure), /172\.28|192\.168|fd00|9000|MINIO_ROOT|IPAddress|Gateway":|Env/);
+    assert.equal(f.commands.filter(args => args[0] === "container" && args[1] === "inspect").length, 1);
+    assert.equal(f.commands.filter(args => args[0] === "network" && args[1] === "inspect").length, 1);
+  });
+  await t.test("endpoint metadata observation does not replace actual binding acceptance", t => {
+    const f = fixture(t), endpoint = f.containerRow.NetworkSettings.Networks[f.networkRow.Name];
+    endpoint.IPAddress = null; endpoint.Gateway = "private-provider-output";
+    assert.equal(prepareHostBackupService(f).endpoint, "https://172.28.0.1:34567");
   });
 });
 
