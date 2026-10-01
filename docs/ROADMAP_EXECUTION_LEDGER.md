@@ -897,3 +897,32 @@ The current release and approved existing deployments remain the terminal scope.
 Target recovery and actual health/browser acceptance remain separate gates. The
 426 criterion contracts and 24 groups remain inventory, with no completion-state
 promotion from this diagnostic work.
+
+
+### HOST diagnostic security follow-up — 1 October 2026
+
+Exact head `a10c5196`, merge `76ff0ae1779b2cf172d16612ae59b9bcee5d9a89`,
+completed verification at12:37 UTC. All six general/Postgres/browser jobs and
+five image builds/smokes passed. HOST remained failed with empty runtime bindings
+and the explicit diagnostic category `observer-not-armed`. The observation
+window was missed; this run provides no kernel diagnosis. All192 evidence files
+and all three cleanup layers were verified. The next full run requires active
+coordination to arm the observer before HOST; no acceptance fallback is added.
+
+Matching CodeQL execution and SARIF processing completed, but the GitHub security
+gate failed on new alerts93,94 and95 in the diagnostic source/tests. These are
+outside the earlier five approved dispositions and remain open pending corrected
+source analysis. No new alert dismissal, exclusion, query or policy change was
+made. Execution success alone does not establish a passing security gate.
+
+Sol source `5e1f49d8d35301014bfb988ebb871b6539f91e83` removes file-path
+interpolation from generated test code by passing an argument, adds an explicit
+restrictive mode while retaining every read-only/no-follow/nonblocking descriptor
+guard, and parses the public CA into a local TLS trust context. The fixed HTTPS
+GET retains certificate and hostname verification, its deadline and no response
+body export. Parent Astra reviewed the exact four-file delta and reconciled the
+source/receipt hashes and hash-only binding changes. Six real process/TLS controls
+and seven observation controls pass; the initial failed receipt remains preserved.
+The actual Node22 HTTPS caller forwards the supplied options to TLS, and correct
+and wrong-CA controls verify the trust behavior. Exact corrected-source CodeQL
+and canonical runtime acceptance remain required. No release readiness is claimed.
