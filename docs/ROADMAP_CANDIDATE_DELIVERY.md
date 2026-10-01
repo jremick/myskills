@@ -171,3 +171,36 @@ expects401. The source-backed correction expects exact private metadata hiding
 (401/AUTHENTICATION_REQUIRED), with generic denied bodies and no comparison
 output. Matching local HTTP proof, lint and strict fixture compilation pass;
 real PG and complete corrected browser/HOST/runtime acceptance remain pending.
+
+The final parent collection for exact PR merge `935d3ebed197d1e3a4763263db271e3b6114a5e4`
+(head `ee472601`, tree `108cc8af`) verifies 90 files, export
+`27be2c8edf7e6fe34e11051ebf25b835fc99f9a30c0ee6527ccc221a13b40ca7`,
+and complete inner/controller cleanup. Both general Node22/24 checks pass;
+both PG and browser lanes and the images/HOST job fail. PG records 312/314
+per lane. Mocked browsers record 193 passes/one skip and registry fullstack
+seven passes per lane; operational draft resubmission fails, and improvement,
+connector and site proof is missing. All five image builds/smokes pass, but the
+running owned backup container has zero runtime bindings despite one requested
+binding and one exposed port. Install/upgrade/restore is not reached.
+
+The combined local source preserves exact `845a1324` preview/browser/HIST fixes
+and `e6120133` HOST correction. HOST explicitly creates and rechecks a non-internal
+IPv4 bridge with NAT publication and IPv4 bridge addressing enabled. Its existing
+strict identity, running-state, gateway, TLS and actual-binding guards remain.
+On a binding-shape failure, three fixed fields report only the exact owned
+endpoint's address shape, syntactic IPv4 validity and selected-gateway match.
+They export no raw addresses, names or Env and change no acceptance guard.
+All 138 helper controls and scoped lint pass. The historical empty-binding
+cause remains unproven; the explicit bridge contract needs real Windows proof.
+
+Exact935d CodeQL execution and cleanup succeed; collection verifies eight files,
+export `6b1ad1e654c66ce269a6dd4c90f86db770e0d6baf27694b065f2fa9e9738adae`,
+and SARIF processing completes. The three reader races and scoped-name concern
+are resolved in that SARIF. The collected GitHub readback still shows alerts
+84/85/87/88/92 open, independently classified as false positives; its CodeQL
+check remains failed. No dismissal or security acceptance is claimed. These
+935d receipts do not prove the combined source. Parent owns renewed immutable
+review and exact Windows/CodeQL acceptance. All 426 identities, 24 groups,
+2,372 references, 137 parity groups, statuses, gaps and zero completed criteria
+remain. `HOST_FINAL_COMBINATION_CHECKPOINT.json` records the coherent local
+source and narrow receipts; the original e612 checkpoint/report are retained.

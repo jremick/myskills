@@ -586,3 +586,59 @@ The matching local HTTP comparison control passes, including live revocation,
 no final comparison output and the strict 401 bundle denial. Both affected API
 fixtures pass lint and strict compilation; PostgreSQL execution remains unrun
 locally and requires the next parent-owned exact Windows gate.
+
+### Collected935d result and combined HOST source — 1 October 2026
+
+The final collected parent receipt tests immutable PR merge
+`935d3ebed197d1e3a4763263db271e3b6114a5e4`, head
+`ee4726013d8294757debfa069c209c9d68f965ba`, tree
+`108cc8af518795d9780aecd79b11752537749c2c`. Verification finished failed at
+06:31:17 UTC. Ninety files are hash-verified with export
+`27be2c8edf7e6fe34e11051ebf25b835fc99f9a30c0ee6527ccc221a13b40ca7`;
+both inner and controller cleanup complete.
+
+| Exact935d lane | Collected result and limit |
+|---|---|
+| General Node22/24 | Both pass; this proves the older source only. |
+| PostgreSQL Node22/24 | Each 312 passes/two failures. Final HIST revoked metadata read returns404 against expected401; the second failure is its parent aggregate. Actual server crash/restart/drain passes both lanes. |
+| Browser Node22/24 | Mocked193 passes/one skip and registry fullstack7 passes each. Operational draft resubmission fails on duplicate status/heading text. Improvement, connector and site proof is missing. |
+| Images/HOST | All five Linux/amd64 image builds/smokes pass. Backup endpoint readback fails with owned running container, requested count1, exposed count1 and runtime binding count0. Full install/upgrade/restore remains unrun. |
+
+The combined local source preserves exact845a preview directory, semantic draft
+assertion and HIST contract corrections without changing those source bytes.
+The original e612 HOST correction explicitly creates a run-owned non-internal
+IPv4/NAT bridge with IPv4 bridge addressing enabled and checks effective network
+values at creation and recheck. The diagnostic followup adds only an address
+shape category, syntactic IPv4-validity boolean and owned-gateway-match boolean
+for the exact owned container attachment when binding shape fails. No raw
+network names, addresses, daemon values or Env leave that boundary.
+
+All existing ownership, running-state, TLS, real binding shape/address/port and
+network-recheck guards remain unchanged. Absent, null, empty, malformed, IPv6,
+numeric, array and object address controls and missing/foreign/malformed gateway
+controls retain the same empty-binding failure. A valid-mapping control confirms
+these observations do not replace actual binding acceptance. The helper suite
+passes138/138 and scoped lint passes; this supplies synthetic/local proof only.
+Historical cause is unproven because the failed run did not record effective
+network defaults and endpoint eligibility. The explicit bridge contract is
+source-supported, with exact Windows runtime acceptance still pending.
+
+Exact935d CodeQL execution succeeds with complete cleanup and eight verified
+files, export `6b1ad1e654c66ce269a6dd4c90f86db770e0d6baf27694b065f2fa9e9738adae`.
+Uploaded SARIF processing completes. Four assigned source concerns are resolved
+in that SARIF: preview/release/provenance reader races and scoped-name encoding.
+The collected PR readback contains five open alerts84/85/87/88/92, independently
+classified as false positives, and a failed GitHub CodeQL check. No alert was
+dismissed or suppressed by this worker; successful execution is not security
+acceptance. Exact updated-source review and Windows/CodeQL gates remain parent-owned.
+
+Only affected HOST unchanged anchors/source hashes and these ledger/candidate
+hashes are reconciled. All426 IDs/text/source identities,24 groups, fixed
+fingerprint `8a21b4dfc6e1b5645f3c1c5da824509204b9532180acb753cfed2c28d8adcc15`,
+2,372 references,137 parity groups, current states, gaps and complete0 remain.
+Generated parity supplies static inventory proof only. The exact combined
+SHA/tree, source preservation and narrow check receipts are recorded in
+`HOST_FINAL_COMBINATION_CHECKPOINT.json` and `host-final-combination.md` in the
+root reports directory. The original e612 checkpoint/report remain unchanged.
+No Mini Docker, PostgreSQL, browser/full matrix, external write or history rewrite
+is part of this continuation.
