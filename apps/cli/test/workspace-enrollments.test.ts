@@ -3,6 +3,8 @@ import test from "node:test";
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { fork } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { withWorkspaceEnrollment, workspaceEnrollmentDirectory } from "../src/workspace-enrollments.js";
 import { codexWorkspaceCapabilities, codexWorkspaceDescriptor, workspaceRootDigest } from "../src/codex-workspace.js";
 import { createArchitectureArtifactFixture } from "../../api/test/fixtures/architecture-artifact-fixture.js";
@@ -11,7 +13,7 @@ async function setup(t: Parameters<typeof createArchitectureArtifactFixture>[0])
   const fixture = await createArchitectureArtifactFixture(t);
   const temp = await mkdtemp(path.join(os.tmpdir(), "myskills-enrollment-authority-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
-  const state = workspaceEnrollmentDirectory({ XDG_CONFIG_HOME: path.join(temp, "config") });
+  const state = path.join(temp, "config", "workspace-enrollments");
   async function root(name: string) { const directory = path.join(temp, name); await mkdir(directory, { recursive: true }); return realpath(directory); }
   async function bind(workspace: string, targetId = fixture.target.id) {
     const discovery = path.join(workspace, ".agents", "skills");
@@ -20,6 +22,64 @@ async function setup(t: Parameters<typeof createArchitectureArtifactFixture>[0])
   }
   return { root, bind, state };
 }
+
+test("production authority ignores XDG, HOME and selected registry profiles", () => {
+  const expected = path.join(os.userInfo().homedir, ".config", "myskills-app", "workspace-enrollments");
+  for (const selection of ["one", "two"]) assert.equal(workspaceEnrollmentDirectory({ XDG_CONFIG_HOME: `/tmp/${selection}`, HOME: `/tmp/${selection}`, MYSKILLS_CONFIG_DIR: `/tmp/${selection}` }), expected);
+});
+
+test("previous XDG reservations migrate under the common authority without rewriting their history", async t => {
+  const s = await setup(t), selected = await s.root("selected"), stale = await s.root("stale");
+  const legacy = path.join(s.state, "legacy"), canonical = path.join(s.state, "canonical");
+  await assert.rejects(withWorkspaceEnrollment(selected, legacy, true, async () => { throw new Error("interrupted"); }), /interrupted/);
+  await withWorkspaceEnrollment(stale, legacy, true, async () => s.bind(stale));
+  await rm(stale, { recursive: true });
+  const original = await readFile(path.join(legacy, "enrollments.json"), "utf8");
+  await withWorkspaceEnrollment(selected, canonical, true, async () => s.bind(selected), { legacyDirectory: legacy });
+  await withWorkspaceEnrollment(selected, canonical, false, async () => {}, { legacyDirectory: legacy });
+  assert.equal(await readFile(path.join(legacy, "enrollments.json"), "utf8"), original);
+  const index = JSON.parse(await readFile(path.join(canonical, "enrollments.json"), "utf8"));
+  assert.ok(index.enrollments.find((row: { root: string; binding: unknown }) => row.root === selected).binding);
+  assert.ok(index.enrollments.some((row: { root: string }) => row.root === stale));
+});
+
+test("two actual CLI processes serialize distinct-XDG parent/child enrollment in both orders and retain interrupted reservations", { timeout: 30_000 }, async t => {
+  const fixture = await createArchitectureArtifactFixture(t);
+  const helper = fileURLToPath(new URL("./helpers/workspace-enrollment-process.ts", import.meta.url));
+  for (const firstSide of ["parent", "child"] as const) {
+    const s = await setup(t), parent = await s.root("process-parent"), child = await s.root("process-parent/child"), disjoint = await s.root("process-disjoint");
+    const first = firstSide === "parent" ? parent : child, second = firstSide === "parent" ? child : parent;
+    let registrations = 0;
+    function launch(workspace: string, xdg: string, holdRegistration: boolean) {
+      const child = fork(helper, [JSON.stringify({ workspace, authority: s.state, target: fixture.target, holdRegistration })], { execArgv: ["--import", "tsx"], env: { PATH: process.env.PATH, XDG_CONFIG_HOME: xdg }, stdio: ["ignore", "ignore", "ignore", "ipc"] });
+      const messages: { event: string; code?: number }[] = [];
+      const waiters = new Map<string, () => void>();
+      child.on("message", value => { const message = value as { event: string; code?: number }; messages.push(message); if (message.event === "registration") registrations++; waiters.get(message.event)?.(); });
+      const done = new Promise<number | null>(resolve => child.once("exit", resolve));
+      t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); });
+      return { child, done, event: (event: string) => messages.some(value => value.event === event) ? Promise.resolve() : new Promise<void>(resolve => waiters.set(event, resolve)) };
+    }
+    const one = launch(first, path.join(s.state, "xdg-one"), true);
+    await one.event("registration");
+    const two = launch(second, path.join(s.state, "xdg-two"), false);
+    await two.event("authority-wait"); // Actual global lock EEXIST before either binding exists.
+    const reserved = JSON.parse(await readFile(path.join(s.state, "enrollments.json"), "utf8"));
+    assert.equal(reserved.enrollments[0].root, first); assert.equal(reserved.enrollments[0].binding, null);
+    assert.equal(registrations, 1);
+    one.child.send({ event: "continue" });
+    assert.equal(await one.done, 0); assert.equal(await two.done, 1); assert.equal(registrations, 1);
+    const other = launch(disjoint, path.join(s.state, "xdg-three"), false);
+    assert.equal(await other.done, 0); assert.equal(registrations, 2);
+    const interrupted = await s.root("interrupted");
+    const crash = launch(interrupted, path.join(s.state, "xdg-four"), true);
+    await crash.event("registration"); crash.child.kill("SIGKILL"); await crash.done;
+    assert.equal(JSON.parse(await readFile(path.join(s.state, "enrollments.json"), "utf8")).enrollments.find((row: { root: string }) => row.root === interrupted).binding, null);
+    const recovery = launch(interrupted, path.join(s.state, "xdg-five"), false);
+    assert.equal(await recovery.done, 0, "same-root retained reservation recovers after actual process death");
+    const final = JSON.parse(await readFile(path.join(s.state, "enrollments.json"), "utf8"));
+    assert.ok(final.enrollments.find((row: { root: string; binding: unknown }) => row.root === interrupted).binding);
+  }
+});
 
 test("shared enrollment authority denies sequential and concurrent parent/child registration in both orders", async t => {
   for (const firstSide of ["parent", "child"] as const) {

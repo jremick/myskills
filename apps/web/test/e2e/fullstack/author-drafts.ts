@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
-import { runOperationalAcceptance } from "../../../../../scripts/operational-acceptance.mjs";
 
 // Failure ledger, written before production code:
 // - A fixture-only editor hides missing persistence: use real API/Postgres and reload.
@@ -16,24 +15,8 @@ import { runOperationalAcceptance } from "../../../../../scripts/operational-acc
 type Actor = { token: string; expiresAt: string; user: { id: string; email: string; roles: string[]; mfaVerified: boolean } };
 type Draft = { id: string; revision: number; title: string; files: Array<{ path: string; content: string }>; submission: { id: string; artifactSha256: string } | null };
 
-test("private browser drafts persist, reject stale edits, recover work, and correct immutable submissions", async ({ page }, testInfo) => {
-  test.setTimeout(300_000);
-  const baseURL = process.env.MYSKILLS_E2E_BASE_URL;
-  if (!baseURL) throw new Error("The disposable full-stack base URL is required.");
-  // The maintained runtime exposes this actor callback; its older declaration
-  // omits it. Extend the existing callback type locally without a runtime seam.
-  const callbacks: NonNullable<NonNullable<Parameters<typeof runOperationalAcceptance>[0]>["callbacks"]> & {
-    beforeRevocation: (context: { actors: { author: Actor; reviewer: Actor; consumer: Actor } }) => Promise<void>;
-  } = {
-    async beforeRevocation({ actors }: { actors: { author: Actor; reviewer: Actor; consumer: Actor } }) {
-      await exerciseDrafts(page, testInfo, baseURL, actors);
-    },
-  };
-  const report = await runOperationalAcceptance({ callbacks });
-  expect(report.passed).toBe(true);
-});
-
-async function exerciseDrafts(page: Page, testInfo: TestInfo, baseURL: string, actors: { author: Actor; reviewer: Actor; consumer: Actor }) {
+// Called as a named step by the actual operational journey, sharing its actors.
+export async function exerciseDrafts(page: Page, testInfo: TestInfo, baseURL: string, actors: { author: Actor; reviewer: Actor; consumer: Actor }) {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.name));
   const authorHeaders = { authorization: `Bearer ${actors.author.token}` };
@@ -44,6 +27,11 @@ async function exerciseDrafts(page: Page, testInfo: TestInfo, baseURL: string, a
   await page.evaluate((session) => localStorage.setItem("myskills-app:web-session", JSON.stringify(session)), { user: actors.author.user, expiresAt: actors.author.expiresAt });
   await page.goto("/submit");
   const workspace = page.getByRole("region", { name: "Private package drafts", exact: true });
+  const selectDraftFile = (file: "skill.json" | "review.md", stage: string) => test.step(`draft file ${stage}: ${file}`, async () => {
+    const selector = workspace.getByLabel("Draft file", { exact: true });
+    await expect(selector.locator(`option[value="${file}"]`), `draft file option at ${stage}`).toHaveCount(1);
+    await selector.selectOption(file);
+  });
   await workspace.getByRole("button", { name: "New draft", exact: true }).click();
   await workspace.getByLabel("New skill name", { exact: true }).fill(slug);
   const createdResponse = page.waitForResponse((r) => r.url().endsWith("/v1/drafts") && r.request().method() === "POST");
@@ -51,12 +39,12 @@ async function exerciseDrafts(page: Page, testInfo: TestInfo, baseURL: string, a
   const created = await createdResponse;
   expect(created.status()).toBe(201);
   const initial = (await created.json()).draft as Draft;
-  await workspace.getByLabel("Draft file", { exact: true }).selectOption("skill.json");
+  await selectDraftFile("skill.json", "created");
   await workspace.getByLabel("File contents", { exact: true }).fill('{"incomplete":');
   await workspace.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(workspace.getByText("Saved revision 2.", { exact: true })).toBeVisible();
   await page.reload();
-  await workspace.getByLabel("Draft file", { exact: true }).selectOption("skill.json");
+  await selectDraftFile("skill.json", "reloaded incomplete metadata");
   await expect(workspace.getByLabel("File contents", { exact: true })).toHaveValue('{"incomplete":');
   await workspace.getByRole("button", { name: "Validate saved draft", exact: true }).click();
   await expect(workspace.getByText("Package needs changes", { exact: true })).toBeVisible();
@@ -71,8 +59,15 @@ async function exerciseDrafts(page: Page, testInfo: TestInfo, baseURL: string, a
   ]);
   await expect(workspace.getByText(/Invalid UTF-8 or binary content; this file cannot be imported/)).toBeVisible();
   await workspace.getByRole("button", { name: "Preview import", exact: true }).click();
+  let importReplacementConfirmed = false;
+  page.once("dialog", async dialog => {
+    expect(dialog.message()).toMatch(/^Replace these unsaved edits\?/);
+    importReplacementConfirmed = true;
+    await dialog.accept();
+  });
   await workspace.getByRole("button", { name: "Use imported files", exact: true }).click();
-  await workspace.getByLabel("Draft file", { exact: true }).selectOption("review.md");
+  expect(importReplacementConfirmed, "the actual dirty-editor replacement requires explicit consent").toBe(true);
+  await selectDraftFile("review.md", "confirmed import");
   await workspace.getByRole("button", { name: "Preview text", exact: true }).click();
   await expect(workspace.getByLabel("Safe file preview", { exact: true })).toContainText("<script>");
   expect(await page.evaluate(() => (window as unknown as { packageExecuted?: boolean }).packageExecuted)).toBeUndefined();
@@ -131,13 +126,13 @@ async function exerciseDrafts(page: Page, testInfo: TestInfo, baseURL: string, a
   await expect(page.getByRole("region", { name: "Submission feedback" }).getByText("Add a concrete correction example.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Choose corrected package", exact: true }).click();
   await expect(workspace.getByText(/Source: submission/)).toBeVisible();
-  await workspace.getByLabel("Draft file", { exact: true }).selectOption("skill.json");
+  await selectDraftFile("skill.json", "requested correction");
   const correctedManifest = JSON.parse(await workspace.getByLabel("File contents", { exact: true }).inputValue());
   expect(correctedManifest.license).toBe("UNLICENSED");
   expect(correctedManifest.visibility).toBe("private");
   correctedManifest.version = "0.1.1";
   await workspace.getByLabel("File contents", { exact: true }).fill(`${JSON.stringify(correctedManifest, null, 2)}\n`);
-  await workspace.getByLabel("Draft file", { exact: true }).selectOption("review.md");
+  await selectDraftFile("review.md", "correction text");
   // The textarea displays normalized line endings; it must not rewrite held bytes
   // until the author actually edits this file.
   expect((await page.request.get(`${baseURL}/api/v1/drafts/${initial.id}/revisions/3`, { headers: authorHeaders }).then((r) => r.json())).draft.files.find((file: { path: string }) => file.path === "review.md").content).toBe(heldText);

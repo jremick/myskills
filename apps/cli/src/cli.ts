@@ -1,4 +1,4 @@
-import { withWorkspaceEnrollment, workspaceEnrollmentDirectory } from "./workspace-enrollments.js";
+import { legacyWorkspaceEnrollmentDirectory, withWorkspaceEnrollment, workspaceEnrollmentDirectory } from "./workspace-enrollments.js";
 import { releaseComparisonHelp, runReleaseComparisonCommand } from "./release-comparison-commands.js";
 import { type ArtifactDurabilityObserver } from "./architecture-artifact-filesystem.js";
 import { evaluationHelp, runEvaluationCommand } from "./evaluation-commands.js";
@@ -189,6 +189,8 @@ export interface CliRuntime {
   configProfile?: string;
   /** Test-only state seam; production uses the shared OS-user enrollment directory. */
   workspaceEnrollmentStateDirectory?: string;
+  /** Internal test observer for a real process waiting on enrollment authority. */
+  workspaceEnrollmentWait?: () => void;
   prompt?: CliPrompt;
   tokenStore?: CliTokenStore;
   /** Test-only clock seam for deterministic local target observations. */
@@ -213,6 +215,7 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
   let parsed: ParsedArgs;
   let namespace: string | undefined;
   const enrollmentDirectory = runtime.workspaceEnrollmentStateDirectory ?? workspaceEnrollmentDirectory(runtime.env);
+  const legacyEnrollmentDirectory = runtime.workspaceEnrollmentStateDirectory ? undefined : legacyWorkspaceEnrollmentDirectory(runtime.env);
   try {
     const selected = selectConfigurationProfile(argv, runtime.env);
     parsed = parseArgs(selected.argv);
@@ -260,7 +263,7 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
           } catch (error) { if (!isNodeError(error) || error.code !== "ENOENT") throw error; }
         }
         const managedMutation = parsed.command === "architecture-artifacts" || parsed.command === "codex" && parsed.args[0] === "enroll" || ["install", "update", "rollback", "companion"].includes(parsed.command);
-        if (workspace && managedMutation) return withWorkspaceEnrollment(String(parsed.options.workspace), enrollmentDirectory, parsed.command === "codex" && parsed.args[0] === "enroll", () => dispatchCli(parsed, runtime));
+        if (workspace && managedMutation) return withWorkspaceEnrollment(String(parsed.options.workspace), enrollmentDirectory, parsed.command === "codex" && parsed.args[0] === "enroll", () => dispatchCli(parsed, runtime), { legacyDirectory: legacyEnrollmentDirectory, onAuthorityWait: runtime.workspaceEnrollmentWait });
         return dispatchCli(parsed, runtime);
       });
     }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import type { TestContext } from "node:test";
 import { generateTotpCode, hashPassword } from "@myskills-app/auth";
-import { architectureTargetAdapterDigest, architectureTargetCapabilitiesDigest, createMultiLevelRouterArchitecture, type ArchitectureTargetObservationInput } from "@myskills-app/core";
+import { architectureTargetAdapterDigest, architectureTargetCapabilitiesDigest, createMultiLevelRouterArchitecture, type ArchitectureFactorySkillInput, type ArchitectureTargetObservationInput } from "@myskills-app/core";
 import { buildApp } from "../../src/app.js";
 import { MemoryAuthStore } from "../../src/auth/memory-auth-store.js";
 import { AuthService } from "../../src/auth/service.js";
@@ -28,7 +28,7 @@ export async function createArchitecturePlanFixture(t: Pick<TestContext, "after"
   const targetStore = new MemoryArchitectureTargetStore();
   const targetService = new ArchitectureTargetService(targetStore, new ArchitectureTargetBindingAuthorizer(architectureStore));
   const submissionService = new SubmissionService(new MemorySubmissionStore());
-  const references = [];
+  const references: Array<ArchitectureFactorySkillInput & { version: string; digest: string }> = [];
   for (const [slug, version, domainId] of [["plan-alpha", "2.0.0", "build"], ["plan-beta", "1.0.0", "build"], ["plan-denied", "1.0.0", "review"]]) {
     const manifest = { name: slug, title: slug, summary: "Synthetic architecture journey", version, license: "Apache-2.0", visibility: "public" as const, platforms: [{ name: "codex", install_target: "codex-skill", status: "supported" as const }], tags: ["fixture"] };
     const submitted = await submissionService.createSubmission({ actor: { id: ownerId, roles: ["author"] }, manifest, files: [{ path: "skill.json", content: JSON.stringify(manifest) }, { path: "README.md", content: "Synthetic architecture fixture." }, ...(composed ? [{path:"SKILL.md",content:`---\nname: ${slug}\ndescription: Synthetic composed instructions\n---\nExact ${slug}@${version} bytes.\n`},{path:"references/context.txt",content:`Asset ${slug}@${version}\n`}] : [])] });

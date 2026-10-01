@@ -172,20 +172,23 @@ if (mode === "seed-nonowner") {
     }, { status: 201 });
     assert.equal(run.versionId, data.submissionId); assert.equal(run.result.artifactSha256, current.artifact.sha256);
     assert.equal(run.result.suiteSha256, suite.latest.bodySha256); assert.equal(run.result.provenance, "api-owned");
+    assert.equal(run.suiteRevisionId, suite.latest.id);
     assert.equal(run.result.runner.id, "package-static"); assert.equal(run.result.runner.version, "1"); assert.equal(run.result.totals.skipped, 1);
     const { runs } = await api(`/v1/evaluations/releases/${slug}/${version}/summary`);
     const summary = runs.find(value => value.id === run.id); assert.ok(summary); assert.equal(summary.summary.assertions, undefined);
-    // Bounded summary only; no raw result, package content or findings exported.
-    data.evaluationProof = { slug, version, record: summary };
+    // Public projection stays bounded. The private /proof fixture separately
+    // retains the exact suite binding needed to verify authenticated restore.
+    data.evaluationProof = { slug, version, record: summary, suiteBinding: { revisionId: run.suiteRevisionId, sha256: run.result.suiteSha256 } };
   } else if (data.evaluationProof) {
     assert.equal(capability.capabilities?.evaluations, true);
-    const { slug, version, record } = data.evaluationProof;
+    const { slug, version, record, suiteBinding } = data.evaluationProof;
+    assert.ok(suiteBinding?.revisionId && /^[a-f0-9]{64}$/.test(suiteBinding.sha256), "private original suite binding is required");
     const { runs } = await api(`/v1/evaluations/releases/${slug}/${version}/summary`);
     assert.deepEqual(runs.find(value => value.id === record.id), record, "exact evaluation bindings and summary must survive restore");
     const { runs: details } = await api(`/v1/evaluations/releases/${slug}/${version}/runs`);
     const restored = details.find(value => value.id === record.id); assert.ok(restored);
     assert.equal(restored.versionId, record.versionId); assert.equal(restored.result.artifactSha256, record.summary.artifactSha256);
-    assert.equal(restored.suiteRevisionId, record.suiteRevisionId); assert.equal(restored.result.suiteSha256, record.summary.suiteSha256);
+    assert.equal(restored.suiteRevisionId, suiteBinding.revisionId); assert.equal(restored.result.suiteSha256, suiteBinding.sha256);
     assert.deepEqual(restored.result.totals, record.summary.totals);
   }
   data.persistedBoundaries = { draft: data.draftId ? "tested" : "not-available-on-source", evaluation: data.evaluationProof ? (mode === "create" ? "created-before-backup" : "restored-exact-summary") : "not-exercised", architecture: "tested", submission: "tested", scanFeedback: "read" };

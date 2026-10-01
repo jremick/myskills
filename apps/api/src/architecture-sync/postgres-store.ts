@@ -324,6 +324,19 @@ export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {
     }
   }
 
+  async findRunForCreate(input: { actorId: string; requestKey: string; targetId: string; idempotencyKey: string }): Promise<ArchitectureSyncRun | null> {
+    const byRequest = await this.db.select().from(skillArchitectureSyncRuns).where(and(
+      eq(skillArchitectureSyncRuns.actorUserId, dbUuid(validateIdentifier(input.actorId, "actorId"), "actorId")),
+      eq(skillArchitectureSyncRuns.requestKey, validateIdentifier(input.requestKey, "requestKey")),
+    )).limit(1);
+    if (byRequest[0]) return this.requireHydratedRun(this.db, byRequest[0].id);
+    const byIdempotency = await this.db.select().from(skillArchitectureSyncRuns).where(and(
+      eq(skillArchitectureSyncRuns.targetId, dbUuid(validateIdentifier(input.targetId, "targetId"), "targetId")),
+      eq(skillArchitectureSyncRuns.idempotencyKey, validateIdentifier(input.idempotencyKey, "idempotencyKey")),
+    )).limit(1);
+    return byIdempotency[0] ? this.requireHydratedRun(this.db, byIdempotency[0].id) : null;
+  }
+
   async getRun(runId: string): Promise<ArchitectureSyncRun | null> {
     const dbRunId = dbUuid(validateIdentifier(runId, "runId"), "runId");
     try {

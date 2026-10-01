@@ -1412,7 +1412,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 66
+            "line": 70
           }
         ],
         "checks": [
@@ -1436,7 +1436,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 78,
+            "line": 138,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -2930,7 +2930,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 54
+            "line": 76
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -3031,7 +3031,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 54
+            "line": 76
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -3513,7 +3513,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2376
+            "line": 2379
           }
         ],
         "checks": [
@@ -3603,7 +3603,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 54
+            "line": 76
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -4112,7 +4112,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2367
+            "line": 2370
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -5712,7 +5712,7 @@
           },
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2376
+            "line": 2379
           }
         ],
         "checks": [
@@ -6185,7 +6185,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2367
+            "line": 2370
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -6341,7 +6341,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2376
+            "line": 2379
           }
         ],
         "checks": [
@@ -6560,7 +6560,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2376
+            "line": 2379
           }
         ],
         "checks": [
@@ -6623,7 +6623,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 212
+            "line": 214
           }
         ],
         "checks": [
@@ -6686,7 +6686,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2376
+            "line": 2379
           }
         ],
         "checks": [
@@ -8486,7 +8486,7 @@
           },
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 202,
+            "line": 203,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           }
@@ -8557,7 +8557,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 54
+            "line": 76
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -8791,7 +8791,7 @@
         "checks": [
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 202,
+            "line": 203,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           },
@@ -9010,7 +9010,7 @@
         "checks": [
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 175,
+            "line": 176,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           },
@@ -9213,7 +9213,7 @@
         "checks": [
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 202,
+            "line": 203,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           },
@@ -11200,11 +11200,11 @@
         "sources": [
           {
             "path": "apps/api/src/architecture-sync/plan-service.ts",
-            "line": 243
+            "line": 245
           },
           {
             "path": "apps/api/src/architecture-sync/postgres-store.ts",
-            "line": 360
+            "line": 373
           },
           {
             "path": "apps/api/src/architecture-sync/purpose.ts",
@@ -11212,7 +11212,7 @@
           },
           {
             "path": "apps/api/src/architecture-sync/service.ts",
-            "line": 262
+            "line": 263
           },
           {
             "path": "packages/core/src/architecture-sync-control.ts",
@@ -11222,7 +11222,7 @@
         "checks": [
           {
             "path": "apps/api/test/postgres-architecture-plan-authority.pgtest.ts",
-            "line": 25,
+            "line": 26,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-plan-authority.pgtest.ts"
           },
@@ -11234,13 +11234,13 @@
           },
           {
             "path": "apps/api/test/postgres-architecture-sync-service.pgtest.ts",
-            "line": 120,
+            "line": 127,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-sync-service.pgtest.ts"
           },
           {
             "path": "apps/api/test/architecture-sync-service.test.ts",
-            "line": 146,
+            "line": 159,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/api/test/architecture-sync-service.test.ts"
           }
@@ -11920,7 +11920,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 1550
+            "line": 1553
           },
           {
             "path": "apps/mcp/src/application-tools.ts",
@@ -12206,7 +12206,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2829
+            "line": 2832
           },
           {
             "path": "apps/mcp/src/application-tools.ts",
@@ -12284,11 +12284,11 @@
         "sources": [
           {
             "path": "apps/api/src/architecture-sync/plan-service.ts",
-            "line": 243
+            "line": 245
           },
           {
             "path": "apps/api/src/architecture-sync/postgres-store.ts",
-            "line": 1432
+            "line": 1445
           },
           {
             "path": "apps/api/src/architecture-sync/purpose.ts",
@@ -12296,7 +12296,7 @@
           },
           {
             "path": "apps/api/src/architecture-sync/service.ts",
-            "line": 380
+            "line": 381
           },
           {
             "path": "packages/core/src/architecture-sync-control.ts",
@@ -12306,7 +12306,7 @@
         "checks": [
           {
             "path": "apps/api/test/postgres-architecture-plan-authority.pgtest.ts",
-            "line": 25,
+            "line": 26,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-plan-authority.pgtest.ts"
           },
@@ -12318,13 +12318,13 @@
           },
           {
             "path": "apps/api/test/postgres-architecture-sync-service.pgtest.ts",
-            "line": 280,
+            "line": 287,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-sync-service.pgtest.ts"
           },
           {
             "path": "apps/api/test/architecture-sync-service.test.ts",
-            "line": 391,
+            "line": 404,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/api/test/architecture-sync-service.test.ts"
           }
@@ -12404,7 +12404,7 @@
         "checks": [
           {
             "path": "apps/api/test/postgres-architecture-plan-authority.pgtest.ts",
-            "line": 25,
+            "line": 26,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-plan-authority.pgtest.ts"
           },
@@ -12416,13 +12416,13 @@
           },
           {
             "path": "apps/api/test/postgres-architecture-sync-service.pgtest.ts",
-            "line": 374,
+            "line": 381,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-sync-service.pgtest.ts"
           },
           {
             "path": "apps/api/test/architecture-sync-service.test.ts",
-            "line": 724,
+            "line": 737,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/api/test/architecture-sync-service.test.ts"
           }
@@ -12514,7 +12514,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 24,
+            "line": 84,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -12973,11 +12973,11 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2046
+            "line": 2049
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
-            "line": 71
+            "line": 72
           }
         ],
         "checks": [
@@ -13060,7 +13060,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 54
+            "line": 76
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -13155,7 +13155,7 @@
         "checks": [
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 202,
+            "line": 203,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           },
@@ -13942,7 +13942,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 54
+            "line": 76
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -15029,7 +15029,7 @@
         "checks": [
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 202,
+            "line": 203,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           },
@@ -15321,7 +15321,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2367
+            "line": 2370
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -15575,7 +15575,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 29
+            "line": 46
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -15767,7 +15767,7 @@
         "checks": [
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 180,
+            "line": 181,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           },
@@ -16015,7 +16015,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 25
+            "line": 42
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18531,7 +18531,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 54
+            "line": 76
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18644,7 +18644,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 54
+            "line": 76
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18757,7 +18757,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 36
+            "line": 53
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18870,7 +18870,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 34
+            "line": 51
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18983,7 +18983,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 36
+            "line": 53
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -19096,7 +19096,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 25
+            "line": 42
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -19209,7 +19209,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 34
+            "line": 51
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -19459,7 +19459,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 20
+            "line": 24
           }
         ],
         "checks": [
@@ -19483,7 +19483,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 62,
+            "line": 122,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -19557,7 +19557,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 20
+            "line": 24
           }
         ],
         "checks": [
@@ -19581,7 +19581,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 24,
+            "line": 84,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -19655,7 +19655,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 20
+            "line": 24
           }
         ],
         "checks": [
@@ -19679,7 +19679,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 46,
+            "line": 106,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -19753,7 +19753,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 20
+            "line": 24
           }
         ],
         "checks": [
@@ -19777,7 +19777,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 62,
+            "line": 122,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -19851,7 +19851,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 20
+            "line": 24
           }
         ],
         "checks": [
@@ -19875,7 +19875,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 46,
+            "line": 106,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -19949,7 +19949,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 20
+            "line": 24
           }
         ],
         "checks": [
@@ -19973,7 +19973,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 46,
+            "line": 106,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -20047,7 +20047,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 20
+            "line": 24
           }
         ],
         "checks": [
@@ -20071,7 +20071,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 62,
+            "line": 122,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -20169,7 +20169,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 24,
+            "line": 84,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -20311,7 +20311,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 20
+            "line": 24
           }
         ],
         "checks": [
@@ -20335,7 +20335,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 62,
+            "line": 122,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -20409,7 +20409,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 66
+            "line": 70
           }
         ],
         "checks": [
@@ -20433,7 +20433,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 24,
+            "line": 84,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -20531,7 +20531,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 24,
+            "line": 84,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -20605,7 +20605,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 66
+            "line": 70
           }
         ],
         "checks": [
@@ -20629,7 +20629,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 46,
+            "line": 106,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -20703,7 +20703,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 20
+            "line": 24
           }
         ],
         "checks": [
@@ -20727,7 +20727,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 62,
+            "line": 122,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -20867,7 +20867,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 54
+            "line": 76
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -21180,7 +21180,7 @@
         "checks": [
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 202,
+            "line": 203,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           },
@@ -21259,7 +21259,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 212
+            "line": 214
           }
         ],
         "checks": [
@@ -22306,7 +22306,7 @@
           },
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 180,
+            "line": 181,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           }
@@ -22864,7 +22864,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2367
+            "line": 2370
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -22998,7 +22998,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2376
+            "line": 2379
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -23472,7 +23472,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 54
+            "line": 76
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -23926,7 +23926,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 29
+            "line": 46
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -24033,7 +24033,7 @@
         "checks": [
           {
             "path": "apps/api/test/package-evaluations.pgtest.ts",
-            "line": 202,
+            "line": 203,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts"
           },
@@ -24875,7 +24875,7 @@
           },
           {
             "path": "apps/api/src/architecture-sync/postgres-store.ts",
-            "line": 437
+            "line": 450
           },
           {
             "path": "apps/api/src/architecture-sync/purpose.ts",
@@ -24883,7 +24883,7 @@
           },
           {
             "path": "apps/api/src/architecture-sync/service.ts",
-            "line": 380
+            "line": 381
           },
           {
             "path": "packages/core/src/architecture-sync-control.ts",
@@ -24893,7 +24893,7 @@
         "checks": [
           {
             "path": "apps/api/test/postgres-architecture-plan-authority.pgtest.ts",
-            "line": 25,
+            "line": 26,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-plan-authority.pgtest.ts"
           },
@@ -24905,13 +24905,13 @@
           },
           {
             "path": "apps/api/test/postgres-architecture-sync-service.pgtest.ts",
-            "line": 374,
+            "line": 381,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-sync-service.pgtest.ts"
           },
           {
             "path": "apps/api/test/architecture-sync-service.test.ts",
-            "line": 391,
+            "line": 404,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/api/test/architecture-sync-service.test.ts"
           }
@@ -25037,7 +25037,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 212
+            "line": 214
           }
         ],
         "checks": [
@@ -25884,7 +25884,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 20
+            "line": 24
           }
         ],
         "checks": [
@@ -25908,7 +25908,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 24,
+            "line": 84,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -28511,11 +28511,11 @@
         "sources": [
           {
             "path": "apps/api/src/architecture-sync/plan-service.ts",
-            "line": 86
+            "line": 88
           },
           {
             "path": "apps/api/src/architecture-sync/postgres-store.ts",
-            "line": 360
+            "line": 373
           },
           {
             "path": "apps/api/src/architecture-sync/purpose.ts",
@@ -28523,7 +28523,7 @@
           },
           {
             "path": "apps/api/src/architecture-sync/service.ts",
-            "line": 221
+            "line": 222
           },
           {
             "path": "packages/core/src/architecture-sync-control.ts",
@@ -28533,7 +28533,7 @@
         "checks": [
           {
             "path": "apps/api/test/postgres-architecture-plan-authority.pgtest.ts",
-            "line": 25,
+            "line": 26,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-plan-authority.pgtest.ts"
           },
@@ -28545,13 +28545,13 @@
           },
           {
             "path": "apps/api/test/postgres-architecture-sync-service.pgtest.ts",
-            "line": 120,
+            "line": 127,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-sync-service.pgtest.ts"
           },
           {
             "path": "apps/api/test/architecture-sync-service.test.ts",
-            "line": 146,
+            "line": 159,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/api/test/architecture-sync-service.test.ts"
           }
@@ -28622,7 +28622,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 20
+            "line": 24
           }
         ],
         "checks": [
@@ -28646,7 +28646,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 46,
+            "line": 106,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -28886,7 +28886,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 24,
+            "line": 84,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -29039,7 +29039,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 20
+            "line": 24
           }
         ],
         "checks": [
@@ -29063,7 +29063,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 62,
+            "line": 122,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -29136,7 +29136,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 20
+            "line": 24
           }
         ],
         "checks": [
@@ -29160,7 +29160,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 62,
+            "line": 122,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -29221,7 +29221,7 @@
           },
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2480
+            "line": 2483
           }
         ],
         "checks": [
@@ -29288,7 +29288,7 @@
           },
           {
             "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
-            "line": 47
+            "line": 49
           }
         ],
         "checks": [
@@ -29300,7 +29300,7 @@
           },
           {
             "path": "apps/api/test/postgres-architecture-sync-service.pgtest.ts",
-            "line": 892,
+            "line": 899,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-sync-service.pgtest.ts"
           }
@@ -30064,7 +30064,7 @@
           },
           {
             "path": "apps/cli/src/workspace-enrollments.ts",
-            "line": 20
+            "line": 24
           }
         ],
         "checks": [
@@ -30088,7 +30088,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 46,
+            "line": 106,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -30181,7 +30181,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 24,
+            "line": 84,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"
@@ -30489,7 +30489,7 @@
           },
           {
             "path": "apps/cli/test/workspace-enrollments.test.ts",
-            "line": 24,
+            "line": 84,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
             "receipt": "final-workspace-enrollment-frozen.tap (5 index ownership, malformed marker and legacy discovery contracts passed)"

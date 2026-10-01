@@ -117,6 +117,19 @@ async function applyInput(runId: string, overrides: Partial<ArchitectureSyncAppl
   return { actor: "owner-1", runId, ...overrides };
 }
 
+test("pre-correction default step IDs replay unchanged while new requests remain namespaced", async () => {
+  const { service, store } = fixture();
+  const legacy = await service.createPreviewRun(input({ steps: input().steps.map((step, index) => ({ ...step, id: `step-${index + 1}` })) }));
+  assert.deepEqual(legacy.run.steps.map(step => step.id), ["step-1", "step-2"]);
+  const replay = await service.createPreviewRun(input());
+  assert.equal(replay.replayed, true); assert.deepEqual(replay.run, legacy.run);
+  assert.deepEqual(await store.getRun(legacy.run.identity.runId), legacy.run);
+  await assert.rejects(service.createPreviewRun(input({ desired: { changed: true } })), (error: unknown) => error instanceof Error && "code" in error && error.code === "ARCHITECTURE_SYNC_IDEMPOTENCY_CONFLICT");
+  const fresh = await Promise.all(["new-one", "new-two"].map(key => service.createPreviewRun(input({ requestKey: key, idempotencyKey: key }))));
+  assert.equal(new Set(fresh.flatMap(result => result.run.steps.map(step => step.id))).size, 4);
+  assert.ok(fresh.every(result => result.run.steps.every(step => !/^step-[12]$/.test(step.id))));
+});
+
 test("preview is digest-only, side-effect-free, and request/idempotency replay is deterministic", async () => {
   const { service, store, executor } = fixture();
   const preview = await service.createPreviewRun(input());

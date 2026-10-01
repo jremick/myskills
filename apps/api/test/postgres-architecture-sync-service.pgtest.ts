@@ -73,6 +73,13 @@ test("PostgresArchitectureSyncStore persists the fixture service journal atomica
   const allSteps = [created, ...distinct].flatMap(result => result.run.steps.map(step => step.id));
   assert.equal(new Set(allSteps).size, allSteps.length);
   for (const result of distinct) assert.deepEqual(await new PostgresArchitectureSyncStore(db).getRun(result.run.identity.runId), result.run);
+  const legacyInput = input({ requestKey: "legacy-defaults", idempotencyKey: "legacy-defaults" });
+  const legacy = await service.createPreviewRun({ ...legacyInput, steps: legacyInput.steps.map((step, index) => ({ ...step, id: `step-${index + 1}` })) });
+  const reopenedLegacyService = new ArchitectureSyncService(new PostgresArchitectureSyncStore(db), executor, ports, { idFactory: () => "legacy-replay-fresh-process" });
+  const legacyReplay = await reopenedLegacyService.createPreviewRun(legacyInput);
+  assert.equal(legacyReplay.replayed, true); assert.deepEqual(legacyReplay.run, legacy.run);
+  assert.deepEqual(await new PostgresArchitectureSyncStore(db).getRun(legacy.run.identity.runId), legacy.run);
+  await assert.rejects(reopenedLegacyService.createPreviewRun({ ...legacyInput, desired: { different: true } }));
   assert.equal((await service.createPreviewRun(input({ requestKey: "second", idempotencyKey: "second" }))).replayed, true);
   const approved = await service.approve({ actor: ownerId, runId: created.run.identity.runId });
   assert.equal(approved.state, "approved");
@@ -921,7 +928,7 @@ async function seedFixture(pool: ReturnType<typeof createPgPool>): Promise<void>
      ) VALUES ($1, $2, $3, 'Sync target', 'fixture', 1, '1.0.0', 'personal-mac', 'personal',
      'connected', 'granted', $4, $4, '{"inventory.read":true}'::jsonb, $5,
        $6, 2, '{}'::jsonb, '{}'::jsonb, $3)`,
-    [targetId, architectureId, ownerId, now, "a".repeat(64), "b".repeat(64)],
+    [targetId, architectureId, ownerId, now, architectureTargetCapabilitiesDigest({ "inventory.read": true }, 1), "b".repeat(64)],
   );
   await pool.query(
     `INSERT INTO skill_architecture_observations (

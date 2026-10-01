@@ -18,6 +18,7 @@ import { SubmissionService } from "../src/submissions/service.js";
 import { PostgresArchitectureSyncStore } from "../src/architecture-sync/postgres-store.js";
 import { ArchitecturePlanService } from "../src/architecture-sync/plan-service.js";
 import { SkillUpgradePolicyService } from "../src/upgrade-policies/service.js";
+import { legacyArchitecturePlanCreation } from "./fixtures/legacy-architecture-plan.js";
 import { PostgresSkillUpgradePolicyStore } from "../src/upgrade-policies/postgres-store.js";
 
 // Actual plan service, coherent production wrapper and independent PostgreSQL
@@ -66,6 +67,20 @@ test("Postgres exact-revision review retains authority, rejects prior changes an
     }finally{await blocker.query("ROLLBACK");blocker.release();await pool.query("UPDATE auth_sessions SET revoked_at=NULL WHERE token_hash=$1",[actor.artifactCredential.hash]);}
   }
   const distinct = await Promise.all(["distinct-a", "distinct-b"].map(idempotencyKey => service.createPlan(actor, target.id, { ...request, idempotencyKey })));
+  const legacyAuthority = store.withPlanAuthority.bind(store);
+  store.withPlanAuthority = (input, operation) => legacyAuthority(input, (scoped, deps) => {
+    const create = scoped.createRun.bind(scoped);
+    scoped.createRun = candidate => create(legacyArchitecturePlanCreation(candidate));
+    return operation(scoped, deps);
+  });
+  let legacy;
+  try { legacy = await service.createPlan(actor, target.id, { ...request, idempotencyKey: "pre-correction-replay" }); }
+  finally { store.withPlanAuthority = legacyAuthority; }
+  assert.ok(legacy.run.steps.length > 0); assert.ok(legacy.run.steps.every((step, index) => step.id === `step-${index + 1}`));
+  const legacyReplay = await service.createPlan(actor, target.id, { ...request, idempotencyKey: "pre-correction-replay" });
+  assert.equal(legacyReplay.replayed, true); assert.deepEqual(legacyReplay.run, legacy.run);
+  assert.deepEqual(await new PostgresArchitectureSyncStore(db).getRun(legacy.run.identity.runId), legacy.run);
+  await assert.rejects(service.createPlan(actor, target.id, { ...request, idempotencyKey: "pre-correction-replay", expectedTargetGeneration: target.generation + 1 }));
   assert.ok(distinct.every(result => result.run.steps.length > 0));
   assert.equal(new Set(distinct.flatMap(result => result.run.steps.map(step => step.id))).size, distinct.reduce((count, result) => count + result.run.steps.length, 0));
   const replayedDistinct = await service.createPlan(actor, target.id, { ...request, idempotencyKey: "distinct-a" });

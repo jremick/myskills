@@ -123,7 +123,7 @@ trust boundary; this does not provide a sandbox against that OS principal.
 | Criterion | Source and acceptance binding | Outstanding acceptance |
 | --- | --- | --- |
 | ARCH-02 | Existing exact-review routes and current credential checks; `postgres-architecture-plan-authority.pgtest.ts` observes actual target/writer locks and a successful first approval write before rollback. Real organization history/grant cases live in `postgres-architecture-artifact.pgtest.ts`. | Windows-owned PostgreSQL execution and independent correction review. |
-| ARCH-03 | Core topology projection; API compact approval, actor and maintenance-window regressions; CLI two disjoint byte fixtures, actual router disable, unrelated-path preservation, directory-sync ordering/failures and overlapping-root refusal. Current-schema PG cases add approval readback, shared leases, distinct rollback actor, baseline-only credential expiry waits and actual window closing. | All added PG cases are prepared for Windows execution. Maintained fullstack and HOST MinIO journeys remain required. HOST backup setup uses owned DNS/TLS identity and bounded phase/operation diagnostics; the historical static-IP/default-IPAM cause is unconfirmed until Linux retry. Actual host recognition/consent stays separate. |
+| ARCH-03 | Core topology projection; API compact approval, actor and maintenance-window regressions; CLI two disjoint byte fixtures, actual router disable, unrelated-path preservation, directory-sync ordering/failures and overlapping-root refusal. Current-schema PG cases add approval readback, shared leases, distinct rollback actor, baseline-only credential expiry waits and actual window closing. | Final exact-candidate Windows execution remains required. HOST backup uses the owned bridge gateway, assigned scoped port and TLS IP SAN. Exact5128 failed endpoint readback; fixed state/network/port diagnostics are prepared for Linux retry. Actual host recognition/consent stays separate. |
 | ARCH-04 | Existing graph editor/migration source remains. `ArchitectureArtifactHandoff` and browser/MCP transport tests bind selected saved review to intent and exact pins, then display trusted-companion commands and receipt limitations. | Full canonical browser/runtime and actual connected-host acceptance; byte fixtures alone do not complete the full architecture lifecycle thesis. |
 
 Historical correction checks on the frozen combined source at `097cd50`
@@ -135,12 +135,21 @@ These are supporting local receipts. Real PostgreSQL locks/serialization,
 MinIO/Linux backup setup, fullstack and host recognition remain Windows-owned.
 The canonical seven failed jobs and failed HOST cleanup receipt are retained.
 
-The later `5128bb8` source includes the final corrections and additional
-published-release PostgreSQL fixture. Its active canonical diagnostic reproduces
-an early exit in the actual server-worker process on Node22 and Node24, before
-the exact database blocker is reached. Those process lifecycle assertions remain
-unproven. Later local receipts and canonical results belong to their exact source
-checkpoints; the historical combined-source receipts above are retained.
+The later exact `5128bb8` diagnostic completed on 1 October 2026. Both general
+checks passed; both PostgreSQL lanes had 306 passes and six failures, including
+an early production-process exit before the exact DB blocker. Mocked browsers
+had 193 passes and one skip per lane; fullstack had eight passes and two failures.
+Five image builds/smokes passed; HOST stopped at backup endpoint readback.
+Current inner/HOST cleanup completed without replacing the older failed receipt.
+
+Current source corrects the process fixture's notification configuration,
+canonical fixture identities, private suite restore binding, common OS-user
+enrollment authority and pre-correction nonempty-plan replay. Legacy IDs/digests
+stay immutable; new generated IDs remain namespaced. The browser draft exercise
+shares the operational actors and explicitly accepts dirty-import replacement.
+Actual process lifecycle, final SQL, fullstack and complete HOST restore remain
+unproven until the corrected exact candidate runs. Local receipts and independent
+review belong to their exact checkpoints; historical evidence remains retained.
 
 `docs/capability-parity.json` records stable ARC-11 coverage and evidence levels.
 Generate its matrix with `npm run docs:parity`; static coverage is not runtime

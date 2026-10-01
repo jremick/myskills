@@ -432,10 +432,11 @@ test("private draft route journey preserves history, isolation and atomic submis
         else denied(response, failure === "scope" || failure === "role" ? 403 : 401, failure === "scope" ? "API_TOKEN_SCOPE_REQUIRED" : failure === "role" ? "SUBMISSION_ROLE_REQUIRED" : "AUTHENTICATION_REQUIRED");
         if (failure === "role") await pool.query("INSERT INTO role_assignments(user_id,role) VALUES($1,'author')", [users.alice]);
         const versions = (await pool.query("SELECT count(*)::int AS n FROM skill_versions v JOIN skills s ON s.id=v.skill_id WHERE s.slug=$1", [slug])).rows[0].n;
-        const jobs = (await pool.query("SELECT count(*)::int AS n FROM package_scan_jobs j JOIN skill_versions v ON v.id=j.skill_version_id JOIN skills s ON s.id=v.skill_id WHERE s.slug=$1", [slug])).rows[0].n;
+        const jobs = (await pool.query("SELECT count(*)::int AS n FROM jobs j JOIN skill_versions v ON v.id::text=j.payload->>'versionId' JOIN skills s ON s.id=v.skill_id WHERE j.type='package-scan' AND s.slug=$1", [slug])).rows[0].n;
+        const scans = (await pool.query("SELECT count(*)::int AS n FROM scan_runs r JOIN skill_versions v ON v.id=r.skill_version_id JOIN skills s ON s.id=v.skill_id JOIN jobs j ON j.id=r.job_id WHERE j.type='package-scan' AND j.payload->>'versionId'=v.id::text AND j.payload->>'scanRunId'=r.id::text AND s.slug=$1", [slug])).rows[0].n;
         const receipt = (await pool.query("SELECT submission_id FROM author_draft_revisions WHERE draft_id=$1 AND revision=1", [draft.id])).rows[0].submission_id;
-        assert.equal(versions, failure === "valid" ? 1 : 0); assert.equal(jobs, failure === "valid" ? 1 : 0); assert.equal(Boolean(receipt), failure === "valid");
-        evidence.push({ check: "submit-current-authority", barrier, kind, failure, versions, jobs, receiptPresent: Boolean(receipt) });
+        assert.equal(versions, failure === "valid" ? 1 : 0); assert.equal(jobs, failure === "valid" ? 1 : 0); assert.equal(scans, failure === "valid" ? 1 : 0); assert.equal(Boolean(receipt), failure === "valid");
+        evidence.push({ check: "submit-current-authority", barrier, kind, failure, versions, jobs, scans, receiptPresent: Boolean(receipt) });
       }
     }
     for (const barrier of ["head", "allocation"] as const) {

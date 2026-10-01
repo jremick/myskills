@@ -656,13 +656,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -868,9 +868,9 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 66,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
-          "anchor": "export async function withWorkspaceEnrollment<T>(workspace: string, directory: string, enrolling: boolean, work: () => Promise<T>): Promise<T> {"
+          "line": 70,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
+          "anchor": "export async function withWorkspaceEnrollment<T>(workspace: string, directory: string, enrolling: boolean, work: () => Promise<T>, options: { legacyDirectory?: string; onAuthorityWait?: () => void } = {}): Promise<T> {"
         }
       ],
       "checks": [
@@ -900,8 +900,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 78,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 138,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"pre-index child binding denies first parent enrollment and a stale unrelated reservation preserves other workspaces\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -919,13 +919,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 121,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "## Criterion bindings and evidence limits"
         }
       ],
@@ -959,13 +959,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 11,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "## Authority and baseline"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -999,13 +999,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 321,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "## Final candidate reconciliation"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 121,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "## Criterion bindings and evidence limits"
         }
       ],
@@ -1039,13 +1039,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 259,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "## External decisions and gates"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -1079,13 +1079,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 198,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "### HOST review remediation checkpoint"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -1119,13 +1119,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -1159,13 +1159,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -1792,8 +1792,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 54,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 76,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -1823,7 +1823,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 31,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -1879,8 +1879,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 54,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 76,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -1910,7 +1910,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 60,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup endpoint denies foreign network, wrong gateway, broad binding and changed ownership\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -2163,8 +2163,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2376,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 2379,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -2226,8 +2226,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 54,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 76,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -2257,7 +2257,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 60,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup endpoint denies foreign network, wrong gateway, broad binding and changed ownership\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -2535,15 +2535,15 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2367,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 2370,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "b07d1fff45cf9e81357ba2230fdeaa6adb842c27141081d0765b0db0b80d393a",
-          "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>): Promise<T> {"
+          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
       "checks": [
@@ -3663,8 +3663,8 @@
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2376,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 2379,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -3703,7 +3703,7 @@
         {
           "path": "apps/cli/src/cli.ts",
           "line": 179,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "text(): Promise<string>;"
         }
       ],
@@ -3942,15 +3942,15 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2367,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 2370,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "b07d1fff45cf9e81357ba2230fdeaa6adb842c27141081d0765b0db0b80d393a",
-          "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>): Promise<T> {"
+          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
       "checks": [
@@ -4050,8 +4050,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2376,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 2379,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -4193,8 +4193,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2376,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 2379,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -4226,8 +4226,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 212,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 214,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {"
         }
       ],
@@ -4259,8 +4259,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2376,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 2379,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -4313,7 +4313,7 @@
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
           "line": 263,
-          "sha256": "9088deb2701224180a33a724bb0aa25a6a2871b102e36e73d24c54c405e51ace",
+          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
           "anchor": "await t.test(\"source membership revoked while draft allocation waits cannot persist held bytes\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4436,7 +4436,7 @@
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
           "line": 223,
-          "sha256": "9088deb2701224180a33a724bb0aa25a6a2871b102e36e73d24c54c405e51ace",
+          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
           "anchor": "await t.test(\"save raced with submit cannot bind changed bytes\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4822,7 +4822,7 @@
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
           "line": 245,
-          "sha256": "9088deb2701224180a33a724bb0aa25a6a2871b102e36e73d24c54c405e51ace",
+          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
           "anchor": "await t.test(\"release seed preserves exact bytes and cannot survive mid-read revocation\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5249,7 +5249,7 @@
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
           "line": 42,
-          "sha256": "9088deb2701224180a33a724bb0aa25a6a2871b102e36e73d24c54c405e51ace",
+          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
           "anchor": "test(\"private draft route journey preserves history, isolation and atomic submission\", { timeout: 180_000 }, async (t) => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5344,8 +5344,8 @@
         },
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 202,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "line": 203,
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "await t.test(\"HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5391,8 +5391,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 54,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 76,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -5422,7 +5422,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 31,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -5481,7 +5481,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5565,8 +5565,8 @@
       "checks": [
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 202,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "line": 203,
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "await t.test(\"HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5718,8 +5718,8 @@
       "checks": [
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 175,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "line": 176,
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "for(const canary of [\"PRIVATE-CONTENT-CANARY\",\"PRIVATE-ORG-\",\"assertions\",\"suiteRevisionId\",\"suiteSha256\",document.latest.bodySha256,\"reviewContext\",\"actorUserId\",\"files\",\"tokenHash\"])assert.equal(summary.body.includes(c",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5849,8 +5849,8 @@
       "checks": [
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 202,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "line": 203,
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "await t.test(\"HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5935,7 +5935,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -6020,7 +6020,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -6173,7 +6173,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -7089,14 +7089,14 @@
       "sources": [
         {
           "path": "apps/api/src/architecture-sync/plan-service.ts",
-          "line": 243,
-          "sha256": "91414ef7d3b0adaebe477d02172315a9f67f058be655e3ce2c5b126e7252110d",
+          "line": 245,
+          "sha256": "b30de10c410d51e6dd268accb588f2d2404ecda09d8c6febba748ae6482e6fe8",
           "anchor": "export function validateCreateArchitecturePlanInput(input: unknown): asserts input is CreateArchitecturePlanInput {"
         },
         {
           "path": "apps/api/src/architecture-sync/postgres-store.ts",
-          "line": 360,
-          "sha256": "c1b7626cc2b64f07f15ebfb6cbef5d9fadd86469426c93807d9332ac2d43bcb2",
+          "line": 373,
+          "sha256": "fa74a3a7085335d909c4a8318189c9182f893b28367c6088f8b18eb70f9d0b8f",
           "anchor": "async claimApply(input: ArchitectureSyncApplyClaimInput): Promise<ArchitectureSyncApplyClaimResult> {"
         },
         {
@@ -7107,8 +7107,8 @@
         },
         {
           "path": "apps/api/src/architecture-sync/service.ts",
-          "line": 262,
-          "sha256": "c49e915ade41b3ca300bd5546e1ab08c53dbf80bb1547c7a2cfa6808b8477173",
+          "line": 263,
+          "sha256": "edddcdbcc15d40a35367db3d06920f9ff33700e70a7ed5abdf4ea7641f6fabcd",
           "anchor": "async apply(input: ArchitectureSyncApplyInput): Promise<ArchitectureSyncRun> {"
         },
         {
@@ -7121,8 +7121,8 @@
       "checks": [
         {
           "path": "apps/api/test/postgres-architecture-plan-authority.pgtest.ts",
-          "line": 25,
-          "sha256": "5f346d33542e8cf0ff9b8f951dc1a48210a055d3dae2ffd14538fe5a6284270e",
+          "line": 26,
+          "sha256": "ba79b4890bde515209a319e7f99370c5e3ebdec61bb1ee88812c668d459c6a52",
           "anchor": "test(\"Postgres exact-revision review retains authority, rejects prior changes and rolls back partial approval\", { timeout: 120_000 }, async t => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-plan-authority.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -7137,16 +7137,16 @@
         },
         {
           "path": "apps/api/test/postgres-architecture-sync-service.pgtest.ts",
-          "line": 120,
-          "sha256": "8bd302e80f40d17cfb359a22822b9a5705682ad2ac672d3a8c68832a6ed5a2df",
+          "line": 127,
+          "sha256": "dc43b5856a559e12a1a54ca1e73413632f5842aca69f7709790ecf6c3bc266eb",
           "anchor": "test(\"PostgresArchitectureSyncStore retains immutable plan metadata and lists bounded target history\", { timeout: 60_000 }, async (t) => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-sync-service.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/api/test/architecture-sync-service.test.ts",
-          "line": 146,
-          "sha256": "f87958ea81ff2c05a684ae3d103f241afa670862ac81136ad22b6eb8ad4c1037",
+          "line": 159,
+          "sha256": "08ed179ecf43871e14ce8bf7a8859bb4f64f9353e329a69410e30b7627ac609a",
           "anchor": "test(\"approval binds the actor and plan digest, then staged apply verifies in order\", async () => {",
           "command": "node --import tsx --test apps/api/test/architecture-sync-service.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -7540,8 +7540,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 1550,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 1553,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "assertCodexObservationOptions(parsed, healthOnly);"
         },
         {
@@ -7702,8 +7702,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2829,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 2832,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "preflightScopeEnrollment(initialState, provider, scope, location.path);"
         },
         {
@@ -7747,14 +7747,14 @@
       "sources": [
         {
           "path": "apps/api/src/architecture-sync/plan-service.ts",
-          "line": 243,
-          "sha256": "91414ef7d3b0adaebe477d02172315a9f67f058be655e3ce2c5b126e7252110d",
+          "line": 245,
+          "sha256": "b30de10c410d51e6dd268accb588f2d2404ecda09d8c6febba748ae6482e6fe8",
           "anchor": "export function validateCreateArchitecturePlanInput(input: unknown): asserts input is CreateArchitecturePlanInput {"
         },
         {
           "path": "apps/api/src/architecture-sync/postgres-store.ts",
-          "line": 1432,
-          "sha256": "c1b7626cc2b64f07f15ebfb6cbef5d9fadd86469426c93807d9332ac2d43bcb2",
+          "line": 1445,
+          "sha256": "fa74a3a7085335d909c4a8318189c9182f893b28367c6088f8b18eb70f9d0b8f",
           "anchor": "ensureNoReservedMetadata(run.approval?.metadata);"
         },
         {
@@ -7765,8 +7765,8 @@
         },
         {
           "path": "apps/api/src/architecture-sync/service.ts",
-          "line": 380,
-          "sha256": "c49e915ade41b3ca300bd5546e1ab08c53dbf80bb1547c7a2cfa6808b8477173",
+          "line": 381,
+          "sha256": "edddcdbcc15d40a35367db3d06920f9ff33700e70a7ed5abdf4ea7641f6fabcd",
           "anchor": "async recover(input: ArchitectureSyncRecoveryInput): Promise<{ run: ArchitectureSyncRun; recovery: ArchitectureSyncRecoveryResult }> {"
         },
         {
@@ -7779,8 +7779,8 @@
       "checks": [
         {
           "path": "apps/api/test/postgres-architecture-plan-authority.pgtest.ts",
-          "line": 25,
-          "sha256": "5f346d33542e8cf0ff9b8f951dc1a48210a055d3dae2ffd14538fe5a6284270e",
+          "line": 26,
+          "sha256": "ba79b4890bde515209a319e7f99370c5e3ebdec61bb1ee88812c668d459c6a52",
           "anchor": "test(\"Postgres exact-revision review retains authority, rejects prior changes and rolls back partial approval\", { timeout: 120_000 }, async t => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-plan-authority.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -7795,16 +7795,16 @@
         },
         {
           "path": "apps/api/test/postgres-architecture-sync-service.pgtest.ts",
-          "line": 280,
-          "sha256": "8bd302e80f40d17cfb359a22822b9a5705682ad2ac672d3a8c68832a6ed5a2df",
+          "line": 287,
+          "sha256": "dc43b5856a559e12a1a54ca1e73413632f5842aca69f7709790ecf6c3bc266eb",
           "anchor": "test(\"PostgresArchitectureSyncStore records recovery evidence and fences concurrent target leases\", { timeout: 60_000 }, async (t) => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-sync-service.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/api/test/architecture-sync-service.test.ts",
-          "line": 391,
-          "sha256": "f87958ea81ff2c05a684ae3d103f241afa670862ac81136ad22b6eb8ad4c1037",
+          "line": 404,
+          "sha256": "08ed179ecf43871e14ce8bf7a8859bb4f64f9353e329a69410e30b7627ac609a",
           "anchor": "test(\"memory recovery finalization rolls back transition, evidence, lease, and audit together\", async () => {",
           "command": "node --import tsx --test apps/api/test/architecture-sync-service.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -7821,13 +7821,13 @@
         {
           "path": "apps/api/src/architecture-sync/plan-service.ts",
           "line": 45,
-          "sha256": "91414ef7d3b0adaebe477d02172315a9f67f058be655e3ce2c5b126e7252110d",
+          "sha256": "b30de10c410d51e6dd268accb588f2d2404ecda09d8c6febba748ae6482e6fe8",
           "anchor": "export class ArchitecturePlanService {"
         },
         {
           "path": "apps/api/src/architecture-sync/postgres-store.ts",
           "line": 122,
-          "sha256": "c1b7626cc2b64f07f15ebfb6cbef5d9fadd86469426c93807d9332ac2d43bcb2",
+          "sha256": "fa74a3a7085335d909c4a8318189c9182f893b28367c6088f8b18eb70f9d0b8f",
           "anchor": "export class PostgresArchitectureSyncStore implements ArchitectureSyncStore {"
         },
         {
@@ -7839,7 +7839,7 @@
         {
           "path": "apps/api/src/architecture-sync/service.ts",
           "line": 134,
-          "sha256": "c49e915ade41b3ca300bd5546e1ab08c53dbf80bb1547c7a2cfa6808b8477173",
+          "sha256": "edddcdbcc15d40a35367db3d06920f9ff33700e70a7ed5abdf4ea7641f6fabcd",
           "anchor": "constructor("
         },
         {
@@ -7852,8 +7852,8 @@
       "checks": [
         {
           "path": "apps/api/test/postgres-architecture-plan-authority.pgtest.ts",
-          "line": 25,
-          "sha256": "5f346d33542e8cf0ff9b8f951dc1a48210a055d3dae2ffd14538fe5a6284270e",
+          "line": 26,
+          "sha256": "ba79b4890bde515209a319e7f99370c5e3ebdec61bb1ee88812c668d459c6a52",
           "anchor": "test(\"Postgres exact-revision review retains authority, rejects prior changes and rolls back partial approval\", { timeout: 120_000 }, async t => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-plan-authority.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -7868,16 +7868,16 @@
         },
         {
           "path": "apps/api/test/postgres-architecture-sync-service.pgtest.ts",
-          "line": 374,
-          "sha256": "8bd302e80f40d17cfb359a22822b9a5705682ad2ac672d3a8c68832a6ed5a2df",
+          "line": 381,
+          "sha256": "dc43b5856a559e12a1a54ca1e73413632f5842aca69f7709790ecf6c3bc266eb",
           "anchor": "test(\"PostgresArchitectureSyncStore rolls back recovery transition, evidence, lease, and audit together\", { timeout: 60_000 }, async (t) => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-sync-service.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/api/test/architecture-sync-service.test.ts",
-          "line": 724,
-          "sha256": "f87958ea81ff2c05a684ae3d103f241afa670862ac81136ad22b6eb8ad4c1037",
+          "line": 737,
+          "sha256": "08ed179ecf43871e14ce8bf7a8859bb4f64f9353e329a69410e30b7627ac609a",
           "anchor": "test(\"memory rollback does not commit compensation after lease loss\", async () => {",
           "command": "node --import tsx --test apps/api/test/architecture-sync-service.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -7918,8 +7918,8 @@
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
           "line": 16,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
-          "anchor": "export function workspaceEnrollmentDirectory(env: Record<string, string | undefined>): string {"
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
+          "anchor": "export function workspaceEnrollmentDirectory(_env: Record<string, string | undefined>): string {"
         }
       ],
       "checks": [
@@ -7949,8 +7949,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 24,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 84,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"shared enrollment authority denies sequential and concurrent parent/child registration in both orders\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -8228,14 +8228,14 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2046,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 2049,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "assertLibraryVersion(libraryResolution, version);"
         },
         {
           "path": "apps/cli/src/install-filesystem.ts",
-          "line": 71,
-          "sha256": "b07d1fff45cf9e81357ba2230fdeaa6adb842c27141081d0765b0db0b80d393a",
+          "line": 72,
+          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
           "anchor": "export function assertInstallRootLocked(root: string): void {"
         }
       ],
@@ -8297,8 +8297,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 54,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 76,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -8328,7 +8328,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 60,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup endpoint denies foreign network, wrong gateway, broad binding and changed ownership\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -8367,15 +8367,15 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 7,
-          "sha256": "764abedf0456e22503f2499799414b6d9b90d46df7a11468267a70d63bc91ff6",
+          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
           "anchor": "## Current delivery"
         }
       ],
       "checks": [
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 202,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "line": 203,
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "await t.test(\"HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -8421,7 +8421,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 1,
-          "sha256": "764abedf0456e22503f2499799414b6d9b90d46df7a11468267a70d63bc91ff6",
+          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
           "anchor": "# Roadmap candidate delivery"
         }
       ],
@@ -8429,7 +8429,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -8771,7 +8771,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 7,
-          "sha256": "764abedf0456e22503f2499799414b6d9b90d46df7a11468267a70d63bc91ff6",
+          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
           "anchor": "## Current delivery"
         }
       ],
@@ -8779,7 +8779,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -8842,8 +8842,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 54,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 76,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -8873,7 +8873,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 60,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup endpoint denies foreign network, wrong gateway, broad binding and changed ownership\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -9466,8 +9466,8 @@
       "checks": [
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 202,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "line": 203,
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "await t.test(\"HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -9650,15 +9650,15 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2367,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 2370,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "b07d1fff45cf9e81357ba2230fdeaa6adb842c27141081d0765b0db0b80d393a",
-          "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>): Promise<T> {"
+          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
       "checks": [
@@ -9809,8 +9809,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 29,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 46,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "reserve(\"network\", network);"
         },
         {
@@ -9840,7 +9840,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 31,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -9879,7 +9879,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 25,
-          "sha256": "764abedf0456e22503f2499799414b6d9b90d46df7a11468267a70d63bc91ff6",
+          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
           "anchor": "## Architecture review follow-through"
         }
       ],
@@ -9887,7 +9887,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -9934,8 +9934,8 @@
       "checks": [
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 180,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "line": 181,
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "await t.test(\"pre-approval comparison uses real reviewer authority without bypassing baseline release visibility\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -10087,8 +10087,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 25,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 42,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "export function prepareHostBackupService({ proof, owner, image, user, password, reserve, mark, docker, call, runService }) {"
         },
         {
@@ -10118,7 +10118,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 31,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -10875,7 +10875,7 @@
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
           "line": 287,
-          "sha256": "9088deb2701224180a33a724bb0aa25a6a2871b102e36e73d24c54c405e51ace",
+          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
           "anchor": "await t.test(\"database payload drift cannot be attributed to the original release or submission digest\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -10920,7 +10920,7 @@
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
           "line": 403,
-          "sha256": "9088deb2701224180a33a724bb0aa25a6a2871b102e36e73d24c54c405e51ace",
+          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
           "anchor": "await t.test(\"draft submit denies stale authority after both head and allocation waits without version job or receipt\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -10965,7 +10965,7 @@
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
           "line": 95,
-          "sha256": "9088deb2701224180a33a724bb0aa25a6a2871b102e36e73d24c54c405e51ace",
+          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
           "anchor": "await t.test(\"save incomplete metadata then correct multi-file content without changing history\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -11061,7 +11061,7 @@
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
           "line": 245,
-          "sha256": "9088deb2701224180a33a724bb0aa25a6a2871b102e36e73d24c54c405e51ace",
+          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
           "anchor": "await t.test(\"release seed preserves exact bytes and cannot survive mid-read revocation\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -11157,7 +11157,7 @@
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
           "line": 95,
-          "sha256": "9088deb2701224180a33a724bb0aa25a6a2871b102e36e73d24c54c405e51ace",
+          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
           "anchor": "await t.test(\"save incomplete metadata then correct multi-file content without changing history\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -11253,7 +11253,7 @@
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
           "line": 202,
-          "sha256": "9088deb2701224180a33a724bb0aa25a6a2871b102e36e73d24c54c405e51ace",
+          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
           "anchor": "await t.test(\"duplicate versions and failure after insert leave no partial draft receipt\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -11619,8 +11619,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 54,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 76,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -11650,7 +11650,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 31,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11706,8 +11706,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 54,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 76,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -11737,7 +11737,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 31,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11793,8 +11793,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 36,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 53,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "chmodSync(join(certs, \"private.key\"), 0o600);"
         },
         {
@@ -11824,7 +11824,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 46,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup launch rejection retains the uncertain owned create and exports only bounded operation diagnostics\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11880,8 +11880,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 34,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 51,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "call(\"openssl\", [\"req\", \"-x509\", \"-newkey\", \"rsa:2048\", \"-nodes\", \"-days\", \"1\", \"-keyout\", join(certs, \"private.key\"),"
         },
         {
@@ -11911,7 +11911,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 31,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11967,8 +11967,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 36,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 53,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "chmodSync(join(certs, \"private.key\"), 0o600);"
         },
         {
@@ -11998,7 +11998,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 31,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -12054,8 +12054,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 25,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 42,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "export function prepareHostBackupService({ proof, owner, image, user, password, reserve, mark, docker, call, runService }) {"
         },
         {
@@ -12085,7 +12085,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 31,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -12141,8 +12141,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 34,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 51,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "call(\"openssl\", [\"req\", \"-x509\", \"-newkey\", \"rsa:2048\", \"-nodes\", \"-days\", \"1\", \"-keyout\", join(certs, \"private.key\"),"
         },
         {
@@ -12172,7 +12172,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 31,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -12199,13 +12199,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 259,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "## External decisions and gates"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -12301,8 +12301,8 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 20,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
+          "line": 24,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
           "anchor": "export function assertOutsideDiscovery(workspace: string): void {"
         }
       ],
@@ -12333,8 +12333,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 62,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 122,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"discovery-contained roots, invalid ancestor markers and changed binding identities fail before registration\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -12375,8 +12375,8 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 20,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
+          "line": 24,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
           "anchor": "export function assertOutsideDiscovery(workspace: string): void {"
         }
       ],
@@ -12407,8 +12407,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 24,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 84,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"shared enrollment authority denies sequential and concurrent parent/child registration in both orders\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -12449,8 +12449,8 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 20,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
+          "line": 24,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
           "anchor": "export function assertOutsideDiscovery(workspace: string): void {"
         }
       ],
@@ -12481,8 +12481,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 46,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 106,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"disjoint existing bindings remain usable without traversing large or unreadable unrelated project contents\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -12523,8 +12523,8 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 20,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
+          "line": 24,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
           "anchor": "export function assertOutsideDiscovery(workspace: string): void {"
         }
       ],
@@ -12555,8 +12555,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 62,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 122,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"discovery-contained roots, invalid ancestor markers and changed binding identities fail before registration\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -12597,8 +12597,8 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 20,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
+          "line": 24,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
           "anchor": "export function assertOutsideDiscovery(workspace: string): void {"
         }
       ],
@@ -12629,8 +12629,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 46,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 106,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"disjoint existing bindings remain usable without traversing large or unreadable unrelated project contents\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -12671,8 +12671,8 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 20,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
+          "line": 24,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
           "anchor": "export function assertOutsideDiscovery(workspace: string): void {"
         }
       ],
@@ -12703,8 +12703,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 46,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 106,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"disjoint existing bindings remain usable without traversing large or unreadable unrelated project contents\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -12745,8 +12745,8 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 20,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
+          "line": 24,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
           "anchor": "export function assertOutsideDiscovery(workspace: string): void {"
         }
       ],
@@ -12777,8 +12777,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 62,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 122,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"discovery-contained roots, invalid ancestor markers and changed binding identities fail before registration\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -12820,8 +12820,8 @@
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
           "line": 16,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
-          "anchor": "export function workspaceEnrollmentDirectory(env: Record<string, string | undefined>): string {"
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
+          "anchor": "export function workspaceEnrollmentDirectory(_env: Record<string, string | undefined>): string {"
         }
       ],
       "checks": [
@@ -12851,8 +12851,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 24,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 84,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"shared enrollment authority denies sequential and concurrent parent/child registration in both orders\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -12870,13 +12870,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 112,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "## Integration and verification records"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 9,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "## Authority and immutable intent"
         }
       ],
@@ -12933,8 +12933,8 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 20,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
+          "line": 24,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
           "anchor": "export function assertOutsideDiscovery(workspace: string): void {"
         }
       ],
@@ -12965,8 +12965,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 62,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 122,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"discovery-contained roots, invalid ancestor markers and changed binding identities fail before registration\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -13007,9 +13007,9 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 66,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
-          "anchor": "export async function withWorkspaceEnrollment<T>(workspace: string, directory: string, enrolling: boolean, work: () => Promise<T>): Promise<T> {"
+          "line": 70,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
+          "anchor": "export async function withWorkspaceEnrollment<T>(workspace: string, directory: string, enrolling: boolean, work: () => Promise<T>, options: { legacyDirectory?: string; onAuthorityWait?: () => void } = {}): Promise<T> {"
         }
       ],
       "checks": [
@@ -13039,8 +13039,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 24,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 84,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"shared enrollment authority denies sequential and concurrent parent/child registration in both orders\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -13082,8 +13082,8 @@
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
           "line": 16,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
-          "anchor": "export function workspaceEnrollmentDirectory(env: Record<string, string | undefined>): string {"
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
+          "anchor": "export function workspaceEnrollmentDirectory(_env: Record<string, string | undefined>): string {"
         }
       ],
       "checks": [
@@ -13113,8 +13113,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 24,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 84,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"shared enrollment authority denies sequential and concurrent parent/child registration in both orders\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -13155,9 +13155,9 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 66,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
-          "anchor": "export async function withWorkspaceEnrollment<T>(workspace: string, directory: string, enrolling: boolean, work: () => Promise<T>): Promise<T> {"
+          "line": 70,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
+          "anchor": "export async function withWorkspaceEnrollment<T>(workspace: string, directory: string, enrolling: boolean, work: () => Promise<T>, options: { legacyDirectory?: string; onAuthorityWait?: () => void } = {}): Promise<T> {"
         }
       ],
       "checks": [
@@ -13187,8 +13187,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 46,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 106,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"disjoint existing bindings remain usable without traversing large or unreadable unrelated project contents\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -13229,8 +13229,8 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 20,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
+          "line": 24,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
           "anchor": "export function assertOutsideDiscovery(workspace: string): void {"
         }
       ],
@@ -13261,8 +13261,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 62,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 122,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"discovery-contained roots, invalid ancestor markers and changed binding identities fail before registration\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -13280,13 +13280,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 9,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "## Authority and immutable intent"
         }
       ],
@@ -13349,8 +13349,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 54,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 76,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -13380,7 +13380,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 31,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -13481,8 +13481,8 @@
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "b07d1fff45cf9e81357ba2230fdeaa6adb842c27141081d0765b0db0b80d393a",
-          "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>): Promise<T> {"
+          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
       "checks": [
@@ -13561,8 +13561,8 @@
       "checks": [
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 202,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "line": 203,
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "await t.test(\"HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -13614,8 +13614,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 212,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 214,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {"
         }
       ],
@@ -13660,7 +13660,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 25,
-          "sha256": "764abedf0456e22503f2499799414b6d9b90d46df7a11468267a70d63bc91ff6",
+          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
           "anchor": "## Architecture review follow-through"
         }
       ],
@@ -13668,7 +13668,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -14138,7 +14138,7 @@
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
           "line": 26,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "test(\"exact-version evaluation HTTP/PG authority, replay, immutability and public projection\",{timeout:120_000},async t=>{",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -14339,8 +14339,8 @@
         },
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 180,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "line": 181,
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "await t.test(\"pre-approval comparison uses real reviewer authority without bypassing baseline release visibility\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -14667,15 +14667,15 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2367,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 2370,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "b07d1fff45cf9e81357ba2230fdeaa6adb842c27141081d0765b0db0b80d393a",
-          "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>): Promise<T> {"
+          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
       "checks": [
@@ -14713,7 +14713,7 @@
         {
           "path": "apps/cli/src/cli.ts",
           "line": 179,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "text(): Promise<string>;"
         }
       ],
@@ -14745,15 +14745,15 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2376,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 2379,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         },
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "b07d1fff45cf9e81357ba2230fdeaa6adb842c27141081d0765b0db0b80d393a",
-          "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>): Promise<T> {"
+          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
       "checks": [
@@ -15031,8 +15031,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 54,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 76,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -15062,7 +15062,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 31,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -15332,8 +15332,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 29,
-          "sha256": "fa932ed7298074054defa0d04c9cc77a63b4b2b4bff0e40a30e599e8960bcc2f",
+          "line": 46,
+          "sha256": "3a7ce2b089f816bd9fd58557ec3b121331f44aab3a808504184fc8a20082fed0",
           "anchor": "reserve(\"network\", network);"
         },
         {
@@ -15363,7 +15363,7 @@
         {
           "path": "scripts/test/host-backup-service.test.mjs",
           "line": 31,
-          "sha256": "18edb54216795cef0ead994955723f5c576fb1ae6b33e7be6b4e0202dba64f5c",
+          "sha256": "7ca4c3ad9f7ead142658b9c6b7747c25a7dd6f02612b493fb6fb0796a3588d01",
           "anchor": "test(\"backup setup reserves ownership before launch and aligns owned gateway, port and TLS and literal credentials without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -15402,15 +15402,15 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 1,
-          "sha256": "764abedf0456e22503f2499799414b6d9b90d46df7a11468267a70d63bc91ff6",
+          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
           "anchor": "# Roadmap candidate delivery"
         }
       ],
       "checks": [
         {
           "path": "apps/api/test/package-evaluations.pgtest.ts",
-          "line": 202,
-          "sha256": "f8cc29498037601d3b3cdaa30cc71de2bf1eaa6db837bda43e7860a3cd562577",
+          "line": 203,
+          "sha256": "35587ff25bd153d2afa467ecee0162185562f83e61b3a5cd685f2751223a05bf",
           "anchor": "await t.test(\"HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-evaluations.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -15444,7 +15444,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 1,
-          "sha256": "764abedf0456e22503f2499799414b6d9b90d46df7a11468267a70d63bc91ff6",
+          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
           "anchor": "# Roadmap candidate delivery"
         },
         {
@@ -15456,7 +15456,7 @@
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -15954,13 +15954,13 @@
         {
           "path": "apps/api/src/architecture-sync/plan-service.ts",
           "line": 45,
-          "sha256": "91414ef7d3b0adaebe477d02172315a9f67f058be655e3ce2c5b126e7252110d",
+          "sha256": "b30de10c410d51e6dd268accb588f2d2404ecda09d8c6febba748ae6482e6fe8",
           "anchor": "export class ArchitecturePlanService {"
         },
         {
           "path": "apps/api/src/architecture-sync/postgres-store.ts",
-          "line": 437,
-          "sha256": "c1b7626cc2b64f07f15ebfb6cbef5d9fadd86469426c93807d9332ac2d43bcb2",
+          "line": 450,
+          "sha256": "fa74a3a7085335d909c4a8318189c9182f893b28367c6088f8b18eb70f9d0b8f",
           "anchor": "async claimRecovery(input: ArchitectureSyncRecoveryClaimInput): Promise<ArchitectureSyncRecoveryClaimResult> {"
         },
         {
@@ -15971,8 +15971,8 @@
         },
         {
           "path": "apps/api/src/architecture-sync/service.ts",
-          "line": 380,
-          "sha256": "c49e915ade41b3ca300bd5546e1ab08c53dbf80bb1547c7a2cfa6808b8477173",
+          "line": 381,
+          "sha256": "edddcdbcc15d40a35367db3d06920f9ff33700e70a7ed5abdf4ea7641f6fabcd",
           "anchor": "async recover(input: ArchitectureSyncRecoveryInput): Promise<{ run: ArchitectureSyncRun; recovery: ArchitectureSyncRecoveryResult }> {"
         },
         {
@@ -15985,8 +15985,8 @@
       "checks": [
         {
           "path": "apps/api/test/postgres-architecture-plan-authority.pgtest.ts",
-          "line": 25,
-          "sha256": "5f346d33542e8cf0ff9b8f951dc1a48210a055d3dae2ffd14538fe5a6284270e",
+          "line": 26,
+          "sha256": "ba79b4890bde515209a319e7f99370c5e3ebdec61bb1ee88812c668d459c6a52",
           "anchor": "test(\"Postgres exact-revision review retains authority, rejects prior changes and rolls back partial approval\", { timeout: 120_000 }, async t => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-plan-authority.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -16001,16 +16001,16 @@
         },
         {
           "path": "apps/api/test/postgres-architecture-sync-service.pgtest.ts",
-          "line": 374,
-          "sha256": "8bd302e80f40d17cfb359a22822b9a5705682ad2ac672d3a8c68832a6ed5a2df",
+          "line": 381,
+          "sha256": "dc43b5856a559e12a1a54ca1e73413632f5842aca69f7709790ecf6c3bc266eb",
           "anchor": "test(\"PostgresArchitectureSyncStore rolls back recovery transition, evidence, lease, and audit together\", { timeout: 60_000 }, async (t) => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-sync-service.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/api/test/architecture-sync-service.test.ts",
-          "line": 391,
-          "sha256": "f87958ea81ff2c05a684ae3d103f241afa670862ac81136ad22b6eb8ad4c1037",
+          "line": 404,
+          "sha256": "08ed179ecf43871e14ce8bf7a8859bb4f64f9353e329a69410e30b7627ac609a",
           "anchor": "test(\"memory recovery finalization rolls back transition, evidence, lease, and audit together\", async () => {",
           "command": "node --import tsx --test apps/api/test/architecture-sync-service.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -16077,8 +16077,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 212,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 214,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {"
         }
       ],
@@ -16168,13 +16168,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 112,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "## Integration and verification records"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -16208,13 +16208,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 9,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "## Authority and immutable intent"
         }
       ],
@@ -16248,13 +16248,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 11,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "## Authority and baseline"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -16288,13 +16288,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 121,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "## Criterion bindings and evidence limits"
         }
       ],
@@ -16406,13 +16406,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -16446,13 +16446,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -16486,13 +16486,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -16606,8 +16606,8 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 20,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
+          "line": 24,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
           "anchor": "export function assertOutsideDiscovery(workspace: string): void {"
         }
       ],
@@ -16638,8 +16638,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 24,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 84,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"shared enrollment authority denies sequential and concurrent parent/child registration in both orders\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -17152,13 +17152,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -17192,13 +17192,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -18329,14 +18329,14 @@
       "sources": [
         {
           "path": "apps/api/src/architecture-sync/plan-service.ts",
-          "line": 86,
-          "sha256": "91414ef7d3b0adaebe477d02172315a9f67f058be655e3ce2c5b126e7252110d",
+          "line": 88,
+          "sha256": "b30de10c410d51e6dd268accb588f2d2404ecda09d8c6febba748ae6482e6fe8",
           "anchor": "async getPlan(actor: ArchitecturePlanActor, runId: string) {"
         },
         {
           "path": "apps/api/src/architecture-sync/postgres-store.ts",
-          "line": 360,
-          "sha256": "c1b7626cc2b64f07f15ebfb6cbef5d9fadd86469426c93807d9332ac2d43bcb2",
+          "line": 373,
+          "sha256": "fa74a3a7085335d909c4a8318189c9182f893b28367c6088f8b18eb70f9d0b8f",
           "anchor": "async claimApply(input: ArchitectureSyncApplyClaimInput): Promise<ArchitectureSyncApplyClaimResult> {"
         },
         {
@@ -18347,8 +18347,8 @@
         },
         {
           "path": "apps/api/src/architecture-sync/service.ts",
-          "line": 221,
-          "sha256": "c49e915ade41b3ca300bd5546e1ab08c53dbf80bb1547c7a2cfa6808b8477173",
+          "line": 222,
+          "sha256": "edddcdbcc15d40a35367db3d06920f9ff33700e70a7ed5abdf4ea7641f6fabcd",
           "anchor": "async approve(input: ArchitectureSyncApprovalInput): Promise<ArchitectureSyncRun> {"
         },
         {
@@ -18361,8 +18361,8 @@
       "checks": [
         {
           "path": "apps/api/test/postgres-architecture-plan-authority.pgtest.ts",
-          "line": 25,
-          "sha256": "5f346d33542e8cf0ff9b8f951dc1a48210a055d3dae2ffd14538fe5a6284270e",
+          "line": 26,
+          "sha256": "ba79b4890bde515209a319e7f99370c5e3ebdec61bb1ee88812c668d459c6a52",
           "anchor": "test(\"Postgres exact-revision review retains authority, rejects prior changes and rolls back partial approval\", { timeout: 120_000 }, async t => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-plan-authority.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -18377,16 +18377,16 @@
         },
         {
           "path": "apps/api/test/postgres-architecture-sync-service.pgtest.ts",
-          "line": 120,
-          "sha256": "8bd302e80f40d17cfb359a22822b9a5705682ad2ac672d3a8c68832a6ed5a2df",
+          "line": 127,
+          "sha256": "dc43b5856a559e12a1a54ca1e73413632f5842aca69f7709790ecf6c3bc266eb",
           "anchor": "test(\"PostgresArchitectureSyncStore retains immutable plan metadata and lists bounded target history\", { timeout: 60_000 }, async (t) => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-sync-service.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/api/test/architecture-sync-service.test.ts",
-          "line": 146,
-          "sha256": "f87958ea81ff2c05a684ae3d103f241afa670862ac81136ad22b6eb8ad4c1037",
+          "line": 159,
+          "sha256": "08ed179ecf43871e14ce8bf7a8859bb4f64f9353e329a69410e30b7627ac609a",
           "anchor": "test(\"approval binds the actor and plan digest, then staged apply verifies in order\", async () => {",
           "command": "node --import tsx --test apps/api/test/architecture-sync-service.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -18432,8 +18432,8 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 20,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
+          "line": 24,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
           "anchor": "export function assertOutsideDiscovery(workspace: string): void {"
         }
       ],
@@ -18464,8 +18464,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 46,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 106,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"disjoint existing bindings remain usable without traversing large or unreadable unrelated project contents\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -18483,13 +18483,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -18523,13 +18523,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -18587,8 +18587,8 @@
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
           "line": 16,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
-          "anchor": "export function workspaceEnrollmentDirectory(env: Record<string, string | undefined>): string {"
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
+          "anchor": "export function workspaceEnrollmentDirectory(_env: Record<string, string | undefined>): string {"
         }
       ],
       "checks": [
@@ -18618,8 +18618,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 24,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 84,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"shared enrollment authority denies sequential and concurrent parent/child registration in both orders\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -18717,8 +18717,8 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 20,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
+          "line": 24,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
           "anchor": "export function assertOutsideDiscovery(workspace: string): void {"
         }
       ],
@@ -18749,8 +18749,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 62,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 122,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"discovery-contained roots, invalid ancestor markers and changed binding identities fail before registration\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -18791,8 +18791,8 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 20,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
+          "line": 24,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
           "anchor": "export function assertOutsideDiscovery(workspace: string): void {"
         }
       ],
@@ -18823,8 +18823,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 62,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 122,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"discovery-contained roots, invalid ancestor markers and changed binding identities fail before registration\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -18847,8 +18847,8 @@
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2480,
-          "sha256": "fe8df2f129db1d214a1b160b1f7edeb3d1174f480d877786f65bf0449ce7b785",
+          "line": 2483,
+          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
           "anchor": "assertMatchingProvenance(binding,provenance);"
         }
       ],
@@ -18886,8 +18886,8 @@
         },
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
-          "line": 47,
-          "sha256": "764abedf0456e22503f2499799414b6d9b90d46df7a11468267a70d63bc91ff6",
+          "line": 49,
+          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
           "anchor": "## Schema and compatibility"
         }
       ],
@@ -18902,8 +18902,8 @@
         },
         {
           "path": "apps/api/test/postgres-architecture-sync-service.pgtest.ts",
-          "line": 892,
-          "sha256": "8bd302e80f40d17cfb359a22822b9a5705682ad2ac672d3a8c68832a6ed5a2df",
+          "line": 899,
+          "sha256": "dc43b5856a559e12a1a54ca1e73413632f5842aca69f7709790ecf6c3bc266eb",
           "anchor": "await runMigrations(pool, { migrationsDir: historical });",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/postgres-architecture-sync-service.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -18920,13 +18920,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 9,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "## Authority and immutable intent"
         }
       ],
@@ -18960,13 +18960,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -19252,13 +19252,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 11,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "## Authority and baseline"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -19315,8 +19315,8 @@
         },
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
-          "line": 20,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
+          "line": 24,
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
           "anchor": "export function assertOutsideDiscovery(workspace: string): void {"
         }
       ],
@@ -19347,8 +19347,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 46,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 106,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"disjoint existing bindings remain usable without traversing large or unreadable unrelated project contents\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -19390,8 +19390,8 @@
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
           "line": 16,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
-          "anchor": "export function workspaceEnrollmentDirectory(env: Record<string, string | undefined>): string {"
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
+          "anchor": "export function workspaceEnrollmentDirectory(_env: Record<string, string | undefined>): string {"
         }
       ],
       "checks": [
@@ -19421,8 +19421,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 24,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 84,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"shared enrollment authority denies sequential and concurrent parent/child registration in both orders\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -19440,13 +19440,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 167,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "### Preserved roadmap integration checkpoint"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -19480,13 +19480,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 167,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "### Preserved roadmap integration checkpoint"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -19601,8 +19601,8 @@
         {
           "path": "apps/cli/src/workspace-enrollments.ts",
           "line": 16,
-          "sha256": "7c93ef5f82915b626658d4de537cb8a0b7ec099333919ff0154b5128ca75b8c8",
-          "anchor": "export function workspaceEnrollmentDirectory(env: Record<string, string | undefined>): string {"
+          "sha256": "292312cd81eea6abb25a5d8b119cf38c7f4d1a092e83a2a972a077c683c5536a",
+          "anchor": "export function workspaceEnrollmentDirectory(_env: Record<string, string | undefined>): string {"
         }
       ],
       "checks": [
@@ -19632,8 +19632,8 @@
         },
         {
           "path": "apps/cli/test/workspace-enrollments.test.ts",
-          "line": 24,
-          "sha256": "a8b1b0fe2a1846d46f0fbe85eb822b1ab257046c90beb348fe0cf333e378cae3",
+          "line": 84,
+          "sha256": "bd05d41bb732193f024d6856dd967a112485afff9e20796e7b2f05f4df6076bb",
           "anchor": "test(\"shared enrollment authority denies sequential and concurrent parent/child registration in both orders\", async t => {",
           "command": "node --import tsx --test apps/cli/test/workspace-enrollments.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -19690,13 +19690,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 167,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "### Preserved roadmap integration checkpoint"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -19818,13 +19818,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],
@@ -19858,13 +19858,13 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "8947f620307a20f9aedd95b8d7a35e240f5c067023162e36efbae9f6e9597997",
+          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
           "anchor": "# Roadmap execution ledger"
         },
         {
           "path": "docs/COMPOSED_ARCHITECTURE_DELIVERY.md",
           "line": 1,
-          "sha256": "20e63233c2e2b2326982ada4917abe35644e5facde2ed9222f8b35485f69ae08",
+          "sha256": "0354d83a75c5ac39489b67b76d3345597bc347c530eeba17dc7a18fdcd8fcb45",
           "anchor": "# Composed Codex workspace architecture delivery"
         }
       ],

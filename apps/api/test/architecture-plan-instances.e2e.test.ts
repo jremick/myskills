@@ -2,6 +2,31 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { architectureTargetAdapterDigest, architectureTargetCapabilitiesDigest } from "@myskills-app/core";
 import { createArchitecturePlanFixture } from "./fixtures/architecture-plan-fixture.js";
+import { legacyArchitecturePlanCreation } from "./fixtures/legacy-architecture-plan.js";
+
+test("pre-correction nonempty review creation replays exact stored IDs and digests under current authority", async t => {
+  const f = await createArchitecturePlanFixture(t);
+  const create = f.syncStore.createRun.bind(f.syncStore);
+  f.syncStore.createRun = input => create(legacyArchitecturePlanCreation(input));
+  const headers = { authorization: `Bearer ${f.sessions.owner}` };
+  const request = () => f.app.inject({ method: "POST", url: `/v1/architecture-targets/${f.target.id}/plans`, headers, payload: f.request });
+  const seeded = await request();
+  assert.equal(seeded.statusCode, 201, seeded.body);
+  f.syncStore.createRun = create;
+  const original = seeded.json().run;
+  assert.ok(original.steps.length > 0);
+  assert.deepEqual(original.steps.map((step: { id: string }) => step.id), original.steps.map((_step: unknown, index: number) => `step-${index + 1}`));
+  const replay = await request();
+  assert.equal(replay.statusCode, 200, replay.body); assert.equal(replay.json().replayed, true);
+  assert.deepEqual(replay.json().run, original); assert.deepEqual(await f.syncStore.getRun(original.identity.runId), original);
+  const revision = await f.architectureStore.createRevision({ actor: f.ownerId, architectureId: f.spec.id, expectedCurrentRevisionId: f.revision.id, message: "Changed immutable revision", spec: f.spec });
+  assert.ok(revision);
+  const changed = await f.app.inject({ method: "POST", url: `/v1/architecture-targets/${f.target.id}/plans`, headers, payload: { ...f.request, revisionId: revision.id } });
+  assert.equal(changed.statusCode, 409, changed.body);
+  const denied = await f.app.inject({ method: "POST", url: `/v1/architecture-targets/${f.target.id}/plans`, headers: { authorization: `Bearer ${f.sessions.plain}` }, payload: f.request });
+  assert.equal(denied.statusCode, 403, denied.body);
+  assert.deepEqual(await f.syncStore.getRun(original.identity.runId), original);
+});
 
 // Two supported Codex instances need distinct physical bindings, observations,
 // approvals and lifecycle history. Sharing logical context must never share a

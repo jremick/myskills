@@ -12,8 +12,12 @@ const maximumBytes = 1024 * 1024;
 const ambiguous = () => new Error("Workspace enrollment ownership is ambiguous. Preserve bindings and the enrollment index for explicit recovery.");
 const exactKeys = (value: object, keys: string[]) => Object.keys(value).sort().join(",") === keys.sort().join(",");
 
-/** Shared across configuration profiles; the caller selects this before profile routing. */
-export function workspaceEnrollmentDirectory(env: Record<string, string | undefined>): string {
+/** Actual OS account authority; HOME, XDG and registry profiles cannot split it. */
+export function workspaceEnrollmentDirectory(_env: Record<string, string | undefined>): string {
+  return path.join(os.userInfo().homedir, ".config", "myskills-app", "workspace-enrollments");
+}
+/** Read-only migration source for reservations written by the previous client. */
+export function legacyWorkspaceEnrollmentDirectory(env: Record<string, string | undefined>): string {
   const base = env.XDG_CONFIG_HOME ? path.join(path.resolve(env.XDG_CONFIG_HOME), "myskills-app") : path.join(os.homedir(), ".config", "myskills-app");
   return path.join(base, "workspace-enrollments");
 }
@@ -63,7 +67,7 @@ function parseIndex(text: string): Index {
 }
 
 /** One protected index lock spans validation, registration, durable binding and index writes. */
-export async function withWorkspaceEnrollment<T>(workspace: string, directory: string, enrolling: boolean, work: () => Promise<T>): Promise<T> {
+export async function withWorkspaceEnrollment<T>(workspace: string, directory: string, enrolling: boolean, work: () => Promise<T>, options: { legacyDirectory?: string; onAuthorityWait?: () => void } = {}): Promise<T> {
   assertOutsideDiscovery(workspace);
   return withInstallRootLock(directory, async stateRoot => {
     const info = await lstat(stateRoot);
@@ -72,6 +76,21 @@ export async function withWorkspaceEnrollment<T>(workspace: string, directory: s
     let index: Index = { schemaVersion: 1, enrollments: [] };
     try { index = parseIndex(await readRegularText(indexPath, maximumBytes)); }
     catch (error) { if (errorCode(error) !== "ENOENT") throw error; }
+    let migrated = false;
+    if (options.legacyDirectory && path.resolve(options.legacyDirectory) !== stateRoot) {
+      try {
+        const legacy = await lstat(options.legacyDirectory);
+        if (!legacy.isDirectory() || legacy.isSymbolicLink() || (legacy.mode & 0o077) !== 0 || typeof process.getuid === "function" && legacy.uid !== process.getuid()) throw ambiguous();
+        const previous = parseIndex(await readRegularText(path.join(await realpath(options.legacyDirectory), "enrollments.json"), maximumBytes));
+        for (const row of previous.enrollments) {
+          const existing = index.enrollments.find(value => value.root === row.root);
+          if (existing && (existing.dev !== row.dev || existing.ino !== row.ino || existing.binding && row.binding && JSON.stringify(existing.binding) !== JSON.stringify(row.binding))) throw ambiguous();
+          if (existing && !existing.binding && row.binding) { existing.binding = row.binding; migrated = true; }
+          if (!existing) { index.enrollments.push(row); migrated = true; }
+        }
+        if (index.enrollments.length > 2048) throw ambiguous();
+      } catch (error) { if (errorCode(error) !== "ENOENT") throw error; }
+    }
     const current = await rootIdentity(workspace);
     for (const entry of index.enrollments) {
       const overlap = pathContains(entry.root, workspace) || pathContains(workspace, entry.root);
@@ -122,7 +141,7 @@ export async function withWorkspaceEnrollment<T>(workspace: string, directory: s
       const { syncArtifactDirectory } = await import("./architecture-artifact-filesystem.js");
       await syncArtifactDirectory(stateRoot);
     };
-    if (entry) await persist(); // Reserve before an API target or local binding can be created.
+    if (entry || migrated) await persist(); // Reserve before an API target or local binding can be created.
     try { return await work(); }
     finally {
       if (entry) {
@@ -134,5 +153,5 @@ export async function withWorkspaceEnrollment<T>(workspace: string, directory: s
         await persist();
       }
     }
-  });
+  }, options.onAuthorityWait);
 }

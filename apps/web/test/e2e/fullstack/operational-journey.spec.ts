@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { runOperationalAcceptance } from "../../../../../scripts/operational-acceptance.mjs";
 import { proveCodexRecognition } from "../../../../../scripts/prove-codex-recognition.mjs";
+import { exerciseDrafts } from "./author-drafts.js";
 
 type BrowserActor = {
   token: string;
@@ -16,6 +17,11 @@ test("author feedback, immutable publication, upgrade policy, real CLI install/u
   page.on("pageerror", (error) => browserErrors.push(error.name));
   const report = await runOperationalAcceptance({
     callbacks: {
+      async beforeRevocation({ actors }) {
+        const baseURL = process.env.MYSKILLS_E2E_BASE_URL;
+        if (!baseURL) throw new Error("The disposable full-stack base URL is required.");
+        await test.step("private browser drafts persist, reject stale edits, recover work, and correct immutable submissions", () => exerciseDrafts(page, testInfo, baseURL, actors));
+      },
       async afterWorkspaceInstall({ workspace, slug }) {
         if (process.env.MYSKILLS_ACCEPTANCE_RUNTIME_PROOF !== "codex") return;
         const recognition = await proveCodexRecognition({ workspace, slug });

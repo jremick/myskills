@@ -19,7 +19,7 @@ function fixture(t, fail = false) {
     mark: (kind, name) => update(ledger => { ledger.resources.find(row => row.kind === kind && row.name === name).state = "created"; }),
     docker: args => { commands.push(args);
       if (args[0] === "network" && args[1] === "inspect") return { stdout: JSON.stringify([{ Id: "b".repeat(64), Name: `${owner}-backup-network`, Driver: "bridge", Scope: "local", Labels: { "io.myskills.host-rehearsal": owner }, IPAM: { Config: [{ Subnet: "172.28.0.0/16", Gateway: "172.28.0.1" }] } }]) };
-      if (args[0] === "container" && args[1] === "inspect") return { stdout: JSON.stringify([{ Id: "a".repeat(64), Config: { Labels: { "io.myskills.host-rehearsal": owner, "io.myskills.host-rehearsal.role": "backup" } }, NetworkSettings: { Networks: { [`${owner}-backup-network`]: { NetworkID: "b".repeat(64) } }, Ports: { "9000/tcp": [{ HostIp: "172.28.0.1", HostPort: "34567" }] } } }]) };
+      if (args[0] === "container" && args[1] === "inspect") return { stdout: JSON.stringify([{ Id: "a".repeat(64), State: { Status: "running", Running: true, Paused: false, Restarting: false, ExitCode: 0, Error: "" }, Config: { Labels: { "io.myskills.host-rehearsal": owner, "io.myskills.host-rehearsal.role": "backup" } }, NetworkSettings: { Networks: { [`${owner}-backup-network`]: { NetworkID: "b".repeat(64) } }, Ports: { "9000/tcp": [{ HostIp: "172.28.0.1", HostPort: "34567" }] } } }]) };
       return { status: 0 }; },
     call: (command, args) => { commands.push([command, ...args]); writeFileSync(join(proof, "certs/private.key"), "synthetic-key"); writeFileSync(join(proof, "certs/public.crt"), "synthetic-certificate"); },
     runService: (role, args, image, tail) => {
@@ -58,7 +58,7 @@ test("backup launch rejection retains the uncertain owned create and exports onl
 });
 
 test("backup endpoint denies foreign network, wrong gateway, broad binding and changed ownership", t => {
-  for (const fault of ["foreign-owner", "gateway-outside", "broad-port", "wrong-container", "changed-network"]) {
+  for (const [fault, reason] of [["foreign-owner", "network-identity-invalid"], ["gateway-outside", "network-gateway-outside"], ["broad-port", "port-binding-address-invalid"], ["wrong-container", "container-identity-invalid"], ["changed-network", "network-changed"], ["missing-port", "port-binding-absent"], ["exited", "container-not-running"], ["daemon-error", "container-not-running"]]) {
     const f = fixture(t); const docker = f.docker; let inspections = 0;
     f.docker = args => {
       const result = docker(args);
@@ -72,10 +72,25 @@ test("backup endpoint denies foreign network, wrong gateway, broad binding and c
       } else {
         if (fault === "broad-port") row.NetworkSettings.Ports["9000/tcp"][0].HostIp = "0.0.0.0";
         if (fault === "wrong-container") row.Config.Labels["io.myskills.host-rehearsal.role"] = "driver";
+        if (fault === "missing-port") row.NetworkSettings.Ports["9000/tcp"] = null;
+        if (fault === "exited" || fault === "daemon-error") {
+          row.State = { Status: "exited", Running: false, Paused: false, Restarting: false, ExitCode: 1,
+            Error: fault === "daemon-error" ? "permission denied PASSWORD=fixture-password https://secret.invalid" : "" };
+          row.NetworkSettings.Ports = {};
+        }
       }
       return { stdout: JSON.stringify([row]) };
     };
-    assert.throws(() => prepareHostBackupService(f), /HOST_BACKUP_NETWORK_INVALID/);
+    assert.throws(() => prepareHostBackupService(f), error => {
+      assert.equal(error.message, "HOST_BACKUP_NETWORK_INVALID");
+      assert.equal(error.hostFailure.reason, reason);
+      assert.doesNotMatch(JSON.stringify(error.hostFailure), /fixture-password|PASSWORD|secret.invalid/);
+      if (fault === "exited" || fault === "daemon-error") {
+        assert.equal(error.hostFailure.containerStatus, "exited"); assert.equal(error.hostFailure.containerExitCode, 1);
+        assert.equal(error.hostFailure.containerErrorCategory, fault === "daemon-error" ? "permission-denied" : "none");
+      }
+      return true;
+    });
     assert.ok(f.commands.every(args => !args.includes("--ip") && !args.includes("--subnet") && !args.includes("--add-host") && !args.includes("host")));
   }
 });

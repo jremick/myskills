@@ -46,11 +46,11 @@ No original MBP worktree or native thread is changed.
 | Integration | `cd93bde57496` | All 426 original clauses and 24 groups have separate current source/check/status/gap bindings. The fixed fingerprint and stale-binding gate are wired into structure. Final exact-candidate matrix and review remain pending. |
 | ID-GOV | `9106bc8cd953` | Integrated as `418e030`, hardened in `cf99c9b`; independent source review complete and new atomicity/deadline PG cases passed in the failed first checkpoint. Final candidate proof pending. |
 | TRUST-MCP | `4d3d183833f6`, recovery `e53508453908` | Integrated as `b10fcab` and `63b496b`, hardened in `cf99c9b`; independent source review complete and new coherent-authorization PG cases passed in the failed first checkpoint. Final candidate proof pending. |
-| QUALITY | `561c045f6012` | Durable scans and version-bound evaluations are integrated at frozen `8ba7e0e`. Final source corrects private disclosure/suite access, draft submit authority, exact-scan consumption and post-wait replay time. Local contracts pass; real PG/process acceptance and renewed review remain pending. |
-| AUTHOR-1 | `085acf87b006` | Draft/import/browser history source is retained. Final CLI/MCP published comparison and CLI/MCP/browser reviewer candidate diff use existing API authority. Local comparison/browser contracts pass; final PG/full-stack acceptance remains pending. |
-| ARCH-LIFE | `360243eeab86` | Composed delivery and reviewed authority fixes are integrated in exact `097cd50`. Final source addresses generated step IDs, shared enrollment/migration compatibility and canonical fixture defects. Prior reviews are complete; renewed final-source review and actual PG/MinIO acceptance remain pending. |
+| QUALITY | `561c045f6012` | Durable scans/evaluations and five authority/disclosure corrections passed exact5128 source review. Exact5128 PG/process failed. Current fixtures correct notification setup, actual jobs/scan association and static-suite identity; corrected real PG/process acceptance remains pending. |
+| AUTHOR-1 | `085acf87b006` | Draft/import/history and CLI/MCP/browser comparisons are retained. Exact5128 real drafts failed at replacement confirmation and duplicate registration. The full browser exercise now shares operational actors and accepts the exact dialog; corrected PG/fullstack acceptance remains pending. |
+| ARCH-LIFE | `360243eeab86` | Exact097 and exact4229 history retained. Exact5128 review required common OS-user enrollment authority and legacy nonempty-plan replay; current source includes both and canonical target fixture correction. Local process/replay checks pass; renewed review and actual PG/MinIO acceptance remain pending. |
 | DISC-SITE | `2453e69c3ba4` | Discovery and site integrated through `8fafa42`; fixed synthetic corpus and local desktop/mobile/keyboard checks passed. PG/canonical/deployed proof pending. |
-| HOST-1 | `3d01d673be27` | Prior independent findings and final gateway/TLS/platform receipt/diagnostic corrections are source-delivered. Seven current synthetic HOST contracts pass. Exact097 reached image receipts before failing; complete final Linux install/upgrade/restore and renewed review remain pending. |
+| HOST-1 | `3d01d673be27` | Exact5128 five image builds/smokes passed; HOST failed endpoint readback, then cleaned up. Current source preserves private suite restore identity/digest and adds fixed container-state/network/port diagnostics. Synthetic contracts pass; actual corrected Linux backup/restore and renewed review remain pending. |
 
 Sequence: ID/TRUST source and review corrections; sequential QUALITY, AUTHOR,
 ARCH, DISC and HOST integration; remaining no-cost evaluation and composed
@@ -333,3 +333,23 @@ gate checks the captured contract, 24 groups and current source anchors/hashes.
 A binding or local fixture receipt is not completed acceptance. The root final
 report carries the committed identity and specific command results; canonical
 SQL, browser, Linux/HOST and CodeQL receipts remain parent-owned.
+
+### Collected exact5128 and current remediation
+
+`myskills-roadmap-reconciled-20261001` finished at `2026-10-01T00:45:25Z`.
+Collection verified 60 files with export SHA-256
+`5cd94926f5ab9b00dec64500cebc4e3c98035c7d9c0ad3fd09ec400edd752408`.
+Both general checks passed; PostgreSQL had 306 passes and six failures per
+Node22/24 lane; mocked browsers had 193 passes and one skip; fullstack had eight
+passes and two failures. All five image builds/smokes passed; HOST endpoint
+readback failed before install/upgrade/restore. Current inner/HOST cleanup
+completed. Earlier uncertain creation and failed cleanup history remain intact.
+
+Immutable5128 review completed with three P2 corrections: private suite restore
+binding, XDG-independent enrollment authority and pre-correction nonempty-plan
+replay. These and the collected runtime fixture failures have current source
+corrections in the owned final branch. HOST endpoint cause is still unconfirmed;
+safe bounded diagnostics distinguish actual state/ownership/port failures on
+the next Linux run. No local fixture substitutes for final process, PG, browser
+or coordinated restore proof. Exact candidate identity/check receipts and
+renewed immutable review are recorded in the parent remediation handoff.

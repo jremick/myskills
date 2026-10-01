@@ -138,6 +138,12 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
     return { run: cloneRun(run), decision: "new" };
   }
 
+  async findRunForCreate(input: { actorId: string; requestKey: string; targetId: string; idempotencyKey: string }): Promise<ArchitectureSyncRun | null> {
+    const record = this.requestKeys.get(`${validateIdentifier(input.actorId, "actorId")}\u0000${validateIdentifier(input.requestKey, "requestKey")}`)
+      ?? this.idempotencyKeys.get(`${validateIdentifier(input.targetId, "targetId")}\u0000${validateIdentifier(input.idempotencyKey, "idempotencyKey")}`);
+    return record ? this.getRun(record.runId) : null;
+  }
+
   async getRun(runId: string): Promise<ArchitectureSyncRun | null> {
     const id = validateIdentifier(runId, "runId");
     const run = this.runs.get(id);

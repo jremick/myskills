@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { defaultOrganizationPolicyV1, organizationPolicyDigest } from "@myskills-app/core";
+import { defaultOrganizationPolicyV1, organizationPolicyDigest, packageEvaluationAssertionsDigest } from "@myskills-app/core";
 import { TeamService } from "../src/teams/service.js";
 import { PostgresTeamStore } from "../src/teams/postgres-team-store.js";
 import { OrganizationService } from "../src/organizations/service.js";
@@ -117,7 +117,8 @@ test("exact-version evaluation HTTP/PG authority, replay, immutability and publi
     const organization = await organizationStore.createOrganization({ name: `Evaluation ${index}`, slug: `evaluation-${index}`, createdByUserId: user.id, creatorEmail: user.email, creatorName: user.name, policy, policySha256: organizationPolicyDigest(policy), reason: "Fixture" });
     const token = index === 0 ? authorToken : outsiderToken;
     await pool.query("UPDATE auth_sessions SET mfa_verified_at=clock_timestamp() WHERE token_hash=$1", [hashSessionToken(token)]);
-    const suite = { ...defaultPackageEvaluationSuite(), assertions: [{ id: `PRIVATE-ORG-${index}-CANARY`, kind: "behavior" }] };
+    const assertions = defaultPackageEvaluationSuite().assertions!.map(assertion => assertion.kind === "behavior" ? { ...assertion, id: `PRIVATE-ORG-${index}-CANARY` } : assertion);
+    const suite = { ...defaultPackageEvaluationSuite(), assertions, caseCount: assertions.length, contentSha256: packageEvaluationAssertionsDigest(assertions) };
     const response = await call("POST", "/v1/improvements/suites", token, { owner: { type: "organization", id: organization.organization.id }, suite });
     assert.equal(response.statusCode, 201, response.body);
     organizationSuites.push({ organization: organization.organization.id, suite: response.json().suite, token, user });
