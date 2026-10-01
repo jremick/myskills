@@ -926,3 +926,40 @@ and seven observation controls pass; the initial failed receipt remains preserve
 The actual Node22 HTTPS caller forwards the supplied options to TLS, and correct
 and wrong-CA controls verify the trust behavior. Exact corrected-source CodeQL
 and canonical runtime acceptance remain required. No release readiness is claimed.
+
+
+### HOST observation continuity follow-up — 1 October 2026
+
+The controlled second run of merge `76ff0ae177` finished at 12:59 UTC. Its
+observer was armed and received the request, but the adapter failed before it
+obtained kernel or TLS evidence. The application recorded `capture-failed`;
+the separate observer recorded `command-failed`. All six general, PostgreSQL
+and browser jobs passed. HOST remained failed. The 192-file collection and
+controller, application and HOST cleanup were verified. These two diagnostic
+receipts must remain distinct; neither establishes the publication cause.
+
+A paired transport probe showed that the same adapter and payload succeeded
+while the original SSH/WSL launcher remained alive and stalled after it exited.
+Independent Astra review accepted keeping that launcher attached for one
+coordinated verification run. The existing backend termination proof remains
+valid. This operational correction does not change Docker or HOST acceptance.
+
+Source `898471671b598626ea490d2e5804c6849caf3040` corrects the reviewed
+final-readback evidence loss. The final inspection uses a non-throwing command
+contract and a local catch. A failed inspection preserves only allowlisted
+observation fields as `post-identity-unverified`, with `identityStable:false`
+and a fixed failure category. Identity mismatch remains distinct. The same
+1.5-second bound, forced termination, output cap, original failure and owned
+cleanup remain. All 11 focused controls pass, including timeout, thrown error,
+nonzero exit and malformed inspection; initial failed receipts are preserved.
+Ten existing source anchors move by six lines, with regenerated hashes and no
+criterion or completion-state promotion.
+
+Exact local `4fc950a2` CodeQL preflight removed the three new diagnostic
+findings with no additions. The eleven remaining raw findings and fingerprints
+were unchanged; this is separate from GitHub alert dispositions. No new alert
+was dismissed, and no query or policy changed. The additional source correction
+requires a matching PR scan and full canonical runtime gate. Installation,
+upgrade, backup/restore, target recovery and deployed acceptance remain pending.
+The current release and its approved existing deployments remain the terminal
+scope; no further roadmap phase is started.
