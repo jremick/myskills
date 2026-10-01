@@ -353,3 +353,44 @@ safe bounded diagnostics distinguish actual state/ownership/port failures on
 the next Linux run. No local fixture substitutes for final process, PG, browser
 or coordinated restore proof. Exact candidate identity/check receipts and
 renewed immutable review are recorded in the parent remediation handoff.
+
+### Collected ba69 and bounded followup — 1 October 2026
+
+`myskills-roadmap-corrected-20261001` ran exact
+`ba69ffe1931cd9d4dc87e00c6a79acdef9b3362a`, tree
+`d0bc065a3db13f85a1bfde907b7881001b566e1f`. The parent cancelled it at
+`2026-10-01T01:41:46Z` after both browser lanes finished and a PostgreSQL
+process timeout prevented completion. Collection verified 54 files with export
+SHA-256 `bead48816dbe05a843a72ec7ef19dfd33e1aa6d1e573e2a74c332aa14b00764f`.
+Controller and inner cleanup completed. Older failed receipts remain intact.
+
+The reached PG comparison asserted obsolete `pending` rather than canonical
+`unreviewed`; its failed private-visibility test left the following anonymous
+HIST positive denied. Source inspection identifies the cascade; an actual rerun
+must confirm it. The actual production process fixture timed out at 90 seconds;
+its internal stage was unknown. Both mocked browser lanes passed 193 tests with
+one skip. Node22 fullstack setup failed when the pre-probed Mailpit port was
+occupied. Node24 main fullstack had seven passes and two failures: the composed
+CLI exited before the draft callback, and improvement submission returned 429.
+The retained proxy log also records 429 at the artifact checkpoint. Connector,
+site, complete general checks, images/HOST and CodeQL did not supply acceptance
+in this cancelled run. No new HOST failure cause is established.
+
+Independent ba69 review accepted the prior three P2 source corrections: private
+HOST evaluation restore binding, OS-user enrollment authority across XDG roots,
+and nonempty legacy-plan replay under current authorization. Its remaining
+review-status/cleanup fixture finding is addressed in the followup. Source
+acceptance of the complete new delta and runtime acceptance remain pending.
+
+The owned followup preserves the review state, restores scoped visibility in
+`finally`, and adds exact child/backend stages with gate release before lease
+expiry. Fullstack automatic ports now come from owned running-container
+readback; API/MCP origins are configured before authentication, and nginx reload
+keeps the bound web container. Operational and improvement journeys each use a
+fresh stack under unchanged production limits. CLI failures expose fixed safe
+action/phase/workspace/code/status categories. Local endpoint/phase fixtures
+passed 11/11, focused permitted CI wiring passed 3/3, diagnostic controls passed
+1/1, and the same-slug/two-profile CLI variant passed 1/1. These are bounded
+local receipts, not production-process, PG, real browser or restore proof. Exact
+followup SHA/tree and final binding/parity/check receipts belong in the root
+checkpoint and report. All 426 original criteria and 24 groups remain preserved.

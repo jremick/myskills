@@ -766,6 +766,8 @@ const jobRunners = {
     const project = job.canRun() ? job.trackComposeProject("fullstack") : null;
     await job.step("fullstack-browser", "npm", ["run", "test:e2e:fullstack"], { extraEnv: { ...ports, MYSKILLS_E2E_COMPOSE_PROJECT: project ?? "" } });
     await collectBrowserEvidence(job, "fullstack-browser", "collect-fullstack-evidence", "fullstack-report.json", "fullstack");
+    await collectBrowserEvidence(job, "fullstack-browser", "collect-operational-evidence", "fullstack-operational-report.json", "fullstack-operational");
+    await collectBrowserEvidence(job, "fullstack-browser", "collect-improvement-evidence", "fullstack-improvement-report.json", "fullstack-improvement");
     await collectBrowserEvidence(job, "fullstack-browser", "collect-connector-evidence", "fullstack-connector-report.json", "fullstack-connector");
     // beta.19's canonical browser contract includes the separate product site.
     // Missing source is an explicit failed gate, never a silently skipped proof.
@@ -1287,7 +1289,9 @@ async function e2ePorts(run) {
     const supplied = process.env[name];
     let port = supplied && /^\d+$/.test(supplied) && Number(supplied) >= 1024 && Number(supplied) <= 65535
       ? supplied
-      : String(await freeLoopbackPort());
+      : ["MYSKILLS_E2E_WEB_PORT", "MYSKILLS_E2E_MAILPIT_PORT"].includes(name) ? "0" : String(await freeLoopbackPort());
+    // Full-stack Docker ports stay daemon-owned from bind through teardown.
+    if (port === "0") { ports[name] = port; continue; }
     if (run.laneCount === 4) {
       while (run.browserPorts.has(port)) port = String(await freeLoopbackPort());
       run.browserPorts.add(port);

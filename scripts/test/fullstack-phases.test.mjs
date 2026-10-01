@@ -5,10 +5,12 @@ import { fullstackPhases } from "../lib/fullstack-phases.mjs";
 // Each phase runs on its own fresh disposable stack, so production auth rate
 // limits (unchanged) never carry over between journey groups.
 
-test("default full-stack run keeps registry journeys and connector acceptance on separate fresh stacks", () => {
+test("default full-stack run isolates operational, improvement and connector budgets without losing any journey", () => {
   assert.deepEqual(fullstackPhases([]), [
     // Existing report and results paths stay unchanged for CI evidence collection.
-    { name: "registry-journeys", playwrightArgs: ["--grep-invert", "remote MCP connector"] },
+    { name: "registry-journeys", playwrightArgs: ["--grep-invert", "remote MCP connector|author feedback, immutable publication|registry plan, local CLI evaluation"] },
+    { name: "operational-journey", playwrightArgs: ["fullstack/operational-journey.spec.ts"], outputDir: "test-results/fullstack-operational", jsonReport: "test-results/fullstack-operational-report.json" },
+    { name: "skill-improvement", playwrightArgs: ["fullstack/skill-improvement.spec.ts"], outputDir: "test-results/fullstack-improvement", jsonReport: "test-results/fullstack-improvement-report.json" },
     // Separate artifacts (relative to apps/web), so the second run cannot clean
     // or overwrite the first.
     {

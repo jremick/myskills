@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
-import { acceptanceConfiguration, runOperationalAcceptance } from "../operational-acceptance.mjs";
+import { acceptanceConfiguration, acceptanceCliFailure, capturedProcess, runOperationalAcceptance } from "../operational-acceptance.mjs";
 import { recoveryConfiguration, rehearseRegistryRecovery } from "../rehearse-registry-recovery.mjs";
 
 test("acceptance defaults to loopback and rejects a remote endpoint before any fixture writes", () => {
@@ -24,6 +24,26 @@ test("endpoint validation does not print a credential embedded in an invalid URL
       return true;
     });
   }
+});
+
+test("operational CLI failure exposes only the fixed composed operation and allowlisted category", async () => {
+  const result = await capturedProcess(process.execPath, ["-e", `process.stderr.write(JSON.stringify({ error: { code: "API_RATE_LIMITED", status: 429, message: "PRIVATE-RAW-ERROR", details: { token: "PRIVATE-TOKEN" } } })); process.exitCode=1;`]);
+  assert.equal(result.code, 1);
+  assert.equal(result.failureCategory, "API_RATE_LIMITED");
+  assert.equal("stderr" in result, false);
+  assert.equal(acceptanceCliFailure(["architecture-artifacts", "apply", "PRIVATE-RUN", "--workspace", "PRIVATE-PATH"], result, { phase: "initial", workspaceIndex: 0 }), "CLI architecture-artifacts/apply failed with exit code 1; category=API_RATE_LIMITED; status=429; phase=initial; workspace=0.");
+  const denied = await capturedProcess(process.execPath, ["-e", `process.stderr.write(JSON.stringify({ error: { code: "PRIVATE-CODE", message: "PRIVATE-ERROR" } })); process.exitCode=1;`]);
+  assert.equal(denied.failureCategory, "unclassified");
+  const malformed = await capturedProcess(process.execPath, ["-e", `process.stderr.write('PRIVATE-NON-JSON'); process.exitCode=1;`]);
+  assert.equal(malformed.failureCategory, "unclassified");
+  const local = await capturedProcess(process.execPath, ["-e", `process.stderr.write(JSON.stringify({ error: { code: "UNEXPECTED_CLI_FAILURE", message: "EACCES: PRIVATE-PATH PRIVATE-TOKEN" } })); process.exitCode=1;`]);
+  assert.equal(acceptanceCliFailure(["architecture-artifacts", "prepare"], local, { phase: "update", workspaceIndex: 1 }), "CLI architecture-artifacts/prepare failed with exit code 1; category=filesystem; filesystemCode=EACCES; phase=update; workspace=1.");
+  for (const [code, message, category] of [["ARCHITECTURE_ARTIFACT_STATE_CONFLICT", "PRIVATE-API-MESSAGE", "ARCHITECTURE_ARTIFACT_STATE_CONFLICT"], ["UNEXPECTED_CLI_FAILURE", "Whole-artifact staging drifted.", "local_staging"], ["UNEXPECTED_CLI_FAILURE", "Aggregate architecture readback failed.", "local_readback"], ["UNEXPECTED_CLI_FAILURE", "Whole-artifact staging drifted. PRIVATE-SUFFIX", "UNEXPECTED_CLI_FAILURE"]]) {
+    const captured = await capturedProcess(process.execPath, ["-e", `process.stderr.write(${JSON.stringify(JSON.stringify({ error: { code, message } }))}); process.exitCode=1;`]);
+    assert.equal(captured.failureCategory, category);
+    assert.doesNotMatch(acceptanceCliFailure(["architecture-artifacts", "verify"], captured), /PRIVATE|drifted|readback failed/);
+  }
+  assert.equal(acceptanceCliFailure(["PRIVATE-COMMAND", "PRIVATE-ACTION"], { code: "PRIVATE-EXIT", failureCategory: "PRIVATE-CATEGORY", failureStatus: "PRIVATE-STATUS", filesystemCode: "PRIVATE-CODE" }, { phase: "PRIVATE-PHASE", workspaceIndex: "PRIVATE-INDEX" }), "CLI unknown failed with exit code unavailable; category=unclassified.");
 });
 
 test("a different live instance is rejected before onboarding or fixture mutations", async (t) => {

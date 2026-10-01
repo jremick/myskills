@@ -42,6 +42,39 @@ test("two explicitly enrolled workspaces install/verify/update/rollback composed
   for(const [workspace,prior,targetId] of [[a.workspace,firstA,a.targetId],[b.workspace,firstB,b.targetId]] as const){const update=await s.artifact(targetId,prior.run.identity.runId,revision.id);assert.notEqual(update.intent.treeDigest,prior.intent.treeDigest);assert.equal((await s.cli(["architecture-artifacts","prepare",update.run.identity.runId],workspace)).code,0);const apply=await s.cli(["architecture-artifacts","apply",update.run.identity.runId],workspace);assert.equal(apply.code,0,apply.error);await assertBytes(workspace,update.intent);const rollback=await s.cli(["architecture-artifacts","rollback",update.run.identity.runId],workspace);assert.equal(rollback.code,0,rollback.error);assert.equal(rollback.output.run.state,"rolled_back");await assertBytes(workspace,prior.intent);await unrelated();}
 });
 
+test("same-slug mixed versions preserve exact trees across two profiles, update and rollback", async t => {
+  const s = await setup(t);
+  const manifest = { name: "plan-alpha", title: "Older same-slug fixture", summary: "Exact mixed-version materialization", version: "1.0.0", license: "Apache-2.0", visibility: "public" as const, platforms: [{ name: "codex", install_target: "codex-skill", status: "supported" as const }], tags: ["fixture"] };
+  const older = await s.fixture.submissionService.createSubmission({ actor: { id: s.fixture.ownerId, roles: ["author"] }, manifest, files: [{ path: "skill.json", content: JSON.stringify(manifest) }, { path: "SKILL.md", content: "---\nname: plan-alpha\ndescription: Older exact mixed-version fixture\n---\nExact plan-alpha@1.0.0 bytes.\n" }, { path: "references/context.txt", content: "Asset plan-alpha@1.0.0\n" }] });
+  const reviewer = { id: "plan-fixture-maintainer", roles: ["maintainer" as const], mfaVerified: true };
+  await s.fixture.submissionService.performReviewAction({ actor: reviewer, submissionId: older.id, action: "approve", artifactSha256: older.artifact.sha256 });
+  await s.fixture.submissionService.performReviewAction({ actor: reviewer, submissionId: older.id, action: "publish" });
+  const spec = structuredClone(s.fixture.spec);
+  Object.assign(spec.skills.find(ref => ref.id === "plan-beta")!, { slug: manifest.name, version: manifest.version, digest: older.artifact.sha256 });
+  spec.profiles.push({ ...structuredClone(spec.profiles[0]), id: "same-slug-second", bindings: spec.profiles[0].bindings.map(binding => binding.nodeId === "leaf-plan-beta" ? { ...binding, enabled: false, runtimeExposure: "disabled" as const } : binding) });
+  spec.environments.push({ id: "same-slug-second-workspace", name: "Second same-slug fixture", kind: "personal", profileId: "same-slug-second" });
+  const revision = await s.fixture.coordinator.run(() => s.fixture.architectureStore.createRevision({ actor: s.fixture.ownerId, architectureId: spec.id, expectedCurrentRevisionId: s.fixture.revision.id, message: "Same slug with independent exact pins", spec }));
+  assert.ok(revision);
+  const workspaces = [await s.enroll("same-slug-one"), await s.enroll("same-slug-two", "same-slug-second", "same-slug-second-workspace")];
+  const baselines = [];
+  for (const [index, enrolled] of workspaces.entries()) {
+    const candidate = await s.artifact(enrolled.targetId, null, revision.id); baselines.push(candidate);
+    assert.deepEqual(candidate.intent.projection.packages.map(pkg => [pkg.slug, pkg.version]), index === 0 ? [["plan-alpha", "2.0.0"], ["plan-alpha", "1.0.0"]] : [["plan-alpha", "2.0.0"]]);
+    for (const action of ["prepare", "apply", "verify"]) { const result = await s.cli(["architecture-artifacts", action, candidate.run.identity.runId], enrolled.workspace); assert.equal(result.code, 0, result.error); }
+    await assertBytes(enrolled.workspace, candidate.intent);
+  }
+  assert.notEqual(baselines[0].intent.treeDigest, baselines[1].intent.treeDigest);
+  spec.nodes.find(node => node.kind === "router")!.label = "Updated same-slug routing context";
+  const updateRevision = await s.fixture.coordinator.run(() => s.fixture.architectureStore.createRevision({ actor: s.fixture.ownerId, architectureId: spec.id, expectedCurrentRevisionId: revision.id, message: "Same-slug router update", spec })); assert.ok(updateRevision);
+  for (const [index, enrolled] of workspaces.entries()) {
+    const candidate = await s.artifact(enrolled.targetId, baselines[index].run.identity.runId, updateRevision.id);
+    for (const action of ["prepare", "apply", "verify"]) { const result = await s.cli(["architecture-artifacts", action, candidate.run.identity.runId], enrolled.workspace); assert.equal(result.code, 0, result.error); }
+    await assertBytes(enrolled.workspace, candidate.intent);
+    const rollback = await s.cli(["architecture-artifacts", "rollback", candidate.run.identity.runId], enrolled.workspace); assert.equal(rollback.code, 0, rollback.error); assert.equal(rollback.output.run.state, "rolled_back");
+    await assertBytes(enrolled.workspace, baselines[index].intent);
+  }
+});
+
 test("each journal move, manifest and lost receipt response is replayable without per-skill success",async t=>{
   for(const point of ["staged","before-old-move","after-old-move","after-old-rename","after-new-rename","before-new-move","after-new-move","manifest","receipt"] as const){
     const indexes=["staged","manifest","receipt"].includes(point)?[1]:[1,2,3,4,5,6];

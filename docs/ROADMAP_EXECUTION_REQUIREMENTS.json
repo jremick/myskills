@@ -12502,13 +12502,13 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
@@ -13390,7 +13390,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 542,
+            "line": 557,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -14364,7 +14364,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 571,
+            "line": 586,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -14738,7 +14738,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 271,
+            "line": 282,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -14818,7 +14818,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 542,
+            "line": 557,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -15481,7 +15481,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 571,
+            "line": 586,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -15773,7 +15773,7 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 61,
+            "line": 94,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
@@ -19471,13 +19471,13 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 120,
+            "line": 153,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 120,
+            "line": 153,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
@@ -19569,13 +19569,13 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
@@ -19667,13 +19667,13 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 45,
+            "line": 78,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 45,
+            "line": 78,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
@@ -20059,13 +20059,13 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
@@ -20157,13 +20157,13 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
@@ -20323,13 +20323,13 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 45,
+            "line": 78,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 45,
+            "line": 78,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
@@ -20519,13 +20519,13 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
@@ -20617,13 +20617,13 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 45,
+            "line": 78,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 45,
+            "line": 78,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
@@ -21420,7 +21420,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 571,
+            "line": 586,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -23316,7 +23316,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 571,
+            "line": 586,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -23389,7 +23389,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 542,
+            "line": 557,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -24212,7 +24212,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 571,
+            "line": 586,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -25896,13 +25896,13 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 61,
+            "line": 94,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 61,
+            "line": 94,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
@@ -29051,13 +29051,13 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 85,
+            "line": 118,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 85,
+            "line": 118,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
@@ -29148,13 +29148,13 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
@@ -30076,13 +30076,13 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 95,
+            "line": 128,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 95,
+            "line": 128,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
@@ -30169,13 +30169,13 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
@@ -30477,13 +30477,13 @@
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },
           {
             "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-            "line": 73,
+            "line": 106,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts"
           },

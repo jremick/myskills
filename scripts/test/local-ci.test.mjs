@@ -117,6 +117,17 @@ test("product-site build and browser proof run in existing browser jobs; missing
   assert.equal(run.result.jobs[0].status, "failed");
 });
 
+test("fresh operational and improvement reports are required alongside registry evidence", t => {
+  for (const phase of ["operational", "improvement"]) {
+    const fixture = makeFixture(t); fixture.configure({ omitFullstackReport: phase });
+    const run = runLocalCi(fixture, ["verify", "--job", "web-e2e-node22"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+    assert.equal(run.status, 1, run.output);
+    const steps = run.result.jobs[0].steps;
+    assert.equal(steps.find(({ name }) => name === "fullstack-browser").status, "passed");
+    assert.equal(steps.find(({ name }) => name === `collect-${phase}-evidence`).status, "failed", "registry evidence cannot stand in for the isolated lifecycle");
+  }
+});
+
 test("unsafe or stale inputs are rejected before any tool, container or workspace is used", (t) => {
   const fixture = makeFixture(t);
   const secretLookingId = "$(touch pwned)";
@@ -224,7 +235,7 @@ test("verify runs every required job on both Node lines and reports gating conte
   assertNoPublication(records);
 
   for (const line of ["22", "24"]) {
-    for (const phase of ["mocked", "fullstack", "fullstack-connector"]) {
+    for (const phase of ["mocked", "fullstack", "fullstack-operational", "fullstack-improvement", "fullstack-connector"]) {
       const summary = JSON.parse(readFileSync(join(run.evidence, "browser-evidence", `web-e2e-node${line}`, phase, "summary.json"), "utf8"));
       assert.equal(summary.reportStatus, "available");
     }
@@ -387,9 +398,13 @@ test("four verify lanes overlap, preserve job order and isolate directories and 
     assert.ok(paths.every((path) => path && !existsSync(path)), `${variable} directories must be removed after the run`);
   }
   const browsers = run.result.jobs.filter(({ id }) => id.startsWith("web-e2e-"));
-  const ports = browsers.flatMap(({ ports }) => Object.values(ports));
-  assert.equal(ports.length, 8);
-  assert.equal(new Set(ports).size, 8, "all browser job ports must be distinct");
+  for (const { ports } of browsers) {
+    assert.equal(ports.MYSKILLS_E2E_WEB_PORT, "0", "Docker must allocate the fullstack web port at bind time");
+    assert.equal(ports.MYSKILLS_E2E_MAILPIT_PORT, "0", "Docker must allocate the fullstack mail port at bind time");
+  }
+  const ports = browsers.flatMap(({ ports }) => [ports.MYSKILLS_E2E_PORT, ports.MYSKILLS_SITE_TEST_PORT]);
+  assert.equal(ports.length, 4);
+  assert.equal(new Set(ports).size, 4, "mocked and site browser ports must be distinct");
   assertEvidenceManifest(run.evidence, run.result);
   assert.equal(existsSync(fixture.runWorkspace), false);
   assert.equal(existsSync(runIdReservation), false);
@@ -1155,6 +1170,8 @@ async function fakeToolMain() {
       }
       if (key === "run test:e2e:fullstack") {
         writeReport("apps/web/test-results/fullstack-report.json");
+        if (config.omitFullstackReport !== "operational") writeReport("apps/web/test-results/fullstack-operational-report.json");
+        if (config.omitFullstackReport !== "improvement") writeReport("apps/web/test-results/fullstack-improvement-report.json");
         writeReport("apps/web/test-results/fullstack-connector-report.json");
         return 0;
       }

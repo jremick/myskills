@@ -656,7 +656,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -885,7 +885,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -893,7 +893,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -919,7 +919,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -959,7 +959,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 11,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "## Authority and baseline"
         },
         {
@@ -999,7 +999,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 321,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "## Final candidate reconciliation"
         },
         {
@@ -1039,7 +1039,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 259,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "## External decisions and gates"
         },
         {
@@ -1079,7 +1079,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 198,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "### HOST review remediation checkpoint"
         },
         {
@@ -1119,7 +1119,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -1159,7 +1159,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -1281,7 +1281,7 @@
         {
           "path": "scripts/test/operational-safety.test.mjs",
           "line": 7,
-          "sha256": "4c8cfd693ae9193de8936098edabe069c7236367a1bbba2a12b5ec493724b1d7",
+          "sha256": "729dfaba80d7b937e32ab8c431d57b4499ff419442553040bc19192c633b75cb",
           "anchor": "test(\"acceptance defaults to loopback and rejects a remote endpoint before any fixture writes\", () => {",
           "command": "node --test scripts/test/operational-safety.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -1312,7 +1312,7 @@
         {
           "path": "scripts/test/operational-safety.test.mjs",
           "line": 19,
-          "sha256": "4c8cfd693ae9193de8936098edabe069c7236367a1bbba2a12b5ec493724b1d7",
+          "sha256": "729dfaba80d7b937e32ab8c431d57b4499ff419442553040bc19192c633b75cb",
           "anchor": "test(\"endpoint validation does not print a credential embedded in an invalid URL\", () => {",
           "command": "node --test scripts/test/operational-safety.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -7933,16 +7933,16 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -8367,7 +8367,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 7,
-          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
+          "sha256": "85d21e11a0e7ba441e0c2f2d4e0e8010a0bea948c53495eeaa4f797014c47165",
           "anchor": "## Current delivery"
         }
       ],
@@ -8421,7 +8421,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 1,
-          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
+          "sha256": "85d21e11a0e7ba441e0c2f2d4e0e8010a0bea948c53495eeaa4f797014c47165",
           "anchor": "# Roadmap candidate delivery"
         }
       ],
@@ -8491,7 +8491,7 @@
         {
           "path": "scripts/test/local-ci.test.mjs",
           "line": 87,
-          "sha256": "9008589aa4261a65bb8ef3aa5533e33f7028b2c8b66f8d029a506e67fb9ca1aa",
+          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
           "anchor": "test(\"HOST rehearsal remains inside railway-images and fails that canonical job when its subprocess fails\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8535,8 +8535,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 542,
-          "sha256": "9008589aa4261a65bb8ef3aa5533e33f7028b2c8b66f8d029a506e67fb9ca1aa",
+          "line": 557,
+          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
           "anchor": "test(\"release-check rejects wrong tags, moved tags and commits outside main before any work\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8637,7 +8637,7 @@
         {
           "path": "scripts/test/operational-safety.test.mjs",
           "line": 7,
-          "sha256": "4c8cfd693ae9193de8936098edabe069c7236367a1bbba2a12b5ec493724b1d7",
+          "sha256": "729dfaba80d7b937e32ab8c431d57b4499ff419442553040bc19192c633b75cb",
           "anchor": "test(\"acceptance defaults to loopback and rejects a remote endpoint before any fixture writes\", () => {",
           "command": "node --test scripts/test/operational-safety.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8668,7 +8668,7 @@
         {
           "path": "scripts/test/operational-safety.test.mjs",
           "line": 19,
-          "sha256": "4c8cfd693ae9193de8936098edabe069c7236367a1bbba2a12b5ec493724b1d7",
+          "sha256": "729dfaba80d7b937e32ab8c431d57b4499ff419442553040bc19192c633b75cb",
           "anchor": "test(\"endpoint validation does not print a credential embedded in an invalid URL\", () => {",
           "command": "node --test scripts/test/operational-safety.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8771,7 +8771,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 7,
-          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
+          "sha256": "85d21e11a0e7ba441e0c2f2d4e0e8010a0bea948c53495eeaa4f797014c47165",
           "anchor": "## Current delivery"
         }
       ],
@@ -9103,8 +9103,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 571,
-          "sha256": "9008589aa4261a65bb8ef3aa5533e33f7028b2c8b66f8d029a506e67fb9ca1aa",
+          "line": 586,
+          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9296,8 +9296,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 271,
-          "sha256": "9008589aa4261a65bb8ef3aa5533e33f7028b2c8b66f8d029a506e67fb9ca1aa",
+          "line": 282,
+          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
           "anchor": "for (const readback of [\"owned\", \"foreign\", \"unavailable\", \"absent\", \"malformed\"]) test(`cancelled MCP creation reconciles ${readback} ownership before cleanup`, async (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9341,8 +9341,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 542,
-          "sha256": "9008589aa4261a65bb8ef3aa5533e33f7028b2c8b66f8d029a506e67fb9ca1aa",
+          "line": 557,
+          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
           "anchor": "test(\"release-check rejects wrong tags, moved tags and commits outside main before any work\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9762,8 +9762,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 571,
-          "sha256": "9008589aa4261a65bb8ef3aa5533e33f7028b2c8b66f8d029a506e67fb9ca1aa",
+          "line": 586,
+          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9879,7 +9879,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 25,
-          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
+          "sha256": "85d21e11a0e7ba441e0c2f2d4e0e8010a0bea948c53495eeaa4f797014c47165",
           "anchor": "## Architecture review follow-through"
         }
       ],
@@ -9927,7 +9927,7 @@
         {
           "path": "scripts/local-ci.mjs",
           "line": 676,
-          "sha256": "d22922a25b25365b74d87522a9c451dbbcdb70752e556155c85a5113d33683af",
+          "sha256": "3d08649558db98f1a053815a8ae3e171149e4b1ec9a836daedfee720daaa56ca",
           "anchor": "async smokeMcp(image) {"
         }
       ],
@@ -9942,8 +9942,8 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 61,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 94,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"denied checkpoints/read helpers retain quarantine; collision, drift, link and replay attacks fail closed\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -12199,7 +12199,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 259,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "## External decisions and gates"
         },
         {
@@ -12317,16 +12317,16 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 120,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 153,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"staging and recovery directory sync boundaries precede approval and destructive renames, including retry ancestry\", async t => {",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 120,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 153,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"staging and recovery directory sync boundaries precede approval and destructive renames, including retry ancestry\", async t => {",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -12391,16 +12391,16 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -12465,16 +12465,16 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 45,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 78,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"each journal move, manifest and lost receipt response is replayable without per-skill success\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 45,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 78,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"each journal move, manifest and lost receipt response is replayable without per-skill success\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -12540,7 +12540,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -12548,7 +12548,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -12614,7 +12614,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -12622,7 +12622,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -12688,7 +12688,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -12696,7 +12696,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -12761,16 +12761,16 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -12835,16 +12835,16 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -12870,7 +12870,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 112,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "## Integration and verification records"
         },
         {
@@ -12949,16 +12949,16 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 45,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 78,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"each journal move, manifest and lost receipt response is replayable without per-skill success\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 45,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 78,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"each journal move, manifest and lost receipt response is replayable without per-skill success\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -13024,7 +13024,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -13032,7 +13032,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -13097,16 +13097,16 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -13171,16 +13171,16 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 45,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 78,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"each journal move, manifest and lost receipt response is replayable without per-skill success\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 45,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 78,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"each journal move, manifest and lost receipt response is replayable without per-skill success\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -13246,7 +13246,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -13254,7 +13254,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -13280,7 +13280,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -13660,7 +13660,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 25,
-          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
+          "sha256": "85d21e11a0e7ba441e0c2f2d4e0e8010a0bea948c53495eeaa4f797014c47165",
           "anchor": "## Architecture review follow-through"
         }
       ],
@@ -13729,8 +13729,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 571,
-          "sha256": "9008589aa4261a65bb8ef3aa5533e33f7028b2c8b66f8d029a506e67fb9ca1aa",
+          "line": 586,
+          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14895,7 +14895,7 @@
         {
           "path": "scripts/test/operational-safety.test.mjs",
           "line": 7,
-          "sha256": "4c8cfd693ae9193de8936098edabe069c7236367a1bbba2a12b5ec493724b1d7",
+          "sha256": "729dfaba80d7b937e32ab8c431d57b4499ff419442553040bc19192c633b75cb",
           "anchor": "test(\"acceptance defaults to loopback and rejects a remote endpoint before any fixture writes\", () => {",
           "command": "node --test scripts/test/operational-safety.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14939,8 +14939,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 571,
-          "sha256": "9008589aa4261a65bb8ef3aa5533e33f7028b2c8b66f8d029a506e67fb9ca1aa",
+          "line": 586,
+          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14984,8 +14984,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 542,
-          "sha256": "9008589aa4261a65bb8ef3aa5533e33f7028b2c8b66f8d029a506e67fb9ca1aa",
+          "line": 557,
+          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
           "anchor": "test(\"release-check rejects wrong tags, moved tags and commits outside main before any work\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -15402,7 +15402,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 1,
-          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
+          "sha256": "85d21e11a0e7ba441e0c2f2d4e0e8010a0bea948c53495eeaa4f797014c47165",
           "anchor": "# Roadmap candidate delivery"
         }
       ],
@@ -15444,7 +15444,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 1,
-          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
+          "sha256": "85d21e11a0e7ba441e0c2f2d4e0e8010a0bea948c53495eeaa4f797014c47165",
           "anchor": "# Roadmap candidate delivery"
         },
         {
@@ -15516,8 +15516,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 571,
-          "sha256": "9008589aa4261a65bb8ef3aa5533e33f7028b2c8b66f8d029a506e67fb9ca1aa",
+          "line": 586,
+          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -16168,7 +16168,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 112,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "## Integration and verification records"
         },
         {
@@ -16208,7 +16208,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16248,7 +16248,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 11,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "## Authority and baseline"
         },
         {
@@ -16288,7 +16288,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16406,7 +16406,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16446,7 +16446,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16486,7 +16486,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16622,16 +16622,16 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 61,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 94,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"denied checkpoints/read helpers retain quarantine; collision, drift, link and replay attacks fail closed\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 61,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 94,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"denied checkpoints/read helpers retain quarantine; collision, drift, link and replay attacks fail closed\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -17152,7 +17152,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -17192,7 +17192,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18449,7 +18449,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -18457,7 +18457,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -18483,7 +18483,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18523,7 +18523,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18603,7 +18603,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -18611,7 +18611,7 @@
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
           "line": 20,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"two explicitly enrolled workspaces install/verify/update/rollback composed multilevel trees with mixed pins and isolated approvals\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -18733,16 +18733,16 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 85,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 118,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"prepared baseline drift and replaced workspace root deny before approval; interrupted explicit rollback resumes\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 85,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 118,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"prepared baseline drift and replaced workspace root deny before approval; interrupted explicit rollback resumes\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -18807,16 +18807,16 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -18887,7 +18887,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 49,
-          "sha256": "7aadfae1ad0abe1e647587ccc712bc539f2655c88ad35ef0e6fb7cbb674ad983",
+          "sha256": "85d21e11a0e7ba441e0c2f2d4e0e8010a0bea948c53495eeaa4f797014c47165",
           "anchor": "## Schema and compatibility"
         }
       ],
@@ -18920,7 +18920,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18960,7 +18960,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -19252,7 +19252,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 11,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "## Authority and baseline"
         },
         {
@@ -19331,16 +19331,16 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 95,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 128,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"overlapping and discovery-contained managed roots reject before registration, staging or approval\", async t => {",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 95,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 128,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"overlapping and discovery-contained managed roots reject before registration, staging or approval\", async t => {",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -19405,16 +19405,16 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -19440,7 +19440,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 167,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "### Preserved roadmap integration checkpoint"
         },
         {
@@ -19480,7 +19480,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 167,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "### Preserved roadmap integration checkpoint"
         },
         {
@@ -19616,16 +19616,16 @@
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
-          "line": 73,
-          "sha256": "db60d07c71d8954ffd20716a754d3f4415f83b7873a6cdd10761bb39e9b341bf",
+          "line": 106,
+          "sha256": "51aaca567135bdef64b539130e3d4b6fd62755a60a1fec1a2edf5ba7ba660f35",
           "anchor": "test(\"router disable and leaf removal remove discovery and private payload, with forbidden baseline rollback quarantined\",async t=>{",
           "command": "node --import tsx --test apps/cli/test/architecture-artifact.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -19690,7 +19690,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 167,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "### Preserved roadmap integration checkpoint"
         },
         {
@@ -19818,7 +19818,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -19858,7 +19858,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "d3ba4dd93039726ab5bda881f89e83632ef035a51e875d0e5771d49278658f5f",
+          "sha256": "31920e3aad1e3e1db8ae9424da17bfcfb197f6767cc4d5d96d6cc6483a81f3d2",
           "anchor": "# Roadmap execution ledger"
         },
         {

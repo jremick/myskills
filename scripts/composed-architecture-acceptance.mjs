@@ -16,19 +16,20 @@ export async function runComposedArchitectureAcceptance({ api, cli, actor, works
   let { revision } = await call(`/v1/architectures/${architecture.id}/revisions`, { expectedCurrentRevisionId: null, message: "Mixed exact object-backed pins", spec });
   const enrolled = [];
   for (const index of [0, 1]) {
+    const diagnostic = { phase: "initial", workspaceIndex: index };
     const root = join(workspace, `composed-workspace-${index}`); await mkdir(root, { mode: 0o700 });
     const profileId = index ? "composed-two" : "composed-one", environmentId = index ? "workspace-two" : "workspace-one";
-    const target = await cli(["codex", "enroll", "--workspace", root, "--architecture-id", architecture.id, "--profile-id", profileId, "--environment-id", environmentId], actor, { json: true });
-    onEnrolled(target.targetId); await cli(["codex", "observe", "--workspace", root, "--upload"], actor, { json: true });
-    const intent = await prepare(target.targetId, revision.id, null); await execute(root, intent);
+    const target = await cli(["codex", "enroll", "--workspace", root, "--architecture-id", architecture.id, "--profile-id", profileId, "--environment-id", environmentId], actor, { json: true, diagnostic });
+    onEnrolled(target.targetId); await cli(["codex", "observe", "--workspace", root, "--upload"], actor, { json: true, diagnostic });
+    const intent = await prepare(target.targetId, revision.id, null); await execute(root, intent, diagnostic);
     enrolled.push({ root, targetId: target.targetId, intent });
   }
   if (enrolled[0].intent.intent.treeDigest === enrolled[1].intent.intent.treeDigest || enrolled[0].targetId === enrolled[1].targetId) throw new Error("Composed fixture target/profile isolation failed.");
   spec.nodes.find(node => node.kind === "router").label = "Updated ordered routing guidance";
   ({ revision } = await call(`/v1/architectures/${architecture.id}/revisions`, { expectedCurrentRevisionId: revision.id, message: "Router update", spec }));
-  for (const fixture of enrolled) {
-    const next = await prepare(fixture.targetId, revision.id, fixture.intent.run.identity.runId); await execute(fixture.root, next);
-    const rolled = await cli(["architecture-artifacts", "rollback", next.run.identity.runId, "--workspace", fixture.root], actor, { json: true });
+  for (const [index, fixture] of enrolled.entries()) {
+    const next = await prepare(fixture.targetId, revision.id, fixture.intent.run.identity.runId); await execute(fixture.root, next, { phase: "update", workspaceIndex: index });
+    const rolled = await cli(["architecture-artifacts", "rollback", next.run.identity.runId, "--workspace", fixture.root], actor, { json: true, diagnostic: { phase: "rollback", workspaceIndex: index } });
     if (rolled.run.state !== "rolled_back") throw new Error("Composed explicit rollback receipt is absent.");
     await exactBytes(fixture.root, fixture.intent.intent);
   }
@@ -42,9 +43,9 @@ export async function runComposedArchitectureAcceptance({ api, cli, actor, works
     await call(`/v1/architecture-plans/${run.identity.runId}/approve`, { expectedReviewDigest: run.metadata.reviewDigest }, 200);
     return call(`/v1/architecture-targets/${targetId}/artifacts`, { reviewRunId: run.identity.runId, baselineRunId, idempotencyKey: crypto.randomUUID() });
   }
-  async function execute(root, candidate) {
+  async function execute(root, candidate, diagnostic) {
     const runId = candidate.run.identity.runId;
-    for (const action of ["prepare", "apply", "verify"]) await cli(["architecture-artifacts", action, runId, "--workspace", root], actor, { json: true });
+    for (const action of ["prepare", "apply", "verify"]) await cli(["architecture-artifacts", action, runId, "--workspace", root], actor, { json: true, diagnostic });
     const { run } = await call(`/v1/architecture-artifacts/${runId}`);
     if (run.state !== "succeeded" || !run.receipts.some(receipt => receipt.code === "artifact.aggregate.verified")) throw new Error("Composed aggregate receipt is absent.");
     await exactBytes(root, candidate.intent);

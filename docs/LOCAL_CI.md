@@ -80,7 +80,7 @@ LOCAL_CI_CODEQL_BIN=/path/to/codeql/codeql scripts/local-ci.sh codeql
 | `DOCKER_HOST`, `DOCKER_CONTEXT` | Jobs that use Docker need a local `unix://` endpoint; a remote endpoint is refused. Set at most one of the two, because `DOCKER_CONTEXT` overrides `DOCKER_HOST`. |
 | `LOCAL_CI_RELEASE_TAG`, `LOCAL_CI_MAIN_REF` | `release-check` only. The tag must be `v<package version>` and point at `HEAD`. `HEAD` must be an ancestor of the main ref (default `refs/remotes/origin/main`). The script does not fetch. |
 | `LOCAL_CI_CODEQL_BIN`, `LOCAL_CI_CODEQL_CATEGORY` | `codeql` only. The category defaults to `/language:javascript-typescript`. |
-| `MYSKILLS_E2E_PORT`, `MYSKILLS_E2E_WEB_PORT`, `MYSKILLS_E2E_MAILPIT_PORT` | Optional loopback ports. Free ports are chosen when unset. With four lanes and both browser jobs selected, overrides are refused and all six selected ports are distinct. |
+| `MYSKILLS_E2E_PORT`, `MYSKILLS_E2E_WEB_PORT`, `MYSKILLS_E2E_MAILPIT_PORT` | Optional loopback ports. Mocked-browser ports are probed when unset. Automatic fullstack web/Mailpit ports are assigned by Docker at bind time and read from the exact running project/service. Explicit fullstack ports must match readback. With four lanes and both browser jobs selected, overrides are refused. |
 
 Jobs receive an allowlisted environment (paths, locale, Docker endpoint, proxy and CA settings,
 browser and npm caches) with `CI=true`. Tokens such as `GITHUB_TOKEN` or `NPM_TOKEN` are not
@@ -130,9 +130,16 @@ because some test tools create Unix sockets there. These private directories are
 their job's resources. Explicit npm and Playwright cache paths remain available through the
 environment allowlist. Docker uses the caller's original configuration directory, resolved to an
 absolute path even when it was implicit under `HOME`, so preflight, jobs and cleanup select the
-same context. Its contents are not copied. Browser ports are selected once per job and are
-never reused by another job in that run; unrelated host processes can still claim a free port
-before a browser starts, which fails the affected gate.
+same context. Its contents are not copied. Mocked/site browser ports are distinct within the run.
+Fullstack web/Mailpit bindings remain loopback-only and daemon-owned through each phase's teardown.
+The fixture reads exact project/service labels and bound ports before configuring the API/MCP
+OAuth issuer, consent, cookie origin and browser/Mailpit URLs. It reloads nginx configuration
+in the same web container to refresh upstream addresses, then checks that both bindings remain unchanged.
+
+Registry, operational (including private drafts), improvement and connector journeys each run on
+a fresh disposable stack. Production rate limits remain unchanged. Operational and improvement
+reports are collected separately as `fullstack-operational` and `fullstack-improvement`; a missing
+report fails the gate and cannot be replaced by a registry-only summary.
 
 Each step runs in its own process group. `SIGTERM` stops all active steps, cleans up and writes a
 cancelled result; allow about 60 seconds. The reservation is released only after complete cleanup.
