@@ -32,7 +32,11 @@ test("author feedback, immutable publication, upgrade policy, real CLI install/u
         const row = page.locator(".submission-row").filter({ hasText: `${slug}@0.1.0` });
         await expect(row).toBeVisible();
         await row.getByRole("button", { name: /feedback|details|review/i }).click();
-        await expect(page.getByRole("region", { name: "Submission feedback" }).getByText(reason, { exact: true }).first()).toBeVisible();
+        const feedback = page.getByRole("region", { name: "Submission feedback", exact: true });
+        const currentChanges = feedback.locator(".control-plane-inline-message").filter({ has: page.getByText("Requested changes", { exact: true }) });
+        await expect(currentChanges.getByText(reason, { exact: true })).toBeVisible();
+        const requestedChange = feedback.getByRole("listitem").filter({ has: page.getByText("Changes requested", { exact: true }) });
+        await expect(requestedChange.getByText(reason, { exact: true })).toBeVisible();
         await expect(page.getByText("Dependency install hook requires maintainer review.", { exact: true }).first()).toBeVisible();
         await page.screenshot({ path: testInfo.outputPath("author-review-feedback.png"), fullPage: true });
       },

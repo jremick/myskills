@@ -123,7 +123,11 @@ export async function exerciseDrafts(page: Page, testInfo: TestInfo, baseURL: st
   await page.reload();
   const row = page.locator(".submission-row").filter({ hasText: `${slug}@0.1.0` });
   await row.getByRole("button", { name: /View feedback/ }).click();
-  await expect(page.getByRole("region", { name: "Submission feedback" }).getByText("Add a concrete correction example.", { exact: true })).toBeVisible();
+  const feedback = page.getByRole("region", { name: "Submission feedback", exact: true });
+  const currentChanges = feedback.locator(".control-plane-inline-message").filter({ has: page.getByText("Requested changes", { exact: true }) });
+  await expect(currentChanges.getByText("Add a concrete correction example.", { exact: true })).toBeVisible();
+  const requestedChange = feedback.getByRole("listitem").filter({ has: page.getByText("Changes requested", { exact: true }) });
+  await expect(requestedChange.getByText("Add a concrete correction example.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Choose corrected package", exact: true }).click();
   await expect(workspace.getByText(/Source: submission/)).toBeVisible();
   await selectDraftFile("skill.json", "requested correction");

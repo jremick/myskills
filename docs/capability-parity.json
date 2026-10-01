@@ -13826,7 +13826,7 @@
               "path": "apps/web/test/e2e/fullstack/author-drafts.ts",
               "line": 1
             },
-            "detail": "Exact5128 real browser failed after dirty-import confirmation was dismissed. Current fullstack helper accepts the exact replacement confirmation, labels file selection stages and shares existing operational actors without altering production registration limits. All original draft persistence/import/OCC/recovery/correction assertions remain. Typecheck and Playwright discovery pass; corrected actual fullstack remains unrun locally."
+            "detail": "Exact5128 real browser failed after dirty-import confirmation was dismissed. Current fullstack helper accepts the exact replacement confirmation, labels file selection stages and shares existing operational actors without altering production registration limits. All original draft persistence/import/OCC/recovery/correction assertions remain. Typecheck and Playwright discovery pass; corrected actual fullstack remains unrun locally. Exact PR133 merge1839 then passed registry7/7 but failed the operational draft feedback locator because current summary and history both contained the note. Current correction asserts both separately without first(); focused DOM feedback and 16 local harness checks pass. Build-once immutable image reuse retains all four fresh phases. Corrected actual browser/Docker acceptance remains parent-owned and unrun locally."
           }
         ]
       },

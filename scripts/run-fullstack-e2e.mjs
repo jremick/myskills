@@ -1,9 +1,12 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fullstackPhases } from "./lib/fullstack-phases.mjs";
 import { readFullstackEndpoint } from "./lib/fullstack-endpoints.mjs";
+import { buildFullstackImages, requireFullstackImages } from "./lib/fullstack-images.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const composeFile = resolve(root, "docker-compose.e2e.yml");
@@ -52,10 +55,12 @@ const generatedSecrets = [
 // limiter is unchanged, and journeys sharing this host address stay isolated.
 const phases = fullstackPhases(process.argv.slice(2));
 let stackUp = false;
+let imageDirectory;
+let frozenImages;
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.once(signal, () => {
-    void teardown().finally(() => process.exit(signal === "SIGINT" ? 130 : 143));
+    void teardown().finally(() => removeImageOverride()).finally(() => process.exit(signal === "SIGINT" ? 130 : 143));
   });
 }
 
@@ -63,18 +68,27 @@ try {
   await run("docker", [...composeArgs, "config", "--quiet"]);
   // Build the CLI packages once; each phase gets fresh containers and data.
   await run("npm", ["run", "build", "-w", "@myskills-app/core", "-w", "@myskills-app/skill-package", "-w", "@jarel/myskills"]);
+  frozenImages = await buildFullstackImages({ run, composeArgs, project: projectName });
+  // Pull external dependencies once. Later stacks must never build or pull a
+  // replacement when an image from this invocation is missing.
+  await run("docker", [...composeArgs, "pull", "--ignore-buildable"]);
+  imageDirectory = await mkdtemp(resolve(tmpdir(), "myskills-fullstack-images-"));
+  const imageOverride = resolve(imageDirectory, "images.json");
+  await writeFile(imageOverride, JSON.stringify({ services: Object.fromEntries(Object.entries(frozenImages).map(([service, image]) => [service, { image, pull_policy: "never" }])) }), { mode: 0o600 });
+  composeArgs.push("--file", imageOverride);
   for (const phase of phases) {
     console.log(`Full-stack phase "${phase.name}" on a fresh disposable stack.`);
     await runPhase(phase);
   }
 } finally {
-  await teardown();
+  try { await teardown(); } finally { await removeImageOverride(); }
 }
 
 async function runPhase(phase) {
   try {
+    await requireFullstackImages({ run, images: frozenImages });
     stackUp = true;
-    await run("docker", [...composeArgs, "up", "--build", "--detach", "--wait", "--wait-timeout", "300"]);
+    await run("docker", [...composeArgs, "up", "--no-build", "--pull", "never", "--detach", "--wait", "--wait-timeout", "300"]);
     const endpoint = (service, containerPort, requestedPort) => readFullstackEndpoint({ run, composeArgs, project: projectName, service, containerPort, requestedPort });
     baseURL = await endpoint("web", 80, webPort);
     environment.MYSKILLS_E2E_BASE_URL = baseURL;
@@ -83,7 +97,7 @@ async function runPhase(phase) {
     if (webPort === "0") {
       // Keep the already-bound web/Mailpit containers. Configure exact OAuth
       // issuer/consent and cookie origins before the first authenticated read.
-      await run("docker", [...composeArgs, "up", "--no-deps", "--detach", "--wait", "--wait-timeout", "300", "api", "mcp"]);
+      await run("docker", [...composeArgs, "up", "--no-build", "--pull", "never", "--no-deps", "--detach", "--wait", "--wait-timeout", "300", "api", "mcp"]);
       // Reload nginx upstream addresses after API/MCP recreation while keeping
       // the web container and its listening socket/daemon binding intact.
       await run("docker", [...composeArgs, "exec", "--no-TTY", "web", "nginx", "-s", "reload"]);
@@ -113,6 +127,10 @@ async function runPhase(phase) {
   } finally {
     await teardown();
   }
+}
+
+async function removeImageOverride() {
+  if (imageDirectory) await rm(imageDirectory, { recursive: true, force: true });
 }
 
 async function teardown() {

@@ -31,7 +31,7 @@ test("full-stack E2E redacts generated credentials and uses the supplied Compose
   for (const value of credentials) assert.equal(output.includes(value), false);
   assert.match(output, /\[redacted\]/);
 
-  for (const record of records) {
+  for (const record of records.filter(({ args }) => args[0] === "compose")) {
     assert.deepEqual(record.args.slice(0, 3), ["compose", "--project-name", project]);
   }
   assert.ok(records.some(({ args }) => args.includes("down") && args.includes("--volumes") && args.includes("--remove-orphans")));
@@ -109,6 +109,7 @@ const args = process.argv.slice(2);
 const names = ${JSON.stringify(credentialNames)};
 const env = Object.fromEntries([...names, "MYSKILLS_E2E_WEB_PORT", "MYSKILLS_E2E_PUBLIC_WEB_PORT", "MYSKILLS_E2E_MAILPIT_PORT", "MYSKILLS_E2E_BASE_URL", "MYSKILLS_E2E_MAILPIT_URL"].map((name) => [name, process.env[name]]));
 appendFileSync(${JSON.stringify(recordPath)}, JSON.stringify({ args, env }) + "\\n");
+if (args[0] === "image" && args[1] === "inspect") { console.log("sha256:" + "c".repeat(64)); process.exit(0); }
 if (args.includes("ps") && args.includes("--quiet")) { console.log((args.at(-1) === "web" ? "a" : "b").repeat(64)); process.exit(0); }
 if (args[0] === "inspect") {
   const service = args.at(-1).startsWith("a") ? "web" : "mailpit";

@@ -88,3 +88,40 @@ Local comparison/publication checks pass 6/6. Real corrected PG/runtime, renewed
 independent review, fullstack/HOST and CodeQL acceptance remain open. All 426
 criteria, 24 groups, fixed fingerprint and zero completed criteria are preserved.
 No production-readiness or remote publication claim follows from these checks.
+
+The collected PR133 merge1839/dd806ac finished failed at `02:34:54Z` on
+1 October 2026. Its 90 files and export SHA-256
+`35e09c0449ebf69e3400f883545c1feb405ce7118846d9aedbb99cf57608f90d` were
+verified; controller and inner cleanup completed. Both general checks passed;
+PG312/314 each failed only the HIST child and parent aggregate. Production-child
+recovery/drain passed. Mocked193/1skip and real registry7/7 each passed, while
+operational failed in private draft feedback on a duplicate current/history note.
+Improvement/connector/site and HOST install/upgrade/restore remained unrun.
+Five HOST images/smokes passed before backup endpoint readback failed. Separate
+HOST remediation and actual runtime acceptance remain outside this worker's claim.
+
+CodeQL execution succeeded with exit0 and complete cleanup. Collection was
+pending at assignment; the later parent receipt verifies 8 files and export
+`d4bcdb9c9764e8cd422384f0a8b789a478efa9406cb5a46ffe797630935cccd4`.
+GitHub security acceptance remains failed with the nine alerts and seven
+unresolved threads recorded in `CI_INTERIM.md`; execution success does not close
+that gate. Parent owns combined review and exact updated-PR verification.
+
+Current source preserves the clean2d5f7207 fixes and separates current requested
+changes from the recorded history event in both real operational browser
+callbacks. The existing correction, scan, publication, private-access and
+immutable-export outcomes remain. The runner builds five exact project images
+once per invocation, pins their immutable IDs, and fails on a missing frozen
+image with no build/pull fallback. All four fresh container/volume lifecycles,
+endpoint and origin reads, unchanged deadlines and explicit filtered selection
+remain. Port-independent build inputs are checked. Sixteen local harness checks,
+focused DOM feedback and web typecheck pass; exact real Docker/browser/PG and
+combined HOST proof remain pending. The correction checkpoint and report carry
+the final source identity and bounded validation; no criterion is complete.
+
+The prior broad push/draft-PR authorization statement was unsupported and placed
+on hold. Parent subsequently recorded the user's `Pr 133 approved` response to
+the specific request to push fixes and update existing draft PR133 for verification.
+That approval is limited to PR133; this worker performs only local source/checks
+and own commits. Parent owns external actions; merge/release/publication/deploy
+still require their separate approval.

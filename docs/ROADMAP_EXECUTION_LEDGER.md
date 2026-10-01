@@ -17,12 +17,18 @@ preserve work and are not feature acceptance. Original source work remains
 preserved. The earlier native project threads are historical and are not active
 execution owners.
 
-The user authorized bounded implementation, independent review, commits,
-pushes and draft PRs using GPT-6.1 Sol/xhigh for implementation and GPT-6
-Astra/xhigh for hard review and coordination. Merge, release/tag creation,
-package/image publication and Railway deployment retain explicit approval
-gates. No paid model evaluations, provider/account changes, employer systems,
-economics/paywalls or recurring automation are authorized.
+The earlier broad assertion of authorization for pushes and draft PRs lacked
+an exact user quote and was placed on hold. On 1 October 2026, the parent
+recorded the user's "Pr 133 approved" response to approval for subsequent
+fix pushes and updates to existing draft PR133 for verification. That bounded
+authorization resolves the hold for PR133 only. The implementation worker
+is authorized for local source changes, checks and own commits; the parent
+owns integration, Windows/controller work and all external actions. Existing
+subscription GPT-6.1 Sol/xhigh implementation and GPT-6 Astra/xhigh review
+remain the selected runtime. Merge, release/tag creation, package/image
+publication and Railway deployment retain explicit approval gates. No paid
+model evaluations, provider/account changes, employer systems, economics/
+paywalls or recurring automation are authorized.
 
 Live readback at continuation start confirmed main at
 `c74ecd33ce987d24ef5ddf40a0fef98f1a50fc9b`, no open PRs and open issue #49.
@@ -426,3 +432,55 @@ runtime pass, renewed review, criterion completion or production readiness is
 claimed. Parent owns remote actions and Windows evidence. Exact local commit,
 receipts and freeze state are in `FOLLOWUP_REVIEW_FIX_CHECKPOINT.json` and
 `followup-review-remediation.md` in the root reports directory.
+
+### Collected PR133 and browser build correction — 1 October 2026
+
+Exact PR133 merge `1839c5c4b78ed685d26fa77e3690be7f5da3d959`, head
+`dd806ac932eeb47d74a94dbcb8c461832700d92c`, tree
+`6d5b98fb5725a78cc8008e19d0b260063134e33e`, finished failed at
+`02:34:54Z`. Collection verified 90 files and export SHA-256
+`35e09c0449ebf69e3400f883545c1feb405ce7118846d9aedbb99cf57608f90d`.
+Controller and inner cleanup completed without failures or leftovers. Both
+general checks passed. Each PG lane passed 312 of 314 tests; the HIST manifest
+mismatch and parent aggregate were the only failures. Actual production-child
+crash/restart/drain passed in both lanes. Those receipts apply to that source.
+
+Both mocked browsers passed 193 tests with one skip; real registry journeys
+passed 7/7 each. Operational reached private draft feedback and failed because
+the exact note matched both the current summary and history. Callback ordering
+supports prior composed steps, not a complete operational pass. Improvement,
+connector and site did not run; missing reports remain failures. All five HOST
+images/smokes passed, but backup-service container readback failed with
+`published-port-shape-invalid`; install/upgrade/restore remained unrun. HOST
+source correction and actual Linux acceptance belong to the separate worker
+and parent. This record does not claim their fix or runtime result.
+
+CodeQL execution `myskills-codeql-1839c5c4b7-1` succeeded with exit0 and complete
+controller cleanup. Its collection was pending at assignment; the subsequently
+supplied parent receipt now verifies 8 files and export SHA-256
+`d4bcdb9c9764e8cd422384f0a8b789a478efa9406cb5a46ffe797630935cccd4`.
+Execution success is separate from GitHub security acceptance: `CI_INTERIM.md`
+records nine alerts (six high, three medium) and seven unresolved threads.
+Combined security review, exact updated-PR verification and collection remain
+parent-owned; this worker made no external calls or alert decisions.
+
+The current browser correction starts at clean `2d5f7207`, retaining its
+failure-bound cleanup, collector and reviewed-visibility HIST fixes. Requested
+changes now assert the exact current summary and corresponding history event
+separately in both operational callbacks, without positional selection. Draft
+correction, queued scan, publication, private access and immutable history/export
+assertions remain. The runner builds its five project images once, snapshots
+only exact owned project tags after the successful build, pins immutable image
+IDs in an invocation-private override, and refuses unavailable IDs before each
+fresh stack. Every startup/origin recreation disables build/pull fallback.
+External dependency images are pulled once. Four container/volume lifecycles,
+endpoint/origin rereads, nginx reload, report paths, explicit filters and existing
+deadlines remain. Build args use same-origin `/api`, independent of phase ports.
+
+Local executable command/HTTP fixtures pass all 16 harness checks, including
+four fresh lifecycles, filtered selection and lost-image failure; focused DOM
+feedback and web typecheck pass. These prove local contracts, not Docker/image
+runtime or real browser/PG acceptance. All 426 IDs, 24 groups, fixed fingerprint
+and zero completed criteria remain. Exact correction SHA/tree and final bounded
+check receipts belong in `PR133_BROWSER_CHECKPOINT.json` and
+`pr133-browser-correction.md` in the absolute root reports directory.
