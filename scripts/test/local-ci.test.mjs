@@ -591,6 +591,7 @@ test("release-check verifies tagged artifacts and release images without publish
   for (const file of ["Dockerfile.api", "Dockerfile.mcp", "Dockerfile.web", "Dockerfile.backup", "Dockerfile.ops"]) assert.ok(builds.some((build) => build.includes(`--file ${file} `)), file);
   assert.equal(docker.filter(({ args }) => args[0] === "run" && args.includes("--rm") && args.includes("none")).length, 5);
   assertMcpSmoke(docker, "myskills-app-railway-mcp");
+  for (const image of ["myskills-app-railway-mcp", "myskills-registry-backup", "myskills-ops"]) assert.ok(docker.some(({ args }) => args[0] === "run" && args.some(arg => arg.startsWith(`${image}:local-ci-`))), `recorder observes downstream smoke ${image}`);
   assertExactCleanup(docker, [verify.env.MYSKILLS_E2E_COMPOSE_PROJECT]);
   assertNoPublication(records);
 
@@ -621,6 +622,8 @@ test("release-check rejects tampered release artifacts", (t) => {
   assert.equal(existsSync(join(run.evidence, "release", "artifacts")), false);
   const resources = JSON.parse(readFileSync(join(run.evidence, "resources.json"), "utf8"));
   assert.ok(resources.resources.every(({ state }) => state === "removed"), JSON.stringify(resources));
+  const downstream = fixture.records().filter(({ tool, args }) => tool === "docker" && (args[0] === "build" || args[0] === "run" && args.some(arg => /^(myskills-app-(api|web|mcp-http|railway-api|railway-mcp|railway-web)|myskills-registry-backup|myskills-ops):local-ci-/.test(arg))));
+  assert.deepEqual(downstream, [], "failed artifact verification must dispatch no downstream image build or smoke");
 });
 
 test("CodeQL applies the repository query filters and fails closed when they are ignored", (t) => {

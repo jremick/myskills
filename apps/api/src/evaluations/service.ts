@@ -11,6 +11,7 @@ import { readImprovementScopeRole } from "../improvements/postgres-scope-access.
 import { isImprovementScopeWriter } from "../improvements/scope-access.js";
 import { assertCurrentTeamOwner, isCurrentTeamOwner } from "../repositories/team-ownership.js";
 import type { SubmissionActor } from "../submissions/types.js";
+import type { ApiTokenScope } from "../auth/types.js";
 
 export interface EvaluationInput { slug: string; version: string; artifactSha256: string; suiteRevisionId: string; platform: string; idempotencyKey: string; disclosure?: "private" | "public-summary" }
 export interface EvaluationRecord { id: string; versionId: string; suiteRevisionId: string; createdAt: string; disclosure: "private" | "public-summary"; reviewContext: { reviewStatus: string; lifecycleStatus: string; context: "release" | "submission" }; result: PackageEvaluationResult }
@@ -35,18 +36,20 @@ export class EvaluationService {
       const scopeRole = await readImprovementScopeRole(tx, actor.id, scope);
       if (!scopeRole) throw missing();
       const disclosure = input.disclosure ?? "private";
+      const requiredScopes: ApiTokenScope[] = disclosure === "public-summary" ? ["improvements:run", "improvements:configure", "sharing:write"] : ["improvements:run"];
+      const assurance = { requireMfa: disclosure === "public-summary" && scope.type !== "user", requireMfaIfPrivileged: disclosure === "public-summary" };
       if (disclosure === "public-summary") {
         if (!isImprovementScopeWriter(scope, scopeRole) || !await this.canDisclose(tx, actor.id, version, true)) {
           throw new AppError("Evidence disclosure requires scope management and exact public release authority.", "EVALUATION_DISCLOSURE_FORBIDDEN", 403);
         }
-        await assertActionAuthority(tx, actor, ["improvements:run"], version.reviewerAccess ? "review" : "read", { requireMfa: scope.type !== "user" });
+        await assertActionAuthority(tx, actor, requiredScopes, version.reviewerAccess ? "review" : "read", assurance);
       }
       const body = normalizeImprovementEvaluationSuiteV1(revision.body);
       if (!body.assertions || improvementDocumentDigest("suite", body) !== revision.body_sha256) throw conflict();
       const existing = await tx.execute(sql`SELECT * FROM package_evaluation_runs WHERE actor_user_id=${actor.id}::uuid AND idempotency_key=${input.idempotencyKey}`);
       if (existing.rows[0]) {
         if (existing.rows[0].request_sha256 !== requestSha) throw conflict();
-        await assertActionAuthority(tx, actor, ["improvements:run"], version.reviewerAccess ? "review" : "read", { requireMfa: disclosure === "public-summary" && scope.type !== "user" });
+        await assertActionAuthority(tx, actor, requiredScopes, version.reviewerAccess ? "review" : "read", assurance);
         return { run: record(existing.rows[0]), created: false };
       }
       const payload = await readArtifactPayload({ artifactStorage: this.options.artifactStorage, artifact: {
@@ -57,7 +60,7 @@ export class EvaluationService {
       if (result.artifactSha256 !== input.artifactSha256 || result.suiteSha256 !== revision.body_sha256) throw conflict();
       const reviewContext = { reviewStatus: String(version.review_status), lifecycleStatus: String(version.lifecycle_status), context };
       // Recheck expiry after artifact IO/evaluation, with retained role/scope locks.
-      await assertActionAuthority(tx, actor, ["improvements:run"], version.reviewerAccess ? "review" : "read", { requireMfa: disclosure === "public-summary" && scope.type !== "user" });
+      await assertActionAuthority(tx, actor, requiredScopes, version.reviewerAccess ? "review" : "read", assurance);
       const inserted = await tx.execute(sql`INSERT INTO package_evaluation_runs
         (id,skill_version_id,artifact_sha256,suite_revision_id,suite_sha256,actor_user_id,idempotency_key,request_sha256,result,review_context,disclosure)
         VALUES (${randomUUID()}::uuid,${version.id}::uuid,${input.artifactSha256},${input.suiteRevisionId}::uuid,${result.suiteSha256},${actor.id}::uuid,
@@ -65,7 +68,7 @@ export class EvaluationService {
       await tx.execute(sql`INSERT INTO audit_events(actor_user_id,action,decision,resource_type,resource_id,details)
         VALUES (${actor.id}::uuid,'evaluation.complete','allow','package_evaluation',${inserted.rows[0]!.id}::uuid,
         ${JSON.stringify({ artifactSha256: result.artifactSha256, suiteSha256: result.suiteSha256, status: result.status, totals: result.totals })}::jsonb)`);
-      await assertActionAuthority(tx, actor, ["improvements:run"], version.reviewerAccess ? "review" : "read", { requireMfa: disclosure === "public-summary" && scope.type !== "user" });
+      await assertActionAuthority(tx, actor, requiredScopes, version.reviewerAccess ? "review" : "read", assurance);
       return { run: record(inserted.rows[0]!), created: true };
     });
   }

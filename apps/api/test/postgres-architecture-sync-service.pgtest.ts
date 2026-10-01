@@ -1,12 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtemp, readdir, copyFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
+  architectureTargetAdapterDigest,
+  architectureTargetCapabilitiesDigest,
+  architectureTargetObservationDigest,
   architectureSyncObservedDigest,
   architectureSyncRecoveryEvidenceDigest,
   architectureSyncSnapshotDigest,
   decideArchitectureSyncRecovery,
   type ArchitectureSyncRecoveryCondition,
 } from "@myskills-app/core";
+import { PostgresArchitectureStore } from "../src/architectures/postgres-store.js";
+import { ArchitectureTargetBindingAuthorizer } from "../src/targets/architecture-binding-authorizer.js";
+import { PostgresArchitectureTargetStore } from "../src/targets/postgres-target-store.js";
+import { ArchitectureTargetService } from "../src/targets/service.js";
 import { ArchitectureSyncService, type ArchitectureSyncPorts } from "../src/architecture-sync/service.js";
 import { MemoryArchitectureSyncFixtureExecutor } from "../src/architecture-sync/fixture-executor.js";
 import { ArchitectureSyncExecutorError, type ArchitectureSyncFixtureExecutor, type ArchitectureSyncPreviewInput } from "../src/architecture-sync/types.js";
@@ -58,6 +69,11 @@ test("PostgresArchitectureSyncStore persists the fixture service journal atomica
   assert.equal((await pool.query("SELECT count(*)::int AS count FROM skill_architecture_sync_runs")).rows[0]?.count, 1);
   assert.equal((await pool.query("SELECT count(*)::int AS count FROM skill_architecture_sync_steps")).rows[0]?.count, 2);
 
+  const distinct = await Promise.all(["second", "third"].map(key => service.createPreviewRun(input({ requestKey: key, idempotencyKey: key }))));
+  const allSteps = [created, ...distinct].flatMap(result => result.run.steps.map(step => step.id));
+  assert.equal(new Set(allSteps).size, allSteps.length);
+  for (const result of distinct) assert.deepEqual(await new PostgresArchitectureSyncStore(db).getRun(result.run.identity.runId), result.run);
+  assert.equal((await service.createPreviewRun(input({ requestKey: "second", idempotencyKey: "second" }))).replayed, true);
   const approved = await service.approve({ actor: ownerId, runId: created.run.identity.runId });
   assert.equal(approved.state, "approved");
   const applied = await service.apply({ actor: ownerId, runId: approved.identity.runId, holderId: "fixture-holder" });
@@ -867,8 +883,14 @@ async function freshPool(t: { after(callback: () => void): void }) {
   t.after(() => pool.end());
   await pool.query("DROP SCHEMA IF EXISTS public CASCADE");
   await pool.query("CREATE SCHEMA public");
-  // The production schema selects artifact_intent and enforces all current purposes.
-  await runMigrations(pool);
+  // This fixture deliberately preserves pre-0034 generic snapshots. Migrate
+  // their historical rows forward, then exercise every journal on the full schema.
+  const migrationRoot = fileURLToPath(new URL("../migrations/", import.meta.url));
+  const historical = await mkdtemp(path.join(os.tmpdir(), "myskills-pre-observation-"));
+  try {
+    for (const file of await readdir(migrationRoot)) if (file.endsWith(".sql") && file < "0034_") await copyFile(path.join(migrationRoot, file), path.join(historical, file));
+    await runMigrations(pool, { migrationsDir: historical });
+  } finally { await rm(historical, { recursive: true, force: true }); }
   return pool;
 }
 
@@ -910,7 +932,27 @@ async function seedFixture(pool: ReturnType<typeof createPgPool>): Promise<void>
        '{"nodes":1}'::jsonb, '{"status":"healthy"}'::jsonb, $7)`,
     [observationId, targetId, "a".repeat(64), "b".repeat(64), observedDigest, JSON.stringify(observed), now],
   );
+  await runMigrations(pool);
+  assert.deepEqual((await pool.query("SELECT observed_state FROM skill_architecture_observations WHERE id=$1", [observationId])).rows[0].observed_state, observed);
 }
+
+test("current observation schema rejects legacy snapshots and round-trips a canonical target observation", { timeout: 60_000 }, async t => {
+  const pool = await freshPool(t);
+  await seedFixture(pool); // A preserved historical row now coexists with current constraints.
+  await assert.rejects(pool.query("INSERT INTO skill_architecture_observations(id,target_id,generation,adapter_kind,adapter_contract_version,adapter_version,adapter_digest,capabilities_digest,observed_digest,observed_state,counts,health_summary,captured_at) SELECT gen_random_uuid(),target_id,generation,adapter_kind,adapter_contract_version,adapter_version,adapter_digest,capabilities_digest,observed_digest,observed_state,counts,health_summary,captured_at FROM skill_architecture_observations WHERE id=$1", [observationId]), error => (error as { code?: string }).code === "23514");
+  const targets = new PostgresArchitectureTargetStore(createDb(pool));
+  const target = await targets.getTarget(ownerId, targetId);
+  assert.ok(target);
+  const capabilitiesDigest = architectureTargetCapabilitiesDigest(target.capabilities, target.adapter.contractVersion);
+  await pool.query("UPDATE skill_architecture_targets SET capabilities_digest=$2 WHERE id=$1", [targetId, capabilitiesDigest]);
+  const observationInput = { schemaVersion: 1 as const, targetId, targetGeneration: target.generation, adapterDigest: architectureTargetAdapterDigest(target.adapter), capabilitiesDigest, observedAt: new Date().toISOString(), skills: [{ slug: "canonical-leaf", kind: "leaf" as const, enabled: true }], configFindings: [], promptAwareness: { detected: false, count: 0, redacted: true as const } };
+  const service = new ArchitectureTargetService(targets, new ArchitectureTargetBindingAuthorizer(new PostgresArchitectureStore(createDb(pool))));
+  const saved = await service.appendObservation({ actor: ownerId, targetId, observation: observationInput });
+  assert.equal(saved.observedDigest, architectureTargetObservationDigest(observationInput));
+  const fresh = (await new PostgresArchitectureTargetStore(createDb(pool)).listObservations({ actor: ownerId, targetId, limit: 1 }))?.[0];
+  assert.deepEqual(fresh, saved);
+  assert.equal((await pool.query("SELECT observed_digest FROM skill_architecture_observations WHERE id=$1", [observationId])).rows[0].observed_digest, observedDigest);
+});
 
 function dbRunId(publicId: string): string {
   const compact = publicId.replace(/^run-/, "");

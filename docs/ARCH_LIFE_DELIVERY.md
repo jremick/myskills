@@ -38,28 +38,38 @@ authorities. Transport journeys exercise public CLI and MCP dispatch. Browser
 evidence establishes inspection and explicit review UX. PostgreSQL persistence,
 real host acceptance and deployed proof remain separate evidence layers.
 
-## Lifecycle residual ledger
+## Current composed candidate
 
-| Outcome | Source boundary | Remaining implementation | Separate acceptance |
-| --- | --- | --- | --- |
-| Discover | Registry/exact-release resolver and architecture explorer | Task-aware retrieval and explicit provider projections where required by the roadmap | Provider host discovery/recognition |
-| Govern | API tenancy, membership, grants, profile denials and release lifecycle | Provider-derived role mapping and conditional exposure | Current target policy and operator consent |
-| Version | Immutable architecture revisions and exact release identities | Durable versioned layout/artifact projections when required | Deployed revision/readback |
-| Share | API grants and existing CLI/MCP management | Public architecture publishing contract | Real recipient/provider access |
-| Compose | Router → router → leaf graph and derive-shell migration | Router/exposure/removal/context-artifact delivery contract; composed orchestration through existing queue/leases/receipts | Real target pilot after supported source exists |
-| Inspect | Saved graph/history and persisted review-only plans | Run outcome UI for later supported execution | PostgreSQL, host and deployed proof kept separate |
-| Safely update | Exact plan fences; per-skill install/update/rollback companion | Whole-architecture preflight, atomic artifact delivery or per-step rollback binding | Explicit pilot and second-provider write activation |
+The API, CLI, MCP and browser now integrate the guided
+`codex-workspace-architecture/v1` contract. This source preserves the full
+router → router → leaf thesis, exact versions, profiles and environments.
+Separate execution approval, one shared lease, whole-tree staging/readback and
+explicit rollback replace the earlier proposed delivery gap. Review approval
+remains permanently non-executable. See
+[COMPOSED_ARCHITECTURE_DELIVERY.md](COMPOSED_ARCHITECTURE_DELIVERY.md).
 
-Two supported tool instances can be two explicitly selected isolated Codex
-workspaces. Their binding, observation, approval, placement and revocation must
-remain independent. The two-instance review journey exercises that source
-boundary. It does not establish whole-architecture installation or actual host
-recognition. A broader provider contract is a separate strategic decision.
+| Outcome | Current source | Remaining acceptance or intentional boundary |
+| --- | --- | --- |
+| Discover | Authorized deterministic task retrieval and explorer | Model benefit and real provider recognition are unverified. |
+| Govern | Current API tenancy/grants/profile/target/release policy | Provider-derived roles and conditional runtime enforcement remain deferred. |
+| Version | Immutable revisions, exact release pins and owned context artifact | Deployed readback pending; durable visual layout is deferred. |
+| Share | Current API grants with CLI/MCP management | Public architecture publication remains unselected. |
+| Compose | Whole-artifact API intent and enrolled Codex companion | Canonical SQL/MinIO/process and actual host consent/recognition pending. |
+| Inspect | Graph/history, saved review and composed intent/receipt handoff | Canonical browser and current receiving-organization denial proof pending. |
+| Safely update | Whole-tree baseline, fences, current execution windows and rollback journal | Canonical interrupted transitions and independent correction review pending. |
 
-Fixture recovery tests prove synthetic leases, receipts and recovery only. Layout
-and diagrams remain derived projections; neither is a new visual source of truth.
+Two disjoint enrolled Codex workspaces have local byte-fixture journeys. They
+are two separate tool instances; each keeps its own identity, consent, approval,
+lease and receipt. They do not prove a signed-in host recognized the entries.
+Broader providers and optional telemetry remain downstream decisions. Diagrams
+remain derived exports, without a second visual source of truth.
 
-## Smallest composed-delivery contract delta
+## Historical pre-composition contract decision
+
+The following proposal records the decision that led to the implemented guided
+contract. Its future-tense statements are historical planning, not present source
+gaps. Current behavior and limits are above and in the composed delivery record.
+
 
 The existing `TargetSkillOperation` queue accepts install/update/rollback with
 one slug/version/artifact. It cannot deliver configure-router, enable, disable,
@@ -104,6 +114,6 @@ Verification results and the exact reviewed commit are recorded at closeout.
 ## Wave2 integration source state
 
 Shared API production registration, CLI/MCP dispatch and browser entry paths are integrated on the roadmap candidate. Historical leaf-check receipts above remain historical and are not whole-candidate acceptance. Current Node22 source/narrow checks and parent canonical PostgreSQL/browser/image results are recorded in the wave2 build report.
-Plans remain permanently review-only. Apply, claim, lease, recovery and rollback reject their purpose before mutation. Historical exposure must be permitted by the current effective profile and ancestors; current policy constraints are fenced. Organization target grants and receiving-organization release visibility are independent from personal ownership. The memory fixture provides point-in-time review intent and is not execution authority. The Postgres production wrapper retains authority through review persistence. Full composed graph artifact delivery from ARCHITECTURE_DECISION.md remains for the next worker; per-skill success is not composed acceptance.
+Plans remain permanently review-only. Apply, claim, lease, recovery and rollback reject their purpose before mutation. Historical exposure must be permitted by the current effective profile and ancestors; current policy constraints are fenced. Organization target grants and receiving-organization release visibility are independent from personal ownership. The memory fixture provides point-in-time review intent and is not execution authority. The Postgres production wrapper retains authority through review persistence. The later guided composed artifact source implements ARCHITECTURE_DECISION.md; per-skill success still does not prove composed acceptance.
 
-Wave2 local proof: memory API route/instance and CLI/MCP transport journeys pass in the21-test narrow selection. Desktop/mobile selected-revision and stale-review browser journeys pass in the25-test affected Chromium selection. Canonical PostgreSQL additions cover held consent/account/exact-release authority, actual observation/policy writers, post-change refusal, atomic approval rollback, concurrent same-actor replay, restart and permanent review-purpose denial. Strict test-source typecheck is a syntax/contract check only; PostgreSQL execution remains with the controller. Current upgrade revisions fence review, while complete composed delivery and execution-time upgrade eligibility remain the next bounded workstream.
+Wave2 local proof: memory API route/instance and CLI/MCP transport journeys pass in the21-test narrow selection. Desktop/mobile selected-revision and stale-review browser journeys pass in the25-test affected Chromium selection. Canonical PostgreSQL additions cover held consent/account/exact-release authority, actual observation/policy writers, post-change refusal, atomic approval rollback, concurrent same-actor replay, restart and permanent review-purpose denial. Strict test-source typecheck is a syntax/contract check only; PostgreSQL execution remains with the controller. Current upgrade revisions fence review. The later composed contract adds execution-time upgrade/window checks; actual SQL and host acceptance remain pending.

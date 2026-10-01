@@ -1,24 +1,53 @@
 import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { isIP } from "node:net";
 import { join } from "node:path";
 
-/** Stable DNS on the owned bridge works with Docker's default IPAM. */
+const invalidBackupNetwork = () => { const error = new Error("HOST_BACKUP_NETWORK_INVALID"); error.hostFailure = { operation: "docker.network.backup-endpoint", reason: "owned-gateway-or-port-invalid" }; throw error; };
+const ipv4Number = value => value.split(".").reduce((number, octet) => number * 256 + Number(octet), 0);
+/** Exact owned bridge identity, dynamic IPAM and a usable assigned IPv4 gateway. */
+function ownedGateway(response, network, owner) {
+  let row;
+  try { row = JSON.parse(response.stdout)[0]; } catch { return invalidBackupNetwork(); }
+  if (row?.Name !== network || row.Driver !== "bridge" || row.Scope !== "local" || !/^[a-f0-9]{64}$/.test(row.Id ?? "") || row.Labels?.["io.myskills.host-rehearsal"] !== owner) return invalidBackupNetwork();
+  const configurations = Array.isArray(row.IPAM?.Config) ? row.IPAM.Config.filter(value => typeof value?.Gateway === "string" && isIP(value.Gateway) === 4) : [];
+  if (configurations?.length !== 1) return invalidBackupNetwork();
+  const { Gateway: gateway, Subnet: subnet } = configurations[0];
+  const parts = typeof subnet === "string" ? subnet.split("/") : [];
+  const prefix = Number(parts[1]);
+  if (parts.length !== 2 || isIP(parts[0]) !== 4 || !Number.isInteger(prefix) || prefix < 1 || prefix > 30 || /^(0|127|169\.254|22[4-9]|2[3-5]\d)\./.test(gateway)) return invalidBackupNetwork();
+  const block = 2 ** (32 - prefix), start = Math.floor(ipv4Number(parts[0]) / block) * block, address = ipv4Number(gateway);
+  if (address <= start || address >= start + block - 1) return invalidBackupNetwork();
+  return { gateway, networkId: row.Id };
+}
+
+/** One TLS-valid gateway endpoint serves the host driver, bridge and recovery. */
 export function prepareHostBackupService({ proof, owner, image, user, password, reserve, mark, docker, call, runService }) {
   assert.match(owner, /^hc-[a-f0-9]{16}$/);
   assert.ok([user, password].every(value => typeof value === "string" && !/[\r\n\0]/.test(value)));
-  const network = `${owner}-backup-network`, hostname = `${owner}-backup`;
+  const network = `${owner}-backup-network`;
   reserve("network", network);
-  docker(["network", "create", "--label", `io.myskills.host-rehearsal=${owner}`, network]);
+  docker(["network", "create", "--driver", "bridge", "--label", `io.myskills.host-rehearsal=${owner}`, network]);
   mark("network", network);
+  const selected = ownedGateway(docker(["network", "inspect", network]), network, owner);
   const certs = join(proof, "certs"); mkdirSync(certs, { mode: 0o700 });
   call("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-keyout", join(certs, "private.key"),
-    "-out", join(certs, "public.crt"), "-subj", "/CN=MySkills disposable backup", "-addext", `subjectAltName=DNS:${hostname}`]);
+    "-out", join(certs, "public.crt"), "-subj", "/CN=MySkills disposable backup", "-addext", `subjectAltName=IP:${selected.gateway}`]);
   chmodSync(join(certs, "private.key"), 0o600);
   // Docker's env-file preserves literal dollars; never export these values in diagnostics.
   writeFileSync(join(proof, "backup-minio.env"), `MINIO_ROOT_USER=${user}\nMINIO_ROOT_PASSWORD=${password}\n`, { mode: 0o600 });
-  runService("backup", ["--network", network, "--network-alias", hostname, "--env-file", join(proof, "backup-minio.env"),
+  const id = runService("backup", ["--network", network, "--publish", `${selected.gateway}::9000`, "--env-file", join(proof, "backup-minio.env"),
     "--mount", `type=bind,source=${certs},target=/certs,readonly`], image, ["server", "/data", "--certs-dir", "/certs"]);
-  return { network, hostname, endpoint: `https://${hostname}:9000` };
+  if (!/^[a-f0-9]{64}$/.test(id ?? "")) return invalidBackupNetwork();
+  // Read back the exact daemon-assigned port and owner; never infer an endpoint.
+  let container;
+  try { container = JSON.parse(docker(["container", "inspect", id]).stdout)[0]; } catch { return invalidBackupNetwork(); }
+  const ports = container?.NetworkSettings?.Ports?.["9000/tcp"];
+  if (container?.Id !== id || container.Config?.Labels?.["io.myskills.host-rehearsal"] !== owner || container.Config?.Labels?.["io.myskills.host-rehearsal.role"] !== "backup"
+    || container.NetworkSettings?.Networks?.[network]?.NetworkID !== selected.networkId || ports?.length !== 1 || ports[0].HostIp !== selected.gateway || !/^[1-9][0-9]{0,4}$/.test(ports[0].HostPort) || Number(ports[0].HostPort) > 65535) return invalidBackupNetwork();
+  const current = ownedGateway(docker(["network", "inspect", network]), network, owner);
+  if (current.gateway !== selected.gateway || current.networkId !== selected.networkId) return invalidBackupNetwork();
+  return { network, gateway: selected.gateway, port: Number(ports[0].HostPort), endpoint: `https://${selected.gateway}:${ports[0].HostPort}` };
 }
 
 /** Only fixed operation names and process status leave the fixture boundary. */

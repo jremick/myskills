@@ -7,7 +7,7 @@ import { OrganizationService } from "../src/organizations/service.js";
 import { PostgresOrganizationStore } from "../src/organizations/postgres-organization-store.js";
 import { randomUUID } from "node:crypto";
 import { hashPassword,hashSessionToken } from "@myskills-app/auth";
-import { defaultPackageEvaluationSuite,parseSkillManifest } from "@myskills-app/skill-package";
+import { compareAuthorizedReviewCandidate,defaultPackageEvaluationSuite,parseSkillManifest } from "@myskills-app/skill-package";
 import { createDb,createPgPool } from "../src/db/client.js";
 import { runMigrations } from "../src/db/migrate.js";
 import { PostgresAuthStore } from "../src/auth/postgres-auth-store.js";
@@ -95,6 +95,15 @@ test("exact-version evaluation HTTP/PG authority, replay, immutability and publi
   const publicRun = await call("POST", `${endpoint}/runs`, authorToken, { ...input, disclosure: "public-summary", idempotencyKey: "explicit-public-summary" });
   assert.equal(publicRun.statusCode, 201, publicRun.body);
   assert.equal(publicRun.json().run.disclosure, "public-summary");
+  const runnerTokenResponse = await call("POST", "/v1/auth/api-tokens", authorToken, { name: "Private evaluator", scopes: ["improvements:run"] });
+  assert.equal(runnerTokenResponse.statusCode, 201, runnerTokenResponse.body);
+  const runnerToken = runnerTokenResponse.json().token.token as string;
+  assert.equal((await call("POST", `${endpoint}/runs`, runnerToken, { ...input, idempotencyKey: "private-token-eval" })).statusCode, 201);
+  const beforeDisclosure = (await pool.query("SELECT count(*)::int AS n FROM package_evaluation_runs")).rows[0].n;
+  const scopedDisclosure = await call("POST", `${endpoint}/runs`, runnerToken, { ...input, disclosure: "public-summary", idempotencyKey: "run-scope-cannot-disclose" });
+  assert.equal(scopedDisclosure.statusCode, 403, scopedDisclosure.body);
+  assert.equal(scopedDisclosure.json().error.code, "API_TOKEN_SCOPE_REQUIRED");
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM package_evaluation_runs")).rows[0].n, beforeDisclosure);
   assert.equal((await call("POST", `${endpoint}/runs`, authorToken, { ...input, disclosure: "public-summary" })).statusCode, 409, "disclosure changes cannot replay private evidence");
   const outsiderSuite = await call("POST", "/v1/improvements/suites", outsiderToken, { owner: { type: "user", id: outsider.id }, suite: defaultPackageEvaluationSuite() });
   assert.equal(outsiderSuite.statusCode, 201, outsiderSuite.body);
@@ -104,8 +113,7 @@ test("exact-version evaluation HTTP/PG authority, replay, immutability and publi
   // Two unrelated organizations use private assertion canaries on this same public release.
   const organizationSuites = [];
   for (const [index, user] of users.entries()) {
-    const policy = structuredClone(defaultOrganizationPolicyV1);
-    if (index === 0) policy.teams.requireOrganizationMembershipForTeamMembers = false;
+    const policy = { ...structuredClone(defaultOrganizationPolicyV1), teams: { ...defaultOrganizationPolicyV1.teams, requireOrganizationMembershipForTeamMembers: index !== 0 } };
     const organization = await organizationStore.createOrganization({ name: `Evaluation ${index}`, slug: `evaluation-${index}`, createdByUserId: user.id, creatorEmail: user.email, creatorName: user.name, policy, policySha256: organizationPolicyDigest(policy), reason: "Fixture" });
     const token = index === 0 ? authorToken : outsiderToken;
     await pool.query("UPDATE auth_sessions SET mfa_verified_at=clock_timestamp() WHERE token_hash=$1", [hashSessionToken(token)]);
@@ -169,6 +177,28 @@ test("exact-version evaluation HTTP/PG authority, replay, immutability and publi
   await authStore.revokeApiToken({userId:author.id,tokenId:readTokenResponse.json().token.id});
   assert.equal((await call("GET",`${endpoint}/summary`,readToken)).statusCode,401);
   assert.equal((await call("GET",`${endpoint}/runs`,readToken)).statusCode,401);
+  await t.test("pre-approval comparison uses real reviewer authority without bypassing baseline release visibility", async () => {
+    for (const [user, token] of [[author, authorToken], [outsider, outsiderToken]] as const) {
+      await pool.query("INSERT INTO role_assignments(user_id,role) VALUES($1,'maintainer') ON CONFLICT DO NOTHING", [user.id]);
+      await pool.query("UPDATE auth_sessions SET mfa_verified_at=clock_timestamp() WHERE token_hash=$1", [hashSessionToken(token)]);
+    }
+    const comparisonInput = { base: { slug: manifest.name, version: manifest.version, artifactSha256: first.artifact.sha256 }, target: { slug: nextManifest.name, version: nextManifest.version, artifactSha256: next.artifact.sha256, submissionId: next.id } };
+    const read = (token: string) => async (kind: string, pin: { slug: string; version: string; artifactSha256: string; submissionId?: string }) => {
+      const review = kind === "review" || kind === "review-bundle";
+      const response = await call("GET", review ? `/v1/review/submissions/${pin.submissionId}${kind === "review-bundle" ? "/bundle" : ""}` : `/v1/skills/${pin.slug}/releases/${pin.version}${kind === "bundle" ? `/bundle?sha256=${pin.artifactSha256}` : ""}`, token);
+      if (response.statusCode !== 200) throw new Error(`Current API denial ${response.statusCode}`);
+      return response.json() as Record<string, unknown>;
+    };
+    const compared = await compareAuthorizedReviewCandidate(comparisonInput, read(authorToken));
+    assert.equal(compared.context, "review-candidate"); assert.equal(compared.totals.modified, 2);
+    await assert.rejects(compareAuthorizedReviewCandidate({ ...comparisonInput, target: { ...comparisonInput.target, artifactSha256: "f".repeat(64) } }, read(authorToken)));
+    await pool.query("UPDATE skills SET visibility='private' WHERE slug=$1", [manifest.name]);
+    assert.equal((await call("GET", `/v1/review/submissions/${next.id}/bundle`, outsiderToken)).statusCode, 200, "reviewer may inspect candidate");
+    await assert.rejects(compareAuthorizedReviewCandidate(comparisonInput, read(outsiderToken)), /Current API denial 404/, "review authority must not broaden baseline readability");
+    assert.equal((await pool.query("SELECT review_status FROM skill_versions WHERE id=$1", [next.id])).rows[0].review_status, "pending");
+    await pool.query("UPDATE skills SET visibility='public' WHERE slug=$1", [manifest.name]);
+  });
+
 });
 async function waitForLock(pool:ReturnType<typeof createPgPool>, fragment = "pg_advisory_xact_lock"){
   const deadline=Date.now()+5000;while(Date.now()<deadline){const r=await pool.query("SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE $1 AND pid<>pg_backend_pid()", [`%${fragment}%`]);if(r.rows.length)return;await new Promise(done=>setTimeout(done,20));}assert.fail("No blocked API evaluation transaction");

@@ -109,6 +109,8 @@ function runtime(api: RegistryFixture) {
 }
 async function invoke(api: RegistryFixture, args: string[], context?: CliRuntime) {
   const fixture = runtime(api);
+  const workspaceIndex = args.indexOf("--workspace");
+  if (workspaceIndex >= 0) (context ?? fixture.context).workspaceEnrollmentStateDirectory = path.join(args[workspaceIndex + 1], ".test-enrollment-state");
   const code = await runCli([...args, "--api-url", "http://api.test"], context ?? fixture.context);
   return { code, ...fixture.output };
 }

@@ -1,7 +1,7 @@
 # Roadmap execution ledger
 
 Last updated: 2026-10-01 (Australia/Melbourne)
-Status: implementation in progress. No roadmap completion or release acceptance claimed.
+Status: final source corrections and criterion bindings prepared; bounded local proof is recorded separately. Final canonical verification and renewed independent review remain pending. No roadmap completion or release acceptance claimed.
 
 This is the integration ledger for the authorized roadmap work. Completion
 means review-ready implementations with exact revision evidence and explicit
@@ -43,14 +43,14 @@ No original MBP worktree or native thread is changed.
 
 | Scope | Preserved source | Current continuation state |
 | --- | --- | --- |
-| Integration | `cd93bde57496` | 426 source criterion records and 24 backlog groups retained; source reconciliation and final matrix pending. |
+| Integration | `cd93bde57496` | All 426 original clauses and 24 groups have separate current source/check/status/gap bindings. The fixed fingerprint and stale-binding gate are wired into structure. Final exact-candidate matrix and review remain pending. |
 | ID-GOV | `9106bc8cd953` | Integrated as `418e030`, hardened in `cf99c9b`; independent source review complete and new atomicity/deadline PG cases passed in the failed first checkpoint. Final candidate proof pending. |
 | TRUST-MCP | `4d3d183833f6`, recovery `e53508453908` | Integrated as `b10fcab` and `63b496b`, hardened in `cf99c9b`; independent source review complete and new coherent-authorization PG cases passed in the failed first checkpoint. Final candidate proof pending. |
-| QUALITY | `561c045f6012` | Durable scans and production worker integrated through `8fafa42`; local checks passed. PG acceptance and version-aware evaluations remain pending. |
-| AUTHOR-1 | `085acf87b006` | Private drafts/imports/browser comparison integrated through `8fafa42`; local surface checks passed. PG and full-stack acceptance pending. |
-| ARCH-LIFE | `360243eeab86` | Composed artifact API/CLI/MCP/browser delivery committed `48839644`; two enrolled local workspace journeys and interruption cases pass. Independent review and actual PG/MinIO acceptance pending. |
+| QUALITY | `561c045f6012` | Durable scans and version-bound evaluations are integrated at frozen `8ba7e0e`. Final source corrects private disclosure/suite access, draft submit authority, exact-scan consumption and post-wait replay time. Local contracts pass; real PG/process acceptance and renewed review remain pending. |
+| AUTHOR-1 | `085acf87b006` | Draft/import/browser history source is retained. Final CLI/MCP published comparison and CLI/MCP/browser reviewer candidate diff use existing API authority. Local comparison/browser contracts pass; final PG/full-stack acceptance remains pending. |
+| ARCH-LIFE | `360243eeab86` | Composed delivery and reviewed authority fixes are integrated in exact `097cd50`. Final source addresses generated step IDs, shared enrollment/migration compatibility and canonical fixture defects. Prior reviews are complete; renewed final-source review and actual PG/MinIO acceptance remain pending. |
 | DISC-SITE | `2453e69c3ba4` | Discovery and site integrated through `8fafa42`; fixed synthetic corpus and local desktop/mobile/keyboard checks passed. PG/canonical/deployed proof pending. |
-| HOST-1 | `3d01d673be27` | Review fixes `6a45918` integrated as `d6c4694`; two independent follow-ups corrected in `48839644`. Combined narrow/controller fixtures pass; independent correction review and actual Linux rehearsal pending. |
+| HOST-1 | `3d01d673be27` | Prior independent findings and final gateway/TLS/platform receipt/diagnostic corrections are source-delivered. Seven current synthetic HOST contracts pass. Exact097 reached image receipts before failing; complete final Linux install/upgrade/restore and renewed review remain pending. |
 
 Sequence: ID/TRUST source and review corrections; sequential QUALITY, AUTHOR,
 ARCH, DISC and HOST integration; remaining no-cost evaluation and composed
@@ -90,9 +90,9 @@ binds source criteria to document sections and lines. The source remains
 | ID-03 | Provider login/linking and external identity lifecycle | ID-GOV | Metadata/mappings exist; runtime issuer/claims/linking/recovery contract not selected. No-cost fixtures and exact decisions; no invented IdP configuration. |
 | AUTHOR-01 | Multi-file drafts, reload/validation, save/history/diff/OCC, requested-change correction and submission | AUTHOR | Implementable; exact held bytes, current author policy/review and immutable releases. |
 | AUTHOR-02 | Folder/ZIP and public commit-pinned GitHub previews with byte/provenance fidelity | AUTHOR | Retain delivered public GitHub imports. Complete folder/ZIP draft paths. Private GitHub, binary and AI choices remain explicit. |
-| HIST-01 | Public/managed version comparison and history usability | AUTHOR + Integration | Inspect current comparison; implement missing bounded exact-version diff and authorized navigation/recovery. |
+| HIST-01 | Public/managed version comparison and history usability | AUTHOR + Integration | Dedicated API-authorized exact published-release CLI/MCP comparison now exists alongside browser comparison. Full-content status, byte/digest identities and bounded previews have local contracts; canonical runtime parity remains pending. |
 | QUALITY-01 | Background scans, leases/retries/crash recovery and immutable digest-bound findings | QUALITY | Existing `not-run` status retained until worker completion; approval fails closed; fence stale workers. |
-| QUALITY-02 | Milestone 6 suites/runs, fail/warn/skipped/incompatible states, reviewer evidence, public-safe summaries and local CLI eval | QUALITY | Reuse improvement eval contracts; bind artifact/target/runner/review; paid execution separately gated. |
+| QUALITY-02 | Milestone 6 suites/runs, fail/warn/skipped/incompatible states, reviewer evidence, public-safe summaries and local CLI eval | QUALITY | Immutable exact artifact/suite/runner/review evidence and local static evaluation exist. Details remain private by canonical scope; explicitly authorized public summaries omit private identities. Canonical persistence/expiry proof is pending; provider behavior stays skipped when unconfigured. |
 | TRUST-01 | Package policy fixtures, reviewer diff and lifecycle/migration paths | QUALITY + AUTHOR + TRUST | Retain controls; close evidenced gaps including hooks/binaries/generated files/injection and safe evidence. |
 | TRUST-02 | Signed or direct authorized integrity-checked artifact delivery | TRUST | Current private API-proxied direct contract retained. Harden digest/size and current post-read auth. Presigned object URLs cannot promise immediate revocation. |
 | MCP-01 | API per-tool/resource audit, privileged reads and stdio/HTTP compatibility | TRUST | Much delivered in beta.18. Distinguish delegated outcome from session intent; complete conformance/negative matrix. |
@@ -101,7 +101,7 @@ binds source criteria to document sections and lines. The source remains
 | ARCH-02 | Persisted desired-versus-observed plans/history, fencing, approvals and recovery evidence | ARCH | Implementable review-only journal reuse; bind exact revision, observation, target generation/consent/capabilities and current policy/releases. |
 | ARCH-03 | Full composed apply/verify/rollback across routers, leaves and targets | ARCH + Integration | `48839644` implements bounded whole-artifact orchestration with immutable API intent, separate execution approval, shared lease and local journal. Two enrolled workspace fixtures and interrupted transitions pass; independent review, PG/MinIO and live consent/recognition remain distinct pending proof. |
 | ARCH-04 | Two supported tool instances, placement/conflicts/enable/disable/relocate and broader adapters | ARCH | Two explicit isolated Codex workspaces can satisfy the two-instance criterion. Implement and verify their placement/isolation/lifecycle first; live consent remains external. Another provider contract is a separate downstream adapter choice. |
-| ARCH-05 | Durable derived diagrams/versioned layout and optional usage telemetry | ARCH | Downstream choices explicit; exports remain accessible. Telemetry off/opt-in needs event/retention/export/delete policy. |
+| ARCH-05 | Durable derived diagrams/versioned layout and optional usage telemetry | ARCH | Derived accessible diagrams/exports exist. Durable server-side layout is an explicit original deferred non-goal; optional telemetry remains future opt-in scope without a selected event/retention/export/delete contract. |
 | HOST-01 | Versioned images/Compose, fresh usable deployment, setup and diagnostics | HOST | Implementable candidate bundle/helper; fresh Linux/amd64 gate and explicit arm64 build/runtime evidence or reviewed support limit. Record emulation separately. Exact source/image identity and public availability required before support claims; publishing gated. |
 | HOST-02 | Full app backup/restore, upgrade/rollback, monitoring/incident response and recovery UX | HOST | Rehearse scripts/runbooks with data-loss/lock limits and measured times. Dedicated owner/admin browser guidance and sanitized receipt inspection are assigned; UI fixtures do not prove restored login/package bytes. No remote host executor is implied. |
 | RELEASE-01 | Reproducible provenance/SBOM/digests, protected tags, signatures and release policy | TRUST + HOST + Integration | Deterministic preparation; signing/distribution choices and publication/deploy gates explicit. |
@@ -300,12 +300,12 @@ The actual PostgreSQL, MinIO and Linux install/upgrade/restore journeys are
 prepared and required by canonical gates. They are not established by those
 local results. The maintained Windows run
 `myskills-roadmap-composed-20261001` accepted this exact source at
-`2026-09-30T21:12:31.972749Z` and is running. Its source manifest digest is
+`2026-09-30T21:12:31.972749Z`. At this historical checkpoint it was running. Its source manifest digest is
 `8f70403ce77cc7455668077117dea32904df97f5c2e9affd1a33dd5bdae58c64`.
-Results and collection remain pending. This checkpoint excludes later
+At that observation, results and collection were pending. This checkpoint excludes later
 QUALITY evaluation/remediation source and cannot gate the final roadmap.
 
-Independent Astra/xhigh review is running on an isolated clean clone of
+At that historical observation, independent Astra/xhigh review was running on an isolated clean clone of
 `48839644`, including the two HOST remediation follow-ups. The completed
 Sol/xhigh architecture worker has exited. After live idle-process verification,
 QUALITY received this exact dependency and the sole local heavy-process slot
@@ -313,3 +313,23 @@ for isolated integration and checks. No push, merge, release, publication or
 deployment has occurred. All 426 original criterion identities and source
 descriptors, and all 24 groups, remain preserved; final evidence reconciliation
 is still required.
+
+The composed run subsequently finished at `2026-09-30T21:25:40.751562Z` with all seven jobs failed. Collection verified 46 files with export SHA-256 `03536a6e863ce9cdac42cb19d64f2865d146f4876c1de2f95c9a3345acf18d0f`. Application cleanup failed at the owned HOST ledger; the original `remove-failed/creationUnconfirmed` receipt and run reservation remain historical evidence. A later restricted supervisor readback found the exact container absent at `2026-09-30T22:49:59Z`; this does not rewrite creation uncertainty or the failed receipt. Downstream fullstack/site and complete restore were not reached.
+
+The independent review completed with six required corrections, followed by exact097 remediation review with seven further findings. Those assigned final source corrections are documented below and require renewed review. The exact `097cd50db075e691fb8d535601b4560ba0cdbfe2` diagnostic finished at `2026-09-30T22:46:58.256021Z`, all seven jobs failed, and collection verified 46 files with export SHA-256 `4a58b0c52eed2ff6caf14dfea6a7123e4b03ed088445fe545c17bec80faf4a03`. That run's current cleanup completed; it is separate from the earlier retained failed history. Neither run includes the final corrections or supplies final acceptance.
+
+## Final candidate reconciliation
+
+The final continuation composes the frozen QUALITY base with exact097 dependency and adds
+its assigned remediation, HIST CLI/MCP comparison and pre-approval reviewer
+comparison. [Current candidate delivery](ROADMAP_CANDIDATE_DELIVERY.md) records
+source behavior, migration compatibility and trust boundaries. It supersedes
+stale present-tense delivery claims while dated beta.18 and prior evidence
+remain historical.
+
+All 426 preserved clauses have separate current bindings in
+[the criterion map](roadmap-criterion-bindings.json). The deterministic structure
+gate checks the captured contract, 24 groups and current source anchors/hashes.
+A binding or local fixture receipt is not completed acceptance. The root final
+report carries the committed identity and specific command results; canonical
+SQL, browser, Linux/HOST and CodeQL receipts remain parent-owned.

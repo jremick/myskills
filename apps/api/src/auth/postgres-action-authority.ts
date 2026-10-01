@@ -12,7 +12,7 @@ export function actionCredential(context: AuthContext, authorization: string): N
 }
 
 /** Retain account, credential and role authority. Recheck actual time after every lock wait. */
-export async function assertActionAuthority(tx: DatabaseTransaction, actor: SubmissionActor, scopes: ApiTokenScope[], action: "author" | "review" | "read", options: { requireMfa?: boolean } = {}): Promise<void> {
+export async function assertActionAuthority(tx: DatabaseTransaction, actor: SubmissionActor, scopes: ApiTokenScope[], action: "author" | "review" | "read", options: { requireMfa?: boolean; requireMfaIfPrivileged?: boolean } = {}): Promise<void> {
   const account = await tx.execute(sql`SELECT id FROM users WHERE id=${actor.id}::uuid AND status='active' AND email_verified_at IS NOT NULL FOR SHARE`);
   if (!account.rows.length) throw unauthenticated();
   const identity = actor.credential;
@@ -37,7 +37,7 @@ export async function assertActionAuthority(tx: DatabaseTransaction, actor: Subm
   if (action === "author" && !elevated && !roles.rows.some(r => r.role === "author")) throw new AppError("Submission requires author permissions.", "SUBMISSION_ROLE_REQUIRED", 403);
   if (action === "review" && !elevated) throw new AppError("Review permissions are required.", "REVIEW_ROLE_REQUIRED", 403);
   // Existing author action contract requires MFA for elevated roles only.
-  if (options.requireMfa || (action !== "read" && elevated)) {
+  if (options.requireMfa || ((action !== "read" || options.requireMfaIfPrivileged) && elevated)) {
     const verifiedAt = c.mfa_verified_at ? timestamp(c.mfa_verified_at) : NaN;
     const expiry = c.assurance_expires_at ? timestamp(c.assurance_expires_at) : NaN;
     if (!Number.isFinite(verifiedAt) || verifiedAt > Date.now() || (kind === "oauth" && (!Number.isFinite(expiry) || expiry <= Date.now() || expiry > verifiedAt + 900_000))) {

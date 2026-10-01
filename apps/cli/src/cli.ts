@@ -1,5 +1,6 @@
+import { withWorkspaceEnrollment, workspaceEnrollmentDirectory } from "./workspace-enrollments.js";
 import { releaseComparisonHelp, runReleaseComparisonCommand } from "./release-comparison-commands.js";
-import { assertIsolatedArtifactWorkspace, type ArtifactDurabilityObserver } from "./architecture-artifact-filesystem.js";
+import { type ArtifactDurabilityObserver } from "./architecture-artifact-filesystem.js";
 import { evaluationHelp, runEvaluationCommand } from "./evaluation-commands.js";
 import { prepareLocalArchitectureArtifact, applyLocalArchitectureArtifact, verifyLocalArchitectureArtifact, rollbackLocalArchitectureArtifact, type ArtifactFaultPoint } from "./architecture-artifact.js";
 import { artifactHash, type ArchitectureArtifactIntent } from "@myskills-app/core";
@@ -186,6 +187,8 @@ export interface CliRuntime {
   /** Production stores are opened only after selecting the configuration profile. */
   createStores?: (env: Record<string, string | undefined>, namespace?: string) => { configStore: CliConfigStore; tokenStore: CliTokenStore };
   configProfile?: string;
+  /** Test-only state seam; production uses the shared OS-user enrollment directory. */
+  workspaceEnrollmentStateDirectory?: string;
   prompt?: CliPrompt;
   tokenStore?: CliTokenStore;
   /** Test-only clock seam for deterministic local target observations. */
@@ -209,6 +212,7 @@ interface ParsedArgs {
 export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {
   let parsed: ParsedArgs;
   let namespace: string | undefined;
+  const enrollmentDirectory = runtime.workspaceEnrollmentStateDirectory ?? workspaceEnrollmentDirectory(runtime.env);
   try {
     const selected = selectConfigurationProfile(argv, runtime.env);
     parsed = parseArgs(selected.argv);
@@ -243,7 +247,6 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
           const relative = path.relative(path.join(os.homedir(), directory), canonicalWorkspace);
           return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
         })) throw new CliError("Choose a project workspace, not global configuration.", 2);
-        if (parsed.command === "architecture-artifacts" || parsed.command === "codex" && parsed.args[0] === "enroll" || ["install", "update", "rollback", "companion"].includes(parsed.command)) await assertIsolatedArtifactWorkspace(canonicalWorkspace);
         await ensureSafeDirectory(canonicalWorkspace, path.join(canonicalWorkspace, ".agents", "skills"));
         parsed.options.workspace = canonicalWorkspace;
       }
@@ -256,6 +259,8 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
             throw new CliError("This installation root belongs to an enrolled Codex workspace. Use --workspace for workspace mutations.", 2);
           } catch (error) { if (!isNodeError(error) || error.code !== "ENOENT") throw error; }
         }
+        const managedMutation = parsed.command === "architecture-artifacts" || parsed.command === "codex" && parsed.args[0] === "enroll" || ["install", "update", "rollback", "companion"].includes(parsed.command);
+        if (workspace && managedMutation) return withWorkspaceEnrollment(String(parsed.options.workspace), enrollmentDirectory, parsed.command === "codex" && parsed.args[0] === "enroll", () => dispatchCli(parsed, runtime));
         return dispatchCli(parsed, runtime);
       });
     }

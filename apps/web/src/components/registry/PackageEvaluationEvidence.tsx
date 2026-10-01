@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { EvaluationClient, EvaluationView } from "@/evaluations-api";
+import { evaluationRuns } from "@/evaluations-api";
 const connections = new WeakMap<EvaluationClient, number>();
 let epoch=0;
 export function PackageEvaluationEvidence(props: { api: EvaluationClient; slug:string; version:string; publicSummary?:boolean }) {
@@ -9,7 +10,7 @@ export function PackageEvaluationEvidence(props: { api: EvaluationClient; slug:s
 function Evidence({api,slug,version,publicSummary=false}:{api:EvaluationClient;slug:string;version:string;publicSummary?:boolean}) {
   const [runs,setRuns]=useState<EvaluationView[]|null>(null);
   const [failed,setFailed]=useState(false);
-  useEffect(()=>{let active=true;void (publicSummary?api.summary(slug,version):api.list(slug,version)).then(value=>{if(active)setRuns(value.runs);}).catch(()=>{if(active)setFailed(true);});return()=>{active=false;};},[api,slug,version,publicSummary]);
+  useEffect(()=>{let active=true;void (publicSummary?api.summary(slug,version):api.list(slug,version)).then(value=>{const current=evaluationRuns(value,publicSummary);if(active)setRuns(current);}).catch(()=>{if(active)setFailed(true);});return()=>{active=false;};},[api,slug,version,publicSummary]);
   return <section aria-label="Package evaluation evidence"><h4>Package evaluations</h4>
     <p>Static package checks cover the declared platform. Provider behavior remains unconfigured. Evaluation evidence does not approve a release.</p>
     {failed?<p role="alert">Evaluation evidence is unavailable for this connection.</p>:runs===null?<p role="status">Loading evaluation evidence…</p>:runs.length===0?<p>No evaluation evidence has been recorded for these exact bytes.</p>:runs.map(run=>{

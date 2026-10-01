@@ -150,7 +150,7 @@ export class ArchitectureSyncService {
   async createPreviewRun(input: ArchitectureSyncPreviewInput): Promise<ArchitectureSyncPreviewResult> {
     const actor = normalizeActor(input.actor);
     const identity = this.buildIdentity(input);
-    const placeholderSteps = normalizePreviewSteps(input.steps, identity.targetGeneration);
+    const placeholderSteps = normalizePreviewSteps(input.steps, identity.targetGeneration, architectureSyncOrderedDigest({ actorId: actor.userId, targetId: identity.targetId, requestKey: normalizeIdentifier(input.requestKey, "requestKey"), idempotencyKey: normalizeIdentifier(input.idempotencyKey, "idempotencyKey") }));
     const planDigest = architectureSyncPlanDigest(placeholderSteps);
     const steps = placeholderSteps.map((step) => ({
       ...step,
@@ -895,12 +895,12 @@ function normalizeIdentifier(value: unknown, field: string): string {
   return value;
 }
 
-function normalizePreviewSteps(input: readonly ArchitectureSyncPreviewStepInput[], expectedGeneration: number): ArchitectureSyncStep[] {
+function normalizePreviewSteps(input: readonly ArchitectureSyncPreviewStepInput[], expectedGeneration: number, requestIdentity: string): ArchitectureSyncStep[] {
   if (!Array.isArray(input) || input.length > architectureSyncControlLimits.steps) throw new AppError("Sync steps are invalid.", "ARCHITECTURE_SYNC_STEP_INVALID", 400);
   const ids = new Set<string>();
   return input.map((item, index) => {
     if (!item || typeof item !== "object") throw new AppError("Sync step is invalid.", "ARCHITECTURE_SYNC_STEP_INVALID", 400);
-    const id = normalizeIdentifier(item.id ?? `step-${index + 1}`, "stepId");
+    const id = normalizeIdentifier(item.id ?? `step-${requestIdentity}-${index + 1}`, "stepId");
     if (ids.has(id)) throw new AppError("Sync step ids must be unique.", "ARCHITECTURE_SYNC_DUPLICATE_STEP", 400);
     ids.add(id);
     const generation = item.targetGeneration ?? expectedGeneration;

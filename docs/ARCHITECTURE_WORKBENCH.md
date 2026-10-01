@@ -65,3 +65,17 @@ and policy. A stale request keeps the existing plan visible for inspection.
 Review approval does not schedule or execute target changes. See the
 [delivery ledger](ARCH_LIFE_DELIVERY.md) for verification and remaining execution
 contracts.
+
+## Composed delivery handoff
+
+The connected-target inspector can prepare an immutable composed artifact from
+an exact saved review for an enrolled Codex workspace. It shows separate local
+prepare/apply/verify commands and receipt status. Review approval does not start
+execution. OAuth and browser inspection do not supply a local executor claim.
+Only the explicitly invoked companion can stage/read back local bytes and seek
+separate current execution authority. Optional rollback has its own approval.
+
+The canonical graph remains API-owned. Drafts and derived diagrams do not become
+an execution source of truth. Canonical browser/SQL/MinIO acceptance, actual host
+recognition and consent remain pending. See
+[COMPOSED_ARCHITECTURE_DELIVERY.md](COMPOSED_ARCHITECTURE_DELIVERY.md).

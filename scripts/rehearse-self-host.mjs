@@ -12,6 +12,7 @@ import { createSelfHostBundle } from "./lib/self-host-release.mjs";
 import { hostBaselineCommit, resolveHostBaseline } from "./lib/self-host-baseline.mjs";
 import { hostDocker, saveHostLedger } from "./lib/host-rehearsal-resources.mjs";
 import { prepareHostBackupService, assertHostCommandSucceeded } from "./lib/host-backup-service.mjs";
+import { inspectHostPlatformImage, pushHostPlatformImage, verifyHostPlatformManifest, fetchHostPlatformManifest } from "./lib/host-platform-receipt.mjs";
 import { rehearseComposeClientInterruption, rehearseComposeInterruption } from "./lib/host-compose-interruption.mjs";
 
 const baseline = hostBaselineCommit;
@@ -76,9 +77,8 @@ async function ready(url) {
   }
   throw new Error("readiness-deadline");
 }
-function inspect(image) {
-  const value = JSON.parse(docker(["image", "inspect", image]).stdout)[0];
-  assert.equal(value.Os, "linux"); assert.equal(value.Architecture, "amd64"); return value;
+function inspect(image, role, check) {
+  return inspectHostPlatformImage(docker, image, role, check);
 }
 function build(suffix, directory, args) {
   const tag = `${owner}/${suffix}:fixture`; reserve("image", tag);
@@ -86,20 +86,13 @@ function build(suffix, directory, args) {
 }
 async function publish(registry, name, image, source) {
   const tag = `${registry}/${owner}/${name}:fixture`; reserve("image", tag);
-  docker(["tag", image, tag]); mark("image", tag); docker(["push", tag]);
-  const manifest = await fetch(`http://${registry}/v2/${owner}/${name}/manifests/fixture`, {
-    headers: { accept: "application/vnd.docker.distribution.manifest.v2+json,application/vnd.oci.image.manifest.v1+json" }, signal: AbortSignal.timeout(10_000),
-  });
-  assert.ok(manifest.ok); const bytes = Buffer.from(await manifest.arrayBuffer());
-  const digest = `sha256:${hash(bytes)}`; assert.equal(manifest.headers.get("docker-content-digest"), digest);
-  const identity = inspect(tag); const ref = `${registry}/${owner}/${name}@${digest}`;
+  docker(["tag", image, tag]); mark("image", tag); pushHostPlatformImage(docker, tag);
+  const { bytes, headerDigest } = await fetchHostPlatformManifest(fetch, `http://${registry}/v2/${owner}/${name}/manifests/fixture`, name);
+  const digest = `sha256:${hash(bytes)}`;
+  const identity = inspect(tag, name, "inspect-before"); const ref = `${registry}/${owner}/${name}@${digest}`;
   reserve("image", ref);
   docker(["pull", "--platform", "linux/amd64", ref]); mark("image", ref);
-  assert.equal(inspect(ref).Id, identity.Id);
-  if (name !== "postgres") {
-    assert.equal(identity.Config.Labels["org.opencontainers.image.revision"], source.commit);
-    assert.equal(identity.Config.Labels["org.opencontainers.image.version"], source.version);
-  }
+  verifyHostPlatformManifest({ bytes, headerDigest, before: identity, after: inspect(ref, name, "inspect-after"), name, source });
   receipt.images[name] = { ref, imageId: identity.Id, platform: "linux/amd64", sourceLabels: name === "postgres" ? null : Object.fromEntries(["org.opencontainers.image.revision", "org.opencontainers.image.version"].map((key) => [key, identity.Config.Labels[key]])) };
   const file = `${name}-manifest.json`;
   const evidence = { schemaVersion: 1, kind: "oci-manifest", status: "passed", imageRef: ref, platformDigest: digest, platform: "linux/amd64",
@@ -110,7 +103,7 @@ async function publish(registry, name, image, source) {
 function pullPinned(tag) {
   reserve("upstream-image", tag); mark("upstream-image", tag, "retained-shared");
   docker(["pull", "--platform", "linux/amd64", tag]);
-  const identity = inspect(tag); const ref = identity.RepoDigests.find((item) => item.includes("@sha256:")); assert.ok(ref);
+  const identity = inspect(tag, "upstream", "inspect-before"); const ref = identity.RepoDigests.find((item) => item.includes("@sha256:")); assert.ok(ref);
   // Shared upstream images are observed, not owned. A run-scoped alias is owned.
   const alias = `${owner}/upstream-${++sequence}:fixture`; reserve("image", alias);
   docker(["tag", ref, alias]); mark("image", alias);
@@ -360,6 +353,7 @@ try {
     "A historical baseline operator bundle is required to claim the complete package-to-package upgrade command."];
 } catch (error) {
   if (error.hostFailure) receipt.failure = error.hostFailure;
+  else if (error.hostPlatformFailure) receipt.failure = error.hostPlatformFailure;
   else receipt.failure = { operation: "fixture.assertion", reason: "bounded-check-failed" };
   receipt.phases[phase] = { ...receipt.phases[phase], status: "failed" };
   receipt.failedPhase = phase; receipt.guidance = "Inspect canonical sanitized step status and child resource ledger; raw provider output and credentials are withheld.";

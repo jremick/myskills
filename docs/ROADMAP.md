@@ -82,8 +82,9 @@ Last updated: 2026-09-30
   optional task-aware recommendations, and simpler self-hosting and deployment.
 - Preserve the API/Postgres registry, immutable reviewed releases, authorization,
   and audit as the shared foundation for each new surface.
-- Keep the proven workspace-scoped Codex companion separate from broader
-  cross-tool sync and full architecture execution, which remain future work.
+- The beta.19 candidate adds guided whole-architecture Codex workspace delivery
+  with separate execution approval and aggregate rollback. Broader cross-tool
+  adapters, actual host recognition/consent and deployed acceptance remain pending.
 - Use the operational acceptance ledger and current source to reconcile older
   milestone status lists. Earlier branch and
   beta.2 labels below are historical; they do not supersede the release tracks.

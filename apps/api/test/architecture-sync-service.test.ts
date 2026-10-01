@@ -124,7 +124,7 @@ test("preview is digest-only, side-effect-free, and request/idempotency replay i
   assert.equal(preview.run.state, "drafted");
   assert.equal(preview.run.receipts.length, 0);
   assert.equal(preview.run.digests.desiredDigest.length, 64);
-  assert.equal(executor.hasApplied(preview.run.identity.runId, "step-1"), false);
+  assert.equal(executor.hasApplied(preview.run.identity.runId, preview.run.steps[0].id), false);
 
   const serialized = JSON.stringify(preview.run);
   assert.equal(/"(?:spec|path|url|prompt|credential|config)"/i.test(serialized), false);
@@ -157,7 +157,7 @@ test("approval binds the actor and plan digest, then staged apply verifies in or
   assert.deepEqual(applied.steps.map((step) => step.state), ["succeeded", "succeeded"]);
   assert.deepEqual(applied.receipts.map((receipt) => receipt.kind), ["approval", "apply", "apply", "verify", "verify", "run"]);
   assert.equal((await store.getCurrentLease(applied.identity.targetId)), null);
-  assert.equal(executor.hasApplied(applied.identity.runId, "step-1"), true);
+  assert.equal(executor.hasApplied(applied.identity.runId, applied.steps[0].id), true);
   const replay = await service.apply(await applyInput(applied.identity.runId));
   assert.deepEqual(replay, applied);
 });

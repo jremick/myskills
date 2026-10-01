@@ -418,10 +418,10 @@ test("approval artifact hash migration backfills legacy approved unpublished row
   // Preserve the real legacy rows and migrate forward before using today's
   // store. Record only migrations already applied by the isolated backfill
   // fixture, then let the production migrator establish the 0039 boundary.
-  await pool.query("CREATE TABLE schema_migrations(id text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
-  for (const file of readdirSync(migrationsDir).filter(file => file.endsWith(".sql") && file <= "0012_approval_artifact_hash.sql").sort()) {
-    await pool.query("INSERT INTO schema_migrations(id) VALUES($1)", [file.replace(/\.sql$/, "")]);
-  }
+  // applyMigrations/applyMigration already record exactly the legacy boundary.
+  // Do not recreate its ledger or falsely mark an unapplied migration complete.
+  const applied = (await pool.query("SELECT id FROM schema_migrations ORDER BY id")).rows.map(row => row.id);
+  assert.deepEqual(applied, readdirSync(migrationsDir).filter(file => file.endsWith(".sql") && file <= "0012_approval_artifact_hash.sql").sort().map(file => file.replace(/\.sql$/, "")));
   await runMigrations(pool);
   assert.equal((await pool.query("SELECT count(*)::int AS n FROM legacy_package_scan_allowances")).rows[0].n, 1);
 

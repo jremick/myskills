@@ -170,6 +170,7 @@ async function cli(j: Journey, step: string, args: string[], options: { token?: 
     return response;
   };
   const code = await runCli([...args, "--json"], {
+    workspaceEnrollmentStateDirectory: path.join(j.configDir, "enrollment-state"),
     env: { MYSKILLS_TOKEN: options.token ?? j.api.session, MYSKILLS_API_URL: j.api.url, MYSKILLS_CONFIG_DIR: j.configDir },
     fetch: fetchImpl,
     io: { stdout: (line) => stdout.push(line), stderr: (line) => stderr.push(line) },

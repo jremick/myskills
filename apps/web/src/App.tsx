@@ -85,6 +85,7 @@ import { SkillManagePanel } from "@/components/registry/SkillManagePanel";
 import { ManagedReleaseSelect, SkillSectionTabs, SkillVersionsPanel } from "@/components/registry/SkillSections";
 import { isPublishedRelease, parseSkillScope, parseSkillTab, safeLibraryReturn, sectionPanelId, sectionTabId, type SkillScope, type SkillTab } from "@/components/registry/skill-workspace";
 import { SubmissionEvidencePanel } from "@/components/registry/SubmissionEvidencePanel";
+import { ReviewComparison } from "@/components/registry/ReviewComparison";
 import { TaskDiscovery } from "@/components/registry/TaskDiscovery";
 import { ReleaseComparison } from "@/components/registry/ReleaseComparison";
 import { DraftWorkspace, ForkReleaseDraft } from "@/components/authoring/DraftWorkspace";
@@ -2967,6 +2968,7 @@ function ReviewDashboard({ client, onOpenSkill, session }: { client: RegistryCli
           </section>
 
           {client.getReviewSubmissionDetail && <SubmissionEvidencePanel key={`${submission.id}:${submission.reviewStatus}`} client={client} submissionId={submission.id} mode="reviewer" />}
+          {client.getReviewSubmissionDetail && <ReviewComparison client={client} submission={submission} />}
 
           <section aria-labelledby={`${baseId}-details`} className="registry-section">
             <h3 id={`${baseId}-details`}>Submission details</h3>

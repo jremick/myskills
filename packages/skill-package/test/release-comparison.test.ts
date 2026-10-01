@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { compareAuthorizedReleases, type ReleaseComparisonRead } from "../src/release-comparison.js";
+import { compareAuthorizedReleases, compareAuthorizedReviewCandidate, type ReleaseComparisonRead, type ReviewComparisonRead } from "../src/release-comparison.js";
 function fixture() {
   const packageFor = (version: string, files: Array<{path:string;content:string}>) => ({ files: [{ path: "skill.json", content: JSON.stringify({ name: "compare", version }) }, ...files] });
   const base = packageFor("1.0.0", [{ path: "same.txt", content: "same" }, { path: "removed.txt", content: "old" }, { path: "changed.txt", content: "a".repeat(50_000) + "OLD" }]);
@@ -44,4 +44,22 @@ test("authorization denial or revocation during final re-read yields no partial 
     await assert.rejects(compareAuthorizedReleases(f.input, async (kind, pin) => { if (++reads === deniedAt) throw new Error("API authorization revoked"); return f.read(kind, pin); }), /revoked/);
     assert.equal(reads, deniedAt);
   }
+});
+
+test("review comparison requires independent published baseline access and exact current candidate authority", async () => {
+  const f = fixture(); const input = { ...f.input, target: { ...f.input.target, submissionId: "00000000-0000-4000-8000-000000000001" } };
+  const read: ReviewComparisonRead = async (kind, pin) => kind === "review" ? { submission: { id: pin.submissionId, slug: pin.slug, version: pin.version } } : kind === "review-bundle" ? f.target : f.read(kind, pin);
+  const result = await compareAuthorizedReviewCandidate(input, read);
+  assert.equal(result.context, "review-candidate"); assert.equal(result.totals.modified, 2);
+  for (const deniedAt of [1, 3, 4, 6, 7]) {
+    let count = 0;
+    await assert.rejects(compareAuthorizedReviewCandidate(input, async (kind, pin) => { if (++count === deniedAt) throw new Error("current API denial"); return read(kind, pin); }), /current API denial/);
+  }
+  await assert.rejects(compareAuthorizedReviewCandidate(input, async (kind, pin) => kind === "review" ? { submission: { id: pin.submissionId, slug: "foreign", version: pin.version } } : read(kind, pin)));
+  await assert.rejects(compareAuthorizedReviewCandidate({ ...input, target: { ...input.target, artifactSha256: "f".repeat(64) } }, read));
+  await assert.rejects(compareAuthorizedReviewCandidate(input, async (kind, pin) => {
+    const value = await read(kind, pin);
+    if (kind === "release") (value.release as Record<string, unknown>).publishedAt = null;
+    return value;
+  }), /readable published exact releases/);
 });

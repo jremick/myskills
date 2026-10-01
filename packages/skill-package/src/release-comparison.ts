@@ -5,6 +5,8 @@ import type { PackageInputFile } from "./package-path.js";
 
 export interface ReleaseComparisonPin { slug: string; version: string; artifactSha256: string }
 export interface ReleaseComparisonInput { base: ReleaseComparisonPin; target: ReleaseComparisonPin }
+export interface ReviewComparisonInput { base: ReleaseComparisonPin; target: ReleaseComparisonPin & { submissionId: string } }
+export type ReviewComparisonRead = (kind: "release" | "bundle" | "review" | "review-bundle", pin: ReleaseComparisonPin & { submissionId?: string }) => Promise<Record<string, unknown>>;
 export type ReleaseComparisonRead = (kind: "release" | "bundle", pin: ReleaseComparisonPin) => Promise<Record<string, unknown>>;
 const invalid = () => new Error("Release comparison requires two readable published exact releases with matching identities and SHA-256 bytes.");
 const digest = (body: string) => createHash("sha256").update(body).digest("hex");
@@ -45,6 +47,31 @@ export async function compareAuthorizedReleases(input: ReleaseComparisonInput, r
   const targetFiles = files(await read("bundle", input.target), input.target, targetBytes);
   // Every call uses API-owned authorization. A management metadata read never replaces bundle access.
   if (releaseBytes(await read("release", input.base), input.base) !== baseBytes || releaseBytes(await read("release", input.target), input.target) !== targetBytes) throw invalid();
+  return comparisonResult(input, baseFiles, targetFiles, baseBytes, targetBytes);
+}
+
+/** Review authority applies only to the candidate; the baseline still needs published-release read access. */
+export async function compareAuthorizedReviewCandidate(input: ReviewComparisonInput, read: ReviewComparisonRead) {
+  validateReleaseComparisonInput(input);
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(input.target.submissionId)) throw invalid();
+  const review = (value: Record<string, unknown>) => {
+    const row = value.submission as Record<string, unknown> | undefined;
+    if (!row || row.id !== input.target.submissionId || row.slug !== input.target.slug || row.version !== input.target.version) throw invalid();
+  };
+  const baseBytes = releaseBytes(await read("release", input.base), input.base);
+  review(await read("review", input.target));
+  const baseFiles = files(await read("bundle", input.base), input.base, baseBytes);
+  const candidate = await read("review-bundle", input.target);
+  const targetBytes = Buffer.byteLength(JSON.stringify(candidate));
+  const targetFiles = files(candidate, input.target, targetBytes);
+  if (releaseBytes(await read("release", input.base), input.base) !== baseBytes) throw invalid();
+  review(await read("review", input.target));
+  // The final verified export also rechecks current reviewer credential/role/MFA authority.
+  files(await read("review-bundle", input.target), input.target, targetBytes);
+  return { ...comparisonResult(input, baseFiles, targetFiles, baseBytes, targetBytes), context: "review-candidate", submissionId: input.target.submissionId };
+}
+
+function comparisonResult(input: ReleaseComparisonInput, baseFiles: PackageInputFile[], targetFiles: PackageInputFile[], baseBytes: number, targetBytes: number) {
   const before = new Map(baseFiles.map(file => [file.path, file.content]));
   const after = new Map(targetFiles.map(file => [file.path, file.content]));
   const totals = { added: 0, removed: 0, modified: 0, unchanged: 0 };

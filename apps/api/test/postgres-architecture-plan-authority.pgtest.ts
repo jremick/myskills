@@ -32,7 +32,7 @@ test("Postgres exact-revision review retains authority, rejects prior changes an
   await pool.query("CREATE SCHEMA public");
   await runMigrations(pool);
   const db = createDb(pool);
-  const actor = { id: randomUUID(), mfaVerified: true, artifactCredential:{kind:"session" as const,hash:hashSessionToken("pg-plan-session")} };
+  const actor = { id: randomUUID(), mfaVerified: true, artifactCredential:{kind:"session" as const,hash:hashSessionToken("pg-plan-session-valid-credential-0001")} };
   await pool.query("INSERT INTO users(id,email,normalized_email,name,status,email_verified_at) VALUES($1,'plan@example.test','plan@example.test','Plan','active',now())", [actor.id]);
   const digest = "a".repeat(64);
   await pool.query("INSERT INTO auth_sessions(user_id,token_hash,expires_at,mfa_verified_at) VALUES($1,$2,clock_timestamp()+interval '1 hour',clock_timestamp())",[actor.id,actor.artifactCredential.hash]);
@@ -59,11 +59,19 @@ test("Postgres exact-revision review retains authority, rejects prior changes an
     const drafted=action==="approve"?await service.createPlan(actor,target.id,{...request,idempotencyKey:"credential-approve"}):null;
     const blocker=await pool.connect();await blocker.query("BEGIN");await blocker.query("SELECT id FROM skill_architecture_targets WHERE id=$1 FOR UPDATE",[target.id]);
     const blockerPid = (await blocker.query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
-    const pending=app.inject({method:"POST",url:drafted?`/v1/architecture-plans/${drafted.run.identity.runId}/approve`:`/v1/architecture-targets/${target.id}/plans`,headers:{authorization:"Bearer pg-plan-session"},payload:drafted?{expectedReviewDigest:String(drafted.run.metadata!.reviewDigest)}:{...request,idempotencyKey:"credential-create"}}).then(response=>response); // Dispatch the injection before observing its blocked SQL.
-    try{await waitForLock(pool,"%skill_architecture_targets%",true,blockerPid);await pool.query("UPDATE auth_sessions SET revoked_at=clock_timestamp() WHERE token_hash=$1",[actor.artifactCredential.hash]);await blocker.query("COMMIT");const response=await pending;assert.equal(response.statusCode,403,response.body);
+    let completedStatus: number | undefined;
+    const pending=app.inject({method:"POST",url:drafted?`/v1/architecture-plans/${drafted.run.identity.runId}/approve`:`/v1/architecture-targets/${target.id}/plans`,headers:{authorization:"Bearer pg-plan-session-valid-credential-0001"},payload:drafted?{expectedReviewDigest:String(drafted.run.metadata!.reviewDigest)}:{...request,idempotencyKey:"credential-create"}}).then(response=>{completedStatus=response.statusCode;return response;}); // Dispatch the injection before observing its blocked SQL.
+    try{await waitForLock(pool,"%skill_architecture_targets%",true,blockerPid,()=>completedStatus);await pool.query("UPDATE auth_sessions SET revoked_at=clock_timestamp() WHERE token_hash=$1",[actor.artifactCredential.hash]);await blocker.query("COMMIT");const response=await pending;assert.equal(response.statusCode,403,response.body);
       if(drafted)assert.deepEqual(await store.getRun(drafted.run.identity.runId),drafted.run);else assert.equal((await store.listRuns({targetId:target.id})).some(run=>run.metadata?.source==="architecture-plan"),false);
     }finally{await blocker.query("ROLLBACK");blocker.release();await pool.query("UPDATE auth_sessions SET revoked_at=NULL WHERE token_hash=$1",[actor.artifactCredential.hash]);}
   }
+  const distinct = await Promise.all(["distinct-a", "distinct-b"].map(idempotencyKey => service.createPlan(actor, target.id, { ...request, idempotencyKey })));
+  assert.ok(distinct.every(result => result.run.steps.length > 0));
+  assert.equal(new Set(distinct.flatMap(result => result.run.steps.map(step => step.id))).size, distinct.reduce((count, result) => count + result.run.steps.length, 0));
+  const replayedDistinct = await service.createPlan(actor, target.id, { ...request, idempotencyKey: "distinct-a" });
+  assert.equal(replayedDistinct.replayed, true);
+  assert.deepEqual(replayedDistinct.run, distinct[0].run);
+  for (const result of distinct) assert.deepEqual(await new PostgresArchitectureSyncStore(db).getRun(result.run.identity.runId), result.run);
   const initial = await service.createPlan(actor, target.id, request);
   assert.equal(initial.run.metadata?.reviewOnly, true);
   const approval = await service.approvePlan(actor, initial.run.identity.runId, { expectedReviewDigest: String(initial.run.metadata?.reviewDigest) });
@@ -72,8 +80,9 @@ test("Postgres exact-revision review retains authority, rejects prior changes an
 
   // Barrier after the real service has locked and authorized the exact release.
   const authority = store.withPlanAuthority.bind(store);
+  const consentBefore = (await pool.query("SELECT status,consent_status,consent_requested_at,consent_granted_at,consent_denied_at,consent_revoked_at FROM skill_architecture_targets WHERE id=$1", [target.id])).rows[0];
   for (const writer of [
-    { name: "consent", sql: "UPDATE skill_architecture_targets SET consent_status='denied' WHERE id=$1", params: [target.id], restore: "UPDATE skill_architecture_targets SET consent_status='granted' WHERE id=$1" },
+    { name: "consent", sql: "UPDATE skill_architecture_targets SET status='degraded', consent_status='denied', consent_denied_at=clock_timestamp() WHERE id=$1", params: [target.id], restore: "UPDATE skill_architecture_targets SET status=$2,consent_status=$3,consent_requested_at=$4,consent_granted_at=$5,consent_denied_at=$6,consent_revoked_at=$7 WHERE id=$1", restoreParams: [target.id,consentBefore.status,consentBefore.consent_status,consentBefore.consent_requested_at,consentBefore.consent_granted_at,consentBefore.consent_denied_at,consentBefore.consent_revoked_at] },
     { name: "account", sql: "UPDATE users SET status='disabled' WHERE id=$1", params: [actor.id], restore: "UPDATE users SET status='active' WHERE id=$1" },
     { name: "release", sql: "UPDATE skill_versions SET lifecycle_status='revoked' WHERE id=$1", params: [versionId], restore: "UPDATE skill_versions SET lifecycle_status='approved' WHERE id=$1" },
   ]) {
@@ -92,7 +101,7 @@ test("Postgres exact-revision review retains authority, rejects prior changes an
       store.withPlanAuthority = authority;
       await assert.rejects(service.approvePlan(actor, committed.run.identity.runId, { expectedReviewDigest: String(committed.run.metadata?.reviewDigest) }));
       assert.deepEqual(await store.getRun(committed.run.identity.runId), committed.run);
-    } finally { release(); await mutation; store.withPlanAuthority = authority; await pool.query(writer.restore, writer.params); }
+    } finally { release(); await mutation; store.withPlanAuthority = authority; await pool.query(writer.restore, "restoreParams" in writer ? writer.restoreParams : writer.params); }
   }
 
   const drafted = await service.createPlan(actor, target.id, { ...request, idempotencyKey: "approval-rollback" });
@@ -142,8 +151,10 @@ test("Postgres exact-revision review retains authority, rejects prior changes an
   }
 });
 
-async function waitForLock(pool: ReturnType<typeof createPgPool>, query: string, pattern = false, blockingPid?: number) {
+async function waitForLock(pool: ReturnType<typeof createPgPool>, query: string, pattern = false, blockingPid?: number, completed?: () => number | undefined) {
   for (let i = 0; i < 200; i++) {
+    const status = completed?.();
+    if (status !== undefined) assert.fail(`Plan request completed before the intended lock boundary: HTTP ${status}`);
     if ((await pool.query(`SELECT 1 FROM pg_stat_activity WHERE query ${pattern ? "LIKE" : "="} $1 AND wait_event_type='Lock' AND cardinality(pg_blocking_pids(pid))>0 AND ($2::int IS NULL OR $2=ANY(pg_blocking_pids(pid)))`, [query, blockingPid ?? null])).rows.length) return;
     await new Promise(resolve => setTimeout(resolve, 10));
   }

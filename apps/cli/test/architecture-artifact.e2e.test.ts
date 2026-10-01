@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, readFile, rm, writeFile, mkdir, symlink, link, rename, readdir, realpath } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile, mkdir, symlink, link, rename, realpath } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { artifactGeneratedName, artifactPrivateRoot, type ArchitectureArtifactIntent } from "@myskills-app/core";
@@ -9,7 +9,7 @@ import { createArchitectureArtifactFixture } from "../../api/test/fixtures/archi
 
 async function setup(t:Parameters<typeof createArchitectureArtifactFixture>[0]){
   const fixture=await createArchitectureArtifactFixture(t);const temp=await mkdtemp(path.join(os.tmpdir(),"myskills-composed-fixture-"));t.after(()=>rm(temp,{recursive:true,force:true}));
-  const output:string[]=[];const errors:string[]=[];const runtime:CliRuntime={env:{HOME:temp,MYSKILLS_TOKEN:fixture.sessions.owner},io:{stdout:text=>output.push(text),stderr:text=>errors.push(text)},fetch:async(input,init)=>{const u=new URL(String(input));const res=await fixture.app.inject({method:(init?.method??"GET") as "GET"|"POST",url:u.pathname+u.search,headers:init?.headers,...(init?.body?{payload:JSON.parse(String(init.body))}:{})});return new Response(res.body,{status:res.statusCode,headers:res.headers as Record<string,string>});}} as CliRuntime;
+  const output:string[]=[];const errors:string[]=[];const runtime:CliRuntime={workspaceEnrollmentStateDirectory:path.join(temp,"enrollment-state"),env:{HOME:temp,MYSKILLS_CONFIG_DIR:path.join(temp,"config"),MYSKILLS_TOKEN:fixture.sessions.owner},io:{stdout:text=>output.push(text),stderr:text=>errors.push(text)},fetch:async(input,init)=>{const u=new URL(String(input));const res=await fixture.app.inject({method:(init?.method??"GET") as "GET"|"POST",url:u.pathname+u.search,headers:init?.headers,...(init?.body?{payload:JSON.parse(String(init.body))}:{})});return new Response(res.body,{status:res.statusCode,headers:res.headers as Record<string,string>});}} as CliRuntime;
   async function cli(args:string[],workspace:string){output.length=0;errors.length=0;const code=await runCli([...args,"--workspace",workspace,"--api-url","http://fixture.test","--json"],runtime);return {code,output:output.length?JSON.parse(output.at(-1)!):null,error:errors.join("\n")};}
   async function enroll(name:string,profileId=fixture.target.profileId,environmentId=fixture.target.environmentId){const workspace=path.join(temp,name);await mkdir(workspace);const result=await cli(["codex","enroll","--architecture-id",fixture.target.architectureId,"--environment-id",environmentId,"--profile-id",profileId],workspace);assert.equal(result.code,0,result.error);const observed=await cli(["codex","observe","--upload"],workspace);assert.equal(observed.code,0,observed.error);return {workspace,targetId:result.output.targetId as string};}
   async function artifact(targetId:string,baselineRunId:string|null=null,revisionId=fixture.revision.id){const review=await fixture.review(targetId,revisionId);const result=await fixture.artifacts.prepare(fixture.actor,targetId,{reviewRunId:review.identity.runId,baselineRunId,idempotencyKey:`artifact-${crypto.randomUUID()}`});return result;}
@@ -101,15 +101,20 @@ test("overlapping and discovery-contained managed roots reject before registrati
     await assert.rejects(readFile(path.join(workspace,".agents/skills/.myskills-app/codex-workspace.json")),{code:"ENOENT"});
     assert.equal((await s.fixture.store.getRun(candidate.run.identity.runId))!.approval,undefined);
   }
-  // Historical overlapping enrollments must also fail when the outer executor is used.
-  const inner=await s.enroll("legacy-inner");await rename(inner.workspace,path.join(outer.workspace,"historical-inner"));
-  const denied=await s.cli(["architecture-artifacts","prepare",candidate.run.identity.runId],outer.workspace);
-  assert.equal(denied.code,1,denied.error);assert.match(denied.error,/enrolled descendant/);
-  await assert.rejects(readdir(path.join(outer.workspace,".myskills-app/architectures")),{code:"ENOENT"});
+  // A manually moved binding keeps its old root identity and cannot be used.
+  // Its disjoint stale reservation must not disable the original workspace.
+  const inner=await s.enroll("legacy-inner");const moved=path.join(outer.workspace,"historical-inner");await rename(inner.workspace,moved);
+  const denied=await s.cli(["codex","enroll"],moved);
+  assert.equal(denied.code,1,denied.error);assert.match(denied.error,/ambiguous|binding|overlap/);
+  const retained=await s.cli(["architecture-artifacts","prepare",candidate.run.identity.runId],outer.workspace);
+  assert.equal(retained.code,0,retained.error);
   assert.equal((await s.fixture.store.getRun(candidate.run.identity.runId))!.approval,undefined);
-  const parent=path.join(s.temp,"parent-of-enrolled");await mkdir(parent);const descendant=await s.enroll("enrolled-descendant");await rename(descendant.workspace,path.join(parent,"child"));
-  const rejected=await s.cli(["codex","enroll","--architecture-id",s.fixture.target.architectureId,"--environment-id",s.fixture.target.environmentId,"--profile-id",s.fixture.target.profileId],parent);
-  assert.equal(rejected.code,1);assert.match(rejected.error,/enrolled descendant/);
+  const parent=path.join(s.temp,"parent-of-enrolled");const child=path.join(parent,"child");await mkdir(child,{recursive:true});
+  const args=["codex","enroll","--architecture-id",s.fixture.target.architectureId,"--environment-id",s.fixture.target.environmentId,"--profile-id",s.fixture.target.profileId];
+  assert.equal((await s.cli(args,child)).code,0);
+  const rejected=await s.cli(args,parent);
+  assert.equal(rejected.code,1);assert.match(rejected.error,/enrolled ancestor or descendant/);
+
 });
 
 test("staging and recovery directory sync boundaries precede approval and destructive renames, including retry ancestry", async t => {

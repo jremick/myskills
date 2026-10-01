@@ -138,8 +138,11 @@ service allocates a new shell identity, authorizes exact releases, appends the
 first revision, and recomputes digests. Migration 0020 records source/target
 revision lineage, mapping/diff status, digests, and idempotency constraints;
 the local API exposes preview/create routes and the web workbench exposes the
-same preview-first controls. The injected external release-authorizer
-preflight cannot be atomic with the database transaction.
+same preview-first controls. The external preflight remains advisory. The current
+Postgres path rechecks exact release authority inside the transaction and retains
+the source revision and membership/policy rows through commit. Earlier preflight
+alone did not provide this atomic boundary; canonical concurrency proof for the
+current implementation remains required.
 
 ## Tenancy, organizations, and effective membership
 
@@ -236,8 +239,10 @@ deterministic metadata observations. It does not search a home directory,
 follow profile pointers, read prompt bodies, emit paths or URLs, retain
 credentials, upload data, or expose mutation methods. The
 `architectures observe` and `architectures health` commands run this adapter
-locally. Live API target upload, automatic discovery, and write operations are
-deferred.
+locally. Separate explicit commands now enroll an isolated workspace, upload its
+authorized target observation, and run the approved composed-artifact companion.
+Those commands do not add mutation to the read-only adapter. Automatic discovery
+and unselected provider executors remain deferred.
 
 ## Diagram and accessible artifacts
 
@@ -285,10 +290,10 @@ a new bounded run.
 
 | Surface | Current branch capability | Explicit gap |
 | --- | --- | --- |
-| API | Architecture patterns/list/detail/revision/preview and draft-preview; organization membership/policy/team routes; architecture grants; pattern migration; target lifecycle and per-skill operations; persisted review-plan create/list/inspect/approve. | Full architecture execution and second-provider write activation. |
-| Web | Architecture explorer and Workbench with immutable history, scoped drafts and derived diagrams; grants and migrations; connected targets, per-skill operations and saved-revision review-plan inspection. | Full architecture execution, live-provider acceptance and durable server-side layout artifacts. |
-| CLI | Existing architecture reads and fixture dry runs; revision/grant/migration and target management commands; explicit-root observe/health and Codex workspace companion; `architecture-plans create/list/show/approve`. | Full architecture orchestration and provider-host recognition require separate contracts and acceptance. |
-| MCP | Existing projections and named architecture/grant/migration/target management actions; four `architecture_plans_*` review actions with strict inputs; local observation/executor handoffs. | Local handoff completion, real host acceptance and full architecture execution. |
+| API | Immutable topology/revisions, tenancy/grants/migration/targets and per-skill operations; permanently review-only plans; separate composed artifact prepare/inspect/execute approval/claim/checkpoint/receipt/rollback under current PostgreSQL authority. | Canonical SQL/MinIO proof and broader provider activation. |
+| Web | Explorer/Workbench/history/scoped drafts/derived diagrams; grants, migrations and connected targets; selected saved review to composed intent and explicit CLI handoff with receipt inspection. | Actual companion completion, host recognition and canonical browser proof. Durable server-side layout remains deferred. |
+| CLI | Architecture management/review and explicit-root observation; enrolled Codex workspace whole-artifact prepare/apply/verify/rollback with bounded staging, current approval/lease and durable journal. | Canonical filesystem/process proof and actual host recognition/consent; broader providers remain unselected. |
+| MCP | Named architecture management/review actions plus composed artifact prepare/inspect and enrolled CLI handoff. OAuth cannot authorize host execution endpoints. | Local companion completion, canonical transports and real host consent/recognition. |
 
 API authorization is the source of truth. Web, CLI, and MCP do not recreate
 membership, release, organization, consent, or target policy. The current
@@ -336,6 +341,14 @@ canonical/actual-host acceptance. This source addition does not establish live
 provider recognition or complete the graph lifecycle thesis.
 
 ## Earlier Phase 2 deferred scope
+
+This dated boundary describes the earlier slice. The current candidate adds the
+separately approved guided composed Codex contract documented in
+[COMPOSED_ARCHITECTURE_DELIVERY.md](COMPOSED_ARCHITECTURE_DELIVERY.md). The read-only
+adapter and fixture executor retain their original limits. Automatic discovery,
+other provider executors, public architectures, conditional runtime enforcement
+and durable layout storage remain outside this candidate.
+
 
 The original Phase 2 slice below excluded these outcomes. The composed source
 addition above now delivers the bounded enrolled-workspace path; broader targets

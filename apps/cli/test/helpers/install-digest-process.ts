@@ -50,7 +50,8 @@ const fetch: FetchLike = async (input, init) => {
   }
   throw new Error(`Unexpected digest fixture request: ${url.pathname}`);
 };
-const runtime: CliRuntime = { env: { MYSKILLS_TOKEN: "synthetic-digest-fixture-token" }, fetch,
+const runtime: CliRuntime = { workspaceEnrollmentStateDirectory: path.resolve(request.root, "../../.test-enrollment-state"),
+  env: { MYSKILLS_TOKEN: "synthetic-digest-fixture-token" }, fetch,
   io: { stdout: (value) => stdout.push(value), stderr: (value) => stderr.push(value) },
   installFault: (point) => { if (point === request.fault) throw new Error(`Interrupted at ${point}`); } };
 

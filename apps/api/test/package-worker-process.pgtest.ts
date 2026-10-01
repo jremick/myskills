@@ -41,22 +41,48 @@ test("server worker crash recovers durable attempt and SIGTERM drains completion
   await gate.query("SELECT pg_advisory_lock($1)", [gateId]);
   const pending = await submissions.createSubmission({ actor: { id: user.id, roles: ["author"] }, manifest, files: [{ path: "skill.json", content: JSON.stringify(manifest) }, { path: "SKILL.md", content: "# Real process worker fixture" }] });
   const port = await freePort();
+  const gatePid = Number((await gate.query("SELECT pg_backend_pid() AS pid")).rows[0].pid);
+  const observed = new Map<ChildProcess, { name: string; stderr: string; startupError: boolean }>();
   const launch = () => {
-    const child = spawn(process.execPath, ["--import", "tsx", "src/server.ts"], { cwd: new URL("../", import.meta.url),
-      env: { PATH: process.env.PATH, DATABASE_URL: url, NODE_ENV: "test", HOST: "127.0.0.1", PORT: String(port), AUTH_SECRET: "process-fixture-secret-at-least-32-bytes", PACKAGE_SCAN_WORKER: "enabled" }, stdio: ["ignore", "pipe", "pipe"] });
+    const name = `myskills-scan-process-${processes.length + 1}`;
+    const database = new URL(url); database.searchParams.set("application_name", name);
+    // test:postgres builds first. Launch the maintained production entry point,
+    // without a source loader, environment-file load or unrelated source worker.
+    const child = spawn(process.execPath, ["dist/server.js"], { cwd: new URL("../", import.meta.url),
+      env: { PATH: process.env.PATH, DATABASE_URL: database.href, NODE_ENV: "test", HOST: "127.0.0.1", PORT: String(port), AUTH_SECRET: "process-fixture-secret-at-least-32-bytes", PACKAGE_SCAN_WORKER: "enabled", LIBRARY_SOURCE_WORKER: "disabled" }, stdio: ["ignore", "pipe", "pipe"] });
+    const state = { name, stderr: "", startupError: false }; observed.set(child, state);
+    child.stderr!.on("data", chunk => { state.stderr = (state.stderr + String(chunk)).slice(-4096); });
+    child.stdout!.on("data", () => undefined);
+    child.on("error", () => { state.startupError = true; });
     processes.push(child); return child;
   };
-  const waitBlocked = () => until(async () => Number((await pool.query("SELECT count(*)::int AS n FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%UPDATE scan_runs%'" )).rows[0].n) > 0);
-  const first = launch(); await waitBlocked();
+  const waitBlocked = async (child: ChildProcess) => {
+    const state = observed.get(child)!;
+    const fail = async () => {
+      const jobs = (await pool.query("SELECT status,attempts,failure_code FROM jobs WHERE type='package-scan'")).rows;
+      const scans = (await pool.query("SELECT status,attempt,failure_code FROM scan_runs WHERE skill_version_id=$1 ORDER BY attempt", [pending.id])).rows;
+      const category = /ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND/.test(state.stderr) ? "module" : /Registry instance identity/.test(state.stderr) ? "registry_identity" : /EADDRINUSE/.test(state.stderr) ? "port" : state.startupError ? "spawn" : "unclassified";
+      assert.fail(`Actual scan worker boundary not reached: ${JSON.stringify({ category, exitCode: child.exitCode, signalCode: child.signalCode, jobs, scans })}`);
+    };
+    await until(async () => {
+      if (state.startupError || child.exitCode !== null || child.signalCode !== null) await fail();
+      try { return (await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(500) })).ok; } catch { return false; }
+    }, fail);
+    await until(async () => {
+      if (state.startupError || child.exitCode !== null || child.signalCode !== null) await fail();
+      return Number((await pool.query("SELECT count(*)::int AS n FROM pg_stat_activity a WHERE a.application_name=$1 AND a.wait_event_type='Lock' AND a.query LIKE '%UPDATE scan_runs%' AND $2=ANY(pg_blocking_pids(a.pid))", [state.name, gatePid])).rows[0].n) === 1;
+    }, fail);
+  };
+  const first = launch(); await waitBlocked(first);
   const crashed = once(first, "exit"); first.kill("SIGKILL"); await crashed;
   assert.equal((await pool.query("SELECT status FROM jobs WHERE type='package-scan'")).rows[0].status, "running");
   await pool.query("UPDATE jobs SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE type='package-scan'");
-  const second = launch(); assert.notEqual(second.pid, first.pid); let errors = ""; second.stderr!.on("data", chunk => { errors = (errors + String(chunk)).slice(-4096); });
-  await waitBlocked();
+  const second = launch(); assert.notEqual(second.pid, first.pid);
+  await waitBlocked(second);
   const shutdown = once(second, "exit"); second.kill("SIGTERM");
   await delay(150); assert.equal(second.exitCode, null, "shutdown must wait for blocked completion");
   await gate.query("SELECT pg_advisory_unlock($1)", [gateId]);
-  const [code] = await shutdown; assert.equal(code, 0, errors);
+  const [code] = await shutdown; assert.equal(code, 0, "actual production process must finish graceful drain");
   const detail = await submissions.getUserSubmissionDetail({ actor: { id: user.id, roles: ["author"] }, submissionId: pending.id });
   assert.deepEqual(detail!.scanRuns.map(r => r.status), ["failed", "succeeded"]);
   assert.ok(detail!.scanRuns.every(r => r.artifactSha256 === pending.artifact.sha256));
@@ -64,12 +90,12 @@ test("server worker crash recovers durable attempt and SIGTERM drains completion
   assert.deepEqual(detail!.scanRuns.map(r => r.attempt), [1, 2]);
   assert.equal(detail!.securityStatus, "passed");
   assert.equal((await pool.query("SELECT status FROM jobs WHERE type='package-scan'")).rows[0].status, "succeeded");
-  assert.equal(errors.includes("Cannot use a pool after calling end"), false);
+  assert.equal(observed.get(second)!.stderr.includes("Cannot use a pool after calling end"), false);
 });
-async function until(check: () => Promise<boolean>) {
+async function until(check: () => Promise<boolean>, fail: () => Promise<never>) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) { if (await check()) return; await delay(40); }
-  assert.fail("Actual server worker did not reach the required lock boundary.");
+  await fail();
 }
 async function freePort() {
   const server = createServer(); server.listen(0, "127.0.0.1"); await once(server, "listening");
