@@ -15,7 +15,8 @@ function fixture(t, fail = false) {
   // retains the requested empty port; NetworkSettings contains the assigned port.
   const networkRow = { Id: networkId, Name: network, Driver: "bridge", Scope: "local", EnableIPv4: true, EnableIPv6: false,
     Internal: false, Attachable: false, Ingress: false, Labels: { "io.myskills.host-rehearsal": owner },
-    IPAM: { Driver: "default", Options: null, Config: [{ Subnet: "172.28.0.0/16", Gateway: gateway }] }, Options: {}, Containers: {} };
+    IPAM: { Driver: "default", Options: null, Config: [{ Subnet: "172.28.0.0/16", Gateway: gateway }] },
+    Options: { "com.docker.network.bridge.gateway_mode_ipv4": "nat", "com.docker.network.bridge.inhibit_ipv4": "false" }, Containers: {} };
   const containerRow = { Id: containerId, Name: `/${owner}-op-1`,
     State: { Status: "running", Running: true, Paused: false, Restarting: false, OOMKilled: false, Dead: false, Pid: 1234, ExitCode: 0, Error: "" },
     Config: { Image: "fixture-minio", ExposedPorts: { "9000/tcp": {} },
@@ -47,6 +48,9 @@ test("backup setup reserves ownership before launch and aligns owned gateway, po
   const f = fixture(t), service = prepareHostBackupService(f);
   const create = f.commands.find(args => args[0] === "network"), run = f.commands.find(args => args[0] === "run"), cert = f.commands.find(args => args[0] === "openssl");
   assert.equal(create.at(-1), service.network);
+  assert.deepEqual(create, ["network", "create", "--driver", "bridge", "--internal=false", "--ipv4=true",
+    "--opt", "com.docker.network.bridge.gateway_mode_ipv4=nat", "--opt", "com.docker.network.bridge.inhibit_ipv4=false",
+    "--label", `io.myskills.host-rehearsal=${f.owner}`, service.network]);
   assert.equal(run.includes("--ip"), false);
   assert.equal(run[run.indexOf("--publish") + 1], `${service.gateway}::9000`);
   assert.equal(run.includes("--network-alias"), false);
@@ -152,6 +156,54 @@ test("backup endpoint accepts an assigned IPv4 port with a second IPv6 IPAM entr
   assert.equal(service.endpoint, "https://172.28.0.1:65535");
   assert.equal(service.port, 65535);
   assert.equal(f.containerRow.HostConfig.PortBindings["9000/tcp"][0].HostPort, "");
+});
+
+test("backup owns IPv4 NAT publication despite incompatible inherited daemon options", t => {
+  const f = fixture(t), docker = f.docker;
+  // Synthetic daemon default-network-opts merge: explicit create values win.
+  // This is a source contract control, not a claim about the Windows daemon.
+  f.networkRow.EnableIPv4 = false;
+  f.networkRow.Options["com.docker.network.bridge.gateway_mode_ipv4"] = "routed";
+  f.networkRow.Options["com.docker.network.bridge.inhibit_ipv4"] = "true";
+  f.docker = args => {
+    if (args[0] === "network" && args[1] === "create") {
+      if (args.includes("--ipv4=true")) f.networkRow.EnableIPv4 = true;
+      for (let index = 0; index < args.length; index++) if (args[index] === "--opt") {
+        const [key, value] = args[index + 1].split("="); f.networkRow.Options[key] = value;
+      }
+    }
+    return docker(args);
+  };
+  assert.equal(prepareHostBackupService(f).endpoint, "https://172.28.0.1:34567");
+  assert.equal(f.commands.filter(args => args[0] === "network" && args[1] === "inspect").length, 2);
+});
+
+test("backup rejects an unusable publication mode before launch and again on network recheck", async t => {
+  const changes = [
+    ["internal", row => { row.Internal = true; }],
+    ["missing internal flag", row => { delete row.Internal; }],
+    ["IPv4 disabled", row => { row.EnableIPv4 = false; }],
+    ["missing IPv4 flag", row => { delete row.EnableIPv4; }],
+    ["missing options", row => { delete row.Options; }],
+    ["null options", row => { row.Options = null; }],
+    ["array options", row => { row.Options = []; }],
+    ["unspecified gateway mode", row => { delete row.Options["com.docker.network.bridge.gateway_mode_ipv4"]; }],
+    ...["routed", "isolated", "nat-unprotected", "private-provider-output"].map(mode =>
+      [mode === "private-provider-output" ? "unknown gateway mode" : mode, row => { row.Options["com.docker.network.bridge.gateway_mode_ipv4"] = mode; }]),
+    ["IPv4 bridge inhibited", row => { row.Options["com.docker.network.bridge.inhibit_ipv4"] = "true"; }],
+    ["unspecified IPv4 inhibition", row => { delete row.Options["com.docker.network.bridge.inhibit_ipv4"]; }],
+  ];
+  for (const stage of ["initial-network", "network-recheck"]) for (const [name, change] of changes) await t.test(`${stage}: ${name}`, t => {
+    const f = fixture(t), docker = f.docker; let reads = 0;
+    f.docker = args => {
+      if (args[0] === "network" && args[1] === "inspect" && ++reads === (stage === "initial-network" ? 1 : 2)) change(f.networkRow);
+      return docker(args);
+    };
+    expectFailure(f, stage, "network-publication-mode-invalid");
+    assert.equal(f.commands.filter(args => args[0] === "run").length, stage === "initial-network" ? 0 : 1);
+    assert.equal(f.commands.filter(args => args[0] === "openssl").length, stage === "initial-network" ? 0 : 1);
+    assert.equal(JSON.parse(readFileSync(f.ledgerPath)).resources.find(row => row.kind === "network").state, "created");
+  });
 });
 
 test("backup network rejects each identity, IPAM and gateway failure with a fixed category", async t => {

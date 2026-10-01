@@ -9,6 +9,8 @@ const safeExitCode = value => Number.isSafeInteger(value) && value >= 0 && value
 const validPort = value => typeof value === "string" && /^[1-9][0-9]{0,4}$/.test(value) && Number(value) <= 65535;
 const metadataShape = value => value === undefined ? "missing" : value === null ? "null" : Array.isArray(value) ? "array" : isRecord(value) ? "object" : "scalar";
 const metadataMapCount = value => isRecord(value) ? Math.min(Object.keys(value).length, 8) : null;
+const gatewayModeOption = "com.docker.network.bridge.gateway_mode_ipv4";
+const inhibitIPv4Option = "com.docker.network.bridge.inhibit_ipv4";
 function portMetadata(container, network, gateway) {
   const exposed = container.Config?.ExposedPorts, requested = container.HostConfig?.PortBindings, runtime = container.NetworkSettings?.Ports;
   const bindings = runtime?.["9000/tcp"], mode = container.HostConfig?.NetworkMode;
@@ -58,6 +60,10 @@ function ownedGateway(response, network, owner, stage) {
   const row = inspection(response, stage);
   if (row.Name !== network || row.Driver !== "bridge" || row.Scope !== "local" || !/^[a-f0-9]{64}$/.test(row.Id ?? "")) return invalidBackupNetwork(stage, "network-identity-invalid");
   if (row.Labels?.["io.myskills.host-rehearsal"] !== owner) return invalidBackupNetwork(stage, "network-owner-mismatch");
+  // IPAM can describe a gateway without proving an IPv4 publishing endpoint.
+  // Docker28.3 inherits unspecified driver options; routed mode has no host port.
+  if (row.Internal !== false || row.EnableIPv4 !== true || !isRecord(row.Options)
+    || row.Options[gatewayModeOption] !== "nat" || row.Options[inhibitIPv4Option] !== "false") return invalidBackupNetwork(stage, "network-publication-mode-invalid");
   const configurations = Array.isArray(row.IPAM?.Config) ? row.IPAM.Config.filter(value => typeof value?.Gateway === "string" && isIP(value.Gateway) === 4) : [];
   if (configurations.length !== 1) return invalidBackupNetwork(stage, "network-ipam-invalid");
   const { Gateway: gateway, Subnet: subnet } = configurations[0];
@@ -75,7 +81,10 @@ export function prepareHostBackupService({ proof, owner, image, user, password, 
   assert.ok([user, password].every(value => typeof value === "string" && !/[\r\n\0]/.test(value)));
   const network = `${owner}-backup-network`;
   reserve("network", network);
-  docker(["network", "create", "--driver", "bridge", "--label", `io.myskills.host-rehearsal=${owner}`, network]);
+  // Own these publication prerequisites rather than relying on daemon defaults.
+  // The daemon still assigns IPAM and the real port, bound only to this gateway.
+  docker(["network", "create", "--driver", "bridge", "--internal=false", "--ipv4=true",
+    "--opt", `${gatewayModeOption}=nat`, "--opt", `${inhibitIPv4Option}=false`, "--label", `io.myskills.host-rehearsal=${owner}`, network]);
   mark("network", network);
   const selected = ownedGateway(docker(["network", "inspect", network]), network, owner, "initial-network");
   const certs = join(proof, "certs"); mkdirSync(certs, { mode: 0o700 });
