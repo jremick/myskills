@@ -296,9 +296,9 @@ async function composedStorageProof(api, token, data) {
       const until = Date.now() + 60_000; let current;
       do { current = (await api(`/v1/submissions/${submission.id}`)).submission; if (current.securityStatus === "passed") break; await new Promise(resolve => setTimeout(resolve, 250)); } while (Date.now() < until);
       assert.equal(current.securityStatus, "passed");
-      await api(`/v1/review/submissions/${submission.id}/actions`, { action: "approve", artifactSha256: submission.artifact.sha256 });
+      await api(`/v1/review/submissions/${submission.id}/actions`, { action: "approve", artifactSha256: current.artifact.sha256 });
       await api(`/v1/review/submissions/${submission.id}/actions`, { action: "publish" });
-      pins.push({ id: slug, slug, version, digest: submission.artifact.sha256, packageVisibility: "public", domainId: "proof" });
+      pins.push({ id: slug, slug, version, digest: current.artifact.sha256, packageVisibility: "public", domainId: "proof" });
     }
     const { architecture } = await api("/v1/architectures", { name: "Composed MinIO source proof", patternId: "multi-level-router", description: "Explicit disposable fixture" }, { status: 201 });
     const spec = core.createMultiLevelRouterArchitecture({ id: architecture.id, name: architecture.name, skills: pins, profile: { id: "fixture", subject: { type: "user", id: data.ownerId } }, environment: { id: "fixture-workspace", kind: "personal" } });

@@ -2930,7 +2930,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 324
+            "line": 341
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -2952,7 +2952,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 50,
+            "line": 88,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -3031,7 +3031,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 324
+            "line": 341
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -3053,7 +3053,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 288,
+            "line": 326,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -3603,7 +3603,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 324
+            "line": 341
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -3625,7 +3625,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 288,
+            "line": 326,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -8557,7 +8557,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 324
+            "line": 341
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -8579,7 +8579,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 50,
+            "line": 88,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -13060,7 +13060,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 324
+            "line": 341
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -13082,7 +13082,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 288,
+            "line": 326,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -13942,7 +13942,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 324
+            "line": 341
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -13964,7 +13964,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 288,
+            "line": 326,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -15597,7 +15597,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 50,
+            "line": 88,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -16037,7 +16037,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 50,
+            "line": 88,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18531,7 +18531,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 324
+            "line": 341
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18553,7 +18553,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 50,
+            "line": 88,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18644,7 +18644,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 324
+            "line": 341
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18666,7 +18666,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 50,
+            "line": 88,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18779,7 +18779,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 77,
+            "line": 115,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18892,7 +18892,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 50,
+            "line": 88,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -19005,7 +19005,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 50,
+            "line": 88,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -19118,7 +19118,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 50,
+            "line": 88,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -19231,7 +19231,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 50,
+            "line": 88,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -20867,7 +20867,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 324
+            "line": 341
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -20889,7 +20889,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 50,
+            "line": 88,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -23472,7 +23472,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 324
+            "line": 341
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -23494,7 +23494,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 50,
+            "line": 88,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -23948,7 +23948,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 50,
+            "line": 88,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"

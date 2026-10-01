@@ -1792,8 +1792,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 324,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "line": 341,
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -1822,8 +1822,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 50,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 88,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -1879,8 +1879,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 324,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "line": 341,
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -1909,8 +1909,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 288,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 326,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup readback rejects each container identity, attachment and published-port failure safely\", async t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -2226,8 +2226,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 324,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "line": 341,
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -2256,8 +2256,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 288,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 326,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup readback rejects each container identity, attachment and published-port failure safely\", async t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -5391,8 +5391,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 324,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "line": 341,
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -5421,8 +5421,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 50,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 88,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -8297,8 +8297,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 324,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "line": 341,
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -8327,8 +8327,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 288,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 326,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup readback rejects each container identity, attachment and published-port failure safely\", async t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -8842,8 +8842,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 324,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "line": 341,
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -8872,8 +8872,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 288,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 326,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup readback rejects each container identity, attachment and published-port failure safely\", async t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -9810,7 +9810,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 149,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "reserve(\"network\", network);"
         },
         {
@@ -9839,8 +9839,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 50,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 88,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -10088,7 +10088,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 145,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "export function prepareHostBackupService({ proof, owner, image, user, password, reserve, mark, docker, call, runService, publicationObserver }) {"
         },
         {
@@ -10117,8 +10117,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 50,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 88,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11619,8 +11619,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 324,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "line": 341,
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -11649,8 +11649,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 50,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 88,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11706,8 +11706,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 324,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "line": 341,
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -11736,8 +11736,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 50,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 88,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11794,7 +11794,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 190,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "chmodSync(join(certs, \"private.key\"), 0o600);"
         },
         {
@@ -11823,8 +11823,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 77,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 115,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup launch rejection retains the uncertain owned create and exports only bounded operation diagnostics\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11881,7 +11881,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 187,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "call(\"openssl\", [\"req\", \"-x509\", \"-newkey\", \"rsa:2048\", \"-nodes\", \"-days\", \"1\", \"-keyout\", join(certs, \"private.key\"),"
         },
         {
@@ -11910,8 +11910,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 50,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 88,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11968,7 +11968,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 190,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "chmodSync(join(certs, \"private.key\"), 0o600);"
         },
         {
@@ -11997,8 +11997,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 50,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 88,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -12055,7 +12055,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 145,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "export function prepareHostBackupService({ proof, owner, image, user, password, reserve, mark, docker, call, runService, publicationObserver }) {"
         },
         {
@@ -12084,8 +12084,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 50,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 88,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -12142,7 +12142,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 187,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "call(\"openssl\", [\"req\", \"-x509\", \"-newkey\", \"rsa:2048\", \"-nodes\", \"-days\", \"1\", \"-keyout\", join(certs, \"private.key\"),"
         },
         {
@@ -12171,8 +12171,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 50,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 88,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -13349,8 +13349,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 324,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "line": 341,
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -13379,8 +13379,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 50,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 88,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -15031,8 +15031,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 324,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "line": 341,
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -15061,8 +15061,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 50,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 88,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -15333,7 +15333,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 149,
-          "sha256": "e084fe58a670a94a397ccd46cc7f804e87f6a25e10227fc6aa955f309a2b14a3",
+          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
           "anchor": "reserve(\"network\", network);"
         },
         {
@@ -15362,8 +15362,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 50,
-          "sha256": "5300dc9a7c6133db753a3fdd971d2390293639eb9f528dcb99145594ca6246a5",
+          "line": 88,
+          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",

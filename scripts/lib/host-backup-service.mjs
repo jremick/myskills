@@ -320,7 +320,24 @@ export function observeHostPublication({ docker, network, owner, selected, id, c
   finally { if (requestPath) { try { unlinkSync(requestPath); } catch { /* observer files are private, never fixture resources */ } } }
 }
 
-/** Only fixed operation names and process status leave the fixture boundary. */
+function driverFailureDetails(stderr) {
+  const text = typeof stderr === "string" ? stderr.slice(0, 16_384) : "";
+  const errorClass = /^AssertionError \[ERR_ASSERTION\]:/m.test(text) ? "assertion"
+    : /^TypeError: fetch failed\r?$/m.test(text) ? "fetch-failed" : /^TypeError:/m.test(text) ? "type-error"
+      : /^SyntaxError:/m.test(text) ? "syntax-error" : /^RangeError:/m.test(text) ? "range-error"
+        : /^ReferenceError:/m.test(text) ? "reference-error" : "unclassified";
+  // Only exact mounted-fixture frames yield bounded integers. No stack text,
+  // error objects, arbitrary paths or response bodies enter the receipt.
+  const lines = [...text.matchAll(/^[ \t]+at (?:(?:[^\r\n(]+\()|async )?file:\/\/\/proof\/fixture\.mjs:([1-9][0-9]{0,3}):[1-9][0-9]{0,3}\)?[ \t]*$/gm)].slice(0, 2).map(match => Number(match[1]));
+  const routes = ["/version.json", "/v1/capabilities", "/v1/auth/login", "/v1/auth/mfa/totp/enroll", "/v1/auth/mfa/totp/confirm", "/v1/auth/mfa/verify",
+    "/v1/submissions", "/v1/architectures", "/v1/drafts", "/v1/auth/logout", "/v1/improvements/suites", "/v1/architecture-targets"];
+  const http = /^AssertionError \[ERR_ASSERTION\]: HTTP (\/[a-zA-Z0-9/-]+) expected ([1-5][0-9]{2}); returned ([1-5][0-9]{2})\r?$/m.exec(text);
+  const knownRoute = http && routes.includes(http[1]);
+  return { errorClass, sourceLine: lines[0] ?? null, callerLine: lines[1] ?? null, route: knownRoute ? http[1] : null,
+    expectedStatus: knownRoute ? Number(http[2]) : null, actualStatus: knownRoute ? Number(http[3]) : null };
+}
+
+/** Only fixed operation names, process status and driver diagnostics leave the fixture boundary. */
 export function hostCommandFailure(command, args, result) {
   const verb = ["run", "compose", "network", "container", "build", "pull", "push", "tag", "inspect", "req", "rev-parse", "status"].includes(args[0]) ? args[0] : "command";
   const tool = command === "openssl" ? "openssl" : command === "git" ? "git" : command === "sh" ? "operator" : "docker";
@@ -332,7 +349,8 @@ export function hostCommandFailure(command, args, result) {
   return { operation: [tool, verb, sub, role].filter(Boolean).join("."),
     exitStatus: Number.isInteger(result.status) ? result.status : null,
     signal: ["SIGTERM", "SIGKILL", "SIGINT", "SIGABRT"].includes(result.signal) ? result.signal : null,
-    processErrorCode: ["ETIMEDOUT", "ENOENT", "EACCES", "EPERM", "ENOBUFS"].includes(result.error?.code) ? result.error.code : null, reason };
+    processErrorCode: ["ETIMEDOUT", "ENOENT", "EACCES", "EPERM", "ENOBUFS"].includes(result.error?.code) ? result.error.code : null, reason,
+    ...(tool === "docker" && verb === "run" && role === "driver" ? { driverFailure: driverFailureDetails(result.stderr) } : {}) };
 }
 
 export function assertHostCommandSucceeded(command, args, result) {

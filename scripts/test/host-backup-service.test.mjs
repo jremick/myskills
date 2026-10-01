@@ -7,6 +7,44 @@ import { join } from "node:path";
 import { assertHostCommandSucceeded, hostCommandFailure, prepareHostBackupService, observeHostPublication } from "../lib/host-backup-service.mjs";
 import { hostDocker, saveHostLedger } from "../lib/host-rehearsal-resources.mjs";
 
+// Failure inventory before the driver-only diagnostic: an assertion remains
+// opaque; raw bodies, credentials, URLs, filenames or error properties escape;
+// an arbitrary route or stack path is accepted; oversized stderr widens capture;
+// non-driver commands change behavior; adding a receipt turns failure into pass.
+const driverArgs = ["run", "--label", "io.myskills.host-rehearsal.role=driver", "fixture-image", "node", "/proof/fixture.mjs", "create", "/proof/fresh.json"];
+test("driver rejection reports only fixed error class, exact fixture lines and whitelisted HTTP status", () => {
+  const stderr = "AssertionError [ERR_ASSERTION]: HTTP /v1/auth/login expected 200; returned 401\nprivate-canary PASSWORD=private-canary https://private-canary.invalid\n    at api (file:///proof/fixture.mjs:124:12)\n    at async file:///proof/fixture.mjs:138:17\n";
+  const result = { status: 1, signal: null, stderr }; let failure;
+  assert.throws(() => assertHostCommandSucceeded("docker", driverArgs, result), error => { failure = error.hostFailure; return error.message === "bounded-command-failed"; });
+  assert.deepEqual(failure, { operation: "docker.run.driver", exitStatus: 1, signal: null, processErrorCode: null, reason: "unclassified",
+    driverFailure: { errorClass: "assertion", sourceLine: 124, callerLine: 138, route: "/v1/auth/login", expectedStatus: 200, actualStatus: 401 } });
+  assert.doesNotMatch(JSON.stringify(failure), /private-canary|PASSWORD|fixture\.mjs|fresh\.json/);
+  for (const [header, errorClass] of [["TypeError: fetch failed", "fetch-failed"], ["TypeError: private-canary", "type-error"],
+    ["SyntaxError: private-canary", "syntax-error"], ["RangeError: private-canary", "range-error"], ["ReferenceError: private-canary", "reference-error"], ["Error: private-canary", "unclassified"]]) {
+    const diagnostic = hostCommandFailure("docker", driverArgs, { status: 1, stderr: `${header}\n    at file:///proof/fixture.mjs:127:5\n` }).driverFailure;
+    assert.deepEqual(diagnostic, { errorClass, sourceLine: 127, callerLine: null, route: null, expectedStatus: null, actualStatus: null });
+  }
+  assert.doesNotThrow(() => assertHostCommandSucceeded("docker", driverArgs, { status: 0, stderr }));
+});
+
+test("driver diagnostics reject foreign stack paths, arbitrary routes/statuses and output beyond the bound", () => {
+  for (const path of ["file:///private/fixture.mjs:124:1", "file:///proof/fixture.mjs?private-canary:124:1", "file:///proof/fixture.mjs:0:1", "file:///proof/fixture.mjs:100000:1", "file:///proof/fixture.mjs:124:1/private-canary"]) {
+    const diagnostic = hostCommandFailure("docker", driverArgs, { status: 1, stderr: `TypeError: private-canary\n    at ${path}\n` }).driverFailure;
+    assert.equal(diagnostic.sourceLine, null); assert.equal(diagnostic.callerLine, null); assert.doesNotMatch(JSON.stringify(diagnostic), /private-canary/);
+  }
+  for (const message of ["HTTP /v1/submissions/private-canary/bundle expected 200; returned 404", "HTTP /v1/auth/login?token=private-canary expected 200; returned 401",
+    "HTTP /v1/auth/login expected 999; returned 401", "HTTP /v1/auth/login expected 200; returned 999", "HTTP https://private-canary.invalid expected 200; returned 401"]) {
+    const diagnostic = hostCommandFailure("docker", driverArgs, { status: 1, stderr: `AssertionError [ERR_ASSERTION]: ${message}\n` }).driverFailure;
+    assert.equal(diagnostic.route, null); assert.equal(diagnostic.expectedStatus, null); assert.equal(diagnostic.actualStatus, null);
+    assert.doesNotMatch(JSON.stringify(diagnostic), /private-canary/);
+  }
+  const diagnostic = hostCommandFailure("docker", driverArgs, { status: 1, stderr: `${"x".repeat(16_384)}\nTypeError: fetch failed\n    at file:///proof/fixture.mjs:127:5\n` }).driverFailure;
+  assert.deepEqual(diagnostic, { errorClass: "unclassified", sourceLine: null, callerLine: null, route: null, expectedStatus: null, actualStatus: null });
+  for (const args of [["run", "fixture-image"], ["run", "--label", "io.myskills.host-rehearsal.role=backup"], ["compose", "--label", "io.myskills.host-rehearsal.role=driver"]]) {
+    assert.equal(hostCommandFailure("docker", args, { status: 1, stderr: "AssertionError [ERR_ASSERTION]: private-canary" }).driverFailure, undefined);
+  }
+});
+
 function fixture(t, fail = false) {
   const proof = mkdtempSync(join(tmpdir(), "host-backup-source-")); t.after(() => rmSync(proof, { recursive: true, force: true }));
   const owner = "hc-0123456789abcdef", ledgerPath = join(proof, "ledger.json"), commands = [], diagnostics = [];
