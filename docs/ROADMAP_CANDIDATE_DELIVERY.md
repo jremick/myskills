@@ -144,3 +144,14 @@ the two CLI hash and three private fixture alerts as defensible false positives;
 their GitHub disposition still requires authority. Those source files are unchanged. No criterion
 status/gap or completed count is promoted; the separate source checkpoint records
 the coherent commit/tree and local receipts.
+
+Independent ee472601 review accepts release/provenance, encoding and the exact
+bindings, with one preview directory-substitution P2. The correction retains
+the inspected directory's handle and device/inode through index selection,
+rejects a changed named directory before reading and closes both handles.
+Root/nested real-directory swaps reproduce 200 before the fix and reject with
+404 afterward; all 47 bounded-reader controls and scoped lint pass. Root/nested
+GET/HEAD and existing leaf guards remain. Parent's immutable935d Windows runs
+continue separately; review and runtime/CodeQL proof of this later source remain
+required. `PREVIEW_DIRECTORY_FIX_CHECKPOINT.json` records its exact identity and
+receipts. No criterion state, gap or completed count changes.

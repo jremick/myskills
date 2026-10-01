@@ -656,7 +656,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -919,7 +919,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -959,7 +959,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 11,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "## Authority and baseline"
         },
         {
@@ -999,7 +999,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 327,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "## Final candidate reconciliation"
         },
         {
@@ -1039,7 +1039,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 265,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "## External decisions and gates"
         },
         {
@@ -1079,7 +1079,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 204,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "### HOST review remediation checkpoint"
         },
         {
@@ -1119,7 +1119,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -1159,7 +1159,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -8367,7 +8367,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 7,
-          "sha256": "dd4e99adf98e286dcfa8f112c7bc3cf20b1e3e27e52b5e8e8ca273c329a3ab5e",
+          "sha256": "562793449a6e7a0d129e24dad593535f5ae8abcc2b42bcd44232c7335ed7c23b",
           "anchor": "## Current delivery"
         }
       ],
@@ -8421,7 +8421,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 1,
-          "sha256": "dd4e99adf98e286dcfa8f112c7bc3cf20b1e3e27e52b5e8e8ca273c329a3ab5e",
+          "sha256": "562793449a6e7a0d129e24dad593535f5ae8abcc2b42bcd44232c7335ed7c23b",
           "anchor": "# Roadmap candidate delivery"
         }
       ],
@@ -8771,7 +8771,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 7,
-          "sha256": "dd4e99adf98e286dcfa8f112c7bc3cf20b1e3e27e52b5e8e8ca273c329a3ab5e",
+          "sha256": "562793449a6e7a0d129e24dad593535f5ae8abcc2b42bcd44232c7335ed7c23b",
           "anchor": "## Current delivery"
         }
       ],
@@ -9879,7 +9879,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 25,
-          "sha256": "dd4e99adf98e286dcfa8f112c7bc3cf20b1e3e27e52b5e8e8ca273c329a3ab5e",
+          "sha256": "562793449a6e7a0d129e24dad593535f5ae8abcc2b42bcd44232c7335ed7c23b",
           "anchor": "## Architecture review follow-through"
         }
       ],
@@ -12199,7 +12199,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 265,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "## External decisions and gates"
         },
         {
@@ -12870,7 +12870,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 118,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "## Integration and verification records"
         },
         {
@@ -13280,7 +13280,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -13660,7 +13660,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 25,
-          "sha256": "dd4e99adf98e286dcfa8f112c7bc3cf20b1e3e27e52b5e8e8ca273c329a3ab5e",
+          "sha256": "562793449a6e7a0d129e24dad593535f5ae8abcc2b42bcd44232c7335ed7c23b",
           "anchor": "## Architecture review follow-through"
         }
       ],
@@ -15402,7 +15402,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 1,
-          "sha256": "dd4e99adf98e286dcfa8f112c7bc3cf20b1e3e27e52b5e8e8ca273c329a3ab5e",
+          "sha256": "562793449a6e7a0d129e24dad593535f5ae8abcc2b42bcd44232c7335ed7c23b",
           "anchor": "# Roadmap candidate delivery"
         }
       ],
@@ -15444,7 +15444,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 1,
-          "sha256": "dd4e99adf98e286dcfa8f112c7bc3cf20b1e3e27e52b5e8e8ca273c329a3ab5e",
+          "sha256": "562793449a6e7a0d129e24dad593535f5ae8abcc2b42bcd44232c7335ed7c23b",
           "anchor": "# Roadmap candidate delivery"
         },
         {
@@ -16168,7 +16168,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 118,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "## Integration and verification records"
         },
         {
@@ -16208,7 +16208,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16248,7 +16248,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 11,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "## Authority and baseline"
         },
         {
@@ -16288,7 +16288,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16406,7 +16406,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16446,7 +16446,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16486,7 +16486,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -17152,7 +17152,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -17192,7 +17192,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18483,7 +18483,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18523,7 +18523,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18887,7 +18887,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 49,
-          "sha256": "dd4e99adf98e286dcfa8f112c7bc3cf20b1e3e27e52b5e8e8ca273c329a3ab5e",
+          "sha256": "562793449a6e7a0d129e24dad593535f5ae8abcc2b42bcd44232c7335ed7c23b",
           "anchor": "## Schema and compatibility"
         }
       ],
@@ -18920,7 +18920,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18960,7 +18960,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -19252,7 +19252,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 11,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "## Authority and baseline"
         },
         {
@@ -19440,7 +19440,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 173,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "### Preserved roadmap integration checkpoint"
         },
         {
@@ -19480,7 +19480,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 173,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "### Preserved roadmap integration checkpoint"
         },
         {
@@ -19690,7 +19690,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 173,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "### Preserved roadmap integration checkpoint"
         },
         {
@@ -19818,7 +19818,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -19858,7 +19858,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "e8e7a623c94eb093f331c729bfd44536f31a8790bb83cae20c2426d1c0c6f1d1",
+          "sha256": "c3251aeddf1d814b16257017e3c7c72e14897a60e6a41424b17fec14b98e7c5c",
           "anchor": "# Roadmap execution ledger"
         },
         {

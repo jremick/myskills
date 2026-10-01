@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 
 const repo = resolve(import.meta.dirname, "../..");
@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import { dirname } from 'node:path';
 import { syncBuiltinESMExports } from 'node:module';
 const target = process.env.READ_TARGET, mode = process.env.READ_MODE;
+const directoryTarget = process.env.READ_DIRECTORY;
 const original = { ...fs };
 const log = row => original.appendFileSync(process.env.READ_EVENTS, JSON.stringify(row) + '\\n');
 let changed = false;
@@ -65,20 +66,29 @@ fs.closeSync = (fd, ...args) => {
 };
 const open = fs.promises.open;
 fs.promises.open = async (path, ...args) => {
-  if (path !== target) return open(path, ...args);
-  mutate('open'); const handle = await open(path, ...args); log({ event: 'open' });
-  mutate('opened');
+  if (path !== target && path !== directoryTarget) return open(path, ...args);
+  const kind = path === directoryTarget ? 'directory' : 'file';
+  if (kind === 'file') mutate('open');
+  const handle = await open(path, ...args); log({ event: 'open', kind });
+  if (kind === 'file') mutate('opened');
   const stat = handle.stat.bind(handle), read = handle.read.bind(handle), close = handle.close.bind(handle);
   handle.stat = async (...args) => {
-    if (mode === 'stat-error') throw new Error('Synthetic descriptor stat failure');
-    return stat(...args);
+    if (kind === 'file' && mode === 'stat-error') throw new Error('Synthetic descriptor stat failure');
+    const info = await stat(...args);
+    if (kind === 'directory' && mode.endsWith('directory-substitution') && !changed) {
+      original.renameSync(path, path + '.original');
+      original.mkdirSync(path);
+      original.writeFileSync(target, '<h1>substituted directory preview</h1>');
+      changed = true; log({ event: 'directory-substitution', inspected: info.isDirectory() });
+    }
+    return info;
   };
   handle.read = async (buffer, offset, length, position) => {
     mutate('read'); log({ event: 'read', length, position });
     if (mode === 'read-error') throw new Error('Synthetic descriptor read failure');
     return read(buffer, offset, mode === 'short-read' ? Math.min(length, 7) : length, position);
   };
-  handle.close = async () => { log({ event: 'close' }); return close(); };
+  handle.close = async () => { log({ event: 'close', kind }); return close(); };
   return handle;
 };
 syncBuiltinESMExports();
@@ -105,7 +115,7 @@ function fixture(t, adapter, mode) {
   copyFileSync(join(repo, "apps/site/scripts/serve.mjs"), join(base, "site/scripts/serve.mjs"));
   writeFileSync(join(base, "site/dist/index.html"), "<h1>root preview</h1>");
   writeFileSync(join(base, "site/dist/guide/index.html"), "<h1>directory preview</h1>");
-  const target = adapter === "release" ? join(root, "package.json") : adapter === "provenance" ? join(root, "dist/release/source.tar") : join(base, "site/dist/guide/index.html");
+  const target = adapter === "release" ? join(root, "package.json") : adapter === "provenance" ? join(root, "dist/release/source.tar") : join(base, mode === "root-directory-substitution" ? "site/dist/index.html" : "site/dist/guide/index.html");
   let expected = readFileSync(target);
   const cap = adapter === "release" ? 1024 * 1024 : adapter === "provenance" ? 128 * 1024 * 1024 : 16 * 1024 * 1024;
   if (mode === "exact-cap") {
@@ -125,7 +135,7 @@ function fixture(t, adapter, mode) {
   }
   const preload = join(base, "read-control.mjs"), events = join(base, "events.jsonl");
   writeFileSync(preload, preloadSource);
-  const env = { ...process.env, READ_TARGET: target, READ_MODE: mode, READ_EVENTS: events, READ_CAP: String(cap) };
+  const env = { ...process.env, READ_TARGET: target, READ_DIRECTORY: adapter === "site" ? dirname(target) : "", READ_MODE: mode, READ_EVENTS: events, READ_CAP: String(cap) };
   const rows = () => existsSync(events) ? readFileSync(events, "utf8").trim().split("\n").map(JSON.parse) : [];
   return { base, root, commit, target, expected, cap, preload, env, rows };
 }
@@ -135,12 +145,25 @@ const succeeds = (adapter, mode) => ["normal", "short-read", "replace-before-rea
 function assertReads(f, mode) {
   const rows = f.rows(), opened = rows.filter(row => row.event === "open").length;
   assert.equal(rows.filter(row => row.event === "close").length, opened, "every opened descriptor must close, including failed stat/read/validation");
-  if (!["symlink"].includes(mode)) assert.ok(opened > 0, "control must reach the real descriptor");
+  const leafOpened = f.env.READ_DIRECTORY ? rows.filter(row => row.event === "open" && row.kind === "file").length : opened;
+  if (!["symlink"].includes(mode)) assert.ok(leafOpened > 0, "control must reach the real leaf descriptor");
+  if (f.env.READ_DIRECTORY) for (const kind of ["directory", "file"]) {
+    assert.equal(rows.filter(row => row.event === "close" && row.kind === kind).length, rows.filter(row => row.event === "open" && row.kind === kind).length, `every ${kind} handle must close`);
+  }
   for (const row of rows.filter(row => row.event === "read")) {
     assert.ok(row.position + row.length <= Math.min(f.expected.length, f.cap) + 1, "growth must never expand the original bounded read");
   }
   if (["replace-after-open", "ancestor-symlink", "oversize", "directory", "fifo", "stat-error"].includes(mode)) assert.equal(rows.some(row => row.event === "read"), false, "invalid opened objects must be rejected before reading");
   if (["grow", "shrink", "read-error"].includes(mode)) assert.ok(rows.some(row => row.event === "read"), "failure control must reach the read boundary");
+  if (mode.endsWith("directory-substitution")) {
+    assert.deepEqual(rows.filter(row => row.event === "directory-substitution"), [{ event: "directory-substitution", inspected: true }], "control must replace a real inspected directory");
+    for (const kind of ["directory", "file"]) {
+      assert.equal(rows.filter(row => row.event === "open" && row.kind === kind).length, 1, `the ${kind} handle must open`);
+      assert.equal(rows.filter(row => row.event === "close" && row.kind === kind).length, 1, `the ${kind} handle must close`);
+    }
+    assert.ok(rows.findIndex(row => row.event === "close" && row.kind === "directory") > rows.findIndex(row => row.event === "open" && row.kind === "file"), "the inspected directory handle must remain open through index selection");
+    assert.equal(rows.some(row => row.event === "read"), false, "directory substitution must fail before consuming the selected index");
+  }
 }
 
 for (const adapter of ["release", "provenance"]) for (const mode of modes) {
@@ -175,7 +198,7 @@ async function availablePort() {
   await new Promise(resolve => socket.close(resolve)); return port;
 }
 
-for (const mode of modes) test(`site preview descriptor reader: ${mode}`, { timeout: 15_000 }, async t => {
+for (const mode of [...modes, "directory-substitution", "root-directory-substitution"]) test(`site preview descriptor reader: ${mode}`, { timeout: 15_000 }, async t => {
   const f = fixture(t, "site", mode), port = await availablePort();
   const child = spawn(process.execPath, ["--import", f.preload, join(f.base, "site/scripts/serve.mjs"), "--port", String(port)], { env: f.env, stdio: ["ignore", "pipe", "pipe"] });
   // Always stop the owned child, including failed HTTP or startup assertions.
@@ -185,7 +208,7 @@ for (const mode of modes) test(`site preview descriptor reader: ${mode}`, { time
     child.stdout.once("data", resolve);
   });
   const url = `http://127.0.0.1:${port}`;
-  const response = await fetch(`${url}/guide/`, { signal: AbortSignal.timeout(5000) });
+  const response = await fetch(`${url}${mode === "root-directory-substitution" ? "/" : "/guide/"}`, { signal: AbortSignal.timeout(5000) });
   assert.equal(response.status, succeeds("site", mode) ? 200 : 404);
   const body = Buffer.from(await response.arrayBuffer());
   if (succeeds("site", mode)) { assert.equal(body.length, f.expected.length); assert.equal(hash(body), hash(f.expected)); }
@@ -197,6 +220,7 @@ for (const mode of modes) test(`site preview descriptor reader: ${mode}`, { time
     assert.equal(response.headers.get("cache-control"), "no-store");
     const head = await fetch(`${url}/guide/`, { method: "HEAD" }); assert.equal(head.status, 200); assert.equal(await head.text(), "");
     assert.equal(await (await fetch(`${url}/`)).text(), "<h1>root preview</h1>");
+    const rootHead = await fetch(`${url}/`, { method: "HEAD" }); assert.equal(rootHead.status, 200); assert.equal(await rootHead.text(), "");
     const denied = await fetch(`${url}/guide/`, { method: "POST" }); assert.equal(denied.status, 405); assert.equal(denied.headers.get("allow"), "GET, HEAD");
     for (const path of ["/missing", "/%ZZ", "/..%2f..%2fsource/package.json"]) assert.equal((await fetch(`${url}${path}`)).status, 404);
     assertReads(f, mode);

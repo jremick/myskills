@@ -524,3 +524,26 @@ fingerprint, zero completed criteria, current statuses and remaining gaps stay
 intact. Exact clean commit/tree and bounded receipts belong in
 `CODEQL_SOURCE_FIX_CHECKPOINT.json` and `pr133-codeql-source-correction.md`
 in the absolute root reports directory. This worker performs no external write.
+
+### Preview directory identity correction — 1 October 2026
+
+Independent review of exact `ee472601` accepts the release/provenance readers,
+encoding and all 2,372 bindings. It identifies one remaining preview P2: a
+different plain directory can replace the inspected directory before index
+selection. The correction retains that directory's handle and device/inode,
+checks the named directory before consuming the index, and closes both handles
+through nested finally blocks.
+
+Two real filesystem controls replace root/nested directories immediately after
+descriptor inspection. Before correction both returned 200 instead of 404;
+after correction both reject substitution before any index read and close both
+handles. All 47 bounded-reader controls pass, including unchanged leaf/symlink
+behavior and explicit root/nested GET/HEAD. Scoped lint passes. Initial loopback
+EPERM and behavioral failures remain recorded separately from passing receipts.
+
+Parent-owned Windows verification/CodeQL at immutable PR merge `935d3ebe`
+continues independently; it cannot prove this later correction. The resulting
+source still needs immutable review and exact updated-PR runtime/CodeQL proof.
+No criterion state, gap or completion flag changes. Exact source identity,
+preservation checks and receipts belong in `PREVIEW_DIRECTORY_FIX_CHECKPOINT.json`
+and `preview-directory-fix.md` in the absolute root reports directory.
