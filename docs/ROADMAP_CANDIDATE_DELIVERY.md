@@ -71,3 +71,20 @@ Independent ba69 review accepted the three prior P2 source corrections. The boun
 External acceptance still includes configured provider/IdP behavior, live email, physical MFA/pilot evidence, signed-in host consent and recognition, broader adapters, arm64 runtime, selected publisher signing, public image/npm publication, tag/release and deployment. Durable server-side diagram/layout persistence and optional telemetry retain their original deferred/non-goal posture. Browser composed relocation remains a documented handoff limitation; no provider or consent commitment was invented to fill it.
 
 Docker source decisions follow [selected-platform image inspection](https://docs.docker.com/reference/cli/docker/image/inspect/), [single-platform push](https://docs.docker.com/reference/cli/docker/image/push/), [bridge networking](https://docs.docker.com/engine/network/drivers/bridge/) and [host-address port publishing](https://docs.docker.com/engine/network/port-publishing/). Their application to this disposable gateway fixture is source reasoning; actual Linux behavior remains pending.
+
+
+On 1 October 2026, independent dd806ac review required bounded process-fixture
+failure cleanup and direct GitHub collection of operational/improvement evidence.
+The followup adds fixture-only connection/query bounds, cancellation-aware waits
+and bounded disposal of owned clients/transports/children even when gate unlock
+fails. The actual child proof and 90-second limit remain. GitHub requires all four
+sanitized reports; missing either new report fails its collector. Local cleanup
+controls and collector/phase checks pass 6/6 each. Parent exact1839/dd806ac PG
+results passed normal process recovery in both Node lanes but failed HIST
+publication (312/314 each, child plus parent aggregate). The second private
+manifest is now published under its reviewed visibility, with the prior public
+policy restored in `finally`; all read denials and final revocation remain.
+Local comparison/publication checks pass 6/6. Real corrected PG/runtime, renewed
+independent review, fullstack/HOST and CodeQL acceptance remain open. All 426
+criteria, 24 groups, fixed fingerprint and zero completed criteria are preserved.
+No production-readiness or remote publication claim follows from these checks.

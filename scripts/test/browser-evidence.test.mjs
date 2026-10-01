@@ -59,3 +59,44 @@ test("missing browser report produces an explicit failure summary", async (t) =>
 function runCollector(report, results, output) {
   return spawnSync(process.execPath, [resolve("scripts/collect-browser-evidence.mjs"), report, results, output], { encoding: "utf8" });
 }
+
+test("direct GitHub fullstack caller exports all four sanitized reports and requires each new phase", async t => {
+  const workflow = await readFile(".github/workflows/ci.yml", "utf8");
+  const browserJob = workflow.split("  web-e2e-supported-node:\n")[1].split("\n  # Preserve the protected-branch context")[0];
+  const steps = browserJob.split("      - name: ").slice(1);
+  const collectors = steps.filter(step => step.includes("run: node scripts/collect-browser-evidence.mjs apps/web/test-results/fullstack"));
+  const phases = ["fullstack", "fullstack-operational", "fullstack-improvement", "fullstack-connector"];
+  assert.equal(collectors.length, 4);
+  for (const [index, phase] of phases.entries()) {
+    const step = collectors[index];
+    assert.match(step, /if: always\(\) && steps\.fullstack-browser\.outcome != 'skipped'/);
+    assert.equal(step.includes("continue-on-error"), false);
+    assert.ok(step.includes(`run: node scripts/collect-browser-evidence.mjs apps/web/test-results/${phase}-report.json apps/web/test-results dist/browser-evidence/${phase}\n`));
+    assert.ok(browserJob.indexOf(step) < browserJob.indexOf("Build product and documentation site"));
+  }
+  assert.match(steps.find(step => step.startsWith("Upload reviewed browser evidence")), /if: always\(\)[\s\S]*path: dist\/browser-evidence\/[\s\S]*if-no-files-found: error/);
+  assert.match(steps.find(step => step.startsWith("Collect reviewed product-site evidence")), /if: always\(\) && steps\.product-site-browser\.outcome != 'skipped'/);
+
+  // Execute the checked workflow commands against synthetic reports. Registry
+  // evidence must not conceal either absent isolated-phase report.
+  for (const omitted of [null, "fullstack-operational", "fullstack-improvement"]) {
+    const root = await mkdtemp(join(tmpdir(), "myskills-github-browser-evidence-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const results = join(root, "apps/web/test-results"); await mkdir(results, { recursive: true });
+    for (const phase of phases) {
+      if (phase === omitted) continue;
+      await writeFile(join(results, `${phase}-report.json`), JSON.stringify({ suites: [{ specs: [{ title: phase, file: `${phase}.spec.ts`, tests: [{ status: "expected", results: [{ status: "passed", stderr: ["private-auth-marker"] }] }] }] }] }));
+    }
+    for (const [index, step] of collectors.entries()) {
+      const args = step.match(/run: node (.+)\n/)[1].split(" ");
+      const result = spawnSync(process.execPath, [resolve(args[0]), ...args.slice(1).map(path => join(root, path))], { encoding: "utf8", timeout: 5_000 });
+      const phase = phases[index];
+      assert.equal(result.status, phase === omitted ? 1 : 0, result.stderr);
+      const text = await readFile(join(root, `dist/browser-evidence/${phase}/summary.json`), "utf8");
+      assert.equal(text.includes("private-auth-marker"), false);
+      const summary = JSON.parse(text);
+      assert.equal(summary.reportStatus, phase === omitted ? "unavailable" : "available");
+      assert.deepEqual(summary.tests.map(test => test.title), phase === omitted ? [] : [phase]);
+    }
+  }
+});

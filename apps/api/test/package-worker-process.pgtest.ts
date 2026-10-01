@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { PoolClient } from "pg";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import { hashPassword } from "@myskills-app/auth";
 import { parseSkillManifest } from "@myskills-app/skill-package";
-import { createDb, createPgPool } from "../src/db/client.js";
+import { createDb } from "../src/db/client.js";
 import { runMigrations } from "../src/db/migrate.js";
 import { PostgresAuthStore } from "../src/auth/postgres-auth-store.js";
 import { PostgresSubmissionStore } from "../src/submissions/postgres-submission-store.js";
 import { SubmissionService } from "../src/submissions/service.js";
+import { processFixture, until as poll, childExit, bounded } from "./fixtures/package-worker-process.js";
 import { readApiStartupFailure } from "../src/startup-diagnostic.js";
 
 /** Canonical PG fixture launches the actual production API process, not reconstructed services. */
@@ -20,31 +20,29 @@ test("server worker crash recovers durable attempt and SIGTERM drains completion
   stage("setup");
   const url = process.env.TEST_DATABASE_URL!;
   assert.match(new URL(url).pathname, /(^|[_/-])(test|ci)([_-]|$)/i);
-  const pool = createPgPool(url);
-  const cleanup: { gate?: PoolClient } = {};
+  const fixture = processFixture(url, t.signal);
+  const { pool } = fixture;
+  const until = (check: () => Promise<boolean>, fail: () => Promise<never>) => poll(fixture.signal, check, fail);
   const processes: ChildProcess[] = [];
-  t.after(async () => {
-    stage("cleanup");
-    for (const child of processes) if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
-    if (cleanup.gate) { await cleanup.gate.query("SELECT pg_advisory_unlock_all()"); cleanup.gate.release(); }
-    await pool.end();
-  });
-  await pool.query("DROP SCHEMA public CASCADE"); await pool.query("CREATE SCHEMA public"); await runMigrations(pool);
+  const cleanup = () => { stage("cleanup"); return fixture.close(); };
+  t.after(cleanup);
+  try {
+  await pool.query("DROP SCHEMA public CASCADE"); await pool.query("CREATE SCHEMA public"); await fixture.run(() => runMigrations(pool), 20_000);
   const db = createDb(pool);
   const auth = new PostgresAuthStore(db);
-  const user = (await auth.createUserWithPassword({ email: "process@example.com", name: "Process", passwordHash: await hashPassword("Process-test-password-983!") })).user!;
-  await auth.updateUserStatus({ userId: user.id, status: "active", emailVerifiedAt: new Date() });
+  const user = (await fixture.run(async () => auth.createUserWithPassword({ email: "process@example.com", name: "Process", passwordHash: await hashPassword("Process-test-password-983!") }))).user!;
+  await fixture.run(() => auth.updateUserStatus({ userId: user.id, status: "active", emailVerifiedAt: new Date() }));
   await pool.query("INSERT INTO role_assignments(user_id,role) VALUES($1,'author') ON CONFLICT DO NOTHING",[user.id]);
   const submissions = new SubmissionService(new PostgresSubmissionStore(db, { backgroundScans: true }));
   const manifest = parseSkillManifest({ name: "process-worker", title: "Worker", summary: "Real process fixture", version: "1.0.0", license: "MIT", visibility: "public", platforms: [{ name: "codex", install_target: "codex-skill" }] });
-  const gate = await pool.connect(); cleanup.gate = gate;
+  const gate = await fixture.run(() => pool.connect()); fixture.setGate(gate);
   const gateId = 724211;
   await pool.query(`CREATE FUNCTION pause_process_scan() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
     IF NEW.status='succeeded' THEN PERFORM pg_advisory_xact_lock(${gateId}); END IF; RETURN NEW; END; $$`);
   await pool.query("CREATE TRIGGER pause_process_scan BEFORE UPDATE ON scan_runs FOR EACH ROW EXECUTE FUNCTION pause_process_scan()");
   await gate.query("SELECT pg_advisory_lock($1)", [gateId]);
-  const pending = await submissions.createSubmission({ actor: { id: user.id, roles: ["author"] }, manifest, files: [{ path: "skill.json", content: JSON.stringify(manifest) }, { path: "SKILL.md", content: "# Real process worker fixture" }] });
-  const port = await freePort();
+  const pending = await fixture.run(() => submissions.createSubmission({ actor: { id: user.id, roles: ["author"] }, manifest, files: [{ path: "skill.json", content: JSON.stringify(manifest) }, { path: "SKILL.md", content: "# Real process worker fixture" }] }));
+  const port = await freePort(fixture.signal);
   const gatePid = Number((await gate.query("SELECT pg_backend_pid() AS pid")).rows[0].pid);
   const observed = new Map<ChildProcess, { name: string; stderr: string; startupError: boolean }>();
   const launch = () => {
@@ -58,7 +56,7 @@ test("server worker crash recovers durable attempt and SIGTERM drains completion
     child.stderr!.on("data", chunk => { state.stderr = (state.stderr + String(chunk)).slice(-4096); });
     child.stdout!.on("data", () => undefined);
     child.on("error", () => { state.startupError = true; });
-    processes.push(child); return child;
+    processes.push(child); return fixture.own(child);
   };
   const waitBlocked = async (child: ChildProcess) => {
     const state = observed.get(child)!;
@@ -72,7 +70,7 @@ test("server worker crash recovers durable attempt and SIGTERM drains completion
     stage(`${processes.indexOf(child) === 0 ? "first" : "replacement"}_health`);
     await until(async () => {
       if (state.startupError || child.exitCode !== null || child.signalCode !== null) await fail();
-      try { return (await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(500) })).ok; } catch { return false; }
+      try { return (await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.any([fixture.signal, AbortSignal.timeout(500)]) })).ok; } catch { return false; }
     }, fail);
     stage(`${processes.indexOf(child) === 0 ? "first" : "replacement"}_completion_gate`);
     let backendPid = 0;
@@ -86,7 +84,7 @@ test("server worker crash recovers durable attempt and SIGTERM drains completion
   };
   const first = launch(); const firstBackend = await waitBlocked(first);
   stage("crash");
-  const crashed = once(first, "exit"); first.kill("SIGKILL");
+  const crashed = childExit(first, fixture.signal); first.kill("SIGKILL");
   assert.deepEqual(await crashed, [null, "SIGKILL"], "the actual API child must die before releasing the test gate");
   // PostgreSQL can detect a disconnected client only at its next socket I/O.
   // Let the abandoned statement leave the test gate, then prove its transaction
@@ -103,15 +101,17 @@ test("server worker crash recovers durable attempt and SIGTERM drains completion
   const second = launch(); assert.notEqual(second.pid, first.pid);
   await waitBlocked(second);
   stage("graceful_drain_held");
-  const shutdown = once(second, "exit"); second.kill("SIGTERM");
-  await delay(150); assert.equal(second.exitCode, null, "shutdown must wait for blocked completion");
+  const shutdown = childExit(second, fixture.signal);
+  void shutdown.catch(() => undefined); // The gate operation may fail before this wait is consumed.
+  second.kill("SIGTERM");
+  await delay(150, undefined, { signal: fixture.signal }); assert.equal(second.exitCode, null, "shutdown must wait for blocked completion");
   await gate.query("SELECT pg_advisory_unlock($1)", [gateId]);
   stage("graceful_drain_released");
   await until(async () => second.exitCode !== null || second.signalCode !== null,
     async () => assert.fail("Replacement API process did not exit after releasing its completion gate"));
   const [code] = await shutdown; assert.equal(code, 0, "actual production process must finish graceful drain");
   stage("durable_final_state");
-  const detail = await submissions.getUserSubmissionDetail({ actor: { id: user.id, roles: ["author"] }, submissionId: pending.id });
+  const detail = await fixture.run(() => submissions.getUserSubmissionDetail({ actor: { id: user.id, roles: ["author"] }, submissionId: pending.id }));
   assert.deepEqual(detail!.scanRuns.map(r => r.status), ["failed", "succeeded"]);
   assert.ok(detail!.scanRuns.every(r => r.artifactSha256 === pending.artifact.sha256));
   assert.equal(detail!.scanRuns[0]!.failureCode, "lease_expired");
@@ -119,13 +119,15 @@ test("server worker crash recovers durable attempt and SIGTERM drains completion
   assert.equal(detail!.securityStatus, "passed");
   assert.equal((await pool.query("SELECT status FROM jobs WHERE type='package-scan'")).rows[0].status, "succeeded");
   assert.equal(observed.get(second)!.stderr.includes("Cannot use a pool after calling end"), false);
+  } finally { await cleanup(); }
 });
-async function until(check: () => Promise<boolean>, fail: () => Promise<never>) {
-  const deadline = Date.now() + 30_000;
-  while (Date.now() < deadline) { if (await check()) return; await delay(40); }
-  await fail();
-}
-async function freePort() {
-  const server = createServer(); server.listen(0, "127.0.0.1"); await once(server, "listening");
-  const port = (server.address() as { port: number }).port; await new Promise<void>(done => server.close(() => done())); return port;
+async function freePort(signal: AbortSignal) {
+  const server = createServer();
+  try {
+    return await bounded(async active => {
+      const listening = once(server, "listening", { signal: active });
+      server.listen(0, "127.0.0.1"); await listening;
+      return (server.address() as { port: number }).port;
+    }, 5_000, signal);
+  } finally { await bounded(() => new Promise<void>((done, reject) => server.close(error => error ? reject(error) : done())), 2_000); }
 }

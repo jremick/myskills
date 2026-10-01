@@ -84,6 +84,12 @@ jobs:
       - name: Collect reviewed full-stack evidence
         if: always() && steps.fullstack-browser.outcome != 'skipped'
         run: node scripts/collect-browser-evidence.mjs apps/web/test-results/fullstack-report.json apps/web/test-results dist/browser-evidence/fullstack
+      - name: Collect reviewed operational evidence
+        if: always() && steps.fullstack-browser.outcome != 'skipped'
+        run: node scripts/collect-browser-evidence.mjs apps/web/test-results/fullstack-operational-report.json apps/web/test-results dist/browser-evidence/fullstack-operational
+      - name: Collect reviewed improvement evidence
+        if: always() && steps.fullstack-browser.outcome != 'skipped'
+        run: node scripts/collect-browser-evidence.mjs apps/web/test-results/fullstack-improvement-report.json apps/web/test-results dist/browser-evidence/fullstack-improvement
       - name: Collect reviewed MCP connector evidence
         if: always() && steps.fullstack-browser.outcome != 'skipped'
         run: node scripts/collect-browser-evidence.mjs apps/web/test-results/fullstack-connector-report.json apps/web/test-results dist/browser-evidence/fullstack-connector

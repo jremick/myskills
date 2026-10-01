@@ -208,8 +208,17 @@ test("exact-version evaluation HTTP/PG authority, replay, immutability and publi
   });
 
   await t.test("HIST-01 compares two exact published PG releases and denies private, wrong-pin, foreign identity and final revoked reads", async () => {
-    await submissions.performReviewAction({ actor: reviewer, submissionId: next.id, action: "approve", artifactSha256: next.artifact.sha256 });
-    await submissions.performReviewAction({ actor: reviewer, submissionId: next.id, action: "publish" });
+    // Both immutable packages were submitted as private. The earlier summary
+    // fixture made the skill public after first publication; publish the second
+    // under its reviewed manifest before restoring that public read policy.
+    const visibility = (await pool.query("SELECT visibility FROM skills WHERE slug=$1", [manifest.name])).rows[0].visibility;
+    try {
+      await pool.query("UPDATE skills SET visibility=$2 WHERE slug=$1", [manifest.name, nextManifest.visibility]);
+      await submissions.performReviewAction({ actor: reviewer, submissionId: next.id, action: "approve", artifactSha256: next.artifact.sha256 });
+      await submissions.performReviewAction({ actor: reviewer, submissionId: next.id, action: "publish" });
+    } finally {
+      await pool.query("UPDATE skills SET visibility=$2 WHERE slug=$1", [manifest.name, visibility]);
+    }
     const pins = { base: { slug: manifest.name, version: manifest.version, artifactSha256: first.artifact.sha256 }, target: { slug: nextManifest.name, version: nextManifest.version, artifactSha256: next.artifact.sha256 } };
     const read = (token?: string) => async (kind: "release" | "bundle", pin: typeof pins.base) => {
       const response = await call("GET", `/v1/skills/${pin.slug}/releases/${pin.version}${kind === "bundle" ? `/bundle?sha256=${pin.artifactSha256}` : ""}`, token);

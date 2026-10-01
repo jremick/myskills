@@ -46,7 +46,7 @@ No original MBP worktree or native thread is changed.
 | Integration | `cd93bde57496` | All 426 original clauses and 24 groups have separate current source/check/status/gap bindings. The fixed fingerprint and stale-binding gate are wired into structure. Final exact-candidate matrix and review remain pending. |
 | ID-GOV | `9106bc8cd953` | Integrated as `418e030`, hardened in `cf99c9b`; independent source review complete and new atomicity/deadline PG cases passed in the failed first checkpoint. Final candidate proof pending. |
 | TRUST-MCP | `4d3d183833f6`, recovery `e53508453908` | Integrated as `b10fcab` and `63b496b`, hardened in `cf99c9b`; independent source review complete and new coherent-authorization PG cases passed in the failed first checkpoint. Final candidate proof pending. |
-| QUALITY | `561c045f6012` | Durable scans/evaluations and five authority/disclosure corrections passed exact5128 source review. Exact5128 PG/process failed. Current fixtures correct notification setup, actual jobs/scan association and static-suite identity; corrected real PG/process acceptance remains pending. |
+| QUALITY | `561c045f6012` | Durable scans/evaluations and five authority/disclosure corrections passed exact5128 source review. Exact1839/dd806ac production-process recovery passed both Node lanes; PG aggregate remains failed at HIST publication. Followup failure-bound teardown and reviewed-visibility fixture corrections have local controls; their real PG proof and renewed review remain pending. |
 | AUTHOR-1 | `085acf87b006` | Draft/import/history and CLI/MCP/browser comparisons are retained. Exact5128 real drafts failed at replacement confirmation and duplicate registration. The full browser exercise now shares operational actors and accepts the exact dialog; corrected PG/fullstack acceptance remains pending. |
 | ARCH-LIFE | `360243eeab86` | Exact097 and exact4229 history retained. Exact5128 review required common OS-user enrollment authority and legacy nonempty-plan replay; current source includes both and canonical target fixture correction. Local process/replay checks pass; renewed review and actual PG/MinIO acceptance remain pending. |
 | DISC-SITE | `2453e69c3ba4` | Discovery and site integrated through `8fafa42`; fixed synthetic corpus and local desktop/mobile/keyboard checks passed. PG/canonical/deployed proof pending. |
@@ -394,3 +394,35 @@ passed 11/11, focused permitted CI wiring passed 3/3, diagnostic controls passed
 local receipts, not production-process, PG, real browser or restore proof. Exact
 followup SHA/tree and final binding/parity/check receipts belong in the root
 checkpoint and report. All 426 original criteria and 24 groups remain preserved.
+
+
+### Followup review corrections — 1 October 2026
+
+Independent review of exact `dd806ac932eeb47d74a94dbcb8c461832700d92c`
+withheld source acceptance for two P2 gaps. The process fixture now bounds its
+own connection, query, polling, child-exit and teardown operations. Cancellation
+starts owned cleanup; unlock rejection or timeout cannot skip transport/client
+and child disposal. Production pool defaults, the 90-second outer limit, actual
+SIGKILL, exact backend disappearance/rollback before lease expiry, distinct
+replacement, held SIGTERM drain and immutable final history remain. Six local
+wire-peer/real-child controls pass; these are failure-disposal proof, not PG
+recovery acceptance. GitHub CI now requires all four sanitized fullstack reports
+with existing always/non-skipped conditions and distinct upload subdirectories.
+Collector/phase checks pass 6/6, including each new report missing independently.
+
+Parent `CI_INTERIM.md` reports exact synthetic merge
+`1839c5c4b78ed685d26fa77e3690be7f5da3d959`, tree identical to dd806ac:
+production-process recovery passed both Node lanes (~2.5 seconds), but PG finished
+312/314 each. The failures are the HIST child and its parent aggregate. The newly
+reached publication mismatch is independent of the earlier visibility cascade:
+both immutable manifests are private, while the preceding summary fixture made
+the skill public. The second real publication now uses its reviewed visibility
+and restores the prior public read policy in `finally`. Every HIST denial, pin,
+identity and final-revocation assertion remains. Local comparison/publication
+checks pass 6/6; this corrected PG journey is unrun. Mocked browser suites passed
+193 with one skip each on the old candidate; fullstack/general/HOST/CodeQL and
+full collected results remain open in the supplied handoff. No current-delta
+runtime pass, renewed review, criterion completion or production readiness is
+claimed. Parent owns remote actions and Windows evidence. Exact local commit,
+receipts and freeze state are in `FOLLOWUP_REVIEW_FIX_CHECKPOINT.json` and
+`followup-review-remediation.md` in the root reports directory.
