@@ -169,9 +169,21 @@ export async function exerciseDrafts(page: Page, testInfo: TestInfo, baseURL: st
   await page.goto(correctionURL);
   await workspace.getByRole("button", { name: "Saved history", exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath("author-private-draft-history.png"), fullPage: true });
-  await page.setViewportSize({ width: 390, height: 844 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath("author-private-draft-mobile.png"), fullPage: true });
+  await captureDraftMobileProof(page, testInfo);
   expect(errors).toEqual([]);
   await testInfo.attach("author-draft-persistence", { body: JSON.stringify({ outcome: "pass", draftId: initial.id, preservedRevision: 3, firstSubmissionId: first.id, firstArtifactSha256: first.artifactSha256, foreignReadStatus: foreign.status(), originalExportUnchanged: true }), contentType: "application/json" });
+}
+
+export async function captureDraftMobileProof(page: Page, testInfo: TestInfo) {
+  // The next operational callback shares this page and checks consumer identity.
+  // Borrow its viewport only for the mobile proof, including failed captures.
+  const inheritedViewport = page.viewportSize();
+  if (!inheritedViewport) throw new Error("The draft mobile proof requires an explicit inherited viewport.");
+  try {
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("author-private-draft-mobile.png"), fullPage: true });
+  } finally {
+    await page.setViewportSize(inheritedViewport);
+  }
 }

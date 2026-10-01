@@ -642,3 +642,41 @@ SHA/tree, source preservation and narrow check receipts are recorded in
 root reports directory. The original e612 checkpoint/report remain unchanged.
 No Mini Docker, PostgreSQL, browser/full matrix, external write or history rewrite
 is part of this continuation.
+
+### PR133 inherited browser viewport correction — 1 October 2026
+
+Parent's receipt for exact PR merge
+`fb4aa6e668273965d657f56894dc97e684308c39`, head
+`13f4d6cee38f5aeb81fb68735cbed7104a16b4a4`, tree
+`44d21e855029bdbb0e0c3f2662be3779d56e2354`, records both Node22 and
+Node24 PostgreSQL jobs passing314/314 with zero failures, cancellations or skips.
+The browser diagnostic records both operational lanes failing after the private
+draft callback at the consumer Account settings title assertion. It cannot find
+the link. The maintained final status records failed completion at07:22:26 UTC,
+both general/PG jobs passing, both browser jobs and railway-images failing, and
+controller cleanup complete. These results do not grant whole-matrix acceptance.
+
+The draft callback shares the operational page and left its viewport at390x844
+after mobile evidence capture. App CSS hides the desktop sidebar at960px and
+below; the mobile identity uses Account menu instead. The next callback changes
+to the consumer session and retains its exact desktop-link/email check. A narrow
+draft capture boundary now saves the inherited viewport and restores it in
+finally, including resize, layout evaluation and screenshot failure. No arbitrary
+desktop size, selector fallback, timeout, retry or production/auth change is used.
+Mobile overflow/screenshot proof and all private-draft, API/CLI/composed and
+revocation assertions remain. Other operational callbacks do not resize the page;
+sibling full-stack tests have separate Page fixtures.
+
+Nine focused controls execute this fixture boundary with Page contract doubles.
+All nine fail before restoration and pass afterward, including inherited mobile
+dimensions, failure propagation, restoration failure and missing viewport denial.
+Seven existing rendered draft controls, scoped lint and web typecheck pass.
+These controls do not prove browser identity, layout, real persistence or the
+complete journey. Parent owns exact updated-source Windows browser acceptance
+and final collection. The old13f4 PG result does not prove this later source.
+
+The source checkpoint and detailed receipts are `BROWSER_VIEWPORT_CHECKPOINT.json`
+and `browser-viewport-fix.md` in the root reports directory. All426 criterion
+identities,24 groups, fixed fingerprint, statuses, remaining gaps and complete0
+are preserved. HOST helper/tests/rehearsal caller and other accepted sources
+remain outside this correction. No local Docker, PG, browser or full matrix ran.

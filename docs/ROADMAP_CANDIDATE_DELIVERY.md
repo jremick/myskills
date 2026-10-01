@@ -204,3 +204,24 @@ review and exact Windows/CodeQL acceptance. All 426 identities, 24 groups,
 2,372 references, 137 parity groups, statuses, gaps and zero completed criteria
 remain. `HOST_FINAL_COMBINATION_CHECKPOINT.json` records the coherent local
 source and narrow receipts; the original e612 checkpoint/report are retained.
+
+The parent receipt at PR merge `fb4aa6e668273965d657f56894dc97e684308c39`
+(head `13f4d6cee38f5aeb81fb68735cbed7104a16b4a4`, tree
+`44d21e855029bdbb0e0c3f2662be3779d56e2354`) records both PostgreSQL lanes
+passing314/314 with no failures, cancellations or skips. Both browser lanes fail
+after private drafts at the consumer Account settings identity assertion.
+Maintained final status records failed completion at07:22:26 UTC, both general/PG
+jobs passing, both browser jobs and railway-images failing, and controller cleanup
+complete. Whole-matrix acceptance is withheld.
+
+The draft mobile screenshot left the shared page at390x844, where CSS hides the
+desktop sidebar. A narrow fixture capture boundary now restores the actual
+inherited viewport in finally, including failed capture. The exact consumer
+email assertion, mobile evidence and every draft/revocation outcome remain.
+Nine contract-double controls fail before restoration and pass afterward;
+seven rendered draft controls, scoped lint and web typecheck pass. This is local
+fixture proof. It grants no real browser acceptance, and the old13f4 PG pass
+does not prove the corrected candidate. Parent owns Windows acceptance and final
+collection. `BROWSER_VIEWPORT_CHECKPOINT.json` and `browser-viewport-fix.md`
+record exact source and proof limits. Criterion identity, states, gaps and
+complete0 remain unchanged; HOST source is preserved.
