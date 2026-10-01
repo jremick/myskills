@@ -240,8 +240,14 @@ test("exact-version evaluation HTTP/PG authority, replay, immutability and publi
     await assert.rejects(compareAuthorizedReleases(pins, async (kind, pin) => {
       if (++reads === 5) await authStore.revokeSessionByTokenHash(hashSessionToken(authorToken));
       return read(authorToken)(kind, pin);
-    }), /Current API denial 401/);
+    }), /Current API denial 404/, "the final private metadata read hides the release after owner-session revocation");
     assert.equal(reads, 5, "revocation happens after both authorized metadata/bundle pairs, before final output");
+    const revokedMetadata = await call("GET", `/v1/skills/${pins.base.slug}/releases/${pins.base.version}`, authorToken);
+    assert.equal(revokedMetadata.statusCode, 404);
+    assert.deepEqual(revokedMetadata.json(), { error: { code: "RELEASE_NOT_FOUND", message: "Release not found." } }, "revoked private metadata exposes no release fields or bytes");
+    const revokedBundle = await call("GET", `/v1/skills/${pins.base.slug}/releases/${pins.base.version}/bundle?sha256=${pins.base.artifactSha256}`, authorToken);
+    assert.equal(revokedBundle.statusCode, 401, "bundle delivery retains strict supplied-credential rejection");
+    assert.deepEqual(revokedBundle.json(), { error: { code: "AUTHENTICATION_REQUIRED", message: "Authentication is required." } }, "revoked bundle exposes no private package bytes");
   });
 
 });

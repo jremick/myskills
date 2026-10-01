@@ -144,3 +144,30 @@ the two CLI hash and three private fixture alerts as defensible false positives;
 their GitHub disposition still requires authority. Those source files are unchanged. No criterion
 status/gap or completed count is promoted; the separate source checkpoint records
 the coherent commit/tree and local receipts.
+
+Independent ee472601 review accepts release/provenance, encoding and the exact
+bindings, with one preview directory-substitution P2. The correction retains
+the inspected directory's handle and device/inode through index selection,
+rejects a changed named directory before reading and closes both handles.
+Root/nested real-directory swaps reproduce 200 before the fix and reject with
+404 afterward; all 47 bounded-reader controls and scoped lint pass. Root/nested
+GET/HEAD and existing leaf guards remain. Parent's immutable935d Windows runs
+were ongoing at that checkpoint; review and runtime/CodeQL proof of this later source remain
+required. `PREVIEW_DIRECTORY_FIX_CHECKPOINT.json` records its exact identity and
+receipts. No criterion state, gap or completed count changes.
+
+The same parent's Windows935d diagnostic later reaches private-draft
+resubmission and records duplicate action-status/receipt-heading text. A separate
+test correction selects each semantically, scopes history comparison and restore
+status, and retains immutable-history/denial assertions. Seven focused rendered
+draft DOM controls, lint and web typecheck pass; corrected real browser proof
+remains pending. The preview checkpoint captures both separate source commits
+and their distinct receipts, without promoting runtime or release acceptance.
+
+Parent later records failed935d verification with cleanup complete and collection
+pending. Both PG lanes reach final HIST revocation and return404 where the fixture
+expects401. The source-backed correction expects exact private metadata hiding
+(404/RELEASE_NOT_FOUND) while retaining strict revoked bundle authentication
+(401/AUTHENTICATION_REQUIRED), with generic denied bodies and no comparison
+output. Matching local HTTP proof, lint and strict fixture compilation pass;
+real PG and complete corrected browser/HOST/runtime acceptance remain pending.

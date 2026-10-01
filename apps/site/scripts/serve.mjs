@@ -23,13 +23,13 @@ createServer(async (request, response) => {
       return;
     }
     // Preview assets must remain inside plain dist directories and below 16 MiB.
-    let handle, content;
+    let handle, directory, content;
     try {
       await noSymlinks(path);
       handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
       let info = await handle.stat();
       if (info.isDirectory()) {
-        await handle.close(); handle = undefined;
+        directory = { handle, path, info }; handle = undefined;
         path = resolve(path, "index.html");
         handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
         info = await handle.stat();
@@ -38,6 +38,10 @@ createServer(async (request, response) => {
       await noSymlinks(path);
       const named = await lstat(path);
       if (!named.isFile() || named.dev !== info.dev || named.ino !== info.ino) throw new Error("Preview asset changed while opening.");
+      if (directory) {
+        const namedDirectory = await lstat(directory.path);
+        if (!namedDirectory.isDirectory() || namedDirectory.dev !== directory.info.dev || namedDirectory.ino !== directory.info.ino) throw new Error("Preview directory changed while selecting its index.");
+      }
       content = Buffer.alloc(info.size + 1);
       let length = 0;
       while (length < content.length) {
@@ -47,7 +51,9 @@ createServer(async (request, response) => {
       }
       if (length !== info.size || (await handle.stat()).size !== info.size) throw new Error("Preview asset size changed while reading.");
       content = content.subarray(0, length);
-    } finally { await handle?.close(); }
+    } finally {
+      try { await handle?.close(); } finally { await directory?.handle.close(); }
+    }
     response.writeHead(200, { "Content-Type": types[extname(path)] ?? "application/octet-stream", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
     response.end(request.method === "HEAD" ? undefined : content);
   } catch {

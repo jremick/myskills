@@ -143,7 +143,9 @@ export async function exerciseDrafts(page: Page, testInfo: TestInfo, baseURL: st
   await workspace.getByLabel("File contents", { exact: true }).fill(`${heldText}\nConcrete correction example.\n`);
   await workspace.getByRole("button", { name: "Save draft", exact: true }).click();
   await workspace.getByRole("button", { name: "Submit saved revision", exact: true }).click();
-  await expect(workspace.getByText(/Submitted .*0.1.1/)).toBeVisible();
+  const draftStatus = workspace.locator(".author-status[role='status']");
+  await expect(draftStatus).toHaveText(`Submitted ${slug}@0.1.1.`);
+  await expect(workspace.getByRole("heading", { name: `Submitted ${slug}@0.1.1`, exact: true })).toBeVisible();
   const unchanged = await page.request.get(`${baseURL}/api/v1/submissions/${first.id}/bundle`, { headers: authorHeaders });
   expect(await unchanged.json()).toEqual(oldExport);
   const snapshot = await page.request.get(`${baseURL}/api/v1/drafts/${initial.id}/revisions/3`, { headers: authorHeaders });
@@ -155,13 +157,13 @@ export async function exerciseDrafts(page: Page, testInfo: TestInfo, baseURL: st
   await workspace.getByRole("button", { name: "Saved history", exact: true }).click();
   await expect(workspace.getByLabel("Compare saved revision", { exact: true })).toBeVisible();
   await workspace.getByLabel("Compare saved revision", { exact: true }).selectOption("1");
-  await expect(workspace.getByText(/changed files/).first()).toBeVisible();
+  await expect(workspace.getByRole("region", { name: "Saved draft history", exact: true }).getByText(/changed files/)).toBeVisible();
   const correctionURL = page.url();
   await page.goto(`/submit?draft=${initial.id}`);
   await workspace.getByRole("button", { name: "Saved history", exact: true }).click();
   await workspace.getByLabel("Compare saved revision", { exact: true }).selectOption("3");
   await workspace.getByRole("button", { name: "Restore as new revision", exact: true }).click();
-  await expect(workspace.getByText("Saved revision 8.", { exact: true })).toBeVisible();
+  await expect(draftStatus).toHaveText("Saved revision 8.");
   const preserved = await page.request.get(`${baseURL}/api/v1/drafts/${initial.id}/revisions/7`, { headers: authorHeaders });
   expect((await preserved.json()).draft.submission.id).toBe(first.id);
   await page.goto(correctionURL);
