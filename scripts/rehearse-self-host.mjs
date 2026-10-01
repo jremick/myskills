@@ -35,8 +35,8 @@ const privateEnv = (path, values) => {
   assert.ok(Object.values(values).every((value) => typeof value === "string" && !/['\\\n\r\0]/.test(value)));
   writeFileSync(path, Object.entries(values).map(([key, value]) => `${key}='${value}'\n`).join(""), { mode: 0o600 });
 };
-function call(command, args, { cwd = root, env = process.env, timeout = 600_000, maxBuffer = 4 * 1024 * 1024, ok = true } = {}) {
-  const result = spawnSync(command, args, { cwd, env, encoding: "utf8", timeout, maxBuffer });
+function call(command, args, { cwd = root, env = process.env, timeout = 600_000, maxBuffer = 4 * 1024 * 1024, killSignal = "SIGTERM", ok = true } = {}) {
+  const result = spawnSync(command, args, { cwd, env, encoding: "utf8", timeout, maxBuffer, killSignal });
   if (ok) assertHostCommandSucceeded(command, args, result);
   return result;
 }

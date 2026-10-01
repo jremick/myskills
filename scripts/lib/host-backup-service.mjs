@@ -177,7 +177,7 @@ export function prepareHostBackupService({ proof, owner, image, user, password, 
     try { invalidBackupNetwork(stage, reason, container, metadata); }
     catch (primary) {
       if (publicationObserver) {
-        try { primary.hostFailure.livePublication = publicationObserver({ docker, network, owner, selected, id, container }); }
+        try { primary.hostFailure.livePublication = publicationObserver({ docker, network, owner, selected, id, container, publicCertificate: hostPublicCertificate(join(certs, "public.crt")) }); }
         catch { primary.hostFailure.livePublication = { category: "capture-failed" }; }
       }
       try { primary.hostFailure.bindingConsistency = bindingConsistency(docker, network, owner, selected, id, container); }
@@ -207,7 +207,17 @@ export function privateHostObservation(path, maximum = 2048) {
     return JSON.parse(buffer.subarray(0, size).toString());
   } finally { closeSync(fd); }
 }
-export function observeHostPublication({ docker, network, owner, selected, id, container, candidate, runId },
+function hostPublicCertificate(path) {
+  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try { const before = fstatSync(fd); if (!before.isFile() || before.uid !== process.getuid() || before.size > 8192) throw new Error("public-certificate-file");
+    const buffer = Buffer.alloc(8193); const size = readSync(fd, buffer, 0, buffer.length, 0); const after = fstatSync(fd);
+    if (size !== before.size || before.size !== after.size || before.ctimeMs !== after.ctimeMs || before.mtimeMs !== after.mtimeMs) throw new Error("public-certificate-transition");
+    const value = buffer.subarray(0, size).toString();
+    if (!/^-----BEGIN CERTIFICATE-----\r?\n[\s\S]+\r?\n-----END CERTIFICATE-----\r?\n?$/.test(value) || value.includes("PRIVATE KEY")) throw new Error("public-certificate-shape");
+    return value;
+  } finally { closeSync(fd); }
+}
+export function observeHostPublication({ docker, network, owner, selected, id, container, candidate, runId, publicCertificate },
   { directory = hostPublicationDirectory, maximumMs = 15000, now = Date.now, wait = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms) } = {}) {
   const until = now() + Math.min(15000, maximumMs); let requestPath;
   try {
@@ -227,7 +237,7 @@ export function observeHostPublication({ docker, network, owner, selected, id, c
     const token = randomBytes(16).toString("hex"); requestPath = join(directory, "request.json");
     // No Env, mounts, credentials, names or source data. Addresses stay private.
     const request = { schemaVersion: 1, candidate, runId, nonce: ready.nonce, token, owner, containerId: id, networkId: selected.networkId,
-      endpointId: endpoint.EndpointID, gateway: selected.gateway, address: endpoint.IPAddress, deadlineMs: until - 3000 };
+      endpointId: endpoint.EndpointID, gateway: selected.gateway, address: endpoint.IPAddress, publicCertificate, deadlineMs: until - 3000 };
     const temporary = join(directory, `${token}.tmp`);
     writeFileSync(temporary, JSON.stringify(request), { flag: "wx", mode: 0o600 }); renameSync(temporary, requestPath);
     let result;
@@ -242,14 +252,30 @@ export function observeHostPublication({ docker, network, owner, selected, id, c
     const categories = ["observed", "unavailable", "namespace-changed", "output-invalid", "command-failed"];
     if (!categories.includes(result.category) || !["bridgeAddress", "forwarding", "listener"].every(key => ["present", "absent", "unavailable"].includes(result[key]))) return { category: "observer-output-invalid" };
     if (now() >= until) return { category: "observer-deadline" };
-    const current = inspection(docker(["container", "inspect", id], { timeout: Math.min(3000, until - now()), maxBuffer: 128 * 1024 }), "publication-diagnostic");
+    const tlsCategories = ["ready", "not-ready", "tls-rejected", "unreachable", "deadline", "unavailable"];
+    if (!tlsCategories.includes(result.ubuntuTls) || result.backendTls !== "unavailable" || !["confirmed", "unconfirmed"].includes(result.adapterTermination)) return { category: "observer-output-invalid" };
+    let dockerPort = "unavailable";
+    if (now() < until - 1500) {
+      try {
+      const published = docker(["port", id, "9000/tcp"], { timeout: Math.min(750, until - now() - 1500), maxBuffer: 2048, killSignal: "SIGKILL" });
+      if (!published.error && !published.signal && published.status === 0 && typeof published.stdout === "string" && Buffer.byteLength(published.stdout) <= 2048) {
+        const output = published.stdout.trim();
+        dockerPort = !output ? "empty" : /^[1-9][0-9]{0,4}$/.test(result.observedPort ?? "") && Number(result.observedPort) <= 65535
+          && output === `${selected.gateway}:${result.observedPort}` ? "matches-observed" : "other";
+      }
+      } catch { /* fixed unavailable category; primary failure remains */ }
+    }
+    if (now() >= until) return { category: "observer-deadline" };
+    const checked = docker(["container", "inspect", id], { timeout: Math.min(1500, until - now()), maxBuffer: 128 * 1024, killSignal: "SIGKILL" });
+    if (checked.error || checked.signal || checked.status !== undefined && checked.status !== 0 || typeof checked.stdout !== "string" || Buffer.byteLength(checked.stdout) > 128 * 1024) return { category: "capture-failed" };
+    const current = inspection(checked, "publication-diagnostic");
     const actual = current.NetworkSettings?.Networks?.[network];
     if (current.Id !== id || current.Config?.Labels?.["io.myskills.host-rehearsal"] !== owner || current.Config?.Labels?.["io.myskills.host-rehearsal.role"] !== "backup"
       || current.State?.Status !== "running" || current.State.Running !== true || current.State.Paused !== false || current.State.Restarting !== false
       || ["NetworkID", "EndpointID", "IPAddress", "Gateway"].some(key => actual?.[key] !== endpoint[key])
       || current.RestartCount !== container.RestartCount || current.State.StartedAt !== container.State.StartedAt) return { category: "identity-changed" };
     return { category: result.category, bridgeAddress: result.bridgeAddress, forwarding: result.forwarding, listener: result.listener,
-      identityStable: true, acceptanceRecovered: false };
+      identityStable: true, ubuntuTls: result.ubuntuTls, backendTls: result.backendTls, adapterTermination: result.adapterTermination, dockerPort, acceptanceRecovered: false };
   } catch (error) { return { category: error.code === "ENOENT" ? "observer-not-armed" : "capture-failed" }; }
   finally { if (requestPath) { try { unlinkSync(requestPath); } catch { /* observer files are private, never fixture resources */ } } }
 }

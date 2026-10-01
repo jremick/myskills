@@ -39,7 +39,7 @@ function fixture(t, fail = false) {
       if (args[0] === "network" && args[1] === "inspect") return { stdout: JSON.stringify([networkRow]) };
       if (args[0] === "container" && args[1] === "inspect") return { stdout: JSON.stringify([containerRow]) };
       return { status: 0 }; },
-    call: (command, args) => { commands.push([command, ...args]); writeFileSync(join(proof, "certs/private.key"), "synthetic-key"); writeFileSync(join(proof, "certs/public.crt"), "synthetic-certificate"); },
+    call: (command, args) => { commands.push([command, ...args]); writeFileSync(join(proof, "certs/private.key"), "synthetic-key"); writeFileSync(join(proof, "certs/public.crt"), "-----BEGIN CERTIFICATE-----\ncHVibGljLWZpeHR1cmU=\n-----END CERTIFICATE-----\n"); },
     runService: (role, args, image, tail, contract) => {
       const command = ["run", "-d", "--label", `io.myskills.host-rehearsal.role=${role}`, ...args, image, ...tail]; commands.push(command);
       const result = hostDocker(ledgerPath, executable, command, { encoding: "utf8" }, { contract, record: value => diagnostics.push(value) }); assertHostCommandSucceeded("docker", command, result); return result.stdout.trim();
@@ -466,22 +466,22 @@ test("live failure observer is finite, private, identity checked and cannot reco
         waits++; time += ms;
         if (scenario === "deadline") return;
         const request = JSON.parse(readFileSync(join(directory, "request.json")));
-        assert.deepEqual(Object.keys(request).sort(), ["schemaVersion", "candidate", "runId", "nonce", "token", "owner", "containerId", "networkId", "endpointId", "gateway", "address", "deadlineMs"].sort());
-        const value = { ...request, category: "observed", bridgeAddress: "present", forwarding: "present", listener: "absent", secret: "fixture-password" };
+        assert.deepEqual(Object.keys(request).sort(), ["schemaVersion", "candidate", "runId", "nonce", "token", "owner", "containerId", "networkId", "endpointId", "gateway", "address", "publicCertificate", "deadlineMs"].sort());
+        const value = { ...request, category: "observed", bridgeAddress: "present", forwarding: "present", listener: "absent", ubuntuTls: "ready", backendTls: "unavailable", adapterTermination: "confirmed", observedPort: "34567", secret: "fixture-password" };
         if (scenario === "foreign") value.containerId = "d".repeat(64);
         if (scenario === "changed") f.containerRow.Config.Labels["io.myskills.host-rehearsal"] = "foreign";
         writeFileSync(join(directory, `${request.token}.json`), scenario === "overflow" ? "x".repeat(2049) : JSON.stringify(value), { mode: 0o600 });
       } });
     };
     let bounded = 0;
-    f.docker = (args, options) => { if (options?.timeout <= 3000) { bounded++; assert.equal(options.maxBuffer, 128 * 1024); } return docker(args, options); };
+    f.docker = (args, options) => { if (options?.timeout <= 3000) { bounded++; assert.equal(options.killSignal, "SIGKILL"); assert.ok([2048, 128 * 1024].includes(options.maxBuffer)); } return docker(args, options); };
     let failure;
     assert.throws(() => prepareHostBackupService(f), error => {
       assert.equal(error.message, "HOST_BACKUP_NETWORK_INVALID"); failure = error.hostFailure;
       assert.equal(failure.reason, "published-port-shape-invalid"); assert.equal(failure.stage, "container-readback");
       assert.equal(failure.containerStatus, "running"); assert.equal(failure.containerExitCode, 0); return true;
     });
-    assert.equal(calls, 1); assert.ok(waits <= 10); assert.ok(bounded <= 1);
+    assert.equal(calls, 1); assert.ok(waits <= 10); assert.ok(bounded <= 2);
     assert.equal(failure.livePublication.category, { observed: "observed", foreign: "observer-identity-rejected", overflow: "observer-output-invalid",
       deadline: "observer-deadline", changed: "identity-changed", throws: "capture-failed" }[scenario]);
     assert.doesNotMatch(JSON.stringify(failure), /fixture-password|172\.28|hc-|foreign/);
@@ -490,4 +490,3 @@ test("live failure observer is finite, private, identity checked and cannot reco
     assert.equal(ledger.resources.find(row => row.kind === "container").state, "created");
   });
 });
-
