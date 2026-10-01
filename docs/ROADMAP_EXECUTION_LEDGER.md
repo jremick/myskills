@@ -963,3 +963,14 @@ requires a matching PR scan and full canonical runtime gate. Installation,
 upgrade, backup/restore, target recovery and deployed acceptance remain pending.
 The current release and its approved existing deployments remain the terminal
 scope; no further roadmap phase is started.
+
+
+Source `229e08a5aabdbf5c6abd6f716c69e5c3888bbc15` adds cooperative
+observer cancellation. It stops request admission and lets the bounded detached
+adapter cleanup finish before exit. A real entrypoint control verifies waiting
+cancellation and active adapter cancellation, with both owned process groups
+absent in about eight seconds. This is local process proof, separate from the
+supervisor's launcher-expiry control and actual HOST observation. The wrapper
+must reserve cancellation and reap time within its original finite deadline,
+retain the attached SSH/WSL launcher and create private receipts exclusively.
+No runtime binding guard, original HOST failure or acceptance gate is relaxed.
