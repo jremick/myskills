@@ -56,7 +56,9 @@ comparison exports only empty/matches-observed/other/unavailable. The backend re
 the single NAT rule targeting that owned IPv4/TCP9000 and its corresponding
 listener. It bounds each command to 2 seconds and raw intermediate output to
 32KiB. Only present/absent/unavailable leave the backend. The existing API
-binding/continuity receipt remains alongside this observation.
+binding/continuity receipt remains alongside this observation. The timing bound
+is 15 seconds for observation, followed by up to two 10-second consistency
+reads, each with forced SIGKILL, before normal cleanup.
 
 A matching NAT rule supplies a private observed port, not proof of working
 publication. The observer uses that port and only the fixture public CA for one

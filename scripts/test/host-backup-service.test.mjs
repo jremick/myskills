@@ -394,8 +394,8 @@ test("binding failure takes exactly two bounded readbacks, records continuity an
     const failure = expectFailure(f, "container-readback", "published-port-shape-invalid", { containerStatus: "running", containerExitCode: 0 });
     assert.equal(failure.portMetadata.runtimeBindingCount, 0);
     assert.deepEqual(extra, [
-      { args: ["network", "inspect", "b".repeat(64)], options: { timeout: 10_000, maxBuffer: 128 * 1024 } },
-      { args: ["container", "inspect", "a".repeat(64)], options: { timeout: 10_000, maxBuffer: 128 * 1024 } },
+      { args: ["network", "inspect", "b".repeat(64)], options: { timeout: 10_000, maxBuffer: 128 * 1024, killSignal: "SIGKILL" } },
+      { args: ["container", "inspect", "a".repeat(64)], options: { timeout: 10_000, maxBuffer: 128 * 1024, killSignal: "SIGKILL" } },
     ]);
     for (const [surface, fields] of Object.entries(expected)) for (const [key, value] of Object.entries(fields)) assert.equal(failure.bindingConsistency[surface][key], value);
     for (const surface of ["network", "container"]) if (failure.bindingConsistency[surface].category === "identity-mismatch") assert.deepEqual(failure.bindingConsistency[surface], { category: "identity-mismatch" });

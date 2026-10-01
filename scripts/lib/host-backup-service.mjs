@@ -94,7 +94,7 @@ function ownedGateway(response, network, owner, stage) {
 // Exactly two additional reads on binding failure. They do not retry launch or
 // supply acceptance. Validate identity before exporting even fixed metadata.
 function bindingConsistency(docker, network, owner, selected, id, initial) {
-  const options = { timeout: 10_000, maxBuffer: 128 * 1024 };
+  const options = { timeout: 10_000, maxBuffer: 128 * 1024, killSignal: "SIGKILL" };
   const read = args => {
     const response = docker(args, options);
     if (response?.error || response?.signal || response?.status !== undefined && response.status !== 0) throw new Error("diagnostic-command-failed");
