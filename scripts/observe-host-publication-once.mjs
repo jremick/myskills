@@ -11,7 +11,7 @@ let token; let ready = false; let adapterTermination = "not-started";
 let cancelled = false;
 const cancel = () => { cancelled = true; };
 // Cooperative shutdown leaves the active detached command's kill/reap timer alive.
-process.once("SIGTERM", cancel); process.once("SIGINT", cancel);
+process.on("SIGTERM", cancel); process.on("SIGINT", cancel);
 try {
   // Adapter is supervisor-owned public routing code, not credentials. Read once,
   // pin the bytes, execute those bytes: no executable replacement race.

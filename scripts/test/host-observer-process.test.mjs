@@ -34,6 +34,7 @@ test("actual observer cooperatively cancels waiting admission and reaps its acti
       if (active) { writeFileSync(join(directory, "request.json"), JSON.stringify(request), { mode: 0o600 });
         await wait(() => existsSync(join(root, "adapter.pid"))); adapterPid = Number(readFileSync(join(root, "adapter.pid"))); }
       const cancelledAt = Date.now(); process.kill(-observer.pid, "SIGTERM");
+      if (active) { await new Promise(done => setTimeout(done, 25)); process.kill(-observer.pid, "SIGTERM"); }
       if (!active) writeFileSync(join(directory, "request.json"), JSON.stringify(request), { mode: 0o600 });
       const forced = setTimeout(() => process.kill(-observer.pid, "SIGKILL"), 11000);
       let result; try { result = await completion; } finally { clearTimeout(forced); }
