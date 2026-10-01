@@ -6,7 +6,27 @@ import { join } from "node:path";
 const containerStatuses = ["created", "running", "paused", "restarting", "removing", "exited", "dead"];
 const isRecord = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const safeExitCode = value => Number.isSafeInteger(value) && value >= 0 && value <= 255 ? value : null;
-function invalidBackupNetwork(stage, reason, container) {
+const validPort = value => typeof value === "string" && /^[1-9][0-9]{0,4}$/.test(value) && Number(value) <= 65535;
+const metadataShape = value => value === undefined ? "missing" : value === null ? "null" : Array.isArray(value) ? "array" : isRecord(value) ? "object" : "scalar";
+const metadataMapCount = value => isRecord(value) ? Math.min(Object.keys(value).length, 8) : null;
+function portMetadata(container, network, gateway) {
+  const exposed = container.Config?.ExposedPorts, requested = container.HostConfig?.PortBindings, runtime = container.NetworkSettings?.Ports;
+  const bindings = runtime?.["9000/tcp"], mode = container.HostConfig?.NetworkMode;
+  // Fixed fields and capped counts only. No map keys, addresses, Env or values
+  // leave this boundary, even when the daemon returns an unexpected shape.
+  const rows = Array.isArray(bindings) ? bindings.slice(0, 8) : [];
+  return { networkModeCategory: mode === network ? "owned-bridge" : mode === undefined ? "missing" : ["host", "none", "bridge", "default"].includes(mode) ? mode : "other",
+    networkAttachmentCount: metadataMapCount(container.NetworkSettings?.Networks),
+    exposedMapShape: metadataShape(exposed), exposedPortCount: metadataMapCount(exposed), exposedPortShape: metadataShape(exposed?.["9000/tcp"]),
+    requestedMapShape: metadataShape(requested), requestedPortCount: metadataMapCount(requested), requestedBindingsShape: metadataShape(requested?.["9000/tcp"]),
+    requestedBindingCount: Array.isArray(requested?.["9000/tcp"]) ? Math.min(requested["9000/tcp"].length, 8) : null,
+    runtimeMapShape: metadataShape(runtime), runtimePortCount: metadataMapCount(runtime), runtimeBindingsShape: metadataShape(bindings),
+    runtimeBindingCount: Array.isArray(bindings) ? Math.min(bindings.length, 8) : null,
+    runtimeObjectCount: rows.filter(isRecord).length,
+    runtimeGatewayMatchCount: rows.filter(row => isRecord(row) && row.HostIp === gateway).length,
+    runtimeValidPortCount: rows.filter(row => isRecord(row) && validPort(row.HostPort)).length };
+}
+function invalidBackupNetwork(stage, reason, container, metadata) {
   const error = new Error("HOST_BACKUP_NETWORK_INVALID");
   error.hostFailure = { operation: "docker.network.backup-endpoint", stage, reason };
   if (container) {
@@ -14,6 +34,7 @@ function invalidBackupNetwork(stage, reason, container) {
     error.hostFailure.containerStatus = containerStatuses.includes(container.State?.Status) ? container.State.Status : "unknown";
     error.hostFailure.containerExitCode = safeExitCode(container.State?.ExitCode);
   }
+  if (metadata) error.hostFailure.portMetadata = metadata;
   throw error;
 }
 function inspection(response, stage) {
@@ -23,7 +44,7 @@ function inspection(response, stage) {
   return rows[0];
 }
 // Command error categories are fixed. Container readback exports only
-// Status/ExitCode; State.Error stays inside the boundary.
+// Status/ExitCode and fixed port metadata; State.Error stays inside the boundary.
 function commandErrorCategory(value) {
   const text = typeof value === "string" ? value.slice(0, 16_384) : "";
   return !text ? "none" : /user specified IP address|user configured subnets|invalid.*subnet|invalid.*ip address/i.test(text) ? "ipam-rejected"
@@ -78,9 +99,9 @@ export function prepareHostBackupService({ proof, owner, image, user, password, 
   if (container.State.Running !== true || container.State.Paused !== false || container.State.Restarting !== false) return invalidBackupNetwork(stage, "container-state-inconsistent", container);
   if (container.NetworkSettings?.Networks?.[network]?.NetworkID !== selected.networkId) return invalidBackupNetwork(stage, "container-network-mismatch", container);
   const ports = container?.NetworkSettings?.Ports?.["9000/tcp"];
-  if (!Array.isArray(ports) || ports.length !== 1 || !isRecord(ports[0])) return invalidBackupNetwork(stage, "published-port-shape-invalid", container);
+  if (!Array.isArray(ports) || ports.length !== 1 || !isRecord(ports[0])) return invalidBackupNetwork(stage, "published-port-shape-invalid", container, portMetadata(container, network, selected.gateway));
   if (ports[0].HostIp !== selected.gateway) return invalidBackupNetwork(stage, "published-port-address-mismatch", container);
-  if (typeof ports[0].HostPort !== "string" || !/^[1-9][0-9]{0,4}$/.test(ports[0].HostPort) || Number(ports[0].HostPort) > 65535) return invalidBackupNetwork(stage, "published-port-number-invalid", container);
+  if (!validPort(ports[0].HostPort)) return invalidBackupNetwork(stage, "published-port-number-invalid", container);
   const current = ownedGateway(docker(["network", "inspect", network]), network, owner, "network-recheck");
   if (current.networkId !== selected.networkId) return invalidBackupNetwork("network-recheck", "network-id-changed");
   if (current.gateway !== selected.gateway) return invalidBackupNetwork("network-recheck", "network-gateway-changed");

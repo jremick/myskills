@@ -11,7 +11,7 @@ function fixture(t, fail = false) {
   const owner = "hc-0123456789abcdef", ledgerPath = join(proof, "ledger.json"), commands = [];
   saveHostLedger(ledgerPath, { schemaVersion: 1, owner, sequence: 0, resources: [] });
   const network = `${owner}-backup-network`, gateway = "172.28.0.1", networkId = "b".repeat(64), containerId = "a".repeat(64);
-  // Docker28 Engine v1.48 shapes, not captured runtime evidence. HostConfig
+  // Synthetic Docker28-compatible shapes, not captured runtime evidence. HostConfig
   // retains the requested empty port; NetworkSettings contains the assigned port.
   const networkRow = { Id: networkId, Name: network, Driver: "bridge", Scope: "local", EnableIPv4: true, EnableIPv6: false,
     Internal: false, Attachable: false, Ingress: false, Labels: { "io.myskills.host-rehearsal": owner },
@@ -25,11 +25,11 @@ function fixture(t, fail = false) {
       Networks: { [network]: { IPAMConfig: null, Links: null, Aliases: null, DriverOpts: null,
         NetworkID: networkId, EndpointID: "c".repeat(64), Gateway: gateway, IPAddress: "172.28.0.2", IPPrefixLen: 16,
         IPv6Gateway: "", GlobalIPv6Address: "", GlobalIPv6PrefixLen: 0, DNSNames: [`${owner}-op-1`, containerId.slice(0, 12)] } } } };
-  const executable = join(proof, "docker");
+  const executable = join(proof, "docker"), dispatchedPath = join(proof, "dispatched.json");
   // Models Docker's default-IPAM contract and its real create-response boundary.
-  writeFileSync(executable, `#!${process.execPath}\nconst a=process.argv.slice(2);if(a.includes('--ip')||${fail}){process.stderr.write('daemon rejected request fixture-password https://secret.invalid');process.exit(1);}if(a[0]==='container')process.exit(1);process.stdout.write('a'.repeat(64));\n`, { mode: 0o755 });
+  writeFileSync(executable, `#!${process.execPath}\nconst a=process.argv.slice(2);require('node:fs').writeFileSync(${JSON.stringify(dispatchedPath)},JSON.stringify(a));if(a.includes('--ip')||${fail}){process.stderr.write('daemon rejected request fixture-password https://secret.invalid');process.exit(1);}if(a[0]==='container')process.exit(1);process.stdout.write('a'.repeat(64));\n`, { mode: 0o755 });
   const update = work => { const ledger = JSON.parse(readFileSync(ledgerPath)); work(ledger); saveHostLedger(ledgerPath, ledger); };
-  return { proof, owner, ledgerPath, commands, networkRow, containerRow, image: "fixture-minio", user: "fixture-user", password: "fixture-password$HOST_INTERPOLATION_PROBE$$",
+  return { proof, owner, ledgerPath, dispatchedPath, commands, networkRow, containerRow, image: "fixture-minio", user: "fixture-user", password: "fixture-password$HOST_INTERPOLATION_PROBE$$",
     reserve: (kind, name) => update(ledger => ledger.resources.push({ kind, name, state: "creating" })),
     mark: (kind, name) => update(ledger => { ledger.resources.find(row => row.kind === kind && row.name === name).state = "created"; }),
     docker: args => { commands.push(args);
@@ -50,6 +50,9 @@ test("backup setup reserves ownership before launch and aligns owned gateway, po
   assert.equal(run.includes("--ip"), false);
   assert.equal(run[run.indexOf("--publish") + 1], `${service.gateway}::9000`);
   assert.equal(run.includes("--network-alias"), false);
+  const dispatched = JSON.parse(readFileSync(f.dispatchedPath, "utf8"));
+  assert.deepEqual(dispatched, ["run", "--name", `${f.owner}-op-1`, "--label", `io.myskills.host-rehearsal=${f.owner}`, ...run.slice(1)],
+    "the actual hostDocker subprocess preserves the exact gateway publication and backup role");
   assert.ok(cert.includes(`subjectAltName=IP:${service.gateway}`));
   assert.equal(service.endpoint, `https://${service.gateway}:34567`);
   assert.equal(readFileSync(join(f.proof, "backup-minio.env"), "utf8"), `MINIO_ROOT_USER=${f.user}\nMINIO_ROOT_PASSWORD=${f.password}\n`);
@@ -73,14 +76,71 @@ test("backup launch rejection retains the uncertain owned create and exports onl
 });
 
 function expectFailure(f, stage, reason, state) {
+  let failure;
   assert.throws(() => prepareHostBackupService(f), error => {
     assert.equal(error.message, "HOST_BACKUP_NETWORK_INVALID");
-    assert.deepEqual(error.hostFailure, { operation: "docker.network.backup-endpoint", stage, reason, ...state });
+    failure = error.hostFailure;
+    const { portMetadata, ...identity } = failure;
+    assert.deepEqual(identity, { operation: "docker.network.backup-endpoint", stage, reason, ...state });
+    if (reason === "published-port-shape-invalid") {
+      assert.deepEqual(Object.keys(portMetadata), ["networkModeCategory", "networkAttachmentCount", "exposedMapShape", "exposedPortCount", "exposedPortShape", "requestedMapShape", "requestedPortCount", "requestedBindingsShape", "requestedBindingCount",
+        "runtimeMapShape", "runtimePortCount", "runtimeBindingsShape", "runtimeBindingCount", "runtimeObjectCount", "runtimeGatewayMatchCount", "runtimeValidPortCount"]);
+      for (const [key, value] of Object.entries(portMetadata)) {
+        if (key === "networkModeCategory") assert.ok(["owned-bridge", "missing", "host", "none", "bridge", "default", "other"].includes(value));
+        else if (key.endsWith("Shape")) assert.ok(["missing", "null", "array", "object", "scalar"].includes(value));
+        else assert.ok(value === null || Number.isInteger(value) && value >= 0 && value <= 8);
+      }
+    } else assert.equal(portMetadata, undefined);
     assert.doesNotMatch(JSON.stringify(error.hostFailure), /fixture-password|private-provider-output|secret.invalid/);
     return true;
   });
   assert.ok(f.commands.every(args => !args.includes("--ip") && !args.includes("--subnet") && !args.includes("--add-host") && !args.includes("host")));
+  return failure;
 }
+
+test("backup shape diagnostics separate CLI exposure/request from runtime mappings using only fixed shapes and capped counts", async t => {
+  const expected = { networkModeCategory: "owned-bridge", networkAttachmentCount: 1,
+    exposedMapShape: "object", exposedPortCount: 1, exposedPortShape: "object", requestedMapShape: "object", requestedPortCount: 1, requestedBindingsShape: "array", requestedBindingCount: 1,
+    runtimeMapShape: "object", runtimePortCount: 1, runtimeBindingsShape: "missing", runtimeBindingCount: null, runtimeObjectCount: 0, runtimeGatewayMatchCount: 0, runtimeValidPortCount: 0 };
+  const cases = [
+    ["missing runtime map", f => { delete f.containerRow.NetworkSettings.Ports; }, { runtimeMapShape: "missing", runtimePortCount: null }],
+    ["null runtime map", f => { f.containerRow.NetworkSettings.Ports = null; }, { runtimeMapShape: "null", runtimePortCount: null }],
+    ["scalar runtime map", f => { f.containerRow.NetworkSettings.Ports = "private-provider-output"; }, { runtimeMapShape: "scalar", runtimePortCount: null }],
+    ["unrelated port", f => { f.containerRow.NetworkSettings.Ports = { "private-provider-output": [{ HostIp: "secret.invalid", HostPort: "fixture-password" }] }; }, {}],
+    ["null binding", f => { f.containerRow.NetworkSettings.Ports["9000/tcp"] = null; }, { runtimeBindingsShape: "null" }],
+    ["empty binding", f => { f.containerRow.NetworkSettings.Ports["9000/tcp"] = []; }, { runtimeBindingsShape: "array", runtimeBindingCount: 0 }],
+    ["nonobject binding", f => { f.containerRow.NetworkSettings.Ports["9000/tcp"] = ["private-provider-output"]; }, { runtimeBindingsShape: "array", runtimeBindingCount: 1 }],
+    ["extra IPv6 binding", f => { f.containerRow.NetworkSettings.Ports["9000/tcp"].push({ HostIp: "::", HostPort: "" }); },
+      { runtimeBindingsShape: "array", runtimeBindingCount: 2, runtimeObjectCount: 2, runtimeGatewayMatchCount: 1, runtimeValidPortCount: 1 }],
+    ["duplicate exact binding", f => { f.containerRow.NetworkSettings.Ports["9000/tcp"].push({ ...f.containerRow.NetworkSettings.Ports["9000/tcp"][0] }); },
+      { runtimeBindingsShape: "array", runtimeBindingCount: 2, runtimeObjectCount: 2, runtimeGatewayMatchCount: 2, runtimeValidPortCount: 2 }],
+    ["missing CLI request", f => { f.containerRow.NetworkSettings.Ports = {}; delete f.containerRow.Config.ExposedPorts; delete f.containerRow.HostConfig.PortBindings; },
+      { exposedMapShape: "missing", exposedPortCount: null, exposedPortShape: "missing", requestedMapShape: "missing", requestedPortCount: null, requestedBindingsShape: "missing", requestedBindingCount: null, runtimePortCount: 0 }],
+    ["malformed CLI request", f => { f.containerRow.NetworkSettings.Ports = {}; f.containerRow.Config.ExposedPorts = { "9000/tcp": "fixture-password" };
+      f.containerRow.HostConfig.PortBindings = { "9000/tcp": { HostIp: "secret.invalid", HostPort: "fixture-password" } }; },
+      { exposedPortShape: "scalar", requestedBindingsShape: "object", requestedBindingCount: null, runtimePortCount: 0 }],
+    ["capped mappings", f => { f.containerRow.NetworkSettings.Ports["9000/tcp"] = Array.from({ length: 30 }, () => ({ HostIp: "secret.invalid", HostPort: "fixture-password" }));
+      f.containerRow.HostConfig.PortBindings["9000/tcp"] = Array(30).fill(null); },
+      { requestedBindingCount: 8, runtimeBindingsShape: "array", runtimeBindingCount: 8, runtimeObjectCount: 8 }],
+    ["unexpected host mode", f => { f.containerRow.NetworkSettings.Ports = {}; f.containerRow.HostConfig.NetworkMode = "host"; },
+      { networkModeCategory: "host", runtimePortCount: 0 }],
+    ["missing network mode", f => { f.containerRow.NetworkSettings.Ports = {}; delete f.containerRow.HostConfig.NetworkMode; },
+      { networkModeCategory: "missing", runtimePortCount: 0 }],
+    ["foreign network mode and extra attachment", f => { f.containerRow.NetworkSettings.Ports = {}; f.containerRow.HostConfig.NetworkMode = "private-provider-output";
+      f.containerRow.NetworkSettings.Networks["private-provider-output"] = { NetworkID: "secret.invalid" }; },
+      { networkModeCategory: "other", networkAttachmentCount: 2, runtimePortCount: 0 }],
+  ];
+  for (const [name, change, metadata] of cases) await t.test(name, t => {
+    const f = fixture(t); change(f);
+    f.containerRow.State.Error = "private-provider-output fixture-password https://secret.invalid";
+    f.containerRow.Config.Env = ["MINIO_ROOT_PASSWORD=fixture-password"];
+    const failure = expectFailure(f, "container-readback", "published-port-shape-invalid", { containerStatus: "running", containerExitCode: 0 });
+    assert.deepEqual(failure.portMetadata, { ...expected, ...metadata });
+    assert.doesNotMatch(JSON.stringify(failure), /172\.28|34567|9000|MINIO_ROOT|HostIp|HostPort|Env/);
+    assert.equal(f.commands.filter(args => args[0] === "container" && args[1] === "inspect").length, 1);
+    assert.equal(f.commands.filter(args => args[0] === "network" && args[1] === "inspect").length, 1);
+  });
+});
 
 test("backup endpoint accepts an assigned IPv4 port with a second IPv6 IPAM entry and unrelated unpublished port", t => {
   const f = fixture(t);
