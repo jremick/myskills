@@ -126,6 +126,22 @@ trust boundary; this does not provide a sandbox against that OS principal.
 | ARCH-03 | Core topology projection; API compact approval, actor and maintenance-window regressions; CLI two disjoint byte fixtures, actual router disable, unrelated-path preservation, directory-sync ordering/failures and overlapping-root refusal. Current-schema PG cases add approval readback, shared leases, distinct rollback actor, baseline-only credential expiry waits and actual window closing. | All added PG cases are prepared for Windows execution. Maintained fullstack and HOST MinIO journeys remain required. HOST backup setup uses owned DNS/TLS identity and bounded phase/operation diagnostics; the historical static-IP/default-IPAM cause is unconfirmed until Linux retry. Actual host recognition/consent stays separate. |
 | ARCH-04 | Existing graph editor/migration source remains. `ArchitectureArtifactHandoff` and browser/MCP transport tests bind selected saved review to intent and exact pins, then display trusted-companion commands and receipt limitations. | Full canonical browser/runtime and actual connected-host acceptance; byte fixtures alone do not complete the full architecture lifecycle thesis. |
 
+Historical correction checks on the frozen combined source at `097cd50`
+passed 34 API/CLI contract cases,
+five focused CLI boundary cases and both admin keyboard cases (1440 and 390).
+The API/CLI/MCP/core/package builds, web typecheck and strict compile of the four
+changed PostgreSQL fixtures passed. Pre-merge HOST source fixtures passed 8/8.
+These are supporting local receipts. Real PostgreSQL locks/serialization,
+MinIO/Linux backup setup, fullstack and host recognition remain Windows-owned.
+The canonical seven failed jobs and failed HOST cleanup receipt are retained.
+
+The later `5128bb8` source includes the final corrections and additional
+published-release PostgreSQL fixture. Its active canonical diagnostic reproduces
+an early exit in the actual server-worker process on Node22 and Node24, before
+the exact database blocker is reached. Those process lifecycle assertions remain
+unproven. Later local receipts and canonical results belong to their exact source
+checkpoints; the historical combined-source receipts above are retained.
+
 `docs/capability-parity.json` records stable ARC-11 coverage and evidence levels.
 Generate its matrix with `npm run docs:parity`; static coverage is not runtime
 parity. Run details and exact candidate SHA are recorded in the parent delivery
