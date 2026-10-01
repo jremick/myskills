@@ -162,7 +162,7 @@ if (["host-ports", "api-ready", "restore-ready"].includes(mode)) {
   if (mode === "create") {
     data.ownerId = verified.user.id;
     const manifest = { name: `host-${data.fixtureName}`, title: "Disposable HOST proof", summary: "Record fixture backup and restore evidence.",
-      version: "1.0.0", license: "Apache-2.0", visibility: "user", platforms: [{ name: "codex", install_target: "codex-skill", status: "supported" }], tags: ["testing"] };
+      version: "1.0.0", license: "Apache-2.0", visibility: "private", platforms: [{ name: "codex", install_target: "codex-skill", status: "supported" }], tags: ["testing"] };
     const submission = await api("/v1/submissions", { manifest, files: [{ path: "skill.json", content: `${JSON.stringify(manifest)}\n` },
       { path: "SKILL.md", content: "---\nname: host-proof\ndescription: Record the supplied fixture checks.\n---\n\nReport only observed fixture outcomes.\n" }] }, { status: 202 });
     data.submissionId = submission.submission.id;
