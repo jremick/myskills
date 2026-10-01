@@ -257,3 +257,34 @@ requires its smallest evidence-based correction. The ledger records the detailed
 limits; root reports `HOST_DISPATCH_CHECKPOINT.json` and
 `host-dispatch-evidence.json` bind final source and checks. Criterion identities,
 2,372 references, 137 groups, states, gaps and complete 0 remain unchanged.
+
+Actual 25d merge `25d0717870e653dadbd7ec124332e253dc543d44` reveals a copied
+local-ci fixture regression: its resources module imports the new diagnostic
+helper, which the fixture copy list omits. The unchanged unsafe-input control
+reproduces `ERR_MODULE_NOT_FOUND`. Fix checkpoint
+`5b82835c037756401531ec8d55e904d894028b78` adds that single dependency entry.
+All assertions, gate/ownership/cleanup behavior and accepted diagnostic/browser
+bytes remain. All 37 existing fake-command controls and narrow lint pass; failed
+red and sandbox-reservation receipts are retained. No real Mini Docker, PG,
+browser or full matrix ran.
+
+Parent's final 25d result is failed at 08:30:34 UTC; 192 collected artifacts are
+verified, export `4d0c8a54654f7603ac721839955a844707dea1ff1d45c2a34652f369e3c0f085`.
+Both PG and browser jobs pass, both general checks fail on the fixture copy,
+and all five image builds/smokes pass. PG records 314/314 per lane; each browser
+lane records 193 mocked passes/one pre-existing skip, ten fullstack and twelve
+site cases. Controller/application/HOST cleanup complete. HOST fails before
+install/restore. The collected client/server 28.3.0/API 1.51 identities, matching final argv and correct
+stored request accompany stable owned network/container/endpoint/state and
+empty runtime bindings twice. This is the daemon publication/reporting boundary;
+stop speculative repository fixes. Kernel publication versus stale daemon
+metadata remains unresolved. Matching CodeQL execution succeeds with eight
+verified files; alert-state acceptance remains pending and no dismissal is
+authorized; candidate CodeQL is failed with alerts 84/85/87/88/92 open. Parent's
+independent Astra source review accepts exact `5b82835` and its retained controls.
+These old 4776 runtime results do not verify the later fixture-fix candidate;
+parent owns exact corrected-source runtime verification. The
+ledger and root reports
+`HOST_DIAGNOSTIC_FIXTURE_CHECKPOINT.json`/`host-diagnostic-fixture-evidence.json`
+record exact source and limits. Criteria, references, parity, states, gaps and
+complete 0 remain unchanged.

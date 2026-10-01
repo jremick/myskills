@@ -737,3 +737,55 @@ missing kernel publication from inconsistent daemon metadata. A demonstrated
 request/dispatch/transition defect requires the smallest evidence-based correction.
 All 426 criterion identities, 24 groups, fixed fingerprint, 2,372 references,
 137 capability groups, states, gaps and complete 0 are preserved.
+
+### PR133 diagnostic dependency in copied CI fixture — 1 October 2026
+
+Actual merge `25d0717870e653dadbd7ec124332e253dc543d44`, head `4776c39`,
+reports `ERR_MODULE_NOT_FOUND` in copied-source local-ci controls. The fixture
+copies `host-rehearsal-resources.mjs` but omits its new imported dependency,
+`host-backup-diagnostics.mjs`. Diagnostic log lines 2645–2725 identify this
+concrete regression. The unchanged unsafe-input control reproduces the same
+missing module locally. The earlier 190 helper controls did not execute this
+temporary local-ci source context.
+
+Fix checkpoint `5b82835c037756401531ec8d55e904d894028b78` adds exactly one
+entry to `fixtureFiles` in `scripts/test/local-ci.test.mjs`. No assertions,
+expectations, skips, gate decisions, ownership or cleanup behavior change.
+Direct-copy/import inspection finds no other incomplete copied context; the
+maintained rehearsal shim and resource test children import from the complete
+source root. Accepted diagnostic and `d8cd93f` browser bytes remain unchanged.
+All 37 existing local-ci fake-command controls and narrow lint pass. The red
+receipt remains. A sandbox-blocked attempt also remains: temporary PID-owned
+reservations returned EPERM; the authorized rerun passes with those reservations.
+This proves fixture wiring and control behavior, not actual runtime acceptance.
+
+Parent's final 25d verification completes failed at 08:30:34 UTC. Its collection
+verifies 192 artifacts, export
+`4d0c8a54654f7603ac721839955a844707dea1ff1d45c2a34652f369e3c0f085`.
+Both PostgreSQL and browser jobs pass; both general checks fail on the copied
+fixture dependency. PG passes 314/314 per lane. Each browser lane records 193
+mocked passes/one pre-existing skip, ten fullstack cases and twelve site cases.
+Controller, application and HOST cleanup complete. All five image builds/smokes
+pass; HOST fails before install and restore acceptance. The final HOST receipt separately captures client/server
+28.3.0, commits `38b7060`/`265f709`, API 1.51 and Linux/amd64. Every final-argv
+comparison matches. Stored request object/gateway counts are one, requested port
+is empty, publish-all is disabled, restart count is zero and endpoint ID is valid.
+Immediate owned-network contract/membership/endpoint checks pass; the running
+container, endpoint, state and request remain unchanged, with empty runtime
+bindings on both observations. This isolates daemon publication/reporting
+infrastructure. It cannot distinguish missing kernel publication from stale
+daemon metadata. No further speculative repository correction is justified.
+
+Matching CodeQL execution succeeds with eight verified files, export
+`bad0fded62d06f6e030d0bcdbb79d128bbebf0dd0c12294079bc710fe55e2b54`.
+Alert-state acceptance remains pending; dismissal authority is absent. These
+25d/4776 receipts do not prove the later fixture-fix candidate or whole-matrix
+acceptance. Candidate CodeQL remains failed with alerts 84/85/87/88/92 open.
+Parent's independent Astra source review accepts exact `5b82835`, the one-line
+copy change, unchanged assertions/guards and verified red/37-pass/lint receipts.
+Parent owns exact corrected-candidate runtime verification.
+
+`HOST_DIAGNOSTIC_FIXTURE_CHECKPOINT.json` and `host-diagnostic-fixture-evidence.json`
+in root reports bind source, before/after controls, collected 25d facts and proof
+limits. No acceptance guard is bypassed. All 426 identities, 24 groups, fixed
+fingerprint, 2,372 references, 137 capability groups, states, gaps and complete 0 remain.

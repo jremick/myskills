@@ -656,7 +656,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -919,7 +919,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -959,7 +959,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 11,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "## Authority and baseline"
         },
         {
@@ -999,7 +999,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 327,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "## Final candidate reconciliation"
         },
         {
@@ -1039,7 +1039,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 265,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "## External decisions and gates"
         },
         {
@@ -1079,7 +1079,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 204,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "### HOST review remediation checkpoint"
         },
         {
@@ -1119,7 +1119,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -1159,7 +1159,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -8367,7 +8367,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 7,
-          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
+          "sha256": "42351e21797e0f95376885f1ec4568f39fe38f294e93c7059fe9e0edf5433fb0",
           "anchor": "## Current delivery"
         }
       ],
@@ -8421,7 +8421,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 1,
-          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
+          "sha256": "42351e21797e0f95376885f1ec4568f39fe38f294e93c7059fe9e0edf5433fb0",
           "anchor": "# Roadmap candidate delivery"
         }
       ],
@@ -8490,8 +8490,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 87,
-          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
+          "line": 88,
+          "sha256": "bf60b91d854be728e989db854c1d3eb7083627b87d009e8cea69fd2b78979159",
           "anchor": "test(\"HOST rehearsal remains inside railway-images and fails that canonical job when its subprocess fails\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8535,8 +8535,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 557,
-          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
+          "line": 558,
+          "sha256": "bf60b91d854be728e989db854c1d3eb7083627b87d009e8cea69fd2b78979159",
           "anchor": "test(\"release-check rejects wrong tags, moved tags and commits outside main before any work\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8771,7 +8771,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 7,
-          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
+          "sha256": "42351e21797e0f95376885f1ec4568f39fe38f294e93c7059fe9e0edf5433fb0",
           "anchor": "## Current delivery"
         }
       ],
@@ -9103,8 +9103,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 586,
-          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
+          "line": 587,
+          "sha256": "bf60b91d854be728e989db854c1d3eb7083627b87d009e8cea69fd2b78979159",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9296,8 +9296,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 282,
-          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
+          "line": 283,
+          "sha256": "bf60b91d854be728e989db854c1d3eb7083627b87d009e8cea69fd2b78979159",
           "anchor": "for (const readback of [\"owned\", \"foreign\", \"unavailable\", \"absent\", \"malformed\"]) test(`cancelled MCP creation reconciles ${readback} ownership before cleanup`, async (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9341,8 +9341,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 557,
-          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
+          "line": 558,
+          "sha256": "bf60b91d854be728e989db854c1d3eb7083627b87d009e8cea69fd2b78979159",
           "anchor": "test(\"release-check rejects wrong tags, moved tags and commits outside main before any work\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9762,8 +9762,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 586,
-          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
+          "line": 587,
+          "sha256": "bf60b91d854be728e989db854c1d3eb7083627b87d009e8cea69fd2b78979159",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9879,7 +9879,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 25,
-          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
+          "sha256": "42351e21797e0f95376885f1ec4568f39fe38f294e93c7059fe9e0edf5433fb0",
           "anchor": "## Architecture review follow-through"
         }
       ],
@@ -12199,7 +12199,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 265,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "## External decisions and gates"
         },
         {
@@ -12870,7 +12870,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 118,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "## Integration and verification records"
         },
         {
@@ -13280,7 +13280,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -13660,7 +13660,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 25,
-          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
+          "sha256": "42351e21797e0f95376885f1ec4568f39fe38f294e93c7059fe9e0edf5433fb0",
           "anchor": "## Architecture review follow-through"
         }
       ],
@@ -13729,8 +13729,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 586,
-          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
+          "line": 587,
+          "sha256": "bf60b91d854be728e989db854c1d3eb7083627b87d009e8cea69fd2b78979159",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14939,8 +14939,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 586,
-          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
+          "line": 587,
+          "sha256": "bf60b91d854be728e989db854c1d3eb7083627b87d009e8cea69fd2b78979159",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14984,8 +14984,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 557,
-          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
+          "line": 558,
+          "sha256": "bf60b91d854be728e989db854c1d3eb7083627b87d009e8cea69fd2b78979159",
           "anchor": "test(\"release-check rejects wrong tags, moved tags and commits outside main before any work\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -15402,7 +15402,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 1,
-          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
+          "sha256": "42351e21797e0f95376885f1ec4568f39fe38f294e93c7059fe9e0edf5433fb0",
           "anchor": "# Roadmap candidate delivery"
         }
       ],
@@ -15444,7 +15444,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 1,
-          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
+          "sha256": "42351e21797e0f95376885f1ec4568f39fe38f294e93c7059fe9e0edf5433fb0",
           "anchor": "# Roadmap candidate delivery"
         },
         {
@@ -15516,8 +15516,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 586,
-          "sha256": "4d2bb946e8c0f900f70c116c3294f20866c9296f08f56c4b684c2e7deaeb55c2",
+          "line": 587,
+          "sha256": "bf60b91d854be728e989db854c1d3eb7083627b87d009e8cea69fd2b78979159",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -16168,7 +16168,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 118,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "## Integration and verification records"
         },
         {
@@ -16208,7 +16208,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16248,7 +16248,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 11,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "## Authority and baseline"
         },
         {
@@ -16288,7 +16288,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16406,7 +16406,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16446,7 +16446,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -16486,7 +16486,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -17152,7 +17152,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -17192,7 +17192,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18483,7 +18483,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18523,7 +18523,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18887,7 +18887,7 @@
         {
           "path": "docs/ROADMAP_CANDIDATE_DELIVERY.md",
           "line": 49,
-          "sha256": "ad67a2f40557324dc1f15cab224a1ec77186bb868a1bef3e1f7b29312507ce95",
+          "sha256": "42351e21797e0f95376885f1ec4568f39fe38f294e93c7059fe9e0edf5433fb0",
           "anchor": "## Schema and compatibility"
         }
       ],
@@ -18920,7 +18920,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -18960,7 +18960,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -19252,7 +19252,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 11,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "## Authority and baseline"
         },
         {
@@ -19440,7 +19440,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 173,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "### Preserved roadmap integration checkpoint"
         },
         {
@@ -19480,7 +19480,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 173,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "### Preserved roadmap integration checkpoint"
         },
         {
@@ -19690,7 +19690,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 173,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "### Preserved roadmap integration checkpoint"
         },
         {
@@ -19818,7 +19818,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
@@ -19858,7 +19858,7 @@
         {
           "path": "docs/ROADMAP_EXECUTION_LEDGER.md",
           "line": 1,
-          "sha256": "b93c94a8a8ec9b45a7b856994b64fa5497e4d9d62c6326e06459b7d55afb9e92",
+          "sha256": "c20d1474b86ee8a84a6e33ac34d4785fb272be9499c0307e97b802b0d7eb42f3",
           "anchor": "# Roadmap execution ledger"
         },
         {
