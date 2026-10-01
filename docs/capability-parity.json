@@ -14413,6 +14413,14 @@
               "line": 1
             },
             "detail": "Current Node22 protected restore driver contract passed original private suite identity/digest comparison with actual authenticated detail shape and independent suite-ID/digest tamper negatives. Public summaries remain unchanged. This is synthetic restore evidence; coordinated Linux restore remains pending."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "scripts/test/host-backup-service.test.mjs",
+              "line": 1
+            },
+            "detail": "Exact isolated HOST continuation a37b283 integrated. Current Node22 bounded endpoint contracts passed78/78, including Docker28 requested-versus-assigned port shape, dual-stack positive, ownership/IPAM/gateway/container-state/attachment/port/JSON/recheck denials and safe status/exit fields. Synthetic daemon responses do not establish the actual5128 cause, Linux endpoint reachability or coordinated restore."
           }
         ]
       },

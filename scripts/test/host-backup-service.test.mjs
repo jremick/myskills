@@ -10,16 +10,31 @@ function fixture(t, fail = false) {
   const proof = mkdtempSync(join(tmpdir(), "host-backup-source-")); t.after(() => rmSync(proof, { recursive: true, force: true }));
   const owner = "hc-0123456789abcdef", ledgerPath = join(proof, "ledger.json"), commands = [];
   saveHostLedger(ledgerPath, { schemaVersion: 1, owner, sequence: 0, resources: [] });
+  const network = `${owner}-backup-network`, gateway = "172.28.0.1", networkId = "b".repeat(64), containerId = "a".repeat(64);
+  // Docker28 Engine v1.48 shapes, not captured runtime evidence. HostConfig
+  // retains the requested empty port; NetworkSettings contains the assigned port.
+  const networkRow = { Id: networkId, Name: network, Driver: "bridge", Scope: "local", EnableIPv4: true, EnableIPv6: false,
+    Internal: false, Attachable: false, Ingress: false, Labels: { "io.myskills.host-rehearsal": owner },
+    IPAM: { Driver: "default", Options: null, Config: [{ Subnet: "172.28.0.0/16", Gateway: gateway }] }, Options: {}, Containers: {} };
+  const containerRow = { Id: containerId, Name: `/${owner}-op-1`,
+    State: { Status: "running", Running: true, Paused: false, Restarting: false, OOMKilled: false, Dead: false, Pid: 1234, ExitCode: 0, Error: "" },
+    Config: { Image: "fixture-minio", ExposedPorts: { "9000/tcp": {} },
+      Labels: { "io.myskills.host-rehearsal": owner, "io.myskills.host-rehearsal.role": "backup" } },
+    HostConfig: { NetworkMode: network, PortBindings: { "9000/tcp": [{ HostIp: gateway, HostPort: "" }] } },
+    NetworkSettings: { Ports: { "9000/tcp": [{ HostIp: gateway, HostPort: "34567" }] },
+      Networks: { [network]: { IPAMConfig: null, Links: null, Aliases: null, DriverOpts: null,
+        NetworkID: networkId, EndpointID: "c".repeat(64), Gateway: gateway, IPAddress: "172.28.0.2", IPPrefixLen: 16,
+        IPv6Gateway: "", GlobalIPv6Address: "", GlobalIPv6PrefixLen: 0, DNSNames: [`${owner}-op-1`, containerId.slice(0, 12)] } } } };
   const executable = join(proof, "docker");
   // Models Docker's default-IPAM contract and its real create-response boundary.
   writeFileSync(executable, `#!${process.execPath}\nconst a=process.argv.slice(2);if(a.includes('--ip')||${fail}){process.stderr.write('daemon rejected request fixture-password https://secret.invalid');process.exit(1);}if(a[0]==='container')process.exit(1);process.stdout.write('a'.repeat(64));\n`, { mode: 0o755 });
   const update = work => { const ledger = JSON.parse(readFileSync(ledgerPath)); work(ledger); saveHostLedger(ledgerPath, ledger); };
-  return { proof, owner, ledgerPath, commands, image: "fixture-minio", user: "fixture-user", password: "fixture-password$HOST_INTERPOLATION_PROBE$$",
+  return { proof, owner, ledgerPath, commands, networkRow, containerRow, image: "fixture-minio", user: "fixture-user", password: "fixture-password$HOST_INTERPOLATION_PROBE$$",
     reserve: (kind, name) => update(ledger => ledger.resources.push({ kind, name, state: "creating" })),
     mark: (kind, name) => update(ledger => { ledger.resources.find(row => row.kind === kind && row.name === name).state = "created"; }),
     docker: args => { commands.push(args);
-      if (args[0] === "network" && args[1] === "inspect") return { stdout: JSON.stringify([{ Id: "b".repeat(64), Name: `${owner}-backup-network`, Driver: "bridge", Scope: "local", Labels: { "io.myskills.host-rehearsal": owner }, IPAM: { Config: [{ Subnet: "172.28.0.0/16", Gateway: "172.28.0.1" }] } }]) };
-      if (args[0] === "container" && args[1] === "inspect") return { stdout: JSON.stringify([{ Id: "a".repeat(64), State: { Status: "running", Running: true, Paused: false, Restarting: false, ExitCode: 0, Error: "" }, Config: { Labels: { "io.myskills.host-rehearsal": owner, "io.myskills.host-rehearsal.role": "backup" } }, NetworkSettings: { Networks: { [`${owner}-backup-network`]: { NetworkID: "b".repeat(64) } }, Ports: { "9000/tcp": [{ HostIp: "172.28.0.1", HostPort: "34567" }] } } }]) };
+      if (args[0] === "network" && args[1] === "inspect") return { stdout: JSON.stringify([networkRow]) };
+      if (args[0] === "container" && args[1] === "inspect") return { stdout: JSON.stringify([containerRow]) };
       return { status: 0 }; },
     call: (command, args) => { commands.push([command, ...args]); writeFileSync(join(proof, "certs/private.key"), "synthetic-key"); writeFileSync(join(proof, "certs/public.crt"), "synthetic-certificate"); },
     runService: (role, args, image, tail) => {
@@ -57,40 +72,137 @@ test("backup launch rejection retains the uncertain owned create and exports onl
     { operation: "openssl.req", exitStatus: null, signal: "SIGTERM", processErrorCode: "ETIMEDOUT", reason: "unclassified" });
 });
 
-test("backup endpoint denies foreign network, wrong gateway, broad binding and changed ownership", t => {
-  for (const [fault, reason] of [["foreign-owner", "network-identity-invalid"], ["gateway-outside", "network-gateway-outside"], ["broad-port", "port-binding-address-invalid"], ["wrong-container", "container-identity-invalid"], ["changed-network", "network-changed"], ["missing-port", "port-binding-absent"], ["exited", "container-not-running"], ["daemon-error", "container-not-running"]]) {
-    const f = fixture(t); const docker = f.docker; let inspections = 0;
-    f.docker = args => {
-      const result = docker(args);
-      if (args[1] !== "inspect") return result;
-      const [row] = JSON.parse(result.stdout);
-      if (args[0] === "network") {
-        inspections++;
-        if (fault === "foreign-owner") row.Labels["io.myskills.host-rehearsal"] = "unowned";
-        if (fault === "gateway-outside") row.IPAM.Config[0].Gateway = "192.168.1.1";
-        if (fault === "changed-network" && inspections === 2) row.Id = "c".repeat(64);
-      } else {
-        if (fault === "broad-port") row.NetworkSettings.Ports["9000/tcp"][0].HostIp = "0.0.0.0";
-        if (fault === "wrong-container") row.Config.Labels["io.myskills.host-rehearsal.role"] = "driver";
-        if (fault === "missing-port") row.NetworkSettings.Ports["9000/tcp"] = null;
-        if (fault === "exited" || fault === "daemon-error") {
-          row.State = { Status: "exited", Running: false, Paused: false, Restarting: false, ExitCode: 1,
-            Error: fault === "daemon-error" ? "permission denied PASSWORD=fixture-password https://secret.invalid" : "" };
-          row.NetworkSettings.Ports = {};
-        }
-      }
-      return { stdout: JSON.stringify([row]) };
-    };
-    assert.throws(() => prepareHostBackupService(f), error => {
-      assert.equal(error.message, "HOST_BACKUP_NETWORK_INVALID");
-      assert.equal(error.hostFailure.reason, reason);
-      assert.doesNotMatch(JSON.stringify(error.hostFailure), /fixture-password|PASSWORD|secret.invalid/);
-      if (fault === "exited" || fault === "daemon-error") {
-        assert.equal(error.hostFailure.containerStatus, "exited"); assert.equal(error.hostFailure.containerExitCode, 1);
-        assert.equal(error.hostFailure.containerErrorCategory, fault === "daemon-error" ? "permission-denied" : "none");
-      }
-      return true;
+function expectFailure(f, stage, reason, state) {
+  assert.throws(() => prepareHostBackupService(f), error => {
+    assert.equal(error.message, "HOST_BACKUP_NETWORK_INVALID");
+    assert.deepEqual(error.hostFailure, { operation: "docker.network.backup-endpoint", stage, reason, ...state });
+    assert.doesNotMatch(JSON.stringify(error.hostFailure), /fixture-password|private-provider-output|secret.invalid/);
+    return true;
+  });
+  assert.ok(f.commands.every(args => !args.includes("--ip") && !args.includes("--subnet") && !args.includes("--add-host") && !args.includes("host")));
+}
+
+test("backup endpoint accepts an assigned IPv4 port with a second IPv6 IPAM entry and unrelated unpublished port", t => {
+  const f = fixture(t);
+  f.networkRow.EnableIPv6 = true;
+  f.networkRow.IPAM.Config.push({ Subnet: "fd00:1234::/64", Gateway: "fd00:1234::1" });
+  f.containerRow.NetworkSettings.Ports["9001/tcp"] = null;
+  f.containerRow.NetworkSettings.Ports["9000/tcp"][0].HostPort = "65535";
+  const service = prepareHostBackupService(f);
+  assert.equal(service.endpoint, "https://172.28.0.1:65535");
+  assert.equal(service.port, 65535);
+  assert.equal(f.containerRow.HostConfig.PortBindings["9000/tcp"][0].HostPort, "");
+});
+
+test("backup network rejects each identity, IPAM and gateway failure with a fixed category", async t => {
+  const cases = [
+    ["name", "network-identity-invalid", row => { row.Name = "private-provider-output"; }],
+    ["driver", "network-identity-invalid", row => { row.Driver = "host"; }],
+    ["scope", "network-identity-invalid", row => { row.Scope = "swarm"; }],
+    ["id", "network-identity-invalid", row => { row.Id = "private-provider-output"; }],
+    ["owner", "network-owner-mismatch", row => { row.Labels["io.myskills.host-rehearsal"] = "private-provider-output"; }],
+    ["missing IPAM", "network-ipam-invalid", row => { row.IPAM = null; }],
+    ["missing IPv4", "network-ipam-invalid", row => { row.IPAM.Config = [{ Gateway: "::1" }]; }],
+    ["ambiguous IPv4", "network-ipam-invalid", row => { row.IPAM.Config.push({ ...row.IPAM.Config[0] }); }],
+    ["missing subnet", "network-gateway-invalid", row => { delete row.IPAM.Config[0].Subnet; }],
+    ["invalid prefix", "network-gateway-invalid", row => { row.IPAM.Config[0].Subnet = "172.28.0.0/31"; }],
+    ["loopback", "network-gateway-invalid", row => { row.IPAM.Config[0] = { Gateway: "127.0.0.1", Subnet: "127.0.0.0/8" }; }],
+    ["outside subnet", "network-gateway-invalid", row => { row.IPAM.Config[0].Gateway = "192.168.1.1"; }],
+    ["network address", "network-gateway-invalid", row => { row.IPAM.Config[0].Gateway = "172.28.0.0"; }],
+    ["broadcast address", "network-gateway-invalid", row => { row.IPAM.Config[0].Gateway = "172.28.255.255"; }],
+  ];
+  for (const [name, reason, change] of cases) await t.test(name, t => {
+    const f = fixture(t); change(f.networkRow);
+    expectFailure(f, "initial-network", reason);
+    assert.equal(f.commands.some(args => args[0] === "run"), false);
+  });
+});
+
+test("backup readback rejects each container identity, attachment and published-port failure safely", async t => {
+  const cases = [
+    ["id", "container-id-mismatch", f => { f.containerRow.Id = "d".repeat(64); }],
+    ["owner", "container-owner-mismatch", f => { f.containerRow.Config.Labels["io.myskills.host-rehearsal"] = "private-provider-output"; }],
+    ["role", "container-role-mismatch", f => { f.containerRow.Config.Labels["io.myskills.host-rehearsal.role"] = "driver"; }],
+    ["inconsistent Running", "container-state-inconsistent", f => { f.containerRow.State.Running = false; }],
+    ["inconsistent Paused", "container-state-inconsistent", f => { f.containerRow.State.Paused = true; }],
+    ["inconsistent Restarting", "container-state-inconsistent", f => { f.containerRow.State.Restarting = true; }],
+    ["missing attachment", "container-network-mismatch", f => { f.containerRow.NetworkSettings.Networks = {}; }],
+    ["foreign network ID", "container-network-mismatch", f => { f.containerRow.NetworkSettings.Networks[f.networkRow.Name].NetworkID = "d".repeat(64); }],
+    ["missing settings", "container-network-mismatch", f => { f.containerRow.NetworkSettings = null; }],
+    ["empty port map", "published-port-shape-invalid", f => { f.containerRow.NetworkSettings.Ports = {}; }],
+    ["null binding", "published-port-shape-invalid", f => { f.containerRow.NetworkSettings.Ports["9000/tcp"] = null; }],
+    ["empty binding", "published-port-shape-invalid", f => { f.containerRow.NetworkSettings.Ports["9000/tcp"] = []; }],
+    ["null row", "published-port-shape-invalid", f => { f.containerRow.NetworkSettings.Ports["9000/tcp"] = [null]; }],
+    ["object instead of array", "published-port-shape-invalid", f => { f.containerRow.NetworkSettings.Ports["9000/tcp"] = { 0: { HostIp: "172.28.0.1", HostPort: "34567" }, length: 1 }; }],
+    ["two bindings", "published-port-shape-invalid", f => { f.containerRow.NetworkSettings.Ports["9000/tcp"].push({ HostIp: "::", HostPort: "" }); }],
+    ["broad address", "published-port-address-mismatch", f => { f.containerRow.NetworkSettings.Ports["9000/tcp"][0].HostIp = "0.0.0.0"; }],
+    ["foreign address", "published-port-address-mismatch", f => { f.containerRow.NetworkSettings.Ports["9000/tcp"][0].HostIp = "192.168.1.1"; }],
+    ...["", "0", "65536", "034567", "private-provider-output", 34567, null].map(port =>
+      [`invalid port ${typeof port}:${port === null ? "null" : typeof port === "string" && !/^\d*$/.test(port) ? "text" : port}`, "published-port-number-invalid", f => { f.containerRow.NetworkSettings.Ports["9000/tcp"][0].HostPort = port; }]),
+  ];
+  for (const [name, reason, change] of cases) await t.test(name, t => {
+    const f = fixture(t); change(f);
+    f.containerRow.State.Error = "private-provider-output fixture-password https://secret.invalid";
+    f.containerRow.Config.Env = ["MINIO_ROOT_PASSWORD=fixture-password"];
+    expectFailure(f, "container-readback", reason, { containerStatus: "running", containerExitCode: 0 });
+    assert.equal(f.commands.filter(args => args[0] === "network" && args[1] === "inspect").length, 1);
+    const ledger = JSON.parse(readFileSync(f.ledgerPath));
+    assert.equal(ledger.resources.find(row => row.kind === "container").state, "created");
+  });
+});
+
+test("backup detached launch diagnoses terminal or pending state before missing runtime ports without speculative retry", async t => {
+  for (const status of ["created", "paused", "restarting", "removing", "exited", "dead"]) await t.test(status, t => {
+    const f = fixture(t);
+    Object.assign(f.containerRow.State, { Status: status, Running: status === "paused", Paused: status === "paused", Restarting: status === "restarting", Dead: status === "dead", ExitCode: status === "exited" ? 1 : 0,
+      Error: "private-provider-output fixture-password https://secret.invalid" });
+    f.containerRow.NetworkSettings.Ports = {};
+    expectFailure(f, "container-readback", "container-not-running", { containerStatus: status, containerExitCode: status === "exited" ? 1 : 0 });
+    assert.equal(f.commands.filter(args => args[0] === "container" && args[1] === "inspect").length, 1);
+  });
+  for (const state of [null, { Status: "private-provider-output", ExitCode: 0 }, { Status: "running", ExitCode: "fixture-password" }, { Status: "running", ExitCode: -1 }, { Status: "running", ExitCode: 256 }]) await t.test("invalid state shape", t => {
+    const f = fixture(t); f.containerRow.State = state;
+    expectFailure(f, "container-readback", "container-state-invalid", {
+      containerStatus: state?.Status === "running" ? "running" : "unknown", containerExitCode: state?.ExitCode === 0 ? 0 : null });
+  });
+});
+
+test("backup creation ID rejection retains the owned reservation without inspecting a guessed container", t => {
+  const f = fixture(t), runService = f.runService;
+  f.runService = (...args) => { runService(...args); return "private-provider-output"; };
+  expectFailure(f, "container-create", "container-id-invalid");
+  assert.equal(f.commands.some(args => args[0] === "container" && args[1] === "inspect"), false);
+  assert.equal(JSON.parse(readFileSync(f.ledgerPath)).resources.find(row => row.kind === "container").state, "created");
+});
+
+test("backup inspect parsing and repeated network identity have fixed stages and preserve reserved resources", async t => {
+  for (const stage of ["initial-network", "container-readback", "network-recheck"]) {
+    const cases = [
+      ["malformed JSON", "inspect-json-invalid", () => "private-provider-output fixture-password"],
+      ["object", "inspect-shape-invalid", () => "{}"],
+      ["null", "inspect-shape-invalid", () => "null"],
+      ["empty array", "inspect-shape-invalid", () => "[]"],
+      ["null row", "inspect-shape-invalid", () => "[null]"],
+      ["extra row", "inspect-shape-invalid", row => JSON.stringify([row, row])],
+      ...(stage === "network-recheck" ? [
+        ["changed ID", "network-id-changed", row => JSON.stringify([{ ...row, Id: "d".repeat(64) }])],
+        ["changed gateway", "network-gateway-changed", row => JSON.stringify([{ ...row, IPAM: { Config: [{ Subnet: "172.28.0.0/16", Gateway: "172.28.0.3" }] } }])],
+        ["changed owner", "network-owner-mismatch", row => JSON.stringify([{ ...row, Labels: { "io.myskills.host-rehearsal": "private-provider-output" } }])],
+      ] : []),
+    ];
+    for (const [name, reason, response] of cases) await t.test(`${stage}: ${name}`, t => {
+      const f = fixture(t), docker = f.docker; let networkReads = 0;
+      f.docker = args => {
+        const result = docker(args);
+        if (args[1] !== "inspect") return result;
+        if (args[0] === "network") networkReads++;
+        const currentStage = args[0] === "container" ? "container-readback" : networkReads === 1 ? "initial-network" : "network-recheck";
+        return currentStage === stage ? { stdout: response(JSON.parse(result.stdout)[0]) } : result;
+      };
+      expectFailure(f, stage, reason);
+      const ledger = JSON.parse(readFileSync(f.ledgerPath));
+      assert.equal(ledger.resources.find(row => row.kind === "network").state, "created");
+      assert.equal(ledger.resources.some(row => row.kind === "container"), stage !== "initial-network");
     });
-    assert.ok(f.commands.every(args => !args.includes("--ip") && !args.includes("--subnet") && !args.includes("--add-host") && !args.includes("host")));
   }
 });
