@@ -3,6 +3,7 @@ import { PostgresDraftStore } from "./drafts/postgres-store.js";
 import { DraftService } from "./drafts/service.js";
 import { PackageScanService } from "./package-quality/scan-service.js";
 import { PackageScanWorker } from "./package-quality/scan-worker.js";
+import { formatApiStartupFailure, type ApiStartupPhase } from "./startup-diagnostic.js";
 import { ArchitecturePlanService } from "./architecture-sync/plan-service.js";
 import { PostgresArchitectureSyncStore } from "./architecture-sync/postgres-store.js";
 import { createPostgresDiscoveryFinalAuthority } from "./discovery/postgres-authority.js";
@@ -237,13 +238,17 @@ const packageScanWorker = process.env.PACKAGE_SCAN_WORKER?.trim() === "disabled"
     onError: () => app.log.error("Package scan failed; durable attempts will be retried."),
   });
 
+let startupPhase: ApiStartupPhase = "listen";
 try {
   await app.listen({ port, host });
+  startupPhase = "worker_start";
   authNotificationWorker?.start();
   librarySourceWorker?.start();
   packageScanWorker?.start();
 } catch (error) {
-  app.log.error(error);
+  // The test logger is disabled. Keep fatal startup evidence observable without
+  // serializing error messages, stacks, addresses, credentials or log payloads.
+  process.stderr.write(formatApiStartupFailure(error, startupPhase));
   await pool.end();
   process.exit(1);
 }

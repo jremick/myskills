@@ -12,6 +12,7 @@ import { runMigrations } from "../src/db/migrate.js";
 import { PostgresAuthStore } from "../src/auth/postgres-auth-store.js";
 import { PostgresSubmissionStore } from "../src/submissions/postgres-submission-store.js";
 import { SubmissionService } from "../src/submissions/service.js";
+import { readApiStartupFailure } from "../src/startup-diagnostic.js";
 
 /** Canonical PG fixture launches the actual production API process, not reconstructed services. */
 test("server worker crash recovers durable attempt and SIGTERM drains completion before pool shutdown", { timeout: 90_000, skip: process.platform === "win32" ? "POSIX signal crash/restart and graceful drain require canonical Linux/PostgreSQL." : false }, async t => {
@@ -49,7 +50,7 @@ test("server worker crash recovers durable attempt and SIGTERM drains completion
     // test:postgres builds first. Launch the maintained production entry point,
     // without a source loader, environment-file load or unrelated source worker.
     const child = spawn(process.execPath, ["dist/server.js"], { cwd: new URL("../", import.meta.url),
-      env: { PATH: process.env.PATH, DATABASE_URL: database.href, NODE_ENV: "test", HOST: "127.0.0.1", PORT: String(port), AUTH_SECRET: "process-fixture-secret-at-least-32-bytes", PACKAGE_SCAN_WORKER: "enabled", LIBRARY_SOURCE_WORKER: "disabled" }, stdio: ["ignore", "pipe", "pipe"] });
+      env: { PATH: process.env.PATH, DATABASE_URL: database.href, NODE_ENV: "test", HOST: "127.0.0.1", PORT: String(port), AUTH_SECRET: "process-fixture-secret-at-least-32-bytes", AUTH_NOTIFICATION_MODE: "disabled", PACKAGE_SCAN_WORKER: "enabled", LIBRARY_SOURCE_WORKER: "disabled" }, stdio: ["ignore", "pipe", "pipe"] });
     const state = { name, stderr: "", startupError: false }; observed.set(child, state);
     child.stderr!.on("data", chunk => { state.stderr = (state.stderr + String(chunk)).slice(-4096); });
     child.stdout!.on("data", () => undefined);
@@ -61,8 +62,9 @@ test("server worker crash recovers durable attempt and SIGTERM drains completion
     const fail = async () => {
       const jobs = (await pool.query("SELECT status,attempts,failure_code FROM jobs WHERE type='package-scan'")).rows;
       const scans = (await pool.query("SELECT status,attempt,failure_code FROM scan_runs WHERE skill_version_id=$1 ORDER BY attempt", [pending.id])).rows;
+      const startup = readApiStartupFailure(state.stderr);
       const category = /ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND/.test(state.stderr) ? "module" : /Registry instance identity/.test(state.stderr) ? "registry_identity" : /EADDRINUSE/.test(state.stderr) ? "port" : state.startupError ? "spawn" : "unclassified";
-      assert.fail(`Actual scan worker boundary not reached: ${JSON.stringify({ category, exitCode: child.exitCode, signalCode: child.signalCode, jobs, scans })}`);
+      assert.fail(`Actual scan worker boundary not reached: ${JSON.stringify({ category: startup?.category ?? category, startup, exitCode: child.exitCode, signalCode: child.signalCode, jobs, scans })}`);
     };
     await until(async () => {
       if (state.startupError || child.exitCode !== null || child.signalCode !== null) await fail();

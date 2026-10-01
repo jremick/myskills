@@ -2602,8 +2602,8 @@
         },
         {
           "path": "apps/api/test/package-worker-process.pgtest.ts",
-          "line": 64,
-          "sha256": "90deb0e07f0c4c34d3ca053cd72a1f4d3b98c70b0d45ab4eabc3f10f07e1b654",
+          "line": 66,
+          "sha256": "3738aec6d6830cca71c51d11a7eb59855ed90761b125b1c8b7dcceca793caa80",
           "anchor": "const category = /ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND/.test(state.stderr) ? \"module\" : /Registry instance identity/.test(state.stderr) ? \"registry_identity\" : /EADDRINUSE/.test(state.stderr) ? \"port\" : state.startupErr",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-worker-process.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3763,8 +3763,8 @@
         },
         {
           "path": "apps/api/test/package-worker-process.pgtest.ts",
-          "line": 17,
-          "sha256": "90deb0e07f0c4c34d3ca053cd72a1f4d3b98c70b0d45ab4eabc3f10f07e1b654",
+          "line": 18,
+          "sha256": "3738aec6d6830cca71c51d11a7eb59855ed90761b125b1c8b7dcceca793caa80",
           "anchor": "test(\"server worker crash recovers durable attempt and SIGTERM drains completion before pool shutdown\", { timeout: 90_000, skip: process.platform === \"win32\" ? \"POSIX signal crash/restart and graceful drain require canon",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-worker-process.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3886,8 +3886,8 @@
         },
         {
           "path": "apps/api/test/package-worker-process.pgtest.ts",
-          "line": 64,
-          "sha256": "90deb0e07f0c4c34d3ca053cd72a1f4d3b98c70b0d45ab4eabc3f10f07e1b654",
+          "line": 66,
+          "sha256": "3738aec6d6830cca71c51d11a7eb59855ed90761b125b1c8b7dcceca793caa80",
           "anchor": "const category = /ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND/.test(state.stderr) ? \"module\" : /Registry instance identity/.test(state.stderr) ? \"registry_identity\" : /EADDRINUSE/.test(state.stderr) ? \"port\" : state.startupErr",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-worker-process.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -9417,8 +9417,8 @@
         },
         {
           "path": "apps/api/test/package-worker-process.pgtest.ts",
-          "line": 64,
-          "sha256": "90deb0e07f0c4c34d3ca053cd72a1f4d3b98c70b0d45ab4eabc3f10f07e1b654",
+          "line": 66,
+          "sha256": "3738aec6d6830cca71c51d11a7eb59855ed90761b125b1c8b7dcceca793caa80",
           "anchor": "const category = /ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND/.test(state.stderr) ? \"module\" : /Registry instance identity/.test(state.stderr) ? \"registry_identity\" : /EADDRINUSE/.test(state.stderr) ? \"port\" : state.startupErr",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-worker-process.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -14088,8 +14088,8 @@
         },
         {
           "path": "apps/api/test/package-worker-process.pgtest.ts",
-          "line": 64,
-          "sha256": "90deb0e07f0c4c34d3ca053cd72a1f4d3b98c70b0d45ab4eabc3f10f07e1b654",
+          "line": 66,
+          "sha256": "3738aec6d6830cca71c51d11a7eb59855ed90761b125b1c8b7dcceca793caa80",
           "anchor": "const category = /ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND/.test(state.stderr) ? \"module\" : /Registry instance identity/.test(state.stderr) ? \"registry_identity\" : /EADDRINUSE/.test(state.stderr) ? \"port\" : state.startupErr",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/package-worker-process.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
