@@ -1,12 +1,75 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { createServer as createHttpServer } from "node:http";
+import { createServer as createTcpServer } from "node:net";
 import test from "node:test";
 import { createTotpSecret } from "../../packages/auth/dist/index.js";
+
+// Failure cases before the namespace correction: Ubuntu publication is mistaken
+// for Docker host loopback; allocation returns duplicate/invalid ports or leaves
+// a listener behind; API readiness accepts a foreign source, redirect, unhealthy
+// response, credentials, non-loopback target, oversized body or stalled response.
+// Recovery must additionally fail before writes on occupied ports, foreign IDs,
+// wrong owner/role/image/network/command, stopped services or unready PG/MinIO.
+// Real local sockets/HTTP below cover driver utilities. The exact Docker service
+// guards, namespaces, recovery and cleanup require the canonical HOST artifact.
+test("host fixture allocates distinct loopback ports and releases every listener", async (t) => {
+  const f = networkFixture(t, {}); const result = await runNetworkFixture(f, "host-ports");
+  assert.equal(result.status, 0, "host port allocation must succeed");
+  const { ports } = JSON.parse(readFileSync(f.file));
+  assert.deepEqual(Object.keys(ports).sort(), ["api", "minio", "postgres"]);
+  assert.equal(new Set(Object.values(ports)).size, 3);
+  for (const value of Object.values(ports)) {
+    assert.match(value, /^[1-9][0-9]{3,4}$/); assert.ok(Number(value) >= 1024 && Number(value) <= 65535);
+    const socket = createTcpServer();
+    await new Promise((done, reject) => { socket.once("error", reject); socket.listen(Number(value), "127.0.0.1", done); });
+    await new Promise(done => socket.close(done));
+  }
+});
+
+test("host fixture readiness requires loopback, healthy HTTP and the exact API source", async (t) => {
+  const source = { commit: "a".repeat(40), version: "0.1.0-beta.19" }; const outcomes = {};
+  for (const failure of [null, "non-loopback", "credentials", "redirect", "not-ready", "wrong-source", "oversized", "stalled"]) {
+    const requests = []; const sockets = new Set();
+    const server = createHttpServer((request, response) => {
+      requests.push(request.url);
+      if (failure === "stalled") return;
+      if (failure === "redirect") { response.writeHead(302, { location: "/ready" }); response.end(); return; }
+      if (request.url === "/ready") { response.writeHead(failure === "not-ready" ? 503 : 200); response.end("ready"); return; }
+      response.setHeader("content-type", "application/json");
+      response.end(failure === "oversized" ? "x".repeat(8192) : JSON.stringify({ revision: failure === "wrong-source" ? "b".repeat(40) : source.commit, version: source.version }));
+    });
+    server.on("connection", socket => { sockets.add(socket); socket.once("close", () => sockets.delete(socket)); });
+    await new Promise(done => server.listen(0, "127.0.0.1", done));
+    const api = `http://${failure === "credentials" ? "private-canary@" : ""}${failure === "non-loopback" ? "remote.invalid" : "127.0.0.1"}:${server.address().port}`;
+    const f = networkFixture(t, { api, expectedSource: source, timeoutMs: 400 });
+    const result = await runNetworkFixture(f, "api-ready");
+    for (const socket of sockets) socket.destroy(); await new Promise(done => server.close(done));
+    assert.equal(result.status === 0, failure === null, `readiness must reject ${failure ?? "none"}`);
+    assert.doesNotMatch(result.output, /private-canary/);
+    if (!failure) assert.deepEqual(requests, ["/ready", "/version.json"]);
+    if (["non-loopback", "credentials"].includes(failure)) assert.deepEqual(requests, []);
+    outcomes[failure ?? "healthy-exact-source"] = result.status === 0 ? "passed" : "rejected";
+  }
+  writeFileSync(join(tmpdir(), `myskills-host-network-controls-${process.version}.json`), `${JSON.stringify({ schemaVersion: 1, node: process.version, scope: "local-real-sockets-and-http-not-Docker-runtime", outcomes }, null, 2)}\n`, { mode: 0o600 });
+});
+
+function networkFixture(t, data) {
+  const root = mkdtempSync(join(tmpdir(), "myskills-network-proof-")); t.after(() => rmSync(root, { recursive: true, force: true }));
+  const file = join(root, "proof.json"); writeFileSync(file, JSON.stringify(data), { mode: 0o600 }); return { file };
+}
+function runNetworkFixture(f, mode) {
+  return new Promise((done, reject) => {
+    const child = spawn(process.execPath, [resolve("scripts/lib/self-host-fixture.mjs"), mode, f.file], { timeout: 5000 }); let output = "";
+    child.once("error", reject); for (const stream of [child.stdout, child.stderr]) stream.on("data", chunk => { output += chunk; if (output.length > 16_384) child.kill("SIGKILL"); });
+    child.once("close", status => done({ status, output }));
+  });
+}
 
 // The driver runs unchanged apart from its image-local auth import location.
 // Fetch is a deterministic contract stub, not Postgres/restore/MFA runtime proof.

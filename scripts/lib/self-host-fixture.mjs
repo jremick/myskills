@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
+import { createServer } from "node:net";
 
 const require = createRequire(import.meta.url);
 const [mode, configPath] = process.argv.slice(2);
@@ -11,7 +12,78 @@ const data = JSON.parse(readFileSync(configPath, "utf8"));
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const save = () => writeFileSync(configPath, `${JSON.stringify(data)}\n`, { mode: 0o600 });
 
-if (mode === "seed-nonowner") {
+// These helpers execute in Docker's host namespace, which can differ from the
+// native Ubuntu namespace used for Docker Desktop's published loopback ports.
+function loopbackTarget(value, protocol) {
+  const target = new URL(value);
+  assert.ok(target.protocol === protocol && target.hostname === "127.0.0.1" && target.port
+    && !target.username && !target.password && !target.search && !target.hash, "fixture-loopback-target-invalid");
+  return target;
+}
+async function hostPorts() {
+  const listeners = [];
+  try {
+    const ports = {};
+    for (const name of ["postgres", "minio", "api"]) {
+      const listener = createServer(socket => socket.destroy()); listeners.push(listener);
+      await new Promise((done, reject) => { listener.once("error", reject); listener.listen(0, "127.0.0.1", done); });
+      const port = listener.address().port; assert.ok(port >= 1024 && port <= 65535);
+      ports[name] = String(port);
+    }
+    assert.equal(new Set(Object.values(ports)).size, 3); data.ports = ports; save();
+  } finally { for (const listener of listeners) if (listener.listening) await new Promise(done => listener.close(done)); }
+}
+async function apiReady() {
+  const target = loopbackTarget(data.api, "http:"); assert.ok(["", "/"].includes(target.pathname));
+  const timeout = data.timeoutMs ?? 180_000; assert.ok(Number.isInteger(timeout) && timeout >= 100 && timeout <= 180_000);
+  const until = Date.now() + timeout;
+  while (Date.now() < until) {
+    try {
+      const options = { redirect: "error", signal: AbortSignal.timeout(Math.max(1, Math.min(3000, until - Date.now()))) };
+      const health = await fetch(new URL("/ready", target), options); await health.body?.cancel();
+      if (health.status === 200) {
+        const version = await fetch(new URL("/version.json", target), options); assert.equal(version.status, 200);
+        let size = 0; const chunks = [];
+        for await (const chunk of version.body) { size += chunk.byteLength; assert.ok(size <= 4096, "fixture-version-size-invalid"); chunks.push(Buffer.from(chunk)); }
+        const observed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        assert.deepEqual(observed, { version: data.expectedSource.version, revision: data.expectedSource.commit }); return;
+      }
+    } catch (error) { if (error.code === "ERR_ASSERTION" || error instanceof SyntaxError) throw error; }
+    await new Promise(done => setTimeout(done, Math.min(100, Math.max(0, until - Date.now()))));
+  }
+  throw new Error("fixture-api-readiness-deadline");
+}
+async function restoreReady() {
+  const database = new URL(data.database); const storage = loopbackTarget(data.storageEndpoint, "http:");
+  assert.ok(database.protocol === "postgres:" && database.hostname === "127.0.0.1" && database.port === data.ports.postgres
+    && database.username && database.password && database.pathname === "/myskills_test" && !database.search && !database.hash);
+  assert.equal(storage.port, data.ports.minio);
+  const { Pool } = require("/app/node_modules/pg"); const { S3Client, ListBucketsCommand } = require("/app/node_modules/@aws-sdk/client-s3");
+  const pool = new Pool({ connectionString: database.href, connectionTimeoutMillis: 1500, query_timeout: 1500, max: 1 });
+  const client = new S3Client({ endpoint: storage.href, region: "local", forcePathStyle: true, maxAttempts: 1,
+    credentials: { accessKeyId: data.accessKeyId, secretAccessKey: data.secretAccessKey } });
+  const until = Date.now() + 90_000;
+  try {
+    while (Date.now() < until) {
+      try {
+        const { rows } = await pool.query("SELECT current_user AS username, current_setting('port') AS port, inet_server_addr()::text AS address");
+        assert.deepEqual(rows, [{ username: database.username, port: data.ports.postgres, address: "127.0.0.1" }]);
+        const health = await fetch(new URL("/minio/health/ready", storage), { redirect: "error", signal: AbortSignal.timeout(1500) }); await health.body?.cancel();
+        if (health.status === 200) {
+          const buckets = await client.send(new ListBucketsCommand({}), { abortSignal: AbortSignal.timeout(1500) });
+          assert.deepEqual(buckets.Buckets ?? [], []); return;
+        }
+      } catch (error) { if (error.code === "ERR_ASSERTION") throw error; }
+      await new Promise(done => setTimeout(done, 250));
+    }
+    throw new Error("fixture-restore-readiness-deadline");
+  } finally { await pool.end(); client.destroy(); }
+}
+
+if (["host-ports", "api-ready", "restore-ready"].includes(mode)) {
+  try { await ({ "host-ports": hostPorts, "api-ready": apiReady, "restore-ready": restoreReady })[mode](); }
+  catch { console.error("HOST_FIXTURE_NETWORK_CHECK_FAILED"); process.exitCode = 1; }
+} else if (mode === "seed-nonowner") {
   // Only a generated disposable Compose database is supplied by the driver.
   // Use the existing store; no mail provider or new account ingress is needed.
   const database = new URL(process.env.DATABASE_URL);

@@ -63,7 +63,12 @@ function docker(args, options, backupDiagnostic) {
 function runService(suffix, args, image, tail = [], contract) {
   if (contract && suffix === "backup") receipt.backupInvocation = { category: "capture-unavailable" };
   const diagnostic = contract && suffix === "backup" ? { contract, record: value => { receipt.backupInvocation = value; } } : undefined;
-  const id = docker(["run", "-d", "--label", `io.myskills.host-rehearsal.role=${suffix}`, ...args, image, ...tail], undefined, diagnostic).stdout.trim();
+  let id;
+  try { id = docker(["run", "-d", "--label", `io.myskills.host-rehearsal.role=${suffix}`, ...args, image, ...tail], undefined, diagnostic).stdout.trim(); }
+  catch (error) {
+    const stage = { "restore-postgres": "restore-postgres-start", "restore-minio": "restore-minio-start", "restored-api": "restored-api-start" }[suffix];
+    if (stage && error.hostFailure) error.hostFailure.stage = stage; throw error;
+  }
   assert.match(id, /^[a-f0-9]{64}$/); return id;
 }
 async function measured(name, fn) {
@@ -151,8 +156,44 @@ function operatorJson(bundle, config, args) {
   return JSON.parse(lines.findLast((line) => line.startsWith("{")));
 }
 function driver(image, args, config, ok = true, { network = "host", envFile } = {}) {
-  return docker(["run", "--rm", "--network", network, ...(envFile ? ["--env-file", envFile] : []), "--user", `${process.getuid()}:${process.getgid()}`, "--mount", `type=bind,source=${proof},target=/proof`,
-    image, "node", "/proof/fixture.mjs", ...args, `/proof/${config}`], { ok });
+  const stage = { "backup-admin.json:bucket": "backup-bucket", "fresh.json:seed-nonowner": "fresh-nonowner", "fresh.json:create": "fresh-create",
+    "fresh-composed.json:composed-storage": "fresh-composed-storage", "restore-network.json:host-ports": "restore-port-allocation",
+    "restore-network.json:restore-ready": "restore-destinations-ready", "restored.json:api-ready": "restored-api-ready", "restored.json:verify": "restored-app-verify",
+    "legacy.json:seed-nonowner": "legacy-nonowner", "legacy.json:create": "legacy-create", "upgraded.json:verify": "upgraded-app-verify" }[`${config}:${args[0]}`];
+  assert.ok(stage, "fixture-driver-stage-required");
+  try {
+    if (network !== "host") {
+      const project = network.replace(/_default$/, "");
+      assert.ok(network === `${project}_default` && new RegExp(`^${owner}-(fresh|legacy)$`).test(project));
+      const ledger = JSON.parse(readFileSync(ledgerPath, "utf8"));
+      assert.ok(ledger.owner === owner && ledger.resources.some(item => item.kind === "compose-project" && item.name === project && item.state === "created"));
+      const rows = JSON.parse(docker(["network", "inspect", network], { maxBuffer: 128 * 1024 }).stdout);
+      assert.ok(rows.length === 1 && rows[0].Name === network && /^[a-f0-9]{64}$/.test(rows[0].Id)
+        && rows[0].Driver === "bridge" && rows[0].Labels?.["com.docker.compose.project"] === project && rows[0].Labels?.["com.docker.compose.network"] === "default");
+    }
+    const result = docker(["run", "--rm", "--label", "io.myskills.host-rehearsal.role=driver", "--network", network, ...(envFile ? ["--env-file", envFile] : []), "--user", `${process.getuid()}:${process.getgid()}`, "--mount", `type=bind,source=${proof},target=/proof`,
+      image, "node", "/proof/fixture.mjs", ...args, `/proof/${config}`], { ok });
+    if (ok && args[0] === "host-ports") {
+      const { ports } = JSON.parse(readFileSync(join(proof, config)));
+      assert.deepEqual(Object.keys(ports).sort(), ["api", "minio", "postgres"]);
+      assert.ok(Object.values(ports).every(value => typeof value === "string" && /^[1-9][0-9]{3,4}$/.test(value) && Number(value) >= 1024 && Number(value) <= 65535));
+      assert.equal(new Set(Object.values(ports)).size, 3);
+    }
+    return result;
+  } catch (error) { error.hostFailure ??= { operation: "fixture.driver", reason: "bounded-check-failed" }; error.hostFailure.stage = stage; throw error; }
+}
+function ownedRestoreService(id, role, imageId, command, env = {}, ready = false) {
+  try {
+    assert.match(id, /^[a-f0-9]{64}$/);
+    const rows = JSON.parse(docker(["container", "inspect", id], { maxBuffer: 128 * 1024 }).stdout); const row = rows[0];
+    assert.ok(rows.length === 1 && row.Id === id && row.Image === imageId && row.Config?.Labels?.["io.myskills.host-rehearsal"] === owner
+      && row.Config.Labels["io.myskills.host-rehearsal.role"] === role && row.State?.Status === "running" && row.State.Running === true
+      && row.State.OOMKilled === false && row.RestartCount === 0 && row.HostConfig?.NetworkMode === "host" && row.HostConfig.PublishAllPorts === false
+      && Object.keys(row.HostConfig.PortBindings ?? {}).length === 0);
+    assert.deepEqual(row.Config.Cmd, command);
+    for (const [key, value] of Object.entries(env)) assert.deepEqual(row.Config.Env.filter(item => item.startsWith(`${key}=`)), [`${key}=${value}`]);
+    if (ready && role === "restore-postgres") docker(["exec", id, "sh", "-ec", '[ "$(cat /proc/1/comm)" = postgres ] && pg_isready -h 127.0.0.1 -p "$1" -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null', "fixture-ready", command.at(-1)]);
+  } catch (error) { error.hostFailure ??= { operation: "fixture.restore-service", reason: "bounded-check-failed" }; error.hostFailure.stage = `${role}-${ready ? "ready" : "identity"}`; throw error; }
 }
 function seedNonowner(image, config, project, dataFile) {
   const file = join(proof, `${project}-fixture-db.env`);
@@ -270,11 +311,11 @@ try {
     const ownerCount = compose(bundle, config, project, ["exec", "-T", "postgres", "sh", "-ec", 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM users"']).stdout.trim();
     assert.equal(ownerCount, "1"); receipt.ownerCount = 1;
     const bootstrap = parsedEnv(join(config, "bootstrap.env")); const runtime = parsedEnv(join(config, "runtime.env"));
-    const dataFile = "fresh.json"; jsonFile(join(proof, dataFile), { api: `http://127.0.0.1:${webPort}/api`, web: `http://127.0.0.1:${webPort}`,
+    const dataFile = "fresh.json"; jsonFile(join(proof, dataFile), { api: "http://web:80/api", web: "http://web:80",
       ...bootstrap, expectedSource: source, fixtureName: "fresh", ...backupBase });
     await ready(`http://127.0.0.1:${webPort}/api/ready`);
     seedNonowner(images.api.ref, config, project, dataFile);
-    driver(images.api.ref, ["create"], dataFile);
+    driver(images.api.ref, ["create"], dataFile, true, { network: `${project}_default` });
     const data = JSON.parse(readFileSync(join(proof, dataFile)));
     const composedDatabase = runtime.DATABASE_URL;
     const composedEnv = join(proof, "fresh-composed-db.env"); assert.ok(!/[\r\n$]/.test(composedDatabase));
@@ -295,18 +336,30 @@ try {
     compose(bundle, config, project, ["stop", "api", "web"]);
     const report = await measured("coordinated-backup", async () => operatorJson(bundle, config, ["backup", "execute"])); assert.equal(report.passed, true);
     receipt.backup = { runId: report.runId, instanceId: identity, coordinated: true, bucketScope: "isolated-fixture-only" };
-    const pgContainer = runService("restore-postgres", ["-e", "POSTGRES_USER=myskills_test", "-e", "POSTGRES_PASSWORD=myskills_test",
-      "-e", "POSTGRES_DB=myskills_test", "--tmpfs", "/var/lib/postgresql/data", "-p", "127.0.0.1::5432"], postgresImage);
-    const s3Container = runService("restore-minio", ["--env-file", join(proof, "backup-minio.env"), "-p", "127.0.0.1::9000"], minioImage, ["server", "/data"]);
-    const pgPort = docker(["port", pgContainer, "5432/tcp"]).stdout.trim().split(":").at(-1);
-    const s3Port = docker(["port", s3Container, "9000/tcp"]).stdout.trim().split(":").at(-1);
-    await ready(`http://127.0.0.1:${s3Port}/minio/health/ready`);
-    const destination = { MYSKILLS_RECOVERY_DESTINATION_POSTGRES_URL: `postgres://myskills_test:myskills_test@127.0.0.1:${pgPort}/myskills_test`,
-      MYSKILLS_RECOVERY_DESTINATION_S3_ENDPOINT: `http://127.0.0.1:${s3Port}`, MYSKILLS_RECOVERY_DESTINATION_S3_REGION: "local",
+    const networkFile = "restore-network.json"; jsonFile(join(proof, networkFile), {});
+    driver(images.api.ref, ["host-ports"], networkFile);
+    const { ports } = JSON.parse(readFileSync(join(proof, networkFile)));
+    const pgUser = `restore_${randomBytes(8).toString("hex")}`, pgPassword = randomBytes(32).toString("hex");
+    const pgCommand = ["postgres", "-c", "listen_addresses=127.0.0.1", "-p", ports.postgres];
+    const minioCommand = ["server", "/data", "--address", `127.0.0.1:${ports.minio}`, "--console-address", "127.0.0.1:0"];
+    const pgContainer = runService("restore-postgres", ["--network", "host", "-e", `POSTGRES_USER=${pgUser}`, "-e", `POSTGRES_PASSWORD=${pgPassword}`,
+      "-e", "POSTGRES_DB=myskills_test", "--tmpfs", "/var/lib/postgresql/data"], postgresImage, pgCommand);
+    const s3Container = runService("restore-minio", ["--network", "host", "--env-file", join(proof, "backup-minio.env")], minioImage, minioCommand);
+    const destination = { MYSKILLS_RECOVERY_DESTINATION_POSTGRES_URL: `postgres://${pgUser}:${pgPassword}@127.0.0.1:${ports.postgres}/myskills_test`,
+      MYSKILLS_RECOVERY_DESTINATION_S3_ENDPOINT: `http://127.0.0.1:${ports.minio}`, MYSKILLS_RECOVERY_DESTINATION_S3_REGION: "local",
       MYSKILLS_RECOVERY_DESTINATION_S3_BUCKET: `${owner}-restore-request`, MYSKILLS_RECOVERY_DESTINATION_S3_ACCESS_KEY_ID: backupUser,
       MYSKILLS_RECOVERY_DESTINATION_S3_SECRET_ACCESS_KEY: backupPassword, MYSKILLS_RECOVERY_DESTINATION_S3_FORCE_PATH_STYLE: "true" };
     const restoreFile = join(proof, "restore.env"); privateEnv(restoreFile, destination);
+    const checkRestoreServices = (ready = false) => {
+      ownedRestoreService(pgContainer, "restore-postgres", receipt.images.postgres.imageId, pgCommand, {}, ready);
+      ownedRestoreService(s3Container, "restore-minio", receipt.images.minio.imageId, minioCommand);
+    };
+    checkRestoreServices();
+    jsonFile(join(proof, networkFile), { ports, database: destination.MYSKILLS_RECOVERY_DESTINATION_POSTGRES_URL,
+      storageEndpoint: destination.MYSKILLS_RECOVERY_DESTINATION_S3_ENDPOINT, accessKeyId: backupUser, secretAccessKey: backupPassword });
+    driver(images.api.ref, ["restore-ready"], networkFile);
     await measured("full-app-restore", async () => {
+      checkRestoreServices(true);
       operator(bundle, config, ["recover", "execute", report.runId, "--target-env-file", restoreFile]);
       // The actual restore script picks new database/bucket names and retains a
       // protected destinations.json. Discover only within this owned config.
@@ -315,13 +368,15 @@ try {
       const restored = JSON.parse(readFileSync(join(config, dirs[0], "destinations.json")));
       const restoredReport = JSON.parse(readFileSync(join(config, dirs[0], "report.json")));
       assert.equal(restoredReport.passed, true); assert.equal(restoredReport.restoredApplicationRuntime, "not-tested");
-      const apiPort = await port(); const restoredEnv = { ...runtime, DATABASE_URL: `postgres://myskills_test:myskills_test@127.0.0.1:${pgPort}/${restored.destinationDatabase}`,
-        HOST: "127.0.0.1", PORT: apiPort, S3_ENDPOINT: `http://127.0.0.1:${s3Port}`, S3_BUCKET: restored.destinationBucket,
+      const restoredEnv = { ...runtime, DATABASE_URL: `postgres://${pgUser}:${pgPassword}@127.0.0.1:${ports.postgres}/${restored.destinationDatabase}`,
+        HOST: "127.0.0.1", PORT: ports.api, S3_ENDPOINT: `http://127.0.0.1:${ports.minio}`, S3_BUCKET: restored.destinationBucket,
         S3_ACCESS_KEY_ID: backupUser, S3_SECRET_ACCESS_KEY: backupPassword };
       writeFileSync(join(proof, "restored-api.env"), Object.entries(restoredEnv).map(([key, value]) => `${key}=${value}\n`).join(""), { mode: 0o600 });
-      runService("restored-api", ["--network", "host", "--env-file", join(proof, "restored-api.env")], images.api.ref, ["node", "apps/api/dist/server.js"]);
-      await ready(`http://127.0.0.1:${apiPort}/ready`);
-      jsonFile(join(proof, "restored.json"), { ...data, api: `http://127.0.0.1:${apiPort}`, web: null });
+      const apiCommand = ["node", "apps/api/dist/server.js"];
+      const restoredApi = runService("restored-api", ["--network", "host", "--env-file", join(proof, "restored-api.env")], images.api.ref, apiCommand);
+      jsonFile(join(proof, "restored.json"), { ...data, api: `http://127.0.0.1:${ports.api}`, web: null });
+      driver(images.api.ref, ["api-ready"], "restored.json");
+      ownedRestoreService(restoredApi, "restored-api", receipt.images.api.imageId, apiCommand, { HOST: "127.0.0.1", PORT: ports.api });
       driver(images.api.ref, ["verify"], "restored.json");
       receipt.backup.manifestSha256 = restoredReport.manifestSha256;
       const restoredData = JSON.parse(readFileSync(join(proof, "restored.json")));
@@ -356,10 +411,11 @@ try {
     compose(bridge, config, project, ["run", "--rm", "--no-deps", "migrate"]);
     operator(bundle, config, ["bootstrap"]); // Explicit candidate tooling bridge; no seed data.
     compose(bridge, config, project, ["up", "-d", "--wait", "--no-deps", "api", "web"]);
-    jsonFile(join(proof, "legacy.json"), { api: `http://127.0.0.1:${webPort}/api`, web: `http://127.0.0.1:${webPort}`, fixtureName: "legacy",
+    await ready(`http://127.0.0.1:${webPort}/api/ready`);
+    jsonFile(join(proof, "legacy.json"), { api: "http://web:80/api", web: "http://web:80", fixtureName: "legacy",
       ...parsedEnv(join(config, "bootstrap.env")), expectedSource: { commit: baseline, version: legacyVersion } });
     seedNonowner(images.api.ref, config, project, "legacy.json");
-    driver(images.api.ref, ["create"], "legacy.json");
+    driver(images.api.ref, ["create"], "legacy.json", true, { network: `${project}_default` });
     const data = JSON.parse(readFileSync(join(proof, "legacy.json")));
     const minio = compose(bridge, config, project, ["ps", "-q", "minio"]).stdout.trim(); docker(["network", "connect", network, minio]);
     privateEnv(join(config, "backup.env"), { ...backupBase, MYSKILLS_BACKUP_INSTANCE_ID: data.instanceId });
@@ -369,7 +425,8 @@ try {
     // c74ecd33 predates the operator package. Use exact legacy runtime plus the
     // canonical target migrate/start sequence; do not invent old source receipts.
     operator(bundle, config, ["up"]);
-    jsonFile(join(proof, "upgraded.json"), { ...data, expectedSource: source }); driver(images.api.ref, ["verify"], "upgraded.json");
+    await ready(`http://127.0.0.1:${webPort}/api/ready`);
+    jsonFile(join(proof, "upgraded.json"), { ...data, expectedSource: source }); driver(images.api.ref, ["verify"], "upgraded.json", true, { network: `${project}_default` });
     receipt.upgrade = { durationMs: Date.now() - upgradeStarted, baselineCommit: baseline, candidateCommit: candidate, sourceAppImages: { api: inspect(oldApi).Id, web: inspect(oldWeb).Id },
       kind: "exact-source-database-and-runtime-transition", backupRunId: before.runId, forwardMigrations: "passed", originalIdentity: "passed",
       originalLoginMfaPermissionsAndBytes: "passed", authProof: JSON.parse(readFileSync(join(proof, "upgraded.json"))).authProof,
