@@ -789,3 +789,46 @@ Parent owns exact corrected-candidate runtime verification.
 in root reports bind source, before/after controls, collected 25d facts and proof
 limits. No acceptance guard is bypassed. All 426 identities, 24 groups, fixed
 fingerprint, 2,372 references, 137 capability groups, states, gaps and complete 0 remain.
+
+### Composed artifact fixture clock correction — 1 October 2026
+
+Collected run `myskills-verify-4e86831c13-1` tested PR merge
+`4e86831c134391aa49dfca971863d32d38afa8a8`, head
+`4dea4b69acb60d09218c6a2ef6d2cd72bfb0ec1e`, tree
+`72bab4c12e271e50517d3267a1435f7729ca3bf6`. It finished failed at09:06:09 UTC.
+Collection verifies192 files, export
+`1d202f4cc7f29ca6880c9f6d1d04e0a2d0da96197c6e836b0e3ad6b848ef4c2a`,
+with application, HOST and controller cleanup complete. Both PG lanes pass314/314;
+both browser jobs pass, including all10 full-stack cases and12 site cases each.
+The mocked browser cases retain193 passes and one existing skip per lane. These
+old-source passes do not grant final-source or whole-matrix acceptance.
+
+Both general jobs fail only the composed maintenance-window control. The
+fixture's authority clock is08:14 UTC, while its memory store defaults to wall
+time. The controlled lease expires08:24; the later wall clock filters it out
+before the successful receipt needed to test closed-window rollback. Source
+inspection and both collected traces identify this fixture mismatch. Production
+fence and maintenance-window guards remain unchanged.
+
+The fixture now supplies one controlled now() closure to both store options.now
+and authorityNow. All six original service tests, their fixed08:14/08:15 dates,
+policy-boundary assertions and separate expiry rejection remain byte-identical.
+Two new controls use historical2000 and future2100 clocks, exercise valid forward
+checkpoint/receipt and rollback consumption1ms before expiry, then require exact
+expiry to hide the lease and reject checkpoint/receipt without journal mutation.
+Before correction both fail for opposite clock behaviors; afterward all eight
+controls pass. The selected two-workspace CLI composed journey passes. Its MCP
+caller initially hits sandbox loopback EPERM, then passes with permitted synthetic
+local socket access; the failed receipt is retained and the passing CLI was not
+repeated. Scoped lint and strict fixture/test compilation pass. No local Docker,
+PG, browser, build, install or full matrix is used.
+
+Executable fixture checkpoint `9698776771da8270ce9cc2bfc06d40a3ee199ba1`, tree
+`f8cccad2e5d2ff34534d7b63d00d32227c3b9248`, precedes this evidence reconciliation.
+Root reports `ARCHITECTURE_FIXTURE_CLOCK_SOURCE_CHECKPOINT.json` and
+`ARCHITECTURE_FIXTURE_CLOCK_CHECKPOINT.json` retain exact source, receipts and
+proof limits. HOST still reports the independently established daemon publication
+boundary; no HOST guard, source or auxiliary recovery artifact changes here.
+Parent owns independent review, integration and exact corrected-candidate runtime
+acceptance. All426 identities,24 groups, fixed fingerprint,2,372 references,
+137 parity groups, states, gaps and complete0 remain. Scope is the current release.

@@ -288,3 +288,27 @@ ledger and root reports
 `HOST_DIAGNOSTIC_FIXTURE_CHECKPOINT.json`/`host-diagnostic-fixture-evidence.json`
 record exact source and limits. Criteria, references, parity, states, gaps and
 complete 0 remain unchanged.
+
+The next collected run, `myskills-verify-4e86831c13-1`, tests exact PR merge
+`4e86831c134391aa49dfca971863d32d38afa8a8` / head
+`4dea4b69acb60d09218c6a2ef6d2cd72bfb0ec1e` / tree
+`72bab4c12e271e50517d3267a1435f7729ca3bf6`. It finishes failed09:06:09 UTC;
+192 files and export
+`1d202f4cc7f29ca6880c9f6d1d04e0a2d0da96197c6e836b0e3ad6b848ef4c2a`
+are verified, with all recorded cleanup complete. Both PG314/314 and browser
+jobs pass, including10 full-stack and12 site cases each. Both general jobs fail
+the controlled maintenance-window fixture because store lease reads use wall time
+instead of its authority clock. HOST remains at the daemon publication boundary.
+
+A fixture-only correction uses one controlled clock for store and authority.
+The six original service tests, fixed dates, policy/expiry assertions, production
+guards and all caller source remain. Two historical/future controls fail before
+correction and all eight controls pass afterward; selected CLI composed and MCP
+transport callers, lint and strict fixture/test compilation pass. The initial
+MCP loopback EPERM receipt is retained. Executable checkpoint
+`9698776771da8270ce9cc2bfc06d40a3ee199ba1` / tree
+`f8cccad2e5d2ff34534d7b63d00d32227c3b9248` and the reconciled checkpoint are
+recorded in root reports `ARCHITECTURE_FIXTURE_CLOCK_SOURCE_CHECKPOINT.json`
+and `ARCHITECTURE_FIXTURE_CLOCK_CHECKPOINT.json`. Old4dea PG/browser passes do
+not verify the new source. Independent review and exact canonical acceptance
+remain parent-owned; criterion identities, states, gaps and complete0 remain.
