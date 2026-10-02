@@ -1,5 +1,16 @@
+import { legacyWorkspaceEnrollmentDirectory, withWorkspaceEnrollment, workspaceEnrollmentDirectory } from "./workspace-enrollments.js";
+import { releaseComparisonHelp, runReleaseComparisonCommand } from "./release-comparison-commands.js";
+import { type ArtifactDurabilityObserver } from "./architecture-artifact-filesystem.js";
+import { evaluationHelp, runEvaluationCommand } from "./evaluation-commands.js";
+import { prepareLocalArchitectureArtifact, applyLocalArchitectureArtifact, verifyLocalArchitectureArtifact, rollbackLocalArchitectureArtifact, type ArtifactFaultPoint } from "./architecture-artifact.js";
+import { artifactHash, type ArchitectureArtifactIntent } from "@myskills-app/core";
 import { ConfigurationProfileError, selectConfigurationProfile } from "./configuration-profile.js";
+import { browserDeviceLogin } from "./device-login.js";
+import { readBoundedResponse, decodeResponseUtf8, MAX_PACKAGE_RESPONSE_BYTES } from "./bounded-response.js";
 import { bundleRequest } from "@myskills-app/core";
+import { authorDraftHelp, authorDraftApiErrorCodes, runAuthorDraftCommand } from "./author-draft-commands.js";
+import { architecturePlanHelp, runArchitecturePlanCommand } from "./architecture-plan-commands.js";
+import { taskDiscoveryRequest } from "./task-discovery-command.js";
 import { libraryCommandHelp, libraryCommandRequest } from "./library-command.js";
 import { registryCollaborationHelp, runRegistryCollaborationCommand } from "./registry-collaboration-commands.js";
 import { accountAdminHelp, runAccountAdminCommand } from "./account-admin-commands.js";
@@ -84,7 +95,7 @@ const DEFAULT_API_URL = "http://localhost:3001";
 const SCOPE_TARGET_LIST_LIMIT = 500;
 const CLI_VERSION = process.env.MYSKILLS_CLI_VERSION ?? "0.0.0-dev";
 const CLI_VISIBILITY_SCOPES = ["public", "authenticated", "organization", "team", "private", "explicit-users"] as const;
-const LOGIN_AUTH_METHODS = ["password", "api-key"] as const;
+const LOGIN_AUTH_METHODS = ["password", "api-key", "browser"] as const;
 const OBSERVED_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const OBSERVED_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 const OBSERVED_VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
@@ -159,9 +170,10 @@ export interface CliConfigStore {
 
 export type FetchLike = (
   input: string,
-  init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal },
+  init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal; redirect?: "error" },
 ) => Promise<{
   headers?: Headers | Record<string, string>;
+  body?: ReadableStream<Uint8Array> | null;
   ok: boolean;
   status: number;
   text(): Promise<string>;
@@ -175,11 +187,17 @@ export interface CliRuntime {
   /** Production stores are opened only after selecting the configuration profile. */
   createStores?: (env: Record<string, string | undefined>, namespace?: string) => { configStore: CliConfigStore; tokenStore: CliTokenStore };
   configProfile?: string;
+  /** Test-only state seam; production uses the shared OS-user enrollment directory. */
+  workspaceEnrollmentStateDirectory?: string;
+  /** Internal test observer for a real process waiting on enrollment authority. */
+  workspaceEnrollmentWait?: () => void;
   prompt?: CliPrompt;
   tokenStore?: CliTokenStore;
   /** Test-only clock seam for deterministic local target observations. */
   codexAdapterClock?: () => Date;
   /** Test-only fault seam for deterministic install crash-recovery coverage. */
+  artifactDurability?: ArtifactDurabilityObserver;
+  artifactFault?: (point: ArtifactFaultPoint) => void | Promise<void>;
   installFault?: (point: InstallFaultPoint) => void | Promise<void>;
   /** Internal executor fence, checked immediately before either promotion. */
   beforeInstallPromotion?: () => Promise<void>;
@@ -196,6 +214,8 @@ interface ParsedArgs {
 export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {
   let parsed: ParsedArgs;
   let namespace: string | undefined;
+  const enrollmentDirectory = runtime.workspaceEnrollmentStateDirectory ?? workspaceEnrollmentDirectory(runtime.env);
+  const legacyEnrollmentDirectory = runtime.workspaceEnrollmentStateDirectory ? undefined : legacyWorkspaceEnrollmentDirectory(runtime.env);
   try {
     const selected = selectConfigurationProfile(argv, runtime.env);
     parsed = parseArgs(selected.argv);
@@ -218,7 +238,7 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
     if (parsed.command === "update" && parsed.options.version !== undefined && !parsed.args[0]) {
       throw new CliError("--version requires a skill slug. Use myskills update <skill-slug> --version <version>.", 2);
     }
-    if (["install", "list", "update", "updates", "rollback", "companion", "codex", "doctor"].includes(parsed.command) || (["library", "libraries"].includes(parsed.command) && parsed.args[0] === "unbind-local")) {
+    if (["install", "list", "update", "updates", "rollback", "companion", "codex", "doctor", "architecture-artifacts"].includes(parsed.command) || (["library", "libraries"].includes(parsed.command) && parsed.args[0] === "unbind-local")) {
       if (parsed.options.workspace && parsed.options.dir) throw new CliError("Choose --workspace or --dir, not both.", 2);
       const workspace = optionalStringOption(parsed, "workspace");
       if (workspace) {
@@ -242,6 +262,8 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
             throw new CliError("This installation root belongs to an enrolled Codex workspace. Use --workspace for workspace mutations.", 2);
           } catch (error) { if (!isNodeError(error) || error.code !== "ENOENT") throw error; }
         }
+        const managedMutation = parsed.command === "architecture-artifacts" || parsed.command === "codex" && parsed.args[0] === "enroll" || ["install", "update", "rollback", "companion"].includes(parsed.command);
+        if (workspace && managedMutation) return withWorkspaceEnrollment(String(parsed.options.workspace), enrollmentDirectory, parsed.command === "codex" && parsed.args[0] === "enroll", () => dispatchCli(parsed, runtime), { legacyDirectory: legacyEnrollmentDirectory, onAuthorityWait: runtime.workspaceEnrollmentWait });
         return dispatchCli(parsed, runtime);
       });
     }
@@ -260,6 +282,18 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
 }
 
 async function dispatchCli(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+    if (parsed.command === "architecture-artifacts") return architectureArtifactCommand(parsed, runtime);
+    if (await runReleaseComparisonCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
+    if (await runEvaluationCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
+    if (await runAuthorDraftCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
+    if (await runArchitecturePlanCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
+    if (parsed.command === "discover") {
+      let request: ReturnType<typeof taskDiscoveryRequest>;
+      try { request = taskDiscoveryRequest(parsed); } catch (error) { throw new CliError(error instanceof Error ? error.message : "Invalid discovery input.", 2, "CLI_ARGUMENTS_INVALID"); }
+      const context = parityCommandContext(parsed, runtime);
+      context.output(await context.request("POST", request.path, request.body, "optional"));
+      return 0;
+    }
     if (await runRegistryCollaborationCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
     if (await runAccountAdminCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
     if (await runArchitectureTargetCommand(parsed, parityCommandContext(parsed, runtime))) return 0;
@@ -380,11 +414,13 @@ function parityCommandContext(parsed: ParsedArgs, runtime: CliRuntime): ParityCo
       }
     },
     async readInput(inputPath) {
+      const inputLimit = parsed.command === "drafts" ? 14 * 1024 * 1024 : 256_000;
+      const inputLimitLabel = parsed.command === "drafts" ? "14 MiB" : "256 KB";
       const info = await lstat(inputPath);
-      if (!info.isFile() || info.size > 256_000) throw new CliError("Input must be a regular JSON file of at most 256 KB.", 2, "CLI_ARGUMENTS_INVALID");
+      if (!info.isFile() || info.size > inputLimit) throw new CliError(`Input must be a regular JSON file of at most ${inputLimitLabel}.`, 2, "CLI_ARGUMENTS_INVALID");
       let input: unknown;
-      try { input = JSON.parse(await readRegularText(await realpath(inputPath), 256_000)); }
-      catch { throw new CliError("Input must contain a JSON object of at most 256 KB.", 2, "CLI_ARGUMENTS_INVALID"); }
+      try { input = JSON.parse(await readRegularText(await realpath(inputPath), inputLimit)); }
+      catch { throw new CliError(`Input must contain a JSON object of at most ${inputLimitLabel}.`, 2, "CLI_ARGUMENTS_INVALID"); }
       if (!input || typeof input !== "object" || Array.isArray(input)) throw new CliError("Input must contain a JSON object.", 2, "CLI_ARGUMENTS_INVALID");
       return input as Record<string, unknown>;
     },
@@ -717,6 +753,11 @@ async function loginCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
   const apiUrl = await loginApiUrl(parsed, runtime);
   parsed.options["api-url"] = apiUrl;
   const method = await loginAuthMethod(parsed, runtime);
+  if (method === "browser") {
+    try { await browserDeviceLogin(apiUrl, optionalStringOption(parsed, "scopes")?.split(",").map((scope) => scope.trim()), runtime); }
+    catch (error) { throw new CliError(error instanceof Error ? error.message : "Browser login failed.", 1); }
+    return 0;
+  }
   if (method === "api-key") {
     return await loginWithApiKey(parsed, runtime, apiUrl, tokenStore);
   }
@@ -2429,6 +2470,35 @@ async function assertWorkspaceBinding(parsed: ParsedArgs, runtime: CliRuntime, p
   return binding;
 }
 
+async function architectureArtifactCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
+  const [action, id, ...extra] = parsed.args;
+  if (!action || !["create","prepare","apply","verify","rollback","show"].includes(action) || !id || extra.length || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(id)) throw new CliError("Usage: myskills architecture-artifacts create <target-id> --input <request.json>; prepare|apply|verify|rollback|show <run-id> --workspace <absolute-dir>.",2);
+  for (const key of Object.keys(parsed.options)) if (!["api-url","token","json","workspace","dir",...(action==="create"?["input"]:[])].includes(key)) throw new CliError(`Unknown option --${key}.`,2);
+  const workspace = optionalStringOption(parsed,"workspace");
+  if (!workspace) throw new CliError("Composed artifact commands require an explicitly enrolled --workspace.",2);
+  const root = installRoot(parsed,runtime);
+  const binding = await readWorkspaceBinding(root);
+  const token = await requireToken(parsed,runtime);
+  const provenance = await registryProvenance(parsed,runtime,token);
+  assertMatchingProvenance(binding,provenance);
+  const current = parseWorkspaceTarget((await apiGet(`/v1/architecture-targets/${encodeURIComponent(binding.target.id)}`,parsed,runtime,token)).target);
+  if(current.generation!==binding.target.generation||current.identityDigest!==binding.target.identityDigest||current.consent.status!=="granted"||current.status==="revoked") throw new CliError("Current workspace consent or binding changed. Retain private recovery state.",1);
+  const context = {workspace,lockRoot:root,targetId:current.id,generation:current.generation,targetIdentityDigest:current.identityDigest,provenanceDigest:artifactHash(provenance),
+    request:(method:"GET"|"POST",route:string,body?:unknown) => method === "GET" ? apiGet(route,parsed,runtime,token) : apiPost(route,body,parsed,runtime,token),
+    download:async(pkg:ArchitectureArtifactIntent["projection"]["packages"][number])=>{
+      const bundle = await downloadVerifiedBundle({slug:pkg.slug,version:pkg.version,platform:"codex"},parsed,runtime,token);
+      if(bundle.artifact.sha256!==pkg.digest||bundle.artifact.byteSize!==pkg.size)throw new CliError("Downloaded release differs from composed exact pin.",1);
+      return bundle.files;
+    },fault:runtime.artifactFault,durability:runtime.artifactDurability};
+  const result = action === "create" ? await (async()=>{if(id!==current.id)throw new CliError("Create target must match this enrolled workspace.",2);const file=stringOption(parsed,"input");return context.request("POST",`/v1/architecture-targets/${encodeURIComponent(id)}/artifacts`,await parityCommandContext(parsed,runtime).readInput(file));})()
+    : action === "prepare" ? await prepareLocalArchitectureArtifact(context,id)
+    : action === "apply" ? await applyLocalArchitectureArtifact(context,id)
+      : action === "verify" ? await verifyLocalArchitectureArtifact(context,id)
+        : action === "rollback" ? await rollbackLocalArchitectureArtifact(context,id)
+          : await context.request("GET",`/v1/architecture-artifacts/${encodeURIComponent(id)}`);
+  runtime.io.stdout(JSON.stringify(result,null,2)); return 0;
+}
+
 async function codexWorkspaceCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const root = installRoot(parsed, runtime);
   if (parsed.args[0] === "enroll") {
@@ -3620,16 +3690,12 @@ async function downloadVerifiedBundle(input: {
   const release = releaseMetadata(releaseResponse, { slug, version });
   const platform = selectReleasePlatform(release, input.platform);
   const bundleText = await apiGetText(
-    `/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}/bundle?platform=${encodeURIComponent(platform.name)}`,
+    `/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}/bundle?platform=${encodeURIComponent(platform.name)}&sha256=${release.artifact.sha256}`,
     parsed,
     runtime,
     token,
+    release.artifact,
   );
-  const byteSize = Buffer.byteLength(bundleText);
-  const sha256 = createHash("sha256").update(bundleText).digest("hex");
-  if (byteSize !== release.artifact.byteSize || sha256 !== release.artifact.sha256) {
-    throw new CliError("Downloaded bundle did not match release metadata.", 1);
-  }
 
   const files = parseBundlePayload(bundleText);
   validatePortableFilePaths(files);
@@ -5193,6 +5259,9 @@ async function recoverInstallTransactions(root: string): Promise<void> {
       throw new CliError("Recovery found active files that match neither the previous nor staged package. Preserve the active files and recovery copies for operator recovery.", 1);
     }
 
+    if (snapshotPath && await pathExists(snapshotPath) && !previousAtOutput && await pathExists(workspaceBindingPath(root))) {
+      throw new CliError("Managed workspace recovery requires current authority. Retained copies remain private; use an authorized recovery workflow.", 1, "WORKSPACE_RECOVERY_REQUIRED");
+    }
     if (snapshotPath && await pathExists(snapshotPath)) {
       if (!transaction.previous?.contentDigest || !await directoryMatchesDigest(snapshotPath, transaction.previous.contentDigest, transaction.previous.contentDigestAlgorithm)) {
         throw new CliError("Recovery snapshot does not match its verified bytes. Preserve both copies for operator recovery.", 1);
@@ -5407,12 +5476,12 @@ async function apiGetWithHeaders(pathname: string, parsed: ParsedArgs, runtime: 
   };
 }
 
-async function apiGetText(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token?: string): Promise<string> {
+async function apiGetText(pathname: string, parsed: ParsedArgs, runtime: CliRuntime, token?: string, artifact?: ReleaseArtifact): Promise<string> {
   const headers: Record<string, string> = {};
   if (token) {
     headers.authorization = `Bearer ${token}`;
   }
-  const response = await apiFetch(pathname, parsed, runtime, { headers });
+  const response = await apiFetch(pathname, parsed, runtime, { headers }, artifact);
   if (!response.ok) {
     throw apiErrorFromResponse(pathname, apiBaseUrl(parsed, runtime), response.status, response.text);
   }
@@ -5476,11 +5545,13 @@ async function apiFetch(
   parsed: ParsedArgs,
   runtime: CliRuntime,
   init?: { method?: string; headers?: Record<string, string>; body?: string },
+  artifact?: ReleaseArtifact,
 ): Promise<{ headers: Record<string, string>; ok: boolean; status: number; text: string }> {
   const baseUrl = apiBaseUrl(parsed, runtime);
   let response: Awaited<ReturnType<FetchLike>>;
+  const signal = AbortSignal.timeout(/^\/v1\/library-entries\/[^/]+\/(?:checks|discoveries|previews)$/.test(pathname) ? 65_000 : 30_000);
   try {
-    response = await runtime.fetch(`${baseUrl}${pathname}`, { ...init, signal: AbortSignal.timeout(/^\/v1\/library-entries\/[^/]+\/(?:checks|discoveries|previews)$/.test(pathname) ? 65_000 : 30_000) });
+    response = await runtime.fetch(`${baseUrl}${pathname}`, { ...init, signal, redirect: "error" });
   } catch {
     throw new CliError([
       "Could not reach the MySkills API.",
@@ -5490,11 +5561,22 @@ async function apiFetch(
       "  myskills <command> --api-url https://myskills.sh/api",
     ].join("\n"), 1, "API_UNREACHABLE");
   }
+  let text: string;
+  try {
+    const bytes = await readBoundedResponse(response, response.ok && artifact ? artifact.byteSize : MAX_PACKAGE_RESPONSE_BYTES, signal);
+    if (response.ok && artifact && (bytes.length !== artifact.byteSize || createHash("sha256").update(bytes).digest("hex") !== artifact.sha256)) {
+      throw new Error("Downloaded bundle did not match release metadata.");
+    }
+    text = decodeResponseUtf8(bytes);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Invalid API response.";
+    throw new CliError(artifact && message === "API response exceeds its byte limit." ? "Downloaded bundle did not match release metadata." : message, 1);
+  }
   return {
     headers: responseHeaders(response.headers),
     ok: response.ok,
     status: response.status,
-    text: await response.text(),
+    text,
   };
 }
 
@@ -5544,6 +5626,8 @@ function apiErrorFromBody(pathname: string, baseUrl: string, status: number, bod
   const code = typeof error?.code === "string" && /^[A-Za-z0-9_.:-]{1,80}$/.test(error.code)
     ? error.code
     : "API_REQUEST_FAILED";
+  if (pathname.startsWith("/v1/evaluations")) return new CliError("Evaluation request failed. Check permission, exact artifact digest and suite revision.", 1, ["AUTHENTICATION_REQUIRED", "API_TOKEN_SCOPE_REQUIRED", "MFA_VERIFICATION_REQUIRED", "EVALUATION_BINDING_CONFLICT", "INVALID_EVALUATION_REQUEST", "EVALUATION_SUITE_UNSUPPORTED", "EVALUATION_SERVICE_UNAVAILABLE"].includes(code) ? code : "API_REQUEST_FAILED", status);
+  if (pathname.startsWith("/v1/drafts")) return new CliError("Draft request failed. Check permission, revision and validated package input.", 1, authorDraftApiErrorCodes.has(code) ? code : "API_REQUEST_FAILED", status);
   return new CliError(safeApiErrorMessage(pathname, message, status), 1, code, status);
 }
 
@@ -5922,7 +6006,7 @@ async function loginAuthMethod(parsed: ParsedArgs, runtime: CliRuntime): Promise
   if (optionalStringOption(parsed, "email") || !runtime.prompt) {
     return "password";
   }
-  const input = await promptOptionalText(runtime, "Authentication method [password] (password/api-key): ");
+  const input = await promptOptionalText(runtime, "Authentication method [password] (password/api-key/browser): ");
   return input ? parseLoginAuthMethod(input) : "password";
 }
 
@@ -5935,7 +6019,7 @@ function parseLoginAuthMethod(input: string): LoginAuthMethod {
     return "api-key";
   }
   if (normalized === "browser" || normalized === "web") {
-    throw new CliError("Browser login is not available in this CLI/API version yet. Choose password or api-key.", 2);
+    return "browser";
   }
   throw new CliError(`Authentication method must be one of: ${LOGIN_AUTH_METHODS.join(", ")}.`, 2);
 }
@@ -6033,7 +6117,8 @@ function releaseArtifact(response: Record<string, unknown>): { sha256: string; b
     throw new CliError("API release response is missing artifact metadata.", 1);
   }
   const record = artifact as Record<string, unknown>;
-  if (typeof record.sha256 !== "string" || typeof record.byteSize !== "number") {
+  if (typeof record.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(record.sha256)
+    || typeof record.byteSize !== "number" || !Number.isSafeInteger(record.byteSize) || record.byteSize < 1 || record.byteSize > MAX_PACKAGE_RESPONSE_BYTES) {
     throw new CliError("API release response has invalid artifact metadata.", 1);
   }
   return {
@@ -6138,6 +6223,9 @@ function helpText(runtime: CliRuntime): string {
     "Commands:",
     ...registryCollaborationHelp.map((line) => `  ${line}`),
     ...accountAdminHelp.map((line) => `  ${line}`),
+    ...authorDraftHelp,
+    ...architecturePlanHelp,
+    "  discover <task description> [--limit <1-20>]",
     ...architectureTargetHelp.map((line) => `  ${line}`),
     "  libraries <action> [id] [--input <request.json>] [--json] (libraries help for actions)",
     "  version",
@@ -6163,7 +6251,8 @@ function helpText(runtime: CliRuntime): string {
     "  improve evidence|accept-evidence --id <id> [--file <request.json>] [--json]",
     "  search [query] [--limit <1-100>] [--cursor <cursor>] [--api-url <url>]",
     "  info <skill-slug> [--version <exact-version>] [--api-url <url>]",
-    "  login [--api-url <url>] [--method <password|api-key>] [--email <email>]",
+    "  login [--api-url <url>] [--method <password|api-key|browser>] [--email <email>]",
+    "  login --method browser [--scopes profile:read,skills:read] (trusted browser consent)",
     "  login --api-key [--api-url <url>]",
     "  logout [--api-url <url>] [--token <token>]",
     "  whoami [--api-url <url>] [--token <token>]",
@@ -6206,6 +6295,10 @@ function helpText(runtime: CliRuntime): string {
     "  update [skill-slug] [--version <version>] [--platform <platform>] [--include-prerelease] [--dry-run] [--accept-user-action] [--dir <install-root>]",
     "  rollback <skill-slug> [--dir <install-root>]",
     "  companion run-once --workspace <absolute-dir> --holder <id> [--api-url <url>] [--token <token>] (token scopes: skills:read, targets:execute; add libraries:read for library-bound skills)",
+    ...evaluationHelp,
+    ...releaseComparisonHelp,
+    "  architecture-artifacts create <target-id> --input <request.json>; prepare|apply|verify|rollback|show <run-id> --workspace <absolute-dir>",
+    "    Stage before execution approval. Aggregate byte/receipt proof does not establish provider recognition.",
     "  codex enroll --workspace <absolute-dir> --architecture-id <id> --environment-id <id> --profile-id <id> [--name <name>] [--api-url <url>]",
     "  codex observe --workspace <absolute-dir> [--upload] [--api-url <url>]",
     "  scopes inventory --provider <codex|claude> --root <absolute-skills-dir> [--json] (local only)",

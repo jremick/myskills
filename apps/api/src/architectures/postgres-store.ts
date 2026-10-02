@@ -510,7 +510,7 @@ export class PostgresArchitectureStore implements ArchitectureStore {
     const record = await this.withCurrentAccess(actor, this.toArchitectureRecord(architecture, undefined, actor));
     if (!record.access.canPreview) return null;
     if (
-      record.access.reasons.includes("organization")
+      (Boolean(organizationId) || record.access.reasons.includes("organization"))
       && (!organizationId || !record.access.allowedOrganizationIds.includes(organizationId))
     ) {
       return null;
@@ -525,7 +525,7 @@ export class PostgresArchitectureStore implements ArchitectureStore {
       .limit(1);
     if (!row) return null;
     const revision = toRevisionRecord(row, architecture.id, validateArchitecturePattern(architecture.patternId), record.access);
-    return revisionSpecReadableToActor(revision.spec, record.access) ? revision : null;
+    return revisionSpecReadableToActor(revision.spec, record.access) && (!organizationId || organizationRevisionSpecIsSafe(revision.spec)) ? revision : null;
   }
 
   async createArchitecture(input: CreateArchitectureInput): Promise<ArchitectureRecord>;

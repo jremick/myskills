@@ -1,4 +1,15 @@
+import { secretDigest as oauthSecretDigest } from "./oauth/tokens.js";
+import { hashApiToken, hashSessionToken } from "@myskills-app/auth";
+import { registerArchitectureArtifactRoutes } from "./architecture-sync/artifact-routes.js";
+import type { ArchitectureArtifactService } from "./architecture-sync/artifact-service.js";
+import { registerDraftRoutes } from "./drafts/routes.js";
+import type { DraftService } from "./drafts/service.js";
+import { registerArchitecturePlanRoutes } from "./architecture-sync/routes.js";
+import type { ArchitecturePlanService } from "./architecture-sync/plan-service.js";
+import { registerTaskDiscoveryRoutes } from "./discovery/routes.js";
+import type { DiscoveryFinalAuthority } from "./discovery/service.js";
 import { registerBundleRoutes } from "./bundles/routes.js";
+import { readAuthorizedArtifactBundle } from "./artifacts/delivery.js";
 import type { BundleService } from "./bundles/service.js";
 import { parseChronologicalPageQuery } from "./repositories/chronological-pagination.js";
 import { parseSkillPageQuery, searchVisibleSkillPage } from "./repositories/skill-pagination.js";
@@ -16,6 +27,8 @@ import {
 import type { ApiTokenScope } from "./auth/types.js";
 import { authenticateApplicationUser, requestDelegatedAction, requireDelegatedAction, requireConditionalDelegatedPolicy } from "./auth/delegated-actions.js";
 import { MemoryAuthRateLimiter, type AuthRateLimiter } from "./auth/rate-limit.js";
+import { registerDeviceLoginRoutes } from "./auth/device-login/routes.js";
+import type { DeviceLoginService } from "./auth/device-login/service.js";
 import type {
   AuthContext,
   AuthService,
@@ -65,6 +78,8 @@ import type { ArchitectureRecord, ArchitectureStore } from "./architectures/type
 import type { ArchitectureTargetService } from "./targets/service.js";
 import type { TargetSkillOperationService } from "./target-operations/service.js";
 import type { SkillUpgradePolicyService } from "./upgrade-policies/service.js";
+import { registerEvaluationRoutes } from "./evaluations/routes.js";
+import type { EvaluationService } from "./evaluations/service.js";
 import type { ImprovementService } from "./improvements/service.js";
 import { registerImprovementRoutes } from "./improvements/routes.js";
 import type {
@@ -120,14 +135,21 @@ export interface BuildAppOptions {
   skillRepository: SkillRepository;
   registryInstanceId?: string;
   authService?: AuthService;
+  deviceLoginService?: DeviceLoginService;
+  deviceLoginLimiter?: AuthRateLimiter;
   submissionService?: SubmissionService;
   teamService?: TeamService;
   organizationService?: OrganizationService;
   architectureStore?: ArchitectureStore;
   architectureTargetService?: ArchitectureTargetService;
+  architectureArtifactService?: ArchitectureArtifactService;
+  architecturePlanService?: ArchitecturePlanService;
+  draftService?: DraftService;
+  discoveryFinalAuthority?: DiscoveryFinalAuthority;
   targetSkillOperationService?: TargetSkillOperationService;
   skillUpgradePolicyService?: SkillUpgradePolicyService;
   improvementService?: ImprovementService;
+  evaluationService?: EvaluationService;
   architectureOrganizationGrantService?: ArchitectureOrganizationGrantService;
   architecturePatternMigrationService?: ArchitecturePatternMigrationService;
   /** Postgres-backed libraries, source imports and tracking. Routes answer 503 when absent. */
@@ -361,11 +383,15 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         organizations: phase2ArchitectureReady && Boolean(options.authService && options.organizationService),
         sharing: Boolean(options.authService),
         architectures: phase2ArchitectureReady && Boolean(options.authService && options.architectureStore && options.submissionService),
+        drafts: Boolean(options.authService && options.draftService),
+        taskDiscovery: Boolean(options.submissionService),
+        architecturePlans: phase2ArchitectureReady && Boolean(options.authService && options.architecturePlanService),
         architectureTargets: phase2ArchitectureReady && Boolean(options.authService && options.architectureTargetService),
         architectureObservationSlugValidation: phase2ArchitectureReady && observationPrivacyReady && Boolean(options.authService && options.architectureTargetService),
         architectureOrganizationGrants: phase2ArchitectureReady && Boolean(options.authService && options.architectureOrganizationGrantService),
         architecturePatternMigrations: phase2ArchitectureReady && Boolean(options.authService && options.architecturePatternMigrationService),
         // Opt-in key: absent unless configured, so existing capability consumers see an unchanged shape.
+        ...(options.evaluationService ? { evaluations: Boolean(options.authService) } : {}),
         ...(options.improvementService ? { improvements: Boolean(options.authService) } : {}),
         // Present only when configured; clients treat an absent flag as false.
         ...(options.libraryService ? {
@@ -956,16 +982,19 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   });
 
   app.get("/v1/skills/:slug/releases/:version/bundle", async (request, reply) => {
+    reply.header("cache-control", "no-store");
     if (!options.submissionService) {
       throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
     }
     const params = parseReleaseParams(request.params);
     const query = parseBundleQuery(request.query);
-    const user = await authenticateOptionalRegistryReader(options.authService, requestAuthorization(request));
-    const bundle = await options.submissionService.getPublicBundle({
+    const bundle = await readAuthorizedArtifactBundle({
+      authService: options.authService,
+      submissionService: options.submissionService,
+      authorization: requestAuthorization(request),
       ...params,
       platform: query.platform,
-      actorId: user?.id ?? null,
+      expectedSha256: (request.query as Record<string, unknown>).sha256,
     });
     if (!bundle) {
       return reply.code(404).send({
@@ -976,8 +1005,10 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       });
     }
     return reply
+      .header("x-myskills-artifact-sha256", bundle.artifact.sha256)
+      .header("content-length", String(Buffer.byteLength(bundle.body)))
       .type(bundle.artifact.contentType)
-      .send(bundle.payload);
+      .send(bundle.body);
   });
 
   app.get("/v1/skills/:slug", async (request, reply) => {
@@ -1146,6 +1177,13 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         ...input,
       }),
     };
+  });
+
+  registerDeviceLoginRoutes(app, {
+    service: options.deviceLoginService,
+    authService: options.authService,
+    limiter: options.deviceLoginLimiter,
+    authorization: requestAuthorization,
   });
 
   app.post("/v1/auth/register", async (request, reply) => {
@@ -2443,6 +2481,15 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     return reply.send({ submission: result });
   });
 
+  registerDraftRoutes(app, options, { requestAuthorization, authFailureReply, requireScope, requiresMfaForRole });
+  registerTaskDiscoveryRoutes(app, options, { requestAuthorization, requireScope });
+  if (options.architectureArtifactService) registerArchitectureArtifactRoutes(app, { service: options.architectureArtifactService, authenticate: (request,reply)=>authenticateArchitecturePlanActor(options,request,reply,true) });
+  if (options.architecturePlanService) registerArchitecturePlanRoutes(app, {
+    service: options.architecturePlanService,
+    authenticate: (request, reply) => authenticateArchitecturePlanActor(options, request, reply),
+  });
+
+  registerEvaluationRoutes(app, { authService: options.authService, evaluationService: options.evaluationService, requestAuthorization });
   registerImprovementRoutes(app, {
     authService: options.authService,
     improvementService: options.improvementService,
@@ -2504,6 +2551,19 @@ async function authenticateArchitectureSession(
     requireMfaForPrivilegedSession(user);
   }
   return user;
+}
+
+async function authenticateArchitecturePlanActor(options:BuildAppOptions,request:FastifyRequest,reply:FastifyReply,artifact=false) {
+  const header=requestAuthorization(request);const context=await options.authService?.authenticateRequest(header);
+  if(!context){if(options.authService)await authFailureReply(options.authService,header,reply);else reply.code(503).send({error:{code:"AUTH_SERVICE_UNAVAILABLE"}});return null;}
+  const delegated=requestDelegatedAction(request);
+  if(context.credential.kind!=="session") {
+    if(delegated) requireDelegatedAction(context,request);
+    else {if(!artifact||context.credential.kind==="oauth")throw new AppError("Use the trusted application session or scoped companion token.","API_TOKEN_REQUIRED",403);
+      requireScope(context,"architectures:read");requireScope(context,"skills:read");requireScope(context,/\/(claim|checkpoint|receipt)$/.test(request.url)?"targets:execute":"targets:control");}
+  }
+  const raw=header?.replace(/^Bearer\s+/i,"");if(!raw)return null;
+  return {...context.user,artifactCredential:{kind:context.credential.kind,hash:context.credential.kind==="session"?hashSessionToken(raw):context.credential.kind==="oauth"?oauthSecretDigest(raw):hashApiToken(raw),requiredScopes:delegated?.requiredScopes,resource:context.credential.resource,clientId:context.credential.clientId}};
 }
 
 async function authenticateArchitectureTargetSession(

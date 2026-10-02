@@ -82,7 +82,7 @@ services:
       AUTH_SECRET: ${MYSKILLS_E2E_AUTH_SECRET:?MYSKILLS_E2E_AUTH_SECRET is required}
       TOTP_ISSUER: MySkills E2E
       APP_BASE_URL: https://e2e.example.test
-      ALLOWED_WEB_ORIGINS: http://127.0.0.1:${MYSKILLS_E2E_WEB_PORT:-43100}
+      ALLOWED_WEB_ORIGINS: http://127.0.0.1:${MYSKILLS_E2E_PUBLIC_WEB_PORT:-${MYSKILLS_E2E_WEB_PORT:-43100}}
       TRUST_PROXY: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7"
       AUTH_NOTIFICATION_MODE: smtp
       SMTP_HOST: mailpit
@@ -104,9 +104,9 @@ services:
       # Remote MCP connections through the web proxy's single public origin.
       # Loopback HTTP is accepted only because this stack is local.
       MYSKILLS_OAUTH_ENABLED: "true"
-      MYSKILLS_OAUTH_ISSUER: http://127.0.0.1:${MYSKILLS_E2E_WEB_PORT:-43100}
-      MYSKILLS_OAUTH_CONSENT_ORIGIN: http://127.0.0.1:${MYSKILLS_E2E_WEB_PORT:-43100}
-      MYSKILLS_MCP_PUBLIC_URL: http://127.0.0.1:${MYSKILLS_E2E_WEB_PORT:-43100}/mcp
+      MYSKILLS_OAUTH_ISSUER: http://127.0.0.1:${MYSKILLS_E2E_PUBLIC_WEB_PORT:-${MYSKILLS_E2E_WEB_PORT:-43100}}
+      MYSKILLS_OAUTH_CONSENT_ORIGIN: http://127.0.0.1:${MYSKILLS_E2E_PUBLIC_WEB_PORT:-${MYSKILLS_E2E_WEB_PORT:-43100}}
+      MYSKILLS_MCP_PUBLIC_URL: http://127.0.0.1:${MYSKILLS_E2E_PUBLIC_WEB_PORT:-${MYSKILLS_E2E_WEB_PORT:-43100}}/mcp
       MYSKILLS_OAUTH_DYNAMIC_REGISTRATION: "true"
       MYSKILLS_OAUTH_REDIRECT_HOSTS: client.example.test
     healthcheck:
@@ -134,8 +134,8 @@ services:
       # nginx forwards Host as its upstream address.
       MYSKILLS_MCP_ALLOWED_HOSTS: mcp:3002
       MYSKILLS_MCP_TRUST_PROXY_HOPS: "1"
-      MYSKILLS_OAUTH_ISSUER: http://127.0.0.1:${MYSKILLS_E2E_WEB_PORT:-43100}
-      MYSKILLS_MCP_PUBLIC_URL: http://127.0.0.1:${MYSKILLS_E2E_WEB_PORT:-43100}/mcp
+      MYSKILLS_OAUTH_ISSUER: http://127.0.0.1:${MYSKILLS_E2E_PUBLIC_WEB_PORT:-${MYSKILLS_E2E_WEB_PORT:-43100}}
+      MYSKILLS_MCP_PUBLIC_URL: http://127.0.0.1:${MYSKILLS_E2E_PUBLIC_WEB_PORT:-${MYSKILLS_E2E_WEB_PORT:-43100}}/mcp
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 3s

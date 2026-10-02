@@ -400,6 +400,13 @@ reject `MYSKILLS_CONFIG_FILE` and `MYSKILLS_TOKEN_FILE`; these retain their
 existing precedence when no profile is selected. `MYSKILLS_TOKEN_STORE=file`
 remains available for profile-local file storage.
 
+Managed workspace overlap checks use one protected index under the actual OS
+account home at `.config/myskills-app/workspace-enrollments`. `HOME`,
+`XDG_CONFIG_HOME`, registry URLs and configuration profiles cannot split this
+authority. The selected older XDG/home index is read for reservation migration;
+its files are preserved. This coordinates normal CLI processes. Preserve the
+index and workspace bindings when a conflicting root requires explicit recovery.
+
 Explicit API and token overrides still apply: `--api-url` then
 `MYSKILLS_API_URL` override the saved registry, and `--token` then
 `MYSKILLS_TOKEN` override the stored credential. Clear inherited overrides when

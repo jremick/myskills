@@ -1,3 +1,12 @@
+import { ArchitectureArtifactService } from "./architecture-sync/artifact-service.js";
+import { PostgresDraftStore } from "./drafts/postgres-store.js";
+import { DraftService } from "./drafts/service.js";
+import { PackageScanService } from "./package-quality/scan-service.js";
+import { PackageScanWorker } from "./package-quality/scan-worker.js";
+import { formatApiStartupFailure, type ApiStartupPhase } from "./startup-diagnostic.js";
+import { ArchitecturePlanService } from "./architecture-sync/plan-service.js";
+import { PostgresArchitectureSyncStore } from "./architecture-sync/postgres-store.js";
+import { createPostgresDiscoveryFinalAuthority } from "./discovery/postgres-authority.js";
 import { BundleService } from "./bundles/service.js";
 import { isIP } from "node:net";
 import { LIBRARY_LIMITS } from "@myskills-app/core";
@@ -8,6 +17,8 @@ import { createAuthNotificationSinkFromEnv } from "./auth/notification.js";
 import { AuthNotificationWorker } from "./auth/notification-outbox.js";
 import { AuthService } from "./auth/service.js";
 import { PostgresAuthStore } from "./auth/postgres-auth-store.js";
+import { DeviceLoginService } from "./auth/device-login/service.js";
+import { PostgresDeviceLoginStore } from "./auth/device-login/postgres-store.js";
 import { PostgresSkillRepository } from "./repositories/postgres-skill-repository.js";
 import { buildApp } from "./app.js";
 import { SubmissionService } from "./submissions/service.js";
@@ -34,6 +45,7 @@ import { TargetSkillOperationService } from "./target-operations/service.js";
 import { PostgresSkillUpgradePolicyStore } from "./upgrade-policies/postgres-store.js";
 import { SkillUpgradePolicyService } from "./upgrade-policies/service.js";
 import { PostgresImprovementStore } from "./improvements/postgres-store.js";
+import { EvaluationService } from "./evaluations/service.js";
 import { ImprovementService } from "./improvements/service.js";
 import { PublicGithubSourceProvider } from "./libraries/github-source.js";
 import { PostgresSourceCooldownStore } from "./libraries/source-cooldown.js";
@@ -59,7 +71,7 @@ if (!registryInstanceId || !/^[a-f0-9-]{36}$/.test(registryInstanceId)) {
 const artifactStorage = createArtifactObjectStorageFromEnv(process.env);
 const improvementStore = new PostgresImprovementStore(db);
 // Publication rechecks the latest release declaration inside its own transaction.
-const submissionStore = new PostgresSubmissionStore(db, { artifactStorage, publicationGuard: improvementStore });
+const submissionStore = new PostgresSubmissionStore(db, { artifactStorage, publicationGuard: improvementStore, backgroundScans: true });
 await submissionStore.reconcilePendingArtifactWrites();
 const teamStore = new PostgresTeamStore(db);
 const teamService = new TeamService(teamStore);
@@ -131,6 +143,9 @@ const oauthService = oauthConfig
   ? new OAuthService({ store: new PostgresOAuthStore(db), authStore, config: oauthConfig })
   : undefined;
 const app = buildApp({
+  deviceLoginService: process.env.MYSKILLS_DEVICE_VERIFICATION_URL
+    ? new DeviceLoginService(new PostgresDeviceLoginStore(db), { verificationUri: process.env.MYSKILLS_DEVICE_VERIFICATION_URL }) : undefined,
+  deviceLoginLimiter: new PostgresAuthRateLimiter(pool, { maxAttempts: 20, windowMs: 60_000 }),
   skillRepository,
   registryInstanceId,
   oauthService,
@@ -152,6 +167,12 @@ const app = buildApp({
     notificationSink,
   }),
   submissionService,
+  draftService: new DraftService(new PostgresDraftStore(db), submissionService),
+  architectureArtifactService: new ArchitectureArtifactService(new PostgresArchitectureSyncStore(db, { artifactStorage }), { architectureStore, targetStore: architectureTargetStore, releaseDependencies: { skillRepository, submissionService } }),
+  architecturePlanService: new ArchitecturePlanService(new PostgresArchitectureSyncStore(db, { artifactStorage }), {
+    architectureStore, targetStore: architectureTargetStore, releaseDependencies: { skillRepository, submissionService },
+  }),
+  discoveryFinalAuthority: createPostgresDiscoveryFinalAuthority(db),
   teamService,
   organizationService,
   architectureStore,
@@ -161,6 +182,7 @@ const app = buildApp({
   targetSkillOperationService,
   skillUpgradePolicyService,
   improvementService,
+  evaluationService: new EvaluationService(db, { artifactStorage }),
   libraryService,
   githubService,
   bundleService,
@@ -210,12 +232,23 @@ const librarySourceWorker = process.env.LIBRARY_SOURCE_WORKER?.trim() === "disab
     onError: () => app.log.error("Library source check failed; due checks will be retried."),
   });
 
+const packageScanWorker = process.env.PACKAGE_SCAN_WORKER?.trim() === "disabled"
+  ? undefined
+  : new PackageScanWorker(new PackageScanService(db, { artifactStorage }), {
+    onError: () => app.log.error("Package scan failed; durable attempts will be retried."),
+  });
+
+let startupPhase: ApiStartupPhase = "listen";
 try {
   await app.listen({ port, host });
+  startupPhase = "worker_start";
   authNotificationWorker?.start();
   librarySourceWorker?.start();
+  packageScanWorker?.start();
 } catch (error) {
-  app.log.error(error);
+  // The test logger is disabled. Keep fatal startup evidence observable without
+  // serializing error messages, stacks, addresses, credentials or log payloads.
+  process.stderr.write(formatApiStartupFailure(error, startupPhase));
   await pool.end();
   process.exit(1);
 }
@@ -230,6 +263,7 @@ const shutdown = () => shutdownPromise ??= (async () => {
   }
   await authNotificationWorker?.stop();
   await librarySourceWorker?.stop();
+  await packageScanWorker?.stop();
   await app.close();
   await pool.end();
 })();

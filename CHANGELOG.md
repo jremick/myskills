@@ -2,16 +2,35 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
-## 0.1.0-beta.18 - candidate
+## 0.1.0-beta.19 - candidate
+
+Target release: `v0.1.0-beta.19`.
+
+- Extend named CLI and MCP workflows across Skills, Libraries, collaboration, administration and account operations, with API-owned permissions and explicit local or browser handoffs.
+- Add opt-in remote MCP OAuth connections with scope consent, PKCE, refresh rotation, revocation and bounded MFA assurance.
+- Organize personal and team Libraries with Collections and overlapping Groups. Preserve member pins, source tracking and inherited Library permissions.
+- Explore saved architectures through a searchable structure list, map and node inspector. Review Workbench draft changes before saving a revision.
+- Create private multi-file author drafts with saved history, folder/ZIP imports, exact-source forks and stale-edit recovery. Compare exact published releases and review candidates without changing immutable versions.
+- Retain background scan attempts and exact artifact/suite evaluation evidence. Static evaluations stay advisory; unconfigured provider behavior is reported as skipped.
+- Sign the CLI in through browser/device approval with explicit scopes and current MFA where required.
+- Save architecture review plans and prepare composed Codex workspace delivery with separate execution approval, shared target leases, aggregate byte verification and explicit rollback.
+- Find authorized exact releases from a task description using bounded word-overlap discovery. Add a separate product and documentation site.
+- Prepare a checksummed self-host Compose bundle and container-only operator helper for setup, forward upgrades, coordinated backups and isolated recovery. Add a standalone Railway MCP image and retained delivery evidence.
+- Patch fast-uri and brace-expansion without changing the dependency set.
+
+This candidate includes the merged, unreleased beta.18 scope, the architecture explorer from PR #126, and the roadmap source in PR #133. Final exact-source runtime verification, protected checks, immutable tagging and artifact publication remain required. Live ChatGPT/Claude consent and recognition, physical MFA scans and account pilots are explicitly deferred. Apply the forward migrations through `0042_package_evaluations` and retain their history. See [beta.19 delivery](docs/BETA19_RELEASE_DELIVERY.md) for gate states, compatibility and evidence limits. No publication or deployment is claimed by this entry.
+
+## 0.1.0-beta.18 - historical candidate
 
 Target release: `v0.1.0-beta.18`.
 
 - Extend named CLI and MCP workflows across registry, Library, collaboration, administration and account operations while preserving API permissions, scopes and MFA requirements.
 - Add opt-in remote MCP connections with OAuth consent, authorization code and PKCE, refresh rotation, connection revocation and bounded MFA assurance. Keep credential entry and local execution behind explicit handoffs.
 - Add a standalone Railway MCP image with startup, health and anonymous-request checks, retained connector evidence and isolated parallel verification.
+- Add personal and team Library Collections and overlapping Groups with inherited permissions, source tracking and named API/CLI/MCP operations; merged in PR #124.
 - Patch the fast-uri and brace-expansion dependencies without changing the dependency set.
 
-Final-source verification, real ChatGPT/Claude acceptance, publication and hosted promotion remain pending. Tracked Collections and Library Groups are excluded while their model choices remain open. Apply the two additive OAuth migrations before enabling connections. See [release preparation](docs/BETA18_RELEASE_DELIVERY.md) for scope, gate states and rollback.
+The merged scope is carried into beta.19. The [beta.18 preparation record](docs/BETA18_RELEASE_DELIVERY.md) retains the historical Collections verification and phase-1 staging evidence; those receipts do not verify the later beta.19 source. Its pending acceptance and publication states are historical, not completion claims. See [beta.19 delivery](docs/BETA19_RELEASE_DELIVERY.md) for the current gates and explicit deferrals.
 
 ## 0.1.0-beta.17 - 2026-09-29
 

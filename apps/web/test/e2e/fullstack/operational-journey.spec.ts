@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { runOperationalAcceptance } from "../../../../../scripts/operational-acceptance.mjs";
 import { proveCodexRecognition } from "../../../../../scripts/prove-codex-recognition.mjs";
+import { exerciseDrafts } from "./author-drafts.js";
 
 type BrowserActor = {
   token: string;
@@ -11,11 +12,16 @@ type BrowserActor = {
 test.describe.configure({ retries: 0 });
 
 test("author feedback, immutable publication, upgrade policy, real CLI install/update/rollback, and revocation", async ({ page }, testInfo) => {
-  test.setTimeout(process.env.MYSKILLS_ACCEPTANCE_ENVIRONMENT === "staging" ? 600_000 : 180_000);
+  test.setTimeout(process.env.MYSKILLS_ACCEPTANCE_ENVIRONMENT === "staging" ? 600_000 : 300_000);
   const browserErrors: string[] = [];
   page.on("pageerror", (error) => browserErrors.push(error.name));
   const report = await runOperationalAcceptance({
     callbacks: {
+      async beforeRevocation({ actors }) {
+        const baseURL = process.env.MYSKILLS_E2E_BASE_URL;
+        if (!baseURL) throw new Error("The disposable full-stack base URL is required.");
+        await test.step("private browser drafts persist, reject stale edits, recover work, and correct immutable submissions", () => exerciseDrafts(page, testInfo, baseURL, actors));
+      },
       async afterWorkspaceInstall({ workspace, slug }) {
         if (process.env.MYSKILLS_ACCEPTANCE_RUNTIME_PROOF !== "codex") return;
         const recognition = await proveCodexRecognition({ workspace, slug });
@@ -26,7 +32,11 @@ test("author feedback, immutable publication, upgrade policy, real CLI install/u
         const row = page.locator(".submission-row").filter({ hasText: `${slug}@0.1.0` });
         await expect(row).toBeVisible();
         await row.getByRole("button", { name: /feedback|details|review/i }).click();
-        await expect(page.getByRole("region", { name: "Submission feedback" }).getByText(reason, { exact: true }).first()).toBeVisible();
+        const feedback = page.getByRole("region", { name: "Submission feedback", exact: true });
+        const currentChanges = feedback.locator(".control-plane-inline-message").filter({ has: page.getByText("Requested changes", { exact: true }) });
+        await expect(currentChanges.getByText(reason, { exact: true })).toBeVisible();
+        const requestedChange = feedback.getByRole("listitem").filter({ has: page.getByText("Changes requested", { exact: true }) });
+        await expect(requestedChange.getByText(reason, { exact: true })).toBeVisible();
         await expect(page.getByText("Dependency install hook requires maintainer review.", { exact: true }).first()).toBeVisible();
         await page.screenshot({ path: testInfo.outputPath("author-review-feedback.png"), fullPage: true });
       },

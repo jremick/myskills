@@ -13,13 +13,19 @@ const approved = { ...base, id: "approved", slug: "code-review-guide", title: "C
 const blocked = { ...base, id: "blocked", slug: "research-brief", title: "Research Brief", summary: "Gather cited evidence.", version: "0.8.0", lifecycleStatus: "quarantined", reviewStatus: "pending", securityStatus: "failed", findingCount: 3, allowedActions: ["request-changes", "reject"] };
 const managed = [pending, approved, blocked].map((s, i) => ({ ...s, tags: [], lifecycleStatus: i === 2 ? "archived" : "approved", latestVersion: s.version, allowedActions: i === 2 ? ["restore"] : ["edit", "archive"] }));
 
-async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; failReview?: boolean; bootstrap?: boolean; teamImport?: boolean } = {}) {
+async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; failReview?: boolean; bootstrap?: boolean; teamImport?: boolean; durableScans?: boolean } = {}) {
   const user = { id: "owner-1", email: "owner@example.test", name: "Example owner", status: "active", roles: ["owner"], emailVerified: true, mfaVerified: options.mfa !== false };
   await page.addInitScript(user => localStorage.setItem("myskills-app:web-session", JSON.stringify({ user, expiresAt: "2027-09-27T00:00:00Z" })), user);
   let rows = structuredClone([pending, approved, blocked]);
+  let correctionDraft: Record<string, unknown> | null = null;
   let failReview = options.failReview === true;
   const writes: Array<{ path: string; body: Record<string, unknown> }> = [];
   const misses: string[] = [];
+  let scanCompleted = false;
+  const scanRuns = () => options.durableScans ? [
+    { id: "attempt-1", status: "failed", createdAt: date, startedAt: date, completedAt: date, artifactSha256: hash, runnerVersion: "package-scan-v1", attempt: 1, failureCode: "lease_expired", findings: [] },
+    { id: "attempt-2", status: scanCompleted ? "succeeded" : "running", createdAt: date, startedAt: date, completedAt: scanCompleted ? date : null, artifactSha256: hash, runnerVersion: "package-scan-v1", attempt: 2, failureCode: null, findings: [] },
+  ] : [];
   const release = (slug: string, version: string) => ({ ...base, id: `${slug}-${version}`, slug, version, lifecycleStatus: "approved", reviewStatus: "approved", securityStatus: "passed", releaseNotes: `Exact release ${version}.`, allowedActions: ["unpublish"] });
   await page.route("**/api/v1/**", async route => {
     const url = new URL(route.request().url());
@@ -29,6 +35,12 @@ async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; 
     if (method === "POST") {
       const body = route.request().postDataJSON() as Record<string, unknown>;
       writes.push({ path, body });
+      // This fixture proves correction placement/focus only. Real persisted
+      // draft history and immutable artifacts are covered by author-drafts.
+      if (path === "/v1/drafts") {
+        correctionDraft = { id: "correction-draft", title: blocked.title, revision: 1, files: [{ path: "skill.json", content: JSON.stringify({ name: blocked.slug, title: blocked.title, summary: blocked.summary, version: blocked.version, visibility: "private", license: "UNLICENSED" }) }, { path: "SKILL.md", content: "# Corrected research package\n" }], source: { kind: "submission", submissionId: blocked.id, slug: blocked.slug, version: blocked.version, artifactSha256: hash }, createdAt: date, updatedAt: date, submission: null };
+        return reply({ draft: correctionDraft }, 201);
+      }
       const review = path.match(/^\/v1\/review\/submissions\/([^/]+)\/actions$/);
       if (review) {
         const row = rows.find(s => s.id === review[1])!;
@@ -43,14 +55,17 @@ async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; 
     if (path === "/v1/me") return reply({ user });
     if (path === "/v1/site") return reply({ site: { landingPageEnabled: true } });
     if (path === "/v1/branding") return reply({ branding: { text: "MySkills", showText: true, logoDataUrl: null } });
+    if (/^\/v1\/evaluations\/releases\/[^/]+\/[^/]+\/(runs|summary)$/.test(path) && method === "GET") return reply({ runs: [] });
     if (path === "/v1/review/submissions") {
       if (failReview) return reply({ error: { code: "SERVICE_UNAVAILABLE", message: "Review queue temporarily unavailable." } }, 503);
       return reply({ submissions: options.partial && !url.searchParams.has("cursor") ? rows.slice(0, 2) : rows, nextCursor: options.partial && !url.searchParams.has("cursor") ? "page-2" : null });
     }
     if (path === "/v1/submissions/mine") return reply({ submissions: rows.map(s => ({ ...s, ...(options.teamImport && s.id === "blocked" ? { owner: { type: "team", id: "engineering-team" } } : {}), reviewStatus: s.id === "blocked" ? "changes-requested" : s.reviewStatus, allowedActions: ["withdraw"] })), nextCursor: null });
+    if (path === "/v1/drafts") return reply({ drafts: correctionDraft ? [{ ...correctionDraft, fileCount: 2, textBytes: 256 }] : [] });
+    if (path === "/v1/drafts/correction-draft" && correctionDraft) return reply({ draft: correctionDraft });
     if (/^\/v1\/(review\/)?submissions\/[^/]+\/bundle$/.test(path)) return route.fulfill({ json: { files: [{ path: "SKILL.md", content: "# Reviewed exact artifact\nUse verified release evidence." }] }, headers: { "x-myskills-artifact-sha256": hash } });
     const detail = path.match(/^\/v1\/(?:review\/)?submissions\/([^/]+)$/);
-    if (detail) return reply({ submission: { ...rows.find(s => s.id === detail[1]), ...(options.teamImport && detail[1] === "blocked" ? { owner: { type: "team", id: "engineering-team" } } : {}), reviewStatus: detail[1] === "blocked" ? "changes-requested" : rows.find(s => s.id === detail[1])?.reviewStatus, changeRequestReason: detail[1] === "blocked" ? "Cite the original research sources." : null, reviewHistory: [], scanRuns: [], correction: { requiresNewVersion: true, canSubmitNewVersion: !options.teamImport } } });
+    if (detail) return reply({ submission: { ...rows.find(s => s.id === detail[1]), ...(options.teamImport && detail[1] === "blocked" ? { owner: { type: "team", id: "engineering-team" } } : {}), reviewStatus: detail[1] === "blocked" ? "changes-requested" : rows.find(s => s.id === detail[1])?.reviewStatus, changeRequestReason: detail[1] === "blocked" ? "Cite the original research sources." : null, reviewHistory: [], scanRuns: scanRuns(), correction: { requiresNewVersion: true, canSubmitNewVersion: !options.teamImport } } });
     if (path === "/v1/manage/skills") return reply({ skills: managed.filter(s => s.title.toLowerCase().includes((url.searchParams.get("q") ?? "").toLowerCase())), nextCursor: null });
     const managedDetail = path.match(/^\/v1\/manage\/skills\/([^/]+)$/);
     if (managedDetail) {
@@ -67,7 +82,7 @@ async function fixture(page: Page, options: { mfa?: boolean; partial?: boolean; 
     misses.push(`${method} ${path}`);
     return reply({ error: { code: "NOT_FOUND" } }, 404);
   });
-  return { writes, misses, recover: () => { failReview = false; } };
+  return { writes, misses, recover: () => { failReview = false; }, finishScan: () => { scanCompleted = true; } };
 }
 
 async function evidence(page: Page, info: TestInfo, writes: unknown) {
@@ -154,7 +169,26 @@ test("submission feedback opens beside its context and returns focus without an 
   await expect(trigger).toBeFocused();
   await trigger.click();
   await page.getByRole("button", { name: "Choose corrected package", exact: true }).click();
-  await expect(page.locator('#package-archive')).toBeFocused();
+  await expect(page.getByLabel("Draft title", { exact: true })).toBeFocused();
+  await expect(page.getByLabel("Draft title", { exact: true })).toHaveValue("Research Brief");
+  expect(state.writes).toEqual([{ path: "/v1/drafts", body: { source: { kind: "submission", submissionId: "blocked" } } }]);
+  await evidence(page, info, state.writes);
+});
+
+test("durable scan evidence shows exact attempts and refreshes completion on mobile", async ({ page }, info) => {
+  const state = await fixture(page, { durableScans: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/submit");
+  await page.getByRole("button", { name: "View feedback for 0.8.0", exact: true }).click();
+  const panel = page.getByRole("region", { name: "Submission feedback", exact: true });
+  await expect(panel.getByText("The worker lease expired. A later attempt can retry this scan.", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Scan in progress. Refresh evidence to check its result.", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Attempt 2", { exact: true })).toBeVisible();
+  await expect(panel.getByText(hash, { exact: true })).toHaveCount(2);
+  state.finishScan();
+  await panel.getByRole("button", { name: "Refresh evidence", exact: true }).click();
+  await expect(panel.getByText("Scan in progress. Refresh evidence to check its result.", { exact: true })).toHaveCount(0);
+  await expect(panel.getByText("No findings were recorded for this completed scan.", { exact: true })).toBeVisible();
   expect(state.writes).toHaveLength(0);
   await evidence(page, info, state.writes);
 });
@@ -237,4 +271,50 @@ test("team import feedback identifies ownership and routes corrections through L
   await expect(page).toHaveURL(/\/libraries$/);
   expect(state.writes).toHaveLength(0);
   await info.attach("team-submission-feedback-receipt", { body: JSON.stringify({ ownershipVisible: true, correctionRoute: "/libraries", mutations: 0 }), contentType: "application/json" });
+});
+
+for (const historyFails of [false, true]) test(`queued draft clears the archive receipt and refreshes history with history failure ${historyFails}`, async ({ page }) => {
+  await fixture(page);
+  const draft = { id: "queued-draft", title: "Queued draft", revision: 1, source: null, createdAt: date, updatedAt: date, submission: null, files: [{ path: "skill.json", content: "{}" }, { path: "SKILL.md", content: "# Queued draft\n" }] };
+  const submission = { id: "queued-submission", slug: "queued-helper", version: "1.0.0", artifactSha256: hash, reviewStatus: "pending", securityStatus: "not-run", scan: { status: "queued", findings: [], findingCount: 0 } };
+  let historyReads = 0;
+  let submissionReads = 0;
+  await page.route("**/api/v1/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    const method = route.request().method();
+    if (path === "/api/v1/submissions/mine") { submissionReads++; return route.fallback(); }
+    if (path === "/api/v1/submissions" && method === "POST") return route.fulfill({ json: { submission: pending, scan: { status: "passed", findings: [], findingCount: 0 } } });
+    if (path === "/api/v1/drafts/queued-draft") return route.fulfill({ json: { draft } });
+    if (path === "/api/v1/drafts/queued-draft/submit") return route.fulfill({ status: 202, json: { draft: { ...draft, submission }, submission } });
+    if (path === "/api/v1/drafts/queued-draft/history") {
+      historyReads++;
+      return historyFails ? route.fulfill({ status: 503, json: { error: { code: "SERVICE_UNAVAILABLE" } } })
+        : route.fulfill({ json: { revisions: [{ ...draft, submission, fileCount: 2, textBytes: 20 }] } });
+    }
+    return route.fallback();
+  });
+  await page.goto("/submit?draft=queued-draft");
+  const workspace = page.getByRole("region", { name: "Private package drafts", exact: true });
+  await expect(workspace.getByLabel("Draft title", { exact: true })).toHaveValue(draft.title);
+  await page.locator("#package-archive").setInputFiles({ name: "old.zip", mimeType: "application/zip", buffer: Buffer.from("fixture archive") });
+  await page.getByRole("button", { name: "Submit for review", exact: true }).click();
+  await expect(page.getByText("No scan findings. The package is ready for maintainer review.", { exact: true })).toBeVisible();
+  const before = submissionReads;
+  await workspace.getByRole("button", { name: "Submit saved revision", exact: true }).click();
+  await expect(workspace.locator(".draft-receipt")).toContainText("Scan: queued");
+  await expect(workspace.locator(".draft-receipt")).toContainText("Scan completion and review are separate steps");
+  await expect(page.locator(".submit-result-block")).toHaveCount(0);
+  await expect.poll(() => submissionReads).toBeGreaterThan(before);
+  await expect.poll(() => historyReads).toBe(1);
+  if (!historyFails) await expect(workspace.getByRole("region", { name: "Saved draft history", exact: true })).toContainText("submitted 1.0.0");
+});
+
+test("queued archive never reports ready before the confirmation scan completes", async ({ page }) => {
+  await fixture(page);
+  await page.route("**/api/v1/submissions", route => route.fulfill({ status: 202, json: { submission: { ...pending, securityStatus: "not-run" }, scan: { status: "queued", findings: [], findingCount: 0 } } }));
+  await page.goto("/submit");
+  await page.locator("#package-archive").setInputFiles({ name: "pending.zip", mimeType: "application/zip", buffer: Buffer.from("fixture archive") });
+  await page.getByRole("button", { name: "Submit for review", exact: true }).click();
+  await expect(page.getByText("The confirmation scan is pending. Check submission history for completion before review.", { exact: true })).toBeVisible();
+  await expect(page.getByText(/The package is ready for maintainer review/)).toHaveCount(0);
 });

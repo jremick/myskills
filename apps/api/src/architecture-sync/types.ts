@@ -1,3 +1,5 @@
+import type { ArchitectureArtifactIntent } from "@myskills-app/core";
+import type { ArchitecturePlanDependencies } from "./plan-service.js";
 import type {
   ArchitectureSyncAction,
   ArchitectureSyncApproval,
@@ -395,8 +397,15 @@ export interface ArchitectureSyncLeaseAcquireInput {
 
 export interface ArchitectureSyncStore {
   readonly kind: "memory" | "postgres";
+  getArtifactIntent(runId: string): Promise<ArchitectureArtifactIntent | null>;
+  setArtifactIntent(runId: string, intent: ArchitectureArtifactIntent): Promise<void>;
+  withArtifactAuthority?<T>(input: { readonly actorId: string; readonly targetId: string }, operation: (store: ArchitectureSyncStore, dependencies: ArchitecturePlanDependencies) => Promise<T>): Promise<T>;
+  withPlanAuthority?<T>(input: { readonly actorId: string; readonly targetId: string }, operation: (store: ArchitectureSyncStore, dependencies: ArchitecturePlanDependencies) => Promise<T>): Promise<T>;
   createRun(input: ArchitectureSyncCreateRunStoreInput): Promise<ArchitectureSyncCreateRunStoreResult>;
+  /** Internal creation lookup; createRun still makes the immutable replay decision. */
+  findRunForCreate(input: { actorId: string; requestKey: string; targetId: string; idempotencyKey: string }): Promise<ArchitectureSyncRun | null>;
   getRun(runId: string): Promise<ArchitectureSyncRun | null>;
+  listRuns(input: { readonly targetId: string; readonly limit?: number; readonly source?: string }): Promise<ArchitectureSyncRun[]>;
   saveRun(run: ArchitectureSyncRun, options?: ArchitectureSyncRunSaveOptions): Promise<ArchitectureSyncRun>;
   claimApply(input: ArchitectureSyncApplyClaimInput): Promise<ArchitectureSyncApplyClaimResult>;
   claimRecovery(input: ArchitectureSyncRecoveryClaimInput): Promise<ArchitectureSyncRecoveryClaimResult>;

@@ -1,0 +1,49 @@
+.recovery-guidance {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 20px;
+}
+.recovery-guidance .recovery-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+.recovery-guidance :is(h3, h4) { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
+.recovery-guidance h4 { font-size: 13px; }
+.recovery-guidance p { margin: 0; }
+.recovery-guidance pre {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.recovery-guidance pre code { font: 12px/20px var(--font-mono); }
+.recovery-guidance .recovery-muted { color: var(--muted); }
+.recovery-guidance .recovery-status { padding: 2px 8px; border-radius: 6px; background: var(--surface-soft); color: var(--ink-soft); font-size: 12px; }
+.recovery-guidance .recovery-status[data-tone="amber"] { background: var(--warning-soft); color: var(--warning); }
+.recovery-guidance .recovery-snapshot-block { display: grid; gap: 8px; min-width: 0; }
+.recovery-guidance .recovery-facts { display: grid; gap: 6px; margin: 0; }
+.recovery-guidance .recovery-facts > div { display: grid; grid-template-columns: 135px minmax(0, 1fr); gap: 8px; }
+.recovery-guidance dt { color: var(--muted); }
+.recovery-guidance dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.recovery-guidance .recovery-image-scroll { min-width: 0; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.recovery-guidance .recovery-image-scroll:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.recovery-guidance .recovery-images { width: 100%; min-width: 620px; table-layout: fixed; border-collapse: collapse; text-align: left; }
+.recovery-guidance .recovery-images :is(th, td) { padding: 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; overflow-wrap: anywhere; }
+.recovery-guidance .recovery-images tr:last-child :is(th, td) { border-bottom: 0; }
+.recovery-guidance .recovery-images thead { background: var(--surface-soft); color: var(--muted); }
+.recovery-guidance .recovery-images th:first-child { width: 95px; }
+.recovery-guidance .recovery-images th:last-child { width: 112px; }
+.recovery-guidance .recovery-mismatch { display: block; color: var(--warning); margin-top: 4px; }
+.recovery-guidance ol { display: grid; gap: 8px; margin: 0; padding-left: 22px; }
+@media (max-width: 520px) {
+  .recovery-guidance .recovery-facts > div { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}

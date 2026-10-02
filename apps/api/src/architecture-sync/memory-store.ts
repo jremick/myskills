@@ -1,6 +1,9 @@
+import { isApprovedArtifactRollbackTransition } from "./artifact-service.js";
+import { assertExecutableSyncRun } from "./purpose.js";
 import { randomUUID } from "node:crypto";
 import {
   AppError,
+  artifactHash, assertArchitectureArtifactIntent, type ArchitectureArtifactIntent,
   architectureSyncControlLimits,
   assertValidArchitectureSyncLease,
   assertValidArchitectureSyncReceipt,
@@ -93,6 +96,16 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
     });
   }
 
+  private readonly artifactIntents = new Map<string, ArchitectureArtifactIntent>();
+  async getArtifactIntent(runId: string): Promise<ArchitectureArtifactIntent | null> { return structuredClone(this.artifactIntents.get(runId) ?? null); }
+  async setArtifactIntent(runId: string, intent: ArchitectureArtifactIntent): Promise<void> {
+    assertArchitectureArtifactIntent(intent);
+    const run = await this.getRun(runId);
+    const previous = this.artifactIntents.get(runId);
+    if (run?.metadata?.source !== "architecture-artifact" || run.metadata.artifactDigest !== artifactHash(intent) || previous && artifactHash(previous)!==artifactHash(intent)) throw new AppError("Artifact intent is immutable and bound to its run.","ARCHITECTURE_ARTIFACT_INTENT_CONFLICT",409);
+    this.artifactIntents.set(runId, structuredClone(intent));
+  }
+
   async createRun(input: ArchitectureSyncCreateRunStoreInput): Promise<ArchitectureSyncCreateRunStoreResult> {
     const actorId = validateIdentifier(input.actorId, "actorId");
     const requestKey = validateIdentifier(input.requestKey, "requestKey");
@@ -125,10 +138,24 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
     return { run: cloneRun(run), decision: "new" };
   }
 
+  async findRunForCreate(input: { actorId: string; requestKey: string; targetId: string; idempotencyKey: string }): Promise<ArchitectureSyncRun | null> {
+    const record = this.requestKeys.get(`${validateIdentifier(input.actorId, "actorId")}\u0000${validateIdentifier(input.requestKey, "requestKey")}`)
+      ?? this.idempotencyKeys.get(`${validateIdentifier(input.targetId, "targetId")}\u0000${validateIdentifier(input.idempotencyKey, "idempotencyKey")}`);
+    return record ? this.getRun(record.runId) : null;
+  }
+
   async getRun(runId: string): Promise<ArchitectureSyncRun | null> {
     const id = validateIdentifier(runId, "runId");
     const run = this.runs.get(id);
     return run ? cloneRun(run) : null;
+  }
+
+  async listRuns(input: { readonly targetId: string; readonly limit?: number; readonly source?: string }): Promise<ArchitectureSyncRun[]> {
+    const targetId = validateIdentifier(input.targetId, "targetId");
+    const limit = input.limit ?? 100;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw new AppError("Sync history limit is invalid.", "ARCHITECTURE_SYNC_LIMIT_INVALID", 400);
+    return [...this.runs.values()].filter(run => run.identity.targetId === targetId && (input.source === undefined || run.metadata?.source === input.source))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.identity.runId.localeCompare(left.identity.runId)).slice(0, limit).map(cloneRun);
   }
 
   /**
@@ -147,6 +174,7 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
     }
     const currentRun = this.runs.get(runId);
     if (!currentRun) throw new AppError("Sync run was not found.", "ARCHITECTURE_SYNC_RUN_NOT_FOUND", 404);
+    assertExecutableSyncRun(currentRun);
     if (currentRun.identity.targetId !== targetId || currentRun.identity.targetGeneration !== targetGeneration) {
       throw new AppError("Sync run and target lease binding do not match.", "ARCHITECTURE_SYNC_BINDING_CONFLICT", 409);
     }
@@ -197,6 +225,7 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
     const run = assertValidArchitectureSyncRun(input.run);
     const nextRun = assertValidArchitectureSyncRun(input.nextRun);
     const runId = validateIdentifier(run.identity.runId, "runId");
+    assertExecutableSyncRun(run);
     const targetId = validateIdentifier(run.identity.targetId, "targetId");
     const actorId = validateIdentifier(input.actorId, "actorId");
     const holderId = validateIdentifier(input.holderId, "holderId");
@@ -336,7 +365,7 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
     const existing = this.runs.get(run.identity.runId);
     if (!existing) throw new AppError("Sync run was not found.", "ARCHITECTURE_SYNC_RUN_NOT_FOUND", 404);
     this.assertImmutableRunFields(existing, run);
-    const runTransitionAllowed = existing.state === run.state
+    const runTransitionAllowed = isApprovedArtifactRollbackTransition(existing, run) || existing.state === run.state
       || (options.recoveryTransition
         ? isValidArchitectureSyncRecoveryTransition({
           from: existing.state,
@@ -371,6 +400,7 @@ export class MemoryArchitectureSyncStore implements ArchitectureSyncStore {
     }
     const run = this.runs.get(runId);
     if (!run) throw new AppError("Sync run was not found.", "ARCHITECTURE_SYNC_RUN_NOT_FOUND", 404);
+    assertExecutableSyncRun(run);
     if (run.identity.targetId !== targetId || run.identity.targetGeneration !== targetGeneration) {
       throw new AppError("Sync run and target lease binding do not match.", "ARCHITECTURE_SYNC_BINDING_CONFLICT", 409);
     }
@@ -593,6 +623,7 @@ function immutableRunProjection(run: ArchitectureSyncRun): Record<string, unknow
       ...(step.metadata === undefined ? {} : { metadata: step.metadata }),
     })),
     capabilities: run.capabilities,
+    metadata: run.metadata,
   };
 }
 

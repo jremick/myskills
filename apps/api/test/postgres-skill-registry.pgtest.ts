@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseSkillManifest, type PackageInputFile } from "@myskills-app/skill-package";
 import { AppError } from "@myskills-app/core";
+import { runMigrations } from "../src/db/migrate.js";
 import { createDb, createPgPool } from "../src/db/client.js";
 import {
   skillTeamGrants,
@@ -414,9 +415,15 @@ test("approval artifact hash migration backfills legacy approved unpublished row
   );
   assert.equal(backfilled.rows[0].approved_artifact_sha256, artifactSha256);
 
-  // The store uses the current schema projection. Add the later release
-  // metadata columns after proving the isolated 0012 backfill behavior.
-  await applyMigration(pool, "0021_skill_release_metadata");
+  // Preserve the real legacy rows and migrate forward before using today's
+  // store. Record only migrations already applied by the isolated backfill
+  // fixture, then let the production migrator establish the 0039 boundary.
+  // applyMigrations/applyMigration already record exactly the legacy boundary.
+  // Do not recreate its ledger or falsely mark an unapplied migration complete.
+  const applied = (await pool.query("SELECT id FROM schema_migrations ORDER BY id")).rows.map(row => row.id);
+  assert.deepEqual(applied, readdirSync(migrationsDir).filter(file => file.endsWith(".sql") && file <= "0012_approval_artifact_hash.sql").sort().map(file => file.replace(/\.sql$/, "")));
+  await runMigrations(pool);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM legacy_package_scan_allowances")).rows[0].n, 1);
 
   const db = createDb(pool);
   const maintainer = await insertUser(db, "legacy-maintainer@example.com", "Legacy Maintainer");
@@ -651,6 +658,11 @@ test("Postgres publish fails when artifact payload changes after approval", {
     }),
     (error) => error instanceof AppError && error.code === "APPROVED_ARTIFACT_HASH_MISMATCH",
   );
+  const state = await pool.query("SELECT lifecycle_status, published_at FROM skill_versions WHERE id=$1", [submitted.id]);
+  assert.equal(state.rows[0].lifecycle_status, "review");
+  assert.equal(state.rows[0].published_at, null);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM audit_events WHERE resource_id=$1 AND action='release.publish' AND decision='deny'", [submitted.id])).rows[0].n, 1);
+
 });
 
 test("Postgres publish rejects artifact payload mutation between pre-read and revalidation", {

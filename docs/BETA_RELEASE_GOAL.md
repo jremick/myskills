@@ -1,9 +1,9 @@
 # Operational Beta Delivery Brief
 
-Version: 0.1.0-beta.18
+Version: 0.1.0-beta.19
 Last updated: 2026-09-30
 
-Target release: `v0.1.0-beta.18`.
+Target release: `v0.1.0-beta.19`.
 
 Status: beta.18 release preparation. This candidate adds CLI/MCP capability
 parity, opt-in OAuth connections, dependency repairs and delivery tooling to

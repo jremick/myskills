@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { PackageFileViewer } from "../src/components/registry/PackageFileViewer.js";
 import { SkillManagePanel } from "../src/components/registry/SkillManagePanel.js";
 import { SubmissionEvidencePanel } from "../src/components/registry/SubmissionEvidencePanel.js";
@@ -67,13 +67,19 @@ test("author feedback shows recorded reasons and scan findings before choosing a
     id: "submission-1", slug: "helper", version: "1.0.0", reviewStatus: "changes-requested",
     changeRequestReason: "Add an example for an empty input.",
     correction: { requiresNewVersion: true, canSubmitNewVersion: true },
-    reviewHistory: [{ action: "request-changes", reason: "Add an example for an empty input.", createdAt: "2026-09-01T00:00:00Z" }],
+    reviewHistory: [{ action: "reject", reason: "Previous review reason.", createdAt: "2026-08-31T00:00:00Z" }, { action: "request-changes", reason: "Add an example for an empty input.", createdAt: "2026-09-01T00:00:00Z" }],
     scanRuns: [{ id: "scan-1", status: "warning", createdAt: "2026-09-01T00:00:00Z", startedAt: null, completedAt: null, findings: [{ category: "review", severity: "warning", path: "SKILL.md", message: "Check the external command." }] }],
   } as UserSubmissionDetail;
   const client = { async getUserSubmissionDetail() { return detail; } } as unknown as RegistryClient;
   const view = render(<SubmissionEvidencePanel client={client} submissionId="submission-1" mode="author" onCorrect={() => { corrected = true; }} />);
   await view.findByText("Check the external command.");
   assert.equal(view.getAllByText("Add an example for an empty input.").length, 2);
+  const currentChanges = view.getByText("Requested changes", { exact: true }).closest(".control-plane-inline-message")!;
+  assert.equal(within(currentChanges as HTMLElement).getByText(detail.changeRequestReason!, { exact: true }).tagName, "P");
+  const requestedChange = view.getByText("Changes requested", { exact: true }).closest("li")!;
+  assert.equal(within(requestedChange).getByText(detail.changeRequestReason!, { exact: true }).tagName, "P");
+  assert.equal(within(currentChanges as HTMLElement).queryByText("Previous review reason."), null);
+  assert.equal(within(requestedChange).queryByText("Previous review reason."), null);
   fireEvent.click(view.getByRole("button", { name: "Choose corrected package" }));
   assert.equal(corrected, true);
 });

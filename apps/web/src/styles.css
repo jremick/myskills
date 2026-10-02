@@ -1,3 +1,9 @@
+@import "./components/operations/operations.css";
+@import "./components/registry/task-discovery.css";
+@import "./components/registry/scan-evidence.css";
+@import "./components/registry/ReleaseComparison.css";
+@import "./components/architecture/architecture-plan.css";
+@import "./components/authoring/draft-workspace.css";
 @import "./components/branding/branding.css";
 @import "./components/marketing/marketing.css";
 @import "./components/library/libraries.css";

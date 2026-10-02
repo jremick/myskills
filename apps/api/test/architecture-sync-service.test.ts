@@ -117,6 +117,19 @@ async function applyInput(runId: string, overrides: Partial<ArchitectureSyncAppl
   return { actor: "owner-1", runId, ...overrides };
 }
 
+test("pre-correction default step IDs replay unchanged while new requests remain namespaced", async () => {
+  const { service, store } = fixture();
+  const legacy = await service.createPreviewRun(input({ steps: input().steps.map((step, index) => ({ ...step, id: `step-${index + 1}` })) }));
+  assert.deepEqual(legacy.run.steps.map(step => step.id), ["step-1", "step-2"]);
+  const replay = await service.createPreviewRun(input());
+  assert.equal(replay.replayed, true); assert.deepEqual(replay.run, legacy.run);
+  assert.deepEqual(await store.getRun(legacy.run.identity.runId), legacy.run);
+  await assert.rejects(service.createPreviewRun(input({ desired: { changed: true } })), (error: unknown) => error instanceof Error && "code" in error && error.code === "ARCHITECTURE_SYNC_IDEMPOTENCY_CONFLICT");
+  const fresh = await Promise.all(["new-one", "new-two"].map(key => service.createPreviewRun(input({ requestKey: key, idempotencyKey: key }))));
+  assert.equal(new Set(fresh.flatMap(result => result.run.steps.map(step => step.id))).size, 4);
+  assert.ok(fresh.every(result => result.run.steps.every(step => !/^step-[12]$/.test(step.id))));
+});
+
 test("preview is digest-only, side-effect-free, and request/idempotency replay is deterministic", async () => {
   const { service, store, executor } = fixture();
   const preview = await service.createPreviewRun(input());
@@ -124,7 +137,7 @@ test("preview is digest-only, side-effect-free, and request/idempotency replay i
   assert.equal(preview.run.state, "drafted");
   assert.equal(preview.run.receipts.length, 0);
   assert.equal(preview.run.digests.desiredDigest.length, 64);
-  assert.equal(executor.hasApplied(preview.run.identity.runId, "step-1"), false);
+  assert.equal(executor.hasApplied(preview.run.identity.runId, preview.run.steps[0].id), false);
 
   const serialized = JSON.stringify(preview.run);
   assert.equal(/"(?:spec|path|url|prompt|credential|config)"/i.test(serialized), false);
@@ -157,7 +170,7 @@ test("approval binds the actor and plan digest, then staged apply verifies in or
   assert.deepEqual(applied.steps.map((step) => step.state), ["succeeded", "succeeded"]);
   assert.deepEqual(applied.receipts.map((receipt) => receipt.kind), ["approval", "apply", "apply", "verify", "verify", "run"]);
   assert.equal((await store.getCurrentLease(applied.identity.targetId)), null);
-  assert.equal(executor.hasApplied(applied.identity.runId, "step-1"), true);
+  assert.equal(executor.hasApplied(applied.identity.runId, applied.steps[0].id), true);
   const replay = await service.apply(await applyInput(applied.identity.runId));
   assert.deepEqual(replay, applied);
 });

@@ -117,4 +117,5 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
+await import("./reconcile-roadmap-criteria.mjs?check");
 console.log("Structure check passed.");

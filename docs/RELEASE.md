@@ -1,31 +1,46 @@
 # Release Process
 
-Version: 0.1.0-beta.18
-Last updated: 2026-09-30
+Version: 0.1.0-beta.19
+Last updated: 2026-10-02
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
 
-## Beta.18 candidate
+## Beta.19 candidate
 
-The next candidate targets `v0.1.0-beta.18` with CLI/MCP capability parity,
-opt-in OAuth connections, dependency repairs, delivery tooling, and personal
-and team Library Collections and Groups. The beta.17 tag remains unchanged.
-Phase-1 verification and Railway staging passed at
-`14970ba10a67f7372b713a3c29a17b8b72d91a24`, before Collections. Collections PR #124
-merged after its full Node 22/24 matrix and CodeQL passed; the tested merge and
-landed source have the same tree. Collections staging, real ChatGPT/Claude
-acceptance, canonical release verification, tagging, publication and production
-promotion remain pending.
-See [Beta.18 release preparation](BETA18_RELEASE_DELIVERY.md).
+The current target is `v0.1.0-beta.19`. It carries the merged, unreleased
+beta.18 CLI/MCP, OAuth, dependency and Collections/Groups scope, the architecture
+explorer from [PR #126](https://github.com/jremick/myskills/pull/126), and the
+roadmap source in [PR #133](https://github.com/jremick/myskills/pull/133): private
+author drafts, exact-version comparisons, durable scan/evaluation evidence,
+browser/device CLI login, architecture review and composed workspace delivery,
+task discovery, the product/docs site and self-host operator packaging.
 
-## Current published status
+Finish verification and publication against one immutable candidate. The full
+runtime gate, HOST install/upgrade/backup/restore acceptance, independent review,
+protected checks, tagged verification and exact artifact identity remain required.
+The owner has explicitly deferred live ChatGPT/Claude consent and recognition,
+physical MFA scans and account pilots. This deferral does not establish host
+acceptance or relax deterministic/runtime gates. Production deployment is outside
+this delivery action. See [Beta.19 release delivery](BETA19_RELEASE_DELIVERY.md).
 
-Readback on 30 September 2026: GitHub beta.17 is published from
-`9c0511e90a4c0b2fe7c54c4e5f11a1b320e8db7b`. npm `beta` remains
-`0.1.0-beta.16`; `latest` and `alpha` remain `0.1.0-alpha.3`.
-The [hosted version endpoint](https://myskills.sh/version.json) reports beta.16
+## Beta.18 historical candidate
+
+The [beta.18 preparation record](BETA18_RELEASE_DELIVERY.md) retains phase-1
+verification and Railway staging at
+`14970ba10a67f7372b713a3c29a17b8b72d91a24`, before Collections, and the later
+Collections/Groups verification from merged
+[PR #124](https://github.com/jremick/myskills/pull/124). These receipts retain their
+original source identities and limits. Their merged features are now included
+in beta.19; their historical pending gates do not certify its later source.
+
+## Last recorded published snapshot
+
+Readback on 30 September 2026: GitHub beta.17 was published from
+`9c0511e90a4c0b2fe7c54c4e5f11a1b320e8db7b`. npm `beta` was
+`0.1.0-beta.16`; `latest` and `alpha` were `0.1.0-alpha.3`.
+The [hosted version endpoint](https://myskills.sh/version.json) reported beta.16
 at `acfb7c8c7f8bc560f6fdba13cf0414033ab6d00e`. Other instances need independent
 readback. Historical records below describe the state at each release; they
 do not establish the current deployed version.
@@ -249,9 +264,9 @@ Draft public release text in a file and use `--notes-file` or the GitHub UI if a
 
 ## CLI Package Publication
 
-The prepared CLI candidate is `0.1.0-beta.18`. The published GitHub CLI archive
-is `0.1.0-beta.17`; npm's `beta` selector
-remains `0.1.0-beta.16` as of 30 September 2026. The package uses
+The prepared CLI candidate is `0.1.0-beta.19`. The recorded publication snapshot
+on 30 September 2026 had the GitHub CLI archive at `0.1.0-beta.17` and npm's
+`beta` selector at `0.1.0-beta.16`. The package uses
 `publishConfig.tag=beta`. `@myskills-app/skill-package` remains a private
 build-time dependency only; esbuild embeds it in the public CLI bundle.
 GitHub publication does not change the published npm version.

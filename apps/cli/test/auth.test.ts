@@ -16,7 +16,7 @@ test("help documents login, logout, and stored token fallback", async () => {
   const code = await runCli(["help"], testRuntime(output));
 
   assert.equal(code, 0);
-  assert.match(output.stdout.join("\n"), /login \[--api-url <url>\] \[--method <password\|api-key>\] \[--email <email>\]/);
+  assert.match(output.stdout.join("\n"), /login \[--api-url <url>\] \[--method <password\|api-key\|browser>\] \[--email <email>\]/);
   assert.match(output.stdout.join("\n"), /logout \[--api-url <url>\] \[--token <token>\]/);
   assert.match(output.stdout.join("\n"), /sharing set <skill-slug> .*--organization <organization-id>/);
   assert.match(output.stdout.join("\n"), /skills edit <skill-slug> .*--visibility <scope>.*deprecated/);

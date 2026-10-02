@@ -1,3 +1,4 @@
+import { resolveImprovementScopeRole, isImprovementScopeWriter, type ImprovementScopeRole } from "./scope-access.js";
 import { randomUUID } from "node:crypto";
 import {
   AppError,
@@ -91,7 +92,7 @@ interface PlanResolution {
   unavailable: boolean;
 }
 
-type ScopeRole = "owner" | "admin" | "member";
+type ScopeRole = ImprovementScopeRole;
 
 const idempotencyKeyPattern = /^[A-Za-z0-9._:-]{8,128}$/;
 const pathIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -941,16 +942,15 @@ export class ImprovementService {
   }
 
   private async scopeRole(actor: ImprovementActor, scope: ImprovementScopeRef): Promise<ScopeRole | null> {
-    if (scope.type === "user") return scope.id === actor.id ? "owner" : null;
-    if (scope.type === "team") {
-      if (!this.deps.teamService) return null;
-      const dashboard = await this.deps.teamService.listDashboard({ id: actor.id, email: actor.email });
-      const team = dashboard.teams.find((item) => item.id === scope.id);
-      if (!team) return null;
-      if (team.organizationId && !await this.organizationRole(actor, team.organizationId)) return null;
-      return team.role;
-    }
-    return this.organizationRole(actor, scope.id);
+    return resolveImprovementScopeRole(actor.id, scope, {
+      team: async id => {
+        if (!this.deps.teamService) return null;
+        const dashboard = await this.deps.teamService.listDashboard({ id: actor.id, email: actor.email });
+        const team = dashboard.teams.find(item => item.id === id);
+        return team ? { role: team.role, organizationId: team.organizationId ?? null } : null;
+      },
+      organization: id => this.organizationRole(actor, id),
+    });
   }
 
   private async organizationRole(actor: ImprovementActor, organizationId: string): Promise<ScopeRole | null> {
@@ -978,7 +978,7 @@ export class ImprovementService {
 
   private async requireWriter(actor: ImprovementActor, scope: ImprovementScopeRef): Promise<void> {
     const role = await this.requireReader(actor, scope);
-    const writer = scope.type === "user" || (scope.type === "team" ? role === "owner" : role === "owner" || role === "admin");
+    const writer = isImprovementScopeWriter(scope, role);
     if (!writer) throw scopeForbidden();
     if (scope.type !== "user") requireMfa(actor);
   }

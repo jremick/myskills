@@ -1,3 +1,4 @@
+import { assertRegistryReadCredential } from "../artifacts/postgres-read-authority.js";
 import { assertCurrentTeamOwner, effectiveTeamOwnerPredicate, isCurrentTeamOwner } from "../repositories/team-ownership.js";
 import type { ChronologicalStoreQuery } from "../repositories/chronological-pagination.js";
 import { and, eq, ilike, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
@@ -33,6 +34,7 @@ import {
 } from "../db/schema.js";
 import type {
   CreateSubmissionInput,
+  ArtifactDeliveryInput,
   PublicBundle,
   PublicReleaseMetadata,
   ReleaseLifecycleAction,
@@ -62,6 +64,7 @@ import type {
 import { assertNoVisibilityMetadataUpdate } from "./types.js";
 import { artifactPayloadSha256 } from "./artifact-hash.js";
 import { reviewHistoryActions, submissionReviewHistory } from "./feedback.js";
+import { enqueuePackageScan, PACKAGE_SCAN_RUNNER_VERSION } from "../package-quality/scan-jobs.js";
 
 /**
  * Optional precondition owned by another domain. It runs inside the publication transaction after
@@ -83,7 +86,7 @@ const DEFAULT_SHARING_SETTINGS: SharingSettings = {
 export class PostgresSubmissionStore implements SubmissionStore {
   constructor(
     private readonly db: Database,
-    private readonly options: { artifactStorage?: ArtifactObjectStorage; publicationGuard?: PostgresReleasePublicationGuard } = {},
+    private readonly options: { artifactStorage?: ArtifactObjectStorage; publicationGuard?: PostgresReleasePublicationGuard; backgroundScans?: boolean } = {},
   ) {}
 
   async createSubmission(input: CreateSubmissionInput & {
@@ -214,7 +217,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
         compatibility: input.release.compatibility,
         lifecycleStatus: "submitted",
         reviewStatus: "unreviewed",
-        securityStatus: input.securityStatus,
+        securityStatus: this.options.backgroundScans ? "not-run" : input.securityStatus,
       }).returning();
 
       if (!version) {
@@ -243,12 +246,16 @@ export class PostgresSubmissionStore implements SubmissionStore {
         payload: this.options.artifactStorage ? { files: [] } : input.artifact.payload,
       });
 
+      if (this.options.backgroundScans) {
+        await enqueuePackageScan(tx, { versionId: version.id, artifactSha256: input.artifact.sha256 });
+      } else {
       const now = new Date();
       const [scanRun] = await tx.insert(scanRuns).values({
         skillVersionId: version.id,
-        status: "succeeded",
+        status: "running",
+        artifactSha256: input.artifact.sha256,
+        runnerVersion: PACKAGE_SCAN_RUNNER_VERSION,
         startedAt: now,
-        completedAt: now,
       }).returning();
 
       if (!scanRun) {
@@ -264,6 +271,8 @@ export class PostgresSubmissionStore implements SubmissionStore {
           path: finding.path ?? null,
         })));
       }
+      await tx.update(scanRuns).set({ status: "succeeded", completedAt: now }).where(eq(scanRuns.id, scanRun.id));
+      }
 
       await tx.insert(auditEvents).values({
         actorUserId: input.actor.id,
@@ -278,7 +287,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
           byteSize: input.artifact.byteSize,
           fileCount: input.files.length,
           findingCount: input.findings.length,
-          securityStatus: input.securityStatus,
+          securityStatus: version.securityStatus,
           ownerUserId: skill.ownerUserId,
           ownerTeamId: skill.ownerTeamId,
         },
@@ -317,8 +326,8 @@ export class PostgresSubmissionStore implements SubmissionStore {
         release: input.release,
         artifact: input.artifact,
         scan: {
-          status: "succeeded",
-          findings: input.findings,
+          status: this.options.backgroundScans ? "queued" : "succeeded",
+          findings: this.options.backgroundScans ? [] : input.findings,
         },
       };
       });
@@ -830,6 +839,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
         version: preparedRow?.version,
         reason: error instanceof AppError ? error.code : "invalid_artifact_manifest",
       });
+      if (error instanceof AppError && error.code === "ARTIFACT_METADATA_MISMATCH") throw new AppError("Approved artifact hash does not match the current submission artifact.", "APPROVED_ARTIFACT_HASH_MISMATCH", 409);
       throw error;
     }
     if (manifest.name !== preparedRow.slug || manifest.version !== preparedRow.version || manifest.visibility !== preparedRow.visibility) {
@@ -1148,6 +1158,18 @@ export class PostgresSubmissionStore implements SubmissionStore {
     return row ? publicRelease(row) : null;
   }
 
+  async authorizeArtifactDelivery(input: ArtifactDeliveryInput): Promise<PublicReleaseMetadata | null> {
+    // The first SELECT acquires one MVCC snapshot for the entire decision.
+    // Revocations committed before it are visible; overlapping writes may
+    // serialize after it. No slow object read or usage UPDATE runs inside it.
+    return this.db.transaction(async (tx) => {
+      await assertRegistryReadCredential(tx, input);
+      const sharing = await getSharingSettings(tx);
+      const row = await selectVisibleRelease(tx, input, sharing);
+      return row ? publicRelease(row) : null;
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
+  }
+
   async getPublicBundle(input: { slug: string; version: string; platform?: string; actorId?: string | null }): Promise<PublicBundle | null> {
     const row = await selectVisibleRelease(this.db, input, await getSharingSettings(this.db));
     if (!row) {
@@ -1251,6 +1273,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
         || prepared.manifest.visibility !== "private" || row.visibility !== "private") {
         throw new AppError("Package manifest does not match the reviewed submission.", "PACKAGE_MANIFEST_MISMATCH", 422);
       }
+      await this.requireApplicableScan(tx, input.submissionId, currentArtifact.sha256);
       await this.options.publicationGuard?.assertReleasePublishable(tx, {
         releaseId: input.submissionId,
         artifactSha256: input.artifactSha256,
@@ -1395,6 +1418,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
         || !currentArtifact || !sameReviewArtifact(currentArtifact, prepared.artifact) || !row.artifactPayloadMatches) {
         throw new AppError("Review artifact hash does not match the self-reviewed artifact.", "ARTIFACT_HASH_MISMATCH", 409);
       }
+      await this.requireApplicableScan(tx, input.submissionId, currentArtifact.sha256);
       await tx.execute(sql`
         INSERT INTO skill_version_review_attestations (skill_version_id, kind, artifact_sha256, actor_user_id, reason)
         VALUES (${input.submissionId}::uuid, 'instance-elevation', ${input.artifactSha256}, ${input.actorId}::uuid, ${input.reason ?? ""})
@@ -1537,7 +1561,18 @@ export class PostgresSubmissionStore implements SubmissionStore {
       }, tx);
       throw new AppError("Submission artifact metadata is required before approval.", "PACKAGE_ARTIFACT_REQUIRED", 422);
     }
+    await this.requireApplicableScan(tx, input.submissionId, artifact.sha256);
     return artifact;
+  }
+
+  private async requireApplicableScan(tx: DbLike, versionId: string, digest: string): Promise<void> {
+    const result = await tx.execute(sql`SELECT id FROM scan_runs WHERE skill_version_id=${versionId}::uuid AND status='succeeded'
+      AND (artifact_sha256=${digest} OR (artifact_sha256 IS NULL AND job_id IS NULL
+        AND id IN (SELECT l.scan_run_id FROM legacy_package_scan_allowances l WHERE l.artifact_sha256=${digest})))
+      AND NOT EXISTS (SELECT 1 FROM scan_findings WHERE scan_run_id=scan_runs.id AND severity IN ('warning','blocking'))
+      ORDER BY created_at DESC, id DESC LIMIT 1`);
+    // Only scans predating the binding migration may use the legacy exception.
+    if (!result.rows.length) throw new AppError("A succeeded scan of the current artifact is required.", "PACKAGE_SCAN_REQUIRED", 422);
   }
 
   private async requirePublishableArtifact(
@@ -1608,6 +1643,7 @@ export class PostgresSubmissionStore implements SubmissionStore {
       }, tx);
       throw new AppError("Submission artifact metadata is required before publication.", "PACKAGE_ARTIFACT_REQUIRED", 422);
     }
+    await this.requireApplicableScan(tx, input.submissionId, artifact.sha256);
     if (!row.approvedArtifactSha256) {
       await this.insertReviewAudit("release.publish", "deny", input.actorId, input.submissionId, {
         slug: row.slug,
@@ -1988,6 +2024,8 @@ async function selectSubmissionFeedback(
         createdAt: run.createdAt.toISOString(),
         startedAt: run.startedAt?.toISOString() ?? null,
         completedAt: run.completedAt?.toISOString() ?? null,
+        artifactSha256: run.artifactSha256, runnerVersion: run.runnerVersion,
+        attempt: run.attempt, failureCode: run.failureCode,
         findings: [],
       };
       scans.set(run.id, scan);

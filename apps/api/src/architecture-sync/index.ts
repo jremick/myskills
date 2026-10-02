@@ -3,3 +3,6 @@ export { MemoryArchitectureSyncFixtureExecutor, recoveryConditionForExecutorFail
 export { ArchitectureSyncService } from "./service.js";
 export type { ArchitectureSyncPorts } from "./service.js";
 export * from "./types.js";
+export { ArchitecturePlanService } from "./plan-service.js";
+export { registerArchitecturePlanRoutes } from "./routes.js";
+export type { ArchitecturePlanActor, ArchitecturePlanDependencies, CreateArchitecturePlanInput } from "./plan-service.js";

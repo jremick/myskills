@@ -138,8 +138,11 @@ service allocates a new shell identity, authorizes exact releases, appends the
 first revision, and recomputes digests. Migration 0020 records source/target
 revision lineage, mapping/diff status, digests, and idempotency constraints;
 the local API exposes preview/create routes and the web workbench exposes the
-same preview-first controls. The injected external release-authorizer
-preflight cannot be atomic with the database transaction.
+same preview-first controls. The external preflight remains advisory. The current
+Postgres path rechecks exact release authority inside the transaction and retains
+the source revision and membership/policy rows through commit. Earlier preflight
+alone did not provide this atomic boundary; canonical concurrency proof for the
+current implementation remains required.
 
 ## Tenancy, organizations, and effective membership
 
@@ -236,8 +239,10 @@ deterministic metadata observations. It does not search a home directory,
 follow profile pointers, read prompt bodies, emit paths or URLs, retain
 credentials, upload data, or expose mutation methods. The
 `architectures observe` and `architectures health` commands run this adapter
-locally. Live API target upload, automatic discovery, and write operations are
-deferred.
+locally. Separate explicit commands now enroll an isolated workspace, upload its
+authorized target observation, and run the approved composed-artifact companion.
+Those commands do not add mutation to the read-only adapter. Automatic discovery
+and unselected provider executors remain deferred.
 
 ## Diagram and accessible artifacts
 
@@ -272,9 +277,11 @@ recovery evidence, target leases, fencing tokens, digests, and safe metadata.
 The API-side `ArchitectureSyncService`, in-memory fixture executor, and
 Postgres store persist and exercise approval, synthetic apply/verify/rollback
 state transitions, recovery decisions, lease loss, and idempotency for tests.
-This does not mutate a target. No public sync-run route, live adapter
-executor, package installer, filesystem writer, or live apply/rollback path is
-enabled. Each bounded sync run allows at most 500 steps and 2,004 append-only
+This does not mutate a target. The separate review-plan surface retains a
+server-compiled exact revision and trusted observation in this journal. Its
+create/list/inspect/approve routes record review only. They do not invoke the
+fixture executor or expose live apply/rollback. Each bounded sync run allows
+at most 500 steps and 2,004 append-only
 receipts. That capacity covers a 1,002-receipt max-step lifecycle, one full
 apply/verify retry, and two recovery/terminal receipts; further retries require
 a new bounded run.
@@ -283,15 +290,17 @@ a new bounded run.
 
 | Surface | Current branch capability | Explicit gap |
 | --- | --- | --- |
-| API | Architecture patterns/list/detail/revision/preview and draft-preview; organization membership/policy/team routes; atomic architecture-grant GET/PUT; pattern-migration preview/create; target registration/consent/observation/health/revoke. | No public sync-run route or live target operation. |
-| Web | Architecture dashboard, semantic editor, exact-release selection, immutable revision history/diff, “use as new draft,” profile/environment preview, SVG plus JSON/Mermaid downloads and a plain-outline projection, user-supplied fixture dry run, organization management, manager grant save/revoke, pattern-migration preview/create, and connected-target workbench. | CLI/MCP write parity, public sync-run UI, live adapters, and durable server-side diagram artifacts. |
-| CLI | Read-only `architectures patterns`, `list`, `show`, `preview`, `compile`, `plan`, and `dry-run`, plus local explicit-root `architectures observe` and `architectures health`; skill-sharing commands include organization grants. | No architecture organization-grant/target/sync/migration API commands and no live Codex upload or mutation connector. |
-| MCP | Read-only `list_architecture_patterns`, `list_architectures`, and `get_architecture_projection`, plus registry discovery tools. | No architecture writes, organization/target/sync/migration tools, or target mutation. |
+| API | Immutable topology/revisions, tenancy/grants/migration/targets and per-skill operations; permanently review-only plans; separate composed artifact prepare/inspect/execute approval/claim/checkpoint/receipt/rollback under current PostgreSQL authority. | Canonical SQL/MinIO proof and broader provider activation. |
+| Web | Explorer/Workbench/history/scoped drafts/derived diagrams; grants, migrations and connected targets; selected saved review to composed intent and explicit CLI handoff with receipt inspection. | Actual companion completion, host recognition and canonical browser proof. Durable server-side layout remains deferred. |
+| CLI | Architecture management/review and explicit-root observation; enrolled Codex workspace whole-artifact prepare/apply/verify/rollback with bounded staging, current approval/lease and durable journal. | Canonical filesystem/process proof and actual host recognition/consent; broader providers remain unselected. |
+| MCP | Named architecture management/review actions plus composed artifact prepare/inspect and enrolled CLI handoff. OAuth cannot authorize host execution endpoints. | Local companion completion, canonical transports and real host consent/recognition. |
 
 API authorization is the source of truth. Web, CLI, and MCP do not recreate
 membership, release, organization, consent, or target policy. The current
-parity is intentionally asymmetric: API/web provide architecture editing,
-API provides tenancy and target lifecycle, and CLI/MCP provide safe reads.
+parity inventory records each operation and its actual proof. Source coverage,
+memory-API journeys, PostgreSQL evidence, provider-host acceptance and deployment
+are separate claims. Review approval records no target execution authority.
+See [ARCH_LIFE_DELIVERY.md](ARCH_LIFE_DELIVERY.md) for the lifecycle residual ledger.
 
 ## Migration sequence
 
@@ -321,9 +330,29 @@ backup artifact alone does not establish either gate; if either is unapproved,
 stop before 0019 and use the deployment runbook's repair-forward or
 pre-migration restore path.
 
-## Deferred and non-goals
+## Composed workspace source delivery
 
-This Phase 2 slice does not enable:
+The roadmap integration now adds `codex-workspace-architecture/v1` immutable
+intent, distinct execution approval, the existing shared target fence and an
+explicit local companion transaction. Review-only plans stay non-executable.
+See [COMPOSED_ARCHITECTURE_DELIVERY.md](COMPOSED_ARCHITECTURE_DELIVERY.md) for
+protocol, limits, recovery semantics, exact ARCH-02/03/04 bindings and pending
+canonical/actual-host acceptance. This source addition does not establish live
+provider recognition or complete the graph lifecycle thesis.
+
+## Earlier Phase 2 deferred scope
+
+This dated boundary describes the earlier slice. The current candidate adds the
+separately approved guided composed Codex contract documented in
+[COMPOSED_ARCHITECTURE_DELIVERY.md](COMPOSED_ARCHITECTURE_DELIVERY.md). The read-only
+adapter and fixture executor retain their original limits. Automatic discovery,
+other provider executors, public architectures, conditional runtime enforcement
+and durable layout storage remain outside this candidate.
+
+
+The original Phase 2 slice below excluded these outcomes. The composed source
+addition above now delivers the bounded enrolled-workspace path; broader targets
+and runtime acceptance remain pending:
 
 - live Codex, ChatGPT, Claude, filesystem, API-project, or other target
   adapters;

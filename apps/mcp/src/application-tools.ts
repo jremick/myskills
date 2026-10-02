@@ -9,7 +9,7 @@ import { RegistryApiError, type ApplicationRequestInput, type McpSession, type R
 export function registerApplicationTools(server: McpServer, client: RegistryApiClient, options: { session?: McpSession } = {}) {
   for (const action of DELEGATED_ACTIONS) {
     const name = action.id.replaceAll(".", "_");
-    const readOnly = action.method === "GET" || ["architectures.preview", "architectures.draft.preview", "architectures.pattern_migration.preview", "improvements.plans.preview"].includes(action.id);
+    const readOnly = action.method === "GET" || ["skills.discover", "draft.preview", "draft.validate", "architectures.preview", "architectures.draft.preview", "architectures.pattern_migration.preview", "improvements.plans.preview"].includes(action.id);
     server.registerTool(name, {
       title: action.id.replaceAll("_", " ").replaceAll(".", " · "),
       description: description(action),
@@ -49,6 +49,10 @@ export function registerApplicationTools(server: McpServer, client: RegistryApiC
 
 function requiredScopes(action: DelegatedAction, input: ApplicationRequestInput | undefined): string[] {
   const scopes: string[] = [...action.requiredScopes];
+  if (action.id === "draft.create" && input?.body && typeof input.body === "object" && "source" in input.body) {
+    const source = input.body.source as { kind?: string };
+    scopes.push(source?.kind === "release" ? "skills:read" : "submissions:read");
+  }
   // These are additive API policies, never substitutes for server permission checks.
   if (action.id === "skills.metadata.update" && input?.body && typeof input.body === "object" && "visibility" in input.body) scopes.push("sharing:write");
   if (["bundles.create", "bundles.update"].includes(action.id) && input?.body && typeof input.body === "object" && "kind" in input.body && input.body.kind === "source") scopes.push("libraries:read");
@@ -57,6 +61,6 @@ function requiredScopes(action: DelegatedAction, input: ApplicationRequestInput 
 
 function description(action: DelegatedAction): string {
   const verb = action.id.replaceAll("_", " ").replaceAll(".", " ");
-  const conditional = action.id === "skills.metadata.update" ? "Changing visibility also requires sharing:write." : ["bundles.create", "bundles.update"].includes(action.id) ? "Source bundles also require libraries:read." : "";
+  const conditional = action.id.startsWith("architecture_artifacts.") ? "Creates or inspects immutable intent only. Stage, approve, apply, verify and rollback through myskills architecture-artifacts with an explicitly enrolled workspace. No filesystem completion without the exact aggregate API receipt; provider recognition remains unproven." : action.id === "draft.create" ? "Release forks additionally require skills:read; submission forks require submissions:read." : action.id === "skills.metadata.update" ? "Changing visibility also requires sharing:write." : ["bundles.create", "bundles.update"].includes(action.id) ? "Source bundles also require libraries:read." : "";
   return `${verb}. Calls the existing MySkills ${action.method} ${action.route} operation with the connected user's live permissions. ${action.requiredScopes.length ? `Requires all scopes: ${action.requiredScopes.join(", ")}.` : "Returns public instance metadata."} ${action.assurance.includes("mfa") ? "MFA assurance is required where the API's role/resource policy applies; reconnect through the trusted application when it expires." : "The API enforces ownership, membership and lifecycle policy."} ${conditional} Read the current resource first for revision/digest-sensitive writes. This operation does not perform local installation or target execution.`;
 }

@@ -1,7 +1,13 @@
+import { createEvaluationClient, type EvaluationClient } from "./evaluations-api.js";
+import { createArchitectureArtifactClient, type ArchitectureArtifactClient } from "./architecture-artifact-client.js";
+import { createArchitecturePlanClient, type ArchitecturePlanClient } from "./architecture-plan-client.js";
+import type { TaskDiscoveryInput, TaskDiscoveryResponse } from "@myskills-app/core";
 import { createBundleClient, type BundleClient } from "./bundle-api.js";
+import { createDeviceLoginClient, type DeviceLoginClient } from "./device-login-api.js";
 import { createImprovementClient, type ImprovementClient } from "./improvement-api";
 import { createGithubClient, type GithubClient } from "./github-api.js";
 import { createLibraryClient, type LibraryClient } from "./library-api.js";
+import { createDraftClient, type DraftClient } from "./drafts-api.js";
 import { createOAuthConnectionClient, type OAuthConnectionClient } from "./oauth-api.js";
 import { MAX_BRAND_LOGO_BYTES, MAX_BRAND_TEXT_LENGTH } from "@myskills-app/core";
 import type {
@@ -796,7 +802,7 @@ export interface RegistryPageInput { query?: string; cursor?: string; limit?: nu
 export interface SubmissionEvidence {
   changeRequestReason: string | null;
   reviewHistory: Array<{ action: ReviewActionName; reason: string | null; createdAt: string }>;
-  scanRuns: Array<{ id: string; status: string; createdAt: string; startedAt: string | null; completedAt: string | null; findings: SubmissionScanFinding[] }>;
+  scanRuns: Array<{ id: string; status: string; createdAt: string; startedAt: string | null; completedAt: string | null; artifactSha256?: string | null; runnerVersion?: string | null; attempt?: number | null; failureCode?: string | null; findings: SubmissionScanFinding[] }>;
 }
 
 export interface UserSubmissionDetail extends UserSubmissionSummary, SubmissionEvidence {
@@ -804,11 +810,15 @@ export interface UserSubmissionDetail extends UserSubmissionSummary, SubmissionE
 }
 export interface ReviewSubmissionDetail extends ReviewSubmissionSummary, SubmissionEvidence {}
 
-export interface RegistryClient {
+export interface RegistryClient extends Partial<ArchitecturePlanClient>, Partial<ArchitectureArtifactClient> {
+  discoverTask?(input: TaskDiscoveryInput, token?: string): Promise<TaskDiscoveryResponse>;
+  deviceLogin?: DeviceLoginClient;
   /** Remote MCP connection consent and management. */
   oauth?: OAuthConnectionClient;
   improvements?: ImprovementClient;
+  evaluations?: EvaluationClient;
   libraries?: LibraryClient;
+  drafts?: DraftClient;
   github?: GithubClient;
   bundles?: BundleClient;
   searchSkillPage?(input: RegistryPageInput): Promise<RegistryPage<PublicSkill>>;
@@ -1001,10 +1011,16 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
   const root = baseUrl.replace(/\/+$/, "");
   const cookieSessionHeaders = { "x-myskills-session-response": "cookie" };
   return {
+    evaluations: createEvaluationClient(root, fetchImpl, token),
+    deviceLogin: createDeviceLoginClient(root, fetchImpl, token),
     oauth: createOAuthConnectionClient(root, fetchImpl, token),
     improvements: createImprovementClient(<T,>(url: string, init?: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown }) => requestJson<T>(fetchImpl, `${root}${url}`, { ...init, token })),
     libraries: createLibraryClient(root, fetchImpl, token),
+    drafts: createDraftClient(root, fetchImpl, token),
     github: createGithubClient(root, fetchImpl, token),
+    ...createArchitectureArtifactClient((method, pathname, body) => requestJson(fetchImpl, `${root}${pathname}`, { method, ...(body === undefined ? {} : { body }), token })),
+    ...createArchitecturePlanClient((method, pathname, body, overrideToken) => requestJson(fetchImpl, `${root}${pathname}`, { method, ...(body === undefined ? {} : { body }), token: overrideToken ?? token })),
+    discoverTask: (input, overrideToken) => requestJson(fetchImpl, `${root}/v1/skills/discover`, { method: "POST", body: input, token: overrideToken ?? token }),
     bundles: createBundleClient(root, fetchImpl, token),
     async searchSkillPage(input) {
       const params = registryPageQuery(input);

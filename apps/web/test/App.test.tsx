@@ -288,6 +288,9 @@ test("default registry client is stable between renders", async () => {
     if (url.endsWith("/compatibility")) {
       return jsonResponse(200, { compatibility: { schemaVersion: 1, declaration: { status: "unspecified", revision: null, targets: [] }, attestation: { status: "none", revision: null }, evidence: [] } });
     }
+    if (url.endsWith("/v1/evaluations/releases/release-notes-helper/0.1.0/summary")) {
+      return jsonResponse(200, { runs: [] });
+    }
     if (url.includes("/releases/")) {
       return jsonResponse(200, { release: publicRelease() });
     }
@@ -302,7 +305,7 @@ test("default registry client is stable between renders", async () => {
 
     fireEvent.click(await view.findByRole("link", { name: "Release Notes Helper" }));
     await view.findByRole("heading", { name: "Release Notes Helper" });
-    await waitFor(() => assert.equal(calls.length, 9));
+    await waitFor(() => assert.equal(calls.length, 10));
     await delay(25);
     assert.deepEqual([...calls].sort(), [
       "http://localhost:3001/v1/branding",
@@ -314,6 +317,7 @@ test("default registry client is stable between renders", async () => {
       "http://localhost:3001/v1/skills/release-notes-helper/releases/0.1.0",
       "http://localhost:3001/v1/architecture-targets",
       "http://localhost:3001/v1/improvements/releases/release-notes-helper/0.1.0/compatibility",
+      "http://localhost:3001/v1/evaluations/releases/release-notes-helper/0.1.0/summary",
     ].sort());
   } finally {
     globalThis.fetch = previousFetch;

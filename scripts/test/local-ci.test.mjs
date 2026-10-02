@@ -66,11 +66,16 @@ const releaseTag = `v${rootPackage.version}`;
 const verifyJobs = ["check-node22", "check-node24", "web-e2e-node22", "web-e2e-node24", "postgres-node22", "postgres-node24", "railway-images"];
 const fixtureFiles = [
   "package.json",
+  "package-lock.json",
+  ...(existsSync(resolve("scripts/create-trust-provenance.mjs")) ? ["scripts/create-trust-provenance.mjs"] : []),
   ".gitignore",
   ".github/codeql/codeql-config.yml",
   "scripts/local-ci.sh",
   "scripts/local-ci.mjs",
   "scripts/lib/secret-patterns.mjs",
+  "scripts/lib/host-rehearsal-resources.mjs",
+  "scripts/lib/host-backup-diagnostics.mjs",
+  "scripts/lib/host-backup-service.mjs",
   "scripts/collect-browser-evidence.mjs",
   "scripts/create-release-artifacts.mjs",
   "scripts/verify-release.mjs",
@@ -80,6 +85,50 @@ const mockedBrowser = "run test:e2e -w @myskills-app/web -- --reporter=line,json
 // The gate is defined for Linux/amd64 hosts; elsewhere a complete pinned run must stay non-gating.
 const hostBlockers = process.platform === "linux" && process.arch === "x64" ? [] : ["unsupported-host-platform"];
 const runIdReservation = join("/var/tmp/myskills-local-ci-locks", runId);
+
+test("HOST rehearsal remains inside railway-images and fails that canonical job when its subprocess fails", (t) => {
+  const fixture = makeFixture(t); fixture.configure({ rules: [{ tool: "host-rehearsal", prefix: "", exit: 1 }] });
+  const run = runLocalCi(fixture, ["verify", "--job", "railway-images"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(run.status, 1, run.output);
+  assert.equal(run.result.jobs[0].id, "railway-images"); assert.equal(run.result.jobs[0].status, "failed");
+  assert.ok(run.result.jobs[0].steps.some((step) => step.name === "host-rehearsal" && step.status === "failed"));
+});
+
+test("HOST receipt must include restored TOTP, non-owner denial and revoked-session denial", (t) => {
+  const fixture = makeFixture(t); fixture.configure({ omitHostAuthProof: true });
+  const run = runLocalCi(fixture, ["verify", "--job", "railway-images"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(run.status, 1, run.output);
+  assert.equal(run.result.jobs[0].reason, "host-rehearsal-evidence-missing");
+});
+
+test("HOST receipt requires the real composed object-byte and denied-storage proof", (t) => {
+  const fixture = makeFixture(t); fixture.configure({ omitHostComposedProof: true });
+  const run = runLocalCi(fixture, ["verify", "--job", "railway-images"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(run.status, 1, run.output);
+  assert.equal(run.result.jobs[0].reason, "host-rehearsal-evidence-missing");
+});
+
+test("product-site build and browser proof run in existing browser jobs; missing site reports fail", (t) => {
+  const fixture = makeFixture(t); fixture.configure({ omitSiteReport: ["22"] });
+  const run = runLocalCi(fixture, ["verify", "--job", "web-e2e-node22"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(run.status, 1, run.output);
+  const records = fixture.records().filter((record) => record.tool === "npm");
+  assert.ok(records.some((record) => record.args.join(" ") === "run build -w @myskills-app/site"));
+  const browser = records.find((record) => record.args.join(" ") === "run test:e2e -w @myskills-app/site -- --reporter=line,json");
+  assert.match(browser.env.MYSKILLS_SITE_TEST_PORT, /^\d+$/);
+  assert.equal(run.result.jobs[0].status, "failed");
+});
+
+test("fresh operational and improvement reports are required alongside registry evidence", t => {
+  for (const phase of ["operational", "improvement"]) {
+    const fixture = makeFixture(t); fixture.configure({ omitFullstackReport: phase });
+    const run = runLocalCi(fixture, ["verify", "--job", "web-e2e-node22"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+    assert.equal(run.status, 1, run.output);
+    const steps = run.result.jobs[0].steps;
+    assert.equal(steps.find(({ name }) => name === "fullstack-browser").status, "passed");
+    assert.equal(steps.find(({ name }) => name === `collect-${phase}-evidence`).status, "failed", "registry evidence cannot stand in for the isolated lifecycle");
+  }
+});
 
 test("unsafe or stale inputs are rejected before any tool, container or workspace is used", (t) => {
   const fixture = makeFixture(t);
@@ -182,12 +231,13 @@ test("verify runs every required job on both Node lines and reports gating conte
   assert.ok(builds.some((build) => build.includes("--file Dockerfile.mcp")));
   assert.ok(builds.some((build) => build.includes("--file Dockerfile.web") && build.includes("--build-arg VITE_API_BASE_URL=/api")));
   assert.ok(builds.some((build) => build.includes("--file Dockerfile.backup")));
-  assert.equal(docker.filter(({ args }) => args[0] === "run" && args.includes("--rm") && args.includes("--network") && args.includes("none")).length, 2);
+  assert.ok(builds.some((build) => build.includes("--file Dockerfile.ops")));
+  assert.equal(docker.filter(({ args }) => args[0] === "run" && args.includes("--rm") && args.includes("--network") && args.includes("none")).length, 5);
   assertMcpSmoke(docker, "myskills-app-mcp");
   assertNoPublication(records);
 
   for (const line of ["22", "24"]) {
-    for (const phase of ["mocked", "fullstack", "fullstack-connector"]) {
+    for (const phase of ["mocked", "fullstack", "fullstack-operational", "fullstack-improvement", "fullstack-connector"]) {
       const summary = JSON.parse(readFileSync(join(run.evidence, "browser-evidence", `web-e2e-node${line}`, phase, "summary.json"), "utf8"));
       assert.equal(summary.reportStatus, "available");
     }
@@ -216,6 +266,19 @@ test("Railway MCP smoke failures fail the image job and cleanup only its created
     assertExactCleanup(docker, [], { conflicts: conflict ? [name] : [] });
     assert.equal(docker.some(({ args }) => args[0] === "exec" && args[1] === name), !conflict);
   }
+});
+
+// HOST-1 failure case: a broken packaged operator entrypoint must fail the
+// image gate, even when the API/MCP/backup images built successfully.
+test("operator image smoke failure fails the gate with exact cleanup and no publication", (t) => {
+  const fixture = makeFixture(t);
+  const name = `myskills-ci-${runId}-railway-images-smoke-ops-configure`;
+  fixture.configure({ rules: [{ tool: "docker", prefix: `run --rm --name ${name} `, exit: 1 }] });
+  const run = runLocalCi(fixture, ["verify", "--job", "railway-images"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(run.status, 1, run.output);
+  assert.equal(run.result.jobs[0].steps.find(({ name }) => name === "smoke-ops-configure").status, "failed");
+  assertExactCleanup(fixture.records().filter(({ tool }) => tool === "docker"), []);
+  assertNoPublication(fixture.records());
 });
 
 for (const readback of ["owned", "foreign", "unavailable", "absent", "malformed"]) test(`cancelled MCP creation reconciles ${readback} ownership before cleanup`, async (t) => {
@@ -337,9 +400,13 @@ test("four verify lanes overlap, preserve job order and isolate directories and 
     assert.ok(paths.every((path) => path && !existsSync(path)), `${variable} directories must be removed after the run`);
   }
   const browsers = run.result.jobs.filter(({ id }) => id.startsWith("web-e2e-"));
-  const ports = browsers.flatMap(({ ports }) => Object.values(ports));
-  assert.equal(ports.length, 6);
-  assert.equal(new Set(ports).size, 6, "all browser job ports must be distinct");
+  for (const { ports } of browsers) {
+    assert.equal(ports.MYSKILLS_E2E_WEB_PORT, "0", "Docker must allocate the fullstack web port at bind time");
+    assert.equal(ports.MYSKILLS_E2E_MAILPIT_PORT, "0", "Docker must allocate the fullstack mail port at bind time");
+  }
+  const ports = browsers.flatMap(({ ports }) => [ports.MYSKILLS_E2E_PORT, ports.MYSKILLS_SITE_TEST_PORT]);
+  assert.equal(ports.length, 4);
+  assert.equal(new Set(ports).size, 4, "mocked and site browser ports must be distinct");
   assertEvidenceManifest(run.evidence, run.result);
   assert.equal(existsSync(fixture.runWorkspace), false);
   assert.equal(existsSync(runIdReservation), false);
@@ -538,9 +605,10 @@ test("release-check verifies tagged artifacts and release images without publish
   const builds = docker.filter(({ args }) => args[0] === "build").map(({ args }) => args.join(" "));
   for (const target of ["api", "mcp-http"]) assert.ok(builds.some((build) => build.includes(`--target ${target} `)), target);
   assert.ok(builds.some((build) => build.includes("--target web ") && build.includes("--build-arg VITE_API_BASE_URL=/api")));
-  for (const file of ["Dockerfile.api", "Dockerfile.mcp", "Dockerfile.web", "Dockerfile.backup"]) assert.ok(builds.some((build) => build.includes(`--file ${file} `)), file);
-  assert.equal(docker.filter(({ args }) => args[0] === "run" && args.includes("--rm") && args.includes("none")).length, 2);
+  for (const file of ["Dockerfile.api", "Dockerfile.mcp", "Dockerfile.web", "Dockerfile.backup", "Dockerfile.ops"]) assert.ok(builds.some((build) => build.includes(`--file ${file} `)), file);
+  assert.equal(docker.filter(({ args }) => args[0] === "run" && args.includes("--rm") && args.includes("none")).length, 5);
   assertMcpSmoke(docker, "myskills-app-railway-mcp");
+  for (const image of ["myskills-app-railway-mcp", "myskills-registry-backup", "myskills-ops"]) assert.ok(docker.some(({ args }) => args[0] === "run" && args.some(arg => arg.startsWith(`${image}:local-ci-`))), `recorder observes downstream smoke ${image}`);
   assertExactCleanup(docker, [verify.env.MYSKILLS_E2E_COMPOSE_PROJECT]);
   assertNoPublication(records);
 
@@ -571,6 +639,8 @@ test("release-check rejects tampered release artifacts", (t) => {
   assert.equal(existsSync(join(run.evidence, "release", "artifacts")), false);
   const resources = JSON.parse(readFileSync(join(run.evidence, "resources.json"), "utf8"));
   assert.ok(resources.resources.every(({ state }) => state === "removed"), JSON.stringify(resources));
+  const downstream = fixture.records().filter(({ tool, args }) => tool === "docker" && (args[0] === "build" || args[0] === "run" && args.some(arg => /^(myskills-app-(api|web|mcp-http|railway-api|railway-mcp|railway-web)|myskills-registry-backup|myskills-ops):local-ci-/.test(arg))));
+  assert.deepEqual(downstream, [], "failed artifact verification must dispatch no downstream image build or smoke");
 });
 
 test("CodeQL applies the repository query filters and fails closed when they are ignored", (t) => {
@@ -836,6 +906,11 @@ function makeFixture(t, { tag = false, mcpSmokeTimeoutMs } = {}) {
     const runner = join(source, "scripts/local-ci.mjs");
     writeFileSync(runner, readFileSync(runner, "utf8").replace(/const mcpSmokeTimeoutMs = [\d_]+;/, `const mcpSmokeTimeoutMs = ${mcpSmokeTimeoutMs};`));
   }
+  // Controller tests fake only the expensive HOST subprocess. The actual HOST
+  // fixture and cleanup module have their own tests; this verifies gating/wiring.
+  writeFileSync(join(source, "scripts/rehearse-self-host.mjs"), `import {readFileSync,writeFileSync} from 'node:fs';import {spawnSync} from 'node:child_process';const r=spawnSync(${JSON.stringify(process.execPath)},[${JSON.stringify(join(root,"tools/fake-tool.mjs"))},'host-rehearsal'],{env:{...process.env,FAKE_TOOL_ROOT:${JSON.stringify(root)}}});if(r.status!==0)process.exit(r.status??1);const authProof=JSON.parse(readFileSync(${JSON.stringify(join(root,"fake-config.json"))})).omitHostAuthProof?undefined:{totp:'original-factor-decrypted-and-verified',recoveryCode:'verified',nonownerPrivateArtifact:'denied',revokedSession:'denied'};writeFileSync(process.argv[4],JSON.stringify({status:'passed',sourceCommit:process.argv[5],composedArtifact:JSON.parse(readFileSync(${JSON.stringify(join(root,"fake-config.json"))})).omitHostComposedProof?undefined:{status:'passed',exactObjectBytes:'passed',deniedStorageNoIntent:'passed'},composeInterruption:{cleanup:'complete',client:{actualComposeClient:'interrupted-in-health-wait'}},protectedComposeInputs:{quotedRuntimeAndBootstrapAndBackup:'exact-values'},restore:{restoredApplicationRuntime:'tested',exactPackageBytes:'passed',authProof},upgrade:{forwardMigrations:'passed',authProof}}));`);
+  mkdirSync(join(source, "apps/site"), { recursive: true });
+  writeFileSync(join(source, "apps/site/package.json"), JSON.stringify({ name: "@myskills-app/site", version: rootPackage.version, private: true }));
   chmodSync(join(source, "scripts/local-ci.sh"), 0o755);
   git(source, "init", "-q", "-b", "main");
   git(source, "add", "-A");
@@ -1053,7 +1128,7 @@ async function fakeToolMain() {
   const config = JSON.parse(fs.readFileSync(path.join(root, "fake-config.json"), "utf8"));
   const key = args.join(" ");
   const env = {};
-  for (const name of ["CI", "TEST_DATABASE_URL", "MYSKILLS_E2E_COMPOSE_PROJECT", "RELEASE_REQUIRE_TAG", "RELEASE_EXPECTED_TAG", "PLAYWRIGHT_JSON_OUTPUT_FILE", "HOME", "TMPDIR", "DOCKER_CONFIG", "DOCKER_CONTEXT"]) {
+  for (const name of ["CI", "TEST_DATABASE_URL", "MYSKILLS_E2E_COMPOSE_PROJECT", "RELEASE_REQUIRE_TAG", "RELEASE_EXPECTED_TAG", "PLAYWRIGHT_JSON_OUTPUT_FILE", "HOME", "TMPDIR", "DOCKER_CONFIG", "DOCKER_CONTEXT", "MYSKILLS_SITE_TEST_PORT"]) {
     if (process.env[name] !== undefined) env[name] = process.env[name];
   }
   const canarySeen = Boolean(config.canary) && Object.values(process.env).some((value) => String(value).includes(config.canary));
@@ -1091,8 +1166,14 @@ async function fakeToolMain() {
         if (!(config.omitMockedReport ?? []).includes(line)) writeReport("apps/web/test-results/mocked-report.json");
         return 0;
       }
+      if (key === "run test:e2e -w @myskills-app/site -- --reporter=line,json") {
+        if (!(config.omitSiteReport ?? []).includes(line)) writeReport("apps/site/test-results/site-report.json");
+        return 0;
+      }
       if (key === "run test:e2e:fullstack") {
         writeReport("apps/web/test-results/fullstack-report.json");
+        if (config.omitFullstackReport !== "operational") writeReport("apps/web/test-results/fullstack-operational-report.json");
+        if (config.omitFullstackReport !== "improvement") writeReport("apps/web/test-results/fullstack-improvement-report.json");
         writeReport("apps/web/test-results/fullstack-connector-report.json");
         return 0;
       }

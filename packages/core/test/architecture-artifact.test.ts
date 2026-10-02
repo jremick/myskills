@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { artifactHash, assertArchitectureArtifactIntent, compileArchitecture, createArchitectureArtifactIntent, projectArchitectureArtifact, renderArchitectureArtifact, createFlatArchitecture, createDomainRouterArchitecture, createMultiLevelRouterArchitecture } from "../src/index.js";
+const ref={id:"exact",slug:"exact",version:"2.1.0",digest:"a".repeat(64),packageVisibility:"public" as const,domainId:"build"};
+const payload=new Map([["exact",[{path:"SKILL.md",content:"---\nname: exact\ndescription: fixture\n---\nExact bytes\n"},{path:"references/context.txt",content:"Relative assets\n"}]]]);
+for(const factory of [createFlatArchitecture,createDomainRouterArchitecture,createMultiLevelRouterArchitecture])test(`composed renderer preserves ${factory.name} topology, bytes and safe discovery`,()=>{
+  const spec=factory({id:"architecture",name:"Fixture",skills:[ref],profile:{id:"personal",subject:{type:"user",id:"actor"}},environment:{id:"workspace",kind:"personal"}});const compiled=compileArchitecture(spec,{registry:[ref],profileId:"personal",environmentId:"workspace"});
+  const projection=projectArchitectureArtifact(compiled,{revisionId:"revision",targetId:"target",generation:1,targetIdentityDigest:"b".repeat(64),adapterDigest:"c".repeat(64),capabilitiesDigest:"d".repeat(64),profileId:"personal",environmentId:"workspace",policyDigest:"e".repeat(64),consentDigest:"f".repeat(64),observationId:"observation",observationDigest:"0".repeat(64),packages:[{refId:"exact",slug:"exact",version:"2.1.0",digest:ref.digest,size:123,platform:"codex"}]});
+  const files=renderArchitectureArtifact(projection,payload);const intent=createArchitectureArtifactIntent(projection,"review",files,null);assertArchitectureArtifactIntent(intent);
+  assert.equal(files.filter(f=>f.path.startsWith(".agents/skills/")).length,compiled.nodes.length);assert.ok(files.some(f=>f.path.endsWith("/payload/references/context.txt")&&f.content==="Relative assets\n"));assert.deepEqual(projection.routers.map(r=>r.routes),compiled.routers.map(r=>r.routes));
+  assert.throws(()=>assertArchitectureArtifactIntent({...intent,prompt:"forbidden"}));assert.throws(()=>assertArchitectureArtifactIntent({...intent,removals:["../../other"]}));assert.throws(()=>assertArchitectureArtifactIntent({...intent,files:[...intent.files,...intent.files],treeDigest:artifactHash([...intent.files,...intent.files])}));
+});

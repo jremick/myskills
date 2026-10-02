@@ -14,7 +14,11 @@ export function fullstackPhases(forwardedArgs) {
   }
   return [
     // Existing report and results paths stay unchanged for CI evidence collection.
-    { name: "registry-journeys", playwrightArgs: ["--grep-invert", CONNECTOR_TITLE] },
+    { name: "registry-journeys", playwrightArgs: ["--grep-invert", `${CONNECTOR_TITLE}|author feedback, immutable publication|registry plan, local CLI evaluation`] },
+    // These longer lifecycles must not inherit the registry group's request
+    // budget, and their reports/screenshots must survive later fresh phases.
+    { name: "operational-journey", playwrightArgs: ["fullstack/operational-journey.spec.ts"], outputDir: "test-results/fullstack-operational", jsonReport: "test-results/fullstack-operational-report.json" },
+    { name: "skill-improvement", playwrightArgs: ["fullstack/skill-improvement.spec.ts"], outputDir: "test-results/fullstack-improvement", jsonReport: "test-results/fullstack-improvement-report.json" },
     // Separate artifacts (relative to apps/web), so the second run cannot
     // clean or overwrite the first.
     {

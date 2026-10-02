@@ -3,10 +3,62 @@ import { spawn } from "node:child_process";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { runComposedArchitectureAcceptance } from "./composed-architecture-acceptance.mjs";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const maximumResponseBytes = 16 * 1024 * 1024;
+// Fixed codes from artifact-service.ts and the existing HTTP/CLI boundary.
+const cliFailureCodes = ["API_RATE_LIMITED", "AUTHENTICATION_REQUIRED", "API_TOKEN_SCOPE_REQUIRED", "INVALID_REQUEST_BODY", "CLI_ERROR", "UNEXPECTED_CLI_FAILURE",
+  ...["APPROVAL_CONFLICT", "APPROVAL_EXPIRED", "APPROVAL_REQUIRED", "AUTHORITY_REQUIRED", "AUTHORITY_STALE", "BASELINE_CONFLICT", "CAPABILITY_REQUIRED", "CLAIM_ACTOR_REQUIRED", "FEATURE_UNSUPPORTED", "FENCE_LOST", "MAINTENANCE_WINDOW_CLOSED", "NOT_FOUND", "POLICY_DENIED", "READBACK_CONFLICT", "RELEASE_INCOMPATIBLE", "RELEASE_UNAVAILABLE", "REVIEW_REQUIRED", "REVIEW_STALE", "ROLLBACK_DENIED", "STATE_CONFLICT"].map(code => `ARCHITECTURE_ARTIFACT_${code}`)];
+const filesystemFailureCodes = ["EACCES", "EPERM", "ENOSPC", "EIO", "ENOENT", "EEXIST", "ENOTDIR", "EISDIR", "EINVAL"];
+// Exact known local messages map to fixed categories; unknown text stays private.
+const localFailureMessages = {
+  "Whole-artifact staging drifted.": "local_staging",
+  "Downloaded materialized tree differs from API-owned intent.": "local_staging",
+  "Private staging/recovery bytes changed.": "local_staging",
+  "Artifact staging contains a link or special file.": "local_staging",
+  "Artifact staging directory limit exceeded.": "local_staging",
+  "Aggregate architecture readback failed.": "local_readback",
+  "Owned tree drifted or contains unknown files. Preserve it for explicit recovery.": "local_readback",
+  "Owned tree contains an unexpected empty directory.": "local_readback",
+  "Owned tree contains a link or special file.": "local_readback",
+  "Owned tree exceeds bounds.": "local_readback",
+  "Artifact directory changed before durability sync.": "local_durability",
+  "Workspace root was substituted.": "local_workspace",
+  "Discovery root was substituted.": "local_workspace",
+  "Discovery root is not a regular directory.": "local_workspace",
+  "Workspace root identity changed. Retain recovery copies.": "local_workspace",
+  "Artifact belongs to a different enrolled workspace or generation.": "local_authority",
+  "Current workspace consent or binding changed. Retain private recovery state.": "local_authority",
+  "Downloaded release differs from composed exact pin.": "local_authority",
+  "Artifact has no claimed lease.": "local_authority",
+  "Artifact lease expired before local promotion.": "local_authority",
+  "Another delivery already claimed this artifact. No local writes performed.": "local_authority",
+  "An unmanaged destination collides with the composed artifact.": "local_baseline",
+  "The whole artifact baseline changed before approval or promotion.": "local_baseline",
+  "Unknown discovery entry collides with this architecture namespace.": "local_baseline",
+  "Composed move destination already exists.": "local_baseline",
+  "Ambiguous partial baseline. Retain both trees.": "local_baseline",
+  "Composed transaction journal is invalid.": "local_journal",
+  "Journal baseline differs from immutable intent.": "local_journal",
+  "Journal placement ownership changed.": "local_journal",
+  "Journal path identities changed.": "local_journal",
+  "Journal execution state is invalid.": "local_journal",
+  "Artifact already has partial or completed state. Use explicit verify or rollback.": "local_journal",
+  "Artifact requires explicit rollback or recovery.": "local_journal",
+  "Composed local schema has missing or unknown fields.": "local_journal",
+  "Composed metadata must be an regular file with one link.": "local_journal",
+  "Composed ownership manifest is invalid.": "local_manifest",
+  "Composed manifest schema is invalid.": "local_manifest",
+  "Composed manifest belongs to another registry.": "local_manifest",
+  "Ownership manifest changed during operation.": "local_manifest",
+  "A different architecture tree is active.": "local_manifest",
+  "Exact API success receipt is missing.": "local_receipt",
+  "Composed artifact is partial; verification does not restore exposed bytes.": "local_receipt",
+  "Rollback cannot remove another manifest.": "local_rollback",
+  "Rollback found altered or ambiguous active bytes. Retain quarantine.": "local_rollback",
+};
 export const feedbackReason = "Explain the expected input and remove the unused dependency hook example.";
 
 /** Validate the destination before fixture creation. No network or writes. */
@@ -66,7 +118,8 @@ export async function runOperationalAcceptance({ env = process.env, callbacks = 
     if (!text) return null;
     try { return JSON.parse(text); } catch { throw new Error("Acceptance API returned malformed JSON."); }
   };
-  const cli = async (args, actor, { expectFailure = false, json = false } = {}) => {
+  const cli = async (args, actor, { expectFailure = false, json = false, diagnostic } = {}) => {
+    if (diagnostic) process.stdout.write(`operational_cli_stage=${cliOperation(args)}${cliFixtureContext(diagnostic)}\n`);
     const result = await capturedProcess(process.execPath, [config.cliPath, ...args, "--api-url", config.apiUrl, ...(json ? ["--json"] : [])], {
       cwd: workspace,
       env: {
@@ -80,7 +133,7 @@ export async function runOperationalAcceptance({ env = process.env, callbacks = 
       if (result.code === 0) throw new Error(`CLI ${args[0]} unexpectedly succeeded.`);
       return null;
     }
-    if (result.code !== 0) throw new Error(`CLI ${args[0]} failed with exit code ${result.code}.`);
+    if (result.code !== 0) throw new Error(acceptanceCliFailure(args, result, diagnostic));
     if (!json || !result.stdout.trim()) return result.stdout.trim();
     try { return JSON.parse(result.stdout); } catch { throw new Error(`CLI ${args[0]} returned malformed JSON.`); }
   };
@@ -164,6 +217,7 @@ export async function runOperationalAcceptance({ env = process.env, callbacks = 
     const next = await submit("0.2.0", false, "fix");
     const nextArtifact = await publish(next);
     await verifyCodexWorkspace(initialArtifact, intermediateArtifact, nextArtifact);
+    await runComposedArchitectureAcceptance({api,cli,actor:actors.reviewer,workspace,slug,releases:[initialArtifact,nextArtifact],onEnrolled:id=>enrolledTargets.push(id),check});
     await cli(["update", slug, "--dry-run", "--dir", installRoot], actors.consumer);
     await assertInstalled(installRoot, "0.1.1", initialArtifact);
     await cli(["update", slug, "--dir", installRoot], actors.consumer);
@@ -470,6 +524,13 @@ export async function runOperationalAcceptance({ env = process.env, callbacks = 
     await writeFile(releaseNotesFile, releaseNotes, { mode: 0o600 });
     const result = await cli(["submit", "--path", directory, "--change-kind", changeKind, "--release-notes-file", releaseNotesFile], actors.author, { json: true });
     if (!result.submission?.id || result.submission.securityStatus === "blocked") throw new Error("Acceptance submission did not pass intake.");
+    const deadline = Date.now() + 30_000;
+    while (true) {
+      const { submission } = await api(`/v1/submissions/${result.submission.id}`, { token: actors.author.token });
+      if (submission.securityStatus === (warning ? "warning" : "passed")) break;
+      if (submission.securityStatus === "failed" || Date.now() >= deadline) throw new Error("Acceptance confirmation scan failed or did not complete within 30 seconds.");
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+    }
     return { id: result.submission.id, version, directory, files, changeKind, releaseNotes };
   }
 
@@ -521,7 +582,7 @@ async function invitationToken(base, email) {
 export async function capturedProcess(command, args, options = {}) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, { ...options, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
+    let stdout = "", stderr = "";
     let bytes = 0;
     let exceeded = false;
     const timer = setTimeout(() => { exceeded = true; child.kill("SIGKILL"); }, 60_000);
@@ -529,6 +590,7 @@ export async function capturedProcess(command, args, options = {}) {
       bytes += chunk.length;
       if (bytes > maximumResponseBytes) { exceeded = true; child.kill("SIGKILL"); }
       else if (keep) stdout += chunk;
+      else if (stderr.length + chunk.length <= 16384) stderr += chunk;
     };
     child.stdout.on("data", (chunk) => collect(chunk, true));
     child.stderr.on("data", (chunk) => collect(chunk, false));
@@ -536,9 +598,43 @@ export async function capturedProcess(command, args, options = {}) {
     child.once("close", (code) => {
       clearTimeout(timer);
       if (exceeded) reject(new Error("Acceptance subprocess exceeded its time or output limit."));
-      else resolvePromise({ code, stdout });
+      else {
+        let failureCategory = "unclassified", failureStatus, filesystemCode;
+        // Only fixed domain codes cross this boundary. Never return stderr,
+        // messages, arguments, paths, credentials or arbitrary error details.
+        try {
+          const error = JSON.parse(stderr).error;
+          if (cliFailureCodes.includes(error?.code)) failureCategory = error.code;
+          if (Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599) failureStatus = error.status;
+          // A generic Node filesystem error may lack a separate errno field.
+          // Match only the fixed leading errno; the remaining message stays private.
+          if (error?.code === "UNEXPECTED_CLI_FAILURE" && typeof error.message === "string") {
+            const code = error.message.match(/^([A-Z]+):/)?.[1];
+            if (filesystemFailureCodes.includes(code)) { failureCategory = "filesystem"; filesystemCode = code; }
+          }
+          if (["CLI_ERROR", "UNEXPECTED_CLI_FAILURE"].includes(error?.code) && Object.hasOwn(localFailureMessages, error.message)) failureCategory = localFailureMessages[error.message];
+        } catch { /* Non-JSON stderr remains private. */ }
+        resolvePromise({ code, stdout, failureCategory, ...(failureStatus ? { failureStatus } : {}), ...(filesystemCode ? { filesystemCode } : {}) });
+      }
     });
   });
+}
+
+function cliOperation(args) {
+  const command = ["architecture-artifacts", "codex", "submit", "releases", "skills", "search", "install", "update", "rollback"].includes(args[0]) ? args[0] : "unknown";
+  const action = command === "architecture-artifacts" && ["prepare", "apply", "verify", "rollback"].includes(args[1]) ? `/${args[1]}` : "";
+  return `${command}${action}`;
+}
+function cliFixtureContext(diagnostic) {
+  const phase = ["initial", "update", "rollback"].includes(diagnostic?.phase) ? `; phase=${diagnostic.phase}` : "";
+  const workspace = [0, 1].includes(diagnostic?.workspaceIndex) ? `; workspace=${diagnostic.workspaceIndex}` : "";
+  return phase + workspace;
+}
+export function acceptanceCliFailure(args, result, diagnostic) {
+  const category = [...cliFailureCodes, ...Object.values(localFailureMessages), "filesystem"].includes(result.failureCategory) ? result.failureCategory : "unclassified";
+  const status = Number.isInteger(result.failureStatus) && result.failureStatus >= 400 && result.failureStatus <= 599 ? `; status=${result.failureStatus}` : "";
+  const filesystem = filesystemFailureCodes.includes(result.filesystemCode) ? `; filesystemCode=${result.filesystemCode}` : "";
+  return `CLI ${cliOperation(args)} failed with exit code ${Number.isInteger(result.code) ? result.code : "unavailable"}; category=${category}${status}${filesystem}${cliFixtureContext(diagnostic)}.`;
 }
 
 async function boundedResponse(response) {

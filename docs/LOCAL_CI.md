@@ -80,7 +80,7 @@ LOCAL_CI_CODEQL_BIN=/path/to/codeql/codeql scripts/local-ci.sh codeql
 | `DOCKER_HOST`, `DOCKER_CONTEXT` | Jobs that use Docker need a local `unix://` endpoint; a remote endpoint is refused. Set at most one of the two, because `DOCKER_CONTEXT` overrides `DOCKER_HOST`. |
 | `LOCAL_CI_RELEASE_TAG`, `LOCAL_CI_MAIN_REF` | `release-check` only. The tag must be `v<package version>` and point at `HEAD`. `HEAD` must be an ancestor of the main ref (default `refs/remotes/origin/main`). The script does not fetch. |
 | `LOCAL_CI_CODEQL_BIN`, `LOCAL_CI_CODEQL_CATEGORY` | `codeql` only. The category defaults to `/language:javascript-typescript`. |
-| `MYSKILLS_E2E_PORT`, `MYSKILLS_E2E_WEB_PORT`, `MYSKILLS_E2E_MAILPIT_PORT` | Optional loopback ports. Free ports are chosen when unset. With four lanes and both browser jobs selected, overrides are refused and all six selected ports are distinct. |
+| `MYSKILLS_E2E_PORT`, `MYSKILLS_E2E_WEB_PORT`, `MYSKILLS_E2E_MAILPIT_PORT` | Optional loopback ports. Mocked-browser ports are probed when unset. Automatic fullstack web/Mailpit ports are assigned by Docker at bind time and read from the exact running project/service. Explicit fullstack ports must match readback. With four lanes and both browser jobs selected, overrides are refused. |
 
 Jobs receive an allowlisted environment (paths, locale, Docker endpoint, proxy and CA settings,
 browser and npm caches) with `CI=true`. Tokens such as `GITHUB_TOKEN` or `NPM_TOKEN` are not
@@ -130,9 +130,16 @@ because some test tools create Unix sockets there. These private directories are
 their job's resources. Explicit npm and Playwright cache paths remain available through the
 environment allowlist. Docker uses the caller's original configuration directory, resolved to an
 absolute path even when it was implicit under `HOME`, so preflight, jobs and cleanup select the
-same context. Its contents are not copied. Browser ports are selected once per job and are
-never reused by another job in that run; unrelated host processes can still claim a free port
-before a browser starts, which fails the affected gate.
+same context. Its contents are not copied. Mocked/site browser ports are distinct within the run.
+Fullstack web/Mailpit bindings remain loopback-only and daemon-owned through each phase's teardown.
+The fixture reads exact project/service labels and bound ports before configuring the API/MCP
+OAuth issuer, consent, cookie origin and browser/Mailpit URLs. It reloads nginx configuration
+in the same web container to refresh upstream addresses, then checks that both bindings remain unchanged.
+
+Registry, operational (including private drafts), improvement and connector journeys each run on
+a fresh disposable stack. Production rate limits remain unchanged. Operational and improvement
+reports are collected separately as `fullstack-operational` and `fullstack-improvement`; a missing
+report fails the gate and cannot be replaced by a registry-only summary.
 
 Each step runs in its own process group. `SIGTERM` stops all active steps, cleans up and writes a
 cancelled result; allow about 60 seconds. The reservation is released only after complete cleanup.
@@ -173,6 +180,7 @@ the aggregate contexts before treating activation as verified.
 | CI `Web E2E / Node 22.x`, `Web E2E / Node 24.x` (15-minute timeout): browser install, workspace build, mocked browser run, evidence collection, full-stack run, evidence collection, evidence upload | `web-e2e-node22`, `web-e2e-node24` with the same steps, conditions and 15-minute limit | Browser system libraries come from host setup. Evidence is exported to the evidence directory instead of a 7-day artifact. A job without exported evidence fails, as with `if-no-files-found: error`. |
 | CI `web-e2e` aggregate | `contexts["web-e2e"]` | None. |
 | CI `Railway images`: `Dockerfile.api`, `Dockerfile.mcp`, `Dockerfile.web`, `Dockerfile.backup`; MCP startup/health/auth and two backup smoke runs without credentials or network | `railway-images` | Builds use `--pull` and run-scoped tags. Image IDs are recorded and the images are removed afterwards. MCP starts its default command with a non-default platform `PORT`. |
+| HOST-1 operator image: `Dockerfile.ops`, setup help and packaged backup/restore help without credentials or network | `railway-images` and `release` | Builds and records the operator image with exact cleanup. Help smokes prove packaged entrypoints load; they do not prove a fresh install, an upgrade or a restore drill. |
 | CI `Postgres / Node 22.x`, `Postgres / Node 24.x` with a `postgres:17-alpine` service | `postgres-node22`, `postgres-node24` | Same image, credentials and health check on a random loopback port. |
 | CI `postgres-integration` aggregate | `contexts["postgres-integration"]` | None. |
 | Release `Verify tag and main ancestry` | `release-check` input validation | The runner supplies full history, the tag and a current main ref; the script does not fetch. |
@@ -206,3 +214,13 @@ Wait for fresh `local-ci/check`, `local-ci/web-e2e` and `local-ci/postgres-integ
 current pull request head, and for the code-scanning rule to accept its CodeQL analysis. Updating
 either the head or its base invalidates evidence for the earlier merge source. Fork contributions
 require maintainer review before their code runs on a trusted worker.
+
+## HOST And Product-Site Rehearsals
+
+`railway-images` now includes the bounded [HOST fixture](SELF_HOST_OPERATOR.md#canonical-rehearsal-and-evidence). It reuses candidate API/web/MCP/OPS images with source labels and exact build revision, and exports `host-rehearsal.json` plus the exact-name child `host-resources.json`. It does not add an eighth job or change the controller lock/configuration. A failed or missing runtime receipt, timeout, signal or incomplete cleanup fails the existing job. Parent dispatch remains `local-ci submit --app myskills --job verify --commit <exact-sha>`.
+
+The one-shot publication observer handles repeated `SIGTERM` or `SIGINT` cooperatively until final cleanup. It stops admitting requests and keeps the active adapter's existing eight-second kill/reap timer alive. It starts no TLS read after cancellation; an already active TLS read retains its two-second bound. The attached supervisor launcher reserves twenty seconds for cooperative shutdown and final reap within its original 1,800-second lifetime: cancel the observer by second 1,780, retain the SSH/WSL session, then force termination only after the grace. This does not extend the fifteen-second HOST observation, either ten-second consistency read or normal cleanup. The observer result cannot recover HOST acceptance.
+
+Both existing `web-e2e-node22` and `web-e2e-node24` jobs also build `@myskills-app/site`, run desktop/mobile/keyboard journeys after Chromium installation, and collect sanitized summaries and reviewed dated screenshots below `browser-evidence/<job>/product-site`. `MYSKILLS_SITE_TEST_PORT` is allocated with the other loopback ports and cannot be shared in four-lane mode. A missing site workspace or browser report is an explicit failed gate. The isolated HOST source clone does not supply the site implementation; integrated canonical verification must include DISC's workspace.
+
+Release synthetic fixtures copy a matching npm v3 lockfile and the real `create-trust-provenance.mjs` dependency when the current verifier requires it. The verifier and artifact-tampering assertions remain real. Controller stub tests do not establish actual website rendering, image runtime, install, upgrade or restored application behavior.

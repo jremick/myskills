@@ -56,7 +56,7 @@ test("S3 artifact storage maps put and get commands without network", async () =
             ContentType: PACKAGE_CONTENT_TYPE,
             Metadata: { sha256: createHash("sha256").update(storedBody).digest("hex") },
             Body: {
-              transformToString: async () => storedBody,
+              transformToWebStream: () => new ReadableStream({ start(controller) { controller.enqueue(Buffer.from(storedBody)); controller.close(); } }),
             },
           };
         }
@@ -143,7 +143,7 @@ test("S3 PUT, GET, and DELETE abort and return within their operation deadline",
 
 test("S3 GET bounds response-body consumption after headers arrive and destroys a stalled Node stream", async () => {
   let destroyed = false;
-  let failBody!: (error: Error) => void;
+    let failBody!: (error: Error) => void;
   const storage = new S3ArtifactObjectStorage({
     bucket: "timeout-fixture",
     requestTimeoutMs: 15,
@@ -152,7 +152,7 @@ test("S3 GET bounds response-body consumption after headers arrive and destroys 
         return {
           ContentType: PACKAGE_CONTENT_TYPE,
           Body: {
-            transformToString: () => new Promise<string>((_, reject) => { failBody = reject; }),
+            transformToWebStream: () => new ReadableStream({ start(controller) { failBody = (error) => controller.error(error); } }),
             destroy(error: Error) { destroyed = true; failBody(error); },
           },
         };
@@ -192,6 +192,21 @@ test("artifact payload reader fails closed when legacy DB fallback does not matc
     hasAppErrorCode("ARTIFACT_METADATA_MISMATCH"),
   );
 });
+
+for (const name of ["AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch", "ServiceUnavailable", "ArtifactStorageTimeoutError"]) {
+  test(`artifact payload reader does not fall back to legacy bytes on ${name}`, async (t) => {
+    const storage = new MemoryArtifactObjectStorage();
+    const payload = { files: [{ path: "README.md", content: "legacy" }] };
+    t.mock.method(storage, "getObject", async () => {
+      const error = new Error("Synthetic provider failure.");
+      error.name = name;
+      throw error;
+    });
+    await assert.rejects(readArtifactPayload({ artifactStorage: storage,
+      artifact: artifactRecord("submissions/legacy.json", JSON.stringify(payload), { payload }),
+    }), hasAppErrorCode("ARTIFACT_PAYLOAD_UNAVAILABLE"));
+  });
+}
 
 test("artifact payload reader fails closed on object metadata mismatch even with DB payload present", async () => {
   const storage = new MemoryArtifactObjectStorage();

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { AppError } from "@myskills-app/core";
 import type { ArtifactObjectStorage } from "./storage.js";
+import { ArtifactStorageIntegrityError } from "./storage.js";
 import type { ArtifactPayload } from "../submissions/types.js";
 
 export interface ArtifactPayloadRecord {
@@ -16,14 +17,20 @@ export async function readArtifactPayload(input: {
   artifact: ArtifactPayloadRecord;
 }): Promise<ArtifactPayload> {
   if (!input.artifactStorage) {
+    assertArtifactBodyMatchesMetadata(JSON.stringify(input.artifact.payload), input.artifact);
     return parseArtifactPayload(input.artifact.payload);
   }
 
   let object: { body: string; contentType: string; sha256?: string };
   try {
-    object = await input.artifactStorage.getObject(input.artifact.storageKey);
+    object = await input.artifactStorage.getObject(input.artifact.storageKey, { maxBytes: input.artifact.byteSize });
   } catch (error) {
-    if (!hasDbArtifactPayload(input.artifact.payload)) {
+    if (error instanceof ArtifactStorageIntegrityError) {
+      throw new AppError("Artifact object failed integrity checks.", "ARTIFACT_METADATA_MISMATCH", 500);
+    }
+    // Legacy fallback applies only to a missing object. Access denial, timeouts
+    // and provider failures must not bypass the storage authority.
+    if (!isMissingArtifactObject(error) || !hasDbArtifactPayload(input.artifact.payload)) {
       throw new AppError("Artifact payload is unavailable.", "ARTIFACT_PAYLOAD_UNAVAILABLE", 500);
     }
     assertArtifactBodyMatchesMetadata(JSON.stringify(input.artifact.payload), input.artifact);
@@ -39,6 +46,10 @@ export async function readArtifactPayload(input: {
     }
     throw new AppError(error instanceof Error ? error.message : "Invalid artifact payload.", "INVALID_PACKAGE_PAYLOAD", 500);
   }
+}
+
+function isMissingArtifactObject(error: unknown): boolean {
+  return error instanceof Error && (error.name === "NoSuchKey" || error.name === "NotFound");
 }
 
 export function parseArtifactPayload(input: unknown): ArtifactPayload {

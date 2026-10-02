@@ -1,4 +1,5 @@
-import { MAX_PACKAGE_ARCHIVE_BYTES, MAX_PACKAGE_FILES, MAX_PACKAGE_TEXT_BYTES } from "@myskills-app/skill-package";
+import { architecturePlanBodies, architecturePlanQueries } from "./architecture-plan-schemas.js";
+import { MAX_PACKAGE_ARCHIVE_BYTES, MAX_PACKAGE_FILES, MAX_PACKAGE_TEXT_BYTES, validatePackageFiles } from "@myskills-app/skill-package";
 import { z } from "zod";
 import { architecturePatternIds, libraryCandidateStates, libraryEventKinds, librarySourceRefKinds, libraryTrackingModes, visibilityScopes, type DelegatedAction } from "@myskills-app/core";
 
@@ -28,7 +29,21 @@ const bundle = { kind: z.enum(["curated", "source"]), name: text(120), purpose: 
 const policy = z.object({ policy: object, expectedRevisionNumber: revision, reason }).strict();
 const migration = { expectedCurrentRevisionId: id, targetPatternId: z.enum(architecturePatternIds), mapping: object.optional() };
 const operation = { action: z.enum(["install", "update", "rollback"]), slug: id, version, platform: id.optional(), idempotencyKey: id };
+const draftFiles = z.array(z.object({ path: text(1024), content: z.string().max(MAX_PACKAGE_TEXT_BYTES) }).strict()).max(MAX_PACKAGE_FILES).superRefine((files, ctx) => {
+  try { validatePackageFiles(files); } catch { ctx.addIssue({ code: "custom", message: "Invalid bounded package files." }); }
+});
+const draftSource = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("release"), slug: id, version, platform: id.optional() }).strict(),
+  z.object({ kind: z.literal("submission"), submissionId: id }).strict(),
+]);
 const fields: Record<string, z.ZodType> = {
+  ...architecturePlanBodies,
+  "draft.create": z.union([z.object({ title: text(120), files: draftFiles }).strict(), z.object({ title: text(120).optional(), source: draftSource }).strict()]),
+  "draft.update": z.object({ expectedRevision: expectedRevision.max(Number.MAX_SAFE_INTEGER), title: text(120), files: draftFiles }).strict(),
+  "draft.preview": z.union([z.object({ files: draftFiles }).strict(), z.object({ archive: z.object({ filename: text(255).optional(), contentBase64: z.string().min(4).max(Math.ceil(MAX_PACKAGE_ARCHIVE_BYTES / 3) * 4).regex(/^[A-Za-z0-9+/]+={0,2}$/) }).strict() }).strict()]),
+  "draft.validate": z.object({ expectedRevision: expectedRevision.max(Number.MAX_SAFE_INTEGER) }).strict(),
+  "draft.submit": z.object({ expectedRevision: expectedRevision.max(Number.MAX_SAFE_INTEGER), release: object.optional() }).strict(),
+  "skills.discover": z.object({ task: text(4000), limit: z.number().int().min(1).max(20).optional() }).strict(),
   "admin.github.test": empty,
   "skills.metadata.update": z.object({ title: text(200).optional(), summary: text(4000).optional(), tags: z.array(text(80)).max(100).optional(), visibility: z.enum(visibilityScopes).optional(), reason }).strict(),
   "skills.lifecycle.decide": z.object({ action: z.enum(["archive", "restore", "delete"]), reason }).strict(),
@@ -91,6 +106,7 @@ const fields: Record<string, z.ZodType> = {
   "target_operations.batch.schedule": z.object({ operations: z.array(z.object({ targetId: id, ...operation }).strict()).min(1).max(100) }).strict(),
   "target_operations.cancel": empty,
   "targets.update_policy.set": policy,
+  "evaluations.run": z.object({ artifactSha256: digest, suiteRevisionId: z.string().uuid(), platform: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/), idempotencyKey: z.string().regex(/^[A-Za-z0-9._:-]{8,128}$/), disclosure: z.enum(["private", "public-summary"]).optional() }).strict(),
   "improvements.declarations.append": z.object({ declaration: object, expectedRevisionNumber: revision, reason: improvementReason }).strict(),
   "improvements.declarations.review": z.object({ decision: z.enum(["approve", "reject"]), artifactSha256: digest, declarationSha256: digest, reason: improvementReason }).strict(),
   "improvements.policy.set": policy.extend({ reason: improvementReason }),
@@ -113,9 +129,10 @@ const fields: Record<string, z.ZodType> = {
   "admin.users.roles.set": z.object({ roles: z.array(z.enum(["owner", "admin", "maintainer", "author", "user"])).min(1).max(5), reason }).strict(),
 };
 const queries: Record<string, z.ZodType> = {
+  ...architecturePlanQueries,
   "skills.list": z.object({ ...page, q: z.string().max(14 * 1024 * 1024).optional() }).strict(),
   "skills.managed.list": z.object({ ...page, q: z.string().max(14 * 1024 * 1024).optional() }).strict(),
-  "skills.releases.export": z.object({ platform: id.optional() }).strict(),
+  "skills.releases.export": z.object({ platform: id.optional(), sha256: digest.optional() }).strict(),
   "submissions.mine.export": z.object({ platform: id.optional() }).strict(),
   "review.submissions.export": z.object({ platform: id.optional() }).strict(),
   "review.submissions.list": z.object(page).strict(),
@@ -143,7 +160,7 @@ const queries: Record<string, z.ZodType> = {
 export function applicationInputSchema(action: DelegatedAction): z.ZodObject {
   const shape: Record<string, z.ZodType> = {};
   const params = [...action.route.matchAll(/:([A-Za-z][A-Za-z0-9]*)/g)].map((match) => match[1]);
-  if (params.length) shape.path = z.object(Object.fromEntries(params.map((name) => [name, id]))).strict();
+  if (params.length) shape.path = z.object(Object.fromEntries(params.map((name) => [name, action.id === "draft.revision" && name === "revision" ? z.string().regex(/^[1-9][0-9]*$/).refine(value => Number.isSafeInteger(Number(value))) : id]))).strict();
   if (queries[action.id]) {
     // Query is required only for deletion concurrency and explicit improvement ownership.
     shape.query = ["libraries.delete", "library_collections.delete", "library_groups.delete", "improvements.profiles.list", "improvements.suites.list"].includes(action.id) ? queries[action.id] : queries[action.id].optional();

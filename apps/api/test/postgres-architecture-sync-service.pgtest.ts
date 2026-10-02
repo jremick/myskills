@@ -1,24 +1,33 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
 import test from "node:test";
+import { mkdtemp, readdir, copyFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  architectureTargetAdapterDigest,
+  architectureTargetCapabilitiesDigest,
+  architectureTargetObservationDigest,
   architectureSyncObservedDigest,
   architectureSyncRecoveryEvidenceDigest,
   architectureSyncSnapshotDigest,
   decideArchitectureSyncRecovery,
   type ArchitectureSyncRecoveryCondition,
 } from "@myskills-app/core";
-import { ArchitectureSyncService, type ArchitectureSyncPorts, type ArchitectureSyncPreviewInput } from "../src/architecture-sync/service.js";
+import { PostgresArchitectureStore } from "../src/architectures/postgres-store.js";
+import { ArchitectureTargetBindingAuthorizer } from "../src/targets/architecture-binding-authorizer.js";
+import { PostgresArchitectureTargetStore } from "../src/targets/postgres-target-store.js";
+import { ArchitectureTargetService } from "../src/targets/service.js";
+import { ArchitectureSyncService, type ArchitectureSyncPorts } from "../src/architecture-sync/service.js";
 import { MemoryArchitectureSyncFixtureExecutor } from "../src/architecture-sync/fixture-executor.js";
-import { ArchitectureSyncExecutorError, type ArchitectureSyncFixtureExecutor } from "../src/architecture-sync/types.js";
+import { ArchitectureSyncExecutorError, type ArchitectureSyncFixtureExecutor, type ArchitectureSyncPreviewInput } from "../src/architecture-sync/types.js";
 import { PostgresArchitectureSyncStore } from "../src/architecture-sync/postgres-store.js";
+import { runMigrations } from "../src/db/migrate.js";
 import { createDb, createPgPool } from "../src/db/client.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
-const migrationsDir = fileURLToPath(new URL("../migrations", import.meta.url));
-const now = new Date("2026-08-30T00:00:00.000Z");
+// Lease time is owned by PostgreSQL clock_timestamp, not a historical fixture clock.
+const now = new Date();
 const ownerId = "11111111-1111-4111-8111-111111111111";
 const architectureId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const revisionId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -31,7 +40,7 @@ test("PostgresArchitectureSyncStore persists the fixture service journal atomica
   const pool = await freshPool(t);
   await seedFixture(pool);
   const db = createDb(pool);
-  const store = new PostgresArchitectureSyncStore(db, { now: () => new Date(now) });
+  const store = new PostgresArchitectureSyncStore(db, { now: () => new Date() });
   const executor = new MemoryArchitectureSyncFixtureExecutor();
   const ports: ArchitectureSyncPorts = {
     authorization: { authorize: async () => ({ allowed: true }) },
@@ -41,7 +50,7 @@ test("PostgresArchitectureSyncStore persists the fixture service journal atomica
   };
   let id = 0;
   const service = new ArchitectureSyncService(store, executor, ports, {
-    now: () => new Date(now),
+    now: () => new Date(),
     idFactory: () => `${++id}`.padStart(32, "0"),
   });
   const previewInput = input();
@@ -60,6 +69,18 @@ test("PostgresArchitectureSyncStore persists the fixture service journal atomica
   assert.equal((await pool.query("SELECT count(*)::int AS count FROM skill_architecture_sync_runs")).rows[0]?.count, 1);
   assert.equal((await pool.query("SELECT count(*)::int AS count FROM skill_architecture_sync_steps")).rows[0]?.count, 2);
 
+  const distinct = await Promise.all(["second", "third"].map(key => service.createPreviewRun(input({ requestKey: key, idempotencyKey: key }))));
+  const allSteps = [created, ...distinct].flatMap(result => result.run.steps.map(step => step.id));
+  assert.equal(new Set(allSteps).size, allSteps.length);
+  for (const result of distinct) assert.deepEqual(await new PostgresArchitectureSyncStore(db).getRun(result.run.identity.runId), result.run);
+  const legacyInput = input({ requestKey: "legacy-defaults", idempotencyKey: "legacy-defaults" });
+  const legacy = await service.createPreviewRun({ ...legacyInput, steps: legacyInput.steps.map((step, index) => ({ ...step, id: `step-${index + 1}` })) });
+  const reopenedLegacyService = new ArchitectureSyncService(new PostgresArchitectureSyncStore(db), executor, ports, { idFactory: () => "legacy-replay-fresh-process" });
+  const legacyReplay = await reopenedLegacyService.createPreviewRun(legacyInput);
+  assert.equal(legacyReplay.replayed, true); assert.deepEqual(legacyReplay.run, legacy.run);
+  assert.deepEqual(await new PostgresArchitectureSyncStore(db).getRun(legacy.run.identity.runId), legacy.run);
+  await assert.rejects(reopenedLegacyService.createPreviewRun({ ...legacyInput, desired: { different: true } }));
+  assert.equal((await service.createPreviewRun(input({ requestKey: "second", idempotencyKey: "second" }))).replayed, true);
   const approved = await service.approve({ actor: ownerId, runId: created.run.identity.runId });
   assert.equal(approved.state, "approved");
   const applied = await service.apply({ actor: ownerId, runId: approved.identity.runId, holderId: "fixture-holder" });
@@ -94,18 +115,83 @@ test("PostgresArchitectureSyncStore persists the fixture service journal atomica
   });
   assert.ok((await store.listAuditEvents()).some((event) => event.actorId === "unseeded-audit-actor"));
 
-  const tampered = structuredClone(applied);
-  tampered.digests.desiredDigest = "e".repeat(64);
+  const tampered = { ...structuredClone(applied), digests: { ...applied.digests, desiredDigest: "e".repeat(64) } };
   await assert.rejects(
     store.saveRun(tampered),
     (error: unknown) => error instanceof Error && "code" in error && error.code === "ARCHITECTURE_SYNC_DIGEST_CONFLICT",
   );
 });
 
+// Test first: the existing PostgreSQL journal must retain bounded history and
+// cannot rewrite the review envelope stored in run metadata.
+test("PostgresArchitectureSyncStore retains immutable plan metadata and lists bounded target history", { timeout: 60_000 }, async (t) => {
+  const pool = await freshPool(t);
+  await seedFixture(pool);
+  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date() });
+  const service = new ArchitectureSyncService(store, new MemoryArchitectureSyncFixtureExecutor(), {
+    authorization: { authorize: async () => true },
+    mfa: { verify: async () => true },
+    consent: { check: async () => true },
+    recovery: recoveryPort(),
+  }, { now: () => new Date(), idFactory: () => "e".repeat(32) });
+  const draft = await service.createPreviewRun(input({ metadata: { source: "architecture-plan", reviewOnly: true, dryRun: true, canApply: false, reviewDigest: "e".repeat(64) } }));
+  assert.deepEqual(await store.listRuns({ targetId, limit: 1 }), [draft.run]);
+  const reopened = new PostgresArchitectureSyncStore(createDb(pool));
+  assert.deepEqual((await reopened.getRun(draft.run.identity.runId))?.metadata, draft.run.metadata);
+  await assert.rejects(reopened.saveRun({ ...draft.run, metadata: { ...draft.run.metadata, reviewDigest: "f".repeat(64) } }),
+    (error: unknown) => (error as { code?: string }).code === "ARCHITECTURE_SYNC_DIGEST_CONFLICT");
+  assert.deepEqual(await reopened.getRun(draft.run.identity.runId), draft.run);
+  for (const change of [{ source: "fixture" }, { reviewOnly: false }, { reviewDigest: "f".repeat(64) }, { syncPublicId: "run-corrupt" }, { syncCapabilities: "{}" }]) {
+    await assert.rejects(pool.query("UPDATE skill_architecture_sync_runs SET metadata = metadata || $2::jsonb WHERE id = $1", [dbRunId(draft.run.identity.runId), JSON.stringify(change)]),
+      (error: unknown) => (error as { code?: string }).code === "55000");
+  }
+  await assert.rejects(pool.query("UPDATE skill_architecture_sync_runs SET metadata = metadata - 'reviewDigest' WHERE id = $1", [dbRunId(draft.run.identity.runId)]),
+    (error: unknown) => (error as { code?: string }).code === "55000");
+  assert.deepEqual(await reopened.getRun(draft.run.identity.runId), draft.run);
+});
+
+// Persistence journey: a lifecycle change waits behind the held review authority
+// and a revocation that commits first prevents callback/journal writes.
+test("Postgres architecture review authority serializes lifecycle revocation through approval commit", { timeout: 60_000 }, async (t) => {
+  const pool = await freshPool(t);
+  await seedFixture(pool);
+  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date() });
+  const ports: ArchitectureSyncPorts = { authorization: { authorize: async () => true }, mfa: { verify: async () => true }, consent: { check: async () => true }, recovery: recoveryPort() };
+  const service = new ArchitectureSyncService(store, new MemoryArchitectureSyncFixtureExecutor(), ports, { now: () => new Date(), idFactory: () => "f".repeat(32) });
+  const draft = await service.createPreviewRun(input({ metadata: { source: "architecture-plan", reviewOnly: true, dryRun: true, canApply: false, reviewDigest: "e".repeat(64) } }));
+  let entered!: () => void;
+  let release!: () => void;
+  const entry = new Promise<void>(resolve => { entered = resolve; });
+  const pause = new Promise<void>(resolve => { release = resolve; });
+  const approval = store.withPlanAuthority({ actorId: ownerId, targetId }, async scoped => {
+    entered();
+    await pause;
+    return new ArchitectureSyncService(scoped, new MemoryArchitectureSyncFixtureExecutor(), ports, { now: () => new Date(), idFactory: () => "9".repeat(32) }).approve({ actor: ownerId, runId: draft.run.identity.runId });
+  });
+  t.after(release);
+  await Promise.race([entry, approval]);
+  const revokeSql = "UPDATE skill_architecture_targets SET status = 'revoked', consent_status = 'revoked', consent_revoked_at = now(), generation = generation + 1 WHERE id = $1";
+  const revocation = pool.query(revokeSql, [targetId]);
+  let waiting = false;
+  for (let attempt = 0; attempt < 100 && !waiting; attempt += 1) {
+    waiting = Boolean((await pool.query("SELECT 1 FROM pg_stat_activity WHERE query = $1 AND wait_event_type = 'Lock'", [revokeSql])).rows[0]);
+    if (!waiting) await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.equal(waiting, true, "Lifecycle update must wait on the retained target row lock.");
+  release();
+  const approved = await approval;
+  await revocation;
+  assert.equal(approved.state, "approved");
+  let callbackEntered = false;
+  await assert.rejects(store.withPlanAuthority({ actorId: ownerId, targetId }, async () => { callbackEntered = true; return approved; }));
+  assert.equal(callbackEntered, false);
+  assert.deepEqual(await store.getRun(draft.run.identity.runId), approved);
+});
+
 test("PostgresArchitectureSyncStore replays a concurrent apply without blocking the winning lease", { timeout: 60_000 }, async (t) => {
   const pool = await freshPool(t);
   await seedFixture(pool);
-  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date(now) });
+  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date() });
   const fixtureExecutor = new MemoryArchitectureSyncFixtureExecutor();
   let firstApply = true;
   let releaseExecutor!: () => void;
@@ -131,7 +217,7 @@ test("PostgresArchitectureSyncStore replays a concurrent apply without blocking 
     mfa: { verify: async () => ({ allowed: true }) },
     consent: { check: async () => ({ allowed: true }) },
     recovery: recoveryPort(),
-  }, { now: () => new Date(now), idFactory: () => `${++id}`.padStart(32, "0") });
+  }, { now: () => new Date(), idFactory: () => `${++id}`.padStart(32, "0") });
   const draft = await service.createPreviewRun(input({
     requestKey: "concurrent-apply-request",
     idempotencyKey: "concurrent-apply-intent",
@@ -151,7 +237,7 @@ test("PostgresArchitectureSyncStore replays a concurrent apply without blocking 
 test("PostgresArchitectureSyncStore rejects recovery while an apply lease is active", { timeout: 60_000 }, async (t) => {
   const pool = await freshPool(t);
   await seedFixture(pool);
-  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date(now) });
+  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date() });
   const fixtureExecutor = new MemoryArchitectureSyncFixtureExecutor();
   let firstApply = true;
   let enteredExecutor!: () => void;
@@ -177,7 +263,7 @@ test("PostgresArchitectureSyncStore rejects recovery while an apply lease is act
     mfa: { verify: async () => ({ allowed: true }) },
     consent: { check: async () => ({ allowed: true }) },
     recovery: recoveryPort("no-mutation"),
-  }, { now: () => new Date(now), idFactory: () => `${++id}`.padStart(32, "0") });
+  }, { now: () => new Date(), idFactory: () => `${++id}`.padStart(32, "0") });
   const draft = await service.createPreviewRun(input({
     requestKey: "recovery-active-request",
     idempotencyKey: "recovery-active-intent",
@@ -202,7 +288,7 @@ test("PostgresArchitectureSyncStore records recovery evidence and fences concurr
   const pool = await freshPool(t);
   await seedFixture(pool);
   const db = createDb(pool);
-  const store = new PostgresArchitectureSyncStore(db, { now: () => new Date(now) });
+  const store = new PostgresArchitectureSyncStore(db, { now: () => new Date() });
   const executor = new MemoryArchitectureSyncFixtureExecutor({
     failure: { phase: "after-mutation-before-receipt", mutateBeforeThrow: true },
   });
@@ -214,7 +300,7 @@ test("PostgresArchitectureSyncStore records recovery evidence and fences concurr
   };
   let id = 100;
   const service = new ArchitectureSyncService(store, executor, ports, {
-    now: () => new Date(now),
+    now: () => new Date(),
     idFactory: () => `${++id}`.padStart(32, "0"),
   });
   const approved = await service.approve({
@@ -297,7 +383,7 @@ test("PostgresArchitectureSyncStore rolls back recovery transition, evidence, le
   await seedFixture(pool);
   let fail = true;
   const store = new PostgresArchitectureSyncStore(createDb(pool), {
-    now: () => new Date(now),
+    now: () => new Date(),
     onRecoveryPhase: (phase) => {
       if (fail && phase === "after-audit") throw new Error("injected recovery finalization failure");
     },
@@ -309,7 +395,7 @@ test("PostgresArchitectureSyncStore rolls back recovery transition, evidence, le
     mfa: { verify: async () => ({ allowed: true }) },
     consent: { check: async () => ({ allowed: true }) },
     recovery: recoveryPort("no-mutation"),
-  }, { now: () => new Date(now), idFactory: () => `${++id}`.padStart(32, "0") });
+  }, { now: () => new Date(), idFactory: () => `${++id}`.padStart(32, "0") });
   const draft = await service.createPreviewRun(input({
     requestKey: "recovery-atomic-pg-request",
     idempotencyKey: "recovery-atomic-pg-intent",
@@ -377,7 +463,7 @@ test("PostgresArchitectureSyncStore rolls back recovery transition, evidence, le
 test("PostgresArchitectureSyncStore persists no-mutation recovery and retries with a new fence", { timeout: 60_000 }, async (t) => {
   const pool = await freshPool(t);
   await seedFixture(pool);
-  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date(now) });
+  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date() });
   const executor = new MemoryArchitectureSyncFixtureExecutor({ failure: { phase: "before-mutation" } });
   let id = 200;
   const service = new ArchitectureSyncService(store, executor, {
@@ -385,7 +471,7 @@ test("PostgresArchitectureSyncStore persists no-mutation recovery and retries wi
     mfa: { verify: async () => ({ allowed: true }) },
     consent: { check: async () => ({ allowed: true }) },
     recovery: recoveryPort("no-mutation"),
-  }, { now: () => new Date(now), idFactory: () => `${++id}`.padStart(32, "0") });
+  }, { now: () => new Date(), idFactory: () => `${++id}`.padStart(32, "0") });
   const draft = await service.createPreviewRun(input({
     requestKey: "recovery-forward-request",
     idempotencyKey: "recovery-forward-intent",
@@ -445,7 +531,7 @@ test("PostgresArchitectureSyncStore persists no-mutation recovery and retries wi
 test("PostgresArchitectureSyncStore retries a started step without rewinding its timestamps", { timeout: 60_000 }, async (t) => {
   const pool = await freshPool(t);
   await seedFixture(pool);
-  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date(now) });
+  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date() });
   const fixtureExecutor = new MemoryArchitectureSyncFixtureExecutor();
   let applyCount = 0;
   const executor: ArchitectureSyncFixtureExecutor = {
@@ -464,7 +550,7 @@ test("PostgresArchitectureSyncStore retries a started step without rewinding its
     mfa: { verify: async () => ({ allowed: true }) },
     consent: { check: async () => ({ allowed: true }) },
     recovery: recoveryPort("no-mutation"),
-  }, { now: () => new Date(now), idFactory: () => `${++id}`.padStart(32, "0") });
+  }, { now: () => new Date(), idFactory: () => `${++id}`.padStart(32, "0") });
   const draft = await service.createPreviewRun(input({
     requestKey: "started-step-recovery-request",
     idempotencyKey: "started-step-recovery-intent",
@@ -495,7 +581,7 @@ test("PostgresArchitectureSyncStore retries a started step without rewinding its
 test("PostgresArchitectureSyncStore persists rollback compensation for succeeded steps", { timeout: 60_000 }, async (t) => {
   const pool = await freshPool(t);
   await seedFixture(pool);
-  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date(now) });
+  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date() });
   const fixtureExecutor = new MemoryArchitectureSyncFixtureExecutor();
   let verifyCount = 0;
   const executor: ArchitectureSyncFixtureExecutor = {
@@ -516,7 +602,7 @@ test("PostgresArchitectureSyncStore persists rollback compensation for succeeded
     mfa: { verify: async () => ({ allowed: true }) },
     consent: { check: async () => ({ allowed: true }) },
     recovery: recoveryPort("restorable-partial-state"),
-  }, { now: () => new Date(now), idFactory: () => `${++id}`.padStart(32, "0") });
+  }, { now: () => new Date(), idFactory: () => `${++id}`.padStart(32, "0") });
   const draft = await service.createPreviewRun(input({
     requestKey: "rollback-compensation-request",
     idempotencyKey: "rollback-compensation-intent",
@@ -569,7 +655,7 @@ test("PostgresArchitectureSyncStore persists rollback compensation for succeeded
 test("PostgresArchitectureSyncStore finalizes rollback throw cleanup without compensation", { timeout: 60_000 }, async (t) => {
   const pool = await freshPool(t);
   await seedFixture(pool);
-  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date(now) });
+  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date() });
   const executor = rollbackFailureExecutor("throw");
   let id = 400;
   const service = new ArchitectureSyncService(store, executor, {
@@ -577,7 +663,7 @@ test("PostgresArchitectureSyncStore finalizes rollback throw cleanup without com
     mfa: { verify: async () => ({ allowed: true }) },
     consent: { check: async () => ({ allowed: true }) },
     recovery: recoveryPort("restorable-partial-state"),
-  }, { now: () => new Date(now), idFactory: () => `${++id}`.padStart(32, "0") });
+  }, { now: () => new Date(), idFactory: () => `${++id}`.padStart(32, "0") });
   const draft = await service.createPreviewRun(input({
     requestKey: "rollback-throw-request",
     idempotencyKey: "rollback-throw-intent",
@@ -628,7 +714,7 @@ test("PostgresArchitectureSyncStore finalizes rollback throw cleanup without com
 test("PostgresArchitectureSyncStore finalizes rollback ok:false cleanup without compensation", { timeout: 60_000 }, async (t) => {
   const pool = await freshPool(t);
   await seedFixture(pool);
-  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date(now) });
+  const store = new PostgresArchitectureSyncStore(createDb(pool), { now: () => new Date() });
   const executor = rollbackFailureExecutor("false");
   let id = 500;
   const service = new ArchitectureSyncService(store, executor, {
@@ -636,7 +722,7 @@ test("PostgresArchitectureSyncStore finalizes rollback ok:false cleanup without 
     mfa: { verify: async () => ({ allowed: true }) },
     consent: { check: async () => ({ allowed: true }) },
     recovery: recoveryPort("restorable-partial-state"),
-  }, { now: () => new Date(now), idFactory: () => `${++id}`.padStart(32, "0") });
+  }, { now: () => new Date(), idFactory: () => `${++id}`.padStart(32, "0") });
   const draft = await service.createPreviewRun(input({
     requestKey: "rollback-false-request",
     idempotencyKey: "rollback-false-intent",
@@ -672,7 +758,7 @@ test("PostgresArchitectureSyncStore finalizes rollback ok:false cleanup without 
   assert.equal(await store.getCurrentLease(targetId), null);
 });
 
-function input(): ArchitectureSyncPreviewInput {
+function input(overrides: Partial<ArchitectureSyncPreviewInput> = {}): ArchitectureSyncPreviewInput {
   return {
     actor: ownerId,
     requestKey: "fixture-request",
@@ -691,6 +777,7 @@ function input(): ArchitectureSyncPreviewInput {
       { action: "configure-router", nodeId: "router-root" },
     ],
     baseline: { restorable: true },
+    ...overrides,
   };
 }
 
@@ -803,12 +890,14 @@ async function freshPool(t: { after(callback: () => void): void }) {
   t.after(() => pool.end());
   await pool.query("DROP SCHEMA IF EXISTS public CASCADE");
   await pool.query("CREATE SCHEMA public");
-  await pool.query("CREATE TABLE schema_migrations (id text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
-  for (const file of readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort()) {
-    await pool.query(readFileSync(join(migrationsDir, file), "utf8"));
-    await pool.query("INSERT INTO schema_migrations (id) VALUES ($1)", [file.slice(0, -4)]);
-    if (file === "0019_architecture_sync_control.sql") break;
-  }
+  // This fixture deliberately preserves pre-0034 generic snapshots. Migrate
+  // their historical rows forward, then exercise every journal on the full schema.
+  const migrationRoot = fileURLToPath(new URL("../migrations/", import.meta.url));
+  const historical = await mkdtemp(path.join(os.tmpdir(), "myskills-pre-observation-"));
+  try {
+    for (const file of await readdir(migrationRoot)) if (file.endsWith(".sql") && file < "0034_") await copyFile(path.join(migrationRoot, file), path.join(historical, file));
+    await runMigrations(pool, { migrationsDir: historical });
+  } finally { await rm(historical, { recursive: true, force: true }); }
   return pool;
 }
 
@@ -839,7 +928,7 @@ async function seedFixture(pool: ReturnType<typeof createPgPool>): Promise<void>
      ) VALUES ($1, $2, $3, 'Sync target', 'fixture', 1, '1.0.0', 'personal-mac', 'personal',
      'connected', 'granted', $4, $4, '{"inventory.read":true}'::jsonb, $5,
        $6, 2, '{}'::jsonb, '{}'::jsonb, $3)`,
-    [targetId, architectureId, ownerId, now, "a".repeat(64), "b".repeat(64)],
+    [targetId, architectureId, ownerId, now, architectureTargetCapabilitiesDigest({ "inventory.read": true }, 1), "b".repeat(64)],
   );
   await pool.query(
     `INSERT INTO skill_architecture_observations (
@@ -850,7 +939,27 @@ async function seedFixture(pool: ReturnType<typeof createPgPool>): Promise<void>
        '{"nodes":1}'::jsonb, '{"status":"healthy"}'::jsonb, $7)`,
     [observationId, targetId, "a".repeat(64), "b".repeat(64), observedDigest, JSON.stringify(observed), now],
   );
+  await runMigrations(pool);
+  assert.deepEqual((await pool.query("SELECT observed_state FROM skill_architecture_observations WHERE id=$1", [observationId])).rows[0].observed_state, observed);
 }
+
+test("current observation schema rejects legacy snapshots and round-trips a canonical target observation", { timeout: 60_000 }, async t => {
+  const pool = await freshPool(t);
+  await seedFixture(pool); // A preserved historical row now coexists with current constraints.
+  await assert.rejects(pool.query("INSERT INTO skill_architecture_observations(id,target_id,generation,adapter_kind,adapter_contract_version,adapter_version,adapter_digest,capabilities_digest,observed_digest,observed_state,counts,health_summary,captured_at) SELECT gen_random_uuid(),target_id,generation,adapter_kind,adapter_contract_version,adapter_version,adapter_digest,capabilities_digest,observed_digest,observed_state,counts,health_summary,captured_at FROM skill_architecture_observations WHERE id=$1", [observationId]), error => (error as { code?: string }).code === "23514");
+  const targets = new PostgresArchitectureTargetStore(createDb(pool));
+  const target = await targets.getTarget(ownerId, targetId);
+  assert.ok(target);
+  const capabilitiesDigest = architectureTargetCapabilitiesDigest(target.capabilities, target.adapter.contractVersion);
+  await pool.query("UPDATE skill_architecture_targets SET capabilities_digest=$2 WHERE id=$1", [targetId, capabilitiesDigest]);
+  const observationInput = { schemaVersion: 1 as const, targetId, targetGeneration: target.generation, adapterDigest: architectureTargetAdapterDigest(target.adapter), capabilitiesDigest, observedAt: new Date().toISOString(), skills: [{ slug: "canonical-leaf", kind: "leaf" as const, enabled: true }], configFindings: [], promptAwareness: { detected: false, count: 0, redacted: true as const } };
+  const service = new ArchitectureTargetService(targets, new ArchitectureTargetBindingAuthorizer(new PostgresArchitectureStore(createDb(pool))));
+  const saved = await service.appendObservation({ actor: ownerId, targetId, observation: observationInput });
+  assert.equal(saved.observedDigest, architectureTargetObservationDigest(observationInput));
+  const fresh = (await new PostgresArchitectureTargetStore(createDb(pool)).listObservations({ actor: ownerId, targetId, limit: 1 }))?.[0];
+  assert.deepEqual(fresh, saved);
+  assert.equal((await pool.query("SELECT observed_digest FROM skill_architecture_observations WHERE id=$1", [observationId])).rows[0].observed_digest, observedDigest);
+});
 
 function dbRunId(publicId: string): string {
   const compact = publicId.replace(/^run-/, "");

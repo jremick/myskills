@@ -546,6 +546,10 @@ export const skillUserGrants = pgTable("skill_user_grants", {
 ]);
 
 export const scanRuns = pgTable("scan_runs", {
+  artifactSha256: text("artifact_sha256"),
+  runnerVersion: text("runner_version"),
+  attempt: integer("attempt"),
+  failureCode: text("failure_code"),
   id: uuid("id").primaryKey().defaultRandom(),
   skillVersionId: uuid("skill_version_id").references(() => skillVersions.id, { onDelete: "cascade" }),
   status: jobStatus("status").notNull().default("queued"),
@@ -1055,6 +1059,7 @@ export const skillUpgradePolicyRevisions = pgTable("skill_upgrade_policy_revisio
 ]);
 
 export const skillArchitectureSyncRuns = pgTable("skill_architecture_sync_runs", {
+  artifactIntent: jsonb("artifact_intent").$type<import("@myskills-app/core").ArchitectureArtifactIntent>(),
   id: uuid("id").primaryKey().defaultRandom(),
   schemaVersion: integer("schema_version").notNull().default(1),
   architectureId: uuid("architecture_id").notNull(),

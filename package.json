@@ -1,6 +1,6 @@
 {
   "name": "myskills-app",
-  "version": "0.1.0-beta.18",
+  "version": "0.1.0-beta.19",
   "license": "Apache-2.0",
   "private": true,
   "description": "Open-source skill registry, sharing, installation, API, MCP, and CLI platform for AI agent skills.",
@@ -29,6 +29,8 @@
     "release:artifacts": "node scripts/create-release-artifacts.mjs",
     "release:verify": "node scripts/verify-release.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
+    "self-host:build": "node scripts/build-self-host-images.mjs",
+    "self-host:bundle": "node scripts/create-self-host-bundle.mjs",
     "smoke:cli-package": "node scripts/smoke-cli-package.mjs",
     "start:api": "npm run start -w @myskills-app/api",
     "start:mcp:http": "npm run start:http -w @myskills-app/mcp",
@@ -38,7 +40,9 @@
     "test:tooling": "node --test scripts/test/*.test.mjs",
     "typecheck:web": "npm run typecheck -w @myskills-app/web",
     "check:parity": "node scripts/check-capability-parity.mjs",
-    "docs:parity": "node scripts/render-capability-parity.mjs --refresh-sources"
+    "docs:parity": "node scripts/render-capability-parity.mjs --refresh-sources",
+    "build:site": "npm run build -w @myskills-app/site",
+    "test:e2e:site": "npm run test:e2e -w @myskills-app/site"
   },
   "engines": {
     "node": ">=22.13 <23 || >=24 <25"

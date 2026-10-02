@@ -16,10 +16,20 @@ export interface ArtifactPayload {
   files: PackageInputFile[];
 }
 
+/** Server-only credential identity, never accepted from an HTTP request body. */
+export interface ArtifactDeliveryInput {
+  slug: string;
+  version: string;
+  actorId: string | null;
+  credential?: { kind: "session" | "api_token" | "oauth"; tokenHash: string; resource?: string; clientId?: string };
+}
+
 export interface SubmissionActor {
   id: string;
   roles: Role[];
   mfaVerified?: boolean;
+  /** Trusted credential provenance supplied by authenticated routes only. */
+  credential?: ArtifactDeliveryInput["credential"];
 }
 
 export interface CreateSubmissionInput {
@@ -96,7 +106,7 @@ export interface StoredSubmission {
     payload: ArtifactPayload;
   };
   scan: {
-    status: "succeeded";
+    status: "queued" | "running" | "succeeded" | "failed";
     findings: ScanFinding[];
   };
 }
@@ -192,6 +202,11 @@ export interface SubmissionFeedback {
     createdAt: string;
     startedAt: string | null;
     completedAt: string | null;
+    /** Absent on legacy synchronous records. Exact evidence bindings on durable scans. */
+    artifactSha256?: string | null;
+    runnerVersion?: string | null;
+    attempt?: number | null;
+    failureCode?: string | null;
     findings: ScanFinding[];
   }>;
 }
@@ -328,6 +343,7 @@ export interface SubmissionStore {
     reason: string;
   }): Promise<void>;
   getPublicRelease(input: { slug: string; version: string; actorId?: string | null }): Promise<PublicReleaseMetadata | null>;
+  authorizeArtifactDelivery?(input: ArtifactDeliveryInput): Promise<PublicReleaseMetadata | null>;
   getPublicBundle(input: { slug: string; version: string; platform?: string; actorId?: string | null }): Promise<PublicBundle | null>;
   recordArtifactAccess(input: {
     actorId?: string | null;

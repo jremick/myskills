@@ -94,6 +94,13 @@ jobs:
           docker run --rm --network none myskills-registry-backup:${{ github.ref_name }} node scripts/run-registry-backup.mjs --help
           docker run --rm --network none myskills-registry-backup:${{ github.ref_name }} node scripts/restore-registry-backup.mjs --help
 
+      - name: Build and smoke operator image without credentials
+        run: |
+          docker build --file Dockerfile.ops --tag myskills-ops:${{ github.ref_name }} .
+          docker run --rm --network none myskills-ops:${{ github.ref_name }} node deploy/self-host/configure.mjs --help
+          docker run --rm --network none myskills-ops:${{ github.ref_name }} node scripts/run-registry-backup.mjs --help
+          docker run --rm --network none myskills-ops:${{ github.ref_name }} node scripts/restore-registry-backup.mjs --help
+
       - name: Upload release artifacts
         uses: actions/upload-artifact@v7
         with:

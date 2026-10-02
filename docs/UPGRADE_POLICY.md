@@ -51,6 +51,8 @@ Before upgrading a self-hosted instance:
 4. Run `npm run check` and the relevant smoke tests for API, web, CLI, and MCP.
 5. Keep rollback notes for the previous deployed commit and container images.
 
+The [operator package](SELF_HOST_OPERATOR.md) requires a newer version and explicit forward-migration consent. After a completed coordinated backup, it records the exact required target before running migrations. Target failure leaves that barrier in place. Retry with the exact target helper or restore to fresh isolated destinations; never restart old binaries against a database whose forward migrations have started.
+
 ## Skill Release Contract
 
 Every published skill release has one immutable artifact and SHA-256 digest. It also has release notes, a change kind, a user-action flag, and optional minimum MySkills, adapter-contract, and source-version requirements. Clients must use SemVer precedence and must not treat a newer but incompatible release as installable.

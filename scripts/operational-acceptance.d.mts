@@ -39,6 +39,7 @@ export function runOperationalAcceptance(options?: {
   env?: Record<string, string | undefined>;
   onCheck?: (check: AcceptanceCheck) => void;
   callbacks?: {
+    beforeRevocation?: (context: { actors: { author: AcceptanceActor; reviewer: AcceptanceActor; consumer: AcceptanceActor } }) => Promise<void>;
     afterFeedback?: (context: { slug: string; actor: AcceptanceActor; reason: string }) => Promise<void>;
     afterPublish?: (context: { slug: string; actor: AcceptanceActor; version: string }) => Promise<void>;
     afterUnpublish?: (context: { slug: string; actor: AcceptanceActor; version: string }) => Promise<void>;

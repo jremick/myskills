@@ -37,6 +37,7 @@ test("registry plan, local CLI evaluation, exact candidate publication and evide
   async function publish(files: { path: string; content: string }[]) {
     const manifest = JSON.parse(files.find((f) => f.path === "skill.json")!.content);
     const submission = (await api("/v1/submissions", { manifest, files, release: releaseMetadata })).submission;
+    await expect.poll(async () => (await api(`/v1/review/submissions/${submission.id}`)).submission.securityStatus, { timeout: 20_000 }).toBe("passed");
     const preview = await fetch(`${baseUrl}/api/v1/review/submissions/${submission.id}/bundle?platform=codex`, { headers: { authorization: `Bearer ${token}` } });
     expect(preview.ok).toBe(true);
     const artifactSha256 = createHash("sha256").update(await preview.text()).digest("hex");

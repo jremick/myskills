@@ -1,3 +1,4 @@
+import { assertExecutableSyncRun } from "./purpose.js";
 import {
   AppError,
   architectureSyncControlLimits,
@@ -149,7 +150,8 @@ export class ArchitectureSyncService {
   async createPreviewRun(input: ArchitectureSyncPreviewInput): Promise<ArchitectureSyncPreviewResult> {
     const actor = normalizeActor(input.actor);
     const identity = this.buildIdentity(input);
-    const placeholderSteps = normalizePreviewSteps(input.steps, identity.targetGeneration);
+    const existing = await this.store.findRunForCreate({ actorId: actor.userId, targetId: identity.targetId, requestKey: normalizeIdentifier(input.requestKey, "requestKey"), idempotencyKey: normalizeIdentifier(input.idempotencyKey, "idempotencyKey") });
+    const placeholderSteps = normalizePreviewSteps(input.steps, identity.targetGeneration, architectureSyncOrderedDigest({ actorId: actor.userId, targetId: identity.targetId, requestKey: normalizeIdentifier(input.requestKey, "requestKey"), idempotencyKey: normalizeIdentifier(input.idempotencyKey, "idempotencyKey") }), existing ?? undefined);
     const planDigest = architectureSyncPlanDigest(placeholderSteps);
     const steps = placeholderSteps.map((step) => ({
       ...step,
@@ -261,6 +263,7 @@ export class ArchitectureSyncService {
   async apply(input: ArchitectureSyncApplyInput): Promise<ArchitectureSyncRun> {
     const actor = normalizeActor(input.actor);
     let run = await this.requireRun(input.runId);
+    assertFixturePurpose(run);
     this.assertExpectedPlanDigest(run, input.expectedPlanDigest);
     this.assertMutationCapabilitiesFailClosed(run);
     if (run.state === "succeeded") return this.finalizeTerminalRun(run, actor.userId, "apply", "run.succeeded");
@@ -378,6 +381,7 @@ export class ArchitectureSyncService {
   async recover(input: ArchitectureSyncRecoveryInput): Promise<{ run: ArchitectureSyncRun; recovery: ArchitectureSyncRecoveryResult }> {
     const actor = normalizeActor(input.actor);
     const run = await this.requireRun(input.runId);
+    assertFixturePurpose(run);
     if (!isInterruptedRunState(run.state)) {
       const replay = this.replayRecovery(run, input.condition);
       if (replay) return replay;
@@ -472,6 +476,7 @@ export class ArchitectureSyncService {
   async rollback(input: ArchitectureSyncRollbackInput): Promise<ArchitectureSyncRun> {
     const actor = normalizeActor(input.actor);
     let run = await this.requireRun(input.runId);
+    assertFixturePurpose(run);
     if (run.state === "rolled_back") return this.finalizeTerminalRun(run, actor.userId, "rollback", "rollback.succeeded");
     if (run.state === "rollback_failed") return this.finalizeTerminalRun(run, actor.userId, "rollback", "rollback.failed", "failed", "deny");
     if (run.state !== "rollback_required" && run.state !== "rolling_back") {
@@ -891,12 +896,12 @@ function normalizeIdentifier(value: unknown, field: string): string {
   return value;
 }
 
-function normalizePreviewSteps(input: readonly ArchitectureSyncPreviewStepInput[], expectedGeneration: number): ArchitectureSyncStep[] {
+function normalizePreviewSteps(input: readonly ArchitectureSyncPreviewStepInput[], expectedGeneration: number, requestIdentity: string, existing?: ArchitectureSyncRun): ArchitectureSyncStep[] {
   if (!Array.isArray(input) || input.length > architectureSyncControlLimits.steps) throw new AppError("Sync steps are invalid.", "ARCHITECTURE_SYNC_STEP_INVALID", 400);
   const ids = new Set<string>();
   return input.map((item, index) => {
     if (!item || typeof item !== "object") throw new AppError("Sync step is invalid.", "ARCHITECTURE_SYNC_STEP_INVALID", 400);
-    const id = normalizeIdentifier(item.id ?? `step-${index + 1}`, "stepId");
+    const id = normalizeIdentifier(item.id ?? (existing?.steps[index]?.id === `step-${index + 1}` ? `step-${index + 1}` : `step-${requestIdentity}-${index + 1}`), "stepId");
     if (ids.has(id)) throw new AppError("Sync step ids must be unique.", "ARCHITECTURE_SYNC_DUPLICATE_STEP", 400);
     ids.add(id);
     const generation = item.targetGeneration ?? expectedGeneration;
@@ -997,4 +1002,9 @@ function cryptoRandomId(): string {
   if (typeof globalThis.crypto?.getRandomValues === "function") globalThis.crypto.getRandomValues(bytes);
   else return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
   return [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function assertFixturePurpose(run: ArchitectureSyncRun): void {
+  assertExecutableSyncRun(run);
+  if (run.metadata?.source === "architecture-artifact") throw new AppError("Composed artifacts require the trusted companion protocol.", "ARCHITECTURE_ARTIFACT_COMPANION_REQUIRED", 409);
 }

@@ -1941,7 +1941,7 @@ test("export writes verified bundle files under output directory", async (t) => 
   const calls: string[] = [];
   const fetch: FetchLike = async (input) => {
     calls.push(String(input));
-    if (String(input).endsWith("/bundle?platform=codex")) {
+    if (String(input).endsWith(`/bundle?platform=codex&sha256=${createHash("sha256").update(bundle).digest("hex")}`)) {
       return rawResponse(200, bundle);
     }
     return response(200, releaseBody("0.1.0", bundle));
@@ -1963,7 +1963,7 @@ test("export writes verified bundle files under output directory", async (t) => 
   assert.equal(code, 0);
   assert.deepEqual(calls, [
     "http://api.test/v1/skills/release-notes-helper/releases/0.1.0",
-    "http://api.test/v1/skills/release-notes-helper/releases/0.1.0/bundle?platform=codex",
+    `http://api.test/v1/skills/release-notes-helper/releases/0.1.0/bundle?platform=codex&sha256=${createHash("sha256").update(bundle).digest("hex")}`,
   ]);
   assert.equal(await readFile(path.join(outputDir, "README.md"), "utf8"), "Summarize release notes.");
   assert.equal(await readFile(path.join(outputDir, "nested", "config.json"), "utf8"), "{}");
@@ -1981,7 +1981,7 @@ test("export refuses unsafe bundle file paths before writing", async (t) => {
     ],
   });
   const fetch: FetchLike = async (input) => {
-    if (String(input).endsWith("/bundle?platform=codex")) {
+    if (String(input).endsWith(`/bundle?platform=codex&sha256=${createHash("sha256").update(bundle).digest("hex")}`)) {
       return rawResponse(200, bundle);
     }
     return response(200, releaseBody("0.1.0", bundle));
@@ -2042,7 +2042,7 @@ test("install downloads the latest verified bundle and records local state", asy
   assert.deepEqual(calls, [
     "Bearer install-token http://api.test/v1/skills/release-notes-helper/releases",
     "Bearer install-token http://api.test/v1/skills/release-notes-helper/releases/0.2.0",
-    "Bearer install-token http://api.test/v1/skills/release-notes-helper/releases/0.2.0/bundle?platform=codex",
+    `Bearer install-token http://api.test/v1/skills/release-notes-helper/releases/0.2.0/bundle?platform=codex&sha256=${createHash("sha256").update(bundle).digest("hex")}`,
     "Bearer install-token http://api.test/v1/skills/release-notes-helper/releases/0.2.0",
   ]);
   assert.equal(await readFile(path.join(installRoot, "release-notes-helper", "README.md"), "utf8"), "Release notes helper 0.2.0");
@@ -2104,8 +2104,9 @@ test("update stores a rollback snapshot and rollback restores it", async (t) => 
         releases: [releaseSummary("0.2.0", bundleText("0.2.0")), releaseSummary("0.1.0", bundleText("0.1.0"))],
       });
     }
-    if (url.endsWith("/bundle?platform=codex")) {
+    if (new URL(url).pathname.endsWith("/bundle")) {
       const version = url.includes("/0.2.0/") ? "0.2.0" : "0.1.0";
+      assert.equal(new URL(url).searchParams.get("sha256"), createHash("sha256").update(bundleText(version)).digest("hex"));
       return rawResponse(200, bundleText(version));
     }
     const version = url.endsWith("/releases/0.2.0") ? "0.2.0" : "0.1.0";
@@ -2219,7 +2220,7 @@ test("companion run-once claims, applies, verifies, and receipts an exact operat
     if (url.endsWith("/v1/target-operations/claim")) {
       return response(200, { claim: { operation, claimToken: "claim-token-that-is-long-enough-000000000000" } });
     }
-    if (url.endsWith("/releases/1.0.0/bundle?platform=codex")) return rawResponse(200, bundle);
+    if (url.endsWith(`/releases/1.0.0/bundle?platform=codex&sha256=${artifact.sha256}`)) return rawResponse(200, bundle);
     if (url.endsWith("/releases/1.0.0")) return response(200, releaseBody("1.0.0", bundle));
     if (url.endsWith("/state")) return response(200, { operation: { ...operation, state: body.state, leaseExpiresAt: new Date(Date.now() + 300_000).toISOString() } });
     return response(200, { operation });

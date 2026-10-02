@@ -75,7 +75,7 @@ export function createNativeSkillsHandlers(options: RegistryApiClientOptions) {
     const platform = release.platforms.filter((item) => item.status === "supported")
       .sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)[0];
     if (!platform) throw new IncompatibleSkill();
-    const bytes = await client.bytes(`${prefix}/bundle?platform=${encodeURIComponent(platform.name)}`, release.artifact.byteSize);
+    const bytes = await client.bytes(`${prefix}/bundle?platform=${encodeURIComponent(platform.name)}&sha256=${release.artifact.sha256}`, release.artifact.byteSize);
     if (bytes.byteLength !== release.artifact.byteSize || digest(bytes) !== release.artifact.sha256) throw new IncompatibleSkill();
     let files: z.infer<typeof bundleSchema>["files"];
     let frontmatter: NativeSkill["frontmatter"];

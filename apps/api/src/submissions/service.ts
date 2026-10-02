@@ -14,6 +14,7 @@ import type { Role } from "@myskills-app/auth";
 import { assertNoVisibilityMetadataUpdate } from "./types.js";
 import type {
   ArtifactPayload,
+  ArtifactDeliveryInput,
   CreateSubmissionInput,
   PublicBundle,
   PublicReleaseMetadata,
@@ -297,6 +298,15 @@ export class SubmissionService {
     return this.store.getPublicRelease(input);
   }
 
+  async authorizeArtifactDelivery(input: ArtifactDeliveryInput, authenticate: () => Promise<string | null>): Promise<PublicReleaseMetadata | null> {
+    if (this.store.authorizeArtifactDelivery) return this.store.authorizeArtifactDelivery(input);
+    // Disposable stores retain the ordinary live checks. Production uses the
+    // PostgreSQL snapshot gate, with no later credential-touch query.
+    const release = await this.store.getPublicRelease(input);
+    if (await authenticate() !== input.actorId) throw new AppError("Authentication is required.", "AUTHENTICATION_REQUIRED", 401);
+    return release;
+  }
+
   async getPublicBundle(input: { slug: string; version: string; platform?: string; actorId?: string | null }): Promise<PublicBundle | null> {
     const bundle = await this.store.getPublicBundle(input);
     await this.store.recordArtifactAccess({
@@ -308,6 +318,10 @@ export class SubmissionService {
       reason: bundle ? undefined : "not_public_or_missing",
     });
     return bundle;
+  }
+
+  async recordArtifactAccess(input: Parameters<SubmissionStore["recordArtifactAccess"]>[0]): Promise<void> {
+    await this.store.recordArtifactAccess(input);
   }
 
   /**

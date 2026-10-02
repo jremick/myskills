@@ -29,7 +29,7 @@ async function temporary(t: TestContext): Promise<string> {
 }
 async function processRun(root: string, locale: string, options: { args?: string[]; fault?: InstallFaultPoint; legacy?: boolean }): Promise<Result> {
   const result = await execute(process.execPath, ["--import", "tsx", processFixture, JSON.stringify({ root, ...options })], {
-    env: { ...process.env, LANG: locale, LC_ALL: locale, LANGUAGE: locale }, timeout: 30_000, maxBuffer: 1024 * 1024,
+    env: { ...process.env, XDG_CONFIG_HOME: path.resolve(root, "../../.test-config"), LANG: locale, LC_ALL: locale, LANGUAGE: locale }, timeout: 30_000, maxBuffer: 1024 * 1024,
   });
   assert.equal(result.stderr, "");
   const parsed = JSON.parse(result.stdout) as Result;

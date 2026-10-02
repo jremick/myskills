@@ -15,7 +15,7 @@ const activeLocks = new Set<string>();
 // directory ancestry during a mutation; that requires native dirfd primitives.
 
 /** Every reader and writer uses the same root lock, including crash recovery. */
-export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>): Promise<T> {
+export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {
   const root = await prepareInstallRoot(inputRoot);
   const lockPath = path.join(root, ".myskills-app", "write.lock");
   const owner: LockOwner = { pid: process.pid, token: randomUUID() };
@@ -25,6 +25,7 @@ export async function withInstallRootLock<T>(inputRoot: string, work: (root: str
       await mkdir(lockPath, { mode: 0o700 });
     } catch (error) {
       if (errorCode(error) !== "EEXIST") throw error;
+      onWait?.();
       await reclaimDeadLock(lockPath);
       if (Date.now() >= deadline) throw new Error("The installation root is busy or has an ambiguous lock. Retry after the other command exits; preserve an ambiguous lock for operator recovery.");
       await new Promise((resolve) => setTimeout(resolve, 25));

@@ -1,3 +1,4 @@
+import { ArchitecturePlanPanel } from "../architecture/ArchitecturePlanPanel.js";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import {
   Activity,
@@ -782,6 +783,7 @@ function TargetDetailPanel({ client, detail, observations, state, message, selec
       <TargetBindingFacts target={detail} currentUserId={currentUserId} architectureNames={architectureNames} organizationNames={organizationNames} />
       <TargetConsentCard client={client} target={detail} onChanged={onRefresh} />
       <TargetObservationCard target={detail} observations={observations} />
+      <ArchitecturePlanPanel key={detail.id} client={client} target={detail} observation={observations[0]} />
       <TargetHealthCard client={client} target={detail} onChanged={onRefresh} />
       <TargetRevokeCard client={client} target={detail} onRevoked={onRefresh} />
     </div>}

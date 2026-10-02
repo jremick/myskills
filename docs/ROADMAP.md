@@ -1,8 +1,8 @@
 # Roadmap
 
-Version: 0.1.0-beta.18
-Document revision: 0.3.9
-Last updated: 2026-09-30
+Version: 0.1.0-beta.19
+Document revision: 0.3.10
+Last updated: 2026-10-02
 
 ## Release Tracks
 
@@ -58,6 +58,14 @@ Last updated: 2026-09-30
   authentication/retry scheduling, and full-page architecture Workbench are
   published in the GitHub prerelease. This is source publication, not a hosted
   beta.17 deployment claim. See [Beta.17 Release Delivery](BETA17_RELEASE_DELIVERY.md).
+- **Combined delivery candidate (`v0.1.0-beta.19`)**: includes the merged,
+  unreleased beta.18 CLI/MCP, OAuth and Library Collections/Groups work,
+  [PR #126](https://github.com/jremick/myskills/pull/126)'s architecture explorer,
+  and [PR #133](https://github.com/jremick/myskills/pull/133)'s roadmap source.
+  Final exact-source runtime verification, protected checks, packaging and
+  publication remain required. Live provider consent/recognition and physical
+  MFA/pilot acceptance are explicitly deferred. See
+  [Beta.19 Release Delivery](BETA19_RELEASE_DELIVERY.md).
 - **Current publication and hosted snapshot (30 September 2026)**: GitHub has
   beta.17 at `9c0511e90a4c0b2fe7c54c4e5f11a1b320e8db7b`; npm `beta` resolves to
   `0.1.0-beta.16`, with `latest` and `alpha` at `0.1.0-alpha.3`. The public
@@ -73,17 +81,21 @@ Last updated: 2026-09-30
 
 ## Current Focus
 
-- Complete beta.18 delivery after the merged dependency, CLI/MCP, Collections
-  and Groups, and local-CI changes: stage the final revision, perform real
-  ChatGPT/Claude acceptance, and finish release and publication gates. Phase-1
-  staging and final Collections source verification are recorded in the
-  [beta.18 delivery record](BETA18_RELEASE_DELIVERY.md).
+- Finish beta.19 verification, packaging and publication against one immutable
+  candidate. It includes the merged, unreleased beta.18 scope and the PR #133
+  roadmap source. The [beta.18 delivery record](BETA18_RELEASE_DELIVERY.md)
+  retains historical phase-1 staging and Collections source verification;
+  the [beta.19 delivery record](BETA19_RELEASE_DELIVERY.md) owns current gates.
 - Make first use easier: native MCP skill delivery, better authoring and imports,
   optional task-aware recommendations, and simpler self-hosting and deployment.
 - Preserve the API/Postgres registry, immutable reviewed releases, authorization,
   and audit as the shared foundation for each new surface.
-- Keep the proven workspace-scoped Codex companion separate from broader
-  cross-tool sync and full architecture execution, which remain future work.
+- The beta.19 candidate adds guided whole-architecture Codex workspace delivery
+  with separate execution approval and aggregate rollback. Actual host
+  recognition/consent, physical MFA scans and account pilots are explicitly
+  deferred. Broader cross-tool adapters remain separate decisions. Runtime
+  acceptance and artifact identity remain required; deployment is outside this
+  delivery action.
 - Use the operational acceptance ledger and current source to reconcile older
   milestone status lists. Earlier branch and
   beta.2 labels below are historical; they do not supersede the release tracks.
@@ -455,11 +467,12 @@ Branch foundations present (fresh verification pending):
 
 Deferred:
 
-- Complete CLI/MCP architecture organization-grant write parity. CLI skill
-  visibility grants can target organizations; architecture grant replacement
-  remains an API/web manager control.
 - Provider-derived roles, public architecture publishing, and conditional
   runtime exposure.
+
+Architecture organization-grant management is exposed through the existing CLI
+and named MCP actions. Its current policy and MFA gates remain API-owned;
+provider-host acceptance is tracked separately in the capability inventory.
 
 ## Milestone 7C: Connected environment targets
 
@@ -488,7 +501,8 @@ Deferred:
 
 - Broader provider/API connectors and adapter invocation beyond the supported
   Codex workspace companion. Automatic home/profile discovery is not enabled.
-- CLI/MCP target management parity and live provider readback.
+- Real provider-host readback and acceptance. CLI/MCP target management is
+  exposed; local observations and execution retain explicit producer handoffs.
 
 ## Milestone 7D: Sync control, recovery, and fencing
 
@@ -507,6 +521,11 @@ Branch foundations present (fresh verification pending):
 - Core/API fixture service, in-memory executor, and persisted Postgres store
   for approval, synthetic apply/verify/rollback transitions, recovery
   decisions, idempotency, and lease-loss tests.
+- Server-owned review-only plans for an exact revision and trusted observation,
+  with inspectable history and explicit approval through API, CLI, MCP and the
+  connected-target inspector. Approval binds the full review digest and
+  rechecks target generation, observation, capabilities, consent and policy.
+  See [ARCH-LIFE delivery](ARCH_LIFE_DELIVERY.md) for candidate verification.
 
 The bounded sync contract allows at most 500 steps and 2,004 append-only
 receipts per run. That capacity covers a 1,002-receipt max-step lifecycle, one
@@ -516,8 +535,13 @@ enable live target writes.
 
 Deferred:
 
-- Public sync-run routes, live adapter executors, package installers,
-  filesystem writers, and any live apply or rollback.
+- Full architecture orchestration through supported target-operation contracts.
+  The current per-skill queue supports install/update/rollback; it does not
+  represent router configuration, enable/disable/remove, or whole-profile
+  delivery. Review approval never invokes the synthetic executor.
+- Real target pilots and second-provider writes require explicit operator
+  acceptance. Existing installers, leases, receipts and recovery remain the
+  implementation boundary for any later supported operation.
 
 ## Milestone 7E: Pattern migration and editor history
 
@@ -541,8 +565,8 @@ Branch foundations present (fresh verification pending):
 
 Deferred:
 
-- CLI/MCP pattern-migration write commands and durable server-side diagram
-  artifacts/versioned layout data. No target or grant rebinding is allowed by
+- Durable server-side diagram artifacts/versioned layout data. CLI and named
+  MCP pattern-migration commands are exposed. No target or grant rebinding is allowed by
   the migration contract.
 
 ### Phase 2 migration order

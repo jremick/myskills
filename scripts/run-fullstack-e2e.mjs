@@ -1,8 +1,12 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fullstackPhases } from "./lib/fullstack-phases.mjs";
+import { readFullstackEndpoint } from "./lib/fullstack-endpoints.mjs";
+import { buildFullstackImages, requireFullstackImages } from "./lib/fullstack-images.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const composeFile = resolve(root, "docker-compose.e2e.yml");
@@ -12,24 +16,28 @@ if (!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(projectName)) {
   console.error("MYSKILLS_E2E_COMPOSE_PROJECT must be a lowercase Docker Compose project name of at most 63 characters.");
   process.exit(1);
 }
-const webPort = process.env.MYSKILLS_E2E_WEB_PORT ?? "43100";
-const mailpitPort = process.env.MYSKILLS_E2E_MAILPIT_PORT ?? "43101";
-const baseURL = `http://127.0.0.1:${webPort}`;
+const webPort = process.env.MYSKILLS_E2E_WEB_PORT ?? "0";
+const mailpitPort = process.env.MYSKILLS_E2E_MAILPIT_PORT ?? "0";
+for (const port of [webPort, mailpitPort]) {
+  if (port !== "0" && (!/^[1-9]\d{3,4}$/.test(port) || Number(port) < 1024 || Number(port) > 65535)) throw new Error("Full-stack published ports must be 0 (automatic) or 1024..65535.");
+}
+let baseURL;
 const composeArgs = ["compose", "--project-name", projectName, "--file", composeFile];
 const environment = {
   ...process.env,
   COMPOSE_PROGRESS: "plain",
   MYSKILLS_E2E_AUTH_SECRET: randomCredential(48),
-  MYSKILLS_E2E_BASE_URL: baseURL,
   MYSKILLS_E2E_INVITEE_PASSWORD: randomCredential(24),
   MYSKILLS_E2E_MAILPIT_PORT: mailpitPort,
-  MYSKILLS_E2E_MAILPIT_URL: `http://127.0.0.1:${mailpitPort}`,
   MYSKILLS_E2E_MINIO_ROOT_PASSWORD: randomCredential(24),
   MYSKILLS_E2E_MINIO_ROOT_USER: `e2e${randomBytes(6).toString("hex")}`,
   MYSKILLS_E2E_OWNER_EMAIL: "beta2-owner@example.test",
   MYSKILLS_E2E_OWNER_PASSWORD: randomCredential(24),
   MYSKILLS_E2E_POSTGRES_PASSWORD: randomCredential(24),
   MYSKILLS_E2E_WEB_PORT: webPort,
+  // Bootstrap configuration only. No authenticated journey runs until the
+  // daemon's actual bound origin is read back and configured in API/MCP.
+  MYSKILLS_E2E_PUBLIC_WEB_PORT: webPort === "0" ? "43100" : webPort,
 };
 // Container logs can echo these generated values; keep them out of CI output.
 const generatedSecrets = [
@@ -47,10 +55,12 @@ const generatedSecrets = [
 // limiter is unchanged, and journeys sharing this host address stay isolated.
 const phases = fullstackPhases(process.argv.slice(2));
 let stackUp = false;
+let imageDirectory;
+let frozenImages;
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.once(signal, () => {
-    void teardown().finally(() => process.exit(signal === "SIGINT" ? 130 : 143));
+    void teardown().finally(() => removeImageOverride()).finally(() => process.exit(signal === "SIGINT" ? 130 : 143));
   });
 }
 
@@ -58,18 +68,42 @@ try {
   await run("docker", [...composeArgs, "config", "--quiet"]);
   // Build the CLI packages once; each phase gets fresh containers and data.
   await run("npm", ["run", "build", "-w", "@myskills-app/core", "-w", "@myskills-app/skill-package", "-w", "@jarel/myskills"]);
+  frozenImages = await buildFullstackImages({ run, composeArgs, project: projectName });
+  // Pull external dependencies once. Later stacks must never build or pull a
+  // replacement when an image from this invocation is missing.
+  await run("docker", [...composeArgs, "pull", "--ignore-buildable"]);
+  imageDirectory = await mkdtemp(resolve(tmpdir(), "myskills-fullstack-images-"));
+  const imageOverride = resolve(imageDirectory, "images.json");
+  await writeFile(imageOverride, JSON.stringify({ services: Object.fromEntries(Object.entries(frozenImages).map(([service, image]) => [service, { image, pull_policy: "never" }])) }), { mode: 0o600 });
+  composeArgs.push("--file", imageOverride);
   for (const phase of phases) {
     console.log(`Full-stack phase "${phase.name}" on a fresh disposable stack.`);
     await runPhase(phase);
   }
 } finally {
-  await teardown();
+  try { await teardown(); } finally { await removeImageOverride(); }
 }
 
 async function runPhase(phase) {
   try {
+    await requireFullstackImages({ run, images: frozenImages });
     stackUp = true;
-    await run("docker", [...composeArgs, "up", "--build", "--detach", "--wait", "--wait-timeout", "300"]);
+    await run("docker", [...composeArgs, "up", "--no-build", "--pull", "never", "--detach", "--wait", "--wait-timeout", "300"]);
+    const endpoint = (service, containerPort, requestedPort) => readFullstackEndpoint({ run, composeArgs, project: projectName, service, containerPort, requestedPort });
+    baseURL = await endpoint("web", 80, webPort);
+    environment.MYSKILLS_E2E_BASE_URL = baseURL;
+    environment.MYSKILLS_E2E_MAILPIT_URL = await endpoint("mailpit", 8025, mailpitPort);
+    environment.MYSKILLS_E2E_PUBLIC_WEB_PORT = new URL(baseURL).port;
+    if (webPort === "0") {
+      // Keep the already-bound web/Mailpit containers. Configure exact OAuth
+      // issuer/consent and cookie origins before the first authenticated read.
+      await run("docker", [...composeArgs, "up", "--no-build", "--pull", "never", "--no-deps", "--detach", "--wait", "--wait-timeout", "300", "api", "mcp"]);
+      // Reload nginx upstream addresses after API/MCP recreation while keeping
+      // the web container and its listening socket/daemon binding intact.
+      await run("docker", [...composeArgs, "exec", "--no-TTY", "web", "nginx", "-s", "reload"]);
+    }
+    if (await endpoint("web", 80, webPort) !== baseURL || await endpoint("mailpit", 8025, mailpitPort) !== environment.MYSKILLS_E2E_MAILPIT_URL) throw new Error("Full-stack bound endpoints changed during origin configuration.");
+    console.log(`Full-stack bound endpoints: web=${baseURL} mailpit=${environment.MYSKILLS_E2E_MAILPIT_URL}`);
     // Remote MCP OAuth discovery, authorization, token and MCP paths must reach
     // the API and MCP services through the production nginx template.
     await run(process.execPath, [resolve(root, "scripts/check-mcp-oauth-routing.mjs"), "--origin", baseURL]);
@@ -93,6 +127,10 @@ async function runPhase(phase) {
   } finally {
     await teardown();
   }
+}
+
+async function removeImageOverride() {
+  if (imageDirectory) await rm(imageDirectory, { recursive: true, force: true });
 }
 
 async function teardown() {
@@ -226,12 +264,20 @@ function run(command, args, options = {}) {
       env: environment,
       stdio: ["inherit", "pipe", "pipe"],
     });
-    forwardRedacted(child.stdout, process.stdout);
+    let captured = "", overflow = false;
+    if (options.capture) {
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", chunk => {
+        if (captured.length + chunk.length > 8192) overflow = true;
+        else if (!overflow) captured += chunk;
+      });
+    } else forwardRedacted(child.stdout, process.stdout);
     forwardRedacted(child.stderr, process.stderr);
     child.once("error", rejectPromise);
     child.once("close", (code, signal) => {
+      if (overflow) { rejectPromise(new Error("Full-stack endpoint readback exceeded its bounded size.")); return; }
       if (code === 0 || options.allowFailure) {
-        resolvePromise();
+        resolvePromise(options.capture ? captured : undefined);
         return;
       }
       rejectPromise(new Error(`${command} exited with ${signal ? `signal ${signal}` : `code ${code}`}.`));

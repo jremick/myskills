@@ -81,10 +81,21 @@ test("owner uses a real HttpOnly cookie session and exports a real seeded bundle
   const authenticatedExport = await page.evaluate(async () => {
     const meResponse = await fetch("/api/v1/me");
     const me = await meResponse.json() as { user?: { email?: string } };
-    const bundleResponse = await fetch("/api/v1/skills/release-notes-helper/releases/0.1.0/bundle?platform=codex");
-    const bundle = await bundleResponse.json() as { files?: Array<{ path: string; content: string }> };
+    const metadata = await (await fetch("/api/v1/skills/release-notes-helper/releases/0.1.0")).json() as { release: { artifact: { sha256: string; byteSize: number } } };
+    const url = `/api/v1/skills/release-notes-helper/releases/0.1.0/bundle?platform=codex&sha256=${metadata.release.artifact.sha256}`;
+    const bundleResponse = await fetch(url);
+    const bytes = await bundleResponse.arrayBuffer();
+    const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const bundle = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as { files?: Array<{ path: string; content: string }> };
+    const stale = await fetch(url.replace(metadata.release.artifact.sha256, "0".repeat(64)));
+    const denied = await fetch(url, { headers: { authorization: "Bearer synthetic-invalid-delivery-credential" } });
     return {
       bundle,
+      exactBytes: { digest, size: bytes.byteLength, expected: metadata.release.artifact, header: bundleResponse.headers.get("x-myskills-artifact-sha256") },
+      cacheControl: bundleResponse.headers.get("cache-control"),
+      staleStatus: stale.status,
+      deniedStatus: denied.status,
+      deniedCacheControl: denied.headers.get("cache-control"),
       bundleContentType: bundleResponse.headers.get("content-type"),
       bundleStatus: bundleResponse.status,
       me,
@@ -95,6 +106,14 @@ test("owner uses a real HttpOnly cookie session and exports a real seeded bundle
   expect(authenticatedExport.meStatus).toBe(200);
   expect(authenticatedExport.me.user?.email).toBe(ownerEmail);
   expect(authenticatedExport.bundleStatus).toBe(200);
+  // The canonical compose stack stores this seeded object in real MinIO.
+  expect(authenticatedExport.exactBytes.digest).toBe(authenticatedExport.exactBytes.expected.sha256);
+  expect(authenticatedExport.exactBytes.header).toBe(authenticatedExport.exactBytes.expected.sha256);
+  expect(authenticatedExport.exactBytes.size).toBe(authenticatedExport.exactBytes.expected.byteSize);
+  expect(authenticatedExport.cacheControl).toBe("no-store");
+  expect(authenticatedExport.staleStatus).toBe(409);
+  expect(authenticatedExport.deniedStatus).toBe(401);
+  expect(authenticatedExport.deniedCacheControl).toBe("no-store");
   expect(authenticatedExport.bundleContentType).toContain("application/vnd.myskills-app.package+json");
   expect(authenticatedExport.bundle.files?.map((file) => file.path)).toEqual(expect.arrayContaining(["README.md", "skill.json"]));
   const manifest = authenticatedExport.bundle.files?.find((file) => file.path === "skill.json");

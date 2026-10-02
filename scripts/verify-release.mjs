@@ -25,6 +25,14 @@ if (process.env.RELEASE_REQUIRE_TAG === "true") artifactArgs.push("--require-tag
 if (process.env.RELEASE_EXPECTED_TAG) artifactArgs.push("--expected-tag", process.env.RELEASE_EXPECTED_TAG);
 run(artifactArgs);
 
+// Exact source/archive/lockfile verification stays unsigned until a signing
+// authority and publication target are explicitly selected.
+const provenance = spawnSync(process.execPath, [
+  "scripts/create-trust-provenance.mjs", "--release", relative(process.cwd(), releaseOutput),
+  "--out", relative(process.cwd(), join(releaseOutputRoot, "provenance")),
+], { stdio: "inherit" });
+if (provenance.status !== 0) process.exit(provenance.status ?? 1);
+
 console.log(`Canonical release verification passed. Artifacts: ${releaseOutput}`);
 
 function run(args) {

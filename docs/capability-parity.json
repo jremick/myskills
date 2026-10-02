@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "audit_date": "2026-09-30",
+  "audit_date": "2026-10-01",
   "evidence_level": "source inventory with scoped contract/runtime evidence; real-host acceptance unverified; deployment evidence recorded separately",
   "base_commit": "3ab55b5da86bef5e3f6864657445b9f0ba38288d",
   "github_main_checked": "6905bf690cd0b9108fc74a392f51909c9726aeb2",
@@ -23,7 +23,7 @@
           "method": "GET",
           "path": "/v1/skills",
           "source": "apps/api/src/app.ts",
-          "line": 915
+          "line": 941
         }
       ],
       "api": {
@@ -41,7 +41,7 @@
         "detail": "search [query] --limit/--cursor, with next cursor output",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 652,
+          "line": 688,
           "anchor": "async function searchCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -64,7 +64,7 @@
         "detail": "Registry filters and pagination",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 669,
+          "line": 676,
           "anchor": "const request = registryClient.searchSkillPage"
         },
         "evidence": [
@@ -127,7 +127,7 @@
           "method": "GET",
           "path": "/v1/skills/:slug",
           "source": "apps/api/src/app.ts",
-          "line": 983
+          "line": 1014
         }
       ],
       "api": {
@@ -145,7 +145,7 @@
         "detail": "info",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 678,
+          "line": 714,
           "anchor": "async function infoCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -160,7 +160,7 @@
         "detail": "Skill inspector",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 5703,
+          "line": 5741,
           "anchor": "function SkillDetail({"
         },
         "evidence": [
@@ -223,7 +223,7 @@
           "method": "GET",
           "path": "/v1/skills/:slug/releases",
           "source": "apps/api/src/app.ts",
-          "line": 924
+          "line": 950
         }
       ],
       "api": {
@@ -241,7 +241,7 @@
         "detail": "releases list",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1237,
+          "line": 1278,
           "anchor": "async function releasesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -319,7 +319,7 @@
           "method": "GET",
           "path": "/v1/skills/:slug/releases/:version",
           "source": "apps/api/src/app.ts",
-          "line": 937
+          "line": 963
         }
       ],
       "api": {
@@ -337,7 +337,7 @@
         "detail": "info <slug> --version <exact-version>; preserves JSON metadata and sanitizes human terminal output",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 678,
+          "line": 714,
           "anchor": "async function infoCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -360,7 +360,7 @@
         "detail": "Exact version inspector",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 5703,
+          "line": 5741,
           "anchor": "function SkillDetail({"
         },
         "evidence": [
@@ -423,31 +423,55 @@
           "method": "GET",
           "path": "/v1/skills/:slug/releases/:version/bundle",
           "source": "apps/api/src/app.ts",
-          "line": 958
+          "line": 984
         }
       ],
       "api": {
         "status": "A",
-        "detail": "See route inventory",
+        "detail": "Exact API-proxied bytes; optional expected SHA-256, no-store and digest/size headers. PostgreSQL final credential/account/policy/release checks share one post-storage authorization snapshot.",
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: See route inventory. Runtime parity is not implied."
+          },
+          {
+            "level": "runtime",
+            "detail": "Real API/MCP sockets with memory domain stores passed exact old/new release, stale digest prefetch denial, invalid bearer, mid-read token/account/scope/membership/policy/lifecycle changes, altered bytes and expiry. No PostgreSQL, deployed object storage or real-host proof.",
+            "source": {
+              "path": "apps/mcp/test/trust-delivery.e2e.test.ts",
+              "line": 25
+            }
+          },
+          {
+            "level": "source",
+            "detail": "Read-only REPEATABLE READ final gate defines authorization at its first SELECT and performs no later auth usage UPDATE. Real-PG stale credential and post-storage mutation regressions are prepared for test:postgres; execution pending. Canonical cookie/MinIO export checks are extended; not run locally.",
+            "source": {
+              "path": "apps/api/test/postgres-artifact-delivery.pgtest.ts",
+              "line": 16
+            }
           }
         ]
       },
       "cli": {
         "status": "A",
-        "detail": "export validates bundle; install also downloads",
+        "detail": "export/install bind the exact release digest, bound streamed bytes by validated size, hash raw bytes, strictly decode UTF-8 and reject redirects.",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1907,
+          "line": 1948,
           "anchor": "async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: export validates bundle; install also downloads. Runtime parity is not implied."
+          },
+          {
+            "level": "runtime",
+            "detail": "Node 22.23.2 candidate narrow run passed 46 checks across real CLI/device HTTP, installation/filesystem regressions and real S3 SDK streams. Two-origin redirects, streaming overflow, invalid UTF-8, stalls and invalid artifact sizes preserve credentials/files. Existing CLI/native MCP contract suites separately passed 138 checks. No PostgreSQL, MinIO deployment or signed-in human-host claim.",
+            "source": {
+              "path": "apps/cli/test/trust-response.e2e.test.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -456,7 +480,7 @@
         "detail": "Export/install CLI command handoff",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 912,
+          "line": 919,
           "anchor": "selectedSkill && release && supportedDetailPlatform ? exportCommand(selectedSkill.slug, release.version, supportedDetailPlatform) : \"\""
         },
         "evidence": [
@@ -468,7 +492,7 @@
       },
       "mcp_api_token": {
         "status": "A",
-        "detail": "skills_releases_export",
+        "detail": "skills_releases_export verifies API digest header; native Skills binds exact digest and rechecks API policy on each resource read.",
         "source": {
           "path": "packages/core/src/delegated-actions.ts",
           "line": 96
@@ -480,6 +504,14 @@
             "source": {
               "path": "apps/mcp/src/application-tools.ts",
               "line": 1
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "Real SDK HTTP native Skills with actual API and memory domain stores: mixed public/team/private releases, digest/traversal/origin/resource bounds, privileged scope denial and revocation. Generic export verifies API digest header. Native human hosts remain unverified.",
+            "source": {
+              "path": "apps/mcp/test/trust-delivery.e2e.test.ts",
+              "line": 92
             }
           }
         ]
@@ -507,7 +539,7 @@
       "delegated_action_ids": [
         "skills.releases.export"
       ],
-      "initial_authorization": "Visible resource; skills:read for token requests; active account and resource policy still apply. Exact artifact digest and lifecycle gates apply."
+      "initial_authorization": "Visible exact release; skills:read for scoped credentials; no anonymous fallback for supplied invalid credentials. Credential/scope, digest/size, visibility, platform and lifecycle rechecked after storage within a 15-second delivery window."
     },
     {
       "id": "REG-06",
@@ -519,13 +551,13 @@
           "method": "GET",
           "path": "/v1/manage/skills",
           "source": "apps/api/src/app.ts",
-          "line": 2198
+          "line": 2236
         },
         {
           "method": "GET",
           "path": "/v1/manage/skills/:slug",
           "source": "apps/api/src/app.ts",
-          "line": 2213
+          "line": 2251
         }
       ],
       "api": {
@@ -629,7 +661,7 @@
           "method": "PUT",
           "path": "/v1/skills/:slug",
           "source": "apps/api/src/app.ts",
-          "line": 998
+          "line": 1029
         }
       ],
       "api": {
@@ -647,7 +679,7 @@
         "detail": "skills edit",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1178,
+          "line": 1219,
           "anchor": "async function skillsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -733,7 +765,7 @@
           "method": "POST",
           "path": "/v1/skills/:slug/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1055
+          "line": 1086
         }
       ],
       "api": {
@@ -751,7 +783,7 @@
         "detail": "skills archive/restore/delete",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1178,
+          "line": 1219,
           "anchor": "async function skillsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -829,7 +861,7 @@
           "method": "POST",
           "path": "/v1/skills/:slug/releases/:version/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1080
+          "line": 1111
         }
       ],
       "api": {
@@ -847,7 +879,7 @@
         "detail": "releases actions",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1237,
+          "line": 1278,
           "anchor": "async function releasesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -925,13 +957,13 @@
           "method": "GET",
           "path": "/v1/skills/:slug/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1106
+          "line": 1137
         },
         {
           "method": "PUT",
           "path": "/v1/skills/:slug/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1123
+          "line": 1154
         }
       ],
       "api": {
@@ -949,7 +981,7 @@
         "detail": "sharing get/set",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1352,
+          "line": 1393,
           "anchor": "async function sharingCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -964,7 +996,7 @@
         "detail": "Sharing editor",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 6051,
+          "line": 6090,
           "anchor": "const next = await client.updateSkillSharing({"
         },
         "evidence": [
@@ -1070,7 +1102,7 @@
         "detail": "bundles list/show/members/memberships",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1923,
+          "line": 1964,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1169,7 +1201,7 @@
         "detail": "bundles sources",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1923,
+          "line": 1964,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1271,7 +1303,7 @@
         "detail": "bundles create/edit",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1923,
+          "line": 1964,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1375,7 +1407,7 @@
         "detail": "bundles save",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1923,
+          "line": 1964,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1452,7 +1484,7 @@
           "method": "POST",
           "path": "/v1/submissions",
           "source": "apps/api/src/app.ts",
-          "line": 2342
+          "line": 2380
         }
       ],
       "api": {
@@ -1462,6 +1494,14 @@
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: See route inventory. Runtime parity is not implied."
+          },
+          {
+            "level": "source",
+            "detail": "Production registration queues background scans; local worker tests pass batch deduplication and shutdown drain. Real PostgreSQL lease/retry/restart/immutable corrected-version tests are prepared for the controller, not locally executed.",
+            "source": {
+              "path": "apps/api/src/package-quality/scan-worker.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -1470,7 +1510,7 @@
         "detail": "submit --path",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1756,
+          "line": 1797,
           "anchor": "async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -1485,7 +1525,7 @@
         "detail": "Submit archive",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2226,
+          "line": 2252,
           "anchor": "const submitted = await client.submitArchive({"
         },
         "evidence": [
@@ -1548,7 +1588,7 @@
           "method": "GET",
           "path": "/v1/submissions/mine",
           "source": "apps/api/src/app.ts",
-          "line": 2266
+          "line": 2304
         }
       ],
       "api": {
@@ -1566,7 +1606,7 @@
         "detail": "submissions list",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1137,
+          "line": 1178,
           "anchor": "async function submissionsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -1581,7 +1621,7 @@
         "detail": "My submissions",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2182,
+          "line": 2208,
           "anchor": "setSubmissions(await client.listUserSubmissions());"
         },
         "evidence": [
@@ -1644,7 +1684,7 @@
           "method": "GET",
           "path": "/v1/submissions/:id",
           "source": "apps/api/src/app.ts",
-          "line": 2230
+          "line": 2268
         }
       ],
       "api": {
@@ -1654,6 +1694,14 @@
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: See route inventory. Runtime parity is not implied."
+          },
+          {
+            "level": "source",
+            "detail": "Source feedback projection retains exact digest, runner, attempt and failure code, preserving legacy nulls. PostgreSQL runtime remains pending.",
+            "source": {
+              "path": "apps/api/src/submissions/postgres-submission-store.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -1684,13 +1732,21 @@
         "detail": "Submission evidence panel",
         "source": {
           "path": "apps/web/src/components/registry/SubmissionEvidencePanel.tsx",
-          "line": 27,
+          "line": 29,
           "anchor": "const request = mode === \"author\" ? client.getUserSubmissionDetail?.(submissionId) : client.getReviewSubmissionDetail?.(submissionId);"
         },
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: Submission evidence panel. Runtime parity is not implied."
+          },
+          {
+            "level": "contract",
+            "detail": "Local Chromium fixture durable attempt/failure display and explicit completion refresh passed; no PostgreSQL readback proof.",
+            "source": {
+              "path": "apps/web/test/e2e/author-review-redesign.spec.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -1747,7 +1803,7 @@
           "method": "GET",
           "path": "/v1/submissions/:id/bundle",
           "source": "apps/api/src/app.ts",
-          "line": 2285
+          "line": 2323
         }
       ],
       "api": {
@@ -1787,7 +1843,7 @@
         "detail": "Export own submission",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2244,
+          "line": 2270,
           "anchor": "const bundle = await client.exportUserSubmission(submission.id);"
         },
         "evidence": [
@@ -1850,7 +1906,7 @@
           "method": "POST",
           "path": "/v1/submissions/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 2317
+          "line": 2355
         }
       ],
       "api": {
@@ -1868,7 +1924,7 @@
         "detail": "submissions withdraw",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1137,
+          "line": 1178,
           "anchor": "async function submissionsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -1883,7 +1939,7 @@
         "detail": "Withdraw control",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2270,
+          "line": 2296,
           "anchor": "await client.performSubmissionAction(submission.id, \"withdraw\", confirmedReason);"
         },
         "evidence": [
@@ -1946,7 +2002,7 @@
           "method": "GET",
           "path": "/v1/review/submissions",
           "source": "apps/api/src/app.ts",
-          "line": 2368
+          "line": 2406
         }
       ],
       "api": {
@@ -1964,7 +2020,7 @@
         "detail": "review submissions --limit/--cursor, with next cursor output",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1042,
+          "line": 1083,
           "anchor": "async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -1987,7 +2043,7 @@
         "detail": "Review queue and load more",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2560,
+          "line": 2595,
           "anchor": "return client.listReviewSubmissionPage ? client.listReviewSubmissionPage({ limit: 100, cursor })"
         },
         "evidence": [
@@ -2050,7 +2106,7 @@
           "method": "GET",
           "path": "/v1/review/submissions/:id",
           "source": "apps/api/src/app.ts",
-          "line": 2247
+          "line": 2285
         }
       ],
       "api": {
@@ -2060,6 +2116,14 @@
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: See route inventory. Runtime parity is not implied."
+          },
+          {
+            "level": "source",
+            "detail": "Source reviewer projection retains digest-bound scan evidence. Canonical PostgreSQL readback remains pending.",
+            "source": {
+              "path": "apps/api/src/submissions/postgres-submission-store.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -2090,7 +2154,7 @@
         "detail": "Reviewer evidence panel",
         "source": {
           "path": "apps/web/src/components/registry/SubmissionEvidencePanel.tsx",
-          "line": 27,
+          "line": 29,
           "anchor": "const request = mode === \"author\" ? client.getUserSubmissionDetail?.(submissionId) : client.getReviewSubmissionDetail?.(submissionId);"
         },
         "evidence": [
@@ -2146,14 +2210,14 @@
     {
       "id": "PUB-08",
       "domain": "Publishing and review",
-      "capability": "Retrieve exact artifact for review",
+      "capability": "Inspect exact review artifact and compare candidate before approval",
       "category": "product",
       "api_operations": [
         {
           "method": "GET",
           "path": "/v1/review/submissions/:id/bundle",
           "source": "apps/api/src/app.ts",
-          "line": 2387
+          "line": 2425
         }
       ],
       "api": {
@@ -2163,45 +2227,67 @@
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: See route inventory. Runtime parity is not implied."
+          },
+          {
+            "level": "source",
+            "detail": "Existing exact release read/export and current review get/export primitives compose the comparison; no new state or review operation. PG read-authority fixture prepared.",
+            "source": {
+              "path": "apps/api/test/package-evaluations.pgtest.ts",
+              "line": 1
+            }
           }
         ]
       },
       "cli": {
         "status": "A",
-        "detail": "review bundle",
+        "detail": "review bundle plus review compare with candidate submission ID, exact versions and both digests",
         "source": {
-          "path": "apps/cli/src/cli.ts",
-          "line": 1042,
-          "anchor": "async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
+          "path": "apps/cli/src/release-comparison-commands.ts",
+          "line": 1
         },
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: review bundle. Runtime parity is not implied."
+          },
+          {
+            "level": "contract",
+            "detail": "Final local Node22 published/reviewer shared and CLI6/6, MCP HTTP1/1 and reviewer DOM2/2 pass. Actual PG current reviewer/baseline visibility fixture is prepared, not executed. Canonical browser acceptance pending.",
+            "source": {
+              "path": "apps/cli/test/release-comparison-commands.test.ts",
+              "line": 1
+            }
           }
         ]
       },
       "ui": {
         "status": "A",
-        "detail": "Review artifact inspector",
+        "detail": "Review inspector compares candidate with an exact readable published baseline before approval; explicitly bounded previews and private-state invalidation",
         "source": {
-          "path": "apps/web/src/App.tsx",
-          "line": 2706,
-          "anchor": "const bundle = await client.getReviewSubmissionBundle(submission.id);"
+          "path": "apps/web/src/components/registry/ReviewComparison.tsx",
+          "line": 1
         },
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: Review artifact inspector. Runtime parity is not implied."
+          },
+          {
+            "level": "contract",
+            "detail": "Final local Node22 published/reviewer shared and CLI6/6, MCP HTTP1/1 and reviewer DOM2/2 pass. Actual PG current reviewer/baseline visibility fixture is prepared, not executed. Canonical browser acceptance pending.",
+            "source": {
+              "path": "apps/web/test/review-comparison.test.tsx",
+              "line": 1
+            }
           }
         ]
       },
       "mcp_api_token": {
         "status": "A",
-        "detail": "review_submissions_export",
+        "detail": "review_submissions_export plus review_submissions_compare with current API token reviewer/MFA and independent baseline read",
         "source": {
-          "path": "packages/core/src/delegated-actions.ts",
-          "line": 124
+          "path": "apps/mcp/src/release-comparison.ts",
+          "line": 1
         },
         "evidence": [
           {
@@ -2209,6 +2295,14 @@
             "detail": "Fixed named action registration and explicit input contracts are present. This is core operation coverage, not exhaustive field, domain or host acceptance proof.",
             "source": {
               "path": "apps/mcp/src/application-tools.ts",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Final local Node22 published/reviewer shared and CLI6/6, MCP HTTP1/1 and reviewer DOM2/2 pass. Actual PG current reviewer/baseline visibility fixture is prepared, not executed. Canonical browser acceptance pending.",
+            "source": {
+              "path": "apps/mcp/test/release-comparison-http.e2e.test.ts",
               "line": 1
             }
           }
@@ -2216,10 +2310,10 @@
       },
       "mcp_oauth": {
         "status": "A",
-        "detail": "review_submissions_export",
+        "detail": "review_submissions_export plus review_submissions_compare through current delegated OAuth reviewer/MFA/scopes; no approval",
         "source": {
-          "path": "packages/core/src/delegated-actions.ts",
-          "line": 124
+          "path": "apps/mcp/src/release-comparison.ts",
+          "line": 1
         },
         "evidence": [
           {
@@ -2229,13 +2323,24 @@
               "path": "apps/mcp/src/application-tools.ts",
               "line": 1
             }
+          },
+          {
+            "level": "contract",
+            "detail": "Final local Node22 published/reviewer shared and CLI6/6, MCP HTTP1/1 and reviewer DOM2/2 pass. Actual PG current reviewer/baseline visibility fixture is prepared, not executed. Canonical browser acceptance pending.",
+            "source": {
+              "path": "apps/mcp/test/release-comparison-http.e2e.test.ts",
+              "line": 1
+            }
           }
         ]
       },
-      "authorization": "Named actions enforce live API user/resource/lifecycle policy and declared scopes: review:read. Privileged OAuth actions require actual session MFA verification within 15 minutes; refresh never extends it. Trusted-control sub-operations retain their original boundary.",
+      "authorization": "Current API reviewer role/MFA and review:read for candidate inspection. Candidate comparison additionally uses skills:read and independent readable published baseline access; reviewer/management authority never broadens baseline visibility. Exact pins/manifest identities/full content are verified and authority is re-read before output; no approval or code execution.",
       "gap": "G04",
       "delegated_action_ids": [
-        "review.submissions.export"
+        "review.submissions.export",
+        "review.submissions.get",
+        "skills.releases.get",
+        "skills.releases.export"
       ],
       "initial_authorization": "Author/ownership for submissions; reviewer roles for review. Own list/detail/bundle require a session; other routes use skills:submit or review:read/write with privileged-role MFA. Publication requires the inspected artifact identity."
     },
@@ -2249,7 +2354,7 @@
           "method": "POST",
           "path": "/v1/review/submissions/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 2422
+          "line": 2460
         }
       ],
       "api": {
@@ -2267,7 +2372,7 @@
         "detail": "review action",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1042,
+          "line": 1083,
           "anchor": "async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -2282,7 +2387,7 @@
         "detail": "Review actions",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2627,
+          "line": 2662,
           "anchor": "const result = await client.performReviewAction({"
         },
         "evidence": [
@@ -5408,7 +5513,7 @@
           "method": "GET",
           "path": "/v1/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1929
+          "line": 1967
         }
       ],
       "api": {
@@ -5426,7 +5531,7 @@
         "detail": "teams list",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1285,
+          "line": 1326,
           "anchor": "async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -5441,7 +5546,7 @@
         "detail": "Teams dashboard",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3146,
+          "line": 3182,
           "anchor": "client.listTeams(),"
         },
         "evidence": [
@@ -5512,7 +5617,7 @@
           "method": "POST",
           "path": "/v1/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1943
+          "line": 1981
         }
       ],
       "api": {
@@ -5530,7 +5635,7 @@
         "detail": "teams create",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1285,
+          "line": 1326,
           "anchor": "async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -5545,7 +5650,7 @@
         "detail": "Create team",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3238,
+          "line": 3274,
           "anchor": "await client.createTeam(teamName);"
         },
         "evidence": [
@@ -5616,13 +5721,13 @@
           "method": "POST",
           "path": "/v1/teams/:id/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1986
+          "line": 2024
         },
         {
           "method": "POST",
           "path": "/v1/teams/invitations/:id/accept",
           "source": "apps/api/src/app.ts",
-          "line": 2072
+          "line": 2110
         }
       ],
       "api": {
@@ -5640,7 +5745,7 @@
         "detail": "teams invite/accept",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1285,
+          "line": 1326,
           "anchor": "async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -5655,7 +5760,7 @@
         "detail": "Team invitations",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3257,
+          "line": 3293,
           "anchor": "await client.inviteTeamMember(invitedTeam.id, email);"
         },
         "evidence": [
@@ -5727,7 +5832,7 @@
           "method": "DELETE",
           "path": "/v1/teams/:teamId/invitations/:invitationId",
           "source": "apps/api/src/app.ts",
-          "line": 2008
+          "line": 2046
         }
       ],
       "api": {
@@ -5825,13 +5930,13 @@
           "method": "PUT",
           "path": "/v1/teams/:teamId/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 2030
+          "line": 2068
         },
         {
           "method": "DELETE",
           "path": "/v1/teams/:teamId/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 2051
+          "line": 2089
         }
       ],
       "api": {
@@ -5930,7 +6035,7 @@
           "method": "GET",
           "path": "/v1/teams/shared-skills",
           "source": "apps/api/src/app.ts",
-          "line": 2092
+          "line": 2130
         }
       ],
       "api": {
@@ -5948,7 +6053,7 @@
         "detail": "teams skills",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1285,
+          "line": 1326,
           "anchor": "async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -5963,7 +6068,7 @@
         "detail": "Team shared skills",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3147,
+          "line": 3183,
           "anchor": "client.listTeamSharedSkills(),"
         },
         "evidence": [
@@ -6026,13 +6131,13 @@
           "method": "GET",
           "path": "/v1/organizations",
           "source": "apps/api/src/app.ts",
-          "line": 1610
+          "line": 1648
         },
         {
           "method": "GET",
           "path": "/v1/organizations/:id",
           "source": "apps/api/src/app.ts",
-          "line": 1676
+          "line": 1714
         }
       ],
       "api": {
@@ -6072,7 +6177,7 @@
         "detail": "Organizations dashboard",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 364,
+          "line": 371,
           "anchor": "const canUseOrganizations = Boolean(session && registryClient.listOrganizations);"
         },
         "evidence": [
@@ -6136,13 +6241,13 @@
           "method": "POST",
           "path": "/v1/organizations",
           "source": "apps/api/src/app.ts",
-          "line": 1624
+          "line": 1662
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1867
+          "line": 1905
         }
       ],
       "api": {
@@ -6246,19 +6351,19 @@
           "method": "GET",
           "path": "/v1/organizations/:id/members",
           "source": "apps/api/src/app.ts",
-          "line": 1693
+          "line": 1731
         },
         {
           "method": "GET",
           "path": "/v1/organizations/:id/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1710
+          "line": 1748
         },
         {
           "method": "GET",
           "path": "/v1/organizations/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1644
+          "line": 1682
         }
       ],
       "api": {
@@ -6363,13 +6468,13 @@
           "method": "POST",
           "path": "/v1/organizations/:id/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1727
+          "line": 1765
         },
         {
           "method": "POST",
           "path": "/v1/organizations/invitations/:id/accept",
           "source": "apps/api/src/app.ts",
-          "line": 1658
+          "line": 1696
         }
       ],
       "api": {
@@ -6473,13 +6578,13 @@
           "method": "PUT",
           "path": "/v1/organizations/:id/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 1747
+          "line": 1785
         },
         {
           "method": "DELETE",
           "path": "/v1/organizations/:id/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 1765
+          "line": 1803
         }
       ],
       "api": {
@@ -6583,19 +6688,19 @@
           "method": "GET",
           "path": "/v1/organizations/:id/policy-revisions",
           "source": "apps/api/src/app.ts",
-          "line": 1783
+          "line": 1821
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/policy-revisions",
           "source": "apps/api/src/app.ts",
-          "line": 1826
+          "line": 1864
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/policy-revisions/:revisionId/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1845
+          "line": 1883
         }
       ],
       "api": {
@@ -6700,19 +6805,19 @@
           "method": "GET",
           "path": "/v1/organizations/:id/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1888
+          "line": 1926
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1910
+          "line": 1948
         },
         {
           "method": "PUT",
           "path": "/v1/teams/:id/organization",
           "source": "apps/api/src/app.ts",
-          "line": 1964
+          "line": 2002
         }
       ],
       "api": {
@@ -6817,13 +6922,13 @@
           "method": "GET",
           "path": "/v1/organizations/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 1800
+          "line": 1838
         },
         {
           "method": "PUT",
           "path": "/v1/organizations/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 1811
+          "line": 1849
         }
       ],
       "api": {
@@ -6927,7 +7032,7 @@
           "method": "GET",
           "path": "/v1/architecture-patterns",
           "source": "apps/api/src/app.ts",
-          "line": 379
+          "line": 405
         }
       ],
       "api": {
@@ -6945,7 +7050,7 @@
         "detail": "architectures patterns",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1399,
+          "line": 1440,
           "anchor": "async function architecturesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -7023,7 +7128,7 @@
           "method": "GET",
           "path": "/v1/architectures",
           "source": "apps/api/src/app.ts",
-          "line": 383
+          "line": 409
         }
       ],
       "api": {
@@ -7041,7 +7146,7 @@
         "detail": "architectures list",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1399,
+          "line": 1440,
           "anchor": "async function architecturesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -7119,19 +7224,19 @@
           "method": "GET",
           "path": "/v1/architectures/:id",
           "source": "apps/api/src/app.ts",
-          "line": 412
+          "line": 438
         },
         {
           "method": "GET",
           "path": "/v1/architectures/:id/revisions",
           "source": "apps/api/src/app.ts",
-          "line": 435
+          "line": 461
         },
         {
           "method": "GET",
           "path": "/v1/architectures/:id/revisions/:revisionId",
           "source": "apps/api/src/app.ts",
-          "line": 639
+          "line": 665
         }
       ],
       "api": {
@@ -7262,7 +7367,7 @@
           "method": "POST",
           "path": "/v1/architectures",
           "source": "apps/api/src/app.ts",
-          "line": 391
+          "line": 417
         }
       ],
       "api": {
@@ -7364,7 +7469,7 @@
           "method": "POST",
           "path": "/v1/architectures/:id/revisions",
           "source": "apps/api/src/app.ts",
-          "line": 445
+          "line": 471
         }
       ],
       "api": {
@@ -7493,7 +7598,7 @@
           "method": "POST",
           "path": "/v1/architectures/:id/preview",
           "source": "apps/api/src/app.ts",
-          "line": 651
+          "line": 677
         }
       ],
       "api": {
@@ -7511,7 +7616,7 @@
         "detail": "architectures preview/compile/plan/dry-run",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1399,
+          "line": 1440,
           "anchor": "async function architecturesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -7606,7 +7711,7 @@
           "method": "POST",
           "path": "/v1/architectures/:id/draft-preview",
           "source": "apps/api/src/app.ts",
-          "line": 506
+          "line": 532
         }
       ],
       "api": {
@@ -7726,13 +7831,13 @@
           "method": "GET",
           "path": "/v1/architectures/:id/organization-grants",
           "source": "apps/api/src/app.ts",
-          "line": 583
+          "line": 609
         },
         {
           "method": "PUT",
           "path": "/v1/architectures/:id/organization-grants",
           "source": "apps/api/src/app.ts",
-          "line": 593
+          "line": 619
         }
       ],
       "api": {
@@ -7852,13 +7957,13 @@
           "method": "POST",
           "path": "/v1/architectures/:id/pattern-migrations/preview",
           "source": "apps/api/src/app.ts",
-          "line": 607
+          "line": 633
         },
         {
           "method": "POST",
           "path": "/v1/architectures/:id/pattern-migrations",
           "source": "apps/api/src/app.ts",
-          "line": 625
+          "line": 651
         }
       ],
       "api": {
@@ -7978,13 +8083,13 @@
           "method": "GET",
           "path": "/v1/architecture-targets",
           "source": "apps/api/src/app.ts",
-          "line": 714
+          "line": 740
         },
         {
           "method": "GET",
           "path": "/v1/architecture-targets/:id",
           "source": "apps/api/src/app.ts",
-          "line": 733
+          "line": 759
         }
       ],
       "api": {
@@ -8024,7 +8129,7 @@
         "detail": "Targets dashboard",
         "source": {
           "path": "apps/web/src/components/target/ArchitectureTargetsDashboard.tsx",
-          "line": 301,
+          "line": 302,
           "anchor": "if (!client.listArchitectureTargets) {"
         },
         "evidence": [
@@ -8088,13 +8193,13 @@
           "method": "POST",
           "path": "/v1/architecture-targets",
           "source": "apps/api/src/app.ts",
-          "line": 722
+          "line": 748
         },
         {
           "method": "POST",
           "path": "/v1/architecture-targets/:id/consent",
           "source": "apps/api/src/app.ts",
-          "line": 744
+          "line": 770
         }
       ],
       "api": {
@@ -8134,7 +8239,7 @@
         "detail": "Target registration and consent",
         "source": {
           "path": "apps/web/src/components/target/ArchitectureTargetsDashboard.tsx",
-          "line": 823,
+          "line": 825,
           "anchor": "if (!client.setArchitectureTargetConsent || target.status === \"revoked\") return;"
         },
         "evidence": [
@@ -8198,7 +8303,7 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/observations",
           "source": "apps/api/src/app.ts",
-          "line": 759
+          "line": 785
         }
       ],
       "api": {
@@ -8238,7 +8343,7 @@
         "detail": "Target observations",
         "source": {
           "path": "apps/web/src/components/target/ArchitectureTargetsDashboard.tsx",
-          "line": 336,
+          "line": 337,
           "anchor": "if (!client.getArchitectureTarget || !client.listArchitectureTargetObservations) {"
         },
         "evidence": [
@@ -8301,7 +8406,7 @@
           "method": "POST",
           "path": "/v1/architecture-targets/:id/observations",
           "source": "apps/api/src/app.ts",
-          "line": 772
+          "line": 798
         }
       ],
       "api": {
@@ -8341,7 +8446,7 @@
         "detail": "Local observation command guidance",
         "source": {
           "path": "apps/web/src/components/target/ArchitectureTargetsDashboard.tsx",
-          "line": 30,
+          "line": 31,
           "anchor": "} from \"@myskills-app/core\";"
         },
         "evidence": [
@@ -8400,7 +8505,7 @@
           "method": "POST",
           "path": "/v1/architecture-targets/:id/health",
           "source": "apps/api/src/app.ts",
-          "line": 784
+          "line": 810
         }
       ],
       "api": {
@@ -8440,7 +8545,7 @@
         "detail": "Target health control",
         "source": {
           "path": "apps/web/src/components/target/ArchitectureTargetsDashboard.tsx",
-          "line": 850,
+          "line": 852,
           "anchor": "if (!client.updateArchitectureTargetHealth || target.status === \"revoked\") return;"
         },
         "evidence": [
@@ -8499,7 +8604,7 @@
           "method": "DELETE",
           "path": "/v1/architecture-targets/:id",
           "source": "apps/api/src/app.ts",
-          "line": 797
+          "line": 823
         }
       ],
       "api": {
@@ -8539,7 +8644,7 @@
         "detail": "Revoke target",
         "source": {
           "path": "apps/web/src/components/target/ArchitectureTargetsDashboard.tsx",
-          "line": 870,
+          "line": 872,
           "anchor": "if (!client.revokeArchitectureTarget || target.status === \"revoked\") return;"
         },
         "evidence": [
@@ -8602,7 +8707,7 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/updates",
           "source": "apps/api/src/app.ts",
-          "line": 822
+          "line": 848
         }
       ],
       "api": {
@@ -8705,7 +8810,7 @@
           "method": "POST",
           "path": "/v1/architecture-targets/:id/operations",
           "source": "apps/api/src/app.ts",
-          "line": 809
+          "line": 835
         }
       ],
       "api": {
@@ -8808,7 +8913,7 @@
           "method": "POST",
           "path": "/v1/target-operations/batch",
           "source": "apps/api/src/app.ts",
-          "line": 851
+          "line": 877
         }
       ],
       "api": {
@@ -8911,13 +9016,13 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/operations",
           "source": "apps/api/src/app.ts",
-          "line": 860
+          "line": 886
         },
         {
           "method": "GET",
           "path": "/v1/target-operations/:id",
           "source": "apps/api/src/app.ts",
-          "line": 871
+          "line": 897
         }
       ],
       "api": {
@@ -9021,7 +9126,7 @@
           "method": "POST",
           "path": "/v1/target-operations/:id/cancel",
           "source": "apps/api/src/app.ts",
-          "line": 877
+          "line": 903
         }
       ],
       "api": {
@@ -9124,13 +9229,13 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 831
+          "line": 857
         },
         {
           "method": "PUT",
           "path": "/v1/architecture-targets/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 840
+          "line": 866
         }
       ],
       "api": {
@@ -9234,19 +9339,19 @@
           "method": "POST",
           "path": "/v1/target-operations/claim",
           "source": "apps/api/src/app.ts",
-          "line": 884
+          "line": 910
         },
         {
           "method": "POST",
           "path": "/v1/target-operations/:id/state",
           "source": "apps/api/src/app.ts",
-          "line": 891
+          "line": 917
         },
         {
           "method": "POST",
           "path": "/v1/target-operations/:id/receipt",
           "source": "apps/api/src/app.ts",
-          "line": 903
+          "line": 929
         }
       ],
       "api": {
@@ -9264,7 +9369,7 @@
         "detail": "companion run-once with lease/fence checks",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 3100,
+          "line": 3170,
           "anchor": "async function companionCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9356,7 +9461,7 @@
         "detail": "improve compatibility --release <slug>@<version>; optional login for public releases",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 421,
+          "line": 457,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9466,7 +9571,7 @@
         "detail": "improve declare/review-declaration",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 421,
+          "line": 457,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9569,7 +9674,7 @@
         "detail": "improve policy",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 421,
+          "line": 457,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9684,7 +9789,7 @@
         "detail": "improve profiles",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 421,
+          "line": 457,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9801,7 +9906,7 @@
         "detail": "improve suites",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 421,
+          "line": 457,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9907,7 +10012,7 @@
         "detail": "improve preview/prepare and show-plan --id <plan-id>; inspect saved plans/runs without creating a local job",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 421,
+          "line": 457,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -10117,7 +10222,7 @@
         "detail": "improve status/cancel",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 421,
+          "line": 457,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -10319,7 +10424,7 @@
         "detail": "improve evidence/accept-evidence",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 421,
+          "line": 457,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -10398,7 +10503,7 @@
           "method": "POST",
           "path": "/v1/auth/register",
           "source": "apps/api/src/app.ts",
-          "line": 1151
+          "line": 1189
         }
       ],
       "api": {
@@ -10438,7 +10543,7 @@
         "detail": "Invitation registration only; no open/request self-registration form",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2022,
+          "line": 2047,
           "anchor": "await client.registerWithInvitation({"
         },
         "evidence": [
@@ -10497,58 +10602,122 @@
           "method": "POST",
           "path": "/v1/auth/login",
           "source": "apps/api/src/app.ts",
-          "line": 1162
+          "line": 1200
         },
         {
           "method": "POST",
           "path": "/v1/auth/mfa/verify",
           "source": "apps/api/src/app.ts",
-          "line": 1228
+          "line": 1266
         },
         {
           "method": "POST",
           "path": "/v1/auth/logout",
           "source": "apps/api/src/app.ts",
-          "line": 1240
+          "line": 1278
+        },
+        {
+          "method": "POST",
+          "path": "/v1/auth/device/start",
+          "source": "apps/api/src/auth/device-login/routes.ts",
+          "line": 32
+        },
+        {
+          "method": "POST",
+          "path": "/v1/auth/device/poll",
+          "source": "apps/api/src/auth/device-login/routes.ts",
+          "line": 37
+        },
+        {
+          "method": "POST",
+          "path": "/v1/auth/device/inspect",
+          "source": "apps/api/src/auth/device-login/routes.ts",
+          "line": 43
+        },
+        {
+          "method": "POST",
+          "path": "/v1/auth/device/decision",
+          "source": "apps/api/src/auth/device-login/routes.ts",
+          "line": 49
         }
       ],
       "api": {
         "status": "A",
-        "detail": "See route inventory",
+        "detail": "Password/MFA sessions and configurable first-party device login. Durable PostgreSQL consent/polling and existing scoped API tokens.",
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: See route inventory. Runtime parity is not implied."
+          },
+          {
+            "level": "runtime",
+            "detail": "Local two-instance API fixture passed scope/session consent, shared polling, replay, denial, expiry, fresh MFA and account/session/token revocation. Memory stores; PostgreSQL and deployed proof remain unverified.",
+            "source": {
+              "path": "apps/api/test/device-login.e2e.test.ts",
+              "line": 1
+            }
+          },
+          {
+            "level": "source",
+            "detail": "Integrated Node 22 candidate refreshes decision time after PostgreSQL locks. Canonical real-PG atomicity/admission/rollback/revocation/deadline cases are registered but not yet executed; no PG acceptance claim.",
+            "source": {
+              "path": "apps/api/test/postgres-device-login-atomicity.pgtest.ts",
+              "line": 13
+            }
           }
         ]
       },
       "cli": {
         "status": "A",
-        "detail": "login with password+TOTP/recovery or API key; logout",
+        "detail": "login with password+TOTP/recovery, API key or --method browser with exact requested --scopes; logout preserves existing API-token local-only behavior.",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 712,
+          "line": 748,
           "anchor": "async function loginCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: login with password+TOTP/recovery or API key; logout. Runtime parity is not implied."
+          },
+          {
+            "level": "runtime",
+            "detail": "Real CLI-to-loopback HTTP API consent/poll/storage journey passed, including denial preserving the previous credential and no token output. Memory API stores; no real-host claim.",
+            "source": {
+              "path": "apps/api/test/device-login-cli.e2e.test.ts",
+              "line": 1
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "Node 22.23.2 candidate narrow run passed 46 checks across real CLI/device HTTP, installation/filesystem regressions and real S3 SDK streams. Two-origin redirects, streaming overflow, invalid UTF-8, stalls and invalid artifact sizes preserve credentials/files. Existing CLI/native MCP contract suites separately passed 138 checks. No PostgreSQL, MinIO deployment or signed-in human-host claim.",
+            "source": {
+              "path": "apps/cli/test/trust-response.e2e.test.ts",
+              "line": 1
+            }
           }
         ]
       },
       "ui": {
         "status": "A",
-        "detail": "Login/MFA/sign out",
+        "detail": "Login/MFA/sign out and /auth/device explicit permission review/approve/deny.",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 1158,
+          "line": 1171,
           "anchor": "const result = await registryClient.verifyMfa({"
         },
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: Login/MFA/sign out. Runtime parity is not implied."
+          },
+          {
+            "level": "runtime",
+            "detail": "Chromium consent fixture passed exact scopes, failed approval retention and explicit denial; screenshot attached. API responses mocked; no full-stack or deployed claim.",
+            "source": {
+              "path": "apps/web/test/e2e/device-login.spec.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -10588,7 +10757,7 @@
           }
         ]
       },
-      "authorization": "Account service policy. Credentials/factor setup and token secrets must stay in trusted user controls. Session-only account management; /me accepts profile:read. OAuth scope changes require renewed consent.",
+      "authorization": "Account service policy. Credentials/factor setup and token secrets must stay in trusted user controls. Session-only account management; /me accepts profile:read. OAuth scope changes require renewed consent. Device consent requires a live session; privileged roles/write scopes require a real MFA event within 15 minutes. Redemption rechecks approving session and live account; MCP hands off to trusted browser/CLI. Device tokens inherit normal API-token scopes and revocation.",
       "gap": "G08"
     },
     {
@@ -10601,7 +10770,7 @@
           "method": "GET",
           "path": "/v1/me",
           "source": "apps/api/src/app.ts",
-          "line": 1596
+          "line": 1634
         }
       ],
       "api": {
@@ -10619,7 +10788,7 @@
         "detail": "whoami / auth status",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 807,
+          "line": 848,
           "anchor": "async function whoamiCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -10634,7 +10803,7 @@
         "detail": "Account/session identity",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 630,
+          "line": 637,
           "anchor": "registryClient.getMe()"
         },
         "evidence": [
@@ -10697,13 +10866,13 @@
           "method": "POST",
           "path": "/v1/auth/email-verification/request",
           "source": "apps/api/src/app.ts",
-          "line": 1176
+          "line": 1214
         },
         {
           "method": "POST",
           "path": "/v1/auth/email-verification/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1187
+          "line": 1225
         }
       ],
       "api": {
@@ -10743,7 +10912,7 @@
         "detail": "Confirmation route; no request/resend action",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 4257,
+          "line": 4295,
           "anchor": "await client.confirmEmailVerification({ token });"
         },
         "evidence": [
@@ -10802,13 +10971,13 @@
           "method": "POST",
           "path": "/v1/auth/password-reset/request",
           "source": "apps/api/src/app.ts",
-          "line": 1197
+          "line": 1235
         },
         {
           "method": "POST",
           "path": "/v1/auth/password-reset/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1208
+          "line": 1246
         }
       ],
       "api": {
@@ -10848,7 +11017,7 @@
         "detail": "Password reset forms",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 1181,
+          "line": 1194,
           "anchor": "await registryClient.requestPasswordReset(input);"
         },
         "evidence": [
@@ -10907,19 +11076,19 @@
           "method": "POST",
           "path": "/v1/auth/account/password",
           "source": "apps/api/src/app.ts",
-          "line": 1248
+          "line": 1286
         },
         {
           "method": "POST",
           "path": "/v1/auth/account/email-change",
           "source": "apps/api/src/app.ts",
-          "line": 1262
+          "line": 1300
         },
         {
           "method": "POST",
           "path": "/v1/auth/email-change/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1218
+          "line": 1256
         }
       ],
       "api": {
@@ -10959,7 +11128,7 @@
         "detail": "Account security forms",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 4469,
+          "line": 4507,
           "anchor": "await client.changePassword({ currentPassword: passwordInput.currentPassword, password: passwordInput.password });"
         },
         "evidence": [
@@ -11018,25 +11187,25 @@
           "method": "GET",
           "path": "/v1/auth/mfa",
           "source": "apps/api/src/app.ts",
-          "line": 1277
+          "line": 1315
         },
         {
           "method": "POST",
           "path": "/v1/auth/mfa/totp/enroll",
           "source": "apps/api/src/app.ts",
-          "line": 1288
+          "line": 1326
         },
         {
           "method": "POST",
           "path": "/v1/auth/mfa/totp/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1300
+          "line": 1338
         },
         {
           "method": "DELETE",
           "path": "/v1/auth/mfa/totp",
           "source": "apps/api/src/app.ts",
-          "line": 1311
+          "line": 1349
         }
       ],
       "api": {
@@ -11076,7 +11245,7 @@
         "detail": "MFA setup/settings",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 5309,
+          "line": 5347,
           "anchor": "const nextEnrollment = await client.startTotpEnrollment({ password: passwordOverride ?? password, label: \"1Password\" });"
         },
         "evidence": [
@@ -11155,19 +11324,19 @@
           "method": "GET",
           "path": "/v1/auth/api-tokens",
           "source": "apps/api/src/app.ts",
-          "line": 1322
+          "line": 1360
         },
         {
           "method": "POST",
           "path": "/v1/auth/api-tokens",
           "source": "apps/api/src/app.ts",
-          "line": 1333
+          "line": 1371
         },
         {
           "method": "DELETE",
           "path": "/v1/auth/api-tokens/:id",
           "source": "apps/api/src/app.ts",
-          "line": 1345
+          "line": 1383
         }
       ],
       "api": {
@@ -11185,7 +11354,7 @@
         "detail": "token list/create/revoke",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 969,
+          "line": 1010,
           "anchor": "async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -11200,7 +11369,7 @@
         "detail": "Token settings",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 4541,
+          "line": 4579,
           "anchor": "const token = await client.createApiToken({"
         },
         "evidence": [
@@ -11404,13 +11573,13 @@
           "method": "GET",
           "path": "/v1/branding",
           "source": "apps/api/src/app.ts",
-          "line": 1357
+          "line": 1395
         },
         {
           "method": "GET",
           "path": "/v1/site",
           "source": "apps/api/src/app.ts",
-          "line": 1379
+          "line": 1417
         }
       ],
       "api": {
@@ -11513,13 +11682,13 @@
           "method": "GET",
           "path": "/v1/admin/branding",
           "source": "apps/api/src/app.ts",
-          "line": 1363
+          "line": 1401
         },
         {
           "method": "PUT",
           "path": "/v1/admin/branding",
           "source": "apps/api/src/app.ts",
-          "line": 1371
+          "line": 1409
         }
       ],
       "api": {
@@ -11622,13 +11791,13 @@
           "method": "GET",
           "path": "/v1/admin/site",
           "source": "apps/api/src/app.ts",
-          "line": 1387
+          "line": 1425
         },
         {
           "method": "PUT",
           "path": "/v1/admin/site",
           "source": "apps/api/src/app.ts",
-          "line": 1395
+          "line": 1433
         }
       ],
       "api": {
@@ -11731,19 +11900,19 @@
           "method": "GET",
           "path": "/v1/admin/registration",
           "source": "apps/api/src/app.ts",
-          "line": 1407
+          "line": 1445
         },
         {
           "method": "PUT",
           "path": "/v1/admin/registration",
           "source": "apps/api/src/app.ts",
-          "line": 1418
+          "line": 1456
         },
         {
           "method": "POST",
           "path": "/v1/admin/registration/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1434
+          "line": 1472
         }
       ],
       "api": {
@@ -11847,13 +12016,13 @@
           "method": "GET",
           "path": "/v1/admin/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1449
+          "line": 1487
         },
         {
           "method": "PUT",
           "path": "/v1/admin/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1469
+          "line": 1507
         }
       ],
       "api": {
@@ -11871,7 +12040,7 @@
         "detail": "admin sharing get/set",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1722,
+          "line": 1763,
           "anchor": "async function adminCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -11945,13 +12114,13 @@
           "method": "GET",
           "path": "/v1/admin/providers",
           "source": "apps/api/src/app.ts",
-          "line": 1493
+          "line": 1531
         },
         {
           "method": "PUT",
           "path": "/v1/admin/providers/:key",
           "source": "apps/api/src/app.ts",
-          "line": 1504
+          "line": 1542
         }
       ],
       "api": {
@@ -12054,13 +12223,13 @@
           "method": "GET",
           "path": "/v1/admin/users",
           "source": "apps/api/src/app.ts",
-          "line": 1520
+          "line": 1558
         },
         {
           "method": "POST",
           "path": "/v1/admin/users/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1531
+          "line": 1569
         }
       ],
       "api": {
@@ -12163,7 +12332,7 @@
           "method": "PUT",
           "path": "/v1/admin/users/:id/roles",
           "source": "apps/api/src/app.ts",
-          "line": 1547
+          "line": 1585
         }
       ],
       "api": {
@@ -12265,13 +12434,13 @@
           "method": "GET",
           "path": "/v1/admin/api-tokens",
           "source": "apps/api/src/app.ts",
-          "line": 1563
+          "line": 1601
         },
         {
           "method": "DELETE",
           "path": "/v1/admin/api-tokens/:id",
           "source": "apps/api/src/app.ts",
-          "line": 1574
+          "line": 1612
         }
       ],
       "api": {
@@ -12374,7 +12543,7 @@
           "method": "GET",
           "path": "/v1/admin/audit",
           "source": "apps/api/src/app.ts",
-          "line": 1585
+          "line": 1623
         }
       ],
       "api": {
@@ -12487,7 +12656,7 @@
         "detail": "init / validate / scan / package",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 540,
+          "line": 576,
           "anchor": "async function initCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -12502,7 +12671,7 @@
         "detail": "Archive submission performs scanning; no scaffold/package workspace editor",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2226,
+          "line": 2252,
           "anchor": "const submitted = await client.submitArchive({"
         },
         "evidence": [
@@ -12572,7 +12741,7 @@
         "detail": "export/install/list/updates/update/rollback",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1995,
+          "line": 2036,
           "anchor": "async function installCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -12657,7 +12826,7 @@
         "detail": "architectures observe/health; bootstrap codex --dry-run",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2432,
+          "line": 2502,
           "anchor": "async function codexWorkspaceCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -12672,7 +12841,7 @@
         "detail": "Targets offer observation command guidance",
         "source": {
           "path": "apps/web/src/components/target/ArchitectureTargetsDashboard.tsx",
-          "line": 30,
+          "line": 31,
           "anchor": "} from \"@myskills-app/core\";"
         },
         "evidence": [
@@ -12742,7 +12911,7 @@
         "detail": "improve plan/run/report/export; explicit plan/cloud consent",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 421,
+          "line": 457,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -12827,7 +12996,7 @@
         "detail": "libraries unbind-local",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1923,
+          "line": 1964,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -12907,7 +13076,7 @@
         "detail": "config/auth status/doctor/version",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 881,
+          "line": 922,
           "anchor": "async function configCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -12960,25 +13129,25 @@
           "method": "GET",
           "path": "/health",
           "source": "apps/api/src/app.ts",
-          "line": 300
+          "line": 322
         },
         {
           "method": "GET",
           "path": "/ready",
           "source": "apps/api/src/app.ts",
-          "line": 310
+          "line": 332
         },
         {
           "method": "GET",
           "path": "/version.json",
           "source": "apps/api/src/app.ts",
-          "line": 305
+          "line": 327
         },
         {
           "method": "GET",
           "path": "/v1/capabilities",
           "source": "apps/api/src/app.ts",
-          "line": 340
+          "line": 362
         }
       ],
       "api": {
@@ -13260,7 +13429,7 @@
           "method": "GET",
           "path": "/v1/mcp/session",
           "source": "apps/api/src/app.ts",
-          "line": 2108
+          "line": 2146
         }
       ],
       "api": {
@@ -13533,6 +13702,1213 @@
           }
         ]
       }
+    },
+    {
+      "id": "PUB-10",
+      "domain": "Publishing and review",
+      "capability": "Private immutable draft saves, history, preview and submission",
+      "category": "product",
+      "api_operations": [
+        {
+          "method": "GET",
+          "path": "/v1/drafts",
+          "source": "apps/api/src/drafts/routes.ts",
+          "line": 36
+        },
+        {
+          "method": "GET",
+          "path": "/v1/drafts/:id",
+          "source": "apps/api/src/drafts/routes.ts",
+          "line": 64
+        },
+        {
+          "method": "GET",
+          "path": "/v1/drafts/:id/history",
+          "source": "apps/api/src/drafts/routes.ts",
+          "line": 73
+        },
+        {
+          "method": "GET",
+          "path": "/v1/drafts/:id/revisions/:revision",
+          "source": "apps/api/src/drafts/routes.ts",
+          "line": 77
+        },
+        {
+          "method": "POST",
+          "path": "/v1/drafts",
+          "source": "apps/api/src/drafts/routes.ts",
+          "line": 40
+        },
+        {
+          "method": "PUT",
+          "path": "/v1/drafts/:id",
+          "source": "apps/api/src/drafts/routes.ts",
+          "line": 68
+        },
+        {
+          "method": "POST",
+          "path": "/v1/drafts/preview",
+          "source": "apps/api/src/drafts/routes.ts",
+          "line": 45
+        },
+        {
+          "method": "POST",
+          "path": "/v1/drafts/:id/validate",
+          "source": "apps/api/src/drafts/routes.ts",
+          "line": 83
+        },
+        {
+          "method": "POST",
+          "path": "/v1/drafts/:id/submit",
+          "source": "apps/api/src/drafts/routes.ts",
+          "line": 88
+        }
+      ],
+      "api": {
+        "status": "A",
+        "detail": "Private immutable draft saves, history, preview and submission",
+        "source": {
+          "path": "apps/api/src/drafts/routes.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          }
+        ]
+      },
+      "cli": {
+        "status": "A",
+        "detail": "Private immutable draft saves, history, preview and submission",
+        "source": {
+          "path": "apps/cli/src/author-draft-commands.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          },
+          {
+            "level": "contract",
+            "detail": "Local Node22 HTTP fixture checks passed for draft dispatch, bounded inputs and safe diagnostics; not PostgreSQL persistence proof.",
+            "source": {
+              "path": "apps/cli/test/author-draft-parity.e2e.test.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "ui": {
+        "status": "A",
+        "detail": "Private immutable draft saves, history, preview and submission",
+        "source": {
+          "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          },
+          {
+            "level": "contract",
+            "detail": "Local Chromium queued draft receipt/history and archive-clear regressions passed, including history failure; full-stack persistence remains controller-owned.",
+            "source": {
+              "path": "apps/web/test/e2e/author-review-redesign.spec.ts",
+              "line": 1
+            }
+          },
+          {
+            "level": "source",
+            "source": {
+              "path": "apps/web/test/e2e/fullstack/author-drafts.ts",
+              "line": 1
+            },
+            "detail": "Exact5128 real browser failed after dirty-import confirmation was dismissed. Current fullstack helper accepts the exact replacement confirmation, labels file selection stages and shares existing operational actors without altering production registration limits. All original draft persistence/import/OCC/recovery/correction assertions remain. Typecheck and Playwright discovery pass; corrected actual fullstack remains unrun locally. Exact PR133 merge1839 then passed registry7/7 but failed the operational draft feedback locator because current summary and history both contained the note. Current correction asserts both separately without first(); focused DOM feedback and 16 local harness checks pass. Build-once immutable image reuse retains all four fresh phases. Corrected actual browser/Docker acceptance remains parent-owned and unrun locally."
+          }
+        ]
+      },
+      "mcp_api_token": {
+        "status": "A",
+        "detail": "Named API delegation with current scope and resource checks",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          },
+          {
+            "level": "contract",
+            "detail": "Local Node22 SDK fixture checks passed for strict schemas and aggregate package limits; connected-host/OAuth acceptance remains pending.",
+            "source": {
+              "path": "apps/mcp/test/author-draft-schema.e2e.test.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "A",
+        "detail": "Named API delegation; connected host acceptance pending",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          }
+        ]
+      },
+      "authorization": "API owns active actor, scopes, ownership/membership, MFA, exact version and lifecycle policy. No local target execution.",
+      "gap": "G04",
+      "delegated_action_ids": [
+        "draft.list",
+        "draft.get",
+        "draft.history",
+        "draft.revision",
+        "draft.create",
+        "draft.update",
+        "draft.preview",
+        "draft.validate",
+        "draft.submit"
+      ]
+    },
+    {
+      "id": "ARC-10",
+      "domain": "Architectures",
+      "capability": "Persisted exact-revision review-only plans and fenced approval",
+      "category": "product",
+      "api_operations": [
+        {
+          "method": "POST",
+          "path": "/v1/architecture-targets/:id/plans",
+          "source": "apps/api/src/architecture-sync/routes.ts",
+          "line": 6
+        },
+        {
+          "method": "GET",
+          "path": "/v1/architecture-targets/:id/plans",
+          "source": "apps/api/src/architecture-sync/routes.ts",
+          "line": 14
+        },
+        {
+          "method": "GET",
+          "path": "/v1/architecture-plans/:id",
+          "source": "apps/api/src/architecture-sync/routes.ts",
+          "line": 19
+        },
+        {
+          "method": "POST",
+          "path": "/v1/architecture-plans/:id/approve",
+          "source": "apps/api/src/architecture-sync/routes.ts",
+          "line": 24
+        }
+      ],
+      "api": {
+        "status": "A",
+        "detail": "Persisted exact-revision review-only plans and fenced approval",
+        "source": {
+          "path": "apps/api/src/architecture-sync/routes.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          },
+          {
+            "level": "contract",
+            "detail": "Local Node22 memory-service route checks passed: exact revision, stale fences, current historical denial, receiving-organization grant and immutable review-only purpose. Not transactional PostgreSQL execution proof.",
+            "source": {
+              "path": "apps/api/test/architecture-plan-routes.e2e.test.ts",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/api/test/architecture-plan-instances.e2e.test.ts",
+              "line": 1
+            },
+            "detail": "Current Node22 memory API regression passed exact pre-correction nonempty step-N journal replay, changed-revision denial and current MFA denial. Generic service replay/new concurrent namespacing also passed. Strictly compiled real PG legacy seeding/replay/fresh-store checks remain unrun locally; exact5128 target-fixture failure is retained."
+          }
+        ]
+      },
+      "cli": {
+        "status": "A",
+        "detail": "Persisted exact-revision review-only plans and fenced approval",
+        "source": {
+          "path": "apps/cli/src/architecture-plan-commands.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          },
+          {
+            "level": "contract",
+            "detail": "Local Node22 HTTP fixture create/read/approve and stale-fence checks passed; no target execution.",
+            "source": {
+              "path": "apps/cli/test/architecture-plan-parity.e2e.test.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "ui": {
+        "status": "A",
+        "detail": "Persisted exact-revision review-only plans and fenced approval",
+        "source": {
+          "path": "apps/web/src/components/architecture/ArchitecturePlanPanel.tsx",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          },
+          {
+            "level": "contract",
+            "detail": "Local Chromium desktop/mobile exact revision selection and stale review retention passed; no target apply requested.",
+            "source": {
+              "path": "apps/web/test/e2e/architecture-plan-review.spec.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_api_token": {
+        "status": "A",
+        "detail": "Named API delegation with current scope and resource checks",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          },
+          {
+            "level": "contract",
+            "detail": "Local Node22 SDK HTTP fixture create/list/get/approve and strict stale apply-body rejection passed.",
+            "source": {
+              "path": "apps/mcp/test/architecture-plan-parity.e2e.test.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "A",
+        "detail": "Named API delegation; connected host acceptance pending",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          }
+        ]
+      },
+      "authorization": "API owns active actor, scopes, ownership/membership, MFA, exact version and lifecycle policy. No local target execution.",
+      "gap": "G08",
+      "delegated_action_ids": [
+        "architecture_plans.create",
+        "architecture_plans.list",
+        "architecture_plans.get",
+        "architecture_plans.approve"
+      ]
+    },
+    {
+      "id": "REG-11",
+      "domain": "Registry",
+      "capability": "Authorized lexical task discovery",
+      "category": "product",
+      "api_operations": [
+        {
+          "method": "POST",
+          "path": "/v1/skills/discover",
+          "source": "apps/api/src/discovery/routes.ts",
+          "line": 11
+        }
+      ],
+      "api": {
+        "status": "A",
+        "detail": "Authorized lexical task discovery",
+        "source": {
+          "path": "apps/api/src/discovery/routes.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          },
+          {
+            "level": "contract",
+            "detail": "Local Node22 synthetic memory API corpus, ordinary-search comparison, no-match and latency receipt passed. No effectiveness, activation, trust, provider or PostgreSQL claim.",
+            "source": {
+              "path": "apps/api/test/task-discovery.e2e.test.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "cli": {
+        "status": "A",
+        "detail": "Authorized lexical task discovery",
+        "source": {
+          "path": "apps/cli/src/task-discovery-command.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          },
+          {
+            "level": "contract",
+            "detail": "Local Node22 HTTP fixture lexical discovery adapter forwarding and invalid-input checks passed.",
+            "source": {
+              "path": "apps/api/test/task-discovery-adapters.e2e.test.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "ui": {
+        "status": "A",
+        "detail": "Authorized lexical task discovery",
+        "source": {
+          "path": "apps/web/src/components/registry/TaskDiscovery.tsx",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          },
+          {
+            "level": "contract",
+            "detail": "Local Chromium desktop/mobile keyboard discovery and exact-release links passed. task-discovery.test.tsx separately passed completed/pending private-state removal across identity/connection changes.",
+            "source": {
+              "path": "apps/web/test/e2e/task-discovery.spec.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_api_token": {
+        "status": "A",
+        "detail": "Named API delegation with current scope and resource checks",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          },
+          {
+            "level": "contract",
+            "detail": "Local Node22 SDK fixture lexical discovery transport checks passed; no provider calls and connected host unverified.",
+            "source": {
+              "path": "apps/api/test/task-discovery-adapters.e2e.test.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "A",
+        "detail": "Named API delegation; connected host acceptance pending",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          }
+        ]
+      },
+      "authorization": "Public or currently authorized registry visibility; supplied credentials must remain active and have skills:read. Final production metadata/default/exact release decisions share one read-only repeatable-read snapshot. No execution permission follows from ranking.",
+      "gap": "G01",
+      "delegated_action_ids": [
+        "skills.discover"
+      ]
+    },
+    {
+      "id": "HIST-01",
+      "domain": "Registry",
+      "capability": "Compare two exact authorized published release packages",
+      "category": "product",
+      "api_operations": [],
+      "api": {
+        "status": "A",
+        "detail": "Existing exact release metadata and bundle APIs; client compares held digest-verified text",
+        "source": {
+          "path": "apps/api/src/artifacts/delivery.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          },
+          {
+            "level": "contract",
+            "detail": "Local Node22 actual AuthService/API memory journey passed for two exact private published releases, owner reads, anonymous/foreign denial, stale digest and revoked credential. PostgreSQL remains pending.",
+            "source": {
+              "path": "apps/api/test/release-comparison-access.e2e.test.ts",
+              "line": 1
+            }
+          },
+          {
+            "level": "source",
+            "detail": "Named real-PG fixture prepared and strictly compiled for two published releases, byte identities, private/management denial, wrong digest/foreign identity and credential revocation after both metadata/bundle pairs. SQL is unrun locally and is not acceptance.",
+            "source": {
+              "path": "apps/api/test/package-evaluations.pgtest.ts",
+              "line": 202
+            }
+          }
+        ]
+      },
+      "cli": {
+        "status": "A",
+        "detail": "skills compare with exact base/target digest pins; full-content statuses, byte/source identities and explicitly truncated bounded previews",
+        "source": {
+          "path": "apps/cli/src/release-comparison-commands.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Dedicated adapter and shared bounded comparator are implemented; no package code executes."
+          },
+          {
+            "level": "contract",
+            "detail": "Final local Node22 focused CLI/shared comparator and MCP HTTP contracts passed, including revocation and invalid exact pins. Current canonical PG/browser and real host acceptance remain pending.",
+            "source": {
+              "path": "apps/cli/test/release-comparison-commands.test.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "ui": {
+        "status": "A",
+        "detail": "Compare two exact authorized published release packages",
+        "source": {
+          "path": "apps/web/src/components/registry/ReleaseComparison.tsx",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          },
+          {
+            "level": "contract",
+            "detail": "Prior historical local fixture receipt: Eight local Chromium fixture journeys passed: exact digest/full-text comparison, identity/byte mismatch, lost visibility, delayed selection, logout and unpublished management denial. This is not final exact-commit canonical acceptance.",
+            "source": {
+              "path": "apps/web/test/e2e/release-comparison.spec.ts",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Final local Node22 Chromium affected run passed all six current published-comparison fixture cases alongside three affected author/review cases. Mocked API browser proof; canonical fullstack remains pending.",
+            "source": {
+              "path": "apps/web/test/e2e/release-comparison.spec.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_api_token": {
+        "status": "A",
+        "detail": "skills_releases_compare composes current exact metadata/export API reads with skills:read; both pins, integrity, identity and final readability checked",
+        "source": {
+          "path": "apps/mcp/src/release-comparison.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Dedicated adapter and shared bounded comparator are implemented; no package code executes."
+          },
+          {
+            "level": "contract",
+            "detail": "Final local Node22 focused CLI/shared comparator and MCP HTTP contracts passed, including revocation and invalid exact pins. Current canonical PG/browser and real host acceptance remain pending.",
+            "source": {
+              "path": "apps/mcp/test/release-comparison-http.e2e.test.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "A",
+        "detail": "skills_releases_compare uses current OAuth API authority and skills:read; consent/tool visibility never substitutes for release access",
+        "source": {
+          "path": "apps/mcp/src/release-comparison.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Dedicated adapter and shared bounded comparator are implemented; no package code executes."
+          },
+          {
+            "level": "contract",
+            "detail": "Final local Node22 focused CLI/shared comparator and MCP HTTP contracts passed, including revocation and invalid exact pins. Current canonical PG/browser and real host acceptance remain pending.",
+            "source": {
+              "path": "apps/mcp/test/release-comparison-http.e2e.test.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "authorization": "API owns current readable published exact release access. Management-only access cannot bypass unreadability. Shared comparison verifies full UTF-8 payload byte size/SHA-256, manifest identity and safe bounded paths, then rechecks both releases before output. No target execution.",
+      "gap": "G02",
+      "delegated_action_ids": [
+        "skills.releases.get",
+        "skills.releases.export"
+      ]
+    },
+    {
+      "id": "SITE-01",
+      "domain": "Product website",
+      "capability": "Independent static product and documentation site",
+      "category": "product",
+      "api_operations": [],
+      "api": {
+        "status": "N",
+        "detail": "Static independent publication artifact; no registry state or agent operation",
+        "source": {
+          "path": "apps/site/README.md",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          }
+        ]
+      },
+      "cli": {
+        "status": "N",
+        "detail": "Static independent publication artifact; no registry state or agent operation",
+        "source": {
+          "path": "apps/site/README.md",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          }
+        ]
+      },
+      "ui": {
+        "status": "A",
+        "detail": "Independent static product and documentation site",
+        "source": {
+          "path": "apps/site/src/content.mjs",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          },
+          {
+            "level": "contract",
+            "detail": "Twelve local Chromium desktop/mobile static-site tests passed for six surfaces, keyboard/skip navigation, truthful source links, layout and contrast. Home screenshots inspected. No application, deployed or release freshness proof.",
+            "source": {
+              "path": "apps/site/test/public-site.spec.mjs",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_api_token": {
+        "status": "N",
+        "detail": "Static independent publication artifact; no registry state or agent operation",
+        "source": {
+          "path": "apps/site/README.md",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "N",
+        "detail": "Static independent publication artifact; no registry state or agent operation",
+        "source": {
+          "path": "apps/site/README.md",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Reachable shared registration and domain implementation inspected in wave2; runtime, PostgreSQL, real-host and deployed acceptance recorded separately."
+          }
+        ]
+      },
+      "authorization": "Public-safe static source and dated examples only. No effectiveness, activation, trust, host recognition or live deployment claim.",
+      "gap": "G01",
+      "delegated_action_ids": []
+    },
+    {
+      "id": "HOST-01",
+      "domain": "Self-host operations",
+      "capability": "Install, upgrade and recover a protected self-host instance",
+      "category": "operations",
+      "api_operations": [],
+      "authorization": "Explicit operator host control, protected owned files, immutable source/image receipts, operation lock, forward-only migration consent and fresh isolated restore destinations. This is a standalone operator package, not an application API mutation.",
+      "gap": "G10",
+      "ui": {
+        "status": "M",
+        "detail": "No browser operator administration surface is implemented.",
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Operator helper and canonical Linux/amd64 rehearsal source are present. No public image or deployment proof; c74ecd33 predates the operator bundle, so its upgrade proof uses exact baseline apps and a candidate tooling bridge.",
+            "source": {
+              "path": "docs/SELF_HOST_OPERATOR.md",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Focused local operator, cleanup and auth-driver contract regressions passed for file/directory fsync, pre-quiescence env validation, public bootstrap validation, fd nofollow reads and unresolved Compose cleanup. Contract stubs do not establish installation, physical power loss, actual Compose interpretation or restored runtime.",
+            "source": {
+              "path": "scripts/test/self-host-operator.test.mjs",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "scripts/test/self-host-fixture.test.mjs",
+              "line": 1
+            },
+            "detail": "Current Node22 protected restore driver contract passed original private suite identity/digest comparison with actual authenticated detail shape and independent suite-ID/digest tamper negatives. Public summaries remain unchanged. This is synthetic restore evidence; coordinated Linux restore remains pending."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "scripts/test/host-backup-service.test.mjs",
+              "line": 1
+            },
+            "detail": "Exact isolated HOST continuation a37b283 integrated. Current Node22 bounded endpoint contracts passed78/78, including Docker28 requested-versus-assigned port shape, dual-stack positive, ownership/IPAM/gateway/container-state/attachment/port/JSON/recheck denials and safe status/exit fields. Synthetic daemon responses do not establish the actual5128 cause, Linux endpoint reachability or coordinated restore."
+          }
+        ]
+      },
+      "api": {
+        "status": "N",
+        "detail": "Standalone checksummed operator package owns host mutations; no application api operation is exposed.",
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Operator helper and canonical Linux/amd64 rehearsal source are present. No public image or deployment proof; c74ecd33 predates the operator bundle, so its upgrade proof uses exact baseline apps and a candidate tooling bridge.",
+            "source": {
+              "path": "docs/SELF_HOST_OPERATOR.md",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Focused local operator, cleanup and auth-driver contract regressions passed for file/directory fsync, pre-quiescence env validation, public bootstrap validation, fd nofollow reads and unresolved Compose cleanup. Contract stubs do not establish installation, physical power loss, actual Compose interpretation or restored runtime.",
+            "source": {
+              "path": "scripts/test/self-host-operator.test.mjs",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "cli": {
+        "status": "N",
+        "detail": "Standalone checksummed operator package owns host mutations; no application cli operation is exposed.",
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Operator helper and canonical Linux/amd64 rehearsal source are present. No public image or deployment proof; c74ecd33 predates the operator bundle, so its upgrade proof uses exact baseline apps and a candidate tooling bridge.",
+            "source": {
+              "path": "docs/SELF_HOST_OPERATOR.md",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Focused local operator, cleanup and auth-driver contract regressions passed for file/directory fsync, pre-quiescence env validation, public bootstrap validation, fd nofollow reads and unresolved Compose cleanup. Contract stubs do not establish installation, physical power loss, actual Compose interpretation or restored runtime.",
+            "source": {
+              "path": "scripts/test/self-host-operator.test.mjs",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_api_token": {
+        "status": "N",
+        "detail": "Standalone checksummed operator package owns host mutations; no application mcp_api_token operation is exposed.",
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Operator helper and canonical Linux/amd64 rehearsal source are present. No public image or deployment proof; c74ecd33 predates the operator bundle, so its upgrade proof uses exact baseline apps and a candidate tooling bridge.",
+            "source": {
+              "path": "docs/SELF_HOST_OPERATOR.md",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Focused local operator, cleanup and auth-driver contract regressions passed for file/directory fsync, pre-quiescence env validation, public bootstrap validation, fd nofollow reads and unresolved Compose cleanup. Contract stubs do not establish installation, physical power loss, actual Compose interpretation or restored runtime.",
+            "source": {
+              "path": "scripts/test/self-host-operator.test.mjs",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "N",
+        "detail": "Standalone checksummed operator package owns host mutations; no application mcp_oauth operation is exposed.",
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Operator helper and canonical Linux/amd64 rehearsal source are present. No public image or deployment proof; c74ecd33 predates the operator bundle, so its upgrade proof uses exact baseline apps and a candidate tooling bridge.",
+            "source": {
+              "path": "docs/SELF_HOST_OPERATOR.md",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Focused local operator, cleanup and auth-driver contract regressions passed for file/directory fsync, pre-quiescence env validation, public bootstrap validation, fd nofollow reads and unresolved Compose cleanup. Contract stubs do not establish installation, physical power loss, actual Compose interpretation or restored runtime.",
+            "source": {
+              "path": "scripts/test/self-host-operator.test.mjs",
+              "line": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "ARC-11",
+      "domain": "Architectures",
+      "capability": "Composed Codex workspace artifact intent, separate execution approval and aggregate local transaction",
+      "category": "product",
+      "api_operations": [
+        {
+          "method": "POST",
+          "path": "/v1/architecture-targets/:id/artifacts",
+          "source": "apps/api/src/architecture-sync/artifact-routes.ts",
+          "line": 6
+        },
+        {
+          "method": "GET",
+          "path": "/v1/architecture-artifacts/:id",
+          "source": "apps/api/src/architecture-sync/artifact-routes.ts",
+          "line": 7
+        },
+        {
+          "method": "POST",
+          "path": "/v1/architecture-artifacts/:id/approve",
+          "source": "apps/api/src/architecture-sync/artifact-routes.ts",
+          "line": 8
+        },
+        {
+          "method": "POST",
+          "path": "/v1/architecture-artifacts/:id/claim",
+          "source": "apps/api/src/architecture-sync/artifact-routes.ts",
+          "line": 9
+        },
+        {
+          "method": "POST",
+          "path": "/v1/architecture-artifacts/:id/checkpoint",
+          "source": "apps/api/src/architecture-sync/artifact-routes.ts",
+          "line": 10
+        },
+        {
+          "method": "POST",
+          "path": "/v1/architecture-artifacts/:id/receipt",
+          "source": "apps/api/src/architecture-sync/artifact-routes.ts",
+          "line": 11
+        },
+        {
+          "method": "POST",
+          "path": "/v1/architecture-artifacts/:id/rollback",
+          "source": "apps/api/src/architecture-sync/artifact-routes.ts",
+          "line": 12
+        }
+      ],
+      "authorization": "Immutable API-owned intent uses compact intent-bound actor approval, current receiving-target PostgreSQL authority, actual post-baseline-wait credential and maintenance-window checks, actor-bound checkpoints/receipts and explicit rollback approvals, and the shared target lease/fence. Local staging/recovery requires durable directory ancestry and isolated managed roots; review plans never execute.",
+      "gap": "G08",
+      "delegated_action_ids": [
+        "architecture_artifacts.prepare",
+        "architecture_artifacts.get"
+      ],
+      "api": {
+        "status": "A",
+        "detail": "Immutable intent, approval, shared lease checkpoints and aggregate receipt; canonical PostgreSQL/object-store runtime proof pending.",
+        "source": {
+          "path": "apps/api/src/architecture-sync/artifact-routes.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Immutable intent, approval, shared lease checkpoints and aggregate receipt; canonical PostgreSQL/object-store runtime proof pending."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/api/test/architecture-artifact-service.test.ts",
+              "line": 1
+            },
+            "detail": "Node22 explicit shared fixture-coordinator authority passes stale policy/consent/observation/credential, distinct approval, duplicate claims, lease loss and bounded metadata-only checkpoints. Production memory review remains non-executable."
+          },
+          {
+            "level": "source",
+            "source": {
+              "path": "apps/api/test/postgres-architecture-artifact.pgtest.ts",
+              "line": 1
+            },
+            "detail": "Correction regressions prepared for current-schema approval roundtrip, real equivalent organization actors, distinct explicit rollback actor, baseline-only credential expiry waits, actual window closing and receiving-grant history denial. Added PostgreSQL cases are unexecuted; Windows owns runtime proof."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/api/test/architecture-artifact-service.test.ts",
+              "line": 1
+            },
+            "detail": "Historical Node22 combined-source097 regression checks compact immutable approval, unchanged organization/target windows at all five execution boundaries, and caller binding on checkpoints, receipts and replay. The 34-case combined API/CLI route receipt passed at that snapshot. Memory-coordinator proof does not establish actual PostgreSQL serialization or post-lock time; final canonical acceptance remains separate."
+          }
+        ]
+      },
+      "cli": {
+        "status": "A",
+        "detail": "Explicit enrolled-workspace prepare/apply/verify/rollback with one root lock, private exact staging/recovery and aggregate receipts. Two actual disposable byte fixtures pass; provider recognition and signed-in host acceptance remain unproven.",
+        "source": {
+          "path": "apps/cli/src/architecture-artifact.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Explicit enrolled-workspace prepare/apply/verify/rollback with one root lock, private exact staging/recovery and aggregate receipts. Two actual disposable byte fixtures pass; provider recognition and signed-in host acceptance remain unproven."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
+              "line": 1
+            },
+            "detail": "Node22 actual CLI/API fixture installs, verifies, updates and rolls back two explicitly enrolled multilevel trees with mixed exact versions and distinct profile denials. All 39 durable journal fault scenarios, removal, forbidden rollback, collision/link/drift and root/baseline refusal pass. This is local filesystem evidence."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/cli/test/architecture-artifact.e2e.test.ts",
+              "line": 1
+            },
+            "detail": "Historical Node22 combined-source097 five-case CLI receipt passed disjoint workspace bytes and unrelated-path preservation, directory-sync ordering/failure/retry fences, discovery-contained/overlapping root refusal, late denied renewal quarantine and explicitly authorized historical rollback. Pre-merge router-disable/removal and interrupted-move cases also passed. These are filesystem/API fixtures; later corrections and final canonical acceptance have separate receipts. Power-loss survival and host recognition remain unverified."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/cli/test/workspace-enrollments.test.ts",
+              "line": 1
+            },
+            "detail": "Current Node22 real child CLI tests passed parent-first/child-first overlap with distinct XDG roots, exactly one registration before binding, disjoint positive and killed-process reservation recovery. Production authority uses actual OS-user home independent of HOME/XDG/config/profile. Corrected legacy reservation migration passed separately; no live-home state written. Actual connected-host and canonical workflow proof remain pending."
+          }
+        ]
+      },
+      "ui": {
+        "status": "B",
+        "detail": "Prepare and inspect intent, display exact pins and trusted-companion commands. Browser does not execute files or infer completed apply.",
+        "source": {
+          "path": "apps/web/src/components/architecture/ArchitectureArtifactHandoff.tsx",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Prepare and inspect intent, display exact pins and trusted-companion commands. Browser does not execute files or infer completed apply."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/web/test/e2e/architecture-artifact-handoff.spec.ts",
+              "line": 1
+            },
+            "detail": "Local installed Chromium desktop/mobile supported Codex workspace v2 handoff and denied read-only case pass (3/3): intent only, exact package pins, normal CLI sequence, separate optional rollback, and no artifact POST for unsupported target. Canonical matching-browser and actual host acceptance pending."
+          }
+        ]
+      },
+      "mcp_api_token": {
+        "status": "B",
+        "detail": "SDK HTTP prepare/get intent transport passes locally. Filesystem execution is a guided handoff to enrolled CLI with session or scoped token.",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "SDK HTTP prepare/get intent transport passes locally. Filesystem execution is a guided handoff to enrolled CLI with session or scoped token."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/mcp/test/architecture-artifact-parity.e2e.test.ts",
+              "line": 1
+            },
+            "detail": "Local Node22 SDK MCP HTTP to actual fixture API prepare/get passes; invented apply input is rejected before forwarding. No filesystem apply tool."
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "B",
+        "detail": "Named prepare/get actions use current delegated OAuth scopes, grant and MFA assurance. Host execution approval/claim/checkpoint/receipt/rollback require the trusted enrolled CLI session or scoped token.",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Named prepare/get actions use current delegated OAuth scopes, grant and MFA assurance. Host execution approval/claim/checkpoint/receipt/rollback require the trusted enrolled CLI session or scoped token."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/mcp/test/architecture-artifact-parity.e2e.test.ts",
+              "line": 1
+            },
+            "detail": "Local SDK HTTP OAuth PKCE/consent grant prepare/get passes; missing delegated scopes and OAuth execution approval are rejected. Real PostgreSQL grant authority and signed-in host acceptance remain pending."
+          }
+        ]
+      }
+    },
+    {
+      "id": "EVAL-01",
+      "domain": "Skill improvement",
+      "capability": "Immutable private static evaluations and explicitly authorized public-safe release summaries",
+      "category": "product",
+      "api_operations": [
+        {
+          "method": "POST",
+          "path": "/v1/evaluations/releases/:slug/:version/runs",
+          "source": "apps/api/src/evaluations/routes.ts",
+          "line": 24
+        },
+        {
+          "method": "GET",
+          "path": "/v1/evaluations/releases/:slug/:version/runs",
+          "source": "apps/api/src/evaluations/routes.ts",
+          "line": 31
+        },
+        {
+          "method": "GET",
+          "path": "/v1/evaluations/releases/:slug/:version/summary",
+          "source": "apps/api/src/evaluations/routes.ts",
+          "line": 34
+        }
+      ],
+      "authorization": "Detailed evidence requires current release access AND canonical suite-scope access. Runs default private. Immutable public-summary opt-in requires suite writer and exact public release disclosure authority, improvements:configure plus sharing:write for scoped credentials, and applicable current MFA. Public reads recheck scope/discloser/release and omit suite IDs/digests, assertions and actor identity. Replay checks actual credential time after suite waits. Behavior remains skipped/provider_unconfigured.",
+      "gap": "G07",
+      "delegated_action_ids": [
+        "evaluations.run",
+        "evaluations.list",
+        "evaluations.summary"
+      ],
+      "api": {
+        "status": "A",
+        "detail": "Exact artifact/version, suite revision/digest, target/context and runner; immutable completion and replay. Canonical PostgreSQL proof pending.",
+        "source": {
+          "path": "apps/api/src/evaluations/routes.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Exact artifact/version, suite revision/digest, target/context and runner; immutable completion and replay. Canonical PostgreSQL proof pending."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/api/test/evaluation-routes.test.ts",
+              "line": 1
+            },
+            "detail": "Node22 route contract and invalid credential/body denials pass. Database authority, immutable completion/replay and restore are prepared but not locally executed."
+          },
+          {
+            "level": "source",
+            "detail": "Final disclosure and scope corrections plus actual expiry/drift/draft-wait PG fixtures are prepared. Three changed PG files compile; SQL execution remains Windows-owned.",
+            "source": {
+              "path": "apps/api/test/package-evaluations.pgtest.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "cli": {
+        "status": "A",
+        "detail": "evals local directory/ZIP returns self-reported static results without upload. Explicit run/list/summary use API.",
+        "source": {
+          "path": "apps/cli/src/evaluation-commands.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "evals local directory/ZIP returns self-reported static results without upload. Explicit run/list/summary use API."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/cli/test/evaluation-commands.test.ts",
+              "line": 1
+            },
+            "detail": "Node22 actual directory/ZIP reads and CLI dispatch JSON/human output pass; no upload, private content/path omission and one authenticated denied request. Fixture transport is not database proof."
+          },
+          {
+            "level": "source",
+            "detail": "Final disclosure and scope corrections plus actual expiry/drift/draft-wait PG fixtures are prepared. Three changed PG files compile; SQL execution remains Windows-owned.",
+            "source": {
+              "path": "apps/api/test/package-evaluations.pgtest.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "ui": {
+        "status": "P",
+        "detail": "Current reviewer evidence and bounded approved-release summary. Run creation remains an explicit CLI/MCP API handoff.",
+        "source": {
+          "path": "apps/web/src/components/registry/PackageEvaluationEvidence.tsx",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Current reviewer evidence and bounded approved-release summary. Run creation remains an explicit CLI/MCP API handoff."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/web/test/e2e/package-evaluations.spec.ts",
+              "line": 1
+            },
+            "detail": "Installed Chrome desktop/mobile reviewer and public approved-release summary pass (3/3); screenshots inspected. DOM connection invalidation and public omission pass. Browser uses explicit fixture routes, not PG."
+          },
+          {
+            "level": "source",
+            "detail": "Final disclosure and scope corrections plus actual expiry/drift/draft-wait PG fixtures are prepared. Three changed PG files compile; SQL execution remains Windows-owned.",
+            "source": {
+              "path": "apps/api/test/package-evaluations.pgtest.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_api_token": {
+        "status": "A",
+        "detail": "evaluations_run/list/summary fixed API actions; improvements:run/read and current API permission.",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "evaluations_run/list/summary fixed API actions; improvements:run/read and current API permission."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/mcp/test/evaluation-http.e2e.test.ts",
+              "line": 1
+            },
+            "detail": "Node22 SDK HTTP socket fixture proves fixed request bindings, strict input and no fallback on denial. This fixture uses an OAuth-shaped session, not real API-token/PG acceptance."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/mcp/test/application-tool-names.ts",
+              "line": 1
+            },
+            "detail": "Complete MCP local suite passes 117/117, including strict advertised tool equality, HTTP/native/stdio and real memory-API OAuth connector fixtures. Canonical PostgreSQL grant/evaluation persistence and signed-in host acceptance remain pending."
+          },
+          {
+            "level": "source",
+            "detail": "Final disclosure and scope corrections plus actual expiry/drift/draft-wait PG fixtures are prepared. Three changed PG files compile; SQL execution remains Windows-owned.",
+            "source": {
+              "path": "apps/api/test/package-evaluations.pgtest.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "A",
+        "detail": "Same actions and existing OAuth grant/scope authority; canonical PostgreSQL OAuth execution pending.",
+        "source": {
+          "path": "apps/mcp/src/application-tools.ts",
+          "line": 1
+        },
+        "evidence": [
+          {
+            "level": "source",
+            "detail": "Same actions and existing OAuth grant/scope authority; canonical PostgreSQL OAuth execution pending."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/mcp/test/evaluation-http.e2e.test.ts",
+              "line": 1
+            },
+            "detail": "Node22 SDK HTTP socket fixture proves discovery, scopes, strict forwarding and private error omission. Real grant/PG and signed-in host acceptance remain pending."
+          },
+          {
+            "level": "contract",
+            "source": {
+              "path": "apps/mcp/test/application-tool-names.ts",
+              "line": 1
+            },
+            "detail": "Complete MCP local suite passes 117/117, including strict advertised tool equality, HTTP/native/stdio and real memory-API OAuth connector fixtures. Canonical PostgreSQL grant/evaluation persistence and signed-in host acceptance remain pending."
+          },
+          {
+            "level": "source",
+            "detail": "Final disclosure and scope corrections plus actual expiry/drift/draft-wait PG fixtures are prepared. Three changed PG files compile; SQL execution remains Windows-owned.",
+            "source": {
+              "path": "apps/api/test/package-evaluations.pgtest.ts",
+              "line": 1
+            }
+          }
+        ]
+      }
     }
   ],
   "negative_evidence": {
@@ -13545,7 +14921,9 @@
     "A status does not certify permission parity across credential kinds.",
     "No production deployment or real ChatGPT/Claude host acceptance in this audit.",
     "All registered business API routes are mapped, including dynamically registered profile/suite routes and OAuth scope routes.",
-    "MCP request body ceiling is 14 MiB plus a 64 KiB JSON-RPC envelope; metadata responses are bounded to 512 KiB and exports to 10 MiB. These transport limits are not domain or real-host acceptance proof."
+    "MCP request body ceiling is 14 MiB plus a 64 KiB JSON-RPC envelope; metadata responses are bounded to 512 KiB and exports to 10 MiB. These transport limits are not domain or real-host acceptance proof.",
+    "HOST-01 records standalone operator source and local contract tests. Canonical Compose interpretation/interruption and restored TOTP, recovery-code, authenticated non-owner denial and revoked-session denial are prepared. Fresh install, exact c74ecd33-to-candidate database/runtime upgrade and full-app restore require actual canonical host-rehearsal.json; no new Linux runtime result, external backup durability, public image, deployed behavior or arm64 proof has been recorded here.",
+    "Final reconciliation preserves all426 original criterion identities/source descriptors and24 groups with per-ID current bindings. None is declared complete from counts or this matrix. Five QUALITY corrections and HIST adapters require renewed independent source review and exact final canonical acceptance. Local evaluation hardlinks retain the existing bounded regular-file behavior."
   ],
   "mcp_tool_inventory": [
     {
@@ -13557,7 +14935,7 @@
       "actions": [],
       "source": {
         "path": "apps/mcp/src/server.ts",
-        "line": 62
+        "line": 66
       }
     },
     {
@@ -13570,7 +14948,7 @@
       "actions": [],
       "source": {
         "path": "apps/mcp/src/server.ts",
-        "line": 84
+        "line": 88
       }
     },
     {
@@ -13584,7 +14962,7 @@
       "actions": [],
       "source": {
         "path": "apps/mcp/src/server.ts",
-        "line": 105
+        "line": 109
       }
     },
     {
@@ -13596,7 +14974,7 @@
       "actions": [],
       "source": {
         "path": "apps/mcp/src/server.ts",
-        "line": 127
+        "line": 131
       }
     },
     {
@@ -13608,7 +14986,7 @@
       "actions": [],
       "source": {
         "path": "apps/mcp/src/server.ts",
-        "line": 159
+        "line": 163
       }
     },
     {
@@ -13620,7 +14998,7 @@
       "actions": [],
       "source": {
         "path": "apps/mcp/src/server.ts",
-        "line": 177
+        "line": 181
       }
     },
     {
@@ -13633,7 +15011,7 @@
       "actions": [],
       "source": {
         "path": "apps/mcp/src/server.ts",
-        "line": 195
+        "line": 199
       }
     },
     {
@@ -13914,7 +15292,7 @@
       "delivery": "guidance_only; performed:false; completion.confirmed:false",
       "source": {
         "path": "apps/mcp/src/application-handoffs.ts",
-        "line": 217
+        "line": 218
       }
     },
     {
@@ -16321,6 +17699,289 @@
         "path": "apps/mcp/src/application-tools.ts",
         "line": 13
       }
+    },
+    {
+      "name": "draft_list",
+      "capability_ids": [
+        "PUB-10"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "draft.list"
+    },
+    {
+      "name": "draft_get",
+      "capability_ids": [
+        "PUB-10"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "draft.get"
+    },
+    {
+      "name": "draft_history",
+      "capability_ids": [
+        "PUB-10"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "draft.history"
+    },
+    {
+      "name": "draft_revision",
+      "capability_ids": [
+        "PUB-10"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "draft.revision"
+    },
+    {
+      "name": "draft_create",
+      "capability_ids": [
+        "PUB-10"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "draft.create"
+    },
+    {
+      "name": "draft_update",
+      "capability_ids": [
+        "PUB-10"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "draft.update"
+    },
+    {
+      "name": "draft_preview",
+      "capability_ids": [
+        "PUB-10"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "draft.preview"
+    },
+    {
+      "name": "draft_validate",
+      "capability_ids": [
+        "PUB-10"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "draft.validate"
+    },
+    {
+      "name": "draft_submit",
+      "capability_ids": [
+        "PUB-10"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "draft.submit"
+    },
+    {
+      "name": "architecture_plans_create",
+      "capability_ids": [
+        "ARC-10"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "architecture_plans.create"
+    },
+    {
+      "name": "architecture_plans_list",
+      "capability_ids": [
+        "ARC-10"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "architecture_plans.list"
+    },
+    {
+      "name": "architecture_plans_get",
+      "capability_ids": [
+        "ARC-10"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "architecture_plans.get"
+    },
+    {
+      "name": "architecture_plans_approve",
+      "capability_ids": [
+        "ARC-10"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "architecture_plans.approve"
+    },
+    {
+      "name": "skills_discover",
+      "capability_ids": [
+        "REG-11"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "skills.discover"
+    },
+    {
+      "name": "discover_skills",
+      "capability_ids": [
+        "REG-11"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/task-discovery.ts",
+        "line": 7
+      }
+    },
+    {
+      "name": "architecture_artifacts_prepare",
+      "capability_ids": [
+        "ARC-11"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "architecture_artifacts.prepare"
+    },
+    {
+      "name": "architecture_artifacts_get",
+      "capability_ids": [
+        "ARC-11"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "architecture_artifacts.get"
+    },
+    {
+      "name": "evaluations_run",
+      "capability_ids": [
+        "EVAL-01"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "evaluations.run"
+    },
+    {
+      "name": "evaluations_list",
+      "capability_ids": [
+        "EVAL-01"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "evaluations.list"
+    },
+    {
+      "name": "evaluations_summary",
+      "capability_ids": [
+        "EVAL-01"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/application-tools.ts",
+        "line": 13
+      },
+      "action_id": "evaluations.summary"
+    },
+    {
+      "name": "skills_releases_compare",
+      "capability_ids": [
+        "HIST-01"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/release-comparison.ts",
+        "line": 37
+      }
+    },
+    {
+      "name": "review_submissions_compare",
+      "capability_ids": [
+        "PUB-08"
+      ],
+      "oauth_advertised": true,
+      "actions": [],
+      "source": {
+        "path": "apps/mcp/src/release-comparison.ts",
+        "line": 53
+      }
     }
   ],
   "mcp_transport_source": {
@@ -16335,7 +17996,7 @@
       ],
       "source": {
         "path": "apps/mcp/src/server.ts",
-        "line": 44
+        "line": 48
       }
     },
     {
@@ -16345,7 +18006,7 @@
       ],
       "source": {
         "path": "apps/mcp/src/server.ts",
-        "line": 50
+        "line": 54
       }
     },
     {
@@ -16355,7 +18016,7 @@
       ],
       "source": {
         "path": "apps/mcp/src/server.ts",
-        "line": 58
+        "line": 62
       }
     },
     {
@@ -16365,7 +18026,7 @@
       ],
       "source": {
         "path": "apps/mcp/src/server.ts",
-        "line": 59
+        "line": 63
       }
     },
     {
@@ -16375,7 +18036,7 @@
       ],
       "source": {
         "path": "apps/mcp/src/server.ts",
-        "line": 60
+        "line": 64
       }
     }
   ],
@@ -16474,7 +18135,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 267
+        "line": 301
       }
     },
     {
@@ -16484,7 +18145,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 268
+        "line": 302
       }
     },
     {
@@ -16494,7 +18155,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 269
+        "line": 303
       }
     },
     {
@@ -16504,7 +18165,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 270
+        "line": 304
       }
     },
     {
@@ -16514,7 +18175,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 273
+        "line": 307
       }
     },
     {
@@ -16524,7 +18185,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 274
+        "line": 308
       }
     },
     {
@@ -16534,7 +18195,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 275
+        "line": 309
       }
     },
     {
@@ -16544,7 +18205,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 278
+        "line": 312
       }
     },
     {
@@ -16554,7 +18215,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 280
+        "line": 314
       }
     },
     {
@@ -16564,7 +18225,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 282
+        "line": 316
       }
     },
     {
@@ -16574,7 +18235,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 284
+        "line": 318
       }
     },
     {
@@ -16584,7 +18245,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 286
+        "line": 320
       }
     },
     {
@@ -16594,7 +18255,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 288
+        "line": 322
       }
     },
     {
@@ -16604,7 +18265,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 290
+        "line": 324
       }
     },
     {
@@ -16614,7 +18275,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 292
+        "line": 326
       }
     },
     {
@@ -16624,7 +18285,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 294
+        "line": 328
       }
     },
     {
@@ -16635,7 +18296,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 296
+        "line": 330
       }
     },
     {
@@ -16645,7 +18306,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 298
+        "line": 332
       }
     },
     {
@@ -16655,7 +18316,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 300
+        "line": 334
       }
     },
     {
@@ -16665,7 +18326,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 302
+        "line": 336
       }
     },
     {
@@ -16685,7 +18346,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 304
+        "line": 338
       }
     },
     {
@@ -16695,7 +18356,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 306
+        "line": 340
       }
     },
     {
@@ -16707,8 +18368,8 @@
         "PUB-09"
       ],
       "source": {
-        "path": "apps/cli/src/registry-collaboration-commands.ts",
-        "line": 62
+        "path": "apps/cli/src/release-comparison-commands.ts",
+        "line": 6
       }
     },
     {
@@ -16729,7 +18390,8 @@
       "capability_ids": [
         "REG-06",
         "REG-07",
-        "REG-08"
+        "REG-08",
+        "HIST-01"
       ],
       "source": {
         "path": "apps/cli/src/registry-collaboration-commands.ts",
@@ -16744,7 +18406,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 314
+        "line": 348
       }
     },
     {
@@ -16757,7 +18419,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 316
+        "line": 350
       }
     },
     {
@@ -16770,7 +18432,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 317
+        "line": 351
       }
     },
     {
@@ -16809,7 +18471,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 319
+        "line": 353
       }
     },
     {
@@ -16848,7 +18510,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 320
+        "line": 354
       }
     },
     {
@@ -16873,7 +18535,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 324
+        "line": 358
       }
     },
     {
@@ -16887,7 +18549,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 326
+        "line": 360
       }
     },
     {
@@ -16906,7 +18568,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 327
+        "line": 361
       }
     },
     {
@@ -16925,7 +18587,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 329
+        "line": 363
       }
     },
     {
@@ -16936,7 +18598,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 331
+        "line": 365
       }
     },
     {
@@ -16946,7 +18608,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 333
+        "line": 367
       }
     },
     {
@@ -16956,7 +18618,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 335
+        "line": 369
       }
     },
     {
@@ -16966,7 +18628,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 337
+        "line": 371
       }
     },
     {
@@ -16976,7 +18638,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 339
+        "line": 373
       }
     },
     {
@@ -16986,7 +18648,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 341
+        "line": 375
       }
     },
     {
@@ -16996,7 +18658,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 3507
+        "line": 3577
       }
     },
     {
@@ -17008,7 +18670,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 3862
+        "line": 3928
       }
     },
     {
@@ -17018,7 +18680,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 349
+        "line": 383
       }
     },
     {
@@ -17115,7 +18777,57 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 347
+        "line": 381
+      }
+    },
+    {
+      "name": "drafts",
+      "capability_ids": [
+        "PUB-10"
+      ],
+      "source": {
+        "path": "apps/cli/src/cli.ts",
+        "line": 418
+      }
+    },
+    {
+      "name": "architecture-plans",
+      "capability_ids": [
+        "ARC-10"
+      ],
+      "source": {
+        "path": "apps/cli/src/architecture-plan-commands.ts",
+        "line": 24
+      }
+    },
+    {
+      "name": "discover",
+      "capability_ids": [
+        "REG-11"
+      ],
+      "source": {
+        "path": "apps/cli/src/cli.ts",
+        "line": 290
+      }
+    },
+    {
+      "name": "architecture-artifacts",
+      "capability_ids": [
+        "ARC-11"
+      ],
+      "source": {
+        "path": "apps/cli/src/cli.ts",
+        "line": 285
+      }
+    },
+    {
+      "name": "evals",
+      "capability_ids": [
+        "EVAL-01"
+      ],
+      "source": {
+        "path": "apps/cli/src/evaluation-commands.ts",
+        "line": 11
       }
     }
   ]

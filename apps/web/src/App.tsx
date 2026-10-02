@@ -1,4 +1,7 @@
+import { PackageEvaluationEvidence } from "@/components/registry/PackageEvaluationEvidence";
+import { RecoveryGuidancePanel } from "./components/operations/RecoveryGuidancePanel.js";
 import { APPLICATION_SCOPES } from "@myskills-app/core";
+import { DeviceAuthorizePage } from "./components/DeviceAuthorizePage.js";
 import { ConfirmationDialog, type ConfirmationRequest } from "@/components/ui/confirmation-dialog";
 import { MarketingLanding } from "./components/marketing/MarketingLanding.js";
 import { LandingSettings } from "./components/marketing/LandingSettings.js";
@@ -82,6 +85,10 @@ import { SkillManagePanel } from "@/components/registry/SkillManagePanel";
 import { ManagedReleaseSelect, SkillSectionTabs, SkillVersionsPanel } from "@/components/registry/SkillSections";
 import { isPublishedRelease, parseSkillScope, parseSkillTab, safeLibraryReturn, sectionPanelId, sectionTabId, type SkillScope, type SkillTab } from "@/components/registry/skill-workspace";
 import { SubmissionEvidencePanel } from "@/components/registry/SubmissionEvidencePanel";
+import { ReviewComparison } from "@/components/registry/ReviewComparison";
+import { TaskDiscovery } from "@/components/registry/TaskDiscovery";
+import { ReleaseComparison } from "@/components/registry/ReleaseComparison";
+import { DraftWorkspace, ForkReleaseDraft } from "@/components/authoring/DraftWorkspace";
 import { SkillImprovementPanel } from "@/components/registry/SkillImprovementPanel";
 import { BundleWorkspace } from "@/components/registry/BundleWorkspace";
 import { isBootstrapVersion, releaseVersionLabel, chipTone, findingsLabel, lifecycleLabel, reviewStatusLabel, securityStatusLabel, severityLabel, visibilityLabel } from "@/components/registry/status-display";
@@ -136,7 +143,7 @@ interface RegistryAppProps {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type AuthState = "idle" | "loading" | "mfa";
-type AppView = "libraries" | "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "organizations" | "targets" | "updates" | "admin" | "review" | "submit" | "teams" | "settings" | "connect" | "not-found";
+type AppView = "libraries" | "landing" | "login" | "register" | "reset-password" | "verify-email" | "change-email" | "browse" | "architectures" | "organizations" | "targets" | "updates" | "admin" | "review" | "submit" | "teams" | "settings" | "connect" | "device" | "not-found";
 
 interface AppLocation {
   view: AppView;
@@ -458,7 +465,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
 
       // The architecture guard sees every move, including moves inside the
       // section; it prompts only when the destination would discard a draft.
-      if (previous.view === "architectures") {
+      if (previous.view === "architectures" || previous.view === "submit") {
         const guard = architectureNavigationGuardRef.current;
         if (guard) {
           const action = nextHistoryIndex !== null && nextHistoryIndex < historyIndexRef.current
@@ -1076,6 +1083,12 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   // Return to a pending remote-connection consent after sign-in. The only
   // return target is the fixed consent path; no URL is taken from input.
   function openAfterSignIn() {
+    if (readDeviceLoginReturn()) {
+      try { sessionStorage.removeItem("myskills:device-login-return"); } catch { /* Private browsing can disable storage. */ }
+      setView("device");
+      pushAppHistory("/auth/device");
+      return;
+    }
     if (readStoredConnectRequest()) {
       setView("connect");
       pushAppHistory(pathForView("connect"));
@@ -1283,6 +1296,13 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     );
   }
 
+  if (activeView === "device") {
+    return <DeviceAuthorizePage client={registryClient.deviceLogin} signedIn={Boolean(session)} onSignIn={() => {
+      try { sessionStorage.setItem("myskills:device-login-return", "1"); } catch { /* The user can reopen /auth/device after signing in. */ }
+      openLogin();
+    }} />;
+  }
+
   if (activeView === "login") {
     return (
       <LoginPage
@@ -1447,6 +1467,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
             />
           )}
         </SkillReleaseCard>
+        {readyRelease && registryClient.evaluations && <PackageEvaluationEvidence api={registryClient.evaluations} slug={readyRelease.slug} version={readyRelease.version} publicSummary />}
         {managedRecord && managedVersion && !isPublishedRelease(managedVersion) && (
           <p className="registry-callout registry-section-callout" data-tone="amber" role="status">
             <CircleAlert size={16} aria-hidden="true" />
@@ -1461,6 +1482,8 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   const renderSectionPanel = (bundles: ReactNode) => {
     if (activeTab === "versions" && detailSlug) {
       return (
+        <>
+        <ReleaseComparison client={registryClient} slug={detailSlug} releases={selectableReleases} historyState={historyState} contextKey={JSON.stringify([session?.user.id ?? "anonymous", workspaceVersion, platform])} />
         <SkillVersionsPanel
           historyState={historyState}
           latestVersion={latestVisibleRelease?.version ?? null}
@@ -1470,6 +1493,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
           selectedVersion={workspaceVersion}
           versionHref={(version) => browseUrl(detailSlug, query, platform, version)}
         />
+        </>
       );
     }
     if (activeTab === "manage" && detailSlug) {
@@ -1674,7 +1698,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
           ) : activeView === "review" && session ? (
             <ReviewDashboard client={registryClient} onOpenSkill={openAppUrl} session={session} />
           ) : activeView === "submit" && session ? (
-            <SubmitDashboard client={registryClient} onOpenSkill={openAppUrl} session={session} />
+            <SubmitDashboard client={registryClient} onOpenSkill={openAppUrl} session={session} url={appUrl} onDraftNavigate={replaceAppHistory} onNavigationGuardChange={registerArchitectureNavigationGuard} />
           ) : activeView === "teams" && session ? (
             <TeamsDashboard client={registryClient} session={session} />
           ) : activeView === "architectures" && session ? (
@@ -1760,6 +1784,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
                   )}
                   {workspaceScope === "all" && showRegistryList && (
                     <section className="registry-results-panel registry-list" aria-label="Skill search results">
+                      <TaskDiscovery key={session?.user.id ?? "anonymous"} client={registryClient} skillHref={(slug, version) => browseUrl(slug, query, platform, version)} />
                       <div className="registry-list-label">
                         <h2>Skills</h2>
                         <span aria-live="polite">{listState === "ready" ? (nextCursor ? `${skills.length} loaded` : String(skills.length)) : ""}</span>
@@ -2155,7 +2180,8 @@ function NotFoundPage({ onHome, onLogin, showLandingLink }: { onHome: () => void
   );
 }
 
-function SubmitDashboard({ client, onOpenSkill }: { client: RegistryClient; onOpenSkill: (url: string) => void; session: WebSession }) {
+function SubmitDashboard({ client, onOpenSkill, session, url, onDraftNavigate, onNavigationGuardChange }: { client: RegistryClient; onOpenSkill: (url: string) => void; session: WebSession; url: string; onDraftNavigate: (url: string) => void; onNavigationGuardChange: (guard: ArchitectureNavigationGuard | null) => void }) {
+  const [correctionSource, setCorrectionSource] = useState<{ submissionId: string; request: number } | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [feedbackId, setFeedbackId] = useState<string | null>(null);
   const [state, setState] = useState<LoadState>("idle");
@@ -2285,7 +2311,11 @@ function SubmitDashboard({ client, onOpenSkill }: { client: RegistryClient; onOp
     focusTarget.current = { kind: "trigger", id: submissionId };
   }
 
-  function chooseCorrection() {
+  function chooseCorrection(submissionId: string) {
+    if (client.drafts) {
+      setCorrectionSource({ submissionId, request: Date.now() });
+      return;
+    }
     setFile(null);
     setResult(null);
     setMessage({ text: "Choose the corrected archive with a new semantic version. Previous submissions remain immutable.", error: false });
@@ -2296,6 +2326,7 @@ function SubmitDashboard({ client, onOpenSkill }: { client: RegistryClient; onOp
   const resultReview = result ? reviewStatusLabel(result.submission.reviewStatus) : null;
   const resultSecurity = result ? securityStatusLabel(result.submission.securityStatus) : null;
   const resultFindings = result ? findingsLabel(result.scan.findingCount) : null;
+  const archiveScanPending = Boolean(result && (["queued", "running"].includes(result.scan.status) || result.submission.securityStatus === "not-run"));
 
   return (
     <main className="registry-workspace author-review submit-dashboard" aria-label="Skill package submission">
@@ -2303,6 +2334,7 @@ function SubmitDashboard({ client, onOpenSkill }: { client: RegistryClient; onOp
         <h1>Submit package</h1>
       </header>
 
+      {client.drafts && <DraftWorkspace key={session.user.id} api={client.drafts} actorId={session.user.id} credentialEpoch={session.expiresAt} url={url} onNavigate={onDraftNavigate} onNavigationGuardChange={onNavigationGuardChange} correctionSource={correctionSource} onSubmitted={async () => { setResult(null); await refreshSubmissions(); }} />}
       <div className="registry-surface">
         <section aria-labelledby={`${baseId}-upload`} className="submit-upload">
           <h2 id={`${baseId}-upload`}>Package archive</h2>
@@ -2348,8 +2380,11 @@ function SubmitDashboard({ client, onOpenSkill }: { client: RegistryClient; onOp
                 <span className="registry-chip" data-tone={chipTone(resultSecurity.tone)}>{resultSecurity.label}</span>
                 <span className="registry-chip" data-tone={chipTone(resultFindings.tone)}>{resultFindings.label}</span>
               </p>
-              <p className="author-status" data-tone={result.scan.findings.length > 0 ? "amber" : "teal"}>
-                {result.scan.findings.length > 0 ? "Review the scan warnings before a maintainer approves this package." : "No scan findings. The package is ready for maintainer review."}
+              <p className="author-status" data-tone={archiveScanPending || result.scan.findings.length > 0 || result.submission.securityStatus !== "passed" ? "amber" : "teal"}>
+                {archiveScanPending ? "The confirmation scan is pending. Check submission history for completion before review."
+                  : result.scan.findings.length > 0 ? "Review the scan warnings before a maintainer approves this package."
+                    : result.submission.securityStatus === "passed" ? "No scan findings. The package is ready for maintainer review."
+                      : "The confirmation scan did not pass. Check submission feedback before review."}
               </p>
               <dl className="registry-facts" data-labels="wide">
                 <div>
@@ -2479,7 +2514,7 @@ function SubmitDashboard({ client, onOpenSkill }: { client: RegistryClient; onOp
                     )}
                     {feedbackOpen && (
                       <div className="submit-feedback" id={feedbackPanelId}>
-                        <SubmissionEvidencePanel client={client} submissionId={submission.id} mode="author" focusOnOpen onClose={() => closeFeedback(submission.id)} onCorrect={chooseCorrection} />
+                        <SubmissionEvidencePanel client={client} submissionId={submission.id} mode="author" focusOnOpen onClose={() => closeFeedback(submission.id)} onCorrect={() => chooseCorrection(submission.id)} />
                         <PackageFileViewer resourceKey={`author:${submission.id}`} loadBundle={() => client.exportUserSubmission(submission.id)} />
                       </div>
                     )}
@@ -2933,6 +2968,7 @@ function ReviewDashboard({ client, onOpenSkill, session }: { client: RegistryCli
           </section>
 
           {client.getReviewSubmissionDetail && <SubmissionEvidencePanel key={`${submission.id}:${submission.reviewStatus}`} client={client} submissionId={submission.id} mode="reviewer" />}
+          {client.getReviewSubmissionDetail && <ReviewComparison client={client} submission={submission} />}
 
           <section aria-labelledby={`${baseId}-details`} className="registry-section">
             <h3 id={`${baseId}-details`}>Submission details</h3>
@@ -3518,7 +3554,7 @@ function TeamSkillSection({ empty, skills, title }: { empty: string; skills: Pub
   );
 }
 
-type AdminTab = "people" | "instance" | "github" | "branding" | "keys" | "providers" | "audit";
+type AdminTab = "people" | "instance" | "github" | "branding" | "keys" | "providers" | "audit" | "recovery";
 const ADMIN_TABS: ReadonlyArray<{ id: AdminTab; label: string }> = [
   { id: "people", label: "People" },
   { id: "instance", label: "Instance" },
@@ -3527,6 +3563,7 @@ const ADMIN_TABS: ReadonlyArray<{ id: AdminTab; label: string }> = [
   { id: "keys", label: "API keys" },
   { id: "providers", label: "Sign-in providers" },
   { id: "audit", label: "Audit" },
+  { id: "recovery", label: "Recovery" },
 ];
 
 function AdminConsole({ client, session }: { client: RegistryClient; session: WebSession }) {
@@ -4154,6 +4191,7 @@ function AdminConsole({ client, session }: { client: RegistryClient; session: We
           )}
         </section>
 
+        <section {...panelProps("recovery")}><RecoveryGuidancePanel key={`${session.user.id}:${session.user.roles.join(",")}`} isAdministrator={isAdminUser(session.user)}/></section>
         <section {...panelProps("audit")}>
           <div className="account-panel-head">
             <div><h2>Audit</h2><p>{auditEvents.length} loaded</p></div>
@@ -5836,6 +5874,7 @@ function SkillDetail({
               resourceKey={`${selectedSkill.slug}:${release.version}:${platform}`}
               loadBundle={() => client.getReleaseBundle!(selectedSkill.slug, release.version, platform)}
             />
+            {client.drafts && session?.user.roles.some((role) => ["author", "maintainer", "admin", "owner"].includes(role)) && <ForkReleaseDraft api={client.drafts} slug={selectedSkill.slug} version={release.version} platform={platform} />}
           </RegistryDisclosure>
         )}
 
@@ -6224,10 +6263,12 @@ function isPublicView(view: AppView): boolean {
     || view === "change-email"
     || view === "browse"
     || view === "connect"
+    || view === "device"
     || view === "not-found";
 }
 
 function initialViewFromPath(pathname: string): AppView {
+  if (pathname === "/auth/device") return "device";
   if (pathname === "/libraries") return "libraries";
   // Legacy Manage skills page: now the Can manage scope of Skills.
   if (pathname === "/manage/skills") return "browse";
@@ -6286,6 +6327,7 @@ function initialViewFromPath(pathname: string): AppView {
 }
 
 function pathForView(view: AppView): string {
+  if (view === "device") return "/auth/device";
   if (view === "landing") {
     return "/";
   }
@@ -6743,4 +6785,8 @@ function writeStoredSession(session: WebSession): void {
 
 function clearStoredSession(): void {
   window.localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+function readDeviceLoginReturn(): boolean {
+  try { return sessionStorage.getItem("myskills:device-login-return") === "1"; } catch { return false; }
 }
