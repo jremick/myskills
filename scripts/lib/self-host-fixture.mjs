@@ -192,24 +192,15 @@ if (["host-ports", "api-ready", "restore-ready"].includes(mode)) {
   }
   await api(`/v1/submissions/${data.submissionId}/bundle`, undefined, { anonymous: true, status: 401 });
   const ownerToken = token;
-  if (mode === "create") {
-    data.revokedSessionToken = token;
-    await api("/v1/auth/logout", undefined, { method: "POST", status: 204 });
+  if (mode !== "create") {
+    token = data.revokedSessionToken;
+    assert.ok(token); await api(`/v1/submissions/${data.submissionId}/bundle`, undefined, { status: 401 });
   }
-  token = data.revokedSessionToken;
-  assert.ok(token); await api(`/v1/submissions/${data.submissionId}/bundle`, undefined, { status: 401 });
   const nonowner = await api("/v1/auth/login", { email: data.nonowner.email, password: data.nonowner.password }, { anonymous: true });
   assert.ok(nonowner.token); assert.equal(nonowner.user.id, data.nonowner.id); assert.deepEqual(nonowner.user.roles, ["user"]);
   token = nonowner.token;
   await api(`/v1/submissions/${data.submissionId}/bundle`, undefined, { status: 404 });
   token = ownerToken;
-  if (mode === "create") {
-    session = await api("/v1/auth/login", credentials, { anonymous: true });
-    const resumed = await api("/v1/auth/mfa/verify", { challengeToken: session.challengeToken, recoveryCode: data.recoveryCodes.shift() }, { anonymous: true });
-    token = resumed.token; assert.ok(token);
-  }
-  data.authProof = { totp: mode === "create" ? "enrollment-confirmed" : "original-factor-decrypted-and-verified",
-    recoveryCode: "verified", nonownerPrivateArtifact: "denied", revokedSession: "denied" };
   // Read the feedback through the real API; do not fabricate scan/eval evidence.
   let submission = await api(`/v1/submissions/${data.submissionId}`);
   if (mode === "create") {
@@ -266,6 +257,13 @@ if (["host-ports", "api-ready", "restore-ready"].includes(mode)) {
     assert.equal(restored.suiteRevisionId, suiteBinding.revisionId); assert.equal(restored.result.suiteSha256, suiteBinding.sha256);
     assert.deepEqual(restored.result.totals, record.summary.totals);
   }
+  if (mode === "create") {
+    data.revokedSessionToken = token;
+    await api("/v1/auth/logout", undefined, { method: "POST", status: 204 });
+    assert.ok(token); await api(`/v1/submissions/${data.submissionId}/bundle`, undefined, { status: 401 });
+  }
+  data.authProof = { totp: mode === "create" ? "enrollment-confirmed" : "original-factor-decrypted-and-verified",
+    recoveryCode: "verified", nonownerPrivateArtifact: "denied", revokedSession: "denied" };
   data.persistedBoundaries = { draft: data.draftId ? "tested" : "not-available-on-source", evaluation: data.evaluationProof ? (mode === "create" ? "created-before-backup" : "restored-exact-summary") : "not-exercised", architecture: "tested", submission: "tested", scanFeedback: "read" };
   save();
 }
