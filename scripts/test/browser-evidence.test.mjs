@@ -56,6 +56,28 @@ test("missing browser report produces an explicit failure summary", async (t) =>
   assert.deepEqual(JSON.parse(await readFile(join(root, "output", "summary.json"), "utf8")), { schemaVersion: 1, reportStatus: "unavailable", tests: [], screenshots: [] });
 });
 
+test("skill preview evidence retains only the reviewed synthetic desktop and mobile screenshots", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "myskills-preview-evidence-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const results = join(root, "results");
+  const output = join(root, "output");
+  await mkdir(join(results, "skill-preview"), { recursive: true });
+  const screenshot = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0ioAAAAASUVORK5CYII=", "base64");
+  const approved = ["skill-preview-1440.png", "skill-preview-390.png"];
+  for (const name of approved) await writeFile(join(results, "skill-preview", name), screenshot);
+  for (const name of ["skill-preview-1280.png", "skill-preview-390-failed.png", "skill-preview-private.png"]) {
+    await writeFile(join(results, "skill-preview", name), "unreviewed-content-must-not-be-published");
+  }
+  const report = join(root, "report.json");
+  await writeFile(report, JSON.stringify({ suites: [] }));
+  const result = runCollector(report, results, output);
+  assert.equal(result.status, 0, result.stderr);
+  const summary = JSON.parse(await readFile(join(output, "summary.json"), "utf8"));
+  assert.deepEqual(summary.screenshots, approved.map(name => `screenshots/skill-preview/${name}`));
+  assert.deepEqual(await readdir(join(output, "screenshots", "skill-preview")), approved);
+  for (const path of summary.screenshots) assert.deepEqual(await readFile(join(output, path)), screenshot);
+});
+
 function runCollector(report, results, output) {
   return spawnSync(process.execPath, [resolve("scripts/collect-browser-evidence.mjs"), report, results, output], { encoding: "utf8" });
 }
