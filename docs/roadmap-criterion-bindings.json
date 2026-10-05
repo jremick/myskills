@@ -4568,7 +4568,7 @@
         {
           "path": "apps/web/src/styles.css",
           "line": 1,
-          "sha256": "9e0165bd9dfb69dfe50c49c1b1a978d290fbc662e93f7450ac62df2a5c6650bf",
+          "sha256": "bb79b8b9348c6728ed4522155049f05284d39a277df3dfbc8bd237d580f71d62",
           "anchor": "@import \"./components/operations/operations.css\";"
         },
         {
@@ -4607,7 +4607,7 @@
         {
           "path": "apps/web/src/styles.css",
           "line": 1,
-          "sha256": "9e0165bd9dfb69dfe50c49c1b1a978d290fbc662e93f7450ac62df2a5c6650bf",
+          "sha256": "bb79b8b9348c6728ed4522155049f05284d39a277df3dfbc8bd237d580f71d62",
           "anchor": "@import \"./components/operations/operations.css\";"
         },
         {
@@ -4685,7 +4685,7 @@
         {
           "path": "apps/web/src/styles.css",
           "line": 1,
-          "sha256": "9e0165bd9dfb69dfe50c49c1b1a978d290fbc662e93f7450ac62df2a5c6650bf",
+          "sha256": "bb79b8b9348c6728ed4522155049f05284d39a277df3dfbc8bd237d580f71d62",
           "anchor": "@import \"./components/operations/operations.css\";"
         },
         {
@@ -5077,7 +5077,7 @@
         {
           "path": "apps/web/src/styles.css",
           "line": 1,
-          "sha256": "9e0165bd9dfb69dfe50c49c1b1a978d290fbc662e93f7450ac62df2a5c6650bf",
+          "sha256": "bb79b8b9348c6728ed4522155049f05284d39a277df3dfbc8bd237d580f71d62",
           "anchor": "@import \"./components/operations/operations.css\";"
         },
         {

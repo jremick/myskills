@@ -208,24 +208,6 @@ button:focus-visible {
   text-align: left;
 }
 
-.device-panel {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.device-panel [data-slot="button"] {
-  max-width: 100%;
-  height: auto;
-  min-height: 44px;
-  white-space: normal;
-}
-
-.device-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
 .landing-hero {
   position: relative;
   min-height: 88dvh;
@@ -9042,4 +9024,22 @@ textarea:focus-visible {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.device-panel {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.device-panel [data-slot="button"] {
+  max-width: 100%;
+  height: auto;
+  min-height: 44px;
+  white-space: normal;
+}
+
+.device-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
