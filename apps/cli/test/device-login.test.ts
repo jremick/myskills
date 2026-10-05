@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { runCli, type CliRuntime, type StoredCliToken } from "../src/cli.js";
 import { createDeviceLoginStore, type PendingDeviceLogin } from "../src/device-login-store.js";
 import { createFileTokenStore, type KeyringTokenBackend } from "../src/token-store.js";
+import { createFileConfigStore } from "../src/config-store.js";
 
 const API = "https://registry.example.test";
 const DEVICE = "D".repeat(43);
@@ -297,6 +298,53 @@ test("HOME overrides do not split the production OS-account lock directory", asy
   const [first, second] = await Promise.all([directory("/tmp/myskills-home-a"), directory("/tmp/myskills-home-b")]);
   assert.equal(first, second);
   assert.equal(first, path.join(os.userInfo().homedir, ".config", "myskills-app", "device-login-locks"));
+});
+
+test("store creation and non-device CLI commands work without an OS account lookup", async t => {
+  const f = await fixture(t);
+  const lookup = t.mock.method(os, "userInfo", () => { throw new Error("private-user-info-diagnostic"); });
+  assert.doesNotThrow(() => createDeviceLoginStore(undefined, f.backend));
+  let opened = 0, requests = 0;
+  f.runtime.env = { MYSKILLS_CONFIG_DIR: path.join(f.dir, "config"), MYSKILLS_TOKEN_STORE: "file" };
+  f.runtime.createStores = (env, namespace) => {
+    opened += 1;
+    return { configStore: createFileConfigStore(env), tokenStore: createFileTokenStore(env), deviceLoginStore: createDeviceLoginStore(namespace, f.backend) };
+  };
+  f.runtime.fetch = async () => { requests += 1; return new Response(JSON.stringify({ skills: [] })); };
+  for (const command of [["help"], ["--help"], ["version"], ["--version"], ["search", "--api-url", API]]) {
+    assert.equal(await runCli(command, f.runtime), 0);
+  }
+  assert.equal(opened, 5);
+  assert.equal(requests, 1);
+  assert.equal(lookup.mock.callCount(), 0);
+  assert.equal(f.backend.values.size, 0);
+  assert.deepEqual(await readdir(f.dir), []);
+});
+
+test("device lock identity failure is clear and never falls back to HOME or accesses credentials", async t => {
+  const f = await fixture(t);
+  t.mock.method(os, "userInfo", () => { throw new Error("private-user-info-diagnostic"); });
+  const fallback = t.mock.method(os, "homedir", () => path.join(f.dir, "home-override"));
+  let credentials = 0, requests = 0;
+  const backend = {
+    get: async () => { credentials += 1; return null; },
+    set: async () => { credentials += 1; },
+    delete: async () => { credentials += 1; },
+  };
+  const store = createDeviceLoginStore(undefined, backend);
+  f.runtime.deviceLoginStore = store;
+  f.runtime.fetch = async () => { requests += 1; throw new Error("Must not fetch without a secure lock identity."); };
+  for (const command of [COMMAND, [...COMMAND, "--no-resume"], ["logout", "--api-url", API, "--json"]]) {
+    assert.equal(await runCli(command, f.runtime), 1);
+    assert.equal(f.errorCode(), "DEVICE_LOGIN_LOCK_UNAVAILABLE");
+    assert.match(f.stderr.at(-1)!, /OS.account home/);
+    assert.equal(f.stderr.at(-1)!.includes("private-user-info-diagnostic"), false);
+  }
+  assert.equal(fallback.mock.callCount(), 0);
+  assert.equal(credentials, 0);
+  assert.equal(requests, 0);
+  assert.deepEqual(await readdir(f.dir), []);
+  assert.equal(f.saved()?.token, "previous-credential");
 });
 
 function message(child: ChildProcess): Promise<void> {

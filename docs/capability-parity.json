@@ -41,7 +41,7 @@
         "detail": "search [query] --limit/--cursor, with next cursor output",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 692,
+          "line": 696,
           "anchor": "async function searchCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -145,7 +145,7 @@
         "detail": "info",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 718,
+          "line": 722,
           "anchor": "async function infoCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -241,7 +241,7 @@
         "detail": "releases list",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1313,
+          "line": 1317,
           "anchor": "async function releasesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -337,7 +337,7 @@
         "detail": "info <slug> --version <exact-version>; preserves JSON metadata and sanitizes human terminal output",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 718,
+          "line": 722,
           "anchor": "async function infoCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -457,7 +457,7 @@
         "detail": "export/install bind the exact release digest, bound streamed bytes by validated size, hash raw bytes, strictly decode UTF-8 and reject redirects.",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1983,
+          "line": 1987,
           "anchor": "async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -679,7 +679,7 @@
         "detail": "skills edit",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1254,
+          "line": 1258,
           "anchor": "async function skillsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -783,7 +783,7 @@
         "detail": "skills archive/restore/delete",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1254,
+          "line": 1258,
           "anchor": "async function skillsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -879,7 +879,7 @@
         "detail": "releases actions",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1313,
+          "line": 1317,
           "anchor": "async function releasesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -981,7 +981,7 @@
         "detail": "sharing get/set",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1428,
+          "line": 1432,
           "anchor": "async function sharingCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -1102,7 +1102,7 @@
         "detail": "bundles list/show/members/memberships",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1999,
+          "line": 2003,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1201,7 +1201,7 @@
         "detail": "bundles sources",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1999,
+          "line": 2003,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1303,7 +1303,7 @@
         "detail": "bundles create/edit",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1999,
+          "line": 2003,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1407,7 +1407,7 @@
         "detail": "bundles save",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1999,
+          "line": 2003,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1510,7 +1510,7 @@
         "detail": "submit --path",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1832,
+          "line": 1836,
           "anchor": "async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -1606,7 +1606,7 @@
         "detail": "submissions list",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1213,
+          "line": 1217,
           "anchor": "async function submissionsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -1924,7 +1924,7 @@
         "detail": "submissions withdraw",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1213,
+          "line": 1217,
           "anchor": "async function submissionsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -2020,7 +2020,7 @@
         "detail": "review submissions --limit/--cursor, with next cursor output",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1118,
+          "line": 1122,
           "anchor": "async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -2372,7 +2372,7 @@
         "detail": "review action",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1118,
+          "line": 1122,
           "anchor": "async function reviewCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -5531,7 +5531,7 @@
         "detail": "teams list",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1361,
+          "line": 1365,
           "anchor": "async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -5635,7 +5635,7 @@
         "detail": "teams create",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1361,
+          "line": 1365,
           "anchor": "async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -5745,7 +5745,7 @@
         "detail": "teams invite/accept",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1361,
+          "line": 1365,
           "anchor": "async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -6053,7 +6053,7 @@
         "detail": "teams skills",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1361,
+          "line": 1365,
           "anchor": "async function teamsCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -7050,7 +7050,7 @@
         "detail": "architectures patterns",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1475,
+          "line": 1479,
           "anchor": "async function architecturesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -7146,7 +7146,7 @@
         "detail": "architectures list",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1475,
+          "line": 1479,
           "anchor": "async function architecturesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -7616,7 +7616,7 @@
         "detail": "architectures preview/compile/plan/dry-run",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1475,
+          "line": 1479,
           "anchor": "async function architecturesCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9369,7 +9369,7 @@
         "detail": "companion run-once with lease/fence checks",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 3205,
+          "line": 3209,
           "anchor": "async function companionCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9461,7 +9461,7 @@
         "detail": "improve compatibility --release <slug>@<version>; optional login for public releases",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 461,
+          "line": 465,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9571,7 +9571,7 @@
         "detail": "improve declare/review-declaration",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 461,
+          "line": 465,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9674,7 +9674,7 @@
         "detail": "improve policy",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 461,
+          "line": 465,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9789,7 +9789,7 @@
         "detail": "improve profiles",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 461,
+          "line": 465,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -9906,7 +9906,7 @@
         "detail": "improve suites",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 461,
+          "line": 465,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -10012,7 +10012,7 @@
         "detail": "improve preview/prepare and show-plan --id <plan-id>; inspect saved plans/runs without creating a local job",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 461,
+          "line": 465,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -10222,7 +10222,7 @@
         "detail": "improve status/cancel",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 461,
+          "line": 465,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -10424,7 +10424,7 @@
         "detail": "improve evidence/accept-evidence",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 461,
+          "line": 465,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -10672,7 +10672,7 @@
         "detail": "login with password+TOTP/recovery, API key or --method browser with exact requested --scopes. Pending browser login resumes from the OS keyring before its original deadline; --no-resume explicitly selects an in-memory request. Logout clears pending state and preserves existing API-token local-only behavior.",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 752,
+          "line": 756,
           "anchor": "async function loginCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -10718,6 +10718,14 @@
             "source": {
               "path": "apps/cli/test/trust-response.e2e.test.ts",
               "line": 1
+            }
+          },
+          {
+            "level": "runtime",
+            "detail": "2026-10-05 Node 24.19.0 startup correction: two new failing-control regressions passed after lazy OS-account resolution. Store creation and help/--help/version/--version/search succeed when userInfo throws; browser/no-resume/logout return a sanitized DEVICE_LOGIN_LOCK_UNAVAILABLE before keyring, network or filesystem work, with no HOME fallback. The older eager enrollment lookup is also deferred to its existing managed-workspace boundary while preserving the original pre-profile migration environment. Native keyring and arbitrary-UID container acceptance remain unverified.",
+            "source": {
+              "path": "apps/cli/test/device-login.test.ts",
+              "line": 303
             }
           }
         ]
@@ -10828,7 +10836,7 @@
         "detail": "whoami / auth status",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 883,
+          "line": 887,
           "anchor": "async function whoamiCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -11394,7 +11402,7 @@
         "detail": "token list/create/revoke",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1045,
+          "line": 1049,
           "anchor": "async function tokenCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -12080,7 +12088,7 @@
         "detail": "admin sharing get/set",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1798,
+          "line": 1802,
           "anchor": "async function adminCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -12696,7 +12704,7 @@
         "detail": "init / validate / scan / package",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 580,
+          "line": 584,
           "anchor": "async function initCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -12781,7 +12789,7 @@
         "detail": "export/install/list/updates/update/rollback",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2071,
+          "line": 2075,
           "anchor": "async function installCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -12866,7 +12874,7 @@
         "detail": "architectures observe/health; bootstrap codex --dry-run",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2537,
+          "line": 2541,
           "anchor": "async function codexWorkspaceCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -12951,7 +12959,7 @@
         "detail": "improve plan/run/report/export; explicit plan/cloud consent",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 461,
+          "line": 465,
           "anchor": "async function improvementCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -13036,7 +13044,7 @@
         "detail": "libraries unbind-local",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1999,
+          "line": 2003,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -13116,7 +13124,7 @@
         "detail": "config/auth status/doctor/version",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 957,
+          "line": 961,
           "anchor": "async function configCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -18175,7 +18183,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 305
+        "line": 309
       }
     },
     {
@@ -18185,7 +18193,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 306
+        "line": 310
       }
     },
     {
@@ -18195,7 +18203,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 307
+        "line": 311
       }
     },
     {
@@ -18205,7 +18213,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 308
+        "line": 312
       }
     },
     {
@@ -18215,7 +18223,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 311
+        "line": 315
       }
     },
     {
@@ -18225,7 +18233,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 312
+        "line": 316
       }
     },
     {
@@ -18235,7 +18243,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 313
+        "line": 317
       }
     },
     {
@@ -18245,7 +18253,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 316
+        "line": 320
       }
     },
     {
@@ -18255,7 +18263,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 318
+        "line": 322
       }
     },
     {
@@ -18265,7 +18273,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 320
+        "line": 324
       }
     },
     {
@@ -18275,7 +18283,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 322
+        "line": 326
       }
     },
     {
@@ -18285,7 +18293,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 324
+        "line": 328
       }
     },
     {
@@ -18295,7 +18303,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 326
+        "line": 330
       }
     },
     {
@@ -18305,7 +18313,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 328
+        "line": 332
       }
     },
     {
@@ -18315,7 +18323,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 330
+        "line": 334
       }
     },
     {
@@ -18325,7 +18333,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 332
+        "line": 336
       }
     },
     {
@@ -18336,7 +18344,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 334
+        "line": 338
       }
     },
     {
@@ -18346,7 +18354,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 336
+        "line": 340
       }
     },
     {
@@ -18356,7 +18364,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 338
+        "line": 342
       }
     },
     {
@@ -18366,7 +18374,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 340
+        "line": 344
       }
     },
     {
@@ -18386,7 +18394,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 342
+        "line": 346
       }
     },
     {
@@ -18396,7 +18404,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 344
+        "line": 348
       }
     },
     {
@@ -18446,7 +18454,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 352
+        "line": 356
       }
     },
     {
@@ -18459,7 +18467,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 354
+        "line": 358
       }
     },
     {
@@ -18472,7 +18480,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 355
+        "line": 359
       }
     },
     {
@@ -18511,7 +18519,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 357
+        "line": 361
       }
     },
     {
@@ -18550,7 +18558,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 358
+        "line": 362
       }
     },
     {
@@ -18575,7 +18583,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 362
+        "line": 366
       }
     },
     {
@@ -18589,7 +18597,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 364
+        "line": 368
       }
     },
     {
@@ -18608,7 +18616,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 365
+        "line": 369
       }
     },
     {
@@ -18627,7 +18635,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 367
+        "line": 371
       }
     },
     {
@@ -18638,7 +18646,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 369
+        "line": 373
       }
     },
     {
@@ -18648,7 +18656,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 371
+        "line": 375
       }
     },
     {
@@ -18658,7 +18666,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 373
+        "line": 377
       }
     },
     {
@@ -18668,7 +18676,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 375
+        "line": 379
       }
     },
     {
@@ -18678,7 +18686,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 377
+        "line": 381
       }
     },
     {
@@ -18688,7 +18696,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 379
+        "line": 383
       }
     },
     {
@@ -18698,7 +18706,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 3612
+        "line": 3616
       }
     },
     {
@@ -18710,7 +18718,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 3963
+        "line": 3967
       }
     },
     {
@@ -18720,7 +18728,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 387
+        "line": 391
       }
     },
     {
@@ -18817,7 +18825,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 385
+        "line": 389
       }
     },
     {
@@ -18827,7 +18835,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 422
+        "line": 426
       }
     },
     {
@@ -18847,7 +18855,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 294
+        "line": 298
       }
     },
     {
@@ -18857,7 +18865,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 289
+        "line": 293
       }
     },
     {

@@ -31,7 +31,7 @@ export class DeviceLoginError extends Error {
 export function createDeviceLoginStore(
   namespace?: string,
   backend: KeyringTokenBackend = nativeKeyringBackend,
-  lockDirectory = deviceLoginLockDirectory(),
+  lockDirectory?: string,
 ): CliDeviceLoginStore {
   const key = (apiUrl: string) => `device-login:${keyringCredentialKey(apiUrl, namespace)}`;
   return {
@@ -60,7 +60,7 @@ export function createDeviceLoginStore(
     async withLock(apiUrl, work) {
       // The default keyring identity ignores config-directory overrides. The
       // lock must therefore live under the actual OS account, not those overrides.
-      const directory = path.join(lockDirectory, createHash("sha256").update(key(apiUrl)).digest("hex"));
+      const directory = path.join(lockDirectory ?? deviceLoginLockDirectory(), createHash("sha256").update(key(apiUrl)).digest("hex"));
       let acquired = false;
       try { return await withInstallRootLock(directory, async () => { acquired = true; return work(); }); }
       catch (error) {
@@ -73,7 +73,13 @@ export function createDeviceLoginStore(
 
 /** Environment HOME overrides must not split an OS-account keyring lock. */
 export function deviceLoginLockDirectory(): string {
-  return path.join(os.userInfo().homedir, ".config", "myskills-app", "device-login-locks");
+  try {
+    const home = os.userInfo().homedir;
+    if (!path.isAbsolute(home)) throw new Error();
+    return path.join(home, ".config", "myskills-app", "device-login-locks");
+  } catch {
+    throw new DeviceLoginError("Cannot determine the OS-account home for secure browser-login locking. Configure a valid OS account before browser login or logout; HOME overrides are not used.", "DEVICE_LOGIN_LOCK_UNAVAILABLE");
+  }
 }
 
 function unavailable(): DeviceLoginError {

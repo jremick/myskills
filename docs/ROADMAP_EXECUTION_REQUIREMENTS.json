@@ -3513,7 +3513,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2414
+            "line": 2418
           }
         ],
         "checks": [
@@ -4112,7 +4112,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2405
+            "line": 2409
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -5712,7 +5712,7 @@
           },
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2414
+            "line": 2418
           }
         ],
         "checks": [
@@ -6185,7 +6185,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2405
+            "line": 2409
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -6341,7 +6341,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2414
+            "line": 2418
           }
         ],
         "checks": [
@@ -6560,7 +6560,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2414
+            "line": 2418
           }
         ],
         "checks": [
@@ -6686,7 +6686,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2414
+            "line": 2418
           }
         ],
         "checks": [
@@ -11920,7 +11920,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 1588
+            "line": 1592
           },
           {
             "path": "apps/mcp/src/application-tools.ts",
@@ -12206,7 +12206,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2867
+            "line": 2871
           },
           {
             "path": "apps/mcp/src/application-tools.ts",
@@ -12973,7 +12973,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2084
+            "line": 2088
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -15321,7 +15321,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2405
+            "line": 2409
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -22864,7 +22864,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2405
+            "line": 2409
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -22998,7 +22998,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2414
+            "line": 2418
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -29221,7 +29221,7 @@
           },
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2518
+            "line": 2522
           }
         ],
         "checks": [

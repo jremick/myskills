@@ -218,8 +218,8 @@ interface ParsedArgs {
 export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {
   let parsed: ParsedArgs;
   let namespace: string | undefined;
-  const enrollmentDirectory = runtime.workspaceEnrollmentStateDirectory ?? workspaceEnrollmentDirectory(runtime.env);
-  const legacyEnrollmentDirectory = runtime.workspaceEnrollmentStateDirectory ? undefined : legacyWorkspaceEnrollmentDirectory(runtime.env);
+  // Preserve the unselected environment for legacy reservation migration.
+  const enrollmentEnv = runtime.env;
   try {
     const selected = selectConfigurationProfile(argv, runtime.env);
     parsed = parseArgs(selected.argv);
@@ -267,7 +267,11 @@ export async function runCli(argv: string[], runtime: CliRuntime): Promise<numbe
           } catch (error) { if (!isNodeError(error) || error.code !== "ENOENT") throw error; }
         }
         const managedMutation = parsed.command === "architecture-artifacts" || parsed.command === "codex" && parsed.args[0] === "enroll" || ["install", "update", "rollback", "companion"].includes(parsed.command);
-        if (workspace && managedMutation) return withWorkspaceEnrollment(String(parsed.options.workspace), enrollmentDirectory, parsed.command === "codex" && parsed.args[0] === "enroll", () => dispatchCli(parsed, runtime), { legacyDirectory: legacyEnrollmentDirectory, onAuthorityWait: runtime.workspaceEnrollmentWait });
+        if (workspace && managedMutation) {
+          const enrollmentDirectory = runtime.workspaceEnrollmentStateDirectory ?? workspaceEnrollmentDirectory(enrollmentEnv);
+          const legacyEnrollmentDirectory = runtime.workspaceEnrollmentStateDirectory ? undefined : legacyWorkspaceEnrollmentDirectory(enrollmentEnv);
+          return withWorkspaceEnrollment(String(parsed.options.workspace), enrollmentDirectory, parsed.command === "codex" && parsed.args[0] === "enroll", () => dispatchCli(parsed, runtime), { legacyDirectory: legacyEnrollmentDirectory, onAuthorityWait: runtime.workspaceEnrollmentWait });
+        }
         return dispatchCli(parsed, runtime);
       });
     }

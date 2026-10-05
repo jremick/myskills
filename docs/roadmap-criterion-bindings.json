@@ -2163,8 +2163,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2414,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "line": 2418,
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -2535,8 +2535,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2405,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "line": 2409,
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
@@ -3663,8 +3663,8 @@
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2414,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "line": 2418,
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -3703,7 +3703,7 @@
         {
           "path": "apps/cli/src/cli.ts",
           "line": 180,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "text(): Promise<string>;"
         }
       ],
@@ -3942,8 +3942,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2405,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "line": 2409,
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
@@ -4050,8 +4050,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2414,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "line": 2418,
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -4193,8 +4193,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2414,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "line": 2418,
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -4227,7 +4227,7 @@
         {
           "path": "apps/cli/src/cli.ts",
           "line": 218,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {"
         }
       ],
@@ -4259,8 +4259,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2414,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "line": 2418,
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -7540,8 +7540,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 1588,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "line": 1592,
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "assertCodexObservationOptions(parsed, healthOnly);"
         },
         {
@@ -7702,8 +7702,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2867,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "line": 2871,
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "preflightScopeEnrollment(initialState, provider, scope, location.path);"
         },
         {
@@ -8228,8 +8228,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2084,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "line": 2088,
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "assertLibraryVersion(libraryResolution, version);"
         },
         {
@@ -9650,8 +9650,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2405,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "line": 2409,
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
@@ -13615,7 +13615,7 @@
         {
           "path": "apps/cli/src/cli.ts",
           "line": 218,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {"
         }
       ],
@@ -14667,8 +14667,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2405,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "line": 2409,
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
@@ -14713,7 +14713,7 @@
         {
           "path": "apps/cli/src/cli.ts",
           "line": 180,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "text(): Promise<string>;"
         }
       ],
@@ -14745,8 +14745,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2414,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "line": 2418,
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         },
         {
@@ -16078,7 +16078,7 @@
         {
           "path": "apps/cli/src/cli.ts",
           "line": 218,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {"
         }
       ],
@@ -18847,8 +18847,8 @@
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2518,
-          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
+          "line": 2522,
+          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
           "anchor": "assertMatchingProvenance(binding,provenance);"
         }
       ],
