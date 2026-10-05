@@ -34,7 +34,7 @@ CLI tokens should be stored in the platform secret store where possible.
 
 ## Current Slice
 
-This document describes the `0.1.0-beta.18` source candidate, including named
+This document describes the `0.1.0-beta.20` source candidate, including resumable browser login, named
 CLI configuration profiles and global/project inventory scopes. Source,
 GitHub releases, npm publication, and hosted deployment are separate states;
 see [release verification](../../docs/RELEASE.md) for their checks. Historical
@@ -78,7 +78,8 @@ myskills scan --path <file-directory-or-zip>
 myskills package --path <directory> --output <file.zip> [--json]
 myskills search [query] [--limit <1-100>] [--cursor <cursor>] [--api-url <url>]
 myskills info <skill-slug> [--version <exact-version>] [--api-url <url>]
-myskills login [--api-url <url>] [--method <password|api-key>] [--email <email>]
+myskills login [--api-url <url>] [--method <password|api-key|browser>] [--email <email>]
+myskills login --method browser [--api-url <url>] [--scopes <comma-separated-scopes>] [--no-resume]
 myskills login --api-key [--api-url <url>]
 myskills logout [--api-url <url>] [--token <token>]
 myskills whoami [--api-url <url>] [--token <token>]
@@ -326,7 +327,7 @@ Public npm publication is a separate release step.
 
 `validate`, `scan`, and `submit` accept a manifest file, package directory, or local `.zip` package. `login` prompts for the API URL when one is not supplied; the default is the local API at `http://localhost:3001`, and custom hosted URLs can be entered manually. Successful login stores the selected API URL in local CLI config so later commands can omit `--api-url`. API URL resolution is `--api-url`, then `MYSKILLS_API_URL`, then saved config, then `http://localhost:3001`.
 
-`login` supports an email/password session flow and an API-key flow. Password
+`login` supports email/password, API-key and browser/device flows. Password
 login handles MFA challenges and stores the verified session token. API-key
 login validates the key with `/v1/me`. Token resolution is `--token`, then
 `MYSKILLS_TOKEN`, then the stored token. The default store uses the platform
@@ -336,6 +337,43 @@ An existing legacy file credential can be read when the keyring entry is
 confirmed absent. Explicit `MYSKILLS_TOKEN_STORE=file` or `MYSKILLS_TOKEN_FILE`
 selects file storage with user-only permissions. A successful keyring write
 clears the obsolete file entry.
+
+`login --method browser` displays the consent URL, user code and deadline. Repeat
+the command with the same API URL, configuration profile and `--scopes` choice to
+resume after an interruption, including after browser approval. The pending
+device secret stays in a separate OS keyring entry; it never enters config,
+token files or terminal output. A process lock serializes polling and logout
+for that API/profile. Its nonsecret owner metadata lives under the actual OS
+account home, independent of `HOME` and configuration-directory overrides.
+Only confirmed dead owners are reclaimed; ambiguous locks require operator
+recovery. Denial, expiry during polling, redemption and logout clear the pending
+entry. After process loss, expired keyring state is removed on the next login
+or logout for that API/profile; there is no background cleanup process. Logout
+discards a pending-only login locally; it does not cancel consent on the API.
+
+Resume keeps the original server expiry and a conservative deadline measured
+before the start request. Polling honors the saved interval, including
+`slow_down`, and bounds each request to the remaining deadline. It never renews
+consent, widens scopes, extends MFA assurance or changes token lifetime.
+Changing `--scopes` while a login is pending requires logout first.
+
+Keyring access is required for automatic resume even when final token storage
+was explicitly set to a file. A host without keyring access, including many
+cloud runners, can explicitly choose `--no-resume` for an in-memory request.
+That option cannot replace a readable existing pending login: logout first.
+If keyring access is unavailable, the CLI warns that old pending state could
+not be checked; restore access and run logout before using resume again.
+There is no plaintext fallback for pending state.
+
+Expiry, interruption, denial, token-save failure and config-save failure have
+distinct JSON error codes. If the server redeemed approval but the response was
+lost, or credential saving was not confirmed, the one-time code cannot recover
+the token. Check `auth status` with the same API/profile and, when needed,
+revoke the CLI browser login token in account settings before starting again.
+A config-save failure explicitly reports that the credential was saved; pass
+`--api-url` until the configuration store is repaired. Cleanup failures remain
+visible, and keyring-unavailable logout still attempts the selected credential's
+normal local deletion or remote session revocation.
 
 `auth status` validates the token without printing it. `logout` revokes stored
 sessions and clears local credentials. If a malformed keyring entry prevents
@@ -543,7 +581,7 @@ that adoption before it changes files. Without it, the operation fails with
 changed. The CLI never widens a token's scopes. This command checks current
 authorization, consent, policy, lease, and exact release identity. It does not
 start a background daemon.
-Browser/device login and additional provider install adapters remain planned.
+Additional provider install adapters remain planned.
 
 To change skill visibility, use the canonical `myskills sharing set
 <skill-slug> --visibility <scope>` command. It accepts either

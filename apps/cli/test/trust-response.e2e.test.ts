@@ -87,7 +87,7 @@ for (const phase of ["start", "poll"] as const) {
     const api = createServer((request, reply) => {
       if (phase === "poll" && request.url?.endsWith("/start")) {
         reply.setHeader("content-type", "application/json");
-        reply.end(JSON.stringify({ deviceCode: "A".repeat(43), userCode: "ABCDE-FGHJK", verificationUri: "https://example.test/auth/device", expiresIn: 60, interval: 5 }));
+        reply.end(JSON.stringify({ deviceCode: "A".repeat(43), userCode: "ABCDE-FGHJK", verificationUri: "https://example.test/auth/device", expiresAt: new Date(Date.now() + 60_000).toISOString(), expiresIn: 60, interval: 5 }));
       } else {
         if (request.url?.endsWith("/poll")) polls++;
         reply.writeHead(308, { location: `${otherOrigin}/capture` }); reply.end();
@@ -95,7 +95,7 @@ for (const phase of ["start", "poll"] as const) {
     });
     const apiUrl = await listen(t, api);
     const f = runtime();
-    assert.equal(await runCli(["login", "--method", "browser", "--api-url", apiUrl], f.options), 1);
+    assert.equal(await runCli(["login", "--method", "browser", "--no-resume", "--api-url", apiUrl], f.options), 1);
     assert.equal(forwarded, 0);
     assert.equal(polls, phase === "poll" ? 1 : 0);
     assert.equal(f.writes(), 0);
@@ -113,7 +113,7 @@ for (const mode of ["header-overflow", "chunk-overflow", "invalid-utf8"] as cons
     });
     const apiUrl = await listen(t, api);
     const f = runtime();
-    assert.equal(await runCli(["login", "--method", "browser", "--api-url", apiUrl], f.options), 1);
+    assert.equal(await runCli(["login", "--method", "browser", "--no-resume", "--api-url", apiUrl], f.options), 1);
     assert.equal(f.writes(), 0);
   });
 }

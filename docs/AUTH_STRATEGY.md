@@ -112,13 +112,13 @@ Provider groups, Cloudflare Access claims, OIDC claims, or SAML attributes can m
 
 ### API And CLI Tokens
 
-Current CLI login uses first-party email/password prompts, completes MFA challenges with a TOTP or recovery-code prompt, and stores the returned session token locally by normalized API URL. Browser-based device or authorization-code login remains the preferred future provider flow where possible.
+Current CLI login supports first-party email/password with TOTP or recovery-code prompts, API keys, and explicit browser/device consent. Credentials are scoped to the normalized API URL and selected configuration profile. Browser/device login can resume a pending request from a separate OS keyring entry until its original five-minute expiry; it does not extend consent, MFA assurance, scoped token lifetime, or the API's one-time redemption. Lost responses after redemption and unconfirmed credential saves require an explicit recovery diagnostic, rather than token reissue. See the [CLI login behavior](../apps/cli/README.md) for deadlines, cleanup and the explicit `--no-resume` option on hosts without keyring access.
 
 Token rules:
 
 - store CLI tokens by API URL so local, staging, and production credentials do not cross over
-- use user-only local file permissions for the current default token store
-- move CLI tokens to the platform secret store by default when that backend is added
+- use the platform secret store by default; explicit final-token file storage retains user-only permissions
+- keep pending browser-login secrets exclusively in the OS keyring, with no plaintext fallback
 - support token revocation and rotation
 - expose token names, scopes, last used time, and expiry in account settings
 - never store provider refresh tokens on the CLI

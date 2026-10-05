@@ -2,6 +2,17 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
+## 0.1.0-beta.20 - candidate
+
+Target release: `v0.1.0-beta.20`.
+
+- Include the device authorization form spacing fix already merged in [PR #136](https://github.com/jremick/myskills/pull/136).
+- Resume an interrupted CLI browser login for the same API, configuration profile and requested scopes before its original deadline. Keep pending device secrets in a separate OS keyring entry and serialize polling across processes.
+- Preserve the server's expiry, consent, scope, MFA and one-time redemption rules. Show the effective deadline and distinct interruption, denial, expiry, credential-save and configuration-save outcomes.
+- Clear terminal or expired pending state during login/logout, including after process loss. Require an explicit `--no-resume` choice when secure pending storage is unavailable, without a plaintext pending fallback.
+
+This candidate is a CLI follow-up to published beta.19 and retains the already-merged device form spacing fix in its cumulative source artifacts. Hosted API/web/MCP deployment is unchanged; no migration or dependency update is required. Local synthetic-keyring and loopback HTTP checks passed, including abrupt process loss, but native OS-keyring and real account acceptance remain unverified. Final exact-source checks, immutable tagging and publication remain pending. See [beta.20 release preparation](docs/BETA20_RELEASE_DELIVERY.md); no beta.20 publication or deployment is claimed here.
+
 ## 0.1.0-beta.19 - candidate
 
 Target release: `v0.1.0-beta.19`.
